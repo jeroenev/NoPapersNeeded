@@ -41,6 +41,12 @@ compose.desktop {
         javaHome = jdk17.get().metadata.installationPath.asFile.absolutePath
 
         nativeDistributions {
+            // jlink strips the runtime to a minimal module set. FileKit's Linux file picker
+            // uses dbus-java, which needs com.sun.security.auth.module.UnixSystem from
+            // jdk.security.auth; without it the app crashes when opening a file dialog.
+            // java.sql and jdk.unsupported are commonly needed by JVM libraries too.
+            modules("jdk.security.auth", "java.sql", "jdk.unsupported")
+
             // Deb only: building Rpm requires rpmbuild, which is not present on Debian/Ubuntu
             // build hosts. Add TargetFormat.Rpm on a host with the rpm-build tooling installed.
             targetFormats(TargetFormat.Deb)
@@ -124,11 +130,25 @@ abstract class PackageAppImageTask @Inject constructor(
         dir.mkdirs()
 
         // Copy the self-contained app-image (bundled JRE + launcher) into AppDir/usr.
+        // Kotlin's copyRecursively does not preserve the executable bit, so restore it
+        // afterwards on the launcher and every ELF/.so under the runtime.
         val usrDir = File(dir, "usr")
         src.copyRecursively(usrDir, overwrite = true)
 
+        val launcherFile = File(dir, "usr/bin/$name")
+        require(launcherFile.exists()) { "launcher not found at usr/bin/$name inside app-image" }
         val launcher = "usr/bin/$name"
-        require(File(dir, launcher).exists()) { "launcher not found at $launcher inside app-image" }
+
+        // Restore executable permission for the launcher and bundled native binaries.
+        usrDir.walkTopDown().forEach { f ->
+            if (!f.isFile) return@forEach
+            val underBin = f.parentFile?.name == "bin"
+            val isNative = f.extension.equals("so", ignoreCase = true) ||
+                f.name.contains(".so.")
+            if (underBin || isNative) {
+                f.setExecutable(true, false)
+            }
+        }
 
         // AppRun -> the bundled launcher.
         val appRun = File(dir, "AppRun")

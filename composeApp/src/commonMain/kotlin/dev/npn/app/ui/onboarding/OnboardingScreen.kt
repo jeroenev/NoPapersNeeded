@@ -13,37 +13,26 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.persistDirectoryAccess
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
-import kotlinx.coroutines.launch
 
 @Composable
 fun OnboardingScreen(env: AppEnvironment) {
-    val scope = rememberCoroutineScope()
-    var opening by remember { mutableStateOf(false) }
-    var error by remember { mutableStateOf<String?>(null) }
+    val opening by env.opening.collectAsStateWithLifecycle()
+    val error by env.openError.collectAsStateWithLifecycle()
 
+    // Extract the path synchronously in the picker callback, then hand the open to the
+    // environment's long-lived scope. Launching on a composable scope here fails: recomposition
+    // while the picker dismisses cancels it before the (suspending) library open completes.
     val picker = rememberDirectoryPickerLauncher { dir ->
         if (dir == null) return@rememberDirectoryPickerLauncher
-        scope.launch {
-            opening = true
-            error = null
-            val result = runCatching {
-                val location = persistDirectoryAccess(dir)
-                env.openLibrary(location)
-            }
-            opening = false
-            result.onFailure { error = it.message ?: "Could not open the folder." }
-        }
+        env.requestOpenLibrary(persistDirectoryAccess(dir))
     }
 
     Column(

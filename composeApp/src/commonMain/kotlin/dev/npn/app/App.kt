@@ -81,11 +81,8 @@ private fun AppRoot(env: AppEnvironment) {
                     }
                 },
                 onRepickReturned = { location ->
-                    scope.launch {
-                        restoreError = null
-                        runCatching { env.openLibrary(location) }
-                            .onFailure { restoreError = it.message ?: "Could not open the folder." }
-                    }
+                    restoreError = null
+                    env.requestOpenLibrary(location)
                 },
             )
         }
@@ -150,13 +147,9 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
             )
         }
         composable<Route.Settings> {
-            val scope = rememberCoroutineScope()
             val changePicker = rememberDirectoryPickerLauncher { dir ->
                 if (dir != null) {
-                    scope.launch {
-                        val location = dev.npn.app.ui.common.persistDirectoryAccess(dir)
-                        runCatching { env.openLibrary(location) }
-                    }
+                    env.requestOpenLibrary(dev.npn.app.ui.common.persistDirectoryAccess(dir))
                 }
             }
             SettingsScreen(

@@ -10,6 +10,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /**
  * Platform-built pieces for one library, returned by [PlatformLibraryFactory.build]. The
@@ -46,11 +47,24 @@ class DefaultAppEnvironment(
     private val _opening = MutableStateFlow(false)
     override val opening: StateFlow<Boolean> = _opening.asStateFlow()
 
+    private val _openError = MutableStateFlow<String?>(null)
+    override val openError: StateFlow<String?> = _openError.asStateFlow()
+
     // Closes the resources (db) backing the current session, kept so we can free them on swap.
     private var currentClose: (() -> Unit)? = null
 
+    override fun requestOpenLibrary(location: String) {
+        // Run on the process-lived appScope, not the caller's (composable) scope, which can be
+        // cancelled by recomposition while a picker dismisses.
+        appScope.launch {
+            runCatching { openLibrary(location) }
+                .onFailure { _openError.value = it.message ?: "Could not open the library." }
+        }
+    }
+
     override suspend fun openLibrary(location: String) {
         _opening.value = true
+        _openError.value = null
         try {
             // Close any existing session/db first.
             closeCurrentInternal()
