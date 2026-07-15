@@ -1,0 +1,116 @@
+package dev.npn.core.app
+
+import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.npnDatabase
+import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.index.DeviceIdentity
+import dev.npn.core.journal.EpochClock
+import dev.npn.core.ocr.OcrEngine
+import dev.npn.core.pdf.PdfBoxEngine
+import dev.npn.core.pdf.ThumbnailStore
+import dev.npn.core.xmp.PdfBoxXmpIO
+import kotlinx.coroutines.CoroutineScope
+import java.io.File
+import java.nio.file.Files
+import java.nio.file.Path
+
+/** Hand-cranked clock so tests get deterministic, strictly-increasing HLCs. */
+class TestClock(start: Long = 1_000L) : EpochClock {
+    var now: Long = start
+    override fun nowMillis(): Long { now += 1; return now }
+}
+
+/** No-op OCR engine (unavailable) so the pipeline uses embedded text only. */
+class NoopOcrEngine : OcrEngine {
+    override val available: Boolean = false
+    override val name: String = "noop"
+    override suspend fun recognizePng(png: ByteArray, lang: String): String = ""
+}
+
+class FakeThumbStore(private val dir: File) : ThumbnailStore {
+    override suspend fun write(docId: String, png: ByteArray): String {
+        dir.mkdirs()
+        val f = File(dir, "$docId.png")
+        f.writeBytes(png)
+        return f.absolutePath
+    }
+    override suspend fun delete(docId: String) { File(dir, "$docId.png").delete() }
+}
+
+/**
+ * Temp-dir rig that builds a real [LibrarySessionImpl] over a JVM filesystem + real Room DB +
+ * real journal/index/ocr pieces. A second session on the same library (different deviceId) is
+ * built via [secondSession] for convergence tests.
+ */
+class AppSessionRig private constructor(
+    val libRoot: Path,
+    val dbDir: File,
+    val fs: JvmLibraryFileSystem,
+    val db: NpnDatabase,
+    val clock: TestClock,
+    val scope: CoroutineScope,
+    val session: LibrarySessionImpl,
+) {
+    fun writePdf(relPath: String, bytes: ByteArray) {
+        val p = libRoot.resolve(relPath)
+        Files.createDirectories(p.parent ?: libRoot)
+        Files.write(p, bytes)
+    }
+
+    fun exists(relPath: String): Boolean = Files.exists(libRoot.resolve(relPath))
+
+    fun close() {
+        session.close()
+        db.close()
+        libRoot.toFile().deleteRecursively()
+        dbDir.deleteRecursively()
+    }
+
+    companion object {
+        suspend fun create(scope: CoroutineScope, ocr: OcrEngine = NoopOcrEngine()): AppSessionRig {
+            val libRoot = Files.createTempDirectory("npn-app-lib")
+            val dbDir = Files.createTempDirectory("npn-app-db").toFile()
+            val fs = JvmLibraryFileSystem(libRoot)
+            val db = npnDatabase(File(dbDir, "index.db"))
+            val clock = TestClock()
+            val deps = SessionDeps(
+                fs = fs,
+                db = db,
+                pdfEngine = PdfBoxEngine(),
+                ocrEngine = ocr,
+                xmpIO = PdfBoxXmpIO(),
+                thumbnailStore = FakeThumbStore(File(dbDir, "thumbs")),
+                scope = scope,
+                ocrLanguage = { "eng" },
+                trashRetentionDays = { 30 },
+                clock = clock,
+            )
+            val session = LibrarySessionImpl.openSession(deps)
+            return AppSessionRig(libRoot, dbDir, fs, db, clock, scope, session)
+        }
+    }
+
+    /**
+     * Build a SECOND session over the SAME library folder but a fresh, separate DB cache and a
+     * distinct deviceId (simulating another device syncing the same folder). Returns the session
+     * plus its db so the caller can close it.
+     */
+    suspend fun secondSession(scope: CoroutineScope, ocr: OcrEngine = NoopOcrEngine()): Pair<LibrarySessionImpl, NpnDatabase> {
+        val db2 = npnDatabase(File(dbDir, "index2.db"))
+        // Force a distinct deviceId by seeding the kv before openSession.
+        db2.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
+        val deps = SessionDeps(
+            fs = fs,
+            db = db2,
+            pdfEngine = PdfBoxEngine(),
+            ocrEngine = ocr,
+            xmpIO = PdfBoxXmpIO(),
+            thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
+            scope = scope,
+            ocrLanguage = { "eng" },
+            trashRetentionDays = { 30 },
+            clock = TestClock(50_000L),
+        )
+        return LibrarySessionImpl.openSession(deps) to db2
+    }
+}

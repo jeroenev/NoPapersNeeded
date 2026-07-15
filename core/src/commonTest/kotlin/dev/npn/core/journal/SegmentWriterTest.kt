@@ -1,0 +1,103 @@
+package dev.npn.core.journal
+
+import dev.npn.core.model.DocProperty
+import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
+
+class SegmentWriterTest {
+
+    private val doc = "a".repeat(64)
+
+    private fun writer(
+        store: SegmentStore,
+        state: LocalJournalState,
+        device: String = "dev1",
+    ): SegmentWriter {
+        var now = 1000L
+        val clock = HlcClock(device, { now++ })
+        return SegmentWriter(store, device, clock, state)
+    }
+
+    @Test
+    fun write_once_naming_and_seq_continuity() = runTest {
+        val store = InMemorySegmentStore()
+        val state = InMemoryLocalJournalState()
+        val w = writer(store, state)
+
+        val batch1 = w.commit(listOf(
+            PendingOp.tagAdd(doc, "a"),
+            PendingOp.tagAdd(doc, "b"),
+        ))
+        assertEquals(listOf(1L, 2L), batch1.map { it.seq })
+
+        val batch2 = w.commit(listOf(PendingOp.propSet(doc, DocProperty.STATUS, "filed")))
+        assertEquals(listOf(3L), batch2.map { it.seq })
+
+        val segs = store.listSegments()
+        assertEquals(2, segs.size)
+        assertTrue(segs.any { it.fileName == SegmentRef.plainName(1) })
+        assertTrue(segs.any { it.fileName == SegmentRef.plainName(3) })
+    }
+
+    @Test
+    fun write_once_fails_on_duplicate_name() = runTest {
+        val store = InMemorySegmentStore()
+        store.writeSegment("dev1", SegmentRef.plainName(1), "x")
+        assertFailsWith<IllegalArgumentException> {
+            store.writeSegment("dev1", SegmentRef.plainName(1), "y")
+        }
+    }
+
+    @Test
+    fun recover_last_seq_from_store_when_local_state_empty() = runTest {
+        val store = InMemorySegmentStore()
+        // Seed store with an existing segment written by dev1 with seqs 1..3
+        val seeded = writer(store, InMemoryLocalJournalState()).commit(listOf(
+            PendingOp.tagAdd(doc, "a"),
+            PendingOp.tagAdd(doc, "b"),
+            PendingOp.tagAdd(doc, "c"),
+        ))
+        assertEquals(3L, seeded.last().seq)
+
+        // Fresh local state -> must recover lastSeq = 3
+        val freshState = InMemoryLocalJournalState()
+        val w2 = writer(store, freshState)
+        assertEquals(3L, w2.recover())
+        val next = w2.commit(listOf(PendingOp.tagAdd(doc, "d")))
+        assertEquals(4L, next.single().seq)
+    }
+
+    @Test
+    fun fork_detection_when_store_has_unknown_own_segment() = runTest {
+        val store = InMemorySegmentStore()
+        // dev1 wrote a segment (simulating another install with same id) but local state is empty
+        writer(store, InMemoryLocalJournalState()).commit(listOf(PendingOp.tagAdd(doc, "a")))
+
+        val localState = InMemoryLocalJournalState()
+        val w = writer(store, localState)
+        // local state knows nothing about the segment in the store
+        val check = w.checkSingleWriter()
+        assertTrue(check is ForkCheck.ForkNeeded)
+        assertEquals(listOf(SegmentRef.plainName(1)), (check as ForkCheck.ForkNeeded).unknownSegments)
+    }
+
+    @Test
+    fun fork_check_ok_when_local_knows_its_segments() = runTest {
+        val store = InMemorySegmentStore()
+        val state = InMemoryLocalJournalState()
+        val w = writer(store, state)
+        w.commit(listOf(PendingOp.tagAdd(doc, "a")))
+        assertEquals(ForkCheck.Ok, w.checkSingleWriter())
+    }
+
+    @Test
+    fun empty_commit_writes_nothing() = runTest {
+        val store = InMemorySegmentStore()
+        val w = writer(store, InMemoryLocalJournalState())
+        assertTrue(w.commit(emptyList()).isEmpty())
+        assertTrue(store.listSegments().isEmpty())
+    }
+}
