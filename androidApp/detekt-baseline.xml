@@ -2,7 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>CyclomaticComplexMethod:IntentImport.kt:IntentImport$suspend fun import: Result?</ID>
     <ID>MaxLineLength:IntentImport.kt:private inline</ID>
     <ID>SwallowedException:NpnWork.kt:RescanOcrWorker$t: Throwable</ID>
   </CurrentIssues>
