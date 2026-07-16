@@ -40,6 +40,7 @@ class Indexer(
     private val journalIndex: JournalIndex,
     private val foldedTracker: DbFoldedSegmentTracker,
     private val clock: EpochClock = SystemEpochClock,
+    private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
 ) {
     private val rescanMutex = Mutex()
     private val _scanState = MutableStateFlow<IndexProgress?>(null)
@@ -475,16 +476,20 @@ class Indexer(
             // OCR pipeline). The fold only owns the metadata-derived columns; carry content
             // forward so a metadata change (tag add, prop set) never wipes full-text search.
             // A brand-new doc has no fts row yet -> null -> empty content until OCR fills it.
-            val existingContent = ftsDao.contentForDoc(doc) ?: ""
-            ftsDao.replaceDocument(
-                docId = doc,
-                fileName = fileName,
-                title = title,
-                content = existingContent,
-                tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
-                correspondent = correspondent,
-                docType = docType,
-            )
+            // Under the shared gate so this read-then-replace cannot interleave with an OCR
+            // content write for the same doc (see FtsWriteGate).
+            ftsWriteGate.withGate {
+                val existingContent = ftsDao.contentForDoc(doc) ?: ""
+                ftsDao.replaceDocument(
+                    docId = doc,
+                    fileName = fileName,
+                    title = title,
+                    content = existingContent,
+                    tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
+                    correspondent = correspondent,
+                    docType = docType,
+                )
+            }
         }
 
         return resurrected
