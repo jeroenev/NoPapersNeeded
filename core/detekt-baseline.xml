@@ -2,15 +2,12 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>ComplexCondition:Indexer.kt:Indexer$!fullHash &amp;&amp; known != null &amp;&amp; known.size == meta.size &amp;&amp; known.mtime == meta.mtimeMillis</ID>
     <ID>ComplexCondition:Indexer.kt:Indexer$(journalTrashed || journalDeleted) &amp;&amp; (origOnDisk != null || fileAtCurrent)</ID>
     <ID>CyclomaticComplexMethod:FoldedState.kt:FoldedState$fun apply</ID>
     <ID>CyclomaticComplexMethod:Indexer.kt:Indexer$private suspend fun applyFold: List&lt;Resurrected&gt;</ID>
-    <ID>CyclomaticComplexMethod:Indexer.kt:Indexer$suspend fun rescan: ScanReport</ID>
     <ID>CyclomaticComplexMethod:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$override fun watch: Flow&lt;FsEvent&gt;</ID>
     <ID>EmptyWhileBlock:DocumentFilterTest.kt:DocumentFilterTest${}</ID>
     <ID>LongMethod:Indexer.kt:Indexer$private suspend fun applyFold: List&lt;Resurrected&gt;</ID>
-    <ID>LongMethod:Indexer.kt:Indexer$suspend fun rescan: ScanReport</ID>
     <ID>LoopWithTooManyJumpStatements:Compactor.kt:Compactor$for</ID>
     <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
     <ID>LoopWithTooManyJumpStatements:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$while</ID>

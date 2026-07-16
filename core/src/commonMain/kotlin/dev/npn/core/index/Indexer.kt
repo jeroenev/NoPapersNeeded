@@ -3,6 +3,7 @@ package dev.npn.core.index
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.PathMeta
 import dev.npn.core.db.TagEntity
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
@@ -66,34 +67,18 @@ class Indexer(
         report(IndexProgress(IndexProgress.Phase.LISTING))
         val all = fs.listAll()
 
-        // --- step 1: partition ---
-        // Collect sync-conflict files separately (the UI offers keep/discard/import-as-new); the
-        // rest is filtered by the shared NpnPaths.indexable predicate.
-        val indexable = ArrayList<FileMeta>()
-        val conflictFiles = ArrayList<String>()
-        for (meta in all) {
-            if (!meta.isDirectory && NpnPaths.isSyncConflict(meta.name)) {
-                conflictFiles.add(meta.relPath)
-                continue
-            }
-            if (NpnPaths.indexable(meta)) indexable.add(meta)
-        }
+        // --- step 1: partition on-disk files into indexable docs + sync-conflict files ---
+        val (indexable, conflictFiles) = partition(all)
 
-        // --- step 2: fast path vs hash ---
+        // --- step 2: fast path vs hash (skip unchanged files by size+mtime) ---
         val dbProjection = documentDao.allPathsAndMeta()
         val byPath = dbProjection.associateBy { it.relPath }
-        // hash by docId of everything currently in the DB (for move/dup detection).
-        val docIdByPath = HashMap<String, String>() // relPath -> known docId (fast path unchanged)
-        val toHash = ArrayList<FileMeta>()
-        for (meta in indexable) {
+        val toHash = indexable.filter { meta ->
             val known = byPath[meta.relPath]
-            if (!fullHash && known != null && known.size == meta.size && known.mtime == meta.mtimeMillis) {
-                docIdByPath[meta.relPath] = known.docId
-            } else {
-                toHash.add(meta)
-            }
+            fullHash || known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
         }
 
+        // --- step 3: hash the changed/new files ---
         report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
         val hashes = HashMap<String, String>() // relPath -> sha256
         var hashedCount = 0
@@ -104,67 +89,104 @@ class Indexer(
         }
 
         report(IndexProgress(IndexProgress.Phase.RECONCILING))
-
-        // Live set of paths present on disk (indexable).
         val diskPaths = indexable.map { it.relPath }.toHashSet()
         val metaByPath = indexable.associateBy { it.relPath }
 
-        // Load existing canonical doc rows we may touch, keyed by docId and by path.
-        val existingByDocId = HashMap<String, DocumentEntity>()
-        val existingByPath = HashMap<String, DocumentEntity>()
-        for (pm in dbProjection) {
-            val row = documentDao.getByDocId(pm.docId)
-            if (row != null) {
-                existingByDocId[row.docId] = row
-                existingByPath[row.relPath] = row
-            }
+        // --- step 4: reconcile hashed files against the DB (move/dup/external-edit/new) ---
+        val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
+
+        // --- step 5: disappeared files -> missing, then pair them with new docs for relinks ---
+        val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
+        recon.relinkCandidates.addAll(pairRelinks(missing.missingDocs, recon.newDocs, recon.relinkCandidates))
+
+        // --- step 6: journal fold -> DB projection ---
+        report(IndexProgress(IndexProgress.Phase.FOLDING))
+        val previouslyFolded = foldedTracker.load()
+        val fold = journalIndex.refresh(previouslyFolded)
+        val resurrected = applyFold(fold.state, diskPaths, metaByPath)
+        foldedTracker.save(fold.foldedSegments)
+
+        // --- step 7: persist external duplicates (replace per doc so re-scans are idempotent) ---
+        val dupByDoc = recon.duplicates.groupBy { it.docId }
+        for ((docId, entries) in dupByDoc) {
+            duplicateDao.replaceAll(docId, entries.map { DuplicateEntity(docId, it.extraRelPath) })
         }
 
+        report(IndexProgress(IndexProgress.Phase.DONE))
+        _scanState.value = null
+
+        ScanReport(
+            added = recon.added,
+            moved = recon.moved,
+            changed = recon.changed,
+            missingCount = missing.missingCount,
+            duplicates = recon.duplicates,
+            conflictFiles = conflictFiles,
+            resurrected = resurrected,
+            relinkCandidates = recon.relinkCandidates,
+            hashedCount = hashedCount,
+            durationMillis = clock.nowMillis() - started,
+        )
+    }
+
+    /**
+     * Split all on-disk entries into indexable documents and sync-conflict files. Conflict files
+     * are surfaced separately (the UI offers keep/discard/import-as-new); everything else runs
+     * through the shared [NpnPaths.indexable] predicate.
+     */
+    private fun partition(all: List<FileMeta>): Pair<List<FileMeta>, List<String>> {
+        val indexable = ArrayList<FileMeta>()
+        val conflictFiles = ArrayList<String>()
+        for (meta in all) {
+            if (!meta.isDirectory && NpnPaths.isSyncConflict(meta.name)) {
+                conflictFiles.add(meta.relPath)
+            } else if (NpnPaths.indexable(meta)) {
+                indexable.add(meta)
+            }
+        }
+        return indexable to conflictFiles
+    }
+
+    /** Mutable accumulator for the reconcile pass, plus the doc rows it touched. */
+    private class Reconciliation {
         var added = 0
         var moved = 0
         var changed = 0
         val duplicates = ArrayList<DuplicateReport>()
         val relinkCandidates = ArrayList<RelinkCandidate>()
-        // New docs created this scan: docId -> (relPath, meta) for relink pairing.
+        // New docs created this scan: docId -> meta, for relink pairing.
         val newDocs = HashMap<String, FileMeta>()
+        // Canonical rows we loaded/updated, kept current so later steps re-read consistently.
+        val existingByDocId = HashMap<String, DocumentEntity>()
+    }
+
+    /**
+     * Reconcile hashed files against the DB. For each hashed file, one of: an unchanged/refreshed
+     * canonical, a move/rename, an external duplicate, an external edit (old -> missing sentinel +
+     * new doc + path-match relink candidate), or a brand-new doc. Mutates the DB and returns the
+     * counters + new docs + duplicates + relink candidates collected.
+     */
+    private suspend fun reconcile(
+        toHash: List<FileMeta>,
+        hashes: Map<String, String>,
+        dbProjection: List<PathMeta>,
+        diskPaths: Set<String>,
+    ): Reconciliation {
+        val recon = Reconciliation()
+        val existingByPath = HashMap<String, DocumentEntity>()
+        for (pm in dbProjection) {
+            val row = documentDao.getByDocId(pm.docId) ?: continue
+            recon.existingByDocId[row.docId] = row
+            existingByPath[row.relPath] = row
+        }
         val now = clock.nowMillis()
 
         for (meta in toHash) {
             val hash = hashes[meta.relPath] ?: continue
-            val existingDoc = existingByDocId[hash]
+            val existingDoc = recon.existingByDocId[hash]
 
             if (existingDoc != null) {
-                val oldPath = existingDoc.relPath
-                val canonicalStillOnDisk = oldPath in diskPaths && oldPath != meta.relPath
-                if (canonicalStillOnDisk) {
-                    // External duplicate: canonical untouched, record the extra path.
-                    duplicates.add(DuplicateReport(hash, meta.relPath))
-                } else if (oldPath != meta.relPath) {
-                    // The file moved/renamed: canonical path no longer on disk (or is this path).
-                    documentDao.upsert(
-                        existingDoc.copy(
-                            relPath = meta.relPath,
-                            fileName = meta.name,
-                            size = meta.size,
-                            mtime = meta.mtimeMillis,
-                            missing = false,
-                        ),
-                    )
-                    existingByDocId[hash] = documentDao.getByDocId(hash)!!
-                    moved++
-                } else {
-                    // Same path, bytes unchanged but was flagged (e.g. mtime touched): refresh.
-                    if (existingDoc.missing || existingDoc.size != meta.size || existingDoc.mtime != meta.mtimeMillis) {
-                        documentDao.upsert(
-                            existingDoc.copy(
-                                size = meta.size,
-                                mtime = meta.mtimeMillis,
-                                missing = false,
-                            ),
-                        )
-                        existingByDocId[hash] = documentDao.getByDocId(hash)!!
-                    }
-                }
+                reconcileKnownHash(existingDoc, meta, hash, diskPaths, recon)
                 continue
             }
 
@@ -172,34 +194,78 @@ class Indexer(
             val docAtPath = existingByPath[meta.relPath]
             if (docAtPath != null && docAtPath.docId != hash) {
                 // External edit: mark old missing (keep metadata), create new doc here. The old
-                // doc must vacate the path (relPath is unique) so the new doc can take it; we move
-                // it to a per-doc sentinel path under .npn (never indexed) that preserves identity.
+                // doc must vacate the path (relPath is unique) so the new doc can take it; move it
+                // to a per-doc sentinel path under .npn (never indexed) that preserves identity.
                 documentDao.upsert(
                     docAtPath.copy(relPath = missingSentinel(docAtPath.docId), missing = true),
                 )
-                existingByDocId[docAtPath.docId] = documentDao.getByDocId(docAtPath.docId)!!
+                recon.existingByDocId[docAtPath.docId] = documentDao.getByDocId(docAtPath.docId)!!
                 existingByPath.remove(meta.relPath)
                 insertNewDocument(hash, meta, now)
-                newDocs[hash] = meta
-                added++
-                changed++
-                relinkCandidates.add(
+                recon.newDocs[hash] = meta
+                recon.added++
+                recon.changed++
+                recon.relinkCandidates.add(
                     RelinkCandidate(docAtPath.docId, hash, reason = "path-match", score = 100),
                 )
             } else {
                 // Brand new hash at a new path.
                 insertNewDocument(hash, meta, now)
-                newDocs[hash] = meta
-                added++
+                recon.newDocs[hash] = meta
+                recon.added++
             }
         }
+        return recon
+    }
 
-        // --- step 4: disappeared files -> missing ---
+    /** Handle a hashed file whose content hash already maps to a known canonical doc. */
+    private suspend fun reconcileKnownHash(
+        existingDoc: DocumentEntity,
+        meta: FileMeta,
+        hash: String,
+        diskPaths: Set<String>,
+        recon: Reconciliation,
+    ) {
+        val oldPath = existingDoc.relPath
+        val canonicalStillOnDisk = oldPath in diskPaths && oldPath != meta.relPath
+        if (canonicalStillOnDisk) {
+            // External duplicate: canonical untouched, record the extra path.
+            recon.duplicates.add(DuplicateReport(hash, meta.relPath))
+        } else if (oldPath != meta.relPath) {
+            // The file moved/renamed: canonical path no longer on disk (or is this path).
+            documentDao.upsert(
+                existingDoc.copy(
+                    relPath = meta.relPath,
+                    fileName = meta.name,
+                    size = meta.size,
+                    mtime = meta.mtimeMillis,
+                    missing = false,
+                ),
+            )
+            recon.existingByDocId[hash] = documentDao.getByDocId(hash)!!
+            recon.moved++
+        } else if (existingDoc.missing || existingDoc.size != meta.size || existingDoc.mtime != meta.mtimeMillis) {
+            // Same path, bytes unchanged but was flagged (e.g. mtime touched): refresh.
+            documentDao.upsert(
+                existingDoc.copy(size = meta.size, mtime = meta.mtimeMillis, missing = false),
+            )
+            recon.existingByDocId[hash] = documentDao.getByDocId(hash)!!
+        }
+    }
+
+    /** Result of the disappeared-files pass. */
+    private class MissingResult(val missingCount: Int, val missingDocs: List<DocumentEntity>)
+
+    /** Mark docs whose canonical path is no longer on disk as missing (skipping deleted/trashed). */
+    private suspend fun detectMissing(
+        dbProjection: List<PathMeta>,
+        diskPaths: Set<String>,
+        existingByDocId: Map<String, DocumentEntity>,
+    ): MissingResult {
         var missingCount = 0
         val missingDocs = ArrayList<DocumentEntity>()
         for (pm in dbProjection) {
-            val row = existingByDocId[pm.docId] ?: continue
-            if (row.deleted || row.trashed) continue
+            existingByDocId[pm.docId] ?: continue
             // Re-read: it may have been updated (moved) above.
             val current = documentDao.getByDocId(pm.docId) ?: continue
             if (current.deleted || current.trashed) continue
@@ -211,46 +277,27 @@ class Indexer(
                 missingCount++
             }
         }
+        return MissingResult(missingCount, missingDocs)
+    }
 
-        // Pair missing docs against brand-new docs for relink candidates.
+    /** Pair each missing doc against brand-new docs to produce relink candidates. */
+    private fun pairRelinks(
+        missingDocs: List<DocumentEntity>,
+        newDocs: Map<String, FileMeta>,
+        existing: List<RelinkCandidate>,
+    ): List<RelinkCandidate> {
+        val out = ArrayList<RelinkCandidate>()
         for (missing in missingDocs) {
             for ((newDocId, newMeta) in newDocs) {
-                if (relinkCandidates.any { it.oldDocId == missing.docId && it.newDocId == newDocId }) continue
+                if (existing.any { it.oldDocId == missing.docId && it.newDocId == newDocId }) continue
+                if (out.any { it.oldDocId == missing.docId && it.newDocId == newDocId }) continue
                 val score = scoreRelink(missing, newMeta)
                 if (score.first > 0) {
-                    relinkCandidates.add(RelinkCandidate(missing.docId, newDocId, score.second, score.first))
+                    out.add(RelinkCandidate(missing.docId, newDocId, score.second, score.first))
                 }
             }
         }
-
-        // --- step 6: journal fold -> DB projection ---
-        report(IndexProgress(IndexProgress.Phase.FOLDING))
-        val previouslyFolded = foldedTracker.load()
-        val fold = journalIndex.refresh(previouslyFolded)
-        val resurrected = applyFold(fold.state, diskPaths, metaByPath)
-        foldedTracker.save(fold.foldedSegments)
-
-        // Persist external duplicates (replace per doc so re-scans are idempotent).
-        val dupByDoc = duplicates.groupBy { it.docId }
-        for ((docId, entries) in dupByDoc) {
-            duplicateDao.replaceAll(docId, entries.map { DuplicateEntity(docId, it.extraRelPath) })
-        }
-
-        report(IndexProgress(IndexProgress.Phase.DONE))
-        _scanState.value = null
-
-        ScanReport(
-            added = added,
-            moved = moved,
-            changed = changed,
-            missingCount = missingCount,
-            duplicates = duplicates,
-            conflictFiles = conflictFiles,
-            resurrected = resurrected,
-            relinkCandidates = relinkCandidates,
-            hashedCount = hashedCount,
-            durationMillis = clock.nowMillis() - started,
-        )
+        return out
     }
 
     /**
