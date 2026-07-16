@@ -99,15 +99,10 @@ class Compactor {
             val dots = (e.op as JournalOp.TagRemove).dots
             dots.isNotEmpty() && dots.all { it in ownAddDots }
         }
-        val mustKeepRemoves = ownRemoves.filter { it !in droppableRemoveCandidates.toHashSet() }
 
         // For a droppable-candidate remove, we can drop it together with its adds only if all of
         // its dots' adds are also dropped. An add is dropped iff it is removed (dead) AND every
-        // remove that references it is a droppable candidate. Compute dead-own-adds that are only
-        // referenced by droppable-candidate removes.
-        val candidateDots = droppableRemoveCandidates
-            .flatMap { (it.op as JournalOp.TagRemove).dots }
-            .toHashSet()
+        // remove that references it is a droppable candidate.
         // An own add is droppable if it is dead and it is referenced only by droppable removes.
         // Build: dot -> list of own removes referencing it.
         val removesByDot = HashMap<Dot, MutableList<JournalEvent>>()

@@ -130,7 +130,6 @@ class Indexer(
         val relinkCandidates = ArrayList<RelinkCandidate>()
         // New docs created this scan: docId -> (relPath, meta) for relink pairing.
         val newDocs = HashMap<String, FileMeta>()
-        // Track paths whose canonical doc we already placed to avoid re-processing.
         val now = clock.nowMillis()
 
         for (meta in toHash) {
