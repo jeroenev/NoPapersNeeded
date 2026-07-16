@@ -166,6 +166,7 @@ fun LibraryScreen(
 
     val drawer: @Composable () -> Unit = {
         LibraryDrawerContent(
+            reviewMode = reviewMode,
             reviewBadge = needsReview,
             savedViews = savedViews,
             onAllDocuments = {

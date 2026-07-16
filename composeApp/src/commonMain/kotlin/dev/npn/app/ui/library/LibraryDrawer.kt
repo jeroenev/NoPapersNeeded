@@ -30,9 +30,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.core.app.SavedView
+import dev.npn.core.model.ReviewMode
 
 @Composable
 fun LibraryDrawerContent(
+    reviewMode: ReviewMode,
     reviewBadge: Int,
     savedViews: List<SavedView>,
     onAllDocuments: () -> Unit,
@@ -63,11 +65,14 @@ fun LibraryDrawerContent(
             icon = { Icon(Icons.Filled.Home, contentDescription = null) },
             onClick = onAllDocuments,
         )
+        val inbox = reviewMode == ReviewMode.INBOX_WORKFLOW
         NavigationDrawerItem(
-            label = { Text("Review queue") },
+            label = { Text(if (inbox) "Review queue" else "Untagged documents") },
             selected = false,
             icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-            badge = { if (reviewBadge > 0) Badge { Text(reviewBadge.toString()) } },
+            // A backlog of untagged documents is normal, so no attention badge outside the inbox
+            // workflow. The count badge only signals a review queue that needs clearing.
+            badge = { if (inbox && reviewBadge > 0) Badge { Text(reviewBadge.toString()) } },
             onClick = onReviewQueue,
         )
         NavigationDrawerItem(
