@@ -19,10 +19,10 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Build
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
@@ -65,6 +65,7 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.platformFileToExternalSource
+import dev.npn.app.ui.common.viewTypeLabel
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
@@ -511,9 +512,9 @@ private fun LibraryTopBar(
                 Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }
             IconButton(onClick = onOpenFilter) {
-                Icon(Icons.Filled.Info, contentDescription = "Filters")
+                Icon(Icons.Filled.Build, contentDescription = "Filters")
             }
-            // View switcher: LIST -> GRID.
+            // View switcher: choose among the ViewType entries.
             Box {
                 var viewMenu by remember { mutableStateOf(false) }
                 IconButton(onClick = { viewMenu = true }) {
@@ -522,7 +523,7 @@ private fun LibraryTopBar(
                 DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
                     ViewType.entries.forEach { v ->
                         DropdownMenuItem(
-                            text = { Text(viewLabel(v)) },
+                            text = { Text(viewTypeLabel(v)) },
                             trailingIcon = {
                                 if (v == viewType) {
                                     Icon(Icons.Filled.Check, contentDescription = null)
@@ -724,11 +725,6 @@ private fun LibraryFab(
             )
         }
     }
-}
-
-private fun viewLabel(v: ViewType): String = when (v) {
-    ViewType.LIST -> "List"
-    ViewType.GRID -> "Grid"
 }
 
 private fun sortLabel(field: SortField): String = when (field) {

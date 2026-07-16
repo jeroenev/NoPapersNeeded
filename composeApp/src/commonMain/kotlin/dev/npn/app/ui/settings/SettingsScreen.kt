@@ -13,7 +13,6 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.Button
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -41,6 +40,7 @@ import androidx.compose.material3.TextButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.ui.common.viewTypeLabel
 import dev.npn.core.app.GridSizing
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ViewType
@@ -192,11 +192,6 @@ private fun DefaultViewTypeDropdown(current: ViewType, onSelect: (ViewType) -> U
             }
         }
     }
-}
-
-private fun viewTypeLabel(v: ViewType): String = when (v) {
-    ViewType.LIST -> "List"
-    ViewType.GRID -> "Grid"
 }
 
 @Composable
