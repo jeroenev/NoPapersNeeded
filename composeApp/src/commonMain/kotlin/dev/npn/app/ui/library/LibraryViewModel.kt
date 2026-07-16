@@ -34,6 +34,8 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /** Import result summary shown as a snackbar. */
 data class ImportSummary(val imported: Int, val duplicate: Int, val failed: Int) {
@@ -347,7 +349,5 @@ class LibraryViewModel(
     }
 }
 
-private fun randomId(): String {
-    val chars = "abcdefghijklmnopqrstuvwxyz0123456789"
-    return buildString { repeat(16) { append(chars.random()) } }
-}
+@OptIn(ExperimentalUuidApi::class)
+private fun randomId(): String = Uuid.random().toString()
