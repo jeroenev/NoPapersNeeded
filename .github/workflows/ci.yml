@@ -21,8 +21,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
+      - name: Static analysis (detekt)
+        run: ./gradlew detekt
+
       - name: Core tests
         run: ./gradlew :core:desktopTest
+
+      - name: composeApp tests (desktop, viewmodels)
+        run: ./gradlew :composeApp:desktopTest
 
       - name: Compile core (Android)
         run: ./gradlew :core:compileAndroidMain

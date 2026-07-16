@@ -1,0 +1,58 @@
+# detekt 2.0 configuration. Layered on top of the built-in defaults (buildUponDefaultConfig = true),
+# so only overrides are listed here. Tuned for a Kotlin Multiplatform + Compose codebase.
+
+complexity:
+  LongMethod:
+    allowedLines: 80
+  LongParameterList:
+    # Compose composables and DI wiring legitimately take many parameters.
+    allowedFunctionParameters: 9
+    allowedConstructorParameters: 12
+    ignoreDefaultParameters: true
+  CyclomaticComplexMethod:
+    allowedComplexity: 20
+  TooManyFunctions:
+    allowedFunctionsPerFile: 20
+    allowedFunctionsPerClass: 20
+    allowedFunctionsPerInterface: 20
+    allowedFunctionsPerObject: 20
+    allowedFunctionsPerEnum: 20
+    ignoreOverridden: true
+  NestedBlockDepth:
+    allowedDepth: 5
+
+style:
+  MagicNumber:
+    # Compose UI uses many dp/sp/weight literals; enforcing this everywhere is noise.
+    active: false
+  ReturnCount:
+    max: 5
+  MaxLineLength:
+    maxLineLength: 120
+  UnusedPrivateFunction:
+    active: true
+  UnusedPrivateProperty:
+    active: true
+  ForbiddenComment:
+    # Flag leftover FIXME so they are tracked.
+    active: true
+    comments:
+      - reason: "Track and resolve before release"
+        value: "FIXME"
+
+naming:
+  FunctionNaming:
+    # Composable functions are PascalCase by convention; test functions use backtick names.
+    ignoreAnnotated: ["Composable"]
+    excludes: ["**/commonTest/**", "**/desktopTest/**", "**/androidUnitTest/**", "**/test/**"]
+
+exceptions:
+  TooGenericExceptionCaught:
+    active: false
+  SwallowedException:
+    active: true
+  ThrowingExceptionsWithoutMessageOrCause:
+    active: false
+
+comments:
+  active: false

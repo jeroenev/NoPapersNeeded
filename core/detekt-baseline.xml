@@ -1,0 +1,43 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>ComplexCondition:Indexer.kt:Indexer$!fullHash &amp;&amp; known != null &amp;&amp; known.size == meta.size &amp;&amp; known.mtime == meta.mtimeMillis</ID>
+    <ID>ComplexCondition:Indexer.kt:Indexer$(journalTrashed || journalDeleted) &amp;&amp; (origOnDisk != null || fileAtCurrent)</ID>
+    <ID>CyclomaticComplexMethod:Compactor.kt:Compactor$fun compact: List&lt;JournalEvent&gt;</ID>
+    <ID>CyclomaticComplexMethod:DocumentRepositoryImpl.kt:DocumentRepositoryImpl$private fun buildQuery: RoomRawQuery</ID>
+    <ID>CyclomaticComplexMethod:FoldedState.kt:FoldedState$fun apply</ID>
+    <ID>CyclomaticComplexMethod:Indexer.kt:Indexer$private suspend fun applyFold: List&lt;Resurrected&gt;</ID>
+    <ID>CyclomaticComplexMethod:Indexer.kt:Indexer$suspend fun rescan: ScanReport</ID>
+    <ID>CyclomaticComplexMethod:JournalEventSerializer.kt:JournalEventSerializer$private fun decodePayload: JournalOp</ID>
+    <ID>CyclomaticComplexMethod:JournalEventSerializer.kt:JournalEventSerializer$private fun encodePayload: JsonObject</ID>
+    <ID>CyclomaticComplexMethod:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$override fun watch: Flow&lt;FsEvent&gt;</ID>
+    <ID>EmptyWhileBlock:DocumentFilterTest.kt:DocumentFilterTest${}</ID>
+    <ID>LongMethod:Compactor.kt:Compactor$fun compact: List&lt;JournalEvent&gt;</ID>
+    <ID>LongMethod:Indexer.kt:Indexer$private suspend fun applyFold: List&lt;Resurrected&gt;</ID>
+    <ID>LongMethod:Indexer.kt:Indexer$suspend fun rescan: ScanReport</ID>
+    <ID>LoopWithTooManyJumpStatements:Compactor.kt:Compactor$for</ID>
+    <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
+    <ID>LoopWithTooManyJumpStatements:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$while</ID>
+    <ID>LoopWithTooManyJumpStatements:LibrarySessionImpl.kt:LibrarySessionImpl$for</ID>
+    <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
+    <ID>LoopWithTooManyJumpStatements:SavedViewRepositoryImpl.kt:SavedViewRepositoryImpl$for</ID>
+    <ID>LoopWithTooManyJumpStatements:XmpParser.kt:XmpParser$while</ID>
+    <ID>MatchingDeclarationName:ExternalSource.desktop.kt:ExternalSource</ID>
+    <ID>MaxLineLength:AppTestSupport.kt:AppSessionRig$suspend</ID>
+    <ID>MaxLineLength:LibrarySessionImpl.kt:LibrarySessionImpl.Companion$val content = DocContentFacadeImpl(db, fs, deps.pdfEngine, thumbnailService, bakeService, coordinator, renderGate)</ID>
+    <ID>MaxLineLength:WireFormatTest.kt:WireFormatTest$val line = """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"x"},"dev":"x","doc":"$sha","op":"prop-set","p":{"key":"bogus","value":"z"}}"""</ID>
+    <ID>MaxLineLength:WireFormatTest.kt:WireFormatTest$val line = """{"v":1,"seq":5,"hlc":{"t":1,"c":0,"d":"x"},"dev":"x","doc":null,"op":"future-op","p":{"whatever":true}}"""</ID>
+    <ID>MaxLineLength:XmpSerializerTest.kt:XmpSerializerTest$append(" &lt;rdf:Description rdf:about=\"\" xmlns:dc=\"http://purl.org/dc/elements/1.1/\" xmlns:npn=\"https://npn.dev/xmp/1.0/\"&gt;\n")</ID>
+    <ID>ReturnCount:FoldedState.kt:FoldedState$fun apply</ID>
+    <ID>ReturnCount:NpnPaths.kt:NpnPaths$fun indexable: Boolean</ID>
+    <ID>ReturnCount:OcrPipeline.kt:OcrPipeline$suspend fun processDoc</ID>
+    <ID>SwallowedException:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$e: java.nio.file.AtomicMoveNotSupportedException</ID>
+    <ID>SwallowedException:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$e: java.nio.file.FileAlreadyExistsException</ID>
+    <ID>ThrowsCount:SafLibraryFileSystem.kt:SafLibraryFileSystem$private fun resolveParentDir: String</ID>
+    <ID>TooGenericExceptionThrown:OcrPipelineTest.kt:ThrowingOcrEngine$throw RuntimeException("boom")</ID>
+    <ID>TooManyFunctions:DocumentDao.kt:DocumentDao</ID>
+    <ID>TooManyFunctions:NpnDatabaseTest.kt:NpnDatabaseTest</ID>
+    <ID>UnusedParameter:Indexer.kt:Indexer$metaByPath: Map&lt;String, FileMeta&gt;</ID>
+  </CurrentIssues>
+</SmellBaseline>
