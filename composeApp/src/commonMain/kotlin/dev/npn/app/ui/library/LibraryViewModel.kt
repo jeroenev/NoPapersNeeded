@@ -19,9 +19,12 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -60,6 +63,11 @@ class LibraryViewModel(
 
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
+
+    // One-shot user-facing messages (e.g. partial bulk-op failure). Collected by the screen and
+    // shown as a snackbar. extraBufferCapacity so emits from viewModelScope never suspend.
+    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
+    val messages: SharedFlow<String> = _messages.asSharedFlow()
 
     // True once the user picks a view or applies a saved view this session. Guards against the
     // async default-view seed clobbering an explicit choice made before it arrives.
@@ -235,17 +243,43 @@ class LibraryViewModel(
 
     // ---- bulk metadata ops ----
 
-    fun bulkAddTag(tag: String) = withSelection { session.meta.addTag(it, tag) }
-    fun bulkRemoveTag(tag: String) = withSelection { session.meta.removeTag(it, tag) }
-    fun bulkSetReviewed(reviewed: Boolean) = withSelection { session.meta.setReviewed(it, reviewed) }
-    fun bulkTrash() = withSelection { ids -> ids.forEach { session.meta.trashDoc(it) } }
+    // Tag/reviewed writes are a single batched session call; on failure surface a message and
+    // keep the selection so the user can retry.
+    fun bulkAddTag(tag: String) = batchedSelection("add tag") { session.meta.addTag(it, tag) }
+    fun bulkRemoveTag(tag: String) = batchedSelection("remove tag") { session.meta.removeTag(it, tag) }
+    fun bulkSetReviewed(reviewed: Boolean) = batchedSelection("update") { session.meta.setReviewed(it, reviewed) }
 
-    private fun withSelection(block: suspend (List<String>) -> Unit) {
+    // Trash is per-doc; run each independently so one failure does not abort the rest.
+    fun bulkTrash() = perDocSelection("trash") { session.meta.trashDoc(it) }
+
+    private fun batchedSelection(action: String, block: suspend (List<String>) -> Unit) {
         val ids = _ui.value.selected.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            runCatching { block(ids) }
-            clearSelection()
+            if (runCatching { block(ids) }.isSuccess) {
+                clearSelection()
+            } else {
+                _messages.tryEmit("Could not $action ${ids.size} document(s)")
+            }
+        }
+    }
+
+    /**
+     * Apply [perDoc] to each selected doc independently so one failure does not abort the rest.
+     * On any failure, emit a message and keep the failed ids selected so the user can retry; only
+     * clear the selection when every doc succeeded. [action] names the operation for the message.
+     */
+    private fun perDocSelection(action: String, perDoc: suspend (String) -> Unit) {
+        val ids = _ui.value.selected.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val failed = ids.filter { runCatching { perDoc(it) }.isFailure }
+            if (failed.isEmpty()) {
+                clearSelection()
+            } else {
+                _ui.value = _ui.value.copy(selected = failed.toSet(), selectionMode = true)
+                _messages.tryEmit("Could not $action ${failed.size} of ${ids.size} document(s)")
+            }
         }
     }
 

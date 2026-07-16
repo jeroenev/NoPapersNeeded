@@ -48,6 +48,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -101,6 +102,11 @@ fun LibraryScreen(
     val drawerState = androidx.compose.material3.rememberDrawerState(
         androidx.compose.material3.DrawerValue.Closed,
     )
+
+    // Surface one-shot VM messages (e.g. partial bulk-op failures) as snackbars.
+    LaunchedEffect(vm, snackbar) {
+        vm.messages.collect { snackbar.showSnackbar(it) }
+    }
 
     var showFilter by remember { mutableStateOf(false) }
     var showSaveView by remember { mutableStateOf(false) }
