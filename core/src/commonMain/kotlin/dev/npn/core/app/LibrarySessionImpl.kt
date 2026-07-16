@@ -13,6 +13,7 @@ import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.FsSegmentStore
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.ImportService
+import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.RelinkService
@@ -246,7 +247,10 @@ class LibrarySessionImpl private constructor(
             val segmentStore = FsSegmentStore(FsSegmentStoreFiles(fs))
             val journalIndex = JournalIndex(segmentStore)
             val foldedTracker = DbFoldedSegmentTracker(db.foldedSegmentDao())
-            val indexer = Indexer(fs, db, journalIndex, foldedTracker, deps.clock)
+            // Shared FTS content gate: serializes metadata-fold content carry-forward against
+            // OCR content writes so they cannot clobber the same FTS row.
+            val ftsWriteGate = FtsWriteGate()
+            val indexer = Indexer(fs, db, journalIndex, foldedTracker, deps.clock, ftsWriteGate)
 
             val identity = DeviceIdentity(db.keyValueDao())
             val initialDeviceId = identity.getOrCreate()
@@ -289,6 +293,7 @@ class LibrarySessionImpl private constructor(
                 tagDao = db.tagDao(),
                 deviceId = effectiveDeviceId,
                 config = OcrConfig(lang = deps.ocrLanguage()),
+                ftsWriteGate = ftsWriteGate,
             )
             val ocrWorker = OcrWorker(ocrPipeline, deps.scope)
 

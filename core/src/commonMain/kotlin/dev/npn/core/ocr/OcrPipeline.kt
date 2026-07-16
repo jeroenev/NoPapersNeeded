@@ -8,6 +8,7 @@ import dev.npn.core.db.TagDao
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.pdf.PdfEngine
 import kotlinx.coroutines.flow.first
 import kotlin.time.Clock
@@ -46,6 +47,7 @@ class OcrPipeline(
     private val tagDao: TagDao,
     private val deviceId: String,
     private val config: OcrConfig = OcrConfig(),
+    private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
 ) {
     companion object {
         const val STATE_PENDING = "pending"
@@ -228,7 +230,9 @@ class OcrPipeline(
 
     // --- indexing / state helpers ---
 
-    private suspend fun indexText(docId: String, pages: List<String>) {
+    private suspend fun indexText(docId: String, pages: List<String>) = ftsWriteGate.withGate {
+        // Under the shared gate so this write cannot interleave with a metadata fold's FTS
+        // read-then-replace for the same doc (see FtsWriteGate).
         val doc = documentDao.getByDocId(docId)
         val tags = tagDao.tagsForDocument(docId)
         ftsDao.replaceDocument(
