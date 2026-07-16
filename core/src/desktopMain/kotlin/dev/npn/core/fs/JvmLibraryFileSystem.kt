@@ -270,17 +270,6 @@ class JvmLibraryFileSystem(private val root: Path) : LibraryFileSystem {
     }
 }
 
-private fun ByteArray.toHexLower(): String {
-    val hex = CharArray(size * 2)
-    val digits = "0123456789abcdef"
-    for (i in indices) {
-        val v = this[i].toInt() and 0xFF
-        hex[i * 2] = digits[v ushr 4]
-        hex[i * 2 + 1] = digits[v and 0x0F]
-    }
-    return hex.concatToString()
-}
-
 /**
  * Debounce a coarse [FsEvent] flow: collapse bursts into a single trailing emission roughly
  * every [windowMillis]. Uses conflate + a sampling delay so rapid filesystem churn (a big sync
