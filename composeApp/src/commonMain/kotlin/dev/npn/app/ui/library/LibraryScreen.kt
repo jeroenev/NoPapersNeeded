@@ -109,12 +109,7 @@ fun LibraryScreen(
         vm.messages.collect { snackbar.showSnackbar(it) }
     }
 
-    var showFilter by remember { mutableStateOf(false) }
-    var showSaveView by remember { mutableStateOf(false) }
-    var showAddTag by remember { mutableStateOf(false) }
-    var showRemoveTag by remember { mutableStateOf(false) }
-    var renameView by remember { mutableStateOf<dev.npn.core.app.SavedView?>(null) }
-    var allTagNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    val dialogs = rememberLibraryDialogState()
 
     val tagColors = remember(tags) { tags.associate { it.name to it.color } }
 
@@ -159,14 +154,14 @@ fun LibraryScreen(
             onImport = { importPicker.launch() },
             onScan = onScan,
             scanAvailable = scanner.available,
-            onOpenFilter = { showFilter = true },
+            onOpenFilter = dialogs::openFilter,
             onAddTag = {
-                scope.launch { allTagNames = vm.allTagNames() }
-                showAddTag = true
+                scope.launch { dialogs.allTagNames = vm.allTagNames() }
+                dialogs.openAddTag()
             },
             onRemoveTag = {
-                scope.launch { allTagNames = vm.allTagNames() }
-                showRemoveTag = true
+                scope.launch { dialogs.allTagNames = vm.allTagNames() }
+                dialogs.openRemoveTag()
             },
         )
     }
@@ -190,9 +185,9 @@ fun LibraryScreen(
             },
             onSaveCurrentView = {
                 scope.launch { drawerState.close() }
-                showSaveView = true
+                dialogs.openSaveView()
             },
-            onRenameSavedView = { renameView = it },
+            onRenameSavedView = dialogs::openRename,
             onDeleteSavedView = { vm.deleteSavedView(it.id) },
             onTogglePinSavedView = { vm.togglePinSavedView(it) },
         )
@@ -214,71 +209,20 @@ fun LibraryScreen(
         },
     )
 
-    if (showFilter) {
-        FilterSheet(
-            filter = ui.filter,
-            tags = tags,
-            correspondents = correspondents,
-            docTypes = docTypes,
-            onApply = {
-                vm.setFilter(it)
-                showFilter = false
-            },
-            onClearAll = { vm.clearFilter() },
-            onDismiss = { showFilter = false },
-        )
-    }
-
-    if (showSaveView) {
-        NameDialog(
-            title = "Save current view",
-            label = "View name",
-            onConfirm = {
-                vm.saveCurrentView(it)
-                showSaveView = false
-            },
-            onDismiss = { showSaveView = false },
-        )
-    }
-
-    renameView?.let { view ->
-        NameDialog(
-            title = "Rename saved view",
-            label = "View name",
-            confirmLabel = "Rename",
-            onConfirm = {
-                vm.renameSavedView(view, it)
-                renameView = null
-            },
-            onDismiss = { renameView = null },
-        )
-    }
-
-    if (showAddTag) {
-        TagPickerDialog(
-            title = "Add tag to ${ui.selected.size} document(s)",
-            allTagNames = allTagNames,
-            confirmLabel = "Add",
-            onConfirm = {
-                vm.bulkAddTag(it)
-                showAddTag = false
-            },
-            onDismiss = { showAddTag = false },
-        )
-    }
-
-    if (showRemoveTag) {
-        TagPickerDialog(
-            title = "Remove tag from ${ui.selected.size} document(s)",
-            allTagNames = allTagNames,
-            confirmLabel = "Remove",
-            onConfirm = {
-                vm.bulkRemoveTag(it)
-                showRemoveTag = false
-            },
-            onDismiss = { showRemoveTag = false },
-        )
-    }
+    LibraryDialogHost(
+        state = dialogs,
+        filter = ui.filter,
+        selectedCount = ui.selected.size,
+        tags = tags,
+        correspondents = correspondents,
+        docTypes = docTypes,
+        onApplyFilter = vm::setFilter,
+        onClearFilter = vm::clearFilter,
+        onSaveView = vm::saveCurrentView,
+        onRenameView = vm::renameSavedView,
+        onAddTag = vm::bulkAddTag,
+        onRemoveTag = vm::bulkRemoveTag,
+    )
 }
 
 @Composable
