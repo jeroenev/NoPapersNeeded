@@ -9,13 +9,12 @@ import kotlinx.coroutines.sync.withLock
 /**
  * Background OCR queue drainer (PLAN.md sec. 5: coroutine worker pool on desktop, WorkManager
  * on Android drives [OcrPipeline.processNext] there). Small and testable: [kick] wakes it,
- * it drains the queue until empty, one item at a time (parallelism is reserved for future use
- * but kept single-flight via the mutex to avoid concurrent sidecar/queue writes).
+ * it drains the queue until empty, one item at a time, kept single-flight via the mutex to
+ * avoid concurrent sidecar/queue writes.
  */
 class OcrWorker(
     private val pipeline: OcrPipeline,
     private val scope: CoroutineScope,
-    @Suppress("unused") private val parallelism: Int = 1,
 ) {
     private val mutex = Mutex()
 
