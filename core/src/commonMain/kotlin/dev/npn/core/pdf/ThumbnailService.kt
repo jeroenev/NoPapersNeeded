@@ -27,6 +27,7 @@ class ThumbnailService(
     private val store: ThumbnailStore,
     private val thumbnailDao: ThumbnailDao,
     private val documentDao: DocumentDao,
+    private val renderGate: RenderGate = RenderGate(),
 ) {
     /**
      * Return the cache path of [docId]'s thumbnail, generating it from the first page if
@@ -43,10 +44,14 @@ class ThumbnailService(
         }
 
         val (png, pageCount) = try {
-            engine.open(bytes).use { handle ->
-                if (handle.pageCount <= 0) return null
-                handle.renderPagePng(0, maxDim) to handle.pageCount
-            }
+            // Gate the heavy open+render so 200 first-load thumbnails cannot run at once and
+            // freeze the UI; the gate caps concurrency and uses a CPU-bound dispatcher.
+            renderGate.render {
+                engine.open(bytes).use { handle ->
+                    if (handle.pageCount <= 0) null
+                    else handle.renderPagePng(0, maxDim) to handle.pageCount
+                }
+            } ?: return null
         } catch (_: Throwable) {
             return null
         }

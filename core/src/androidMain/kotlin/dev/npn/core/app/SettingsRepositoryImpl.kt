@@ -33,6 +33,8 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         val ocrLanguage: String,
         val trashRetentionDays: Int,
         val defaultViewType: ViewType,
+        val gridColumnWidth: Int,
+        val landscapeListColumns: Boolean,
     )
 
     private fun load() = Snapshot(
@@ -40,13 +42,18 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         ocrLanguage = prefs.getString(KEY_OCR_LANG, "eng") ?: "eng",
         trashRetentionDays = prefs.getInt(KEY_TRASH_DAYS, 30),
         defaultViewType = prefs.getString(KEY_VIEW_TYPE, null)
-            ?.let { runCatching { ViewType.valueOf(it) }.getOrNull() } ?: ViewType.LIST,
+            ?.let { runCatching { ViewType.valueOf(it) }.getOrNull() } ?: ViewType.GRID,
+        gridColumnWidth = prefs.getInt(KEY_GRID_WIDTH, GridSizing.DEFAULT_COLUMN_WIDTH)
+            .coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
+        landscapeListColumns = prefs.getBoolean(KEY_LANDSCAPE_LIST, false),
     )
 
     override val libraryLocation: Flow<String?> = state.map { it.libraryLocation }
     override val ocrLanguage: Flow<String> = state.map { it.ocrLanguage }
     override val trashRetentionDays: Flow<Int> = state.map { it.trashRetentionDays }
     override val defaultViewType: Flow<ViewType> = state.map { it.defaultViewType }
+    override val gridColumnWidth: Flow<Int> = state.map { it.gridColumnWidth }
+    override val landscapeListColumns: Flow<Boolean> = state.map { it.landscapeListColumns }
 
     override suspend fun setLibraryLocation(location: String?) {
         prefs.edit().apply {
@@ -70,11 +77,24 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         state.value = load()
     }
 
+    override suspend fun setGridColumnWidth(dp: Int) {
+        val clamped = dp.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
+        prefs.edit().putInt(KEY_GRID_WIDTH, clamped).apply()
+        state.value = load()
+    }
+
+    override suspend fun setLandscapeListColumns(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_LANDSCAPE_LIST, enabled).apply()
+        state.value = load()
+    }
+
     companion object {
         private const val PREFS_NAME = "npn_settings"
         private const val KEY_LOCATION = "libraryLocation"
         private const val KEY_OCR_LANG = "ocrLanguage"
         private const val KEY_TRASH_DAYS = "trashRetentionDays"
         private const val KEY_VIEW_TYPE = "defaultViewType"
+        private const val KEY_GRID_WIDTH = "gridColumnWidth"
+        private const val KEY_LANDSCAPE_LIST = "landscapeListColumns"
     }
 }

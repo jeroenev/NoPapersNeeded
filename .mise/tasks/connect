@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+#MISE description="Reconnect adb to an already-paired device over Wi-Fi"
+#USAGE arg "<addr>" help="Device address as IP:PORT (from the Wireless debugging screen)"
+set -euo pipefail
+
+# mise exposes declared args as usage_<name>, not positional $1.
+adb connect "$usage_addr"
+echo
+echo ">> Connected. Devices:"
+adb devices -l

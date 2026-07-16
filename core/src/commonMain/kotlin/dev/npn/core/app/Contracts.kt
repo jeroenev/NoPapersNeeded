@@ -185,4 +185,15 @@ interface SettingsRepository {
     suspend fun setTrashRetentionDays(days: Int)
     val defaultViewType: Flow<ViewType>
     suspend fun setDefaultViewType(v: ViewType)
+    val gridColumnWidth: Flow<Int>       // min grid cell width in dp; drives adaptive column count, default 160
+    suspend fun setGridColumnWidth(dp: Int)
+    val landscapeListColumns: Flow<Boolean>  // multi-column list view when the window is landscape, default false
+    suspend fun setLandscapeListColumns(enabled: Boolean)
+}
+
+/** Bounds for the user-adjustable grid cell width (dp). */
+object GridSizing {
+    const val MIN_COLUMN_WIDTH = 100
+    const val MAX_COLUMN_WIDTH = 280
+    const val DEFAULT_COLUMN_WIDTH = 160
 }
