@@ -6,7 +6,7 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
+import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
@@ -37,24 +37,24 @@ class DocDetailViewModel(
 
     val doc: StateFlow<DocListItem?> =
         session.documents.observeDoc(docId)
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     val reviewMode: StateFlow<ReviewMode> =
         session.reviewMode
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReviewMode.DEFAULT)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     val correspondents: StateFlow<List<String>> =
         session.documents.observeCorrespondents()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val docTypes: StateFlow<List<String>> =
         session.documents.observeDocTypes()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val tagColors: StateFlow<Map<String, String?>> =
         session.tags.observeTags()
             .map { tags -> tags.associate { it.name to it.color } }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyMap())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
     init {
         viewModelScope.launch {
