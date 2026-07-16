@@ -1,8 +1,15 @@
 package dev.npn.app.ui.common
 
+import dev.npn.core.app.ViewType
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
+
+/** Display label for a library [ViewType]. */
+fun viewTypeLabel(v: ViewType): String = when (v) {
+    ViewType.LIST -> "List"
+    ViewType.GRID -> "Grid"
+}
 
 /** Human-readable file size. */
 fun formatSize(bytes: Long): String {

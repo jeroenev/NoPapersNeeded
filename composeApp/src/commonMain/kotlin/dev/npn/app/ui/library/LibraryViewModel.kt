@@ -171,10 +171,6 @@ class LibraryViewModel(
         queryInput.value = filter.query ?: ""
     }
 
-    fun updateFilter(block: (LibraryFilter) -> LibraryFilter) {
-        _ui.value = _ui.value.copy(filter = block(_ui.value.filter))
-    }
-
     fun clearFilter() {
         _ui.value = _ui.value.copy(filter = LibraryFilter())
         queryInput.value = ""
