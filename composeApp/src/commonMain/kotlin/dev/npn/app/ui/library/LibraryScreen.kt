@@ -385,7 +385,8 @@ private fun LibraryContent(
                             ui = ui,
                             columnWidth = gridColumnWidth,
                             onOpen = onOpenDoc,
-                            vm = vm,
+                            onToggleSelect = vm::toggleSelection,
+                            onStartSelection = vm::startSelection,
                         )
                         ViewType.LIST -> DocList(
                             docs = docs,
@@ -395,7 +396,8 @@ private fun LibraryContent(
                             ui = ui,
                             landscapeColumns = landscapeListColumns,
                             onOpen = onOpenDoc,
-                            vm = vm,
+                            onToggleSelect = vm::toggleSelection,
+                            onStartSelection = vm::startSelection,
                         )
                     }
                 }
@@ -413,7 +415,8 @@ private fun DocList(
     ui: LibraryUiState,
     landscapeColumns: Boolean,
     onOpen: (String) -> Unit,
-    vm: LibraryViewModel,
+    onToggleSelect: (String) -> Unit,
+    onStartSelection: (String) -> Unit,
 ) {
     val row: @Composable (dev.npn.core.app.DocListItem) -> Unit = { item ->
         DocListRow(
@@ -424,11 +427,11 @@ private fun DocList(
             selectionMode = ui.selectionMode,
             selected = item.doc.docId in ui.selected,
             onClick = {
-                if (ui.selectionMode) vm.toggleSelection(item.doc.docId)
+                if (ui.selectionMode) onToggleSelect(item.doc.docId)
                 else onOpen(item.doc.docId)
             },
-            onLongClick = { vm.startSelection(item.doc.docId) },
-            onToggleSelect = { vm.toggleSelection(item.doc.docId) },
+            onLongClick = { onStartSelection(item.doc.docId) },
+            onToggleSelect = { onToggleSelect(item.doc.docId) },
         )
     }
 
@@ -466,7 +469,8 @@ private fun DocGrid(
     ui: LibraryUiState,
     columnWidth: Int,
     onOpen: (String) -> Unit,
-    vm: LibraryViewModel,
+    onToggleSelect: (String) -> Unit,
+    onStartSelection: (String) -> Unit,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(columnWidth.dp),
@@ -482,10 +486,10 @@ private fun DocGrid(
                 selectionMode = ui.selectionMode,
                 selected = item.doc.docId in ui.selected,
                 onClick = {
-                    if (ui.selectionMode) vm.toggleSelection(item.doc.docId)
+                    if (ui.selectionMode) onToggleSelect(item.doc.docId)
                     else onOpen(item.doc.docId)
                 },
-                onLongClick = { vm.startSelection(item.doc.docId) },
+                onLongClick = { onStartSelection(item.doc.docId) },
             )
         }
     }
