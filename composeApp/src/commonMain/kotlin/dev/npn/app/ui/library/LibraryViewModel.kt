@@ -22,7 +22,7 @@ import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.SharingStarted
+import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -78,12 +78,12 @@ class LibraryViewModel(
     /** Min grid cell width (dp), user-adjustable via settings; drives the adaptive column count. */
     val gridColumnWidth: StateFlow<Int> =
         settings.gridColumnWidth
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 160)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, 160)
 
     /** When true, the list view uses multiple columns while the window is landscape. */
     val landscapeListColumns: StateFlow<Boolean> =
         settings.landscapeListColumns
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, false)
 
     // Raw query text, debounced before it hits the filter. The search field reads this directly
     // (via [queryText]) so it reflects keystrokes immediately; the debounce only gates the filter.
@@ -120,23 +120,23 @@ class LibraryViewModel(
             _ui.map { it.sort }.distinctUntilChanged(),
         ) { f, s -> f to s }
             .flatMapLatest { (f, s) -> session.documents.observeDocuments(f, s) }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val tags: StateFlow<List<TagInfo>> =
         session.tags.observeTags()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val correspondents: StateFlow<List<String>> =
         session.documents.observeCorrespondents()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val docTypes: StateFlow<List<String>> =
         session.documents.observeDocTypes()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val reviewMode: StateFlow<ReviewMode> =
         session.reviewMode
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReviewMode.DEFAULT)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     val needsReviewCount: StateFlow<Int> =
         session.reviewMode.flatMapLatest { mode ->
@@ -144,23 +144,23 @@ class LibraryViewModel(
                 ReviewMode.UNTAGGED_ONLY -> session.documents.observeUntaggedCount()
                 ReviewMode.INBOX_WORKFLOW -> session.documents.observeUnreviewedOrUntaggedCount()
             }
-        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, 0)
 
     val savedViews: StateFlow<List<SavedView>> =
         session.savedViews.observeSavedViews()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val scanProgress: StateFlow<ScanProgressUi?> =
         session.scanProgress
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     val lastScanReport: StateFlow<ScanReport?> =
         session.lastScanReport
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     val ocrStatus: StateFlow<OcrStatus> =
         session.ocrStatus
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), OcrStatus(0, false))
+            .stateIn(viewModelScope, WhileSubscribedTimeout, OcrStatus(0, false))
 
     // ---- filter/sort/view controls ----
 

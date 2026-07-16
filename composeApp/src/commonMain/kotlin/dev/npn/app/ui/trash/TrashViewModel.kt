@@ -6,7 +6,7 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.index.RelinkCandidate
-import kotlinx.coroutines.flow.SharingStarted
+import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -22,20 +22,20 @@ class TrashViewModel(
 
     val trashed: StateFlow<List<DocListItem>> =
         session.documents.observeTrashed()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val duplicates: StateFlow<List<Pair<String, String>>> =
         session.documents.observeDuplicates()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val missing: StateFlow<List<DocumentEntity>> =
         session.documents.observeMissing()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val relinkCandidates: StateFlow<List<RelinkCandidate>> =
         session.lastScanReport
             .map { report -> report?.relinkCandidates.orEmpty() }
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     fun restore(docId: String) = launch { session.meta.restoreDoc(docId) }
     fun deleteForever(docId: String) = launch { session.meta.deleteDocPermanently(docId) }

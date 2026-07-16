@@ -7,7 +7,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
-import kotlinx.coroutines.flow.SharingStarted
+import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
@@ -45,10 +45,10 @@ class SettingsViewModel(
             gridColumnWidth = grid.first,
             landscapeListColumns = grid.second,
         )
-    }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
+    }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
     val reviewMode: StateFlow<ReviewMode> =
-        session.reviewMode.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReviewMode.DEFAULT)
+        session.reviewMode.stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     fun setOcrLanguage(lang: String) = viewModelScope.launch { settings.setOcrLanguage(lang) }
 

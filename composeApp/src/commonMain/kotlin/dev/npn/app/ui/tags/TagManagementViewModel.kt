@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
-import kotlinx.coroutines.flow.SharingStarted
+import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -30,7 +30,7 @@ class TagManagementViewModel(
 
     val tags: StateFlow<List<TagInfo>> =
         session.tags.observeTags()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /** Build the namespace tree from the flat tag list. */
     fun buildTree(flat: List<TagInfo>): List<TagNode> {
