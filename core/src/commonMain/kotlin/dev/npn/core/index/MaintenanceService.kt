@@ -107,12 +107,12 @@ class MaintenanceService(
         var cleanedBase = base
         // Syncthing: "name.sync-conflict-YYYYMMDD-..." (the marker sits in the base since we split
         // on the LAST dot, which is the real extension). Cut at the marker.
-        val stMarker = cleanedBase.indexOf(".sync-conflict-")
+        val stMarker = cleanedBase.indexOf(NpnPaths.MARKER_SYNCTHING)
         if (stMarker >= 0) cleanedBase = cleanedBase.substring(0, stMarker)
         // Dropbox / Nextcloud parenthetical: "name (conflicted copy ...)" / "(Case Conflict ...)".
-        val parenIdx = cleanedBase.indexOf(" (conflicted copy")
+        val parenIdx = cleanedBase.indexOf(NpnPaths.MARKER_CONFLICTED_COPY)
         if (parenIdx >= 0) cleanedBase = cleanedBase.substring(0, parenIdx)
-        val caseIdx = cleanedBase.indexOf(" (Case Conflict")
+        val caseIdx = cleanedBase.indexOf(NpnPaths.MARKER_CASE_CONFLICT)
         if (caseIdx >= 0) cleanedBase = cleanedBase.substring(0, caseIdx)
 
         cleanedBase = cleanedBase.trim().ifEmpty { "document" }

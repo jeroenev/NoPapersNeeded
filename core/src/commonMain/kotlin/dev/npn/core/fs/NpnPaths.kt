@@ -12,6 +12,14 @@ object NpnPaths {
     const val TRASH_DIR = ".npn/trash"
     const val DEFAULT_INBOX = "inbox"
 
+    /**
+     * Sync-conflict filename markers, shared between detection ([isSyncConflict]) and stripping
+     * (MaintenanceService.cleanConflictName) so the two never drift.
+     */
+    const val MARKER_SYNCTHING = ".sync-conflict-"
+    const val MARKER_CONFLICTED_COPY = " (conflicted copy"
+    const val MARKER_CASE_CONFLICT = " (Case Conflict"
+
     /** `.npn/journal/<deviceId>` */
     fun journalDeviceDir(deviceId: String): String = "$JOURNAL_DIR/$deviceId"
 
@@ -63,9 +71,10 @@ object NpnPaths {
      * These files must be excluded from the index; the UI offers keep/discard/import-as-new.
      */
     fun isSyncConflict(name: String): Boolean {
-        if (name.contains(".sync-conflict-")) return true
-        if (name.contains("(conflicted copy")) return true
-        if (name.contains("(Case Conflict")) return true
+        if (name.contains(MARKER_SYNCTHING)) return true
+        // Match leniently (without the leading space) so variants are still detected.
+        if (name.contains(MARKER_CONFLICTED_COPY.trimStart())) return true
+        if (name.contains(MARKER_CASE_CONFLICT.trimStart())) return true
         return false
     }
 

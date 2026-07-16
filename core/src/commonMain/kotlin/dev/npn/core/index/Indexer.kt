@@ -67,19 +67,16 @@ class Indexer(
         val all = fs.listAll()
 
         // --- step 1: partition ---
+        // Collect sync-conflict files separately (the UI offers keep/discard/import-as-new); the
+        // rest is filtered by the shared NpnPaths.indexable predicate.
         val indexable = ArrayList<FileMeta>()
         val conflictFiles = ArrayList<String>()
         for (meta in all) {
-            if (meta.isDirectory) continue
-            if (NpnPaths.isInternal(meta.relPath)) continue
-            if (NpnPaths.isSyncTemp(meta.name)) continue
-            if (NpnPaths.isSyncConflict(meta.name)) {
+            if (!meta.isDirectory && NpnPaths.isSyncConflict(meta.name)) {
                 conflictFiles.add(meta.relPath)
                 continue
             }
-            if (!NpnPaths.isPdf(meta.name)) continue
-            if (NpnPaths.isHidden(meta.relPath)) continue
-            indexable.add(meta)
+            if (NpnPaths.indexable(meta)) indexable.add(meta)
         }
 
         // --- step 2: fast path vs hash ---
@@ -273,12 +270,7 @@ class Indexer(
         val diskPaths = HashSet<String>()
         val metaByPath = HashMap<String, FileMeta>()
         for (meta in all) {
-            if (meta.isDirectory) continue
-            if (NpnPaths.isInternal(meta.relPath)) continue
-            if (NpnPaths.isSyncTemp(meta.name)) continue
-            if (NpnPaths.isSyncConflict(meta.name)) continue
-            if (!NpnPaths.isPdf(meta.name)) continue
-            if (NpnPaths.isHidden(meta.relPath)) continue
+            if (!NpnPaths.indexable(meta)) continue
             diskPaths.add(meta.relPath)
             metaByPath[meta.relPath] = meta
         }
