@@ -21,6 +21,8 @@ data class PendingOp(val doc: String?, val op: JournalOp) {
         fun tagMerge(from: String, to: String) = PendingOp(null, JournalOp.TagMerge(from, to))
         fun tagStyle(tag: String, color: String?, icon: String?) =
             PendingOp(null, JournalOp.TagStyle(tag, color, icon))
+        fun settingSet(key: String, value: String?) =
+            PendingOp(null, JournalOp.SettingSet(key, value))
     }
 }
 

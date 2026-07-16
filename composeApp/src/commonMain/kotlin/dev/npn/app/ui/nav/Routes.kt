@@ -18,16 +18,10 @@ sealed interface Route {
     data object TagManagement : Route
 
     @Serializable
-    data object ReviewQueue : Route
-
-    @Serializable
     data object Trash : Route
 
     @Serializable
     data object Settings : Route
-
-    @Serializable
-    data object Kanban : Route
 
     @Serializable
     data class SavedViewRoute(val id: String) : Route

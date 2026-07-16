@@ -12,7 +12,9 @@ Decisions taken (2026-07-15):
 - Duplicates are forbidden in the library: import dedups by hash; externally introduced duplicates are flagged for cleanup. Every hash has exactly one canonical path
 - Clocks: hybrid logical clocks (HLC) for last-writer-wins, not pure Lamport
 - OCR text syncs as sidecars in `.npn/ocr/` so devices adopt each other's results instead of re-OCRing
-- v1 scope: kanban stays; auto-tagging rules move to post-v1
+- v1 scope: auto-tagging rules move to post-v1
+- Kanban dropped (2026-07-15, post-build): redundant with the review queue and grid view for a single-user tool; list + grid + review queue cover the workflow
+- Review workflow reworked (2026-07-15, post-build): the three-state status enum (inbox/reviewed/filed) collapsed to a per-doc `reviewed` boolean plus a synced, user-selectable `reviewMode` (untagged-only default, or inbox-workflow); see Feature design
 
 ## 1. Architecture principles
 
@@ -34,7 +36,7 @@ Decisions taken (2026-07-15):
 
 ### Metadata journal (per-device, write-once segments)
 - Location: `.npn/journal/<deviceId>/<seq>.jsonl` inside the library folder, so it syncs with the documents. Each device only ever creates new segment files in its own directory; a segment is written once, closed, and never modified. All devices read all segments. This is the single journal design on both platforms: no append mode needed, which sidesteps SAF's unreliable append semantics entirely.
-- A segment is opened per session (or per size/time threshold) and contains JSON-line events: `{seq, hlc, deviceId, docId, op, payload}`. Ops: `tag-add`, `tag-remove`, `prop-set` (status, correspondent, document type, document date), `doc-trash`, `doc-restore`, `doc-delete` (tombstone), `relink`, plus `tag-rename`/`tag-merge` as library-wide ops.
+- A segment is opened per session (or per size/time threshold) and contains JSON-line events: `{seq, hlc, deviceId, docId, op, payload}`. Ops: `tag-add`, `tag-remove`, `prop-set` (reviewed, correspondent, document type, document date, title), `doc-trash`, `doc-restore`, `doc-delete` (tombstone), `relink`, plus `tag-rename`/`tag-merge`/`tag-style`/`setting-set` as library-wide ops (`setting-set` carries synced settings like `reviewMode`, LWW).
 - Merge semantics, deterministic on every device:
   - Tags: observed-remove set (OR-set). Each `tag-add` is identified by its dot `(deviceId, seq)`; a `tag-remove` lists the dots it has observed. An add wins over a concurrent remove that hasn't seen it; re-adding after remove works correctly.
   - Single-value properties: last-writer-wins ordered by hybrid logical clock (HLC: physical time + logical counter), device-id tiebreak. Deterministic like Lamport, but recent edits win as users expect even after long offline periods. Absurd wall-clock values are clamped against the local clock to bound damage from a misconfigured device.
@@ -147,15 +149,18 @@ Key dependencies:
 ### Document properties (paperless-ngx parity)
 - Document date: distinct from file mtime. Auto-extracted from OCR/embedded text (date-pattern heuristics, pick most plausible, user-confirmable), manually editable. Stored as `prop-set` journal events.
 - Correspondent and document type: single-value properties like paperless-ngx, stored as journal events, managed like tags (autocomplete, merge/rename). v1 keeps these simple string properties; custom fields are post-v1.
-- Document status lifecycle: inbox -> reviewed/filed (drives the review queue and the kanban default grouping). Journal event; kanban drag-and-drop is a single journal event, conflict-free.
+- Review workflow (replaces the old inbox/reviewed/filed status enum): a library-wide `reviewMode` setting, synced across devices via a `setting-set` journal event (HLC last-writer-wins, folded like tag styles). Two modes:
+  - `untagged-only` (default): no manual marker. A document needs review while it has no tags; "reviewed" is derived as (has any tag). Nothing extra is stored, so it stays in sync with tag state for free.
+  - `inbox-workflow`: an explicit per-doc `reviewed` boolean (`prop-set` journal event, LWW). Users mark documents reviewed by hand; a document needs review while unreviewed or untagged.
+  - Switching untagged-only -> inbox-workflow prompts a one-shot migration (mark all / mark tagged / mark none) that seeds the reviewed flag. Mode resolves by HLC on merge; migration prop-sets fold per-doc.
 
 ### Search and browse
 - Built-in FTS over the three axes: file/document names, file content (embedded text + OCR), and tags. Also matches correspondent and document type.
-- Filters: tags (AND/OR/NOT), correspondent, document type, date ranges (document date and added date), folder, status, untagged/needs-review. Search results with content snippets and hit highlighting.
+- Filters: tags (AND/OR/NOT), correspondent, document type, date ranges (document date and added date), folder, reviewed/unreviewed, untagged, review-queue preset. Search results with content snippets and hit highlighting.
 - Library views, all with cached first-page thumbnails:
   1. List (dense, metadata-forward)
   2. Grid (thumbnail-forward)
-  3. Kanban: horizontally scrolling lanes of preview cards. Grouping dimension is configurable: status (inbox/review/filed, default), a chosen tag set, correspondent, or document type. Drag-and-drop between lanes updates the underlying property/tag.
+  (Kanban was considered but dropped, see decisions section.)
 - Saved views: named filter+sort+view-type combinations, pinnable to the home screen/sidebar (paperless-ngx saved views). Stored locally, export/import as JSON.
 - Duplicate handling: import dedups by hash, so duplicates only appear through external file copies; a maintenance screen lists them and offers one-tap cleanup (keep canonical path, remove extras).
 - Trash: soft delete moves files to `.npn/trash/` (syncs across devices, excluded from index) plus a `doc-trash` journal event carrying the original path for restore; name collisions in trash are avoided with hash-suffixed filenames. Restore support, configurable auto-purge (default 30 days).
@@ -163,16 +168,16 @@ Key dependencies:
 
 ### Screens (v1)
 1. Onboarding: pick/create library folder, explain sync model (point syncthing/cloud client at it)
-2. Library: search bar, filter panel (tags, correspondent, type, dates, status), sort, list/grid/kanban switcher, saved views sidebar/drawer, conflict banner
-3. Document detail: preview, tags editor, properties (date, correspondent, type, status), metadata, rename/move/delete, export/share (baked) and bake-in-place
+2. Library: search bar, filter panel (tags, correspondent, type, dates, reviewed), sort, list/grid switcher, saved views sidebar/drawer, conflict banner
+3. Document detail: preview, tags editor, properties (date, correspondent, type, reviewed marker in inbox-workflow mode), metadata, rename/move/delete, export/share (baked) and bake-in-place
 4. Scan/import: FAB -> MLKit (Android); import button + drag-drop (desktop)
-5. Review queue: inbox-status and untagged documents (also reachable as a built-in saved view)
+5. Review queue: a preset filter on the library screen (not a separate screen). Untagged docs in untagged-only mode; unreviewed-or-untagged docs in inbox-workflow mode
 6. Tag management: tag list with counts, rename/merge/delete, colors; same pattern for correspondents and document types
 7. Trash: restore/purge (plus duplicates maintenance)
 8. Settings: library location, OCR language/engine, indexing behavior, trash retention, about
 
 ### Feature parity reference
-Covered from paperless-ngx: tags, correspondents, document types, document date detection, inbox/review workflow, saved views, full-text search with filters, duplicate detection, bulk editing, trash.
+Covered from paperless-ngx: tags, correspondents, document types, document date detection, review workflow (simplified to a synced reviewMode + reviewed marker), saved views, full-text search with filters, duplicate detection, bulk editing, trash.
 Covered from Papra: simple tag management, trash/restore, deduplication.
 Moved to post-v1: matching/auto-assignment (tagging rules); the future Gemma-based suggester plugs into the same pipeline.
 Deliberately excluded (web/hosting or multi-user concerns): web UI, REST API, multi-user/permissions, email ingest, server-side consumption folders (the library folder itself covers this), audit trail, custom fields (post-v1 candidate), ASN/archive serial numbers (post-v1 candidate if physical archiving demand exists).
@@ -206,17 +211,16 @@ Exit criteria: journal convergence proven under simulated multi-device sync, DB 
 ### Phase 3: tags and metadata (2-3 weeks)
 - Tag editor UI, autocomplete, bulk tagging, tag filters in library (all journal-backed)
 - Tag management screen (rename/merge/delete as journal ops); correspondents and document types
-- Document date extraction heuristics + manual property editing; status lifecycle (inbox/reviewed)
+- Document date extraction heuristics + manual property editing; review workflow (reviewMode setting + reviewed marker)
 - Relink flow for externally modified files (heuristics: path/name, size + page-count fingerprint, baked `npn:documentId`)
 - External conflict-file detection (pattern list) with keep/discard/import-as-new
 - Review queue for inbox/untagged documents
 - XMP bake: export/share with baked copy; manual bake-in-place (single + bulk) with relink event and sync-cost warning
 
 ### Phase 4: organization and views (2-3 weeks)
-- Kanban view with preview cards, configurable grouping, drag-and-drop between lanes
 - Saved views (create from current filters, pin, manage), export/import JSON
 - Trash (soft delete to `.npn/trash/` + journal event with original path, restore, auto-purge) and duplicates maintenance screen
-- Advanced search filters (correspondent, type, dates, status) + snippets/highlighting polish
+- Advanced search filters (correspondent, type, dates, reviewed) + snippets/highlighting polish
 
 ### Phase 5: polish and release (2-3 weeks)
 - Desktop packaging: deb/rpm + AppImage/Flatpak (Linux only in v1)

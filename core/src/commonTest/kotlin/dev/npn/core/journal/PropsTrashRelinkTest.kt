@@ -17,11 +17,11 @@ class PropsTrashRelinkTest {
 
     @Test
     fun prop_lww_by_hlc() {
-        val e1 = prop(1, DocProperty.STATUS, "inbox", 10)
-        val e2 = prop(2, DocProperty.STATUS, "filed", 20)
-        assertEquals("filed", JournalFolder.fold(listOf(e1, e2)).effectiveProp(doc, DocProperty.STATUS))
+        val e1 = prop(1, DocProperty.CORRESPONDENT, "alice", 10)
+        val e2 = prop(2, DocProperty.CORRESPONDENT, "bob", 20)
+        assertEquals("bob", JournalFolder.fold(listOf(e1, e2)).effectiveProp(doc, DocProperty.CORRESPONDENT))
         // order independent
-        assertEquals("filed", JournalFolder.fold(listOf(e2, e1)).effectiveProp(doc, DocProperty.STATUS))
+        assertEquals("bob", JournalFolder.fold(listOf(e2, e1)).effectiveProp(doc, DocProperty.CORRESPONDENT))
     }
 
     @Test
@@ -34,9 +34,9 @@ class PropsTrashRelinkTest {
     @Test
     fun prop_tiebreak_by_device_id() {
         // same physical + counter, different device -> higher deviceId wins
-        val ea = JournalEvent(1, 1, Hlc(10, 0, "aaa"), "aaa", doc, JournalOp.PropSet(DocProperty.STATUS, "a"))
-        val ez = JournalEvent(1, 1, Hlc(10, 0, "zzz"), "zzz", doc, JournalOp.PropSet(DocProperty.STATUS, "z"))
-        assertEquals("z", JournalFolder.fold(listOf(ea, ez)).effectiveProp(doc, DocProperty.STATUS))
+        val ea = JournalEvent(1, 1, Hlc(10, 0, "aaa"), "aaa", doc, JournalOp.PropSet(DocProperty.CORRESPONDENT, "a"))
+        val ez = JournalEvent(1, 1, Hlc(10, 0, "zzz"), "zzz", doc, JournalOp.PropSet(DocProperty.CORRESPONDENT, "z"))
+        assertEquals("z", JournalFolder.fold(listOf(ea, ez)).effectiveProp(doc, DocProperty.CORRESPONDENT))
     }
 
     private fun trash(seq: Long, path: String, t: Long, dev: String = "d1") =

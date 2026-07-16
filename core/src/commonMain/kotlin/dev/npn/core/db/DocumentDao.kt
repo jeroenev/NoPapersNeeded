@@ -47,10 +47,10 @@ interface DocumentDao {
     fun observeAll(): Flow<List<DocumentEntity>>
 
     @Query(
-        "SELECT * FROM documents WHERE status = :status AND trashed = 0 AND deleted = 0 " +
+        "SELECT * FROM documents WHERE reviewed = :reviewed AND trashed = 0 AND deleted = 0 " +
             "AND missing = 0 ORDER BY addedAt DESC",
     )
-    fun observeByStatus(status: String): Flow<List<DocumentEntity>>
+    fun observeByReviewed(reviewed: Boolean): Flow<List<DocumentEntity>>
 
     @Query("SELECT * FROM documents WHERE trashed = 1 AND deleted = 0 ORDER BY addedAt DESC")
     fun observeTrashed(): Flow<List<DocumentEntity>>
@@ -69,17 +69,22 @@ interface DocumentDao {
     // --- Counts ---
 
     @Query(
-        "SELECT COUNT(*) FROM documents WHERE status = 'inbox' AND trashed = 0 " +
-            "AND deleted = 0 AND missing = 0",
-    )
-    fun countInbox(): Flow<Int>
-
-    @Query(
         "SELECT COUNT(*) FROM documents d " +
             "LEFT JOIN document_tags t ON d.docId = t.docId " +
             "WHERE t.tag IS NULL AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0",
     )
     fun countUntagged(): Flow<Int>
+
+    /**
+     * Review-queue count for INBOX_WORKFLOW mode: documents that are unreviewed OR have no tags.
+     * (UNTAGGED_ONLY mode uses [countUntagged].)
+     */
+    @Query(
+        "SELECT COUNT(*) FROM documents d WHERE d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "AND (d.reviewed = 0 OR NOT EXISTS " +
+            "(SELECT 1 FROM document_tags t WHERE t.docId = d.docId))",
+    )
+    fun countUnreviewedOrUntagged(): Flow<Int>
 
     @Query("SELECT COUNT(*) FROM documents WHERE trashed = 1 AND deleted = 0")
     fun countTrash(): Flow<Int>

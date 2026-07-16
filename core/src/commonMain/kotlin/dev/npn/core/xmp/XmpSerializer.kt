@@ -60,7 +60,7 @@ object XmpSerializer {
         appendSimple(sb, "npn:correspondent", data.correspondent)
         appendSimple(sb, "npn:documentType", data.docType)
         appendSimple(sb, "npn:documentDate", data.docDate)
-        appendSimple(sb, "npn:status", data.status)
+        appendSimple(sb, "npn:reviewed", data.reviewed)
 
         sb.append("    </rdf:Description>").append('\n')
         sb.append("  </rdf:RDF>").append('\n')

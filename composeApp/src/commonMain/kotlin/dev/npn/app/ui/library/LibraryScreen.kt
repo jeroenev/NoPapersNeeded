@@ -65,7 +65,7 @@ import dev.npn.app.ui.common.platformFileToExternalSource
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
-import dev.npn.core.model.DocStatus
+import dev.npn.core.model.ReviewMode
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
@@ -77,10 +77,8 @@ fun LibraryScreen(
     session: LibrarySession,
     env: AppEnvironment,
     onOpenDoc: (String) -> Unit,
-    onReviewQueue: () -> Unit,
     onTrash: () -> Unit,
     onTags: () -> Unit,
-    onKanban: () -> Unit,
     onSettings: () -> Unit,
 ) {
     val vm: LibraryViewModel = viewModel { LibraryViewModel(session) }
@@ -89,8 +87,8 @@ fun LibraryScreen(
     val tags by vm.tags.collectAsStateWithLifecycle()
     val correspondents by vm.correspondents.collectAsStateWithLifecycle()
     val docTypes by vm.docTypes.collectAsStateWithLifecycle()
-    val inbox by vm.inboxCount.collectAsStateWithLifecycle()
-    val untagged by vm.untaggedCount.collectAsStateWithLifecycle()
+    val needsReview by vm.needsReviewCount.collectAsStateWithLifecycle()
+    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
     val savedViews by vm.savedViews.collectAsStateWithLifecycle()
     val scanProgress by vm.scanProgress.collectAsStateWithLifecycle()
     val lastScan by vm.lastScanReport.collectAsStateWithLifecycle()
@@ -141,6 +139,7 @@ fun LibraryScreen(
             session = session,
             docs = docs,
             tagColors = tagColors,
+            reviewMode = reviewMode,
             scanProgress = scanProgress,
             lastScan = lastScan,
             ocr = ocr,
@@ -151,7 +150,6 @@ fun LibraryScreen(
             onImport = { importPicker.launch() },
             onScan = onScan,
             scanAvailable = scanner.available,
-            onKanban = onKanban,
             onOpenFilter = { showFilter = true },
             onAddTag = {
                 scope.launch { allTagNames = vm.allTagNames() }
@@ -166,16 +164,15 @@ fun LibraryScreen(
 
     val drawer: @Composable () -> Unit = {
         LibraryDrawerContent(
-            reviewBadge = inbox + untagged,
+            reviewBadge = needsReview,
             savedViews = savedViews,
             onAllDocuments = {
                 vm.clearFilter()
                 scope.launch { drawerState.close() }
             },
-            onReviewQueue = { scope.launch { drawerState.close() }; onReviewQueue() },
+            onReviewQueue = { vm.applyReviewPreset(); scope.launch { drawerState.close() } },
             onTrash = { scope.launch { drawerState.close() }; onTrash() },
             onTags = { scope.launch { drawerState.close() }; onTags() },
-            onKanban = { scope.launch { drawerState.close() }; onKanban() },
             onSettings = { scope.launch { drawerState.close() }; onSettings() },
             onSavedView = { view ->
                 vm.applySavedView(view)
@@ -281,6 +278,7 @@ private fun LibraryContent(
     session: LibrarySession,
     docs: List<dev.npn.core.app.DocListItem>,
     tagColors: Map<String, String?>,
+    reviewMode: ReviewMode,
     scanProgress: dev.npn.core.app.ScanProgressUi?,
     lastScan: dev.npn.core.index.ScanReport?,
     ocr: dev.npn.core.app.OcrStatus,
@@ -291,7 +289,6 @@ private fun LibraryContent(
     onImport: () -> Unit,
     onScan: () -> Unit,
     scanAvailable: Boolean,
-    onKanban: () -> Unit,
     onOpenFilter: () -> Unit,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
@@ -301,10 +298,11 @@ private fun LibraryContent(
             if (ui.selectionMode) {
                 SelectionTopBar(
                     count = ui.selected.size,
+                    reviewMode = reviewMode,
                     onClose = vm::clearSelection,
                     onAddTag = onAddTag,
                     onRemoveTag = onRemoveTag,
-                    onSetStatus = vm::bulkSetStatus,
+                    onSetReviewed = vm::bulkSetReviewed,
                     onTrash = vm::bulkTrash,
                 )
             } else {
@@ -314,9 +312,7 @@ private fun LibraryContent(
                     onMenu = onMenu,
                     onOpenFilter = onOpenFilter,
                     onSetSort = vm::setSort,
-                    onSetView = { v ->
-                        if (v == ViewType.KANBAN) onKanban() else vm.setViewType(v)
-                    },
+                    onSetView = vm::setViewType,
                     onRefresh = vm::refresh,
                 )
             }
@@ -369,7 +365,7 @@ private fun LibraryContent(
                     )
                 } else {
                     when (ui.viewType) {
-                        ViewType.GRID, ViewType.KANBAN -> DocGrid(
+                        ViewType.GRID -> DocGrid(
                             docs = docs,
                             content = session.content,
                             tagColors = tagColors,
@@ -381,6 +377,7 @@ private fun LibraryContent(
                             docs = docs,
                             content = session.content,
                             tagColors = tagColors,
+                            reviewMode = reviewMode,
                             ui = ui,
                             onOpen = onOpenDoc,
                             vm = vm,
@@ -397,6 +394,7 @@ private fun DocList(
     docs: List<dev.npn.core.app.DocListItem>,
     content: dev.npn.core.app.DocContentFacade,
     tagColors: Map<String, String?>,
+    reviewMode: ReviewMode,
     ui: LibraryUiState,
     onOpen: (String) -> Unit,
     vm: LibraryViewModel,
@@ -407,6 +405,7 @@ private fun DocList(
                 item = item,
                 content = content,
                 tagColors = tagColors,
+                reviewMode = reviewMode,
                 selectionMode = ui.selectionMode,
                 selected = item.doc.docId in ui.selected,
                 onClick = {
@@ -476,7 +475,7 @@ private fun LibraryTopBar(
             IconButton(onClick = onOpenFilter) {
                 Icon(Icons.Filled.Info, contentDescription = "Filters")
             }
-            // View switcher: LIST -> GRID -> KANBAN. Selecting KANBAN opens the kanban board.
+            // View switcher: LIST -> GRID.
             Box {
                 var viewMenu by remember { mutableStateOf(false) }
                 IconButton(onClick = { viewMenu = true }) {
@@ -487,7 +486,7 @@ private fun LibraryTopBar(
                         DropdownMenuItem(
                             text = { Text(viewLabel(v)) },
                             trailingIcon = {
-                                if (v == viewType && v != ViewType.KANBAN) {
+                                if (v == viewType) {
                                     Icon(Icons.Filled.Check, contentDescription = null)
                                 }
                             },
@@ -529,13 +528,14 @@ private fun LibraryTopBar(
 @Composable
 private fun SelectionTopBar(
     count: Int,
+    reviewMode: ReviewMode,
     onClose: () -> Unit,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
-    onSetStatus: (DocStatus) -> Unit,
+    onSetReviewed: (Boolean) -> Unit,
     onTrash: () -> Unit,
 ) {
-    var statusMenu by remember { mutableStateOf(false) }
+    var reviewMenu by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
     TopAppBar(
         title = { Text("$count selected") },
@@ -545,16 +545,18 @@ private fun SelectionTopBar(
         actions = {
             TextButton(onClick = onAddTag) { Text("Add tag") }
             TextButton(onClick = onRemoveTag) { Text("Remove tag") }
-            Box {
-                TextButton(onClick = { statusMenu = true }) { Text("Status") }
-                DropdownMenu(expanded = statusMenu, onDismissRequest = { statusMenu = false }) {
-                    DocStatus.entries.forEach { s ->
+            // Manual reviewed marker only applies in the inbox-workflow mode.
+            if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                Box {
+                    TextButton(onClick = { reviewMenu = true }) { Text("Review") }
+                    DropdownMenu(expanded = reviewMenu, onDismissRequest = { reviewMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text(statusName(s)) },
-                            onClick = {
-                                onSetStatus(s)
-                                statusMenu = false
-                            },
+                            text = { Text("Mark reviewed") },
+                            onClick = { onSetReviewed(true); reviewMenu = false },
+                        )
+                        DropdownMenuItem(
+                            text = { Text("Mark needs review") },
+                            onClick = { onSetReviewed(false); reviewMenu = false },
                         )
                     }
                 }
@@ -689,7 +691,6 @@ private fun LibraryFab(
 private fun viewLabel(v: ViewType): String = when (v) {
     ViewType.LIST -> "List"
     ViewType.GRID -> "Grid"
-    ViewType.KANBAN -> "Kanban"
 }
 
 private fun sortLabel(field: SortField): String = when (field) {
@@ -699,8 +700,4 @@ private fun sortLabel(field: SortField): String = when (field) {
     SortField.SIZE -> "Size"
 }
 
-private fun statusName(s: DocStatus): String = when (s) {
-    DocStatus.INBOX -> "Inbox"
-    DocStatus.REVIEWED -> "Reviewed"
-    DocStatus.FILED -> "Filed"
-}
+

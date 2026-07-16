@@ -5,6 +5,9 @@ import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalIndex
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SegmentWriter
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -29,8 +32,13 @@ class JournalCoordinator(
 ) {
     private val mutex = Mutex()
 
-    @Volatile
-    private var state: FoldedState = FoldedState()
+    private val _state = MutableStateFlow(FoldedState())
+    private var state: FoldedState
+        get() = _state.value
+        set(value) { _state.value = value }
+
+    /** Observable folded state; re-emits after every refresh/commit. */
+    val stateFlow: StateFlow<FoldedState> = _state.asStateFlow()
 
     /**
      * Refresh the in-memory [FoldedState] from the store. Called at boot and after any external

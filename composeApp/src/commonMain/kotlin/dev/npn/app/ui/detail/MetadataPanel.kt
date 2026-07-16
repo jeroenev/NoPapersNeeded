@@ -31,12 +31,11 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.common.StatusBadge
+import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.formatEpochDate
-import dev.npn.app.ui.common.statusLabel
 import dev.npn.core.app.DocListItem
-import dev.npn.core.model.DocStatus
+import dev.npn.core.model.ReviewMode
 
 /**
  * Editable metadata for one document: title, correspondent, docType, docDate, notes-style fields,
@@ -54,7 +53,9 @@ fun MetadataPanel(
     onCommitCorrespondent: (String) -> Unit,
     onCommitDocType: (String) -> Unit,
     onCommitDocDate: (String) -> Unit,
-    onSetStatus: (DocStatus) -> Unit,
+    reviewMode: ReviewMode,
+    reviewed: Boolean,
+    onSetReviewed: (Boolean) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
     modifier: Modifier = Modifier,
@@ -67,14 +68,19 @@ fun MetadataPanel(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Status row.
+        // Reviewed row.
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.SpaceBetween,
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            StatusBadge(DocStatus.fromWire(doc.status))
-            StatusDropdown(current = DocStatus.fromWire(doc.status), onSelect = onSetStatus)
+            ReviewedBadge(reviewed)
+            // Manual toggle only in inbox-workflow mode; derived from tags otherwise.
+            if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                OutlinedButton(onClick = { onSetReviewed(!reviewed) }) {
+                    Text(if (reviewed) "Mark needs review" else "Mark reviewed")
+                }
+            }
         }
 
         CommitTextField(
@@ -125,28 +131,6 @@ fun MetadataPanel(
             FactRow("Added", formatEpochDate(doc.addedAt))
             doc.pageCount?.let { FactRow("Pages", it.toString()) }
             FactRow("OCR", ocrLabel(doc.ocrState))
-        }
-    }
-}
-
-@Composable
-private fun StatusDropdown(current: DocStatus, onSelect: (DocStatus) -> Unit) {
-    var expanded by remember { mutableStateOf(false) }
-    androidx.compose.foundation.layout.Box {
-        OutlinedButton(onClick = { expanded = true }) {
-            Text(statusLabel(current))
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DocStatus.entries.forEach { s ->
-                DropdownMenuItem(
-                    text = { Text(statusLabel(s)) },
-                    onClick = {
-                        onSelect(s)
-                        expanded = false
-                    },
-                )
-            }
         }
     }
 }

@@ -26,7 +26,7 @@ class NpnDatabaseTest {
     private fun doc(
         id: String,
         relPath: String = "$id.pdf",
-        status: String = "inbox",
+        reviewed: Boolean = false,
         correspondent: String? = null,
         docType: String? = null,
         docDate: String? = null,
@@ -40,7 +40,7 @@ class NpnDatabaseTest {
         size = 100,
         mtime = 1000,
         addedAt = 1000,
-        status = status,
+        reviewed = reviewed,
         correspondent = correspondent,
         docType = docType,
         docDate = docDate,
@@ -69,8 +69,8 @@ class NpnDatabaseTest {
         dao.getByPath("${"a".repeat(64)}.pdf")!!.docId shouldBe "a".repeat(64)
 
         // upsert updates in place
-        dao.upsert(doc("a".repeat(64), status = "filed"))
-        dao.getByDocId("a".repeat(64))!!.status shouldBe "filed"
+        dao.upsert(doc("a".repeat(64), reviewed = true))
+        dao.getByDocId("a".repeat(64))!!.reviewed shouldBe true
     }
 
     @Test
@@ -90,18 +90,21 @@ class NpnDatabaseTest {
     }
 
     @Test
-    fun statusFilterAndCounts() = runTest {
+    fun reviewedFilterAndCounts() = runTest {
         val dao = db.documentDao()
         dao.upsertAll(
             listOf(
-                doc("a".repeat(64), status = "inbox"),
-                doc("b".repeat(64), relPath = "b.pdf", status = "inbox"),
-                doc("c".repeat(64), relPath = "c.pdf", status = "filed"),
+                doc("a".repeat(64), reviewed = false),
+                doc("b".repeat(64), relPath = "b.pdf", reviewed = false),
+                doc("c".repeat(64), relPath = "c.pdf", reviewed = true),
             ),
         )
-        dao.observeByStatus("inbox").first().map { it.docId }
+        dao.observeByReviewed(false).first().map { it.docId }
             .shouldContainExactlyInAnyOrder("a".repeat(64), "b".repeat(64))
-        dao.countInbox().first() shouldBe 2
+        // All three are untagged, so the untagged-only review count is 3.
+        dao.countUntagged().first() shouldBe 3
+        // Unreviewed-or-untagged also 3 (all untagged).
+        dao.countUnreviewedOrUntagged().first() shouldBe 3
         dao.countTrash().first() shouldBe 0
     }
 
@@ -249,7 +252,7 @@ class NpnDatabaseTest {
     // --- RawQuery path ---
 
     @Test
-    fun rawQueryFilterByStatusAndTagJoin() = runTest {
+    fun rawQueryFilterByReviewedAndTagJoin() = runTest {
         val docDao = db.documentDao()
         val tagDao = db.tagDao()
         val a = "a".repeat(64)
@@ -257,20 +260,20 @@ class NpnDatabaseTest {
         val c = "c".repeat(64)
         docDao.upsertAll(
             listOf(
-                doc(a, status = "inbox"),
-                doc(b, relPath = "b.pdf", status = "inbox"),
-                doc(c, relPath = "c.pdf", status = "filed"),
+                doc(a, reviewed = false),
+                doc(b, relPath = "b.pdf", reviewed = false),
+                doc(c, relPath = "c.pdf", reviewed = true),
             ),
         )
         tagDao.addTagToDocs("invoice", listOf(a, c))
 
-        // Upper-layer-built SQL: inbox docs that carry the 'invoice' tag -> only `a`.
+        // Upper-layer-built SQL: unreviewed docs that carry the 'invoice' tag -> only `a`.
         val query = RoomRawQuery(
             sql = "SELECT d.* FROM documents d " +
                 "JOIN document_tags t ON d.docId = t.docId " +
-                "WHERE d.status = ? AND t.tag = ? ORDER BY d.addedAt DESC",
+                "WHERE d.reviewed = ? AND t.tag = ? ORDER BY d.addedAt DESC",
             onBindStatement = {
-                it.bindText(1, "inbox")
+                it.bindLong(1, 0L)
                 it.bindText(2, "invoice")
             },
         )

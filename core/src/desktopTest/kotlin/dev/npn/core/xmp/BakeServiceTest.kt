@@ -65,7 +65,7 @@ class BakeServiceTest {
 
         var relinkOld: String? = null
         var relinkNew: String? = null
-        val data = NpnXmpData(tags = listOf("filed", "acme"), status = "filed")
+        val data = NpnXmpData(tags = listOf("filed", "acme"), reviewed = "true")
 
         val result = BakeService(fs, io).bakeInPlace("doc.pdf", data) { old, new ->
             relinkOld = old
@@ -86,7 +86,7 @@ class BakeServiceTest {
         readXmp.shouldNotBeNull()
         val parsed = XmpParser.parse(readXmp)
         parsed.tags shouldBe listOf("filed", "acme")
-        parsed.status shouldBe "filed"
+        parsed.reviewed shouldBe "true"
         parsed.documentId shouldBe oldSha
 
         // No temp litter.

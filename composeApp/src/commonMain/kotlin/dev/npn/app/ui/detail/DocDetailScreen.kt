@@ -44,9 +44,10 @@ import dev.npn.app.ui.common.BoxWithConstraintsLayout
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.library.NameDialog
+import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.model.DocStatus
+import dev.npn.core.model.ReviewMode
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
 import io.github.vinceglb.filekit.write
@@ -64,6 +65,7 @@ fun DocDetailScreen(
     val correspondents by vm.correspondents.collectAsStateWithLifecycle()
     val docTypes by vm.docTypes.collectAsStateWithLifecycle()
     val tagColors by vm.tagColors.collectAsStateWithLifecycle()
+    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
 
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -121,13 +123,16 @@ fun DocDetailScreen(
         return
     }
 
-    val reviewed = DocStatus.fromWire(current.doc.status) != DocStatus.INBOX
+    val reviewed = current.effectiveReviewed(reviewMode)
+    // Manual reviewed toggle only makes sense in inbox-workflow mode (derived otherwise).
+    val canToggleReviewed = reviewMode == ReviewMode.INBOX_WORKFLOW
 
     Scaffold(
         topBar = {
             DetailTopBar(
                 title = current.doc.title?.takeIf { it.isNotBlank() } ?: current.doc.fileName,
                 reviewed = reviewed,
+                canToggleReviewed = canToggleReviewed,
                 baking = ui.baking,
                 reindexing = ui.reindexing,
                 onBack = onBack,
@@ -157,7 +162,9 @@ fun DocDetailScreen(
                 onCommitCorrespondent = vm::setCorrespondent,
                 onCommitDocType = vm::setDocType,
                 onCommitDocDate = vm::setDocDate,
-                onSetStatus = vm::setStatus,
+                reviewMode = reviewMode,
+                reviewed = reviewed,
+                onSetReviewed = vm::setReviewed,
                 onAddTag = vm::addTag,
                 onRemoveTag = vm::removeTag,
                 modifier = m,
@@ -261,6 +268,7 @@ fun DocDetailScreen(
 private fun DetailTopBar(
     title: String,
     reviewed: Boolean,
+    canToggleReviewed: Boolean,
     baking: Boolean,
     reindexing: Boolean,
     onBack: () -> Unit,
@@ -280,12 +288,14 @@ private fun DetailTopBar(
             }
         },
         actions = {
-            IconButton(onClick = onToggleReviewed) {
-                Icon(
-                    Icons.Filled.CheckCircle,
-                    contentDescription = if (reviewed) "Mark unreviewed" else "Mark reviewed",
-                    tint = if (reviewed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+            if (canToggleReviewed) {
+                IconButton(onClick = onToggleReviewed) {
+                    Icon(
+                        Icons.Filled.CheckCircle,
+                        contentDescription = if (reviewed) "Mark unreviewed" else "Mark reviewed",
+                        tint = if (reviewed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
             }
             IconButton(onClick = onExport) {
                 Icon(Icons.Filled.Share, contentDescription = "Export baked copy")

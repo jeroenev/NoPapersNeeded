@@ -39,7 +39,6 @@ fun LibraryDrawerContent(
     onReviewQueue: () -> Unit,
     onTrash: () -> Unit,
     onTags: () -> Unit,
-    onKanban: () -> Unit,
     onSettings: () -> Unit,
     onSavedView: (SavedView) -> Unit,
     onSaveCurrentView: () -> Unit,
@@ -82,12 +81,6 @@ fun LibraryDrawerContent(
             selected = false,
             icon = { Icon(Icons.Filled.Star, contentDescription = null) },
             onClick = onTags,
-        )
-        NavigationDrawerItem(
-            label = { Text("Kanban") },
-            selected = false,
-            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
-            onClick = onKanban,
         )
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))

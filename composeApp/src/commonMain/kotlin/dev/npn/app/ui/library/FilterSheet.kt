@@ -34,7 +34,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.TagInfo
-import dev.npn.core.model.DocStatus
 
 /**
  * Filter panel. Tag multi-select is split into three sections (AND/OR/NOT); cycling a tag
@@ -92,13 +91,21 @@ fun FilterSheet(
                 }
             }
 
-            SectionLabel("Status")
+            SectionLabel("Reviewed")
             EnumDropdown(
-                current = draft.status?.let(::statusName) ?: "Any",
-                options = listOf("Any") + DocStatus.entries.map(::statusName),
+                current = when (draft.reviewed) {
+                    true -> "Reviewed"
+                    false -> "Needs review"
+                    null -> "Any"
+                },
+                options = listOf("Any", "Reviewed", "Needs review"),
                 onSelect = { label ->
                     draft = draft.copy(
-                        status = DocStatus.entries.firstOrNull { statusName(it) == label },
+                        reviewed = when (label) {
+                            "Reviewed" -> true
+                            "Needs review" -> false
+                            else -> null
+                        },
                     )
                 },
             )
@@ -200,10 +207,4 @@ private fun cycleTag(f: LibraryFilter, tag: String): LibraryFilter {
         TagBucket.ANY -> stripped.copy(tagsNone = stripped.tagsNone + tag)
         TagBucket.NONE -> stripped
     }
-}
-
-private fun statusName(s: DocStatus): String = when (s) {
-    DocStatus.INBOX -> "Inbox"
-    DocStatus.REVIEWED -> "Reviewed"
-    DocStatus.FILED -> "Filed"
 }

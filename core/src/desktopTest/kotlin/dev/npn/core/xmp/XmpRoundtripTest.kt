@@ -20,7 +20,7 @@ class XmpRoundtripTest {
                 correspondent = "Someone",
                 docType = "letter",
                 docDate = "2025-01-02",
-                status = "reviewed",
+                reviewed = "true",
             ),
         )
     }
@@ -32,7 +32,7 @@ class XmpRoundtripTest {
 
     @Test
     fun emptyTagsButOtherProps() {
-        roundtrip(NpnXmpData(documentId = "c".repeat(64), tags = emptyList(), status = "inbox"))
+        roundtrip(NpnXmpData(documentId = "c".repeat(64), tags = emptyList(), reviewed = "false"))
     }
 
     @Test

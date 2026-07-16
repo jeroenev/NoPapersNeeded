@@ -1,6 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.model.DocStatus
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -48,7 +47,7 @@ class DocumentFilterTest {
     }
 
     @Test
-    fun statusAndUntaggedAndFolder() = runTest {
+    fun reviewedAndUntaggedAndFolder() = runTest {
         val rig = AppSessionRig.create(backgroundScope)
         try {
             rig.writePdf("inbox/a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
@@ -57,16 +56,47 @@ class DocumentFilterTest {
             val a = rig.fs.sha256("inbox/a.pdf")
             val b = rig.fs.sha256("filed/b.pdf")
 
-            rig.session.meta.setStatus(listOf(b), DocStatus.FILED)
+            rig.session.meta.setReviewed(listOf(b), true)
             rig.session.meta.addTag(listOf(b), "t")
 
             val repo = rig.session.documents
-            ids(repo.observeDocuments(LibraryFilter(status = DocStatus.FILED), LibrarySort()).first())
+            ids(repo.observeDocuments(LibraryFilter(reviewed = true), LibrarySort()).first())
                 .shouldContainExactly(listOf(b))
+            ids(repo.observeDocuments(LibraryFilter(reviewed = false), LibrarySort()).first())
+                .shouldContainExactly(listOf(a))
             ids(repo.observeDocuments(LibraryFilter(untaggedOnly = true), LibrarySort()).first())
                 .shouldContainExactly(listOf(a))
             ids(repo.observeDocuments(LibraryFilter(folder = "inbox"), LibrarySort()).first())
                 .shouldContainExactly(listOf(a))
+            // UNTAGGED_ONLY review count = untagged docs (only a).
+            repo.observeUntaggedCount().first() shouldBe 1
+        } finally {
+            rig.close()
+        }
+    }
+
+    @Test
+    fun unreviewedOrUntaggedCoversInboxWorkflowReview() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        try {
+            // a: reviewed + untagged  -> review (untagged)
+            // b: unreviewed + tagged  -> review (unreviewed)
+            // c: reviewed + tagged    -> not review
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+            rig.writePdf("c.pdf", PdfFixtures.embeddedTextPdf("charlie"))
+            rig.session.rescan()
+            val a = rig.fs.sha256("a.pdf")
+            val b = rig.fs.sha256("b.pdf")
+            val c = rig.fs.sha256("c.pdf")
+
+            rig.session.meta.setReviewed(listOf(a, c), true)
+            rig.session.meta.addTag(listOf(b, c), "t")
+
+            val repo = rig.session.documents
+            ids(repo.observeDocuments(LibraryFilter(unreviewedOrUntagged = true), LibrarySort()).first())
+                .shouldContainExactlyInAnyOrder(listOf(a, b))
+            repo.observeUnreviewedOrUntaggedCount().first() shouldBe 2
         } finally {
             rig.close()
         }

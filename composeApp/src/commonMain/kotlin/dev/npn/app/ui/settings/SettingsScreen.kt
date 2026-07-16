@@ -34,21 +34,27 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
+import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ViewType
+import dev.npn.core.model.ReviewMode
 
 const val NPN_VERSION = "0.1.0"
 
 @Composable
 fun SettingsScreen(
     env: AppEnvironment,
+    session: LibrarySession,
     onBack: () -> Unit,
     onChangeLibrary: () -> Unit,
 ) {
-    val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings) }
+    val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -121,6 +127,15 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
+            SectionHeader("Review workflow")
+            ReviewModeChooser(
+                current = reviewMode,
+                onUntaggedOnly = vm::setUntaggedOnlyMode,
+                onInboxWorkflow = vm::setInboxWorkflowMode,
+            )
+
+            HorizontalDivider()
+
             SectionHeader("About")
             Text(
                 "No papers needed $NPN_VERSION",
@@ -155,8 +170,7 @@ private fun DefaultViewTypeDropdown(current: ViewType, onSelect: (ViewType) -> U
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            // KANBAN is deferred to a later wave; only offer LIST/GRID as a default.
-            listOf(ViewType.LIST, ViewType.GRID).forEach { vt ->
+            ViewType.entries.forEach { vt ->
                 DropdownMenuItem(
                     text = { Text(viewTypeLabel(vt)) },
                     onClick = {
@@ -172,5 +186,86 @@ private fun DefaultViewTypeDropdown(current: ViewType, onSelect: (ViewType) -> U
 private fun viewTypeLabel(v: ViewType): String = when (v) {
     ViewType.LIST -> "List"
     ViewType.GRID -> "Grid"
-    ViewType.KANBAN -> "Kanban"
+}
+
+@Composable
+private fun ReviewModeChooser(
+    current: ReviewMode,
+    onUntaggedOnly: () -> Unit,
+    onInboxWorkflow: (ReviewMigration) -> Unit,
+) {
+    var showMigration by remember { mutableStateOf(false) }
+
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ReviewModeOption(
+            label = "Untagged only",
+            description = "Documents just appear. A document needs review until it has a tag.",
+            selected = current == ReviewMode.UNTAGGED_ONLY,
+            onClick = { if (current != ReviewMode.UNTAGGED_ONLY) onUntaggedOnly() },
+        )
+        ReviewModeOption(
+            label = "Inbox workflow",
+            description = "New documents land in an inbox. You mark them reviewed by hand.",
+            selected = current == ReviewMode.INBOX_WORKFLOW,
+            onClick = { if (current != ReviewMode.INBOX_WORKFLOW) showMigration = true },
+        )
+        Text(
+            "This setting syncs across your devices.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+
+    if (showMigration) {
+        AlertDialog(
+            onDismissRequest = { showMigration = false },
+            title = { Text("Switch to inbox workflow") },
+            text = {
+                Text(
+                    "How should existing documents be marked? New documents will always start as " +
+                        "needing review.",
+                )
+            },
+            confirmButton = {
+                Column {
+                    TextButton(onClick = {
+                        onInboxWorkflow(ReviewMigration.MARK_ALL); showMigration = false
+                    }) { Text("Mark all as reviewed") }
+                    TextButton(onClick = {
+                        onInboxWorkflow(ReviewMigration.MARK_TAGGED); showMigration = false
+                    }) { Text("Mark tagged documents as reviewed") }
+                    TextButton(onClick = {
+                        onInboxWorkflow(ReviewMigration.MARK_NONE); showMigration = false
+                    }) { Text("Don't mark any (all need review)") }
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showMigration = false }) { Text("Cancel") }
+            },
+        )
+    }
+}
+
+@Composable
+private fun ReviewModeOption(
+    label: String,
+    description: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text(label, style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (selected) {
+                Text("Active", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
+        }
+    }
 }

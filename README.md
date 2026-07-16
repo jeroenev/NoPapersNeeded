@@ -40,12 +40,11 @@ same library.
 - Hierarchical tags with autocomplete, bulk tagging, rename/merge/delete.
 - Correspondents and document types managed like tags.
 - Saved views: named filter/sort/view combinations, pinnable.
-- Review queue for inbox and untagged documents.
-- Kanban board with configurable grouping and drag-and-drop between lanes.
+- Review queue with a choice of workflow (synced across devices): "untagged only" (documents just appear, needing review until tagged) or "inbox workflow" (an explicit reviewed marker you set by hand).
 - Trash with restore and configurable auto-purge.
 - Maintenance: duplicate detection, missing-file detection and relink flow.
 - Background OCR: MLKit on Android, Tesseract CLI on desktop.
-- Cached first-page thumbnails; list, grid and kanban views.
+- Cached first-page thumbnails; list and grid views.
 
 ## Requirements
 
@@ -61,6 +60,59 @@ The Gradle build uses a Java 17 toolchain provisioned via the foojay resolver, s
 matching JDK is downloaded automatically if needed. The Android SDK is located via
 `local.properties` (`sdk.dir`) or the `ANDROID_HOME` / `ANDROID_SDK_ROOT`
 environment variable.
+
+### Task runner (mise)
+
+Common build, run, test, and device-deploy commands are wrapped as
+[mise](https://mise.jdx.dev) tasks in `mise.toml` (plus file tasks in
+`.mise/tasks/`). Run `mise tasks` to list them, and `mise run <task>` (or just
+`mise <task>`) to execute one. The raw Gradle commands each task wraps are shown
+below if you prefer to run them directly.
+
+| Task | Wraps |
+|------|-------|
+| `mise apk` | `./gradlew :androidApp:assembleDebug` |
+| `mise apk-release` | `./gradlew :androidApp:assembleRelease` (unsigned) |
+| `mise bundle` | `./gradlew :androidApp:bundleRelease` |
+| `mise deploy` | `installDebug` over adb, then launches the app (add `--release` for the release build) |
+| `mise uninstall` | `adb uninstall dev.npn` |
+| `mise pair` | one-time adb Wi-Fi pairing wizard (Android 11+) |
+| `mise connect <ip:port>` | `adb connect` for an already-paired device |
+| `mise devices` | `adb devices -l` |
+| `mise hot` | `./gradlew :desktopApp:hotRun --auto` (Compose Hot Reload) |
+| `mise desktop` | `./gradlew :desktopApp:run` |
+| `mise package-deb` | `./gradlew :desktopApp:packageDistributionForCurrentOS` |
+| `mise package-appimage` | `./gradlew :desktopApp:packageAppImage` |
+| `mise package-jar` | `./gradlew :desktopApp:packageUberJarForCurrentOS` |
+| `mise test` | `./gradlew :core:desktopTest` |
+| `mise test-all` | `./gradlew allTests :core:desktopTest` |
+| `mise check` | `./gradlew check` |
+| `mise build` | `./gradlew build` |
+| `mise clean` | `./gradlew clean` |
+
+### Deploying to an Android device
+
+To iterate on a physical device without a cable, pair once over Wi-Fi
+(Android 11+, phone and workstation on the same network), then deploy with a
+single command:
+
+```
+mise pair      # one time: follow the prompts, uses the phone's Wireless debugging screen
+mise deploy    # every time: build + install over adb + launch dev.npn/.MainActivity
+```
+
+`mise deploy` runs the Android Gradle Plugin `installDebug` task (build + adb
+install) and then `adb shell am start -n dev.npn/.MainActivity`. If the device
+drops off the network later, reconnect with `mise connect <ip:port>` (no
+re-pairing needed). A USB-connected device works too; skip `mise pair`.
+
+For fast UI iteration without a device, use `mise hot`: the Compose UI in
+`composeApp` runs on the desktop target with Compose Hot Reload, so edits to
+shared composables update live on save. Android-only code paths (document
+scanner, share intents, WorkManager) are not exercised there; use `mise deploy`
+for those.
+
+### Raw Gradle commands
 
 Android debug APK:
 

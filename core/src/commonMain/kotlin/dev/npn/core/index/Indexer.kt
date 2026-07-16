@@ -12,7 +12,6 @@ import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalIndex
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.DocProperty
-import dev.npn.core.model.DocStatus
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -307,7 +306,7 @@ class Indexer(
                 size = meta.size,
                 mtime = meta.mtimeMillis,
                 addedAt = now,
-                status = DocStatus.INBOX.wire,
+                // reviewed defaults to false (new doc = needs review).
             ),
         )
     }
@@ -346,8 +345,8 @@ class Indexer(
      * - Tags: every tag with a known style gets a [TagEntity] upsert; every doc's document_tags is
      *   replaced with its effective tag set. Tags appearing only in adds (no explicit style) are
      *   upserted with null style so tag-management counts see them.
-     * - Props: status/correspondent/docType/docDate/title columns are set from effective props;
-     *   absent -> defaults (status inbox, others null).
+     * - Props: reviewed/correspondent/docType/docDate/title columns are set from effective props;
+     *   absent -> defaults (reviewed false, others null).
      * - Trash: the trashed flag + trashedOrigPath come from the fold's trash state. Resurrection:
      *   if the journal says trashed/deleted but the file exists at the original path, prefer the
      *   file (clear missing, do NOT set trashed) and report it. This keeps the file authoritative.
@@ -422,8 +421,7 @@ class Indexer(
                 for (p in preds) state.effectiveProp(p, key)?.let { return it }
                 return null
             }
-            val status = prop(DocProperty.STATUS)?.let { DocStatus.fromWire(it).wire }
-                ?: DocStatus.INBOX.wire
+            val reviewed = prop(DocProperty.REVIEWED) == "true"
             val correspondent = prop(DocProperty.CORRESPONDENT)
             val docType = prop(DocProperty.DOC_TYPE)
             val docDate = prop(DocProperty.DOC_DATE)
@@ -461,7 +459,7 @@ class Indexer(
                 row.copy(
                     relPath = relPath,
                     fileName = fileName,
-                    status = status,
+                    reviewed = reviewed,
                     correspondent = correspondent,
                     docType = docType,
                     docDate = docDate,

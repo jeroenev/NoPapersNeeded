@@ -136,7 +136,7 @@ class DocContentFacadeImpl(
             correspondent = doc?.correspondent,
             docType = doc?.docType,
             docDate = doc?.docDate,
-            status = doc?.status,
+            reviewed = if (doc?.reviewed == true) "true" else "false",
         )
     }
 }

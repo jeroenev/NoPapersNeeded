@@ -66,6 +66,11 @@ sealed class JournalOp {
         override val wire get() = "tag-style"
     }
 
+    /** {"key": String, "value": String?}; doc null, library-wide. LWW synced setting. */
+    data class SettingSet(val key: String, val value: String?) : JournalOp() {
+        override val wire get() = "setting-set"
+    }
+
     /** An op with an `op` string this build does not understand. Skipped during folding. */
     data class Unknown(override val wire: String) : JournalOp()
 }

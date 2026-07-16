@@ -33,7 +33,7 @@ class SegmentWriterTest {
         ))
         assertEquals(listOf(1L, 2L), batch1.map { it.seq })
 
-        val batch2 = w.commit(listOf(PendingOp.propSet(doc, DocProperty.STATUS, "filed")))
+        val batch2 = w.commit(listOf(PendingOp.propSet(doc, DocProperty.REVIEWED, "true")))
         assertEquals(listOf(3L), batch2.map { it.seq })
 
         val segs = store.listSegments()

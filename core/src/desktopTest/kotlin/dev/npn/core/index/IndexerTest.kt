@@ -197,7 +197,7 @@ class IndexerTest {
         writer.commit(
             listOf(
                 PendingOp.tagAdd(docId, "receipt"),
-                PendingOp.propSet(docId, DocProperty.STATUS, "filed"),
+                PendingOp.propSet(docId, DocProperty.REVIEWED, "true"),
                 PendingOp.propSet(docId, DocProperty.CORRESPONDENT, "acme"),
             ),
         )
@@ -205,7 +205,7 @@ class IndexerTest {
 
         rig.db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("receipt")
         val row = rig.db.documentDao().getByDocId(docId)!!
-        row.status shouldBe "filed"
+        row.reviewed shouldBe true
         row.correspondent shouldBe "acme"
 
         // tag-rename event -> tags updated

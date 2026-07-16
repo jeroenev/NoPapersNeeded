@@ -35,7 +35,6 @@ import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.Route
 import dev.npn.app.ui.onboarding.OnboardingScreen
-import dev.npn.app.ui.review.ReviewQueueScreen
 import dev.npn.app.ui.settings.SettingsScreen
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
@@ -105,10 +104,8 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
                 session = session,
                 env = env,
                 onOpenDoc = { nav.navigate(Route.DocDetail(it)) },
-                onReviewQueue = { nav.navigate(Route.ReviewQueue) },
                 onTrash = { nav.navigate(Route.Trash) },
                 onTags = { nav.navigate(Route.TagManagement) },
-                onKanban = { nav.navigate(Route.Kanban) },
                 onSettings = { nav.navigate(Route.Settings) },
             )
         }
@@ -117,13 +114,6 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
             DocDetailScreen(
                 docId = route.docId,
                 session = session,
-                onBack = { nav.popBackStack() },
-            )
-        }
-        composable<Route.ReviewQueue> {
-            ReviewQueueScreen(
-                session = session,
-                onOpenDoc = { nav.navigate(Route.DocDetail(it)) },
                 onBack = { nav.popBackStack() },
             )
         }
@@ -139,13 +129,6 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
                 onBack = { nav.popBackStack() },
             )
         }
-        composable<Route.Kanban> {
-            dev.npn.app.ui.kanban.KanbanScreen(
-                session = session,
-                onOpenDoc = { nav.navigate(Route.DocDetail(it)) },
-                onBack = { nav.popBackStack() },
-            )
-        }
         composable<Route.Settings> {
             val changePicker = rememberDirectoryPickerLauncher { dir ->
                 if (dir != null) {
@@ -154,6 +137,7 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
             }
             SettingsScreen(
                 env = env,
+                session = session,
                 onBack = { nav.popBackStack() },
                 onChangeLibrary = { changePicker.launch() },
             )

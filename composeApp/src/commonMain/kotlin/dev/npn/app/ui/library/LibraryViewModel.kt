@@ -15,7 +15,7 @@ import dev.npn.core.app.TagInfo
 import dev.npn.core.app.ViewType
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
-import dev.npn.core.model.DocStatus
+import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -94,13 +94,17 @@ class LibraryViewModel(
         session.documents.observeDocTypes()
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
-    val inboxCount: StateFlow<Int> =
-        session.documents.observeInboxCount()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    val reviewMode: StateFlow<ReviewMode> =
+        session.reviewMode
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReviewMode.DEFAULT)
 
-    val untaggedCount: StateFlow<Int> =
-        session.documents.observeUntaggedCount()
-            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
+    val needsReviewCount: StateFlow<Int> =
+        session.reviewMode.flatMapLatest { mode ->
+            when (mode) {
+                ReviewMode.UNTAGGED_ONLY -> session.documents.observeUntaggedCount()
+                ReviewMode.INBOX_WORKFLOW -> session.documents.observeUnreviewedOrUntaggedCount()
+            }
+        }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 0)
 
     val savedViews: StateFlow<List<SavedView>> =
         session.savedViews.observeSavedViews()
@@ -135,6 +139,19 @@ class LibraryViewModel(
 
     fun clearFilter() {
         _ui.value = _ui.value.copy(filter = LibraryFilter())
+        queryInput.value = ""
+    }
+
+    /**
+     * Review queue preset. In UNTAGGED_ONLY mode this filters untagged documents; in INBOX_WORKFLOW
+     * it filters documents that are unreviewed or untagged. Replaces any active filter.
+     */
+    fun applyReviewPreset() {
+        val filter = when (reviewMode.value) {
+            ReviewMode.UNTAGGED_ONLY -> LibraryFilter(untaggedOnly = true)
+            ReviewMode.INBOX_WORKFLOW -> LibraryFilter(unreviewedOrUntagged = true)
+        }
+        _ui.value = _ui.value.copy(filter = filter)
         queryInput.value = ""
     }
 
@@ -185,7 +202,7 @@ class LibraryViewModel(
 
     fun bulkAddTag(tag: String) = withSelection { session.meta.addTag(it, tag) }
     fun bulkRemoveTag(tag: String) = withSelection { session.meta.removeTag(it, tag) }
-    fun bulkSetStatus(status: DocStatus) = withSelection { session.meta.setStatus(it, status) }
+    fun bulkSetReviewed(reviewed: Boolean) = withSelection { session.meta.setReviewed(it, reviewed) }
     fun bulkTrash() = withSelection { ids -> ids.forEach { session.meta.trashDoc(it) } }
 
     private fun withSelection(block: suspend (List<String>) -> Unit) {
