@@ -133,9 +133,8 @@ class LibrarySessionImpl private constructor(
     }
 
     override suspend fun applyRelink(oldDocId: String, newDocId: String) {
-        val report = relinkService.applyRelink(oldDocId, newDocId)
-        _lastScanReport.value = report
-        coordinator.refreshState()
+        // commitAndRescan already refreshes the coordinator's folded state under the lock.
+        _lastScanReport.value = relinkService.applyRelink(oldDocId, newDocId)
     }
 
     override suspend fun purgeTrash(olderThanDays: Int) {
@@ -277,7 +276,7 @@ class LibrarySessionImpl private constructor(
 
             val importService = ImportService(fs, db.documentDao(), db.ocrQueueDao(), deps.clock)
             val maintenance = MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
-            val relinkService = RelinkService(writer, indexer)
+            val relinkService = RelinkService(coordinator)
 
             val ocrPipeline = OcrPipeline(
                 fs = fs,
