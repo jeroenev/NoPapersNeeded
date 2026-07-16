@@ -12,7 +12,9 @@ import androidx.room3.RoomDatabaseConstructor
  * correct fallback (see the platform builders): a schema bump just drops and rebuilds.
  */
 @Database(
-    version = 1,
+    // v2: documents.status (enum) replaced by documents.reviewed (boolean). Cache is rebuildable,
+    // so the platform builders drop and rebuild via fallbackToDestructiveMigration.
+    version = 2,
     exportSchema = true,
     entities = [
         DocumentEntity::class,

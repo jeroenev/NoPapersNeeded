@@ -11,7 +11,7 @@ package dev.npn.core.xmp
  * - [correspondent]  -> `npn:correspondent`
  * - [docType]        -> `npn:documentType`
  * - [docDate]        -> `npn:documentDate`  (ISO local date, `yyyy-MM-dd`)
- * - [status]         -> `npn:status`
+ * - [reviewed]       -> `npn:reviewed`       ("true"/"false")
  *
  * All fields are optional; a `null` (or empty [tags]) simply omits the corresponding property
  * from the packet.
@@ -23,7 +23,7 @@ data class NpnXmpData(
     val correspondent: String? = null,
     val docType: String? = null,
     val docDate: String? = null,
-    val status: String? = null,
+    val reviewed: String? = null,
 ) {
     companion object {
         val EMPTY = NpnXmpData()

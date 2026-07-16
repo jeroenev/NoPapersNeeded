@@ -52,9 +52,9 @@ class DocumentRepositoryImpl(
             if (doc == null) null else DocListItem(doc, tagsFor(listOf(docId))[docId].orEmpty())
         }
 
-    override fun observeInboxCount(): Flow<Int> = documentDao.countInbox()
-
     override fun observeUntaggedCount(): Flow<Int> = documentDao.countUntagged()
+
+    override fun observeUnreviewedOrUntaggedCount(): Flow<Int> = documentDao.countUnreviewedOrUntagged()
 
     override fun observeTrashed(): Flow<List<DocListItem>> =
         documentDao.observeTrashed().mapLatest { docs ->
@@ -112,9 +112,14 @@ class DocumentRepositoryImpl(
         if (filter.untaggedOnly) {
             where.add("NOT EXISTS (SELECT 1 FROM document_tags dt WHERE dt.docId = d.docId)")
         }
-        filter.status?.let {
-            where.add("d.status = ?")
-            bindText(it.wire)
+        if (filter.unreviewedOrUntagged) {
+            where.add(
+                "(d.reviewed = 0 OR NOT EXISTS (SELECT 1 FROM document_tags dt WHERE dt.docId = d.docId))",
+            )
+        }
+        filter.reviewed?.let {
+            where.add("d.reviewed = ?")
+            bindLong(if (it) 1L else 0L)
         }
         filter.correspondent?.let {
             where.add("d.correspondent = ?")

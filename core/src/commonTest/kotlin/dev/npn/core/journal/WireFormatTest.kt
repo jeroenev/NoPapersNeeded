@@ -58,7 +58,7 @@ class WireFormatTest {
         val ops = listOf(
             event(sha, JournalOp.TagAdd("t")),
             event(sha, JournalOp.TagRemove("t", listOf(Dot("d2", 7), Dot("d3", 9)))),
-            event(sha, JournalOp.PropSet(DocProperty.STATUS, "filed")),
+            event(sha, JournalOp.PropSet(DocProperty.REVIEWED, "true")),
             event(sha, JournalOp.PropSet(DocProperty.TITLE, null)),
             event(sha, JournalOp.DocTrash("/lib/x.pdf")),
             event(sha, JournalOp.DocRestore),
@@ -68,6 +68,8 @@ class WireFormatTest {
             event(null, JournalOp.TagMerge("a", "b")),
             event(null, JournalOp.TagStyle("a", "#fff", "icon")),
             event(null, JournalOp.TagStyle("a", null, null)),
+            event(null, JournalOp.SettingSet("reviewMode", "inbox-workflow")),
+            event(null, JournalOp.SettingSet("reviewMode", null)),
         )
         for (e in ops) {
             val parsed = JournalCodec.decodeLineOrNull(JournalCodec.encode(e))

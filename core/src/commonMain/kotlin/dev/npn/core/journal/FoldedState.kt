@@ -54,6 +54,9 @@ class FoldedState {
 
     data class StyleVal(val color: String?, val icon: String?, val hlc: Hlc)
 
+    // --- library-wide synced settings: key -> LWW (value, hlc) ---
+    private val settings = HashMap<String, PropVal>()
+
     /** Apply one event. Commutative: final state is identical regardless of apply order. */
     fun apply(event: JournalEvent) {
         when (val op = event.op) {
@@ -99,6 +102,12 @@ class FoldedState {
                 val existing = tagStyles[op.tag]
                 if (existing == null || event.hlc > existing.hlc) {
                     tagStyles[op.tag] = StyleVal(op.color, op.icon, event.hlc)
+                }
+            }
+            is JournalOp.SettingSet -> {
+                val existing = settings[op.key]
+                if (existing == null || event.hlc > existing.hlc) {
+                    settings[op.key] = PropVal(op.value, event.hlc)
                 }
             }
             is JournalOp.Unknown -> Unit // tolerant skip
@@ -203,6 +212,9 @@ class FoldedState {
 
     /** Effective style for a tag, or null if none set. */
     fun tagStyle(tag: String): StyleVal? = tagStyles[tag]
+
+    /** Effective value of a library-wide synced setting, or null if never set/cleared. */
+    fun effectiveSetting(key: String): String? = settings[key]?.value
 
     /** All documents this state has any tag data for (literal keys, before resolveDocId). */
     fun taggedDocs(): Set<String> = tagAdds.keys.toSet()

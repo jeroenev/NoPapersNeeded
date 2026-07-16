@@ -52,7 +52,7 @@ class XmpParserTest {
         data.title shouldBe "Foreign Title"
         // No npn props present.
         data.documentId shouldBe null
-        data.status shouldBe null
+        data.reviewed shouldBe null
     }
 
     @Test
@@ -61,11 +61,11 @@ class XmpParserTest {
             <rdf:Description rdf:about=""
                 xmlns:npn="https://npn.dev/xmp/1.0/"
                 npn:documentId="deadbeef"
-                npn:status="filed"/>
+                npn:reviewed="true"/>
         """.trimIndent()
         val data = XmpParser.parse(xml)
         data.documentId shouldBe "deadbeef"
-        data.status shouldBe "filed"
+        data.reviewed shouldBe "true"
     }
 
     @Test

@@ -45,6 +45,8 @@ class Compactor {
         val latestProp = HashMap<Pair<String, DocProperty>, JournalEvent>()
         // ---- tag-style: latest own per tag ----
         val latestStyle = HashMap<String, JournalEvent>()
+        // ---- setting-set: latest own per key ----
+        val latestSetting = HashMap<String, JournalEvent>()
         // ---- trash/restore: latest own per doc ----
         val latestTrash = HashMap<String, JournalEvent>()
 
@@ -63,6 +65,10 @@ class Compactor {
                 is JournalOp.TagStyle -> {
                     val prev = latestStyle[op.tag]
                     if (prev == null || e.hlc > prev.hlc) latestStyle[op.tag] = e
+                }
+                is JournalOp.SettingSet -> {
+                    val prev = latestSetting[op.key]
+                    if (prev == null || e.hlc > prev.hlc) latestSetting[op.key] = e
                 }
                 is JournalOp.DocTrash, JournalOp.DocRestore -> {
                     val doc = e.doc ?: continue
@@ -138,6 +144,7 @@ class Compactor {
 
         kept.addAll(latestProp.values)
         kept.addAll(latestStyle.values)
+        kept.addAll(latestSetting.values)
         kept.addAll(latestTrash.values)
         kept.addAll(alwaysKeep)
         kept.addAll(keptAdds)

@@ -86,7 +86,7 @@ class CompactionPropertyTest {
             val op: JournalOp = when (rng.nextInt(6)) {
                 0 -> JournalOp.TagAdd(tags[rng.nextInt(tags.size)])
                 1 -> JournalOp.PropSet(
-                    dev.npn.core.model.DocProperty.STATUS,
+                    dev.npn.core.model.DocProperty.REVIEWED,
                     if (rng.nextBoolean()) null else "s${rng.nextInt(100)}",
                 )
                 2 -> JournalOp.DocTrash("/f${rng.nextInt(50)}.pdf")

@@ -6,7 +6,6 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.DocProperty
-import dev.npn.core.model.DocStatus
 
 /**
  * Journal-backed write side. Every metadata change is one or more [PendingOp]s committed through
@@ -46,9 +45,10 @@ class MetadataWriterImpl(
         }
     }
 
-    override suspend fun setStatus(docIds: List<String>, status: DocStatus) {
+    override suspend fun setReviewed(docIds: List<String>, reviewed: Boolean) {
         if (docIds.isEmpty()) return
-        coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.STATUS, status.wire) })
+        val v = if (reviewed) "true" else "false"
+        coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.REVIEWED, v) })
     }
 
     override suspend fun setCorrespondent(docIds: List<String>, value: String?) {

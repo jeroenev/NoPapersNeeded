@@ -30,7 +30,7 @@ object XmpParser {
                 correspondent = readNpn(xml, "correspondent"),
                 docType = readNpn(xml, "documentType"),
                 docDate = readNpn(xml, "documentDate"),
-                status = readNpn(xml, "status"),
+                reviewed = readNpn(xml, "reviewed"),
             )
         } catch (_: Throwable) {
             // Never propagate parse failures; a partial/empty result is the contract.

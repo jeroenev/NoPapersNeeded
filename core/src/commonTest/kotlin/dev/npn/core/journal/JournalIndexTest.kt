@@ -28,14 +28,14 @@ class JournalIndexTest {
         // add a new segment for d1
         write(store, "d1", 2, listOf(ev("d1", 2, JournalOp.TagAdd("y"), 20)))
         // also a new device
-        write(store, "d2", 1, listOf(ev("d2", 1, JournalOp.PropSet(DocProperty.STATUS, "filed"), 15)))
+        write(store, "d2", 1, listOf(ev("d2", 1, JournalOp.PropSet(DocProperty.REVIEWED, "true"), 15)))
 
         val incremental = index.refresh(first.foldedSegments)
         val full = index.refresh(emptyMap())
 
         assertEquals(full.state.effectiveTags(doc), incremental.state.effectiveTags(doc))
         assertEquals(setOf("x", "y"), incremental.state.effectiveTags(doc))
-        assertEquals("filed", incremental.state.effectiveProp(doc, DocProperty.STATUS))
+        assertEquals("true", incremental.state.effectiveProp(doc, DocProperty.REVIEWED))
         assertEquals(full.foldedSegments, incremental.foldedSegments)
     }
 

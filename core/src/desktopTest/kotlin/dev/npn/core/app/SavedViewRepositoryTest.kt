@@ -16,10 +16,9 @@ class SavedViewRepositoryTest {
             val view = SavedView(
                 id = "v1",
                 name = "Invoices",
-                filter = LibraryFilter(tagsAll = listOf("invoice"), status = null),
+                filter = LibraryFilter(tagsAll = listOf("invoice"), reviewed = null),
                 sort = LibrarySort(SortField.NAME, ascending = true),
                 viewType = ViewType.GRID,
-                kanbanGrouping = KanbanGrouping.CORRESPONDENT,
                 pinned = true,
             )
             repo.save(view)
@@ -53,7 +52,7 @@ class SavedViewRepositoryTest {
                   {"id":"a","name":"A","viewType":"LIST"},
                   {"broken":true},
                   {"id":"a","name":"A dup","viewType":"LIST"},
-                  {"id":"b","name":"B","viewType":"KANBAN"}
+                  {"id":"b","name":"B","viewType":"GRID"}
                 ]
             """.trimIndent()
             val n = rig.session.savedViews.importJson(json)

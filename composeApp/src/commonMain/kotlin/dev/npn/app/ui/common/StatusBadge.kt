@@ -9,14 +9,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
-import dev.npn.core.model.DocStatus
 
+/** Small badge showing whether a document has been reviewed. */
 @Composable
-fun StatusBadge(status: DocStatus, modifier: Modifier = Modifier) {
-    val (label, bg, fg) = when (status) {
-        DocStatus.INBOX -> Triple("Inbox", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
-        DocStatus.REVIEWED -> Triple("Reviewed", MaterialTheme.colorScheme.secondaryContainer, MaterialTheme.colorScheme.onSecondaryContainer)
-        DocStatus.FILED -> Triple("Filed", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+fun ReviewedBadge(reviewed: Boolean, modifier: Modifier = Modifier) {
+    val (label, bg, fg) = if (reviewed) {
+        Triple("Reviewed", MaterialTheme.colorScheme.primaryContainer, MaterialTheme.colorScheme.onPrimaryContainer)
+    } else {
+        Triple("Needs review", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)
     }
     Text(
         text = label,
@@ -27,11 +27,4 @@ fun StatusBadge(status: DocStatus, modifier: Modifier = Modifier) {
             .background(bg)
             .padding(horizontal = 6.dp, vertical = 2.dp),
     )
-}
-
-/** Statuses in lifecycle order, for dropdowns. */
-fun statusLabel(status: DocStatus): String = when (status) {
-    DocStatus.INBOX -> "Inbox"
-    DocStatus.REVIEWED -> "Reviewed"
-    DocStatus.FILED -> "Filed"
 }

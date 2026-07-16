@@ -9,7 +9,6 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
-import dev.npn.core.model.DocStatus
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -96,7 +95,6 @@ class ImportService(
                 size = meta.size,
                 mtime = meta.mtimeMillis,
                 addedAt = now,
-                status = DocStatus.INBOX.wire,
                 ocrState = "pending",
             ),
         )

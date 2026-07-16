@@ -34,7 +34,7 @@ class PdfBoxXmpIOTest {
             correspondent = "ACME",
             docType = "invoice",
             docDate = "2026-07-15",
-            status = "filed",
+            reviewed = "true",
         )
         val xmp = XmpSerializer.serialize(data)
         val baked = io.writeBaked(fixturePdf(), xmp, data.tags, data.title)

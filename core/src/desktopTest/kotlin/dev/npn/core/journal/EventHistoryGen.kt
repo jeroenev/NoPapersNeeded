@@ -100,6 +100,11 @@ class EventHistoryGen(
                 val to = tagVocab[rng.nextInt(tagVocab.size)]
                 return@produceOne addEvent(dev, seq, hlc, null, JournalOp.TagMerge(from, to))
             }
+            choice < 96 -> {
+                // library-wide synced setting (reviewMode) LWW
+                val value = if (rng.nextBoolean()) "inbox-workflow" else "untagged-only"
+                return@produceOne addEvent(dev, seq, hlc, null, JournalOp.SettingSet("reviewMode", value))
+            }
             else -> {
                 val tag = tagVocab[rng.nextInt(tagVocab.size)]
                 return@produceOne addEvent(
@@ -147,6 +152,10 @@ object FoldedStateEquivalence {
         require(a.relinkLosers().toSet() == b.relinkLosers().toSet()) { "relink losers differ" }
         for (tag in allTags) {
             require(a.tagStyle(tag) == b.tagStyle(tag)) { "tag style differs for $tag" }
+        }
+        // Library-wide synced settings must also converge.
+        require(a.effectiveSetting("reviewMode") == b.effectiveSetting("reviewMode")) {
+            "reviewMode setting differs"
         }
     }
 }

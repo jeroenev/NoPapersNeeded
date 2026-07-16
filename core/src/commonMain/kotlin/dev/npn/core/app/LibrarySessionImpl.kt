@@ -20,8 +20,10 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.JournalIndex
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrPipeline
@@ -73,6 +75,29 @@ class LibrarySessionImpl private constructor(
 
     override val ocrStatus: Flow<OcrStatus> =
         db.ocrQueueDao().countActive().map { active -> OcrStatus(pending = active, running = active > 0) }
+
+    override val reviewMode: Flow<ReviewMode> =
+        coordinator.stateFlow.map { ReviewMode.fromWire(it.effectiveSetting(ReviewMode.WIRE_KEY)) }
+
+    override suspend fun setReviewMode(mode: ReviewMode) {
+        coordinator.commitAndApply(listOf(PendingOp.settingSet(ReviewMode.WIRE_KEY, mode.wire)))
+    }
+
+    override suspend fun markReviewedForMigration(onlyTagged: Boolean) {
+        val dao = db.documentDao()
+        val live = dao.allPathsAndMeta().mapNotNull { dao.getByDocId(it.docId) }
+            .filter { !it.trashed && !it.deleted && !it.missing }
+        val targets = if (!onlyTagged) {
+            live
+        } else {
+            val tagged = dao.tagsForDocs(live.map { it.docId }).map { it.docId }.toHashSet()
+            live.filter { it.docId in tagged }
+        }
+        val ops = targets.map {
+            PendingOp.propSet(it.docId, dev.npn.core.model.DocProperty.REVIEWED, "true")
+        }
+        if (ops.isNotEmpty()) coordinator.commitAndApply(ops)
+    }
 
     private var jobs: MutableList<Job> = ArrayList()
     private var started = false

@@ -14,7 +14,7 @@ class XmpSerializerTest {
             correspondent = "ACME Corp",
             docType = "invoice",
             docDate = "2026-07-15",
-            status = "filed",
+            reviewed = "true",
         )
 
         val expected = buildString {
@@ -38,7 +38,7 @@ class XmpSerializerTest {
             append("      <npn:correspondent>ACME Corp</npn:correspondent>\n")
             append("      <npn:documentType>invoice</npn:documentType>\n")
             append("      <npn:documentDate>2026-07-15</npn:documentDate>\n")
-            append("      <npn:status>filed</npn:status>\n")
+            append("      <npn:reviewed>true</npn:reviewed>\n")
             append("    </rdf:Description>\n")
             append("  </rdf:RDF>\n")
             append("</x:xmpmeta>\n")
@@ -74,7 +74,7 @@ class XmpSerializerTest {
 
     @Test
     fun deterministicAcrossCalls() {
-        val data = NpnXmpData(tags = listOf("x", "y"), title = "T", status = "inbox")
+        val data = NpnXmpData(tags = listOf("x", "y"), title = "T", reviewed = "false")
         XmpSerializer.serialize(data) shouldBe XmpSerializer.serialize(data)
     }
 }

@@ -16,7 +16,7 @@ import androidx.room3.PrimaryKey
     tableName = "documents",
     indices = [
         Index(value = ["relPath"], unique = true),
-        Index(value = ["status"]),
+        Index(value = ["reviewed"]),
         Index(value = ["correspondent"]),
         Index(value = ["docType"]),
         Index(value = ["docDate"]),
@@ -35,8 +35,11 @@ data class DocumentEntity(
     val pageCount: Int? = null,
     /** First-seen epoch millis. */
     val addedAt: Long,
-    /** Wire value of [dev.npn.core.model.DocStatus]. */
-    val status: String = "inbox",
+    /**
+     * Manual "reviewed" marker used by the INBOX_WORKFLOW review mode. In UNTAGGED_ONLY mode this
+     * is ignored (reviewed is derived as "has any tag").
+     */
+    val reviewed: Boolean = false,
     val correspondent: String? = null,
     val docType: String? = null,
     /** ISO-8601 local date, e.g. 2026-07-15. */

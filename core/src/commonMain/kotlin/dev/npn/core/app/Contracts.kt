@@ -3,7 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.SavedViewEntity
 import dev.npn.core.index.ScanReport
-import dev.npn.core.model.DocStatus
+import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
@@ -21,7 +21,7 @@ data class LibraryFilter(
     val tagsAll: List<String> = emptyList(),
     val tagsAny: List<String> = emptyList(),
     val tagsNone: List<String> = emptyList(),
-    val status: DocStatus? = null,
+    val reviewed: Boolean? = null,        // null = any; true/false filters the reviewed marker
     val correspondent: String? = null,
     val docType: String? = null,
     val docDateFrom: String? = null,      // ISO yyyy-MM-dd, inclusive
@@ -30,6 +30,7 @@ data class LibraryFilter(
     val addedTo: Long? = null,
     val folder: String? = null,           // relPath prefix
     val untaggedOnly: Boolean = false,
+    val unreviewedOrUntagged: Boolean = false,  // INBOX_WORKFLOW review preset: !reviewed OR no tags
 ) {
     val isEmpty: Boolean
         get() = this == LibraryFilter()
@@ -40,9 +41,7 @@ enum class SortField { NAME, ADDED, DOC_DATE, SIZE }
 @Serializable
 data class LibrarySort(val field: SortField = SortField.ADDED, val ascending: Boolean = false)
 
-enum class ViewType { LIST, GRID, KANBAN }
-
-enum class KanbanGrouping { STATUS, CORRESPONDENT, DOC_TYPE, TAGS }
+enum class ViewType { LIST, GRID }
 
 @Serializable
 data class SavedView(
@@ -51,8 +50,6 @@ data class SavedView(
     val filter: LibraryFilter = LibraryFilter(),
     val sort: LibrarySort = LibrarySort(),
     val viewType: ViewType = ViewType.LIST,
-    val kanbanGrouping: KanbanGrouping = KanbanGrouping.STATUS,
-    val kanbanTags: List<String> = emptyList(),  // lanes when grouping == TAGS
     val pinned: Boolean = false,
 )
 
@@ -69,8 +66,8 @@ data class TagInfo(val name: String, val color: String?, val icon: String?, val 
 interface DocumentRepository {
     fun observeDocuments(filter: LibraryFilter, sort: LibrarySort): Flow<List<DocListItem>>
     fun observeDoc(docId: String): Flow<DocListItem?>
-    fun observeInboxCount(): Flow<Int>
-    fun observeUntaggedCount(): Flow<Int>
+    fun observeUntaggedCount(): Flow<Int>              // UNTAGGED_ONLY review count
+    fun observeUnreviewedOrUntaggedCount(): Flow<Int>  // INBOX_WORKFLOW review count
     fun observeTrashed(): Flow<List<DocListItem>>
     fun observeMissing(): Flow<List<DocumentEntity>>
     fun observeDuplicates(): Flow<List<Pair<String, String>>>  // docId to extra relPath
@@ -96,7 +93,7 @@ interface SavedViewRepository {
 interface MetadataWriter {
     suspend fun addTag(docIds: List<String>, tag: String)
     suspend fun removeTag(docIds: List<String>, tag: String)
-    suspend fun setStatus(docIds: List<String>, status: DocStatus)
+    suspend fun setReviewed(docIds: List<String>, reviewed: Boolean)
     suspend fun setCorrespondent(docIds: List<String>, value: String?)
     suspend fun setDocType(docIds: List<String>, value: String?)
     suspend fun setDocDate(docId: String, isoDate: String?)
@@ -139,6 +136,18 @@ interface LibrarySession {
     val scanProgress: Flow<ScanProgressUi?>        // null when idle
     val lastScanReport: Flow<ScanReport?>
     val ocrStatus: Flow<OcrStatus>
+
+    /** Library-wide review workflow, synced across devices via the journal. */
+    val reviewMode: Flow<ReviewMode>
+    suspend fun setReviewMode(mode: ReviewMode)
+
+    /**
+     * One-shot migration used when switching to INBOX_WORKFLOW. Marks documents reviewed:
+     * [onlyTagged] true -> only documents that currently have at least one tag; false -> all live
+     * documents. Writes reviewed=true prop-set events only where needed (unaffected docs keep the
+     * default false). No-op set writes nothing.
+     */
+    suspend fun markReviewedForMigration(onlyTagged: Boolean)
 
     suspend fun rescan(): ScanReport
     suspend fun importPdf(source: dev.npn.core.fs.ExternalSource, suggestedName: String): ImportOutcome

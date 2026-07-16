@@ -1,6 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.model.DocStatus
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -38,15 +37,15 @@ class MetadataWriterTest {
     }
 
     @Test
-    fun setStatusReflected() = runTest {
+    fun setReviewedReflected() = runTest {
         val rig = AppSessionRig.create(backgroundScope)
         try {
             rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
             rig.session.rescan()
             val id = rig.docId("a.pdf")
 
-            rig.session.meta.setStatus(listOf(id), DocStatus.FILED)
-            rig.db.documentDao().getByDocId(id)!!.status shouldBe DocStatus.FILED.wire
+            rig.session.meta.setReviewed(listOf(id), true)
+            rig.db.documentDao().getByDocId(id)!!.reviewed shouldBe true
         } finally {
             rig.close()
         }

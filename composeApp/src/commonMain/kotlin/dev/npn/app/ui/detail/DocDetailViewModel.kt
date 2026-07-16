@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.model.DocStatus
+import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,6 +38,10 @@ class DocDetailViewModel(
     val doc: StateFlow<DocListItem?> =
         session.documents.observeDoc(docId)
             .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), null)
+
+    val reviewMode: StateFlow<ReviewMode> =
+        session.reviewMode
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), ReviewMode.DEFAULT)
 
     val correspondents: StateFlow<List<String>> =
         session.documents.observeCorrespondents()
@@ -92,13 +96,13 @@ class DocDetailViewModel(
     fun setDocType(value: String?) =
         launch { session.meta.setDocType(listOf(docId), value?.takeIf { it.isNotBlank() }) }
     fun setDocDate(isoDate: String?) = launch { session.meta.setDocDate(docId, isoDate?.takeIf { it.isNotBlank() }) }
-    fun setStatus(status: DocStatus) = launch { session.meta.setStatus(listOf(docId), status) }
 
     fun addTag(tag: String) = launch { session.meta.addTag(listOf(docId), tag) }
     fun removeTag(tag: String) = launch { session.meta.removeTag(listOf(docId), tag) }
 
-    fun markReviewed() = setStatus(DocStatus.REVIEWED)
-    fun markUnreviewed() = setStatus(DocStatus.INBOX)
+    fun setReviewed(reviewed: Boolean) = launch { session.meta.setReviewed(listOf(docId), reviewed) }
+    fun markReviewed() = setReviewed(true)
+    fun markUnreviewed() = setReviewed(false)
 
     fun trash(onDone: () -> Unit) = launch {
         session.meta.trashDoc(docId)

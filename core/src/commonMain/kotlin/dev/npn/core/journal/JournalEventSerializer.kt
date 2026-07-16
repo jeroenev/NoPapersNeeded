@@ -96,6 +96,10 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
             put("color", op.color?.let { JsonPrimitive(it) } ?: JsonNull)
             put("icon", op.icon?.let { JsonPrimitive(it) } ?: JsonNull)
         }
+        is JournalOp.SettingSet -> buildJsonObject {
+            put("key", JsonPrimitive(op.key))
+            put("value", op.value?.let { JsonPrimitive(it) } ?: JsonNull)
+        }
         is JournalOp.Unknown -> JsonObject(emptyMap())
     }
 
@@ -122,6 +126,10 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
             tag = p["tag"]!!.jsonPrimitive.content,
             color = p["color"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content },
             icon = p["icon"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content },
+        )
+        "setting-set" -> JournalOp.SettingSet(
+            key = p["key"]!!.jsonPrimitive.content,
+            value = p["value"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content },
         )
         else -> JournalOp.Unknown(opWire)
     }
