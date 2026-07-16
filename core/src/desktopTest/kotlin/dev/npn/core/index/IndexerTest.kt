@@ -125,7 +125,7 @@ class IndexerTest {
 
         // Apply relink: metadata carries to new doc, old doc superseded (deleted).
         rig.clock.advance()
-        val relink = RelinkService(writer, rig.indexer)
+        val relink = RelinkService(rig.coordinator(writer))
         relink.applyRelink(oldId, newId)
 
         rig.db.tagDao().tagsForDocument(newId) shouldContainExactly listOf("invoice")

@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.FsSegmentStoreFiles
@@ -45,6 +46,10 @@ class IndexRig private constructor(
             hlcClock = HlcClock(deviceId, clock),
             localState = DbLocalJournalState(db.keyValueDao()),
         )
+
+    /** Build a [JournalCoordinator] over [writer] and this rig's indexer/journal index. */
+    fun coordinator(writer: SegmentWriter): JournalCoordinator =
+        JournalCoordinator(writer, journalIndex, indexer)
 
     /** Write a fake PDF (bytes need not be valid; only the .pdf suffix matters to the indexer). */
     fun writePdf(relPath: String, content: String) {

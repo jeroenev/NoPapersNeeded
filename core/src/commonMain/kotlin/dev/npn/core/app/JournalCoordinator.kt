@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.index.Indexer
+import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalIndex
 import dev.npn.core.journal.PendingOp
@@ -69,4 +70,21 @@ class JournalCoordinator(
 
     /** Convenience for op lists that do not depend on current dots. */
     suspend fun commitAndApply(ops: List<PendingOp>): Boolean = commitBuilt { ops }
+
+    /**
+     * Commit [ops] as one segment and run a full [Indexer.rescan] inside the same critical section.
+     *
+     * Unlike [commitBuilt] (which only refolds), this is for ops such as `relink` whose fold effect
+     * needs a full rescan to carry metadata onto the new id and mark the superseded doc. Serializing
+     * this against every other write preserves the single-writer invariant: the shared, non
+     * concurrency-safe [SegmentWriter] is never touched by two callers at once.
+     *
+     * Returns the resulting [ScanReport]. Refreshes [currentState] from the store after the rescan.
+     */
+    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport = mutex.withLock {
+        writer.commit(ops)
+        val report = indexer.rescan()
+        state = journalIndex.refresh().state
+        report
+    }
 }
