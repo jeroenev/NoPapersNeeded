@@ -4,6 +4,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.pdf.PdfEngine
+import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.NpnXmpData
@@ -28,6 +29,7 @@ class DocContentFacadeImpl(
     private val thumbnailService: ThumbnailService,
     private val bakeService: BakeService,
     private val coordinator: JournalCoordinator,
+    private val renderGate: RenderGate = RenderGate(),
 ) : DocContentFacade {
 
     private val documentDao get() = db.documentDao()
@@ -57,9 +59,11 @@ class DocContentFacadeImpl(
         val doc = documentDao.getByDocId(docId) ?: return null
         return try {
             val bytes = fs.readBytes(doc.relPath)
-            pdfEngine.open(bytes).use { handle ->
-                if (pageIndex < 0 || pageIndex >= handle.pageCount) return null
-                handle.renderPagePng(pageIndex, maxDim)
+            renderGate.render {
+                pdfEngine.open(bytes).use { handle ->
+                    if (pageIndex < 0 || pageIndex >= handle.pageCount) null
+                    else handle.renderPagePng(pageIndex, maxDim)
+                }
             }
         } catch (t: Throwable) {
             println("renderPage failed for $docId p$pageIndex: ${t.message}")

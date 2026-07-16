@@ -24,6 +24,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
@@ -39,6 +41,7 @@ import androidx.compose.material3.TextButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
+import dev.npn.core.app.GridSizing
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
@@ -124,6 +127,14 @@ fun SettingsScreen(
                 current = state.defaultViewType,
                 onSelect = vm::setDefaultViewType,
             )
+            GridSizeSlider(
+                current = state.gridColumnWidth,
+                onChange = vm::setGridColumnWidth,
+            )
+            LandscapeListToggle(
+                enabled = state.landscapeListColumns,
+                onToggle = vm::setLandscapeListColumns,
+            )
 
             HorizontalDivider()
 
@@ -186,6 +197,44 @@ private fun DefaultViewTypeDropdown(current: ViewType, onSelect: (ViewType) -> U
 private fun viewTypeLabel(v: ViewType): String = when (v) {
     ViewType.LIST -> "List"
     ViewType.GRID -> "Grid"
+}
+
+@Composable
+private fun GridSizeSlider(current: Int, onChange: (Int) -> Unit) {
+    // Local slider position for smooth dragging; the committed value drives the label and persists.
+    var position by remember(current) { mutableStateOf(current.toFloat()) }
+    Column {
+        Text(
+            "Grid item size: ${position.toInt()} dp",
+            style = MaterialTheme.typography.bodyMedium,
+        )
+        Slider(
+            value = position,
+            onValueChange = { position = it },
+            onValueChangeFinished = { onChange(position.toInt()) },
+            valueRange = GridSizing.MIN_COLUMN_WIDTH.toFloat()..GridSizing.MAX_COLUMN_WIDTH.toFloat(),
+        )
+        Text(
+            "Smaller values fit more columns. Only affects the grid view.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+}
+
+@Composable
+private fun LandscapeListToggle(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text("Multi-column list in landscape", style = MaterialTheme.typography.bodyMedium)
+            Text(
+                "Show the list view in two columns when the window is wider than it is tall.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = enabled, onCheckedChange = onToggle)
+    }
 }
 
 @Composable

@@ -28,6 +28,8 @@ class SettingsRepositoryImpl(
         val ocrLanguage: String,
         val trashRetentionDays: Int,
         val defaultViewType: ViewType,
+        val gridColumnWidth: Int,
+        val landscapeListColumns: Boolean,
     )
 
     private fun load(): Snapshot {
@@ -39,7 +41,11 @@ class SettingsRepositoryImpl(
             ocrLanguage = props.getProperty(KEY_OCR_LANG) ?: "eng",
             trashRetentionDays = props.getProperty(KEY_TRASH_DAYS)?.toIntOrNull() ?: 30,
             defaultViewType = props.getProperty(KEY_VIEW_TYPE)?.let { runCatching { ViewType.valueOf(it) }.getOrNull() }
-                ?: ViewType.LIST,
+                ?: ViewType.GRID,
+            gridColumnWidth = props.getProperty(KEY_GRID_WIDTH)?.toIntOrNull()
+                ?.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
+                ?: GridSizing.DEFAULT_COLUMN_WIDTH,
+            landscapeListColumns = props.getProperty(KEY_LANDSCAPE_LIST)?.toBoolean() ?: false,
         )
     }
 
@@ -49,6 +55,8 @@ class SettingsRepositoryImpl(
         props.setProperty(KEY_OCR_LANG, snapshot.ocrLanguage)
         props.setProperty(KEY_TRASH_DAYS, snapshot.trashRetentionDays.toString())
         props.setProperty(KEY_VIEW_TYPE, snapshot.defaultViewType.name)
+        props.setProperty(KEY_GRID_WIDTH, snapshot.gridColumnWidth.toString())
+        props.setProperty(KEY_LANDSCAPE_LIST, snapshot.landscapeListColumns.toString())
         file.parentFile?.mkdirs()
         file.outputStream().use { props.store(it, "no-papers-needed settings") }
     }
@@ -57,6 +65,8 @@ class SettingsRepositoryImpl(
     override val ocrLanguage: Flow<String> = state.map { it.ocrLanguage }
     override val trashRetentionDays: Flow<Int> = state.map { it.trashRetentionDays }
     override val defaultViewType: Flow<ViewType> = state.map { it.defaultViewType }
+    override val gridColumnWidth: Flow<Int> = state.map { it.gridColumnWidth }
+    override val landscapeListColumns: Flow<Boolean> = state.map { it.landscapeListColumns }
 
     override suspend fun setLibraryLocation(location: String?) {
         val next = state.value.copy(libraryLocation = location?.ifEmpty { null })
@@ -82,11 +92,27 @@ class SettingsRepositoryImpl(
         persist(next)
     }
 
+    override suspend fun setGridColumnWidth(dp: Int) {
+        val next = state.value.copy(
+            gridColumnWidth = dp.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
+        )
+        state.value = next
+        persist(next)
+    }
+
+    override suspend fun setLandscapeListColumns(enabled: Boolean) {
+        val next = state.value.copy(landscapeListColumns = enabled)
+        state.value = next
+        persist(next)
+    }
+
     companion object {
         private const val KEY_LOCATION = "libraryLocation"
         private const val KEY_OCR_LANG = "ocrLanguage"
         private const val KEY_TRASH_DAYS = "trashRetentionDays"
         private const val KEY_VIEW_TYPE = "defaultViewType"
+        private const val KEY_GRID_WIDTH = "gridColumnWidth"
+        private const val KEY_LANDSCAPE_LIST = "landscapeListColumns"
 
         fun defaultFile(): File {
             val configHome = System.getenv("XDG_CONFIG_HOME")?.ifEmpty { null }

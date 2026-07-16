@@ -4,6 +4,7 @@ package dev.npn.app.ui.library
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -60,6 +61,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.BoxWithConstraintsLayout
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.platformFileToExternalSource
 import dev.npn.core.app.LibrarySession
@@ -81,7 +83,7 @@ fun LibraryScreen(
     onTags: () -> Unit,
     onSettings: () -> Unit,
 ) {
-    val vm: LibraryViewModel = viewModel { LibraryViewModel(session) }
+    val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val docs by vm.documents.collectAsStateWithLifecycle()
     val tags by vm.tags.collectAsStateWithLifecycle()
@@ -293,6 +295,9 @@ private fun LibraryContent(
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
 ) {
+    val queryText by vm.queryText.collectAsStateWithLifecycle()
+    val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
+    val landscapeListColumns by vm.landscapeListColumns.collectAsStateWithLifecycle()
     Scaffold(
         topBar = {
             if (ui.selectionMode) {
@@ -330,7 +335,7 @@ private fun LibraryContent(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             SearchField(
-                value = ui.filter.query ?: "",
+                value = queryText,
                 onValueChange = vm::onQueryChange,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
@@ -370,6 +375,7 @@ private fun LibraryContent(
                             content = session.content,
                             tagColors = tagColors,
                             ui = ui,
+                            columnWidth = gridColumnWidth,
                             onOpen = onOpenDoc,
                             vm = vm,
                         )
@@ -379,6 +385,7 @@ private fun LibraryContent(
                             tagColors = tagColors,
                             reviewMode = reviewMode,
                             ui = ui,
+                            landscapeColumns = landscapeListColumns,
                             onOpen = onOpenDoc,
                             vm = vm,
                         )
@@ -396,26 +403,49 @@ private fun DocList(
     tagColors: Map<String, String?>,
     reviewMode: ReviewMode,
     ui: LibraryUiState,
+    landscapeColumns: Boolean,
     onOpen: (String) -> Unit,
     vm: LibraryViewModel,
 ) {
-    LazyColumn(Modifier.fillMaxSize()) {
-        items(docs, key = { it.doc.docId }) { item ->
-            DocListRow(
-                item = item,
-                content = content,
-                tagColors = tagColors,
-                reviewMode = reviewMode,
-                selectionMode = ui.selectionMode,
-                selected = item.doc.docId in ui.selected,
-                onClick = {
-                    if (ui.selectionMode) vm.toggleSelection(item.doc.docId)
-                    else onOpen(item.doc.docId)
-                },
-                onLongClick = { vm.startSelection(item.doc.docId) },
-                onToggleSelect = { vm.toggleSelection(item.doc.docId) },
-            )
-            HorizontalDivider()
+    val row: @Composable (dev.npn.core.app.DocListItem) -> Unit = { item ->
+        DocListRow(
+            item = item,
+            content = content,
+            tagColors = tagColors,
+            reviewMode = reviewMode,
+            selectionMode = ui.selectionMode,
+            selected = item.doc.docId in ui.selected,
+            onClick = {
+                if (ui.selectionMode) vm.toggleSelection(item.doc.docId)
+                else onOpen(item.doc.docId)
+            },
+            onLongClick = { vm.startSelection(item.doc.docId) },
+            onToggleSelect = { vm.toggleSelection(item.doc.docId) },
+        )
+    }
+
+    // Multi-column list when the option is on and the content area is landscape; otherwise the
+    // classic single-column list. Two columns keeps each row wide enough to stay readable.
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        if (landscapeColumns && isLandscape) {
+            LazyVerticalGrid(
+                columns = GridCells.Fixed(2),
+                modifier = Modifier.fillMaxSize(),
+            ) {
+                items(docs, key = { it.doc.docId }) { item ->
+                    Column {
+                        row(item)
+                        HorizontalDivider()
+                    }
+                }
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxSize()) {
+                items(docs, key = { it.doc.docId }) { item ->
+                    row(item)
+                    HorizontalDivider()
+                }
+            }
         }
     }
 }
@@ -426,11 +456,12 @@ private fun DocGrid(
     content: dev.npn.core.app.DocContentFacade,
     tagColors: Map<String, String?>,
     ui: LibraryUiState,
+    columnWidth: Int,
     onOpen: (String) -> Unit,
     vm: LibraryViewModel,
 ) {
     LazyVerticalGrid(
-        columns = GridCells.Adaptive(160.dp),
+        columns = GridCells.Adaptive(columnWidth.dp),
         modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),

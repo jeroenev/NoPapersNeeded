@@ -7,6 +7,7 @@ import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.OcrStatus
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.ScanProgressUi
@@ -25,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -53,15 +55,43 @@ data class LibraryUiState(
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 class LibraryViewModel(
     val session: LibrarySession,
+    private val settings: SettingsRepository,
 ) : ViewModel() {
 
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
 
-    // Raw query text, debounced before it hits the filter.
+    // True once the user picks a view or applies a saved view this session. Guards against the
+    // async default-view seed clobbering an explicit choice made before it arrives.
+    private var viewOverridden = false
+
+    /** Min grid cell width (dp), user-adjustable via settings; drives the adaptive column count. */
+    val gridColumnWidth: StateFlow<Int> =
+        settings.gridColumnWidth
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), 160)
+
+    /** When true, the list view uses multiple columns while the window is landscape. */
+    val landscapeListColumns: StateFlow<Boolean> =
+        settings.landscapeListColumns
+            .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    // Raw query text, debounced before it hits the filter. The search field reads this directly
+    // (via [queryText]) so it reflects keystrokes immediately; the debounce only gates the filter.
+    // Binding the field to the debounced filter value instead desyncs the Android IME and drops
+    // input.
     private val queryInput = MutableStateFlow("")
+    val queryText: StateFlow<String> = queryInput.asStateFlow()
 
     init {
+        // Seed the initial view from the persisted default. Only applies the first value and only
+        // if the user has not already switched the view this session.
+        viewModelScope.launch {
+            val saved = settings.defaultViewType.first()
+            if (!viewOverridden) {
+                _ui.value = _ui.value.copy(viewType = saved)
+            }
+        }
+
         viewModelScope.launch {
             queryInput
                 .debounce(300)
@@ -160,10 +190,15 @@ class LibraryViewModel(
     }
 
     fun setViewType(v: ViewType) {
+        viewOverridden = true
         _ui.value = _ui.value.copy(viewType = v)
+        // Persist so the choice becomes the default and survives restart (also keeps the settings
+        // screen in sync with the top-bar switcher).
+        viewModelScope.launch { settings.setDefaultViewType(v) }
     }
 
     fun applySavedView(view: SavedView) {
+        viewOverridden = true
         _ui.value = _ui.value.copy(filter = view.filter, sort = view.sort, viewType = view.viewType)
         queryInput.value = view.filter.query ?: ""
     }

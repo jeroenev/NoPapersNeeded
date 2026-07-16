@@ -1,0 +1,40 @@
+#!/usr/bin/env bash
+#MISE description="Build, install over adb, and launch on the connected device"
+#USAGE flag "--release" help="Deploy the release build instead of debug"
+set -euo pipefail
+
+APP_ID="${ANDROID_APP_ID:-dev.npn}"
+LAUNCHER="${ANDROID_LAUNCHER:-dev.npn/.MainActivity}"
+
+# Collect serials of online devices (state == "device"). A single wireless phone
+# can show up twice: once as an IP:port entry and once as an mDNS/TLS entry. Both
+# are the same hardware, so prefer the IP:port serial and pin adb to it via
+# ANDROID_SERIAL to avoid "more than one device" errors.
+serials=$(adb devices | awk '$2 == "device" { print $1 }')
+
+if [ -z "$serials" ]; then
+    echo "No adb device connected. Plug in via USB, or pair wirelessly with: mise pair" >&2
+    echo "Current devices:" >&2
+    adb devices -l >&2
+    exit 1
+fi
+
+# Pick an IP:port serial if present, else the first one.
+target=$(printf '%s\n' "$serials" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$' | head -n1)
+if [ -z "$target" ]; then
+    target=$(printf '%s\n' "$serials" | head -n1)
+fi
+export ANDROID_SERIAL="$target"
+echo ">> Using device $ANDROID_SERIAL"
+
+if [ "${usage_release:-false}" = "true" ]; then
+    echo ">> Building + installing release..."
+    ./gradlew :androidApp:installRelease
+else
+    echo ">> Building + installing debug..."
+    ./gradlew :androidApp:installDebug
+fi
+
+echo ">> Launching $LAUNCHER ..."
+adb shell am start -n "$LAUNCHER"
+echo ">> Done."

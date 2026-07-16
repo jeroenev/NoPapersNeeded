@@ -29,6 +29,7 @@ import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.ocr.OcrWorker
 import dev.npn.core.pdf.PdfEngine
+import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.xmp.BakeService
@@ -292,12 +293,16 @@ class LibrarySessionImpl private constructor(
             )
             val ocrWorker = OcrWorker(ocrPipeline, deps.scope)
 
+            // Single shared gate so thumbnail + page rendering share one bounded concurrency
+            // budget and a first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
+            val renderGate = RenderGate()
             val thumbnailService = ThumbnailService(
                 engine = deps.pdfEngine,
                 fs = fs,
                 store = deps.thumbnailStore,
                 thumbnailDao = db.thumbnailDao(),
                 documentDao = db.documentDao(),
+                renderGate = renderGate,
             )
             val bakeService = BakeService(fs, deps.xmpIO)
 
@@ -305,7 +310,7 @@ class LibrarySessionImpl private constructor(
             val tags = TagRepositoryImpl(db.tagDao())
             val savedViews = SavedViewRepositoryImpl(db.savedViewDao())
             val meta = MetadataWriterImpl(coordinator, db, fs, TrashOps(fs))
-            val content = DocContentFacadeImpl(db, fs, deps.pdfEngine, thumbnailService, bakeService, coordinator)
+            val content = DocContentFacadeImpl(db, fs, deps.pdfEngine, thumbnailService, bakeService, coordinator, renderGate)
 
             return LibrarySessionImpl(
                 deviceId = effectiveDeviceId,

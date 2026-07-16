@@ -2,6 +2,7 @@ package dev.npn.app.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.npn.core.app.GridSizing
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.ViewType
@@ -16,7 +17,9 @@ data class SettingsUiState(
     val libraryLocation: String? = null,
     val ocrLanguage: String = "eng",
     val trashRetentionDays: Int = 30,
-    val defaultViewType: ViewType = ViewType.LIST,
+    val defaultViewType: ViewType = ViewType.GRID,
+    val gridColumnWidth: Int = GridSizing.DEFAULT_COLUMN_WIDTH,
+    val landscapeListColumns: Boolean = false,
 )
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
@@ -32,12 +35,15 @@ class SettingsViewModel(
         settings.ocrLanguage,
         settings.trashRetentionDays,
         settings.defaultViewType,
-    ) { location, lang, retention, viewType ->
+        combine(settings.gridColumnWidth, settings.landscapeListColumns) { w, l -> w to l },
+    ) { location, lang, retention, viewType, grid ->
         SettingsUiState(
             libraryLocation = location,
             ocrLanguage = lang,
             trashRetentionDays = retention,
             defaultViewType = viewType,
+            gridColumnWidth = grid.first,
+            landscapeListColumns = grid.second,
         )
     }.stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), SettingsUiState())
 
@@ -51,6 +57,12 @@ class SettingsViewModel(
 
     fun setDefaultViewType(v: ViewType) =
         viewModelScope.launch { settings.setDefaultViewType(v) }
+
+    fun setGridColumnWidth(dp: Int) =
+        viewModelScope.launch { settings.setGridColumnWidth(dp) }
+
+    fun setLandscapeListColumns(enabled: Boolean) =
+        viewModelScope.launch { settings.setLandscapeListColumns(enabled) }
 
     /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */
     fun setUntaggedOnlyMode() =

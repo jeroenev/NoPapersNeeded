@@ -1,0 +1,33 @@
+#!/usr/bin/env bash
+#MISE description="One-time adb Wi-Fi pairing wizard (Android 11+)"
+set -euo pipefail
+
+cat <<'EOF'
+adb Wi-Fi pairing (one time per workstation).
+
+On the phone (same Wi-Fi as this machine):
+  Settings -> Developer options -> Wireless debugging -> ON
+  Tap "Pair device with pairing code"
+  Note the IP:PORT and the 6-digit code shown on THAT screen.
+
+EOF
+
+read -r -p "Pairing IP:PORT (from the pairing-code dialog): " PAIR_ADDR
+adb pair "$PAIR_ADDR"
+
+cat <<'EOF'
+
+Pairing done. Now connect using the OTHER address shown at the top of the
+main "Wireless debugging" screen (different port than the pairing one).
+
+EOF
+
+read -r -p "Connect IP:PORT (from the main Wireless debugging screen): " CONN_ADDR
+adb connect "$CONN_ADDR"
+
+echo
+echo ">> Paired and connected. Verify:"
+adb devices -l
+echo
+echo "From now on just run: mise deploy"
+echo "If the device drops off later, reconnect with: mise connect $CONN_ADDR"
