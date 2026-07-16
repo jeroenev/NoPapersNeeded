@@ -1,6 +1,8 @@
 package dev.npn.core.index
 
+import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.model.DocProperty
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -280,20 +282,30 @@ class IndexerTest {
         rig.db.tagDao().tagsForDocument(docId).sorted() shouldContainExactly listOf("2026", "urgent", "work")
     }
 
-    // 11. deviceId fork: foreign segment in own dir -> DeviceIdentity yields a fresh id
+    // 11. deviceId fork: foreign segment in own dir -> DeviceIdentity yields a fresh id and
+    //     resets local journal state so the new id does not inherit the old seq/known segments.
     @Test
     fun deviceIdForkOnForeignSegment() = runTest {
         val kv = rig.db.keyValueDao()
         val identity = DeviceIdentity(kv)
         val deviceId = identity.getOrCreate()
 
-        // This installation writes a segment normally.
+        // This installation writes a segment normally, populating local journal state.
         rig.writePdf("a.pdf", "alpha")
         rig.indexer.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
-        val writer = rig.writer(deviceId)
+        val localState = DbLocalJournalState(kv)
+        val writer = SegmentWriter(
+            store = rig.fsSegmentStore,
+            deviceId = deviceId,
+            hlcClock = HlcClock(deviceId, rig.clock),
+            localState = localState,
+        )
         rig.clock.advance()
         writer.commit(listOf(PendingOp.tagAdd(docId, "mine")))
+        // Precondition: local state now knows a seq and at least one own segment.
+        (localState.getLastSeq() != null).shouldBeTrue()
+        localState.getKnownOwnSegments().isNotEmpty().shouldBeTrue()
 
         // Simulate a foreign installation sharing this device id: a segment appears in the same
         // device directory that our local state does not know about.
@@ -304,10 +316,12 @@ class IndexerTest {
             "",
         )
 
-        val forkedWriter = rig.writer(deviceId)
-        val newId = identity.ensureSingleWriter(forkedWriter)
+        val newId = identity.ensureSingleWriter(writer, localState)
         (newId != deviceId).shouldBeTrue()
         kv.get(DeviceIdentity.KEY_DEVICE_ID) shouldBe newId
+        // Regression: fork must clear the old device's local bookkeeping.
+        localState.getLastSeq() shouldBe null
+        localState.getKnownOwnSegments() shouldBe emptySet()
     }
 
     // 12. FTS content preserved across a metadata fold: OCR writes content, a tag-add fold must

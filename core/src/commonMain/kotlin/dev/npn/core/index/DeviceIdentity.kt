@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.journal.ForkCheck
+import dev.npn.core.journal.LocalJournalState
 import dev.npn.core.journal.SegmentWriter
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -28,18 +29,22 @@ class DeviceIdentity(private val kv: KeyValueDao) {
 
     /**
      * Run the journal fork check for [writer]. If a fork is needed (a foreign own-device segment
-     * appeared), generate and persist a fresh device id, reset the local journal state so the new
-     * id starts clean, and return it. Otherwise return the current id unchanged.
+     * appeared), generate and persist a fresh device id, reset [localState] so the new id starts
+     * clean, and return it. Otherwise return the current id unchanged.
      *
-     * The caller is expected to build a new [SegmentWriter] with the returned id when it differs.
+     * [localState] is the same state the [writer] uses; it must be reset on fork so the new device
+     * id does not inherit the old device's `lastSeq` or known-segment set (which belong to the id
+     * that was cloned). The caller is expected to build a new [SegmentWriter] with the returned id
+     * and this now-reset [localState] when the id differs.
      */
-    suspend fun ensureSingleWriter(writer: SegmentWriter): String {
+    suspend fun ensureSingleWriter(writer: SegmentWriter, localState: LocalJournalState): String {
         writer.recover()
         return when (writer.checkSingleWriter()) {
             is ForkCheck.Ok -> writer.deviceId
             is ForkCheck.ForkNeeded -> {
                 val fresh = Uuid.random().toString()
                 kv.put(KEY_DEVICE_ID, fresh)
+                localState.reset()
                 fresh
             }
         }

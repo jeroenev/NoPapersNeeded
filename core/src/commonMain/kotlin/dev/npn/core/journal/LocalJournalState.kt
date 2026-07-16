@@ -10,6 +10,13 @@ interface LocalJournalState {
     suspend fun setLastSeq(seq: Long)
     suspend fun getKnownOwnSegments(): Set<String>
     suspend fun setKnownOwnSegments(fileNames: Set<String>)
+
+    /**
+     * Clear all local bookkeeping so a freshly-forked device id starts clean. After a fork the
+     * old device's `lastSeq` and known-segment set must not carry over: the new id owns no
+     * segments yet and must number seq from zero.
+     */
+    suspend fun reset()
 }
 
 /** In-memory [LocalJournalState] for tests. */
@@ -21,4 +28,5 @@ class InMemoryLocalJournalState : LocalJournalState {
     override suspend fun setLastSeq(seq: Long) { lastSeq = seq }
     override suspend fun getKnownOwnSegments(): Set<String> = known
     override suspend fun setKnownOwnSegments(fileNames: Set<String>) { known = fileNames }
+    override suspend fun reset() { lastSeq = null; known = emptySet() }
 }
