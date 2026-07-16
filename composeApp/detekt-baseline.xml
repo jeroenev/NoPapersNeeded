@@ -1,0 +1,28 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>EmptyFunctionBlock:FakeSession.kt:DeferredDefaultViewSettings${}</ID>
+    <ID>EmptyFunctionBlock:FakeSession.kt:FakeLibrarySession${}</ID>
+    <ID>LongMethod:DocDetailScreen.kt:@Composable fun DocDetailScreen</ID>
+    <ID>LongMethod:FilterSheet.kt:@Composable fun FilterSheet</ID>
+    <ID>LongMethod:LibraryScreen.kt:@Composable fun LibraryScreen</ID>
+    <ID>LongMethod:LibraryScreen.kt:@Composable private fun LibraryContent</ID>
+    <ID>LongMethod:PageViewer.kt:@Composable fun PageViewer</ID>
+    <ID>LongMethod:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
+    <ID>LongMethod:TagManagementScreen.kt:@Composable fun TagManagementScreen</ID>
+    <ID>MatchingDeclarationName:Routes.kt:Route</ID>
+    <ID>MaxLineLength:ActiveFilters.kt:filter.tagsNone.forEach { t -&gt; add("NOT $t" to { onFilterChange(filter.copy(tagsNone = filter.tagsNone - t)) }) }</ID>
+    <ID>MaxLineLength:DocDetailScreen.kt:tint = if (reviewed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant</ID>
+    <ID>MaxLineLength:FakeSession.kt:FakeLibrarySession$override suspend fun importImagesAsPdf: ImportOutcome</ID>
+    <ID>MaxLineLength:FakeSession.kt:FakeSettingsRepository$override suspend fun setLandscapeListColumns</ID>
+    <ID>MaxLineLength:FakeSession.kt:FakeSettingsRepository$override suspend fun setTrashRetentionDays</ID>
+    <ID>MaxLineLength:LibraryViewModel.kt:LibraryViewModel$when</ID>
+    <ID>MaxLineLength:StatusBadge.kt:Triple("Needs review", MaterialTheme.colorScheme.tertiaryContainer, MaterialTheme.colorScheme.onTertiaryContainer)</ID>
+    <ID>MaxLineLength:TagDialogs.kt:Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)</ID>
+    <ID>MaxLineLength:TrashScreen.kt:EmptyState(icon = Icons.Filled.Refresh, title = "No duplicates", subtitle = "Every hash has one canonical path.")</ID>
+    <ID>MaxLineLength:TrashScreen.kt:Text("Extra copy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)</ID>
+    <ID>TooManyFunctions:DocDetailViewModel.kt:DocDetailViewModel : ViewModel</ID>
+    <ID>TooManyFunctions:LibraryViewModel.kt:LibraryViewModel : ViewModel</ID>
+  </CurrentIssues>
+</SmellBaseline>
