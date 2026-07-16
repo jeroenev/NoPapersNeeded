@@ -39,52 +39,78 @@ import dev.npn.core.model.DocProperty
 class Compactor {
 
     fun compact(ownEvents: List<JournalEvent>, othersEvents: List<JournalEvent>): List<JournalEvent> {
-        val kept = ArrayList<JournalEvent>()
+        val classified = classify(ownEvents)
+        val (keptAdds, keptRemoves) = compactOrSet(classified.ownAdds, classified.ownRemoves, othersEvents)
 
-        // ---- props: latest own per (doc, key) ----
+        val kept = ArrayList<JournalEvent>()
+        kept.addAll(classified.latestPerLwwKey())
+        kept.addAll(classified.alwaysKeep)
+        kept.addAll(keptAdds)
+        kept.addAll(keptRemoves)
+        return kept.sortedBy { it.seq }
+    }
+
+    /** Own events grouped by how compaction treats them. */
+    private class Classified {
+        // Last-writer-wins buckets: only the newest own event per identity survives.
         val latestProp = HashMap<Pair<String, DocProperty>, JournalEvent>()
-        // ---- tag-style: latest own per tag ----
         val latestStyle = HashMap<String, JournalEvent>()
-        // ---- setting-set: latest own per key ----
         val latestSetting = HashMap<String, JournalEvent>()
-        // ---- trash/restore: latest own per doc ----
         val latestTrash = HashMap<String, JournalEvent>()
 
-        val ownAdds = ArrayList<JournalEvent>()        // op is TagAdd
-        val ownRemoves = ArrayList<JournalEvent>()      // op is TagRemove
-        val alwaysKeep = ArrayList<JournalEvent>()      // deletes, renames, merges, unknowns
+        val ownAdds = ArrayList<JournalEvent>()    // op is TagAdd
+        val ownRemoves = ArrayList<JournalEvent>()  // op is TagRemove
+        val alwaysKeep = ArrayList<JournalEvent>()  // deletes, relinks, renames, merges, unknowns
 
+        fun latestPerLwwKey(): List<JournalEvent> =
+            latestProp.values + latestStyle.values + latestSetting.values + latestTrash.values
+    }
+
+    /** Bucket own events (LWW dedup for prop/style/setting/trash, collect adds/removes/keep-all). */
+    private fun classify(ownEvents: List<JournalEvent>): Classified {
+        val c = Classified()
         for (e in ownEvents) {
             when (val op = e.op) {
                 is JournalOp.PropSet -> {
                     val doc = e.doc ?: continue
                     val key = doc to op.key
-                    val prev = latestProp[key]
-                    if (prev == null || e.hlc > prev.hlc) latestProp[key] = e
+                    val prev = c.latestProp[key]
+                    if (prev == null || e.hlc > prev.hlc) c.latestProp[key] = e
                 }
                 is JournalOp.TagStyle -> {
-                    val prev = latestStyle[op.tag]
-                    if (prev == null || e.hlc > prev.hlc) latestStyle[op.tag] = e
+                    val prev = c.latestStyle[op.tag]
+                    if (prev == null || e.hlc > prev.hlc) c.latestStyle[op.tag] = e
                 }
                 is JournalOp.SettingSet -> {
-                    val prev = latestSetting[op.key]
-                    if (prev == null || e.hlc > prev.hlc) latestSetting[op.key] = e
+                    val prev = c.latestSetting[op.key]
+                    if (prev == null || e.hlc > prev.hlc) c.latestSetting[op.key] = e
                 }
                 is JournalOp.DocTrash, JournalOp.DocRestore -> {
                     val doc = e.doc ?: continue
-                    val prev = latestTrash[doc]
-                    if (prev == null || e.hlc > prev.hlc) latestTrash[doc] = e
+                    val prev = c.latestTrash[doc]
+                    if (prev == null || e.hlc > prev.hlc) c.latestTrash[doc] = e
                 }
-                is JournalOp.Relink -> alwaysKeep.add(e)
-                JournalOp.DocDelete -> alwaysKeep.add(e)
-                is JournalOp.TagRename, is JournalOp.TagMerge -> alwaysKeep.add(e)
-                is JournalOp.TagAdd -> ownAdds.add(e)
-                is JournalOp.TagRemove -> ownRemoves.add(e)
-                is JournalOp.Unknown -> alwaysKeep.add(e)
+                is JournalOp.Relink -> c.alwaysKeep.add(e)
+                JournalOp.DocDelete -> c.alwaysKeep.add(e)
+                is JournalOp.TagRename, is JournalOp.TagMerge -> c.alwaysKeep.add(e)
+                is JournalOp.TagAdd -> c.ownAdds.add(e)
+                is JournalOp.TagRemove -> c.ownRemoves.add(e)
+                is JournalOp.Unknown -> c.alwaysKeep.add(e)
             }
         }
+        return c
+    }
 
-        // ---- OR-set compaction ----
+    /**
+     * OR-set compaction: return (keptAdds, keptRemoves). Drops an (own add, own remove-of-that-add)
+     * pair only when the remove's dots are ALL own and ALL their adds are also dropped, so the pair
+     * leaves no trace and no other device can resurrect it (they refold on set change).
+     */
+    private fun compactOrSet(
+        ownAdds: List<JournalEvent>,
+        ownRemoves: List<JournalEvent>,
+        othersEvents: List<JournalEvent>,
+    ): Pair<List<JournalEvent>, List<JournalEvent>> {
         // All removed dots seen anywhere (own removes + others' removes).
         val removedDotsAll = HashSet<Dot>()
         (ownRemoves + othersEvents).forEach { e ->
@@ -92,19 +118,14 @@ class Compactor {
         }
         val ownAddDots = ownAdds.map { it.dot }.toHashSet()
 
-        // Decide which own removes we can consider dropping. A remove is a candidate for
-        // dropping only if ALL its dots are own adds (present in this own set). Removes touching
+        // A remove is a candidate for dropping only if ALL its dots are own adds. Removes touching
         // any other-device dot, or any dot not in our own add set, must be kept.
         val droppableRemoveCandidates = ownRemoves.filter { e ->
             val dots = (e.op as JournalOp.TagRemove).dots
             dots.isNotEmpty() && dots.all { it in ownAddDots }
         }
 
-        // For a droppable-candidate remove, we can drop it together with its adds only if all of
-        // its dots' adds are also dropped. An add is dropped iff it is removed (dead) AND every
-        // remove that references it is a droppable candidate.
-        // An own add is droppable if it is dead and it is referenced only by droppable removes.
-        // Build: dot -> list of own removes referencing it.
+        // dot -> own removes referencing it.
         val removesByDot = HashMap<Dot, MutableList<JournalEvent>>()
         ownRemoves.forEach { e ->
             (e.op as JournalOp.TagRemove).dots.forEach { d ->
@@ -112,11 +133,11 @@ class Compactor {
             }
         }
         val droppableRemoveSet = droppableRemoveCandidates.toHashSet()
+        // An own add is droppable if it is dead and referenced only by droppable-candidate removes.
         val droppableAddDots = HashSet<Dot>()
         for (dot in ownAddDots) {
             if (dot !in removedDotsAll) continue // still live -> keep the add
             val refs = removesByDot[dot] ?: continue // removed by someone else's remove only
-            // referenced only by own removes that are all droppable candidates?
             if (refs.all { it in droppableRemoveSet }) droppableAddDots.add(dot)
         }
 
@@ -125,27 +146,16 @@ class Compactor {
         val removesToDrop = droppableRemoveCandidates.filter { e ->
             (e.op as JournalOp.TagRemove).dots.all { it in droppableAddDots }
         }.toHashSet()
-        // Recompute: an add is only truly dropped if the remove(s) referencing it are dropped.
+        // An add is only truly dropped if the remove(s) referencing it are dropped.
         val finalDroppedAddDots = HashSet<Dot>()
         for (dot in droppableAddDots) {
             val refs = removesByDot[dot] ?: continue
             if (refs.all { it in removesToDrop }) finalDroppedAddDots.add(dot)
         }
 
-        // Keep own adds that are NOT finally dropped.
         val keptAdds = ownAdds.filter { it.dot !in finalDroppedAddDots }
-        // Keep own removes that are not dropped.
         val keptRemoves = ownRemoves.filter { it !in removesToDrop }
-
-        kept.addAll(latestProp.values)
-        kept.addAll(latestStyle.values)
-        kept.addAll(latestSetting.values)
-        kept.addAll(latestTrash.values)
-        kept.addAll(alwaysKeep)
-        kept.addAll(keptAdds)
-        kept.addAll(keptRemoves)
-
-        return kept.sortedBy { it.seq }
+        return keptAdds to keptRemoves
     }
 
     /**

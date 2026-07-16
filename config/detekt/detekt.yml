@@ -11,6 +11,8 @@ complexity:
     ignoreDefaultParameters: true
   CyclomaticComplexMethod:
     allowedComplexity: 20
+    # An exhaustive when over a sealed type (one branch per case) is readable, not complex.
+    ignoreSimpleWhenEntries: true
   TooManyFunctions:
     allowedFunctionsPerFile: 20
     allowedFunctionsPerClass: 20
