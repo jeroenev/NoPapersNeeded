@@ -11,6 +11,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Platform-built pieces for one library, returned by [PlatformLibraryFactory.build]. The
@@ -41,8 +43,14 @@ class DefaultAppEnvironment(
     override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val _session = MutableStateFlow<LibrarySessionImpl?>(null)
-    override val session: StateFlow<dev.npn.core.app.LibrarySession?>
-        get() = @Suppress("UNCHECKED_CAST") (_session.asStateFlow() as StateFlow<dev.npn.core.app.LibrarySession?>)
+    @Suppress("UNCHECKED_CAST")
+    override val session: StateFlow<dev.npn.core.app.LibrarySession?> =
+        _session.asStateFlow() as StateFlow<dev.npn.core.app.LibrarySession?>
+
+    // Serializes open/close so two overlapping opens (e.g. requestOpenLibrary on appScope racing
+    // openPersistedLibrary) cannot interleave closeCurrentInternal with _session assignment and
+    // leak a db handle or close a live session.
+    private val sessionMutex = Mutex()
 
     private val _opening = MutableStateFlow(false)
     override val opening: StateFlow<Boolean> = _opening.asStateFlow()
@@ -62,7 +70,7 @@ class DefaultAppEnvironment(
         }
     }
 
-    override suspend fun openLibrary(location: String) {
+    override suspend fun openLibrary(location: String) = sessionMutex.withLock {
         _opening.value = true
         _openError.value = null
         try {
@@ -80,7 +88,7 @@ class DefaultAppEnvironment(
         }
     }
 
-    override suspend fun closeLibrary() {
+    override suspend fun closeLibrary() = sessionMutex.withLock {
         closeCurrentInternal()
     }
 
