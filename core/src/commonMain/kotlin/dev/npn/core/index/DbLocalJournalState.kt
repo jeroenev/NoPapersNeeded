@@ -30,6 +30,11 @@ class DbLocalJournalState(private val kv: KeyValueDao) : LocalJournalState {
         kv.put(KEY_KNOWN_SEGMENTS, json.encodeToString(setSerializer, fileNames))
     }
 
+    override suspend fun reset() {
+        kv.delete(KEY_LAST_SEQ)
+        kv.delete(KEY_KNOWN_SEGMENTS)
+    }
+
     companion object {
         const val KEY_LAST_SEQ = "journal.lastSeq"
         const val KEY_KNOWN_SEGMENTS = "journal.knownOwnSegments"

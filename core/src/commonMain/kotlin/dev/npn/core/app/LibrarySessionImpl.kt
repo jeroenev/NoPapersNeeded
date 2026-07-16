@@ -259,7 +259,7 @@ class LibrarySessionImpl private constructor(
                 hlcClock = HlcClock(initialDeviceId, deps.clock),
                 localState = localState,
             )
-            val effectiveDeviceId = identity.ensureSingleWriter(provisional)
+            val effectiveDeviceId = identity.ensureSingleWriter(provisional, localState)
             val writer = if (effectiveDeviceId == initialDeviceId) {
                 provisional
             } else {
