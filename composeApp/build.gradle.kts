@@ -50,6 +50,9 @@ kotlin {
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.kotest.assertions)
+            implementation(libs.kotest.property)
         }
         androidMain.dependencies {
             implementation(libs.compose.uiToolingPreview)
