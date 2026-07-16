@@ -85,7 +85,11 @@ fun DocListRow(
                 horizontalArrangement = Arrangement.spacedBy(8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                ReviewedBadge(item.effectiveReviewed(reviewMode))
+                // Only the inbox workflow surfaces a review status. Without it, an untagged
+                // document is not "wrong", so no "Needs review" badge is shown.
+                if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                    ReviewedBadge(item.effectiveReviewed(reviewMode))
+                }
                 Text(
                     text = item.doc.docDate ?: formatEpochDate(item.doc.addedAt),
                     style = MaterialTheme.typography.bodySmall,

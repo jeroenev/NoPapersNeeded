@@ -68,15 +68,15 @@ fun MetadataPanel(
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Reviewed row.
-        Row(
-            Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            ReviewedBadge(reviewed)
-            // Manual toggle only in inbox-workflow mode; derived from tags otherwise.
-            if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+        // Reviewed row. Only the inbox workflow has a review status; without it there is no
+        // badge and no manual toggle (reviewed state is derived from tags).
+        if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                ReviewedBadge(reviewed)
                 OutlinedButton(onClick = { onSetReviewed(!reviewed) }) {
                     Text(if (reviewed) "Mark needs review" else "Mark reviewed")
                 }

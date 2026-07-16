@@ -139,7 +139,7 @@ fun SettingsScreen(
             HorizontalDivider()
 
             SectionHeader("Review workflow")
-            ReviewModeChooser(
+            InboxWorkflowToggle(
                 current = reviewMode,
                 onUntaggedOnly = vm::setUntaggedOnlyMode,
                 onInboxWorkflow = vm::setInboxWorkflowMode,
@@ -238,26 +238,32 @@ private fun LandscapeListToggle(enabled: Boolean, onToggle: (Boolean) -> Unit) {
 }
 
 @Composable
-private fun ReviewModeChooser(
+private fun InboxWorkflowToggle(
     current: ReviewMode,
     onUntaggedOnly: () -> Unit,
     onInboxWorkflow: (ReviewMigration) -> Unit,
 ) {
     var showMigration by remember { mutableStateOf(false) }
+    val enabled = current == ReviewMode.INBOX_WORKFLOW
 
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        ReviewModeOption(
-            label = "Untagged only",
-            description = "Documents just appear. A document needs review until it has a tag.",
-            selected = current == ReviewMode.UNTAGGED_ONLY,
-            onClick = { if (current != ReviewMode.UNTAGGED_ONLY) onUntaggedOnly() },
-        )
-        ReviewModeOption(
-            label = "Inbox workflow",
-            description = "New documents land in an inbox. You mark them reviewed by hand.",
-            selected = current == ReviewMode.INBOX_WORKFLOW,
-            onClick = { if (current != ReviewMode.INBOX_WORKFLOW) showMigration = true },
-        )
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Enable inbox workflow", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "New documents land in an inbox and you mark them reviewed by hand. " +
+                        "When off, documents just appear and count as reviewed once tagged.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = enabled,
+                onCheckedChange = { checked ->
+                    if (checked) showMigration = true else onUntaggedOnly()
+                },
+            )
+        }
         Text(
             "This setting syncs across your devices.",
             style = MaterialTheme.typography.bodySmall,
@@ -268,7 +274,7 @@ private fun ReviewModeChooser(
     if (showMigration) {
         AlertDialog(
             onDismissRequest = { showMigration = false },
-            title = { Text("Switch to inbox workflow") },
+            title = { Text("Enable inbox workflow") },
             text = {
                 Text(
                     "How should existing documents be marked? New documents will always start as " +
@@ -292,29 +298,5 @@ private fun ReviewModeChooser(
                 TextButton(onClick = { showMigration = false }) { Text("Cancel") }
             },
         )
-    }
-}
-
-@Composable
-private fun ReviewModeOption(
-    label: String,
-    description: String,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    OutlinedButton(onClick = onClick, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(label, style = MaterialTheme.typography.bodyLarge)
-                Text(
-                    description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            if (selected) {
-                Text("Active", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
-            }
-        }
     }
 }
