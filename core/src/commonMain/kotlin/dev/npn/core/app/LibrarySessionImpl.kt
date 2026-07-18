@@ -3,10 +3,13 @@ package dev.npn.core.app
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.FsSegmentStoreFiles
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.fs.debounced
 import dev.npn.core.index.DbFoldedSegmentTracker
 import dev.npn.core.index.DbLocalJournalState
 import dev.npn.core.index.DeviceIdentity
@@ -40,6 +43,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 
@@ -169,13 +173,24 @@ class LibrarySessionImpl private constructor(
             },
         )
 
-        // Desktop file watching -> debounced rescan. On SAF (android) watch() is empty, so this is
-        // a no-op there and indexing stays rescan-driven (pull-to-refresh / periodic job).
+        // Desktop file watching -> rescan. On SAF (android) watch() is empty, so this is a no-op
+        // there and indexing stays rescan-driven (pull-to-refresh / periodic job). Two guards:
+        // - self-echo filter: every metadata edit writes a journal segment into .npn/, which the
+        //   watcher would otherwise turn into a full rescan per edit (holding the rescan mutex and
+        //   delaying the next edit's fold). Our own writes are already folded synchronously;
+        //   other devices' segments/sidecars (file sync) still pass through.
+        // - debounce: collapse sync bursts into one rescan instead of hundreds.
         jobs.add(
             scope.launch {
-                fs.watch().collect {
-                    runCatching { doWatchTriggeredRescan() }
-                }
+                fs.watch()
+                    .filterNot { event ->
+                        val rel = (event as? FsEvent.Changed)?.relPath
+                        rel != null && NpnPaths.isOwnDeviceWrite(rel, deviceId)
+                    }
+                    .debounced()
+                    .collect {
+                        runCatching { doWatchTriggeredRescan() }
+                    }
             },
         )
 

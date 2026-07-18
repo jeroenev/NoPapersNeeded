@@ -43,6 +43,9 @@ interface TagDao {
     @Query("DELETE FROM document_tags WHERE tag = :oldName")
     suspend fun deleteDanglingDocumentTags(oldName: String)
 
+    @Query("SELECT * FROM tags")
+    suspend fun all(): List<TagEntity>
+
     @Query(
         "SELECT t.name AS name, t.color AS color, t.icon AS icon, " +
             "COUNT(dt.docId) AS count " +
