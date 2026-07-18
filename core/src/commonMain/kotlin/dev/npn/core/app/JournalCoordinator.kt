@@ -47,6 +47,7 @@ class JournalCoordinator(
      */
     suspend fun refreshState() = mutex.withLock {
         state = journalIndex.refresh().state
+        writer.observeHlc(state.maxHlc)
     }
 
     /** The current folded state. Safe to read for dot lookups; treat as a snapshot. */
@@ -64,6 +65,7 @@ class JournalCoordinator(
         writer.commit(ops)
         // Refold from the store (picks up the just-written segment) and apply to the DB.
         state = journalIndex.refresh().state
+        writer.observeHlc(state.maxHlc)
         indexer.refreshFold()
         true
     }
@@ -85,6 +87,7 @@ class JournalCoordinator(
         writer.commit(ops)
         val report = indexer.rescan()
         state = journalIndex.refresh().state
+        writer.observeHlc(state.maxHlc)
         report
     }
 }

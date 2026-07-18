@@ -100,4 +100,26 @@ class SegmentWriterTest {
         assertTrue(w.commit(emptyList()).isEmpty())
         assertTrue(store.listSegments().isEmpty())
     }
+
+    @Test
+    fun observe_hlc_orders_later_commits_after_remote() = runTest {
+        val store = InMemorySegmentStore()
+        // Local wall clock (~1000) is far behind the remote HLC already in the store.
+        val w = writer(store, InMemoryLocalJournalState())
+        val remote = Hlc(50_000L, 3, "other")
+        w.observeHlc(remote)
+        val event = w.commit(listOf(PendingOp.tagAdd(doc, "a"))).single()
+        assertTrue(event.hlc > remote, "commit after observeHlc must order after the remote HLC")
+    }
+
+    @Test
+    fun observe_hlc_ignores_remote_behind_local() = runTest {
+        val store = InMemorySegmentStore()
+        val w = writer(store, InMemoryLocalJournalState())
+        val first = w.commit(listOf(PendingOp.tagAdd(doc, "a"))).single()
+        w.observeHlc(Hlc(1L, 0, "other"))
+        val second = w.commit(listOf(PendingOp.tagAdd(doc, "b"))).single()
+        assertTrue(second.hlc > first.hlc)
+        assertTrue(second.hlc.physicalMillis < 50_000L, "stale remote must not inflate the clock")
+    }
 }

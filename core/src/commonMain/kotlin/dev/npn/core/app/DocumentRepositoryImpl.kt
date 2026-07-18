@@ -64,14 +64,15 @@ class DocumentRepositoryImpl(
     override fun observeDoc(docId: String): Flow<DocListItem?> =
         combine(
             documentDao.observeByDocId(docId),
+            documentDao.observeTagsForDoc(docId),
             fieldDao.observeForDoc(docId),
-        ) { doc, fields ->
+        ) { doc, tags, fields ->
             if (doc == null) {
                 null
             } else {
                 DocListItem(
                     doc,
-                    tagsFor(listOf(docId))[docId].orEmpty(),
+                    tags,
                     fields = fields.associate { it.fieldKey to it.fieldValue },
                 )
             }

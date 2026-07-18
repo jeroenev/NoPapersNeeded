@@ -5,6 +5,9 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -118,6 +121,46 @@ class MetadataWriterTest {
             // Clearing a field removes it.
             rig.session.meta.setField(id, "amount", null)
             rig.session.documents.observeDoc(id).first()!!.fields shouldBe mapOf("vendor" to "ACME")
+        } finally {
+            rig.close()
+        }
+    }
+
+    /**
+     * Regression: [DocumentRepository.observeDoc] must re-emit on tag changes without a
+     * re-subscribe (the detail view used to read tags one-shot and only re-emitted on
+     * `documents`/`document_fields` invalidations, leaving the screen stale until reopened).
+     * Each collector below subscribes BEFORE the write, so its predicate can only be satisfied
+     * by a re-emission of the live flow.
+     */
+    @Test
+    fun observeDocReEmitsTagEditsOnLiveSubscription() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        try {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            val flow = rig.session.documents.observeDoc(id)
+
+            coroutineScope {
+                val added = async(start = CoroutineStart.UNDISPATCHED) {
+                    flow.first { it != null && "invoice" in it.tags }
+                }
+                rig.session.meta.addTag(listOf(id), "invoice")
+                added.await()
+
+                val removed = async(start = CoroutineStart.UNDISPATCHED) {
+                    flow.first { it != null && "invoice" !in it.tags }
+                }
+                rig.session.meta.removeTag(listOf(id), "invoice")
+                removed.await()
+
+                val readded = async(start = CoroutineStart.UNDISPATCHED) {
+                    flow.first { it != null && "invoice" in it.tags }
+                }
+                rig.session.meta.addTag(listOf(id), "invoice")
+                readded.await()
+            }
         } finally {
             rig.close()
         }
