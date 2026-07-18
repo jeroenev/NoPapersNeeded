@@ -81,6 +81,16 @@ class SegmentWriter(
     }
 
     /**
+     * Advance the local HLC clock past [remote] (standard HLC receive rule). Called with the
+     * fold's max HLC after every refold: the clock starts at zero on boot, so without this seed
+     * a backwards/slow wall clock would stamp new events BELOW ones already in the store and
+     * every LWW write (prop/field set or clear) would silently lose to stale state.
+     */
+    fun observeHlc(remote: Hlc) {
+        if (remote > hlcClock.last) hlcClock.observe(remote)
+    }
+
+    /**
      * Compare the store's own-device segments against the locally-known set. If the store has
      * an own segment the local state does not know, a fork is needed.
      */

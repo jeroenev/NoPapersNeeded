@@ -40,6 +40,15 @@ class JournalIndexTest {
     }
 
     @Test
+    fun fold_tracks_max_hlc_across_devices() = runTest {
+        val store = InMemorySegmentStore()
+        write(store, "d1", 1, listOf(ev("d1", 1, JournalOp.TagAdd("x"), 10)))
+        write(store, "d2", 1, listOf(ev("d2", 1, JournalOp.PropSet(DocProperty.REVIEWED, "true"), 5_000)))
+        val folded = JournalIndex(store).refresh(emptyMap())
+        assertEquals(Hlc(5_000, 0, "d2"), folded.state.maxHlc)
+    }
+
+    @Test
     fun compaction_triggered_refold_of_one_device_dir() = runTest {
         val store = InMemorySegmentStore()
         // d1 writes two segments

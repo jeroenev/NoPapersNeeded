@@ -27,15 +27,26 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE docId = :docId")
     fun observeByDocId(docId: String): Flow<DocumentEntity?>
 
+    /** Live tag list for one document (detail view); re-emits on document_tags changes. */
+    @Query("SELECT tag FROM document_tags WHERE docId = :docId ORDER BY tag")
+    fun observeTagsForDoc(docId: String): Flow<List<String>>
+
     @Query("DELETE FROM documents WHERE docId = :docId")
     suspend fun deleteByDocId(docId: String)
 
     /**
      * Filtered library listing. The upper layer builds the SQL (filters, sort, tag joins)
-     * and passes it as a [RoomRawQuery]. Observed entities cover both tables so tag changes
-     * re-emit the flow.
+     * and passes it as a [RoomRawQuery]. Observed entities cover documents, tags, and custom
+     * fields so tag/field edits re-emit the flow (tags and fields are attached in memory by
+     * the repository on each emission).
      */
-    @RawQuery(observedEntities = [DocumentEntity::class, DocumentTagEntity::class])
+    @RawQuery(
+        observedEntities = [
+            DocumentEntity::class,
+            DocumentTagEntity::class,
+            DocumentFieldEntity::class,
+        ],
+    )
     fun observeLibraryRaw(query: RoomRawQuery): Flow<List<DocumentEntity>>
 
     // --- Canned queries ---

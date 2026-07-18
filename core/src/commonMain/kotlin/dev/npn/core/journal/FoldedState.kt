@@ -60,8 +60,17 @@ class FoldedState {
     // --- library-wide synced settings: key -> LWW (value, hlc) ---
     private val settings = HashMap<String, PropVal>()
 
+    /**
+     * Highest HLC across all applied events (any device, any op). Used to seed the local
+     * [HlcClock] after a fold so new writes are ordered after everything already in the store,
+     * even when the wall clock regressed between sessions or another device's clock runs ahead.
+     */
+    var maxHlc: Hlc = Hlc.ZERO
+        private set
+
     /** Apply one event. Commutative: final state is identical regardless of apply order. */
     fun apply(event: JournalEvent) {
+        if (event.hlc > maxHlc) maxHlc = event.hlc
         when (val op = event.op) {
             is JournalOp.TagAdd -> {
                 val doc = event.doc ?: return
