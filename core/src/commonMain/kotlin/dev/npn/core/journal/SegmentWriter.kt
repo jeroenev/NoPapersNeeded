@@ -56,16 +56,21 @@ class SegmentWriter(
     private val hlcClock: HlcClock,
     private val localState: LocalJournalState,
 ) {
+    private var recoveryComplete = false
+
     /**
      * Ensure [localState] knows the last seq. If it is empty (fresh install or lost local
      * state), recover lastSeq as the max seq present across this device's own segments.
      * Returns the recovered/known last seq (null if the device has never written).
      */
     suspend fun recover(): Long? {
-        val known = localState.getLastSeq()
-        if (known != null) return known
+        if (recoveryComplete) return localState.getLastSeq()
         val ownSegs = ownSegments()
-        if (ownSegs.isEmpty()) return null
+        val known = localState.getLastSeq()
+        if (ownSegs.isEmpty()) {
+            recoveryComplete = true
+            return known
+        }
         // A plain segment's file name only encodes its FIRST seq, so read actual contents to
         // find the true max seq this device has assigned. Snapshots would be safe from the name,
         // but reading is uniform and correct for both.
@@ -75,9 +80,11 @@ class SegmentWriter(
             val segMax = events.maxOfOrNull { it.seq } ?: ref.lastSeq
             if (segMax > maxSeq) maxSeq = segMax
         }
-        localState.setLastSeq(maxSeq)
-        localState.setKnownOwnSegments(ownSegs.map { it.fileName }.toSet())
-        return maxSeq
+        val recoveredSeq = maxOf(known ?: 0L, maxSeq)
+        if (known != recoveredSeq) localState.setLastSeq(recoveredSeq)
+        if (known == null) localState.setKnownOwnSegments(ownSegs.map { it.fileName }.toSet())
+        recoveryComplete = true
+        return recoveredSeq
     }
 
     /**
@@ -113,7 +120,7 @@ class SegmentWriter(
         val built = events.map { pending ->
             seq += 1
             JournalEvent(
-                version = JournalEvent.CURRENT_VERSION,
+                version = JournalEventVersions.CANONICAL,
                 seq = seq,
                 hlc = hlcClock.next(),
                 dev = deviceId,

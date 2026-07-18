@@ -12,6 +12,35 @@ object NpnPaths {
     const val TRASH_DIR = ".npn/trash"
     const val DEFAULT_INBOX = "inbox"
 
+    const val STORAGE_V1 = 1
+    const val STORAGE_V2 = 2
+
+    /** Device-local source classification for compaction snapshots (not an on-disk store marker). */
+    const val STORAGE_SNAPSHOT = 3
+
+    private val objectBucketPattern = Regex("^objects-v([1-9][0-9]*)-([0-9a-fA-F]{2})$")
+    // Snapshots use a DISTINCT bucket namespace so pre-snapshot readers classify them as Unknown
+    // (ignored) rather than as an object they must fold or an unsupported store that blocks writes.
+    // See METADATA_STORAGE_PLAN.md "Compaction and Retention".
+    private val snapshotBucketPattern = Regex("^objects-snap-v([1-9][0-9]*)-([0-9a-fA-F]{2})$")
+    private val objectNamePattern = Regex("^([0-9a-f]{64})\\.jsonl$")
+    private val objectStagingPattern = Regex("^\\.[0-9a-f]{64}\\.[^.]+\\.[^.]+\\.part$")
+    private val legacySegmentPattern = Regex("^[0-9]+(?:-[0-9]+\\.snap)?\\.jsonl$")
+
+    /** Snapshot object-store version. Independent axis from [STORAGE_V2]; currently the same value. */
+    const val SNAPSHOT_V2 = 2
+
+    sealed interface JournalPath {
+        data class Legacy(val deviceId: String, val fileName: String) : JournalPath
+        data class ObjectV2(val expectedHash: String, val canonical: Boolean) : JournalPath
+
+        /** A compaction snapshot object (multi-actor events + a supersession manifest). */
+        data class SnapshotV2(val expectedHash: String, val canonical: Boolean) : JournalPath
+        data class UnsupportedObjectStore(val version: Int) : JournalPath
+        data object Staging : JournalPath
+        data object Unknown : JournalPath
+    }
+
     /**
      * Sync-conflict filename markers, shared between detection ([isSyncConflict]) and stripping
      * (MaintenanceService.cleanConflictName) so the two never drift.
@@ -26,6 +55,83 @@ object NpnPaths {
     /** `.npn/journal/<deviceId>/<fileName>` */
     fun journalSegmentPath(deviceId: String, fileName: String): String =
         "${journalDeviceDir(deviceId)}/$fileName"
+
+    fun journalObjectPath(hash: String, snapshot: Boolean = false): String {
+        require(hash.matches(Regex("^[0-9a-f]{64}$"))) { "Invalid SHA-256: $hash" }
+        val infix = if (snapshot) "objects-snap-v$SNAPSHOT_V2" else "objects-v$STORAGE_V2"
+        return "$JOURNAL_DIR/$infix-${hash.take(2)}/$hash.jsonl"
+    }
+
+    fun journalStagingPath(
+        hash: String,
+        installationId: String,
+        nonce: String,
+        snapshot: Boolean = false,
+    ): String = journalObjectPath(hash, snapshot).substringBeforeLast('/') +
+        "/.$hash.$installationId.$nonce.part"
+
+    /** Classify direct journal source files without letting object buckets masquerade as devices. */
+    fun journalPath(relPath: String): JournalPath {
+        val norm = normalize(relPath)
+        val prefix = "$JOURNAL_DIR/"
+        if (!norm.startsWith(prefix)) return JournalPath.Unknown
+        val parts = norm.removePrefix(prefix).split('/')
+        return if (parts.size == 2) classifyJournalFile(parts[0], parts[1]) else JournalPath.Unknown
+    }
+
+    private fun classifyJournalFile(dir: String, name: String): JournalPath {
+        val snapshotBucket = snapshotBucketPattern.matchEntire(dir)
+        val bucket = objectBucketPattern.matchEntire(dir)
+        return when {
+            snapshotBucket != null -> classifySnapshotFile(snapshotBucket, name)
+            bucket != null -> classifyObjectFile(bucket, name)
+            dir.isNotEmpty() && legacySegmentPattern.matches(name) -> JournalPath.Legacy(dir, name)
+            else -> JournalPath.Unknown
+        }
+    }
+
+    private fun classifyObjectFile(bucket: MatchResult, name: String): JournalPath {
+        val version = bucket.groupValues[1].toIntOrNull() ?: Int.MAX_VALUE
+        val expected = recoverObjectHash(name)
+        val prefixMatches = expected?.startsWith(bucket.groupValues[2].lowercase()) == true
+        return when {
+            version != STORAGE_V2 -> JournalPath.UnsupportedObjectStore(version)
+            objectStagingPattern.matches(name) -> JournalPath.Staging
+            expected == null || !prefixMatches -> JournalPath.Unknown
+            else -> JournalPath.ObjectV2(expected, objectNamePattern.matches(name))
+        }
+    }
+
+    private fun classifySnapshotFile(bucket: MatchResult, name: String): JournalPath {
+        val version = bucket.groupValues[1].toIntOrNull() ?: Int.MAX_VALUE
+        val expected = recoverObjectHash(name)
+        val prefixMatches = expected?.startsWith(bucket.groupValues[2].lowercase()) == true
+        return when {
+            version != SNAPSHOT_V2 -> JournalPath.UnsupportedObjectStore(version)
+            objectStagingPattern.matches(name) -> JournalPath.Staging
+            expected == null || !prefixMatches -> JournalPath.Unknown
+            else -> JournalPath.SnapshotV2(expected, objectNamePattern.matches(name))
+        }
+    }
+
+    /** Recover a canonical digest from a canonical or common sync-conflict object filename. */
+    fun recoverObjectHash(name: String): String? {
+        objectNamePattern.matchEntire(name)?.let { return it.groupValues[1] }
+        if (!isSyncConflict(name)) return null
+        val matches = Regex("(?:^|[^0-9a-f])([0-9a-f]{64})(?=[^0-9a-f]|$)")
+            .findAll(name.lowercase()).map { it.groupValues[1] }.distinct().toList()
+        return matches.singleOrNull()
+    }
+
+    fun objectStoreVersion(relPath: String): Int? {
+        val norm = normalize(relPath)
+        if (!norm.startsWith("$JOURNAL_DIR/")) return null
+        val dir = norm.removePrefix("$JOURNAL_DIR/").substringBefore('/')
+        val version = objectBucketPattern.matchEntire(dir)?.groupValues?.get(1)
+            ?: snapshotBucketPattern.matchEntire(dir)?.groupValues?.get(1)
+            ?: return null
+        return version.toIntOrNull() ?: Int.MAX_VALUE
+    }
 
     /** `.npn/ocr/<sha256>.<deviceId>.json` */
     fun ocrSidecarPath(sha256: String, deviceId: String): String =

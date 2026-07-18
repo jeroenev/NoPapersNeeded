@@ -11,7 +11,8 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.FoldedState
-import dev.npn.core.journal.JournalIndex
+import dev.npn.core.journal.JournalEvent
+import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.DocProperty
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -39,8 +40,6 @@ import kotlinx.coroutines.sync.withLock
 class Indexer(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
-    private val journalIndex: JournalIndex,
-    private val foldedTracker: DbFoldedSegmentTracker,
     private val clock: EpochClock = SystemEpochClock,
     private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
 ) {
@@ -57,6 +56,7 @@ class Indexer(
     private val duplicateDao get() = db.duplicateDao()
 
     suspend fun rescan(
+        metadataState: FoldedState,
         fullHash: Boolean = false,
         onProgress: (IndexProgress) -> Unit = {},
     ): ScanReport = rescanMutex.withLock {
@@ -67,68 +67,67 @@ class Indexer(
         }
 
         report(IndexProgress(IndexProgress.Phase.LISTING))
-        val all = fs.listAll()
+        try {
+            val all = fs.listAll()
 
-        // --- step 1: partition on-disk files into indexable docs + sync-conflict files ---
-        val (indexable, conflictFiles) = partition(all)
+            // --- step 1: partition on-disk files into indexable docs + sync-conflict files ---
+            val (indexable, conflictFiles) = partition(all)
 
-        // --- step 2: fast path vs hash (skip unchanged files by size+mtime) ---
-        val dbProjection = documentDao.allPathsAndMeta()
-        val byPath = dbProjection.associateBy { it.relPath }
-        val toHash = indexable.filter { meta ->
-            val known = byPath[meta.relPath]
-            fullHash || known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
+            // --- step 2: fast path vs hash (skip unchanged files by size+mtime) ---
+            val dbProjection = documentDao.allPathsAndMeta()
+            val byPath = dbProjection.associateBy { it.relPath }
+            val toHash = indexable.filter { meta ->
+                val known = byPath[meta.relPath]
+                fullHash || known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
+            }
+
+            // --- step 3: hash the changed/new files ---
+            report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
+            val hashes = HashMap<String, String>() // relPath -> sha256
+            var hashedCount = 0
+            for (meta in toHash) {
+                hashes[meta.relPath] = fs.sha256(meta.relPath)
+                hashedCount++
+                report(IndexProgress(IndexProgress.Phase.HASHING, hashed = hashedCount, total = toHash.size))
+            }
+
+            report(IndexProgress(IndexProgress.Phase.RECONCILING))
+            val diskPaths = indexable.map { it.relPath }.toHashSet()
+
+            // --- step 4: reconcile hashed files against the DB (move/dup/external-edit/new) ---
+            val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
+
+            // --- step 5: disappeared files -> missing, then pair them with new docs for relinks ---
+            val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
+            recon.relinkCandidates.addAll(pairRelinks(missing.missingDocs, recon.newDocs, recon.relinkCandidates))
+
+            // --- step 6: journal fold -> DB projection ---
+            report(IndexProgress(IndexProgress.Phase.FOLDING))
+            val resurrected = applyFold(metadataState, diskPaths, reconcileFileState = true)
+
+            // --- step 7: persist external duplicates (replace per doc so re-scans are idempotent) ---
+            val dupByDoc = recon.duplicates.groupBy { it.docId }
+            for ((docId, entries) in dupByDoc) {
+                duplicateDao.replaceAll(docId, entries.map { DuplicateEntity(docId, it.extraRelPath) })
+            }
+
+            report(IndexProgress(IndexProgress.Phase.DONE))
+
+            ScanReport(
+                added = recon.added,
+                moved = recon.moved,
+                changed = recon.changed,
+                missingCount = missing.missingCount,
+                duplicates = recon.duplicates,
+                conflictFiles = conflictFiles,
+                resurrected = resurrected,
+                relinkCandidates = recon.relinkCandidates,
+                hashedCount = hashedCount,
+                durationMillis = clock.nowMillis() - started,
+            )
+        } finally {
+            _scanState.value = null
         }
-
-        // --- step 3: hash the changed/new files ---
-        report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
-        val hashes = HashMap<String, String>() // relPath -> sha256
-        var hashedCount = 0
-        for (meta in toHash) {
-            hashes[meta.relPath] = fs.sha256(meta.relPath)
-            hashedCount++
-            report(IndexProgress(IndexProgress.Phase.HASHING, hashed = hashedCount, total = toHash.size))
-        }
-
-        report(IndexProgress(IndexProgress.Phase.RECONCILING))
-        val diskPaths = indexable.map { it.relPath }.toHashSet()
-        val metaByPath = indexable.associateBy { it.relPath }
-
-        // --- step 4: reconcile hashed files against the DB (move/dup/external-edit/new) ---
-        val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
-
-        // --- step 5: disappeared files -> missing, then pair them with new docs for relinks ---
-        val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
-        recon.relinkCandidates.addAll(pairRelinks(missing.missingDocs, recon.newDocs, recon.relinkCandidates))
-
-        // --- step 6: journal fold -> DB projection ---
-        report(IndexProgress(IndexProgress.Phase.FOLDING))
-        val previouslyFolded = foldedTracker.load()
-        val fold = journalIndex.refresh(previouslyFolded)
-        val resurrected = applyFold(fold.state, diskPaths, metaByPath)
-        foldedTracker.save(fold.foldedSegments)
-
-        // --- step 7: persist external duplicates (replace per doc so re-scans are idempotent) ---
-        val dupByDoc = recon.duplicates.groupBy { it.docId }
-        for ((docId, entries) in dupByDoc) {
-            duplicateDao.replaceAll(docId, entries.map { DuplicateEntity(docId, it.extraRelPath) })
-        }
-
-        report(IndexProgress(IndexProgress.Phase.DONE))
-        _scanState.value = null
-
-        ScanReport(
-            added = recon.added,
-            moved = recon.moved,
-            changed = recon.changed,
-            missingCount = missing.missingCount,
-            duplicates = recon.duplicates,
-            conflictFiles = conflictFiles,
-            resurrected = resurrected,
-            relinkCandidates = recon.relinkCandidates,
-            hashedCount = hashedCount,
-            durationMillis = clock.nowMillis() - started,
-        )
     }
 
     /**
@@ -140,7 +139,7 @@ class Indexer(
         val indexable = ArrayList<FileMeta>()
         val conflictFiles = ArrayList<String>()
         for (meta in all) {
-            if (!meta.isDirectory && NpnPaths.isSyncConflict(meta.name)) {
+            if (!meta.isDirectory && !NpnPaths.isInternal(meta.relPath) && NpnPaths.isSyncConflict(meta.name)) {
                 conflictFiles.add(meta.relPath)
             } else if (NpnPaths.indexable(meta)) {
                 indexable.add(meta)
@@ -302,34 +301,64 @@ class Indexer(
         return out
     }
 
-    /**
-     * Fold-only refresh: refold the journals and re-apply the effective views (tags, props,
-     * trash/delete, relinks) into the DB, WITHOUT walking/hashing the file tree for changes.
-     *
-     * Used by the service layer after it commits its own journal ops (tag add/remove, prop set,
-     * trash, ...): a metadata write never changes the file set, so a full rescan would be wasteful.
-     * It still needs the current disk paths so the resurrection logic (prefer-file-over-tombstone)
-     * stays correct, so it does one lightweight [LibraryFileSystem.listAll] but never hashes.
-     *
-     * Reuses the exact same [applyFold] logic as [rescan]; no duplication.
-     */
-    suspend fun refreshFold(): List<Resurrected> = rescanMutex.withLock {
-        _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-        val all = fs.listAll()
-        val diskPaths = HashSet<String>()
-        val metaByPath = HashMap<String, FileMeta>()
-        for (meta in all) {
-            if (!NpnPaths.indexable(meta)) continue
-            diskPaths.add(meta.relPath)
-            metaByPath[meta.relPath] = meta
+    /** Apply already-reduced events without reading journal files or walking the PDF library. */
+    suspend fun refreshEvents(
+        state: FoldedState,
+        events: List<JournalEvent>,
+        ftsGateHeld: Boolean = false,
+    ): List<Resurrected> =
+        rescanMutex.withLock {
+            if (events.isEmpty()) return@withLock emptyList()
+            _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
+            try {
+                val documents = LinkedHashSet<String>()
+                val styledTags = LinkedHashSet<String>()
+                for (event in events) {
+                    event.doc?.let(documents::add)
+                    when (val op = event.op) {
+                        is JournalOp.TagRemove -> Unit // tag-remove events carry their affected document
+                        is JournalOp.TagRename, is JournalOp.TagMerge -> documents.addAll(state.taggedDocs())
+                        is JournalOp.TagStyle -> styledTags += op.tag
+                        is JournalOp.Relink -> {
+                            documents.addAll(state.docsWithMetadata())
+                            documents += op.newDoc
+                        }
+                        else -> Unit
+                    }
+                }
+                documents.toList().forEach { documents += state.resolveDocId(it) }
+                applyFold(
+                    state = state,
+                    diskPaths = emptySet(),
+                    reconcileFileState = false,
+                    documentScope = documents,
+                    styledTags = styledTags,
+                    ftsGateHeld = ftsGateHeld,
+                )
+            } finally {
+                _scanState.value = null
+            }
         }
-        val previouslyFolded = foldedTracker.load()
-        val fold = journalIndex.refresh(previouslyFolded)
-        val resurrected = applyFold(fold.state, diskPaths, metaByPath)
-        foldedTracker.save(fold.foldedSegments)
-        _scanState.value = null
-        resurrected
+
+    /** Reproject a reconciled mixed-version accumulator without rereading journal sources. */
+    suspend fun refreshState(
+        state: FoldedState,
+        preserveLifecycleDocs: Set<String> = emptySet(),
+    ): List<Resurrected> = rescanMutex.withLock {
+        _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
+        try {
+            applyFold(
+                state,
+                emptySet(),
+                reconcileFileState = false,
+                preserveLifecycleDocs = preserveLifecycleDocs,
+            )
+        } finally {
+            _scanState.value = null
+        }
     }
+
+    suspend fun <T> withFtsWriteGate(block: suspend () -> T): T = ftsWriteGate.withGate(block)
 
     /**
      * A synthetic, unique relPath for a doc whose file was replaced in place (external edit). It
@@ -407,31 +436,75 @@ class Indexer(
     private suspend fun applyFold(
         state: FoldedState,
         diskPaths: Set<String>,
-        metaByPath: Map<String, FileMeta>,
+        reconcileFileState: Boolean,
+        documentScope: Set<String>? = null,
+        styledTags: Set<String> = emptySet(),
+        ftsGateHeld: Boolean = false,
+        preserveLifecycleDocs: Set<String> = emptySet(),
     ): List<Resurrected> {
-        val resurrected = ArrayList<Resurrected>()
-
-        // Collect all docs the journal has any data about.
+        // Every doc the fold must project: those the journal has data about, plus (for a full
+        // fold) every doc currently in the DB so stale trash/delete flags get cleared.
         val journalDocs = LinkedHashSet<String>()
-        journalDocs.addAll(state.docsWithMetadata())
+        journalDocs.addAll(documentScope ?: state.docsWithMetadata())
+        if (documentScope == null) {
+            for (pm in documentDao.allPathsAndMeta()) journalDocs.add(pm.docId)
+        }
+        upsertReferencedTags(state, journalDocs, styledTags)
+        val supersession = resolveSupersessions(state, journalDocs)
 
-        // Also include every doc currently in the DB so trash/delete flags get cleared correctly.
-        for (pm in documentDao.allPathsAndMeta()) journalDocs.add(pm.docId)
+        val resurrected = ArrayList<Resurrected>()
+        for (doc in journalDocs) {
+            val row = documentDao.getByDocId(doc) ?: continue
+            projectDocument(
+                doc = doc,
+                row = row,
+                state = state,
+                supersession = supersession,
+                diskPaths = diskPaths,
+                reconcileFileState = reconcileFileState,
+                preserveLifecycleDocs = preserveLifecycleDocs,
+                ftsGateHeld = ftsGateHeld,
+                resurrected = resurrected,
+            )
+        }
+        return resurrected
+    }
 
-        // Upsert all tags referenced anywhere (with styles when set). Diffed against the current
-        // rows so an unchanged fold does not touch the table: every write here invalidates the
-        // `tags` Room flows (tag management screen, tag colors) even when nothing changed.
+    /**
+     * Upsert all tags referenced anywhere (with styles when set). Diffed against the current rows
+     * so an unchanged fold does not touch the table: every write here invalidates the `tags` Room
+     * flows (tag management screen, tag colors) even when nothing changed.
+     */
+    private suspend fun upsertReferencedTags(
+        state: FoldedState,
+        journalDocs: Set<String>,
+        styledTags: Set<String>,
+    ) {
         val allTags = LinkedHashSet<String>()
         for (doc in journalDocs) allTags.addAll(state.effectiveTags(doc))
+        allTags.addAll(styledTags)
         val existingTagRows = tagDao.all().associateBy { it.name }
         for (tag in allTags) {
             val style = state.tagStyle(tag)
             val entity = TagEntity(name = tag, color = style?.color, icon = style?.icon)
             if (existingTagRows[tag] != entity) tagDao.upsert(entity)
         }
+    }
 
-        // Handle relink supersession: mark old docs deleted where a winning relink resolves to a
-        // different, known id. Record predecessors so metadata carries onto the resolved target.
+    /**
+     * Result of the relink-supersession pass: which docs were marked deleted/superseded, and, per
+     * resolved target, the older ids that relinked onto it (so their metadata carries over).
+     */
+    private class Supersession(
+        val superseded: Set<String>,
+        val predecessors: Map<String, List<String>>,
+    )
+
+    /**
+     * Mark old docs deleted where a winning relink resolves to a different, known id, and record
+     * predecessors so metadata carries onto the resolved target.
+     */
+    private suspend fun resolveSupersessions(state: FoldedState, journalDocs: Set<String>): Supersession {
         val superseded = HashSet<String>()
         val predecessors = HashMap<String, MutableList<String>>() // target -> old docs resolving here
         for (doc in journalDocs) {
@@ -445,118 +518,183 @@ class Indexer(
                 }
             }
         }
+        return Supersession(superseded, predecessors)
+    }
 
-        for (doc in journalDocs) {
-            val row = documentDao.getByDocId(doc) ?: continue
+    /** Effective metadata columns for a doc: own value wins, else inherit from a predecessor. */
+    private class ProjectedMeta(
+        val reviewed: Boolean,
+        val correspondent: String?,
+        val docType: String?,
+        val docDate: String?,
+        val title: String?,
+    )
 
-            // Predecessors (older ids that relinked onto this doc): their metadata carries over.
-            val preds = predecessors[doc].orEmpty()
+    private fun projectMeta(state: FoldedState, doc: String, preds: List<String>): ProjectedMeta {
+        fun prop(key: DocProperty): String? {
+            state.effectiveProp(doc, key)?.let { return it }
+            for (p in preds) state.effectiveProp(p, key)?.let { return it }
+            return null
+        }
+        return ProjectedMeta(
+            reviewed = prop(DocProperty.REVIEWED) == "true",
+            correspondent = prop(DocProperty.CORRESPONDENT),
+            docType = prop(DocProperty.DOC_TYPE),
+            docDate = prop(DocProperty.DOC_DATE),
+            title = prop(DocProperty.TITLE),
+        )
+    }
 
-            // Tags: this doc's own effective tags plus every predecessor's effective tags.
-            // Diffed: only rewrite the doc's tag rows when the set actually changed, so an
-            // unrelated edit does not invalidate `document_tags` observers for every doc.
-            val tagSet = LinkedHashSet<String>()
-            tagSet.addAll(state.effectiveTags(doc))
-            for (p in preds) tagSet.addAll(state.effectiveTags(p))
-            val effTags = tagSet.toList().sorted()
-            val tagsChanged = tagDao.tagsForDocument(doc) != effTags
-            if (tagsChanged) tagDao.setForDocument(doc, effTags)
+    /**
+     * Effective tags for a doc plus every predecessor's effective tags. Diffed: only rewrite the
+     * doc's tag rows when the set actually changed, so an unrelated edit does not invalidate
+     * `document_tags` observers for every doc. Returns the effective (sorted) tags and whether the
+     * stored rows changed.
+     */
+    private suspend fun projectTags(state: FoldedState, doc: String, preds: List<String>): Pair<List<String>, Boolean> {
+        val tagSet = LinkedHashSet<String>()
+        tagSet.addAll(state.effectiveTags(doc))
+        for (p in preds) tagSet.addAll(state.effectiveTags(p))
+        val effTags = tagSet.toList().sorted()
+        val tagsChanged = tagDao.tagsForDocument(doc) != effTags
+        if (tagsChanged) tagDao.setForDocument(doc, effTags)
+        return effTags to tagsChanged
+    }
 
-            // Custom fields: own value wins; inherit predecessor keys that this doc doesn't set.
-            // Diffed like tags.
-            val effFields = LinkedHashMap<String, String>()
-            for (p in preds) effFields.putAll(state.effectiveFields(p))
-            effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
-            val curFields = fieldDao.fieldsForDocs(listOf(doc)).associate { it.fieldKey to it.fieldValue }
-            if (curFields != effFields) {
-                fieldDao.deleteForDoc(doc)
-                if (effFields.isNotEmpty()) {
-                    fieldDao.upsertAll(effFields.map { (k, v) -> DocumentFieldEntity(doc, k, v) })
-                }
-            }
-
-            // Props: own value wins; otherwise inherit from a predecessor (first that has it).
-            fun prop(key: DocProperty): String? {
-                state.effectiveProp(doc, key)?.let { return it }
-                for (p in preds) state.effectiveProp(p, key)?.let { return it }
-                return null
-            }
-            val reviewed = prop(DocProperty.REVIEWED) == "true"
-            val correspondent = prop(DocProperty.CORRESPONDENT)
-            val docType = prop(DocProperty.DOC_TYPE)
-            val docDate = prop(DocProperty.DOC_DATE)
-            val title = prop(DocProperty.TITLE)
-
-            // Trash / delete state, with resurrection preference for the file.
-            val journalDeleted = state.isDeleted(doc) || doc in superseded
-            val journalTrashed = state.isTrashed(doc) && !state.isDeleted(doc)
-            val origPath = state.trashOrigPath(doc)
-
-            var trashed = journalTrashed
-            var deleted = journalDeleted
-            var missing = row.missing
-            var relPath = row.relPath
-            var fileName = row.fileName
-
-            val origOnDisk = origPath?.takeIf { it in diskPaths }
-            val fileAtCurrent = relPath in diskPaths
-
-            if ((journalTrashed || journalDeleted) && (origOnDisk != null || fileAtCurrent)) {
-                // Resurrection: prefer the file. Clear trashed/deleted for the working view.
-                if (!superseded.contains(doc)) {
-                    trashed = false
-                    deleted = false
-                    missing = false
-                    if (origOnDisk != null) {
-                        relPath = origOnDisk
-                        fileName = origOnDisk.substringAfterLast('/')
-                    }
-                    resurrected.add(Resurrected(doc, relPath, wasDeleted = journalDeleted))
-                }
-            }
-
-            // Diffed: skip the upsert when the effective row equals what is stored, so a fold
-            // triggered by one edit does not rewrite (and invalidate) every other doc's row.
-            val newRow = row.copy(
-                relPath = relPath,
-                fileName = fileName,
-                reviewed = reviewed,
-                correspondent = correspondent,
-                docType = docType,
-                docDate = docDate,
-                title = title,
-                trashed = trashed,
-                trashedOrigPath = if (trashed) origPath else null,
-                deleted = deleted,
-                missing = missing,
-            )
-            val rowChanged = newRow != row
-            if (rowChanged) documentDao.upsert(newRow)
-
-            // FTS: preserve the existing extracted-text content (OCR/embedded text written by the
-            // OCR pipeline). The fold only owns the metadata-derived columns; carry content
-            // forward so a metadata change (tag add, prop set) never wipes full-text search.
-            // A brand-new doc has no fts row yet -> null -> empty content until OCR fills it.
-            // Under the shared gate so this read-then-replace cannot interleave with an OCR
-            // content write for the same doc (see FtsWriteGate). All fts metadata columns derive
-            // from the doc row + tags, so when neither changed and a row already exists there is
-            // nothing to write.
-            ftsWriteGate.withGate {
-                val existingContent = ftsDao.contentForDoc(doc)
-                if (rowChanged || tagsChanged || existingContent == null) {
-                    ftsDao.replaceDocument(
-                        docId = doc,
-                        fileName = fileName,
-                        title = title,
-                        content = existingContent ?: "",
-                        tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
-                        correspondent = correspondent,
-                        docType = docType,
-                    )
-                }
+    /**
+     * Custom fields: own value wins; inherit predecessor keys this doc doesn't set. Diffed like
+     * tags so an unrelated edit does not rewrite this doc's field rows.
+     */
+    private suspend fun projectFields(state: FoldedState, doc: String, preds: List<String>) {
+        val effFields = LinkedHashMap<String, String>()
+        for (p in preds) effFields.putAll(state.effectiveFields(p))
+        effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
+        val curFields = fieldDao.fieldsForDocs(listOf(doc)).associate { it.fieldKey to it.fieldValue }
+        if (curFields != effFields) {
+            fieldDao.deleteForDoc(doc)
+            if (effFields.isNotEmpty()) {
+                fieldDao.upsertAll(effFields.map { (k, v) -> DocumentFieldEntity(doc, k, v) })
             }
         }
+    }
 
-        return resurrected
+    /** The trash/delete lifecycle for a doc, after applying the file-resurrection preference. */
+    private class Lifecycle(
+        val trashed: Boolean,
+        val deleted: Boolean,
+        val missing: Boolean,
+        val relPath: String,
+        val fileName: String,
+        val origPath: String?,
+    )
+
+    /**
+     * Resolve the doc's trash/delete state with resurrection preference for the file: if the
+     * journal says trashed/deleted but the file exists at the original (or current) path, prefer
+     * the file, clear the flags, and record a [Resurrected]. Docs in [preserveLifecycleDocs] keep
+     * their stored lifecycle regardless.
+     */
+    private fun projectLifecycle(
+        state: FoldedState,
+        doc: String,
+        row: DocumentEntity,
+        supersession: Supersession,
+        diskPaths: Set<String>,
+        reconcileFileState: Boolean,
+        preserveLifecycleDocs: Set<String>,
+        resurrected: MutableList<Resurrected>,
+    ): Lifecycle {
+        val journalDeleted = state.isDeleted(doc) || doc in supersession.superseded
+        val journalTrashed = state.isTrashed(doc) && !state.isDeleted(doc)
+        val origPath = state.trashOrigPath(doc)
+
+        var trashed = if (doc in preserveLifecycleDocs) row.trashed else journalTrashed
+        var deleted = if (doc in preserveLifecycleDocs) row.deleted else journalDeleted
+        var missing = row.missing
+        var relPath = row.relPath
+        var fileName = row.fileName
+
+        val origOnDisk = origPath?.takeIf { it in diskPaths }
+        val fileAtCurrent = relPath in diskPaths
+        val tombstonedFileExists =
+            (journalTrashed || journalDeleted) && (origOnDisk != null || fileAtCurrent)
+
+        if (reconcileFileState && tombstonedFileExists && doc !in supersession.superseded) {
+            // Resurrection: prefer the file. Clear trashed/deleted for the working view.
+            trashed = false
+            deleted = false
+            missing = false
+            if (origOnDisk != null) {
+                relPath = origOnDisk
+                fileName = origOnDisk.substringAfterLast('/')
+            }
+            resurrected.add(Resurrected(doc, relPath, wasDeleted = journalDeleted))
+        }
+        return Lifecycle(trashed, deleted, missing, relPath, fileName, origPath)
+    }
+
+    /** Project one doc's tags, fields, props, lifecycle, row and FTS from the folded state. */
+    private suspend fun projectDocument(
+        doc: String,
+        row: DocumentEntity,
+        state: FoldedState,
+        supersession: Supersession,
+        diskPaths: Set<String>,
+        reconcileFileState: Boolean,
+        preserveLifecycleDocs: Set<String>,
+        ftsGateHeld: Boolean,
+        resurrected: MutableList<Resurrected>,
+    ) {
+        // Predecessors (older ids that relinked onto this doc): their metadata carries over.
+        val preds = supersession.predecessors[doc].orEmpty()
+
+        val (effTags, tagsChanged) = projectTags(state, doc, preds)
+        projectFields(state, doc, preds)
+        val meta = projectMeta(state, doc, preds)
+        val lifecycle = projectLifecycle(
+            state, doc, row, supersession, diskPaths, reconcileFileState, preserveLifecycleDocs, resurrected,
+        )
+
+        // Diffed: skip the upsert when the effective row equals what is stored, so a fold
+        // triggered by one edit does not rewrite (and invalidate) every other doc's row.
+        val newRow = row.copy(
+            relPath = lifecycle.relPath,
+            fileName = lifecycle.fileName,
+            reviewed = meta.reviewed,
+            correspondent = meta.correspondent,
+            docType = meta.docType,
+            docDate = meta.docDate,
+            title = meta.title,
+            trashed = lifecycle.trashed,
+            trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
+            deleted = lifecycle.deleted,
+            missing = lifecycle.missing,
+        )
+        val rowChanged = newRow != row
+        if (rowChanged) documentDao.upsert(newRow)
+
+        // FTS: preserve the existing extracted-text content (OCR/embedded text written by the
+        // OCR pipeline). The fold only owns the metadata-derived columns; carry content
+        // forward so a metadata change (tag add, prop set) never wipes full-text search.
+        // A brand-new doc has no fts row yet -> null -> empty content until OCR fills it.
+        // Under the shared gate so this read-then-replace cannot interleave with an OCR
+        // content write for the same doc (see FtsWriteGate). All fts metadata columns derive
+        // from the doc row + tags, so when neither changed and a row already exists there is
+        // nothing to write.
+        suspend fun updateFts() {
+            val existingContent = ftsDao.contentForDoc(doc)
+            if (rowChanged || tagsChanged || existingContent == null) {
+                ftsDao.replaceDocument(
+                    docId = doc,
+                    fileName = lifecycle.fileName,
+                    title = meta.title,
+                    content = existingContent ?: "",
+                    tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
+                    correspondent = meta.correspondent,
+                    docType = meta.docType,
+                )
+            }
+        }
+        if (ftsGateHeld) updateFts() else ftsWriteGate.withGate { updateFts() }
     }
 }

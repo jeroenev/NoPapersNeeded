@@ -43,7 +43,9 @@ val SystemEpochClock: EpochClock = EpochClock { systemNowMillis() }
 expect fun systemNowMillis(): Long
 
 /**
- * Generates monotonic HLCs and merges remote ones.
+ * Single monotonic HLC watermark: tracks the highest (physicalMillis, counter) produced or
+ * observed so far and hands out the next value, with the actor (device/transaction id) supplied
+ * per call so one allocator can stamp events for several actors (content-addressed transactions).
  *
  * Clamp policy (documented per spec leeway):
  * - When generating locally, wall time is always trusted: if the wall clock jumped far
@@ -58,23 +60,61 @@ expect fun systemNowMillis(): Long
  *
  * Not thread-safe; callers serialize access (single writer per device).
  */
-class HlcClock(
-    val deviceId: String,
-    private val epochClock: EpochClock = SystemEpochClock,
-    initial: Hlc = Hlc(0L, 0, deviceId),
+class HlcWatermarkAllocator(
+    private val clock: EpochClock = SystemEpochClock,
+    initialPhysicalMillis: Long = 0L,
+    initialCounter: Int = 0,
 ) {
-    var last: Hlc = initial
+    var physicalMillis: Long = initialPhysicalMillis
+        private set
+    var counter: Int = initialCounter
         private set
 
-    /** Produce the next local HLC, monotonically greater than every previously produced or observed one. */
-    fun next(): Hlc {
-        val wallNow = epochClock.nowMillis()
-        val newPhysical = maxOf(wallNow, last.physicalMillis)
-        val newCounter = if (newPhysical == last.physicalMillis) last.counter + 1 else 0
-        val hlc = Hlc(newPhysical, newCounter, deviceId)
-        last = hlc
-        return hlc
+    /**
+     * Merge a remote HLC into the watermark (standard HLC receive rule), advancing it so any
+     * subsequent [next] stays strictly ahead of [remote].
+     */
+    fun observe(remote: Hlc) {
+        val wall = clock.nowMillis()
+        val capped = minOf(remote.physicalMillis, wall + HlcClock.CLAMP_MS)
+        val nextPhysical = maxOf(wall, physicalMillis, capped)
+        counter = when {
+            nextPhysical == physicalMillis && nextPhysical == capped -> maxOf(counter, remote.counter) + 1
+            nextPhysical == physicalMillis -> counter + 1
+            nextPhysical == capped -> remote.counter + 1
+            else -> 0
+        }
+        physicalMillis = nextPhysical
     }
+
+    /** Produce the next HLC for [actor], monotonically greater than every prior value. */
+    fun next(actor: String): Hlc {
+        val wall = clock.nowMillis()
+        val nextPhysical = maxOf(wall, physicalMillis)
+        counter = if (nextPhysical == physicalMillis) counter + 1 else 0
+        physicalMillis = nextPhysical
+        return Hlc(physicalMillis, counter, actor)
+    }
+}
+
+/**
+ * Generates monotonic HLCs for a single device and merges remote ones. A thin, single-actor
+ * facade over [HlcWatermarkAllocator]: [deviceId] is the fixed actor and [last] exposes the
+ * watermark as a full [Hlc] for the receive-rule guard in `SegmentWriter`.
+ *
+ * Not thread-safe; callers serialize access (single writer per device).
+ */
+class HlcClock(
+    val deviceId: String,
+    epochClock: EpochClock = SystemEpochClock,
+    initial: Hlc = Hlc(0L, 0, deviceId),
+) {
+    private val allocator = HlcWatermarkAllocator(epochClock, initial.physicalMillis, initial.counter)
+
+    val last: Hlc get() = Hlc(allocator.physicalMillis, allocator.counter, deviceId)
+
+    /** Produce the next local HLC, monotonically greater than every previously produced or observed one. */
+    fun next(): Hlc = allocator.next(deviceId)
 
     /**
      * Merge a remote HLC into the local clock (standard HLC receive rule) and return the
@@ -82,24 +122,8 @@ class HlcClock(
      * so subsequent [next] calls stay ahead of anything observed.
      */
     fun observe(remote: Hlc): Hlc {
-        val wallNow = epochClock.nowMillis()
-        val cappedRemotePhysical = minOf(remote.physicalMillis, wallNow + CLAMP_MS)
-        val newPhysical = maxOf(wallNow, last.physicalMillis, cappedRemotePhysical)
-        val newCounter = when (newPhysical) {
-            last.physicalMillis, cappedRemotePhysical -> {
-                val base = when {
-                    newPhysical == last.physicalMillis && newPhysical == cappedRemotePhysical ->
-                        maxOf(last.counter, remote.counter)
-                    newPhysical == last.physicalMillis -> last.counter
-                    else -> remote.counter
-                }
-                base + 1
-            }
-            else -> 0
-        }
-        val hlc = Hlc(newPhysical, newCounter, deviceId)
-        last = hlc
-        return hlc
+        allocator.observe(remote)
+        return last
     }
 
     companion object {

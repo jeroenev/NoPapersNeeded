@@ -9,32 +9,6 @@ import androidx.room3.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface FoldedSegmentDao {
-
-    @Query("SELECT * FROM folded_segments")
-    suspend fun allSegments(): List<FoldedSegmentEntity>
-
-    @Query("SELECT * FROM folded_segments WHERE deviceId = :deviceId")
-    suspend fun segmentsForDevice(deviceId: String): List<FoldedSegmentEntity>
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insert(segment: FoldedSegmentEntity)
-
-    @Insert(onConflict = OnConflictStrategy.IGNORE)
-    suspend fun insertAll(segments: List<FoldedSegmentEntity>)
-
-    @Query("DELETE FROM folded_segments WHERE deviceId = :deviceId")
-    suspend fun deleteForDevice(deviceId: String)
-
-    /** Refold a device's directory: replace the tracked segment set for that device. */
-    @Transaction
-    suspend fun replaceForDevice(deviceId: String, names: List<String>) {
-        deleteForDevice(deviceId)
-        insertAll(names.map { FoldedSegmentEntity(deviceId, it) })
-    }
-}
-
-@Dao
 interface SavedViewDao {
 
     @Query("SELECT * FROM saved_views ORDER BY position, name")

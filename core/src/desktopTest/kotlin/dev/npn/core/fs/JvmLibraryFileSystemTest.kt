@@ -50,6 +50,11 @@ class JvmLibraryFileSystemTest {
             ".npn/journal/dev1",
             ".npn/journal/dev1/0.jsonl",
         )
+        fs.listAllUnder(".npn/journal").map { it.relPath }.shouldContainExactlyInAnyOrder(
+            ".npn/journal/dev1",
+            ".npn/journal/dev1/0.jsonl",
+        )
+        fs.listAllUnder("missing") shouldBe emptyList()
 
         val stat = fs.stat("inbox/a.pdf")
         stat.shouldNotBeNull()
@@ -108,6 +113,34 @@ class JvmLibraryFileSystemTest {
         fs.writeBytesOnce("empty.txt", ByteArray(0))
         fs.sha256("empty.txt") shouldBe
             "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+
+    @Test
+    fun verifiedObjectPublicationIsAtomicIdempotentAndNeverReplaces() = runTest {
+        val bytes = "complete transaction".encodeToByteArray()
+        val hash = sha256Bytes(bytes)
+        val canonical = NpnPaths.journalObjectPath(hash)
+        val staging = NpnPaths.journalStagingPath(hash, "installation", "one")
+        fs.writeBytesOnce(staging, bytes)
+        fs.publishVerifiedObjectOnce(staging, canonical, hash) shouldBe VerifiedPublicationResult.PUBLISHED
+        fs.exists(staging).shouldBeFalse()
+        fs.readBytes(canonical).contentEquals(bytes).shouldBeTrue()
+
+        val retry = NpnPaths.journalStagingPath(hash, "installation", "two")
+        fs.writeBytesOnce(retry, bytes)
+        fs.publishVerifiedObjectOnce(retry, canonical, hash) shouldBe VerifiedPublicationResult.ALREADY_PRESENT
+        fs.exists(retry).shouldBeFalse()
+
+        val other = "other".encodeToByteArray()
+        val otherHash = sha256Bytes(other)
+        val corruptTarget = NpnPaths.journalObjectPath(otherHash)
+        fs.writeBytesOnce(corruptTarget, "corrupt".encodeToByteArray())
+        val otherStaging = NpnPaths.journalStagingPath(otherHash, "installation", "three")
+        fs.writeBytesOnce(otherStaging, other)
+        assertFailsWith<IllegalStateException> {
+            fs.publishVerifiedObjectOnce(otherStaging, corruptTarget, otherHash)
+        }
+        fs.readBytes(corruptTarget).decodeToString() shouldBe "corrupt"
     }
 
     @Test

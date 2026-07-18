@@ -40,6 +40,7 @@ fun createAppEnvironment(context: Context): AppEnvironment {
             scope = scope,
             ocrLanguage = { settings.ocrLanguage.first() },
             trashRetentionDays = { settings.trashRetentionDays.first() },
+            installationId = settings.installationId.first(),
         )
         OpenedLibrary(deps) { deps.closeDb() }
     }

@@ -7,6 +7,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.File
 import java.util.Properties
+import java.util.UUID
 
 /**
  * Desktop [SettingsRepository] persisted to a `settings.properties` file under
@@ -31,11 +32,19 @@ class SettingsRepositoryImpl(
         val librarySort: LibrarySort,
         val gridColumnWidth: Int,
         val landscapeListColumns: Boolean,
+        val installationId: String,
     )
 
     private fun load(): Snapshot {
         if (file.exists()) {
             runCatching { file.inputStream().use { props.load(it) } }
+        }
+        val installationId = props.getProperty(KEY_INSTALLATION_ID) ?: UUID.randomUUID().toString().also { fresh ->
+            props.setProperty(KEY_INSTALLATION_ID, fresh)
+            runCatching {
+                file.parentFile?.mkdirs()
+                file.outputStream().use { props.store(it, "no-papers-needed settings") }
+            }
         }
         return Snapshot(
             libraryLocation = props.getProperty(KEY_LOCATION)?.ifEmpty { null },
@@ -53,6 +62,7 @@ class SettingsRepositoryImpl(
                 ?.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
                 ?: GridSizing.DEFAULT_COLUMN_WIDTH,
             landscapeListColumns = props.getProperty(KEY_LANDSCAPE_LIST)?.toBoolean() ?: false,
+            installationId = installationId,
         )
     }
 
@@ -66,6 +76,7 @@ class SettingsRepositoryImpl(
         props.setProperty(KEY_SORT_ASC, snapshot.librarySort.ascending.toString())
         props.setProperty(KEY_GRID_WIDTH, snapshot.gridColumnWidth.toString())
         props.setProperty(KEY_LANDSCAPE_LIST, snapshot.landscapeListColumns.toString())
+        props.setProperty(KEY_INSTALLATION_ID, snapshot.installationId)
         file.parentFile?.mkdirs()
         file.outputStream().use { props.store(it, "no-papers-needed settings") }
     }
@@ -77,6 +88,7 @@ class SettingsRepositoryImpl(
     override val librarySort: Flow<LibrarySort> = state.map { it.librarySort }
     override val gridColumnWidth: Flow<Int> = state.map { it.gridColumnWidth }
     override val landscapeListColumns: Flow<Boolean> = state.map { it.landscapeListColumns }
+    override val installationId: Flow<String> = state.map { it.installationId }
 
     override suspend fun setLibraryLocation(location: String?) {
         val next = state.value.copy(libraryLocation = location?.ifEmpty { null })
@@ -131,6 +143,7 @@ class SettingsRepositoryImpl(
         private const val KEY_SORT_ASC = "librarySortAscending"
         private const val KEY_GRID_WIDTH = "gridColumnWidth"
         private const val KEY_LANDSCAPE_LIST = "landscapeListColumns"
+        private const val KEY_INSTALLATION_ID = "installationId"
 
         fun defaultFile(): File {
             val configHome = System.getenv("XDG_CONFIG_HOME")?.ifEmpty { null }

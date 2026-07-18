@@ -13,15 +13,15 @@ same library.
   app can rebuild all of its state from the folder alone.
 - Documents are immutable. Once a PDF is in the library the app never rewrites its
   bytes (rename/move only). The one exception is the explicit bake-in-place action.
-- Metadata is a journal. Changes (tags, properties, trash, relink) are appended to
-  per-device, write-once segment files under `.npn/journal/`. No file is ever
-  modified after it is written, and no two devices write the same file, so sync
-  conflicts on app data are structurally impossible. Merges are conflict-free:
+- Metadata is a journal. Changes (tags, properties, trash, relink) are stored as
+  immutable JSONL transactions under `.npn/journal/`. New-format transactions use
+  their complete-file SHA-256 as the filename; legacy per-device segments remain
+  readable. No published transaction is modified after it is written. Merges are conflict-free:
   OR-set semantics for tags, hybrid-logical-clock last-writer-wins for single-value
   properties.
-- SQLite is a rebuildable cache. The index (search, thumbnails, folded journal
-  state) lives in device-local storage, never inside the library folder, and is
-  never synced. Delete it and it rebuilds from the folder.
+- SQLite is a rebuildable cache. The index (search, thumbnails, source provenance,
+  and incremental metadata projection) lives in device-local storage, never inside
+  the library folder, and is never synced. Delete it and it rebuilds from the folder.
 - OCR travels as sidecars. Extracted text is written to `.npn/ocr/` keyed by file
   hash and device id, so a device adopts another device's OCR instead of redoing it.
 - Identity is the SHA-256 of the file bytes. Renames and moves never detach
@@ -168,13 +168,22 @@ Library/
   ... your PDFs and subfolders ...
   inbox/                                # optional import/scan target
   .npn/
-    journal/<deviceId>/<seq>.jsonl      # per-device, write-once metadata segments
+    journal/<deviceId>/<seq>.jsonl      # legacy per-device metadata segments
+    journal/objects-v2-<00..ff>/
+      <sha256>.jsonl                    # content-addressed metadata transactions
     ocr/<sha256>.<deviceId>.json        # OCR sidecars, adopted across devices
     trash/                              # soft-deleted files (synced, not indexed)
 ```
 
 The `.npn/` directory syncs with the documents. The device-local index and cached
 thumbnails live outside the library folder and are never synced.
+
+Metadata is written as content-addressed storage-v2 objects on every storage
+provider that supports verified publication (all current desktop and Android/SAF
+libraries). Legacy per-device v1 segments are no longer produced but remain fully
+readable forever, so libraries written by older releases keep folding correctly.
+A provider without a proven atomic create-without-replacement primitive (an unknown
+future backend) would fall back to writing legacy v1 segments.
 
 ## License
 

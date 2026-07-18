@@ -28,8 +28,14 @@ class FoldedState {
     private val tagAdds = HashMap<String, HashMap<String, HashMap<Dot, Hlc>>>()
     // set of all dots ever removed by any tag-remove (tombstones); keep forever
     private val removedDots = HashSet<Dot>()
-    // library-wide rename/merge ops, unordered; sorted by HLC when computing effective names
+    // library-wide rename/merge ops, unordered; sorted by HLC when computing effective names.
+    // The sorted view is derived on demand and cached, invalidated whenever a rename is applied.
     private val renames = ArrayList<RenameOp>()
+    private var sortedRenamesCache: List<RenameOp>? = null
+
+    /** Renames sorted by HLC, computed once per mutation and cached (invalidated on apply). */
+    private val sortedRenames: List<RenameOp>
+        get() = sortedRenamesCache ?: renames.sortedBy { it.hlc }.also { sortedRenamesCache = it }
 
     data class RenameOp(val from: String, val to: String, val hlc: Hlc, val isMerge: Boolean)
 
@@ -114,10 +120,14 @@ class FoldedState {
                 val doc = event.doc ?: return
                 relinks.getOrPut(doc) { ArrayList() }.add(RelinkClaim(op.newDoc, event.hlc))
             }
-            is JournalOp.TagRename ->
+            is JournalOp.TagRename -> {
                 renames.add(RenameOp(op.from, op.to, event.hlc, isMerge = false))
-            is JournalOp.TagMerge ->
+                sortedRenamesCache = null
+            }
+            is JournalOp.TagMerge -> {
                 renames.add(RenameOp(op.from, op.to, event.hlc, isMerge = true))
+                sortedRenamesCache = null
+            }
             is JournalOp.TagStyle -> {
                 val existing = tagStyles[op.tag]
                 if (existing == null || event.hlc > existing.hlc) {
@@ -148,7 +158,7 @@ class FoldedState {
      */
     fun effectiveTags(doc: String): Set<String> {
         val byTag = tagAdds[doc] ?: return emptySet()
-        val sortedRenames = renames.sortedBy { it.hlc }
+        val sortedRenames = sortedRenames
         val result = LinkedHashSet<String>()
         for ((literal, dots) in byTag) {
             for ((dot, addHlc) in dots) {
@@ -264,7 +274,7 @@ class FoldedState {
      */
     fun liveTagDots(doc: String, effectiveName: String): List<Dot> {
         val byTag = tagAdds[doc] ?: return emptyList()
-        val sortedRenames = renames.sortedBy { it.hlc }
+        val sortedRenames = sortedRenames
         val out = ArrayList<Dot>()
         for ((literal, dots) in byTag) {
             for ((dot, addHlc) in dots) {

@@ -3,12 +3,11 @@ package dev.npn.core.index
 import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
-import dev.npn.core.fs.FsSegmentStoreFiles
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.HlcClock
-import dev.npn.core.journal.JournalIndex
 import dev.npn.core.journal.SegmentWriter
+import dev.npn.core.index.ScanReport
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -25,18 +24,29 @@ class IndexRig private constructor(
     val db: NpnDatabase,
     val clock: MutableClock,
 ) {
-    val segmentStoreFiles = FsSegmentStoreFiles(fs)
-    val fsSegmentStore = FsSegmentStore(segmentStoreFiles)
-    val journalIndex = JournalIndex(fsSegmentStore)
-    val foldedTracker = DbFoldedSegmentTracker(db.foldedSegmentDao())
+    val fsSegmentStore = FsSegmentStore(fs)
 
-    val indexer = Indexer(fs, db, journalIndex, foldedTracker, clock)
+    val indexer = Indexer(fs, db, clock)
+
+    /** Real persisted accumulator: reads the same V1 journal segments the writers produce. */
+    val accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
 
     val importService =
         ImportService(fs, db.documentDao(), db.ocrQueueDao(), clock)
 
     val maintenance =
         MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
+
+    /**
+     * Reconcile metadata through the persisted accumulator, then rescan the file tree. Mirrors
+     * what [JournalCoordinator.rescan] does in production, so tests keep calling a single method.
+     */
+    suspend fun rescan(): ScanReport {
+        val state = accumulator.reconcile().state
+        val report = indexer.rescan(metadataState = state)
+        accumulator.markReady(state.maxHlc)
+        return report
+    }
 
     /** Build a SegmentWriter for [deviceId] over this library, with its own local state. */
     fun writer(deviceId: String): SegmentWriter =
@@ -47,9 +57,9 @@ class IndexRig private constructor(
             localState = DbLocalJournalState(db.keyValueDao()),
         )
 
-    /** Build a [JournalCoordinator] over [writer] and this rig's indexer/journal index. */
+    /** Build a [JournalCoordinator] over [writer] backed by this rig's accumulator + indexer. */
     fun coordinator(writer: SegmentWriter): JournalCoordinator =
-        JournalCoordinator(writer, journalIndex, indexer)
+        JournalCoordinator(writer, indexer, accumulator)
 
     /** Write a fake PDF (bytes need not be valid; only the .pdf suffix matters to the indexer). */
     fun writePdf(relPath: String, content: String) {

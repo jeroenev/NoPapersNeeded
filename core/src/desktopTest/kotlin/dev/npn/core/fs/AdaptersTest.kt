@@ -1,5 +1,6 @@
 package dev.npn.core.fs
 
+import dev.npn.core.index.FsSegmentStore
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -28,7 +29,7 @@ class AdaptersTest {
 
     @Test
     fun segmentStoreWriteOnceAndListingGroupedByDevice() = runTest {
-        val store = FsSegmentStoreFiles(fs)
+        val store = FsSegmentStore(fs)
         store.writeJournalFileOnce("devA", "0001.jsonl", "{\"seq\":1}")
         store.writeJournalFileOnce("devA", "0002.jsonl", "{\"seq\":2}")
         store.writeJournalFileOnce("devB", "0001.jsonl", "{\"seq\":1}")
@@ -55,7 +56,7 @@ class AdaptersTest {
 
     @Test
     fun segmentStoreWriteOnceRejectsDuplicate() = runTest {
-        val store = FsSegmentStoreFiles(fs)
+        val store = FsSegmentStore(fs)
         store.writeJournalFileOnce("devA", "0001.jsonl", "a")
         kotlin.test.assertFailsWith<IllegalStateException> {
             store.writeJournalFileOnce("devA", "0001.jsonl", "b")

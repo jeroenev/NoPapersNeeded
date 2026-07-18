@@ -31,6 +31,9 @@ import kotlin.io.path.name
  */
 class JvmLibraryFileSystem(private val root: Path) : LibraryFileSystem {
 
+    override val verifiedPublicationCapability: VerifiedPublicationCapability =
+        VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
+
     private fun resolve(relPath: String): Path {
         val norm = NpnPaths.normalize(relPath)
         return if (norm.isEmpty()) root else root.resolve(norm)
@@ -39,13 +42,17 @@ class JvmLibraryFileSystem(private val root: Path) : LibraryFileSystem {
     private fun relOf(path: Path): String =
         root.relativize(path).toString().replace('\\', '/')
 
-    override suspend fun listAll(): List<FileMeta> = withContext(Dispatchers.IO) {
+    override suspend fun listAll(): List<FileMeta> = listAllFrom(root)
+
+    override suspend fun listAllUnder(relPath: String): List<FileMeta> = listAllFrom(resolve(relPath))
+
+    private suspend fun listAllFrom(start: Path): List<FileMeta> = withContext(Dispatchers.IO) {
         val out = ArrayList<FileMeta>()
-        if (!Files.exists(root)) return@withContext out
+        if (!Files.exists(start)) return@withContext out
         // followLinks = false: do not traverse symlink cycles.
-        Files.walkFileTree(root, emptySet<FileVisitOption>(), Int.MAX_VALUE, object : SimpleFileVisitor<Path>() {
+        Files.walkFileTree(start, emptySet<FileVisitOption>(), Int.MAX_VALUE, object : SimpleFileVisitor<Path>() {
             override fun preVisitDirectory(dir: Path, attrs: BasicFileAttributes): FileVisitResult {
-                if (dir != root) out.add(metaOf(dir, attrs))
+                if (dir != start) out.add(metaOf(dir, attrs))
                 return FileVisitResult.CONTINUE
             }
 
@@ -116,6 +123,43 @@ class JvmLibraryFileSystem(private val root: Path) : LibraryFileSystem {
         Unit
     }
 
+    override suspend fun publishVerifiedObjectOnce(
+        stagingPath: String,
+        canonicalPath: String,
+        expectedHash: String,
+    ): VerifiedPublicationResult = withContext(Dispatchers.IO) {
+        val staging = resolve(stagingPath)
+        val canonical = resolve(canonicalPath)
+        require(staging.parent == canonical.parent) { "Object staging must be in the canonical bucket" }
+        check(Files.isRegularFile(staging)) { "Staging object is missing: $stagingPath" }
+        check(hashPath(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
+        val result = try {
+            // Creating a hard link installs one complete directory entry and cannot replace an
+            // existing target. Providers without this primitive must use the v1 writer.
+            Files.createLink(canonical, staging)
+            VerifiedPublicationResult.PUBLISHED
+        } catch (_: java.nio.file.FileAlreadyExistsException) {
+            check(Files.isRegularFile(canonical) && hashPath(canonical) == expectedHash) {
+                "Canonical object exists with invalid bytes: $canonicalPath"
+            }
+            VerifiedPublicationResult.ALREADY_PRESENT
+        } catch (e: UnsupportedOperationException) {
+            throw VerifiedPublicationUnavailableException("Atomic no-replace publication is unsupported", e)
+        } catch (e: IOException) {
+            if (Files.isRegularFile(canonical)) {
+                check(hashPath(canonical) == expectedHash) {
+                    "Canonical object appeared with invalid bytes: $canonicalPath"
+                }
+                VerifiedPublicationResult.ALREADY_PRESENT
+            } else {
+                throw VerifiedPublicationUnavailableException("Atomic no-replace publication failed", e)
+            }
+        }
+        check(hashPath(canonical) == expectedHash) { "Published object hash mismatch: $canonicalPath" }
+        Files.deleteIfExists(staging)
+        result
+    }
+
     override suspend fun move(fromRelPath: String, toRelPath: String) = withContext(Dispatchers.IO) {
         val from = resolve(fromRelPath)
         val to = resolve(toRelPath)
@@ -160,8 +204,12 @@ class JvmLibraryFileSystem(private val root: Path) : LibraryFileSystem {
     }
 
     override suspend fun sha256(relPath: String): String = withContext(Dispatchers.IO) {
+        hashPath(resolve(relPath))
+    }
+
+    private fun hashPath(path: Path): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        Files.newInputStream(resolve(relPath)).use { input ->
+        Files.newInputStream(path).use { input ->
             DigestInputStream(input, digest).use { dis ->
                 val buffer = ByteArray(64 * 1024)
                 while (dis.read(buffer) != -1) {
@@ -169,7 +217,7 @@ class JvmLibraryFileSystem(private val root: Path) : LibraryFileSystem {
                 }
             }
         }
-        digest.digest().toHexLower()
+        return digest.digest().toHexLower()
     }
 
     override suspend fun importExternal(source: ExternalSource, toRelPath: String) = withContext(Dispatchers.IO) {

@@ -346,6 +346,7 @@ class FakeSettingsRepository(
     val librarySortFlow = MutableStateFlow(LibrarySort())
     val gridColumnWidthFlow = MutableStateFlow(160)
     val landscapeListColumnsFlow = MutableStateFlow(false)
+    val installationIdFlow = MutableStateFlow("test-installation")
 
     val setDefaultViews = mutableListOf<ViewType>()
     val setSorts = mutableListOf<LibrarySort>()
@@ -355,6 +356,7 @@ class FakeSettingsRepository(
     val setLandscapeFlags = mutableListOf<Boolean>()
 
     override val libraryLocation: Flow<String?> get() = libraryLocationFlow
+    override val installationId: Flow<String> get() = installationIdFlow
     override suspend fun setLibraryLocation(location: String?) { libraryLocationFlow.value = location }
     override val ocrLanguage: Flow<String> get() = ocrLanguageFlow
     override suspend fun setOcrLanguage(lang: String) { setOcrLanguages += lang; ocrLanguageFlow.value = lang }
@@ -381,6 +383,7 @@ class DeferredDefaultViewSettings : SettingsRepository {
     fun emitDefaultView(v: ViewType) { defaultView.value = v }
 
     override val libraryLocation: Flow<String?> = flowOf(null)
+    override val installationId: Flow<String> = flowOf("test-installation")
     override suspend fun setLibraryLocation(location: String?) {}
     override val ocrLanguage: Flow<String> = flowOf("eng")
     override suspend fun setOcrLanguage(lang: String) {}

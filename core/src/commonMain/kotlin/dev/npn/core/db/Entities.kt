@@ -116,19 +116,6 @@ data class FtsDocumentEntity(
     val docType: String? = null,
 )
 
-/**
- * Tracks which journal segment files have been folded into this cache. Segments are
- * write-once immutable files, so a filename either is or isn't folded (PLAN.md sec. 2).
- */
-@Entity(
-    tableName = "folded_segments",
-    primaryKeys = ["deviceId", "fileName"],
-)
-data class FoldedSegmentEntity(
-    val deviceId: String,
-    val fileName: String,
-)
-
 @Entity(tableName = "saved_views")
 data class SavedViewEntity(
     @PrimaryKey val id: String,
@@ -175,3 +162,80 @@ data class KeyValueEntity(
     @PrimaryKey val key: String,
     val value: String,
 )
+
+@Entity(tableName = "metadata_sources")
+data class MetadataSourceEntity(
+    @PrimaryKey val path: String,
+    val storageVersion: Int,
+    val fingerprint: String,
+    val contentHash: String?,
+    val status: String,
+    val diagnostic: String? = null,
+)
+
+@Entity(
+    tableName = "metadata_events",
+    primaryKeys = ["deviceId", "sequence"],
+    indices = [Index(value = ["hlcPhysical", "hlcCounter", "hlcDevice"], unique = true)],
+)
+data class MetadataEventEntity(
+    val deviceId: String,
+    val sequence: Long,
+    val canonicalJson: String,
+    val hlcPhysical: Long,
+    val hlcCounter: Int,
+    val hlcDevice: String,
+    val documentId: String?,
+    val operation: String,
+)
+
+@Entity(
+    tableName = "metadata_source_events",
+    primaryKeys = ["sourcePath", "eventDeviceId", "eventSequence"],
+    indices = [Index(value = ["eventDeviceId", "eventSequence"])],
+)
+data class MetadataSourceEventEntity(
+    val sourcePath: String,
+    val eventDeviceId: String,
+    val eventSequence: Long,
+)
+
+@Entity(tableName = "metadata_transaction_actors")
+data class MetadataTransactionActorEntity(
+    @PrimaryKey val actorId: String,
+    val objectHash: String,
+)
+
+/**
+ * Supersession fact recorded by an APPLIED compaction snapshot: [snapshotPath] supersedes the v2
+ * object (or older snapshot) whose content hash is [supersededHash]. Rows are keyed by the pair so
+ * two concurrent snapshots superseding the same object are both idempotently recorded. A missing
+ * previously-applied source is tolerated iff its content hash appears here for an applied snapshot
+ * (see MetadataAccumulator.validatePublishedObjects).
+ */
+@Entity(
+    tableName = "metadata_superseded",
+    primaryKeys = ["snapshotPath", "supersededHash"],
+    indices = [Index(value = ["supersededHash"])],
+)
+data class MetadataSupersededEntity(
+    val snapshotPath: String,
+    val supersededHash: String,
+)
+
+@Entity(tableName = "metadata_projection_state")
+data class MetadataProjectionStateEntity(
+    @PrimaryKey val id: Int = SINGLETON_ID,
+    val projectionVersion: Int,
+    val migrationState: String,
+    val sourceMaxPhysical: Long,
+    val sourceMaxCounter: Int,
+    val sourceMaxDevice: String,
+    val allocatorPhysical: Long,
+    val allocatorCounter: Int,
+    val diagnostic: String? = null,
+) {
+    companion object {
+        const val SINGLETON_ID = 1
+    }
+}

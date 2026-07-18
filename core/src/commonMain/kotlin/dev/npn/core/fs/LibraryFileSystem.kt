@@ -19,6 +19,19 @@ data class FileMeta(
     val isDirectory: Boolean,
 )
 
+enum class VerifiedPublicationCapability {
+    ATOMIC_CREATE_NO_REPLACE,
+    UNSUPPORTED,
+}
+
+enum class VerifiedPublicationResult {
+    PUBLISHED,
+    ALREADY_PRESENT,
+}
+
+class VerifiedPublicationUnavailableException(message: String, cause: Throwable? = null) :
+    IllegalStateException(message, cause)
+
 /**
  * A coarse change signal from the platform watcher. Coarse granularity is intentional: the
  * indexer reacts by rescanning (fast-path mtime+size), so exact per-file precision is not
@@ -64,8 +77,14 @@ expect class ExternalSource
  * - All paths are library-relative, '/'-separated, no leading slash.
  */
 interface LibraryFileSystem {
+    /** Whether this provider can atomically publish a complete staged object without replacement. */
+    val verifiedPublicationCapability: VerifiedPublicationCapability
+
     /** Recursive walk of the whole library, including `.npn/` contents. Directories are included. */
     suspend fun listAll(): List<FileMeta>
+
+    /** Recursive walk below [relPath], excluding [relPath] itself. */
+    suspend fun listAllUnder(relPath: String): List<FileMeta>
 
     suspend fun exists(relPath: String): Boolean
 
@@ -80,6 +99,16 @@ interface LibraryFileSystem {
      * (temp file + rename on desktop). Never appends or overwrites.
      */
     suspend fun writeBytesOnce(relPath: String, bytes: ByteArray)
+
+    /**
+     * Atomically expose [stagingPath] as [canonicalPath], refusing replacement. Both paths must be
+     * in the same directory and the bytes at both boundaries must hash to [expectedHash].
+     */
+    suspend fun publishVerifiedObjectOnce(
+        stagingPath: String,
+        canonicalPath: String,
+        expectedHash: String,
+    ): VerifiedPublicationResult
 
     /** Move/rename, creating parent dirs of the target. Fails if the target already exists. */
     suspend fun move(fromRelPath: String, toRelPath: String)

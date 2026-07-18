@@ -25,8 +25,10 @@ data class JournalEvent(
     val op: JournalOp,
 ) {
     val dot: Dot get() = Dot(dev, seq)
+}
 
-    companion object {
-        const val CURRENT_VERSION = 1
-    }
+/** Event-envelope versions are independent from the journal storage layout version. */
+object JournalEventVersions {
+    const val V1: Int = 1
+    const val CANONICAL: Int = V1
 }

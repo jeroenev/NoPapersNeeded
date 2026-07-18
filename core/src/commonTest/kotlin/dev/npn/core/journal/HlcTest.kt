@@ -91,4 +91,13 @@ class HlcTest {
         assertEquals(now, merged.physicalMillis)
         assertEquals(0, merged.counter)
     }
+
+    @Test
+    fun transaction_actor_allocator_stays_monotonic_across_actor_changes() {
+        val allocator = HlcWatermarkAllocator(clock = { 1000L })
+        val first = allocator.next("00000000-0000-4000-8000-000000000001")
+        val second = allocator.next("00000000-0000-4000-8000-000000000002")
+        assertTrue(second > first)
+        assertEquals(first.counter + 1, second.counter)
+    }
 }

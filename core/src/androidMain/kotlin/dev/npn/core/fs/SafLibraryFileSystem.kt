@@ -30,6 +30,13 @@ class SafLibraryFileSystem(
     private val treeUri: Uri,
 ) : LibraryFileSystem {
 
+    // SAF rename is not POSIX-atomic, but v2 objects are content-addressed: the staging file is
+    // written and hash-verified in full before the rename, so the published object can never be
+    // torn, and readers verify the content hash against the filename anyway (see
+    // StorageV2Reader / publishVerifiedObjectOnce below).
+    override val verifiedPublicationCapability: VerifiedPublicationCapability =
+        VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
+
     private val resolver get() = context.contentResolver
 
     private val treeDocId: String = DocumentsContract.getTreeDocumentId(treeUri)
@@ -135,10 +142,20 @@ class SafLibraryFileSystem(
         if (NpnPaths.isPdf(name)) "application/pdf" else "application/octet-stream"
 
     override suspend fun listAll(): List<FileMeta> = withContext(Dispatchers.IO) {
+        listAllFrom(treeDocId, "")
+    }
+
+    override suspend fun listAllUnder(relPath: String): List<FileMeta> = withContext(Dispatchers.IO) {
+        val norm = NpnPaths.normalize(relPath)
+        val root = resolveEntry(norm)
+        if (root == null || !root.isDir) emptyList() else listAllFrom(root.docId, norm)
+    }
+
+    private fun listAllFrom(rootId: String, rootRel: String): List<FileMeta> {
         val out = ArrayList<FileMeta>()
         // Iterative DFS over (docId, relPath) directory frontier.
         val stack = ArrayDeque<Pair<String, String>>()
-        stack.addLast(treeDocId to "")
+        stack.addLast(rootId to rootRel)
         while (stack.isNotEmpty()) {
             val (dirId, dirRel) = stack.removeLast()
             for (entry in queryChildren(dirId)) {
@@ -155,7 +172,7 @@ class SafLibraryFileSystem(
                 if (entry.isDir) stack.addLast(entry.docId to rel)
             }
         }
-        out
+        return out
     }
 
     override suspend fun exists(relPath: String): Boolean = withContext(Dispatchers.IO) {
@@ -214,6 +231,98 @@ class SafLibraryFileSystem(
             throw e
         }
         Unit
+    }
+
+    /**
+     * Publish a fully-written, hash-verified staging object under its canonical, content-addressed
+     * name via [DocumentsContract.renameDocument].
+     *
+     * SAF rename is not guaranteed atomic like POSIX `rename(2)`, but this is safe because:
+     * - The staging bytes are verified to hash to [expectedHash] *before* the rename, so the
+     *   renamed canonical file always holds a complete object (rename moves the existing directory
+     *   entry; it never re-copies or truncates bytes).
+     * - v2 readers recompute the content hash and compare it against the filename; a torn or
+     *   mismatched object is treated as retryable/skippable rather than a hard failure.
+     *
+     * Failure handling: on any rename failure the staging file is left in place (it is classified
+     * as [NpnPaths.JournalPath.Staging] and ignored by readers, then GC'd by the accumulator) and a
+     * retryable [VerifiedPublicationUnavailableException] is thrown, so a wrongly-named file is
+     * never installed in the published objects directory. If the canonical object already exists
+     * (same hash ⇒ same content), the staging file is deleted and the call reports
+     * [VerifiedPublicationResult.ALREADY_PRESENT].
+     */
+    override suspend fun publishVerifiedObjectOnce(
+        stagingPath: String,
+        canonicalPath: String,
+        expectedHash: String,
+    ): VerifiedPublicationResult = withContext(Dispatchers.IO) {
+        val stagingSegments = splitSegments(stagingPath)
+        val canonicalSegments = splitSegments(canonicalPath)
+        require(stagingSegments.dropLast(1) == canonicalSegments.dropLast(1)) {
+            "Object staging must be in the canonical bucket"
+        }
+        val canonicalName = canonicalSegments.last()
+
+        // A canonical object already present means the content was published earlier (content
+        // addressed: same hash ⇒ same bytes). Verify its bytes and drop our staging copy.
+        resolveEntry(canonicalPath)?.let { existing ->
+            check(!existing.isDir) { "Canonical object path is a directory: $canonicalPath" }
+            check(sha256OfEntry(existing) == expectedHash) {
+                "Canonical object exists with invalid bytes: $canonicalPath"
+            }
+            runCatching { delete(stagingPath) }
+            return@withContext VerifiedPublicationResult.ALREADY_PRESENT
+        }
+
+        val staging = resolveEntry(stagingPath)
+            ?: throw VerifiedPublicationUnavailableException("Staging object is missing: $stagingPath")
+        check(!staging.isDir) { "Staging object path is a directory: $stagingPath" }
+        check(sha256OfEntry(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
+
+        // Rename the complete staging file to its canonical name within the same bucket. SAF
+        // rename can throw or return null on some providers; treat that as retryable and leave the
+        // staging file for a later attempt / GC.
+        val renamedUri = try {
+            DocumentsContract.renameDocument(resolver, docUri(staging.docId), canonicalName)
+        } catch (e: Exception) {
+            throw retryablePublish(canonicalPath, e)
+        } ?: throw retryablePublish(canonicalPath, null)
+
+        // Some providers ignore the requested name and dedup (e.g. "<hash> (1).jsonl"), which would
+        // leave a wrongly-named file in the published directory. Detect that, remove the stray, and
+        // fail retryably. The original staging file is gone (renamed), so re-staging happens above.
+        val actualName = DocumentFile.fromSingleUri(context, renamedUri)?.name
+        if (actualName != null && actualName != canonicalName) {
+            runCatching { DocumentsContract.deleteDocument(resolver, renamedUri) }
+            throw retryablePublish(
+                canonicalPath,
+                IOException("Provider renamed publish target to '$actualName'"),
+            )
+        }
+
+        // Confirm the published object is intact and correctly named before reporting success.
+        val published = resolveEntry(canonicalPath)
+            ?: throw retryablePublish(canonicalPath, IOException("Published object not found after rename"))
+        check(sha256OfEntry(published) == expectedHash) {
+            "Published object hash mismatch: $canonicalPath"
+        }
+        VerifiedPublicationResult.PUBLISHED
+    }
+
+    private fun retryablePublish(canonicalPath: String, cause: Throwable?): VerifiedPublicationUnavailableException =
+        VerifiedPublicationUnavailableException("Verified publication failed: $canonicalPath", cause)
+
+    private fun sha256OfEntry(entry: Entry): String {
+        val digest = MessageDigest.getInstance("SHA-256")
+        resolver.openInputStream(docUri(entry.docId))?.use { input ->
+            DigestInputStream(input, digest).use { dis ->
+                val buffer = ByteArray(64 * 1024)
+                while (dis.read(buffer) != -1) {
+                    // read feeds the digest
+                }
+            }
+        } ?: throw IOException("Cannot open for read: ${entry.docId}")
+        return digest.digest().toHexLower()
     }
 
     override suspend fun move(fromRelPath: String, toRelPath: String) = withContext(Dispatchers.IO) {
@@ -372,5 +481,3 @@ class SafLibraryFileSystem(
     /** SAF provides no reliable change notifications; indexing is rescan-driven. */
     override fun watch(): Flow<FsEvent> = emptyFlow()
 }
-
-
