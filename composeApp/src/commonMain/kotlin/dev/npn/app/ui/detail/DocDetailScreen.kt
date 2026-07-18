@@ -87,6 +87,11 @@ fun DocDetailScreen(
     val snackbar = remember { SnackbarHostState() }
     var allTagNames by remember { mutableStateOf<List<String>>(emptyList()) }
 
+    // Surface one-shot VM messages (failed metadata writes etc.) as snackbars.
+    LaunchedEffect(vm, snackbar) {
+        vm.messages.collect { snackbar.showSnackbar(it) }
+    }
+
     var showRename by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
     var confirmBake by remember { mutableStateOf(false) }
@@ -175,7 +180,7 @@ fun DocDetailScreen(
                 baking = ui.baking,
                 reindexing = ui.reindexing,
                 onBack = onBack,
-                onToggleReviewed = { if (reviewed) vm.markUnreviewed() else vm.markReviewed() },
+                onToggleReviewed = { vm.setReviewed(!reviewed) },
                 onRename = { showRename = true },
                 onExport = {
                     saver.launch(

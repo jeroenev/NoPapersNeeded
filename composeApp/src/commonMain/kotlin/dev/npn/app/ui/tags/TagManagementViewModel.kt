@@ -1,13 +1,12 @@
 package dev.npn.app.ui.tags
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
+import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
-import kotlinx.coroutines.launch
 
 /**
  * A node in the hierarchical tag tree. Dot-separated tag paths ("a.b.c") form a namespace tree.
@@ -26,7 +25,7 @@ data class TagNode(
 
 class TagManagementViewModel(
     val session: LibrarySession,
-) : ViewModel() {
+) : MessagesViewModel() {
 
     val tags: StateFlow<List<TagInfo>> =
         session.tags.observeTags()
@@ -74,18 +73,14 @@ class TagManagementViewModel(
         return childrenOf("", 0)
     }
 
-    fun create(name: String, color: String?, icon: String?) = launch {
+    fun create(name: String, color: String?, icon: String?) = launchReporting("create tag") {
         session.meta.setTagStyle(name.trim(), color, icon)
     }
 
-    fun rename(from: String, to: String) = launch { session.meta.renameTag(from, to.trim()) }
-    fun merge(from: String, into: String) = launch { session.meta.mergeTag(from, into.trim()) }
-    fun delete(name: String) = launch { session.meta.deleteTag(name) }
-    fun setStyle(name: String, color: String?, icon: String?) = launch {
+    fun rename(from: String, to: String) = launchReporting("rename tag") { session.meta.renameTag(from, to.trim()) }
+    fun merge(from: String, into: String) = launchReporting("merge tags") { session.meta.mergeTag(from, into.trim()) }
+    fun delete(name: String) = launchReporting("delete tag") { session.meta.deleteTag(name) }
+    fun setStyle(name: String, color: String?, icon: String?) = launchReporting("update tag style") {
         session.meta.setTagStyle(name, color, icon)
-    }
-
-    private fun launch(block: suspend () -> Unit) {
-        viewModelScope.launch { runCatching { block() } }
     }
 }

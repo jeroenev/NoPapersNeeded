@@ -28,9 +28,12 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -62,6 +65,12 @@ fun TagManagementScreen(
     var deleteTarget by remember { mutableStateOf<String?>(null) }
     var styleTarget by remember { mutableStateOf<Pair<String, String?>?>(null) }
 
+    val snackbar = remember { SnackbarHostState() }
+    // Surface one-shot VM messages (failed tag writes) as snackbars.
+    LaunchedEffect(vm, snackbar) {
+        vm.messages.collect { snackbar.showSnackbar(it) }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -78,6 +87,7 @@ fun TagManagementScreen(
                 Icon(Icons.Filled.Add, contentDescription = "New tag")
             }
         },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         if (tags.isEmpty()) {
             Box(Modifier.fillMaxSize().padding(padding)) {
