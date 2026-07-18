@@ -32,7 +32,7 @@ class PdfBoxAndroidXmpIO(context: Context) : PdfXmpIO {
             val meta = doc.documentCatalog?.metadata ?: return@withContext null
             meta.exportXMPMetadata().use { input ->
                 val bytes = input.readBytes()
-                if (bytes.isEmpty()) null else bytes.decodeToString()
+                if (bytes.isEmpty()) null else decodeXmpBytes(bytes)
             }
         }
     }
@@ -65,21 +65,11 @@ class PdfBoxAndroidXmpIO(context: Context) : PdfXmpIO {
 
     override suspend fun verify(pdfBytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
         try {
-            val xmp = readXmpInternal(pdfBytes) ?: return@withContext false
+            val xmp = readXmp(pdfBytes) ?: return@withContext false
             val data = XmpParser.parse(xmp)
             data.documentId != null || data.tags.isNotEmpty()
         } catch (_: Throwable) {
             false
-        }
-    }
-
-    private fun readXmpInternal(pdfBytes: ByteArray): String? {
-        PDDocument.load(pdfBytes).use { doc ->
-            val meta = doc.documentCatalog?.metadata ?: return null
-            meta.exportXMPMetadata().use { input ->
-                val bytes = input.readBytes()
-                return if (bytes.isEmpty()) null else bytes.decodeToString()
-            }
         }
     }
 

@@ -85,7 +85,7 @@ class JournalCoordinator(
     val currentState: FoldedState get() = state
 
     suspend fun ingestObject(relPath: String) = mutex.withLock {
-        try {
+        withDurableProjectionRecovery {
             var events: List<JournalEvent> = emptyList()
             indexer.withFtsWriteGate {
                 accumulator.withProjectionTransaction {
@@ -97,8 +97,6 @@ class JournalCoordinator(
                 }
             }
             updateSettings(events)
-        } catch (_: Throwable) {
-            recoverDurableProjection()
         }
     }
 
@@ -165,15 +163,12 @@ class JournalCoordinator(
         ) ?: return@withLock null
         withContext(NonCancellable) {
             val published = activeCompactor.publish(plan) ?: return@withContext null
-            try {
+            withDurableProjectionRecovery {
                 accumulator.withProjectionTransaction { support.recordLocalSnapshot(published) }
                 support.deleteSupersededFiles(published.supersedes.mapNotNull { hash ->
                     plan.firstOrNull { it.contentHash == hash }?.relPath
                 })
                 published.contentHash
-            } catch (_: Throwable) {
-                recoverDurableProjection()
-                null
             }
         }
     }
@@ -196,7 +191,7 @@ class JournalCoordinator(
                 writer.deviceId, SegmentRef.plainName(written.first().seq),
             )
             val version = if (published == null) NpnPaths.STORAGE_V1 else NpnPaths.STORAGE_V2
-            try {
+            withDurableProjectionRecovery {
                 indexer.withFtsWriteGate {
                     accumulator.withProjectionTransaction {
                         accumulator.recordLocalSource(path, version, published?.contentHash, written)
@@ -206,8 +201,6 @@ class JournalCoordinator(
                     }
                 }
                 updateSettings(written)
-            } catch (_: Throwable) {
-                recoverDurableProjection()
             }
         }
         true
@@ -215,6 +208,51 @@ class JournalCoordinator(
 
     /** Convenience for op lists that do not depend on current dots. */
     suspend fun commitAndApply(ops: List<PendingOp>): Boolean = commitBuilt { ops }
+
+    /**
+     * Apply an immediate, optimistic DB mutation for [lifecycleDocs] and commit [ops] atomically
+     * under the single-writer mutex.
+     *
+     * Ordering guarantee: [optimisticWrite] (e.g. flipping a trashed/deleted flag or a
+     * post-restore relPath so the UI reacts before the journal catches up) runs INSIDE the mutex,
+     * immediately before the commit that persists the corresponding journal event. Because every
+     * concurrent fold (periodic [reconcileMetadata], [rescan], [refreshState]) also holds this
+     * mutex, none can interleave between the optimistic write and its committing fold, so the
+     * optimistic value can never be clobbered by a fold that has not yet seen the event.
+     * [lifecycleDocs] are additionally passed through [Indexer.applyFold]'s preserveLifecycleDocs
+     * so the committing fold keeps the just-written lifecycle row rather than re-deriving it from a
+     * journal state that (for a not-yet-folded source) might not carry it.
+     */
+    suspend fun commitWithOptimisticLifecycle(
+        ops: List<PendingOp>,
+        lifecycleDocs: Set<String>,
+        optimisticWrite: suspend () -> Unit,
+    ): Boolean = mutex.withLock {
+        ensureWritable()
+        optimisticWrite()
+        if (ops.isEmpty()) return@withLock false
+        withContext(NonCancellable) {
+            val (published, written) = writeTransaction(ops)
+            val path = published?.relPath ?: NpnPaths.journalSegmentPath(
+                writer.deviceId, SegmentRef.plainName(written.first().seq),
+            )
+            val version = if (published == null) NpnPaths.STORAGE_V1 else NpnPaths.STORAGE_V2
+            withDurableProjectionRecovery {
+                indexer.withFtsWriteGate {
+                    accumulator.withProjectionTransaction {
+                        accumulator.recordLocalSource(path, version, published?.contentHash, written)
+                        written.forEach(state::apply)
+                        observeSourceHlc()
+                        indexer.refreshEvents(
+                            state, written, ftsGateHeld = true, preserveLifecycleDocs = lifecycleDocs,
+                        )
+                    }
+                }
+                updateSettings(written)
+            }
+        }
+        true
+    }
 
     /**
      * Commit [ops] as one segment and run a full [Indexer.rescan] inside the same critical section.
@@ -289,18 +327,43 @@ class JournalCoordinator(
         accumulator.persistAllocator(physical, counter)
     }
 
-    private suspend fun recoverDurableProjection() {
+    /**
+     * Run [attempt] — a bounded projection of an ALREADY-durable write/publish — and, on any
+     * failure, keep the disposable in-memory state + DB projection from diverging from the journal.
+     *
+     * On failure the ORIGINAL exception is preserved (its message latches [writeBlockReason]) while
+     * we try to rebuild the projection from the durable store via [recoverDurableProjection]:
+     *  - recovery succeeds -> the projection is consistent again and writes are re-enabled, but the
+     *    original failure is still rethrown so the caller learns the optimistic projection failed;
+     *  - recovery fails -> that failure also latches [writeBlockReason] (never escapes unlatched)
+     *    and is attached as suppressed to the rethrown original.
+     *
+     * This mirrors the latch-then-rethrow contract of [refreshState]/[rescan]/[reconcileMetadata]
+     * so every entry point behaves uniformly.
+     */
+    private suspend fun <T> withDurableProjectionRecovery(attempt: suspend () -> T): T =
         try {
-            state = accumulator.reconcile().state
-            observeSourceHlc()
-            indexer.refreshState(state)
-            accumulator.markReady(state.maxHlc)
-            seedSettings()
-            writeBlockReason = null
-        } catch (recoveryFailure: Throwable) {
-            blockWrites(recoveryFailure)
-            throw recoveryFailure
+            attempt()
+        } catch (failure: Throwable) {
+            blockWrites(failure)
+            try {
+                recoverDurableProjection()
+            } catch (recoveryFailure: Throwable) {
+                blockWrites(recoveryFailure)
+                failure.addSuppressed(recoveryFailure)
+                throw failure
+            }
+            throw failure
         }
+
+    /** Rebuild the in-memory state + DB projection from the durable store; clears the write block. */
+    private suspend fun recoverDurableProjection() {
+        state = accumulator.reconcile().state
+        observeSourceHlc()
+        indexer.refreshState(state)
+        accumulator.markReady(state.maxHlc)
+        seedSettings()
+        writeBlockReason = null
     }
 
     companion object {

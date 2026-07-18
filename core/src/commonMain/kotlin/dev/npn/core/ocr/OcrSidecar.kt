@@ -25,7 +25,16 @@ data class OcrSidecar(
     @SerialName("pages") val pages: List<String>,
 ) {
     /** Full document text: pages joined with a blank line, matching the index format. */
-    fun fullText(): String = pages.joinToString("\n\n")
+    fun fullText(): String = joinPages(pages)
+
+    companion object {
+        /**
+         * Join OCR page texts into a single document string with a blank line between pages.
+         * This is the exact separator the FTS index stores, so callers that only hold the page
+         * list (e.g. the OCR pipeline's indexing step) produce byte-identical indexed text.
+         */
+        fun joinPages(pages: List<String>): String = pages.joinToString("\n\n")
+    }
 }
 
 /** Serialization codec for [OcrSidecar]. Keeps output compact (no pretty-printing). */

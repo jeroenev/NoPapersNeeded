@@ -89,7 +89,7 @@ interface SavedViewRepository {
     suspend fun save(view: SavedView)
     suspend fun delete(id: String)
     suspend fun exportJson(): String
-    suspend fun importJson(json: String): Int   // returns number imported
+    suspend fun importJson(text: String): Int   // returns number imported
 }
 
 // ---------- write side (journal-backed) ----------

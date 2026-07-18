@@ -48,35 +48,15 @@ class TrashOps(private val fs: LibraryFileSystem) {
         }
     }
 
-    private suspend fun uniquify(path: String): String {
-        if (!fs.exists(path)) return path
-        val dot = path.lastIndexOf('.')
-        val slash = path.lastIndexOf('/')
-        val hasExt = dot > slash
-        val base = if (hasExt) path.substring(0, dot) else path
-        val ext = if (hasExt) path.substring(dot) else ""
-        var i = 1
-        while (true) {
-            val candidate = "$base-$i$ext"
-            if (!fs.exists(candidate)) return candidate
-            i++
-        }
-    }
+    private suspend fun uniquify(path: String): String =
+        uniquifyPath(path, startIndex = 1, suffix = { "-$it" }, exists = fs::exists)
 
-    private suspend fun uniquifyRestored(path: String): String {
-        if (!fs.exists(path)) return path
-        val dot = path.lastIndexOf('.')
-        val slash = path.lastIndexOf('/')
-        val hasExt = dot > slash
-        val base = if (hasExt) path.substring(0, dot) else path
-        val ext = if (hasExt) path.substring(dot) else ""
-        val first = "$base (restored)$ext"
-        if (!fs.exists(first)) return first
-        var i = 1
-        while (true) {
-            val candidate = "$base (restored $i)$ext"
-            if (!fs.exists(candidate)) return candidate
-            i++
-        }
-    }
+    private suspend fun uniquifyRestored(path: String): String =
+        uniquifyPath(
+            path,
+            startIndex = 1,
+            firstSuffix = " (restored)",
+            suffix = { " (restored $it)" },
+            exists = fs::exists,
+        )
 }

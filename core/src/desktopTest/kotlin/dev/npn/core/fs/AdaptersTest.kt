@@ -76,8 +76,5 @@ class AdaptersTest {
         ocr.listForHash("otherhash").shouldContainExactlyInAnyOrder("devA")
 
         ocr.list() shouldHaveSize 3
-
-        ocr.delete(hash, "devA")
-        ocr.listForHash(hash).shouldContainExactlyInAnyOrder("devB")
     }
 }

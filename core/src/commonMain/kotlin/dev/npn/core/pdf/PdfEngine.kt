@@ -67,8 +67,6 @@ interface PdfEngine {
     /** Open [bytes] as a PDF; throws [PdfOpenException] on an invalid/corrupt file. */
     suspend fun open(bytes: ByteArray): PdfDocumentHandle
 
-    suspend fun isValidPdf(bytes: ByteArray): Boolean
-
     /** Combine JPEG/PNG page images into a single PDF (one image per page). */
     suspend fun imagesToPdf(images: List<ByteArray>): ByteArray
 }

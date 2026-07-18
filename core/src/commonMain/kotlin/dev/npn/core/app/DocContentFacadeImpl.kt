@@ -20,7 +20,7 @@ import dev.npn.core.xmp.NpnXmpData
  *   row to the new hash, reusing the same relink semantics the [dev.npn.core.index.RelinkService]
  *   relies on.
  *
- * All failure paths return null/false and log via println (a real logger comes later).
+ * All failure paths return null/false and report through [logFailure].
  */
 class DocContentFacadeImpl(
     private val db: NpnDatabase,
@@ -30,6 +30,9 @@ class DocContentFacadeImpl(
     private val bakeService: BakeService,
     private val coordinator: JournalCoordinator,
     private val renderGate: RenderGate = RenderGate(),
+    private val logFailure: (String, Throwable) -> Unit = { message, failure ->
+        println("$message: ${failure.message}")
+    },
 ) : DocContentFacade {
 
     private val documentDao get() = db.documentDao()
@@ -50,7 +53,7 @@ class DocContentFacadeImpl(
                 pc
             }
         } catch (t: Throwable) {
-            println("pageCount failed for $docId: ${t.message}")
+            logFailure("pageCount failed for $docId", t)
             null
         }
     }
@@ -66,7 +69,7 @@ class DocContentFacadeImpl(
                 }
             }
         } catch (t: Throwable) {
-            println("renderPage failed for $docId p$pageIndex: ${t.message}")
+            logFailure("renderPage failed for $docId p$pageIndex", t)
             null
         }
     }
@@ -82,7 +85,7 @@ class DocContentFacadeImpl(
         return try {
             fs.readBytes(doc.relPath)
         } catch (t: Throwable) {
-            println("rawBytes failed for $docId: ${t.message}")
+            logFailure("rawBytes failed for $docId", t)
             null
         }
     }
@@ -92,7 +95,7 @@ class DocContentFacadeImpl(
         return try {
             bakeService.bakeToBytes(doc.relPath, buildXmpData(docId))
         } catch (t: Throwable) {
-            println("bakedCopyBytes failed for $docId: ${t.message}")
+            logFailure("bakedCopyBytes failed for $docId", t)
             null
         }
     }
@@ -130,7 +133,7 @@ class DocContentFacadeImpl(
             }
             true
         } catch (t: Throwable) {
-            println("bakeInPlace failed for $docId: ${t.message}")
+            logFailure("bakeInPlace failed for $docId", t)
             false
         }
     }

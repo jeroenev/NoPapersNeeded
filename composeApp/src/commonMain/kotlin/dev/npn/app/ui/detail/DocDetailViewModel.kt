@@ -87,16 +87,6 @@ class DocDetailViewModel(
 
     // ---- viewer controls ----
 
-    fun nextPage() {
-        val cur = _ui.value
-        if (cur.pageIndex < cur.pageCount - 1) _ui.value = cur.copy(pageIndex = cur.pageIndex + 1)
-    }
-
-    fun prevPage() {
-        val cur = _ui.value
-        if (cur.pageIndex > 0) _ui.value = cur.copy(pageIndex = cur.pageIndex - 1)
-    }
-
     fun goToPage(index: Int) {
         val cur = _ui.value
         if (index in 0 until cur.pageCount.coerceAtLeast(1)) _ui.value = cur.copy(pageIndex = index)
@@ -159,8 +149,6 @@ class DocDetailViewModel(
     }
 
     suspend fun bakedCopyBytes(): ByteArray? = runCatching { session.content.bakedCopyBytes(docId) }.getOrNull()
-
-    suspend fun allTagNames(): List<String> = session.tags.allTagNames()
 
     suspend fun renderPage(pageIndex: Int, maxDim: Int): ByteArray? =
         runCatching { session.content.renderPage(docId, pageIndex, maxDim) }.getOrNull()

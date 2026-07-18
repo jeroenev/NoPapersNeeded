@@ -47,14 +47,6 @@ data class SnapshotManifest(val version: Int, val supersedes: List<String>) {
 object SnapshotCodec {
     val json = JournalCodec.json
 
-    /** True when [line] is a snapshot manifest record (a `snap` versioned object). */
-    fun isManifestLine(line: String): Boolean {
-        val trimmed = line.trim()
-        if (!trimmed.startsWith("{")) return false
-        val obj = runCatching { json.parseToJsonElement(trimmed) as? JsonObject }.getOrNull() ?: return false
-        return obj.containsKey(SnapshotManifest.FIELD_SNAP)
-    }
-
     fun decodeManifest(line: String): SnapshotManifest {
         val obj = json.parseToJsonElement(line.trim()) as? JsonObject
             ?: throw IllegalArgumentException("Snapshot manifest is not a JSON object")

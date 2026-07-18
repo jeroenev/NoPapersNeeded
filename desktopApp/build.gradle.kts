@@ -23,7 +23,6 @@ dependencies {
     implementation(project(":core"))
     implementation(compose.desktop.currentOs)
     implementation(libs.kotlinx.coroutines.swing)
-    implementation(libs.pdfbox)
 }
 
 kotlin {

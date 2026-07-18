@@ -32,8 +32,6 @@ class TesseractCliEngine(
         } else {
             proc.exitValue() == 0
         }
-    } catch (_: IOException) {
-        false
     } catch (_: Throwable) {
         false
     }

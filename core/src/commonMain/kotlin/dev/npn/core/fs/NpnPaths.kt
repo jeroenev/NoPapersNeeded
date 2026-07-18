@@ -226,4 +226,33 @@ object NpnPaths {
     /** Normalize a library-relative path: strip leading/trailing slashes, collapse repeats. */
     fun normalize(relPath: String): String =
         relPath.split('/').filter { it.isNotEmpty() }.joinToString("/")
+
+}
+
+/** Return [path] or a suffixed free candidate, preserving dotfiles and directory-name dots. */
+suspend fun uniquifyPath(
+    path: String,
+    startIndex: Int,
+    firstSuffix: String? = null,
+    suffix: (Int) -> String,
+    exists: suspend (String) -> Boolean,
+): String {
+    if (!exists(path)) return path
+    val slash = path.lastIndexOf('/')
+    val dot = path.lastIndexOf('.')
+    val (base, ext) = if (dot > slash + 1) {
+        path.substring(0, dot) to path.substring(dot)
+    } else {
+        path to ""
+    }
+    if (firstSuffix != null) {
+        val first = "$base$firstSuffix$ext"
+        if (!exists(first)) return first
+    }
+    var index = startIndex
+    while (true) {
+        val candidate = "$base${suffix(index)}$ext"
+        if (!exists(candidate)) return candidate
+        index++
+    }
 }

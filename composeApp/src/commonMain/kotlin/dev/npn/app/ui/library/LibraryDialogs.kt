@@ -24,38 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 
-/** Text-entry dialog (used for "Save current view"). */
-@Composable
-fun NameDialog(
-    title: String,
-    label: String,
-    confirmLabel: String = "Save",
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var text by remember { mutableStateOf("") }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text(label) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
-        confirmButton = {
-            TextButton(
-                enabled = text.isNotBlank(),
-                onClick = { onConfirm(text.trim()) },
-            ) { Text(confirmLabel) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}
-
 /** Tag pick dialog with autocomplete from existing tag names (used for bulk add/remove). */
 @Composable
 fun TagPickerDialog(

@@ -4,7 +4,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.index.DeviceIdentity
-import dev.npn.core.journal.EpochClock
+import dev.npn.core.index.MutableClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.ThumbnailStore
@@ -13,12 +13,6 @@ import kotlinx.coroutines.CoroutineScope
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
-
-/** Hand-cranked clock so tests get deterministic, strictly-increasing HLCs. */
-class TestClock(start: Long = 1_000L) : EpochClock {
-    var now: Long = start
-    override fun nowMillis(): Long { now += 1; return now }
-}
 
 /** No-op OCR engine (unavailable) so the pipeline uses embedded text only. */
 class NoopOcrEngine : OcrEngine {
@@ -47,7 +41,7 @@ class AppSessionRig private constructor(
     val dbDir: File,
     val fs: JvmLibraryFileSystem,
     val db: NpnDatabase,
-    val clock: TestClock,
+    val clock: MutableClock,
     val scope: CoroutineScope,
     val session: LibrarySessionImpl,
 ) {
@@ -75,7 +69,7 @@ class AppSessionRig private constructor(
             val dbDir = Files.createTempDirectory("npn-app-db").toFile()
             val fs = JvmLibraryFileSystem(libRoot)
             val db = npnDatabase(File(dbDir, "index.db"))
-            val clock = TestClock()
+            val clock = MutableClock(autoTick = true)
             val deps = SessionDeps(
                 fs = fs,
                 db = db,
@@ -113,7 +107,7 @@ class AppSessionRig private constructor(
             scope = scope,
             ocrLanguage = { "eng" },
             trashRetentionDays = { 30 },
-            clock = TestClock(50_000L),
+            clock = MutableClock(50_000L, autoTick = true),
         )
         return LibrarySessionImpl.openSession(deps) to db2
     }

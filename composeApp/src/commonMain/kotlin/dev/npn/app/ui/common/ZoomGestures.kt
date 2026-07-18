@@ -22,28 +22,23 @@ import androidx.compose.ui.input.pointer.positionChanged
  * pointers are down the events are consumed here and the child never scrolls; a single-finger drag
  * is never consumed and scrolls normally.
  *
- * [onZoom] receives the incremental zoom factor (>1 = fingers moving apart). [onZoomEnd] fires
- * once when a gesture that actually pinched ends.
+ * [onZoom] receives the incremental zoom factor (>1 = fingers moving apart).
  */
 fun Modifier.pinchToZoom(
     onZoom: (Float) -> Unit,
-    onZoomEnd: () -> Unit = {},
 ): Modifier = pointerInput(Unit) {
     awaitEachGesture {
-        var pinched = false
         awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
         while (true) {
             val event = awaitPointerEvent(PointerEventPass.Initial)
             val pressed = event.changes.count { it.pressed }
             if (pressed == 0) break
             if (pressed >= 2) {
-                pinched = true
                 val zoom = event.calculateZoom()
                 if (zoom != 1f) onZoom(zoom)
                 event.changes.forEach { it.consume() }
             }
         }
-        if (pinched) onZoomEnd()
     }
 }
 

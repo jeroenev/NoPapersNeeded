@@ -33,16 +33,6 @@ class PdfBoxEngine : PdfEngine {
         PdfBoxDocumentHandle(doc)
     }
 
-    override suspend fun isValidPdf(bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
-        if (!looksLikePdf(bytes)) return@withContext false
-        try {
-            Loader.loadPDF(bytes).use { it.numberOfPages >= 0 }
-            true
-        } catch (_: Throwable) {
-            false
-        }
-    }
-
     override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray = withContext(Dispatchers.IO) {
         PDDocument().use { doc ->
             for (imageBytes in images) {

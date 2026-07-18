@@ -136,7 +136,7 @@ class ReconcilePerfTest {
     fun secondReconcileDoesNotRereadUnchangedAppliedSources() = runTest {
         writePdf("a.pdf", "alpha")
         rescan()
-        val docId = db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
 
         // A committed tag produces a v1 segment; project it through the coordinator.
         val writer = writer("dev-main")
@@ -161,7 +161,7 @@ class ReconcilePerfTest {
     fun mutatedV1SourceIsRereadAndShrinkStillFails() = runTest {
         writePdf("a.pdf", "alpha")
         rescan()
-        val docId = db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
 
         val writer = writer("dev-main")
         val coordinator = coordinator(writer)
@@ -196,8 +196,8 @@ class ReconcilePerfTest {
         writePdf("a.pdf", "alpha")
         writePdf("b.pdf", "bravo")
         rescan()
-        val a = db.documentDao().getByPath("a.pdf")!!.docId
-        val b = db.documentDao().getByPath("b.pdf")!!.docId
+        val a = db.documentDao().rowAtPath("a.pdf")!!.docId
+        val b = db.documentDao().rowAtPath("b.pdf")!!.docId
 
         val writer = writer("dev-main")
         val coordinator = coordinator(writer)
@@ -248,7 +248,7 @@ class ReconcilePerfTest {
     fun removedSourceTriggersFullReprojectionAndValidation() = runTest {
         writePdf("a.pdf", "alpha")
         rescan()
-        val docId = db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
 
         val writer = writer("dev-main")
         val coordinator = coordinator(writer)

@@ -3,7 +3,6 @@ package dev.npn.core.xmp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
-import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.common.PDMetadata
 import java.io.ByteArrayOutputStream
 
@@ -20,7 +19,7 @@ class PdfBoxXmpIO : PdfXmpIO {
             val meta = doc.documentCatalog?.metadata ?: return@withContext null
             meta.exportXMPMetadata().use { input ->
                 val bytes = input.readBytes()
-                if (bytes.isEmpty()) null else bytes.decodeToString()
+                if (bytes.isEmpty()) null else decodeXmpBytes(bytes)
             }
         }
     }
@@ -54,21 +53,11 @@ class PdfBoxXmpIO : PdfXmpIO {
 
     override suspend fun verify(pdfBytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
         try {
-            val xmp = readXmpInternal(pdfBytes) ?: return@withContext false
+            val xmp = readXmp(pdfBytes) ?: return@withContext false
             val data = XmpParser.parse(xmp)
             data.documentId != null || data.tags.isNotEmpty()
         } catch (_: Throwable) {
             false
-        }
-    }
-
-    private fun readXmpInternal(pdfBytes: ByteArray): String? {
-        Loader.loadPDF(pdfBytes).use { doc: PDDocument ->
-            val meta = doc.documentCatalog?.metadata ?: return null
-            meta.exportXMPMetadata().use { input ->
-                val bytes = input.readBytes()
-                return if (bytes.isEmpty()) null else bytes.decodeToString()
-            }
         }
     }
 }

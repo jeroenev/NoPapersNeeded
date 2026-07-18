@@ -55,7 +55,8 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BoxWithConstraintsLayout
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
-import dev.npn.app.ui.library.NameDialog
+import dev.npn.app.ui.common.TextInputDialog
+import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
@@ -85,7 +86,9 @@ fun DocDetailScreen(
 
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    var allTagNames by remember { mutableStateOf<List<String>>(emptyList()) }
+    // Tag autocomplete: tagColors already carries every tag name reactively (from observeTags,
+    // ordered by name), so derive the suggestion list from it instead of a separate one-shot load.
+    val allTagNames = remember(tagColors) { tagColors.keys.toList() }
 
     // Surface one-shot VM messages (failed metadata writes etc.) as snackbars.
     LaunchedEffect(vm, snackbar) {
@@ -107,10 +110,6 @@ fun DocDetailScreen(
     val browsePosition = browse.positionOf(docId)
     val goPrevDoc: (() -> Unit)? = prevDocId?.let { { onNavigateToDoc(it) } }
     val goNextDoc: (() -> Unit)? = nextDocId?.let { { onNavigateToDoc(it) } }
-
-    androidx.compose.runtime.LaunchedEffect(docId) {
-        allTagNames = runCatching { vm.allTagNames() }.getOrDefault(emptyList())
-    }
 
     // Export: bake a copy to a user-chosen destination.
     val saver = rememberFileSaverLauncher(
@@ -171,7 +170,7 @@ fun DocDetailScreen(
         },
         topBar = {
             DetailTopBar(
-                title = current.doc.title?.takeIf { it.isNotBlank() } ?: current.doc.fileName,
+                title = documentDisplayTitle(current.doc.title, current.doc.fileName),
                 browsePosition = browsePosition,
                 onPrevDoc = goPrevDoc,
                 onNextDoc = goNextDoc,
@@ -264,7 +263,7 @@ fun DocDetailScreen(
     }
 
     if (showRename) {
-        NameDialog(
+        TextInputDialog(
             title = "Rename file",
             label = "New file name",
             confirmLabel = "Rename",
@@ -400,7 +399,7 @@ private fun DetailTopBar(
 }
 
 private fun exportName(item: DocListItem): String {
-    val base = (item.doc.title?.takeIf { it.isNotBlank() } ?: item.doc.fileName)
+    val base = documentDisplayTitle(item.doc.title, item.doc.fileName)
         .substringBeforeLast('.')
         .ifBlank { "document" }
     return base

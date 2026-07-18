@@ -203,34 +203,7 @@ class SafLibraryFileSystem(
         }
         val name = splitSegments(relPath).last()
         val parentId = resolveParentDir(relPath, create = true)
-        val createdUri = DocumentsContract.createDocument(
-            resolver,
-            docUri(parentId),
-            mimeForName(name),
-            name,
-        ) ?: throw IOException("Failed to create file: $relPath")
-        // SAF may silently dedup and rename to "name (1).ext". That violates write-once, so
-        // detect it, delete the misnamed file, and fail.
-        val created = DocumentFile.fromSingleUri(context, createdUri)
-        val actualName = created?.name
-        if (actualName != null && actualName != name) {
-            try {
-                DocumentsContract.deleteDocument(resolver, createdUri)
-            } catch (_: Exception) {
-            }
-            error("Target already exists (SAF renamed to '$actualName'): $relPath")
-        }
-        try {
-            resolver.openOutputStream(createdUri, "w")?.use { it.write(bytes) }
-                ?: throw IOException("Cannot open for write: $relPath")
-        } catch (e: Throwable) {
-            try {
-                DocumentsContract.deleteDocument(resolver, createdUri)
-            } catch (_: Exception) {
-            }
-            throw e
-        }
-        Unit
+        writeBytesInDir(parentId, name, bytes, relPath)
     }
 
     /**
@@ -293,7 +266,7 @@ class SafLibraryFileSystem(
         // fail retryably. The original staging file is gone (renamed), so re-staging happens above.
         val actualName = DocumentFile.fromSingleUri(context, renamedUri)?.name
         if (actualName != null && actualName != canonicalName) {
-            runCatching { DocumentsContract.deleteDocument(resolver, renamedUri) }
+            deleteQuietly(renamedUri)
             throw retryablePublish(
                 canonicalPath,
                 IOException("Provider renamed publish target to '$actualName'"),
@@ -312,16 +285,22 @@ class SafLibraryFileSystem(
     private fun retryablePublish(canonicalPath: String, cause: Throwable?): VerifiedPublicationUnavailableException =
         VerifiedPublicationUnavailableException("Verified publication failed: $canonicalPath", cause)
 
-    private fun sha256OfEntry(entry: Entry): String {
+    private fun sha256OfEntry(entry: Entry): String = digestSha256(docUri(entry.docId), entry.docId)
+
+    /**
+     * Stream the content at [uri] through a SHA-256 [DigestInputStream] (64 KiB buffer) and return
+     * the lowercase hex digest. [relForError] is only used to build the not-found message.
+     */
+    private fun digestSha256(uri: Uri, relForError: String): String {
         val digest = MessageDigest.getInstance("SHA-256")
-        resolver.openInputStream(docUri(entry.docId))?.use { input ->
+        resolver.openInputStream(uri)?.use { input ->
             DigestInputStream(input, digest).use { dis ->
                 val buffer = ByteArray(64 * 1024)
                 while (dis.read(buffer) != -1) {
                     // read feeds the digest
                 }
             }
-        } ?: throw IOException("Cannot open for read: ${entry.docId}")
+        } ?: throw IOException("Cannot open for read: $relForError")
         return digest.digest().toHexLower()
     }
 
@@ -392,7 +371,12 @@ class SafLibraryFileSystem(
         Unit
     }
 
-    /** Create a file with an exact name inside [parentId], failing on SAF rename dedup. */
+    /**
+     * Create a file with an exact name inside [parentId] and write [bytes] once. SAF may silently
+     * dedup a name collision by renaming to "name (1).ext"; that violates write-once, so on such a
+     * mismatch the stray file is deleted and the call fails. If the write itself throws, the
+     * just-created file is removed so no partial object is left behind.
+     */
     private fun writeBytesInDir(parentId: String, name: String, bytes: ByteArray, relForError: String) {
         val createdUri = DocumentsContract.createDocument(
             resolver,
@@ -400,16 +384,39 @@ class SafLibraryFileSystem(
             mimeForName(name),
             name,
         ) ?: throw IOException("Failed to create file: $relForError")
+        assertExactCreatedName(createdUri, name, relForError)
+        try {
+            writeCreatedFile(createdUri, bytes, relForError)
+        } catch (e: Throwable) {
+            deleteQuietly(createdUri)
+            throw e
+        }
+    }
+
+    private fun writeCreatedFile(uri: Uri, bytes: ByteArray, relForError: String) {
+        resolver.openOutputStream(uri, "w")?.use { it.write(bytes) }
+            ?: throw IOException("Cannot open for write: $relForError")
+    }
+
+    /**
+     * Guard against SAF's silent rename-dedup: if the provider gave [createdUri] a name other than
+     * [expected] (e.g. "name (1).ext"), delete the stray file and fail write-once. A null actual
+     * name is treated as "unknown, assume ok" to match prior behaviour.
+     */
+    private fun assertExactCreatedName(createdUri: Uri, expected: String, relForError: String) {
         val actualName = DocumentFile.fromSingleUri(context, createdUri)?.name
-        if (actualName != null && actualName != name) {
-            try {
-                DocumentsContract.deleteDocument(resolver, createdUri)
-            } catch (_: Exception) {
-            }
+        if (actualName != null && actualName != expected) {
+            deleteQuietly(createdUri)
             error("Target already exists (SAF renamed to '$actualName'): $relForError")
         }
-        resolver.openOutputStream(createdUri, "w")?.use { it.write(bytes) }
-            ?: throw IOException("Cannot open for write: $relForError")
+    }
+
+    /** Best-effort delete that never throws (used to clean up stray/partial files). */
+    private fun deleteQuietly(uri: Uri) {
+        try {
+            DocumentsContract.deleteDocument(resolver, uri)
+        } catch (_: Exception) {
+        }
     }
 
     override suspend fun delete(relPath: String) = withContext(Dispatchers.IO) {
@@ -445,16 +452,7 @@ class SafLibraryFileSystem(
 
     override suspend fun sha256(relPath: String): String = withContext(Dispatchers.IO) {
         val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
-        val digest = MessageDigest.getInstance("SHA-256")
-        resolver.openInputStream(docUri(entry.docId))?.use { input ->
-            DigestInputStream(input, digest).use { dis ->
-                val buffer = ByteArray(64 * 1024)
-                while (dis.read(buffer) != -1) {
-                    // read feeds the digest
-                }
-            }
-        } ?: throw IOException("Cannot open for read: $relPath")
-        digest.digest().toHexLower()
+        digestSha256(docUri(entry.docId), relPath)
     }
 
     override suspend fun importExternal(source: ExternalSource, toRelPath: String) = withContext(Dispatchers.IO) {

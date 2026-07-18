@@ -107,9 +107,8 @@ class HlcWatermarkAllocator(
 class HlcClock(
     val deviceId: String,
     epochClock: EpochClock = SystemEpochClock,
-    initial: Hlc = Hlc(0L, 0, deviceId),
 ) {
-    private val allocator = HlcWatermarkAllocator(epochClock, initial.physicalMillis, initial.counter)
+    private val allocator = HlcWatermarkAllocator(epochClock)
 
     val last: Hlc get() = Hlc(allocator.physicalMillis, allocator.counter, deviceId)
 

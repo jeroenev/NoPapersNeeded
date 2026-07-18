@@ -70,17 +70,6 @@ class PdfBoxAndroidEngine(private val context: Context) : PdfEngine {
         AndroidPdfDocumentHandle(pdDoc, renderer, pfd, temp)
     }
 
-    override suspend fun isValidPdf(bytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
-        if (!looksLikePdf(bytes)) return@withContext false
-        ensureInit(context)
-        try {
-            PDDocument.load(bytes).use { it.numberOfPages >= 0 }
-            true
-        } catch (_: Throwable) {
-            false
-        }
-    }
-
     override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray = withContext(Dispatchers.IO) {
         ensureInit(context)
         val doc = PDDocument()

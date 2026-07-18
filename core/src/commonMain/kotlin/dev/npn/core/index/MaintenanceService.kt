@@ -5,6 +5,7 @@ import dev.npn.core.db.DuplicateDao
 import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.uniquifyPath
 
 /** How to resolve an external sync-conflict file. */
 sealed interface ConflictAction {
@@ -119,18 +120,6 @@ class MaintenanceService(
         return "$dir$cleanedBase$ext"
     }
 
-    private suspend fun uniquify(path: String): String {
-        if (!fs.exists(path)) return path
-        val dot = path.lastIndexOf('.')
-        val slash = path.lastIndexOf('/')
-        val hasExt = dot > slash
-        val base = if (hasExt) path.substring(0, dot) else path
-        val ext = if (hasExt) path.substring(dot) else ""
-        var i = 2
-        while (true) {
-            val candidate = "$base ($i)$ext"
-            if (!fs.exists(candidate)) return candidate
-            i++
-        }
-    }
+    private suspend fun uniquify(path: String): String =
+        uniquifyPath(path, startIndex = 2, suffix = { " ($it)" }, exists = fs::exists)
 }

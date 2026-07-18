@@ -83,9 +83,6 @@ interface DuplicateDao {
     @Query("DELETE FROM duplicates WHERE docId = :docId")
     suspend fun deleteForDoc(docId: String)
 
-    @Query("DELETE FROM duplicates WHERE relPath = :relPath")
-    suspend fun deleteForPath(relPath: String)
-
     /** Replace all duplicate paths recorded for a document. */
     @Transaction
     suspend fun replaceAll(docId: String, rows: List<DuplicateEntity>) {

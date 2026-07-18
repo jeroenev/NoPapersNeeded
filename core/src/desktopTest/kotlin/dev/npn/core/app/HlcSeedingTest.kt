@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.index.MutableClock
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.xmp.PdfBoxXmpIO
@@ -83,7 +84,7 @@ class HlcSeedingTest {
                 scope = backgroundScope,
                 ocrLanguage = { "eng" },
                 trashRetentionDays = { 30 },
-                clock = TestClock(1L),
+                clock = MutableClock(1L, autoTick = true),
             )
             val session2 = LibrarySessionImpl.openSession(deps)
 

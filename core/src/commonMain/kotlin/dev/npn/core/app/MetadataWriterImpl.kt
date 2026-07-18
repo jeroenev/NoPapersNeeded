@@ -4,6 +4,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.DocProperty
 
@@ -37,12 +38,7 @@ class MetadataWriterImpl(
     override suspend fun removeTag(docIds: List<String>, tag: String) {
         val t = tag.trim()
         if (t.isEmpty() || docIds.isEmpty()) return
-        coordinator.commitBuilt { state ->
-            docIds.mapNotNull { docId ->
-                val dots = state.liveTagDots(docId, t)
-                if (dots.isEmpty()) null else PendingOp.tagRemove(docId, t, dots)
-            }
-        }
+        coordinator.commitBuilt { state -> orSetTagRemovals(state, docIds, t) }
     }
 
     override suspend fun setReviewed(docIds: List<String>, reviewed: Boolean) {
@@ -97,12 +93,7 @@ class MetadataWriterImpl(
         if (t.isEmpty()) return
         // No dedicated journal op by design: remove the tag from every doc currently holding it,
         // listing all observed dots (OR-set delete-everywhere).
-        coordinator.commitBuilt { state ->
-            state.taggedDocs().mapNotNull { docId ->
-                val dots = state.liveTagDots(docId, t)
-                if (dots.isEmpty()) null else PendingOp.tagRemove(docId, t, dots)
-            }
-        }
+        coordinator.commitBuilt { state -> orSetTagRemovals(state, state.taggedDocs(), t) }
     }
 
     override suspend fun setTagStyle(tag: String, color: String?, icon: String?) {
@@ -118,9 +109,16 @@ class MetadataWriterImpl(
         if (fs.exists(origPath)) {
             trashOps.moveToTrash(origPath, docId)
         }
-        // Immediate DB sync so the UI hides it now; the event carries origPath for cross-device restore.
-        documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
-        coordinator.commitAndApply(listOf(PendingOp.docTrash(docId, origPath)))
+        // Immediate DB sync so the UI hides it now; the event carries origPath for cross-device
+        // restore. The optimistic row write runs under the coordinator mutex, atomically with the
+        // committing fold, so a concurrent reconcile cannot clobber the trashed flag before the
+        // journal event is folded (see JournalCoordinator.commitWithOptimisticLifecycle).
+        coordinator.commitWithOptimisticLifecycle(
+            ops = listOf(PendingOp.docTrash(docId, origPath)),
+            lifecycleDocs = setOf(docId),
+        ) {
+            documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
+        }
     }
 
     override suspend fun restoreDoc(docId: String) {
@@ -130,16 +128,20 @@ class MetadataWriterImpl(
         // The file lives in trash under a hash-suffixed name; find it and move it back (uniquify
         // via TrashOps.restore if the target is taken).
         val finalPath = restoreFromTrash(docId, target) ?: target
-        documentDao.upsert(
-            doc.copy(
-                trashed = false,
-                trashedOrigPath = null,
-                relPath = finalPath,
-                fileName = finalPath.substringAfterLast('/'),
-                missing = false,
-            ),
-        )
-        coordinator.commitAndApply(listOf(PendingOp.docRestore(docId)))
+        coordinator.commitWithOptimisticLifecycle(
+            ops = listOf(PendingOp.docRestore(docId)),
+            lifecycleDocs = setOf(docId),
+        ) {
+            documentDao.upsert(
+                doc.copy(
+                    trashed = false,
+                    trashedOrigPath = null,
+                    relPath = finalPath,
+                    fileName = finalPath.substringAfterLast('/'),
+                    missing = false,
+                ),
+            )
+        }
     }
 
     override suspend fun deleteDocPermanently(docId: String) {
@@ -150,9 +152,14 @@ class MetadataWriterImpl(
             trashEntry != null -> runCatching { fs.delete(trashEntry) }
             fs.exists(doc.relPath) -> runCatching { fs.delete(doc.relPath) }
         }
-        // Tombstone in DB immediately; keep it hidden (deleted flag) after any rescan.
-        documentDao.upsert(doc.copy(deleted = true, trashed = false, missing = false))
-        coordinator.commitAndApply(listOf(PendingOp.docDelete(docId)))
+        // Tombstone in DB immediately; keep it hidden (deleted flag) after any rescan. The
+        // optimistic row write is serialized with the committing fold under the coordinator mutex.
+        coordinator.commitWithOptimisticLifecycle(
+            ops = listOf(PendingOp.docDelete(docId)),
+            lifecycleDocs = setOf(docId),
+        ) {
+            documentDao.upsert(doc.copy(deleted = true, trashed = false, missing = false))
+        }
     }
 
     override suspend fun renameFile(docId: String, newFileName: String) {
@@ -175,6 +182,18 @@ class MetadataWriterImpl(
         documentDao.upsert(doc.copy(relPath = target, fileName = target.substringAfterLast('/')))
         // No journal event: path is file-level state, re-derived on rescan.
     }
+
+    /**
+     * Build the OR-set `tag-remove` ops for [tag] over [docIds]: for each doc, list the dots
+     * currently observed for `(doc, tag)` in [state] and emit a remove carrying them, skipping docs
+     * that do not hold the tag (empty dots). Shared by [removeTag] (a doc subset) and [deleteTag]
+     * (every tagged doc) so the "delete-everywhere by observed dots" rule lives in one place.
+     */
+    private fun orSetTagRemovals(state: FoldedState, docIds: Collection<String>, tag: String): List<PendingOp> =
+        docIds.mapNotNull { docId ->
+            val dots = state.liveTagDots(docId, tag)
+            if (dots.isEmpty()) null else PendingOp.tagRemove(docId, tag, dots)
+        }
 
     // --- trash helpers ---
 

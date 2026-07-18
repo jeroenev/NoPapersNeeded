@@ -1,6 +1,5 @@
 package dev.npn.app.ui.library
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.ImportOutcome
@@ -19,12 +18,10 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharedFlow
+import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.debounce
@@ -61,17 +58,13 @@ data class LibraryUiState(
 class LibraryViewModel(
     val session: LibrarySession,
     private val settings: SettingsRepository,
-) : ViewModel() {
+) : MessagesViewModel() {
 
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
 
-    // One-shot user-facing messages (e.g. partial bulk-op failure). Collected by the screen and
-    // shown as a snackbar. extraBufferCapacity so emits from viewModelScope never suspend.
-    // Not on MessagesViewModel: this class is at the TooManyFunctions baseline; changing its
-    // supertype would invalidate the grandfathered finding without reducing its size.
-    private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
-    val messages: SharedFlow<String> = _messages.asSharedFlow()
+    // One-shot user-facing messages (partial bulk-op failures) are surfaced via the inherited
+    // [MessagesViewModel.message] API and collected by the screen as snackbars.
 
     // True once the user picks a view or applies a saved view this session. Guards against the
     // async default-view seed clobbering an explicit choice made before it arrives.
@@ -269,67 +262,50 @@ class LibraryViewModel(
 
     // ---- bulk metadata ops ----
 
-    // Tag/reviewed writes are a single batched session call; on failure surface a message and
-    // keep the selection so the user can retry.
-    fun bulkAddTag(tag: String) = batchedSelection("add tag") { session.meta.addTag(it, tag) }
-    fun bulkRemoveTag(tag: String) = batchedSelection("remove tag") { session.meta.removeTag(it, tag) }
-    fun bulkSetReviewed(reviewed: Boolean) = batchedSelection("update") { session.meta.setReviewed(it, reviewed) }
-
-    // Trash is per-doc; run each independently so one failure does not abort the rest.
-    fun bulkTrash() = perDocSelection("trash") { session.meta.trashDoc(it) }
-
-    private fun batchedSelection(action: String, block: suspend (List<String>) -> Unit) {
-        val ids = _ui.value.selected.toList()
-        if (ids.isEmpty()) return
-        viewModelScope.launch {
-            if (runCatching { block(ids) }.isSuccess) {
-                clearSelection()
-            } else {
-                _messages.tryEmit("Could not $action ${ids.size} document(s)")
-            }
-        }
-    }
+    // Tag/reviewed writes are a single batched session call (perDoc = false); trash is per-doc so
+    // one failure does not abort the rest (perDoc = true). See [runOnSelection].
+    fun bulkAddTag(tag: String) = runOnSelection("add tag") { session.meta.addTag(it, tag) }
+    fun bulkRemoveTag(tag: String) = runOnSelection("remove tag") { session.meta.removeTag(it, tag) }
+    fun bulkSetReviewed(reviewed: Boolean) = runOnSelection("update") { session.meta.setReviewed(it, reviewed) }
+    fun bulkTrash() = runOnSelection("trash", perDoc = true) { session.meta.trashDoc(it.single()) }
 
     /**
-     * Apply [perDoc] to each selected doc independently so one failure does not abort the rest.
-     * On any failure, emit a message and keep the failed ids selected so the user can retry; only
-     * clear the selection when every doc succeeded. [action] names the operation for the message.
+     * Run a bulk op over the current selection.
+     *
+     * - [perDoc] = false (default): [block] receives all selected ids as one batched call. On
+     *   failure surface a message and keep the whole selection so the user can retry.
+     * - [perDoc] = true: [block] is invoked once per id (as a singleton list) so each doc runs
+     *   independently; only the ids that failed are kept selected for retry.
+     *
+     * On full success the selection is cleared. [action] names the op for the failure message.
      */
-    private fun perDocSelection(action: String, perDoc: suspend (String) -> Unit) {
+    private fun runOnSelection(
+        action: String,
+        perDoc: Boolean = false,
+        block: suspend (List<String>) -> Unit,
+    ) {
         val ids = _ui.value.selected.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            val failed = ids.filter { runCatching { perDoc(it) }.isFailure }
-            if (failed.isEmpty()) {
+            if (perDoc) {
+                val failed = ids.filter { runCatching { block(listOf(it)) }.isFailure }
+                if (failed.isEmpty()) {
+                    clearSelection()
+                } else {
+                    _ui.value = _ui.value.copy(selected = failed.toSet(), selectionMode = true)
+                    message("Could not $action ${failed.size} of ${ids.size} document(s)")
+                }
+            } else if (runCatching { block(ids) }.isSuccess) {
                 clearSelection()
             } else {
-                _ui.value = _ui.value.copy(selected = failed.toSet(), selectionMode = true)
-                _messages.tryEmit("Could not $action ${failed.size} of ${ids.size} document(s)")
+                message("Could not $action ${ids.size} document(s)")
             }
-        }
-    }
-
-    suspend fun allTagNames(): List<String> = session.tags.allTagNames()
-
-    // ---- saved views ----
-
-    fun saveCurrentView(name: String) {
-        val cur = _ui.value
-        viewModelScope.launch {
-            session.savedViews.save(
-                SavedView(
-                    id = randomId(),
-                    name = name,
-                    filter = cur.filter,
-                    sort = cur.sort,
-                    viewType = cur.viewType,
-                ),
-            )
         }
     }
 
     // ---- import ----
 
+    /** Import PDFs from external sources, tallying the per-source outcome into an [ImportSummary]. */
     fun import(sources: List<Pair<ExternalSource, String>>, onDone: (ImportSummary) -> Unit) {
         viewModelScope.launch {
             var imported = 0
@@ -362,20 +338,21 @@ class LibraryViewModel(
         }
     }
 
-    // ---- saved view management ----
-
-    fun renameSavedView(view: SavedView, name: String) {
-        viewModelScope.launch { session.savedViews.save(view.copy(name = name.trim())) }
-    }
-
-    fun deleteSavedView(id: String) {
-        viewModelScope.launch { session.savedViews.delete(id) }
-    }
-
-    fun togglePinSavedView(view: SavedView) {
-        viewModelScope.launch { session.savedViews.save(view.copy(pinned = !view.pinned)) }
-    }
+    // Saved-view create/rename/pin/delete are thin, single-line pass-throughs to
+    // [LibrarySession.savedViews] with no view-model state of their own, so they run from the
+    // drawer's own coroutine scope (see LibraryScreen) rather than adding a wrapper method each
+    // here. Building a new view from the live UI state is a pure helper: see [newSavedView].
 }
 
 @OptIn(ExperimentalUuidApi::class)
 private fun randomId(): String = Uuid.random().toString()
+
+/** Capture [ui] (filter/sort/view) as a new [SavedView] named [name]. */
+internal fun newSavedView(ui: LibraryUiState, name: String): SavedView =
+    SavedView(
+        id = randomId(),
+        name = name,
+        filter = ui.filter,
+        sort = ui.sort,
+        viewType = ui.viewType,
+    )

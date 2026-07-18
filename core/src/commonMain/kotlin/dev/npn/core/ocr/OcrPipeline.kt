@@ -102,7 +102,7 @@ class OcrPipeline(
             try {
                 val sidecar = OcrSidecarCodec.decode(sidecars.read(docId, chosen))
                 indexText(docId, sidecar.pages)
-                setOcrState(docId, OCR_ADOPTED)
+                setOcrState(docId, OCR_ADOPTED, pageCount = sidecar.pages.size)
                 markDone(docId)
                 return
             } catch (_: Throwable) {
@@ -201,14 +201,10 @@ class OcrPipeline(
         val byHash = sidecars.list()
             .mapNotNull { meta ->
                 val fileName = meta.relPath.removePrefix(prefix)
-                // <sha256>.<deviceId>.json
-                if (!fileName.endsWith(".json")) return@mapNotNull null
-                val stem = fileName.removeSuffix(".json")
-                val dot = stem.indexOf('.')
-                if (dot <= 0) return@mapNotNull null
-                val hash = stem.substring(0, dot)
-                val dev = stem.substring(dot + 1)
-                if (hash.length != 64 || dev.isEmpty()) return@mapNotNull null
+                // Shared lenient parser; additionally require a full 64-char SHA-256 hash here so
+                // adoption only ever keys off a canonical content hash (unchanged behaviour).
+                val (hash, dev) = OcrSidecarFiles.parseSidecarName(fileName) ?: return@mapNotNull null
+                if (hash.length != 64) return@mapNotNull null
                 hash to dev
             }
             .groupBy({ it.first }, { it.second })
@@ -223,7 +219,7 @@ class OcrPipeline(
                 continue
             }
             indexText(hash, sidecar.pages)
-            setOcrState(hash, OCR_ADOPTED)
+            setOcrState(hash, OCR_ADOPTED, pageCount = sidecar.pages.size)
             ocrQueueDao.delete(hash)
         }
     }
@@ -239,7 +235,7 @@ class OcrPipeline(
             docId = docId,
             fileName = doc?.fileName,
             title = doc?.title,
-            content = pages.joinToString("\n\n"),
+            content = OcrSidecar.joinPages(pages),
             tags = tags.joinToString(" ").ifEmpty { null },
             correspondent = doc?.correspondent,
             docType = doc?.docType,
