@@ -5,6 +5,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.NpnDatabase
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
 
@@ -27,14 +28,20 @@ class DocumentRepositoryImpl(
     private val documentDao get() = db.documentDao()
     private val ftsDao: FtsDao get() = db.ftsDao()
 
+    private val fieldDao get() = db.documentFieldDao()
+
     override fun observeDocuments(filter: LibraryFilter, sort: LibrarySort): Flow<List<DocListItem>> {
         val queryText = filter.query?.takeIf { it.isNotBlank() }
         val rawFlow = documentDao.observeLibraryRaw(buildQuery(filter, sort))
         return rawFlow.mapLatest { docs ->
-            // Attach tags for all docs in one pass.
-            val tagsByDoc = tagsFor(docs.map { it.docId })
+            // Attach tags and custom fields for all docs in one pass.
+            val ids = docs.map { it.docId }
+            val tagsByDoc = tagsFor(ids)
+            val fieldsByDoc = fieldsFor(ids)
             if (queryText == null) {
-                docs.map { DocListItem(it, tagsByDoc[it.docId].orEmpty()) }
+                docs.map {
+                    DocListItem(it, tagsByDoc[it.docId].orEmpty(), fields = fieldsByDoc[it.docId].orEmpty())
+                }
             } else {
                 // Two-step FTS: fetch snippets, keep only matched ids, preserve FTS rank order.
                 val hits = ftsDao.search(sanitizeFts(queryText))
@@ -42,15 +49,42 @@ class DocumentRepositoryImpl(
                 val order = hits.map { it.docId }.withIndex().associate { it.value to it.index }
                 docs.filter { it.docId in snippetById }
                     .sortedBy { order[it.docId] ?: Int.MAX_VALUE }
-                    .map { DocListItem(it, tagsByDoc[it.docId].orEmpty(), snippetById[it.docId]) }
+                    .map {
+                        DocListItem(
+                            it,
+                            tagsByDoc[it.docId].orEmpty(),
+                            snippetById[it.docId],
+                            fieldsByDoc[it.docId].orEmpty(),
+                        )
+                    }
             }
         }
     }
 
     override fun observeDoc(docId: String): Flow<DocListItem?> =
-        documentDao.observeByDocId(docId).mapLatest { doc ->
-            if (doc == null) null else DocListItem(doc, tagsFor(listOf(docId))[docId].orEmpty())
+        combine(
+            documentDao.observeByDocId(docId),
+            fieldDao.observeForDoc(docId),
+        ) { doc, fields ->
+            if (doc == null) {
+                null
+            } else {
+                DocListItem(
+                    doc,
+                    tagsFor(listOf(docId))[docId].orEmpty(),
+                    fields = fields.associate { it.fieldKey to it.fieldValue },
+                )
+            }
         }
+
+    override fun observeFieldKeys(): Flow<List<String>> = fieldDao.observeDistinctKeys()
+
+    private suspend fun fieldsFor(docIds: List<String>): Map<String, Map<String, String>> {
+        if (docIds.isEmpty()) return emptyMap()
+        return fieldDao.fieldsForDocs(docIds)
+            .groupBy { it.docId }
+            .mapValues { (_, rows) -> rows.associate { it.fieldKey to it.fieldValue } }
+    }
 
     override fun observeUntaggedCount(): Flow<Int> = documentDao.countUntagged()
 

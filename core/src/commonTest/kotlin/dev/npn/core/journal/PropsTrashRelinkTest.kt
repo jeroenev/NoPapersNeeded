@@ -39,6 +39,30 @@ class PropsTrashRelinkTest {
         assertEquals("z", JournalFolder.fold(listOf(ea, ez)).effectiveProp(doc, DocProperty.CORRESPONDENT))
     }
 
+    private fun field(seq: Long, key: String, value: String?, t: Long, dev: String = "d1") =
+        JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.FieldSet(key, value))
+
+    @Test
+    fun field_lww_and_clear() {
+        val e1 = field(1, "amount", "10.00", 10)
+        val e2 = field(2, "amount", "42.50", 20)
+        assertEquals(mapOf("amount" to "42.50"), JournalFolder.fold(listOf(e1, e2)).effectiveFields(doc))
+        // order independent
+        assertEquals(mapOf("amount" to "42.50"), JournalFolder.fold(listOf(e2, e1)).effectiveFields(doc))
+        // later null clears the field entirely
+        val e3 = field(3, "amount", null, 30)
+        assertEquals(emptyMap(), JournalFolder.fold(listOf(e1, e2, e3)).effectiveFields(doc))
+    }
+
+    @Test
+    fun fields_are_independent_by_key() {
+        val a = field(1, "amount", "5", 10)
+        val b = field(2, "vendor", "Acme", 20)
+        val folded = JournalFolder.fold(listOf(a, b))
+        assertEquals(mapOf("amount" to "5", "vendor" to "Acme"), folded.effectiveFields(doc))
+        assertTrue(doc in folded.docsWithMetadata())
+    }
+
     private fun trash(seq: Long, path: String, t: Long, dev: String = "d1") =
         JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocTrash(path))
 

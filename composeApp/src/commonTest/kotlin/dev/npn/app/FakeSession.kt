@@ -87,8 +87,11 @@ class FakeDocumentRepository : DocumentRepository {
     override fun observeTrashed(): Flow<List<DocListItem>> = trashed
     override fun observeMissing(): Flow<List<DocumentEntity>> = missing
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> = duplicates
+    val fieldKeys = MutableStateFlow<List<String>>(emptyList())
+
     override fun observeCorrespondents(): Flow<List<String>> = correspondents
     override fun observeDocTypes(): Flow<List<String>> = docTypes
+    override fun observeFieldKeys(): Flow<List<String>> = fieldKeys
 }
 
 class FakeTagRepository : TagRepository {
@@ -127,6 +130,7 @@ class FakeMetadataWriter : MetadataWriter {
     val correspondentSets = mutableListOf<Pair<List<String>, String?>>()
     val docTypeSets = mutableListOf<Pair<List<String>, String?>>()
     val docDateSets = mutableListOf<Pair<String, String?>>()
+    val fieldSets = mutableListOf<Triple<String, String, String?>>()
     val renamedTags = mutableListOf<Pair<String, String>>()
     val mergedTags = mutableListOf<Pair<String, String>>()
     val deletedTags = mutableListOf<String>()
@@ -175,6 +179,10 @@ class FakeMetadataWriter : MetadataWriter {
         titleSets += docId to title
     }
 
+    override suspend fun setField(docId: String, key: String, value: String?) {
+        fieldSets += Triple(docId, key, value)
+    }
+
     override suspend fun renameTag(from: String, to: String) { renamedTags += from to to }
     override suspend fun mergeTag(from: String, to: String) { mergedTags += from to to }
     override suspend fun deleteTag(name: String) { deletedTags += name }
@@ -219,6 +227,9 @@ class FakeDocContentFacade : DocContentFacade {
 
     var clearedThumbnails = 0
     override suspend fun clearThumbnailCache(): Int = clearedThumbnails
+
+    var extractedTextValue: String? = null
+    override suspend fun extractedText(docId: String): String? = extractedTextValue
 }
 
 class FakeLibrarySession : LibrarySession {

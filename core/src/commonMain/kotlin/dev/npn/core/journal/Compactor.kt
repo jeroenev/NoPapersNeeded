@@ -54,6 +54,7 @@ class Compactor {
     private class Classified {
         // Last-writer-wins buckets: only the newest own event per identity survives.
         val latestProp = HashMap<Pair<String, DocProperty>, JournalEvent>()
+        val latestField = HashMap<Pair<String, String>, JournalEvent>()
         val latestStyle = HashMap<String, JournalEvent>()
         val latestSetting = HashMap<String, JournalEvent>()
         val latestTrash = HashMap<String, JournalEvent>()
@@ -63,7 +64,14 @@ class Compactor {
         val alwaysKeep = ArrayList<JournalEvent>()  // deletes, relinks, renames, merges, unknowns
 
         fun latestPerLwwKey(): List<JournalEvent> =
-            latestProp.values + latestStyle.values + latestSetting.values + latestTrash.values
+            latestProp.values + latestField.values + latestStyle.values +
+                latestSetting.values + latestTrash.values
+
+        /** Keep only the highest-HLC event per [key] in [bucket]. */
+        fun <K> putLatest(bucket: HashMap<K, JournalEvent>, key: K, e: JournalEvent) {
+            val prev = bucket[key]
+            if (prev == null || e.hlc > prev.hlc) bucket[key] = e
+        }
     }
 
     /** Bucket own events (LWW dedup for prop/style/setting/trash, collect adds/removes/keep-all). */
@@ -71,25 +79,11 @@ class Compactor {
         val c = Classified()
         for (e in ownEvents) {
             when (val op = e.op) {
-                is JournalOp.PropSet -> {
-                    val doc = e.doc ?: continue
-                    val key = doc to op.key
-                    val prev = c.latestProp[key]
-                    if (prev == null || e.hlc > prev.hlc) c.latestProp[key] = e
-                }
-                is JournalOp.TagStyle -> {
-                    val prev = c.latestStyle[op.tag]
-                    if (prev == null || e.hlc > prev.hlc) c.latestStyle[op.tag] = e
-                }
-                is JournalOp.SettingSet -> {
-                    val prev = c.latestSetting[op.key]
-                    if (prev == null || e.hlc > prev.hlc) c.latestSetting[op.key] = e
-                }
-                is JournalOp.DocTrash, JournalOp.DocRestore -> {
-                    val doc = e.doc ?: continue
-                    val prev = c.latestTrash[doc]
-                    if (prev == null || e.hlc > prev.hlc) c.latestTrash[doc] = e
-                }
+                is JournalOp.PropSet -> e.doc?.let { c.putLatest(c.latestProp, it to op.key, e) }
+                is JournalOp.FieldSet -> e.doc?.let { c.putLatest(c.latestField, it to op.key, e) }
+                is JournalOp.TagStyle -> c.putLatest(c.latestStyle, op.tag, e)
+                is JournalOp.SettingSet -> c.putLatest(c.latestSetting, op.key, e)
+                is JournalOp.DocTrash, JournalOp.DocRestore -> e.doc?.let { c.putLatest(c.latestTrash, it, e) }
                 is JournalOp.Relink -> c.alwaysKeep.add(e)
                 JournalOp.DocDelete -> c.alwaysKeep.add(e)
                 is JournalOp.TagRename, is JournalOp.TagMerge -> c.alwaysKeep.add(e)

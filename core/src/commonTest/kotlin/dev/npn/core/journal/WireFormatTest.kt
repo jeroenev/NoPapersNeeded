@@ -60,6 +60,8 @@ class WireFormatTest {
             event(sha, JournalOp.TagRemove("t", listOf(Dot("d2", 7), Dot("d3", 9)))),
             event(sha, JournalOp.PropSet(DocProperty.REVIEWED, "true")),
             event(sha, JournalOp.PropSet(DocProperty.TITLE, null)),
+            event(sha, JournalOp.FieldSet("amount", "42.50")),
+            event(sha, JournalOp.FieldSet("amount", null)),
             event(sha, JournalOp.DocTrash("/lib/x.pdf")),
             event(sha, JournalOp.DocRestore),
             event(sha, JournalOp.DocDelete),
@@ -94,6 +96,20 @@ class WireFormatTest {
         assertTrue(p["value"] is JsonNull)
         val parsed = JournalCodec.decodeLineOrNull(JournalCodec.encode(e))!!
         assertEquals(null, (parsed.op as JournalOp.PropSet).value)
+    }
+
+    @Test
+    fun field_set_wire_shape_and_roundtrip() {
+        val e = event(sha, JournalOp.FieldSet("amount", "42.50"))
+        val p = fields(JournalCodec.encode(e))["p"]!!.jsonObject
+        assertEquals("amount", p["key"]!!.jsonPrimitive.content)
+        assertEquals("42.50", p["value"]!!.jsonPrimitive.content)
+        val parsed = JournalCodec.decodeLineOrNull(JournalCodec.encode(e))!!
+        assertEquals(e, parsed)
+        // Null value clears.
+        val cleared = event(sha, JournalOp.FieldSet("amount", null))
+        val pc = fields(JournalCodec.encode(cleared))["p"]!!.jsonObject
+        assertTrue(pc["value"] is JsonNull)
     }
 
     @Test

@@ -12,14 +12,16 @@ import androidx.room3.RoomDatabaseConstructor
  * correct fallback (see the platform builders): a schema bump just drops and rebuilds.
  */
 @Database(
-    // v2: documents.status (enum) replaced by documents.reviewed (boolean). Cache is rebuildable,
-    // so the platform builders drop and rebuild via fallbackToDestructiveMigration.
-    version = 2,
+    // v2: documents.status (enum) replaced by documents.reviewed (boolean).
+    // v3: added document_fields (per-document custom metadata). Cache is rebuildable, so the
+    // platform builders drop and rebuild via fallbackToDestructiveMigration.
+    version = 3,
     exportSchema = true,
     entities = [
         DocumentEntity::class,
         TagEntity::class,
         DocumentTagEntity::class,
+        DocumentFieldEntity::class,
         FtsDocumentEntity::class,
         FoldedSegmentEntity::class,
         SavedViewEntity::class,
@@ -34,6 +36,7 @@ abstract class NpnDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
     abstract fun tagDao(): TagDao
     abstract fun ftsDao(): FtsDao
+    abstract fun documentFieldDao(): DocumentFieldDao
     abstract fun foldedSegmentDao(): FoldedSegmentDao
     abstract fun savedViewDao(): SavedViewDao
     abstract fun thumbnailDao(): ThumbnailDao

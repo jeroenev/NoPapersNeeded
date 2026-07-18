@@ -9,20 +9,27 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Tab
+import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -38,9 +45,10 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.model.ReviewMode
 
 /**
- * Editable metadata for one document: title, correspondent, docType, docDate, notes-style fields,
- * tag editor, and OCR/extraction status. Text fields commit on focus loss / explicit save via the
- * [onCommit*] callbacks. Correspondent/docType offer existing values as suggestions.
+ * Side panel for one document with two tabs: **Details** (editable metadata — title,
+ * correspondent, docType, docDate, custom fields, tags, and file/OCR facts) and **Text** (the
+ * extracted OCR/embedded full text). Text fields commit on focus loss via the [onCommit*]
+ * callbacks; correspondent/docType/field-keys offer existing values as suggestions.
  */
 @Composable
 fun MetadataPanel(
@@ -49,10 +57,81 @@ fun MetadataPanel(
     tagColors: Map<String, String?>,
     correspondents: List<String>,
     docTypes: List<String>,
+    fieldKeys: List<String>,
+    ocrText: String?,
     onCommitTitle: (String) -> Unit,
     onCommitCorrespondent: (String) -> Unit,
     onCommitDocType: (String) -> Unit,
     onCommitDocDate: (String) -> Unit,
+    onCommitField: (key: String, value: String) -> Unit,
+    onRemoveField: (key: String) -> Unit,
+    reviewMode: ReviewMode,
+    reviewed: Boolean,
+    onSetReviewed: (Boolean) -> Unit,
+    onAddTag: (String) -> Unit,
+    onRemoveTag: (String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var tab by remember { mutableStateOf(PanelTab.DETAILS) }
+    Column(modifier) {
+        TabRow(selectedTabIndex = tab.ordinal) {
+            PanelTab.entries.forEach { t ->
+                Tab(
+                    selected = tab == t,
+                    onClick = { tab = t },
+                    text = { Text(t.label) },
+                )
+            }
+        }
+        when (tab) {
+            PanelTab.DETAILS -> DetailsTab(
+                item = item,
+                allTagNames = allTagNames,
+                tagColors = tagColors,
+                correspondents = correspondents,
+                docTypes = docTypes,
+                fieldKeys = fieldKeys,
+                onCommitTitle = onCommitTitle,
+                onCommitCorrespondent = onCommitCorrespondent,
+                onCommitDocType = onCommitDocType,
+                onCommitDocDate = onCommitDocDate,
+                onCommitField = onCommitField,
+                onRemoveField = onRemoveField,
+                reviewMode = reviewMode,
+                reviewed = reviewed,
+                onSetReviewed = onSetReviewed,
+                onAddTag = onAddTag,
+                onRemoveTag = onRemoveTag,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+            PanelTab.TEXT -> OcrTextTab(
+                text = ocrText,
+                ocrState = item.doc.ocrState,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+        }
+    }
+}
+
+private enum class PanelTab(val label: String) {
+    DETAILS("Details"),
+    TEXT("Text"),
+}
+
+@Composable
+private fun DetailsTab(
+    item: DocListItem,
+    allTagNames: List<String>,
+    tagColors: Map<String, String?>,
+    correspondents: List<String>,
+    docTypes: List<String>,
+    fieldKeys: List<String>,
+    onCommitTitle: (String) -> Unit,
+    onCommitCorrespondent: (String) -> Unit,
+    onCommitDocType: (String) -> Unit,
+    onCommitDocDate: (String) -> Unit,
+    onCommitField: (key: String, value: String) -> Unit,
+    onRemoveField: (key: String) -> Unit,
     reviewMode: ReviewMode,
     reviewed: Boolean,
     onSetReviewed: (Boolean) -> Unit,
@@ -113,6 +192,15 @@ fun MetadataPanel(
 
         HorizontalDivider()
 
+        CustomFieldsSection(
+            fields = item.fields,
+            fieldKeys = fieldKeys,
+            onCommitField = onCommitField,
+            onRemoveField = onRemoveField,
+        )
+
+        HorizontalDivider()
+
         Text("Tags", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
         TagEditor(
             tags = item.tags,
@@ -141,6 +229,7 @@ private fun CommitTextField(
     label: String,
     initial: String,
     placeholder: String? = null,
+    modifier: Modifier = Modifier,
     onCommit: (String) -> Unit,
 ) {
     var text by remember(initial) { mutableStateOf(initial) }
@@ -150,7 +239,7 @@ private fun CommitTextField(
         label = { Text(label) },
         placeholder = placeholder?.let { { Text(it, maxLines = 1) } },
         singleLine = true,
-        modifier = Modifier
+        modifier = modifier
             .fillMaxWidth()
             .commitOnFocusLost(text, initial, onCommit),
     )
@@ -222,6 +311,142 @@ private fun SuggestField(
                     },
                 )
             }
+        }
+    }
+}
+
+/**
+ * Custom metadata fields: existing fields render as commit-on-blur text fields (blanking one
+ * removes it), plus an add-field row with a key box (autocompleting from [fieldKeys] already used
+ * in the library) and a value box.
+ */
+@Composable
+private fun CustomFieldsSection(
+    fields: Map<String, String>,
+    fieldKeys: List<String>,
+    onCommitField: (key: String, value: String) -> Unit,
+    onRemoveField: (key: String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "Fields",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        // Deterministic order so fields don't jump around as the map re-emits.
+        for (fieldKey in fields.keys.sorted()) {
+            // key() ties each row's composition state (edit buffer, focus) to the field key
+            // instead of its list position. Without it, adding/removing a field shifts rows into
+            // other keys' slots; the reused CommitTextField then holds a stale edit buffer and its
+            // recomposition-induced blur re-commits the old value, silently undoing a just-issued
+            // delete (LWW: the spurious write is newer than the delete).
+            key(fieldKey) {
+                val value = fields.getValue(fieldKey)
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    CommitTextField(
+                        label = fieldKey,
+                        initial = value,
+                        onCommit = { onCommitField(fieldKey, it) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    IconButton(onClick = { onRemoveField(fieldKey) }) {
+                        Icon(Icons.Filled.Close, contentDescription = "Remove field $fieldKey")
+                    }
+                }
+            }
+        }
+        AddFieldRow(existingKeys = fields.keys, fieldKeys = fieldKeys, onAdd = onCommitField)
+    }
+}
+
+@Composable
+private fun AddFieldRow(
+    existingKeys: Set<String>,
+    fieldKeys: List<String>,
+    onAdd: (key: String, value: String) -> Unit,
+) {
+    var key by remember { mutableStateOf("") }
+    var value by remember { mutableStateOf("") }
+    var expanded by remember { mutableStateOf(false) }
+    // Suggest keys used elsewhere in the library that this doc doesn't already have.
+    val suggestions = remember(key, fieldKeys, existingKeys) {
+        val q = key.trim()
+        fieldKeys.filter { it !in existingKeys && (q.isEmpty() || it.contains(q, ignoreCase = true)) }
+            .take(8)
+    }
+    val canAdd = key.isNotBlank() && value.isNotBlank()
+
+    fun commit() {
+        if (canAdd) {
+            onAdd(key.trim(), value.trim())
+            key = ""
+            value = ""
+            expanded = false
+        }
+    }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
+            OutlinedTextField(
+                value = key,
+                onValueChange = { key = it; expanded = it.isNotBlank() && suggestions.isNotEmpty() },
+                label = { Text("New field") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            DropdownMenu(
+                expanded = expanded && suggestions.isNotEmpty(),
+                onDismissRequest = { expanded = false },
+                properties = androidx.compose.ui.window.PopupProperties(focusable = false),
+            ) {
+                suggestions.forEach { s ->
+                    DropdownMenuItem(text = { Text(s) }, onClick = { key = s; expanded = false })
+                }
+            }
+        }
+        OutlinedTextField(
+            value = value,
+            onValueChange = { value = it },
+            label = { Text("Value") },
+            singleLine = true,
+            modifier = Modifier.weight(1f),
+        )
+        IconButton(onClick = { commit() }, enabled = canAdd) {
+            Icon(Icons.Filled.Add, contentDescription = "Add field")
+        }
+    }
+}
+
+/** Read-only extracted text (OCR / embedded), selectable, in a scrolling monospace-ish block. */
+@Composable
+private fun OcrTextTab(text: String?, ocrState: String, modifier: Modifier = Modifier) {
+    Column(
+        modifier = modifier
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+    ) {
+        when {
+            text != null -> SelectionContainer {
+                Text(text, style = MaterialTheme.typography.bodySmall)
+            }
+            else -> Text(
+                when (ocrState) {
+                    "pending" -> "Text extraction is queued for this document."
+                    "failed" -> "Text extraction failed for this document."
+                    "none" -> "No text has been extracted from this document yet."
+                    else -> "No text available."
+                },
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

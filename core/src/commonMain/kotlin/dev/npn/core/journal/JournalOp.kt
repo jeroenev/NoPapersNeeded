@@ -31,6 +31,15 @@ sealed class JournalOp {
         override val wire get() = "prop-set"
     }
 
+    /**
+     * {"key": String, "value": String?}; null clears. doc required. Per-document custom metadata
+     * field with a free-form string key (unlike [PropSet], whose key is the closed [DocProperty]
+     * enum). Last-writer-wins by HLC, same as [PropSet].
+     */
+    data class FieldSet(val key: String, val value: String?) : JournalOp() {
+        override val wire get() = "field-set"
+    }
+
     /** {"origPath": String}; doc required. */
     data class DocTrash(val origPath: String) : JournalOp() {
         override val wire get() = "doc-trash"

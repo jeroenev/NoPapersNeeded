@@ -21,8 +21,27 @@ class XmpRoundtripTest {
                 docType = "letter",
                 docDate = "2025-01-02",
                 reviewed = "true",
+                fields = mapOf("amount" to "42.50", "invoice #" to "INV-001"),
             ),
         )
+    }
+
+    @Test
+    fun customFieldsWithSpecialCharacters() {
+        roundtrip(
+            NpnXmpData(
+                fields = mapOf(
+                    "total & tax" to "€1.234,56",
+                    "note" to "<b>bold</b> & \"quoted\"",
+                    "発票番号" to "Ünïcödé-42",
+                ),
+            ),
+        )
+    }
+
+    @Test
+    fun customFieldsOnly() {
+        roundtrip(NpnXmpData(fields = mapOf("amount" to "9.99")))
     }
 
     @Test

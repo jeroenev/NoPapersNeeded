@@ -79,6 +79,10 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
             put("key", JsonPrimitive(op.key.wire))
             put("value", op.value?.let { JsonPrimitive(it) } ?: JsonNull)
         }
+        is JournalOp.FieldSet -> buildJsonObject {
+            put("key", JsonPrimitive(op.key))
+            put("value", op.value?.let { JsonPrimitive(it) } ?: JsonNull)
+        }
         is JournalOp.DocTrash -> buildJsonObject { put("origPath", JsonPrimitive(op.origPath)) }
         JournalOp.DocRestore -> JsonObject(emptyMap())
         JournalOp.DocDelete -> JsonObject(emptyMap())
@@ -115,6 +119,12 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
             val valueElem = p["value"]
             val value = if (valueElem == null || valueElem is JsonNull) null else valueElem.jsonPrimitive.content
             JournalOp.PropSet(key, value)
+        }
+        "field-set" -> {
+            val key = p["key"]?.jsonPrimitive?.content ?: return JournalOp.Unknown(opWire)
+            val valueElem = p["value"]
+            val value = if (valueElem == null || valueElem is JsonNull) null else valueElem.jsonPrimitive.content
+            JournalOp.FieldSet(key, value)
         }
         "doc-trash" -> JournalOp.DocTrash(p["origPath"]!!.jsonPrimitive.content)
         "doc-restore" -> JournalOp.DocRestore

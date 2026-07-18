@@ -62,6 +62,22 @@ object XmpSerializer {
         appendSimple(sb, "npn:documentDate", data.docDate)
         appendSimple(sb, "npn:reviewed", data.reviewed)
 
+        // npn:fields as an rdf:Bag of key/value structs (arbitrary user keys, sorted for
+        // determinism). Wrapping keys in a value element avoids emitting user text as XML names.
+        if (data.fields.isNotEmpty()) {
+            sb.append("      <npn:fields>").append('\n')
+            sb.append("        <rdf:Bag>").append('\n')
+            for (key in data.fields.keys.sorted()) {
+                val value = data.fields.getValue(key)
+                sb.append("          <rdf:li rdf:parseType=\"Resource\">").append('\n')
+                sb.append("            <npn:fieldKey>").append(escape(key)).append("</npn:fieldKey>").append('\n')
+                sb.append("            <npn:fieldValue>").append(escape(value)).append("</npn:fieldValue>").append('\n')
+                sb.append("          </rdf:li>").append('\n')
+            }
+            sb.append("        </rdf:Bag>").append('\n')
+            sb.append("      </npn:fields>").append('\n')
+        }
+
         sb.append("    </rdf:Description>").append('\n')
         sb.append("  </rdf:RDF>").append('\n')
         sb.append("</x:xmpmeta>").append('\n')

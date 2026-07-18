@@ -73,6 +73,13 @@ class MetadataWriterImpl(
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.TITLE, v)))
     }
 
+    override suspend fun setField(docId: String, key: String, value: String?) {
+        val k = key.trim()
+        if (k.isEmpty()) return
+        val v = value?.trim()?.ifEmpty { null }
+        coordinator.commitAndApply(listOf(PendingOp.fieldSet(docId, k, v)))
+    }
+
     override suspend fun renameTag(from: String, to: String) {
         val f = from.trim(); val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return

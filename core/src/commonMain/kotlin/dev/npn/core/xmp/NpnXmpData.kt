@@ -12,9 +12,10 @@ package dev.npn.core.xmp
  * - [docType]        -> `npn:documentType`
  * - [docDate]        -> `npn:documentDate`  (ISO local date, `yyyy-MM-dd`)
  * - [reviewed]       -> `npn:reviewed`       ("true"/"false")
+ * - [fields]         -> `npn:fields`         (an rdf:Bag of key/value pairs; arbitrary user keys)
  *
- * All fields are optional; a `null` (or empty [tags]) simply omits the corresponding property
- * from the packet.
+ * All fields are optional; a `null` (or empty [tags]/[fields]) simply omits the corresponding
+ * property from the packet.
  */
 data class NpnXmpData(
     val documentId: String? = null,
@@ -24,6 +25,8 @@ data class NpnXmpData(
     val docType: String? = null,
     val docDate: String? = null,
     val reviewed: String? = null,
+    /** Custom metadata fields (free-form key -> value). Keys are user-defined. */
+    val fields: Map<String, String> = emptyMap(),
 ) {
     companion object {
         val EMPTY = NpnXmpData()
