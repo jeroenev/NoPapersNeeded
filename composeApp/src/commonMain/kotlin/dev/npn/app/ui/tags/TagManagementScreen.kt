@@ -46,8 +46,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.parseHexColor
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.TagInfo
 
 @Composable
 fun TagManagementScreen(
@@ -56,7 +58,7 @@ fun TagManagementScreen(
 ) {
     val vm: TagManagementViewModel = viewModel { TagManagementViewModel(session) }
     val tags by vm.tags.collectAsStateWithLifecycle()
-    val tree = remember(tags) { vm.buildTree(tags) }
+    val tree = remember(tags) { buildTree(tags) }
     val flatNames = remember(tags) { tags.map { it.name } }
 
     var showCreate by remember { mutableStateOf(false) }
@@ -129,11 +131,13 @@ fun TagManagementScreen(
     }
 
     renameTarget?.let { from ->
-        SingleValueDialog(
+        TextInputDialog(
             title = "Rename tag",
             label = "New name",
             initial = from,
             confirmLabel = "Rename",
+            // Block confirming until the name is non-blank and actually changed.
+            confirmEnabled = { it.isNotBlank() && it.trim() != from },
             onConfirm = { to ->
                 vm.rename(from, to)
                 renameTarget = null
@@ -227,6 +231,48 @@ private fun TagRow(
             }
         }
     }
+}
+
+/** Build the namespace tree from the flat tag list. */
+internal fun buildTree(flat: List<TagInfo>): List<TagNode> {
+    val byPath = flat.associateBy { it.name }
+    // Collect all path prefixes so intermediate namespaces appear even without their own tag.
+    val allPaths = sortedSetOf<String>()
+    for (t in flat) {
+        val parts = t.name.split('.')
+        val acc = StringBuilder()
+        for ((i, p) in parts.withIndex()) {
+            if (i > 0) acc.append('.')
+            acc.append(p)
+            allPaths.add(acc.toString())
+        }
+    }
+
+    fun childrenOf(prefix: String, depth: Int): List<TagNode> {
+        val prefixDot = if (prefix.isEmpty()) "" else "$prefix."
+        val direct = allPaths.filter { path ->
+            path != prefix &&
+                path.startsWith(prefixDot) &&
+                !path.removePrefix(prefixDot).contains('.')
+        }.sorted()
+
+        return direct.map { path ->
+            val kids = childrenOf(path, depth + 1)
+            val info = byPath[path]
+            val own = info?.count ?: 0
+            TagNode(
+                path = path,
+                segment = path.substringAfterLast('.'),
+                depth = depth,
+                info = info,
+                count = own,
+                descendantCount = own + kids.sumOf { it.descendantCount },
+                children = kids,
+            )
+        }
+    }
+
+    return childrenOf("", 0)
 }
 
 private fun flatten(nodes: List<TagNode>): List<TagNode> {

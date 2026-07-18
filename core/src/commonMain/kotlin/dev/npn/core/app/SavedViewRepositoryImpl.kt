@@ -43,14 +43,13 @@ class SavedViewRepositoryImpl(private val dao: SavedViewDao) : SavedViewReposito
         return json.encodeToString(listSerializer, views)
     }
 
-    override suspend fun importJson(json: String): Int {
-        val jsonText = json
-        val parsed = runCatching { this.json.decodeFromString(listSerializer, jsonText) }.getOrNull()
-            ?: return importLenient(jsonText)
+    override suspend fun importJson(text: String): Int {
+        val parsed = runCatching { json.decodeFromString(listSerializer, text) }.getOrNull()
+            ?: return importLenient(text)
         var count = 0
         val seen = HashSet<String>()
-        // Later entries win on duplicate id: iterate in reverse to keep the last, but persist all
-        // distinct ids once.
+        // Dedup by id, keeping the FIRST occurrence: the `seen` set skips any later duplicate, so
+        // the earliest entry for each id is the one persisted.
         for (view in parsed) {
             if (view.id.isBlank()) continue
             if (!seen.add(view.id)) continue

@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagChip
+import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.formatSize
 import dev.npn.core.app.DocContentFacade
@@ -32,7 +33,7 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.model.ReviewMode
 
 private fun DocListItem.displayTitle(): String =
-    doc.title?.takeIf { it.isNotBlank() } ?: doc.fileName
+    documentDisplayTitle(doc.title, doc.fileName)
 
 /**
  * Effective reviewed state for display. In UNTAGGED_ONLY the marker is derived (reviewed == has

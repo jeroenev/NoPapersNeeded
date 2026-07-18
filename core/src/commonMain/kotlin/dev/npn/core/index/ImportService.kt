@@ -7,6 +7,7 @@ import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import kotlin.uuid.ExperimentalUuidApi
@@ -118,17 +119,7 @@ class ImportService(
     /** Build `dir/name.pdf`, adding " (2)", " (3)", ... before the extension until free. */
     private suspend fun uniqueTargetPath(dir: String, name: String): String {
         val normDir = NpnPaths.normalize(dir)
-        val dot = name.lastIndexOf('.')
-        val base = if (dot > 0) name.substring(0, dot) else name
-        val ext = if (dot > 0) name.substring(dot) else ""
-        fun path(candidate: String) = if (normDir.isEmpty()) candidate else "$normDir/$candidate"
-        var candidate = path(name)
-        if (!fs.exists(candidate)) return candidate
-        var i = 2
-        while (true) {
-            candidate = path("$base ($i)$ext")
-            if (!fs.exists(candidate)) return candidate
-            i++
-        }
+        val target = if (normDir.isEmpty()) name else "$normDir/$name"
+        return uniquifyPath(target, startIndex = 2, suffix = { " ($it)" }, exists = fs::exists)
     }
 }

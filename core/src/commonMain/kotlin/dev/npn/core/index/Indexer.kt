@@ -103,7 +103,10 @@ class Indexer(
 
             // --- step 6: journal fold -> DB projection ---
             report(IndexProgress(IndexProgress.Phase.FOLDING))
-            val resurrected = applyFold(metadataState, diskPaths, reconcileFileState = true)
+            val resurrected = applyFold(
+                metadataState,
+                FoldRequest(diskPaths = diskPaths, reconcileFileState = true),
+            )
 
             // --- step 7: persist external duplicates (replace per doc so re-scans are idempotent) ---
             val dupByDoc = recon.duplicates.groupBy { it.docId }
@@ -301,11 +304,30 @@ class Indexer(
         return out
     }
 
+    /**
+     * The non-state inputs of one [applyFold] pass, grouped so the three fold modes are explicit at
+     * a glance instead of threading 6 positional/subset args through two functions:
+     *  - full rescan: [reconcileFileState] = true + populated [diskPaths] (resurrection preference);
+     *  - event refresh: a bounded [documentScope] (+ [styledTags]) folded with [ftsGateHeld] held;
+     *  - state refresh: whole-DB reproject (null [documentScope]) with [preserveLifecycleDocs] kept.
+     *
+     * Defaults describe the plain fold-only mode; each entry point overrides only what differs.
+     */
+    private class FoldRequest(
+        val diskPaths: Set<String> = emptySet(),
+        val reconcileFileState: Boolean = false,
+        val documentScope: Set<String>? = null,
+        val styledTags: Set<String> = emptySet(),
+        val ftsGateHeld: Boolean = false,
+        val preserveLifecycleDocs: Set<String> = emptySet(),
+    )
+
     /** Apply already-reduced events without reading journal files or walking the PDF library. */
     suspend fun refreshEvents(
         state: FoldedState,
         events: List<JournalEvent>,
         ftsGateHeld: Boolean = false,
+        preserveLifecycleDocs: Set<String> = emptySet(),
     ): List<Resurrected> =
         rescanMutex.withLock {
             if (events.isEmpty()) return@withLock emptyList()
@@ -315,8 +337,9 @@ class Indexer(
                 val styledTags = LinkedHashSet<String>()
                 for (event in events) {
                     event.doc?.let(documents::add)
+                    // TagRemove needs no extra scope: its affected document is already added via
+                    // event.doc above. Rename/merge/relink/style fan out to more docs/tags.
                     when (val op = event.op) {
-                        is JournalOp.TagRemove -> Unit // tag-remove events carry their affected document
                         is JournalOp.TagRename, is JournalOp.TagMerge -> documents.addAll(state.taggedDocs())
                         is JournalOp.TagStyle -> styledTags += op.tag
                         is JournalOp.Relink -> {
@@ -328,12 +351,13 @@ class Indexer(
                 }
                 documents.toList().forEach { documents += state.resolveDocId(it) }
                 applyFold(
-                    state = state,
-                    diskPaths = emptySet(),
-                    reconcileFileState = false,
-                    documentScope = documents,
-                    styledTags = styledTags,
-                    ftsGateHeld = ftsGateHeld,
+                    state,
+                    FoldRequest(
+                        documentScope = documents,
+                        styledTags = styledTags,
+                        ftsGateHeld = ftsGateHeld,
+                        preserveLifecycleDocs = preserveLifecycleDocs,
+                    ),
                 )
             } finally {
                 _scanState.value = null
@@ -347,12 +371,7 @@ class Indexer(
     ): List<Resurrected> = rescanMutex.withLock {
         _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
         try {
-            applyFold(
-                state,
-                emptySet(),
-                reconcileFileState = false,
-                preserveLifecycleDocs = preserveLifecycleDocs,
-            )
+            applyFold(state, FoldRequest(preserveLifecycleDocs = preserveLifecycleDocs))
         } finally {
             _scanState.value = null
         }
@@ -433,23 +452,15 @@ class Indexer(
      *   pipeline) across metadata-only folds and rescans. A brand-new doc with no fts row yet
      *   gets empty content, which the OCR pipeline fills later via its own path.
      */
-    private suspend fun applyFold(
-        state: FoldedState,
-        diskPaths: Set<String>,
-        reconcileFileState: Boolean,
-        documentScope: Set<String>? = null,
-        styledTags: Set<String> = emptySet(),
-        ftsGateHeld: Boolean = false,
-        preserveLifecycleDocs: Set<String> = emptySet(),
-    ): List<Resurrected> {
+    private suspend fun applyFold(state: FoldedState, request: FoldRequest): List<Resurrected> {
         // Every doc the fold must project: those the journal has data about, plus (for a full
         // fold) every doc currently in the DB so stale trash/delete flags get cleared.
         val journalDocs = LinkedHashSet<String>()
-        journalDocs.addAll(documentScope ?: state.docsWithMetadata())
-        if (documentScope == null) {
+        journalDocs.addAll(request.documentScope ?: state.docsWithMetadata())
+        if (request.documentScope == null) {
             for (pm in documentDao.allPathsAndMeta()) journalDocs.add(pm.docId)
         }
-        upsertReferencedTags(state, journalDocs, styledTags)
+        upsertReferencedTags(state, journalDocs, request.styledTags)
         val supersession = resolveSupersessions(state, journalDocs)
 
         val resurrected = ArrayList<Resurrected>()
@@ -460,10 +471,7 @@ class Indexer(
                 row = row,
                 state = state,
                 supersession = supersession,
-                diskPaths = diskPaths,
-                reconcileFileState = reconcileFileState,
-                preserveLifecycleDocs = preserveLifecycleDocs,
-                ftsGateHeld = ftsGateHeld,
+                request = request,
                 resurrected = resurrected,
             )
         }
@@ -639,10 +647,7 @@ class Indexer(
         row: DocumentEntity,
         state: FoldedState,
         supersession: Supersession,
-        diskPaths: Set<String>,
-        reconcileFileState: Boolean,
-        preserveLifecycleDocs: Set<String>,
-        ftsGateHeld: Boolean,
+        request: FoldRequest,
         resurrected: MutableList<Resurrected>,
     ) {
         // Predecessors (older ids that relinked onto this doc): their metadata carries over.
@@ -652,7 +657,8 @@ class Indexer(
         projectFields(state, doc, preds)
         val meta = projectMeta(state, doc, preds)
         val lifecycle = projectLifecycle(
-            state, doc, row, supersession, diskPaths, reconcileFileState, preserveLifecycleDocs, resurrected,
+            state, doc, row, supersession,
+            request.diskPaths, request.reconcileFileState, request.preserveLifecycleDocs, resurrected,
         )
 
         // Diffed: skip the upsert when the effective row equals what is stored, so a fold
@@ -695,6 +701,6 @@ class Indexer(
                 )
             }
         }
-        if (ftsGateHeld) updateFts() else ftsWriteGate.withGate { updateFts() }
+        if (request.ftsGateHeld) updateFts() else ftsWriteGate.withGate { updateFts() }
     }
 }

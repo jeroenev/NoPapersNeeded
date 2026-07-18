@@ -121,39 +121,6 @@ private fun ColorSwatch(color: String?, selected: Boolean, onClick: () -> Unit) 
     }
 }
 
-/** Prefilled single-value text dialog (used for rename). */
-@Composable
-fun SingleValueDialog(
-    title: String,
-    label: String,
-    initial: String,
-    confirmLabel: String,
-    onConfirm: (String) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    var text by remember { mutableStateOf(initial) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text(title) },
-        text = {
-            OutlinedTextField(
-                value = text,
-                onValueChange = { text = it },
-                label = { Text(label) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-        },
-        confirmButton = {
-            TextButton(
-                enabled = text.isNotBlank() && text.trim() != initial,
-                onClick = { onConfirm(text.trim()) },
-            ) { Text(confirmLabel) }
-        },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}
-
 /** Pick an existing tag from a list (used for merge target). */
 @Composable
 fun TagPickDialog(

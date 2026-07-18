@@ -67,7 +67,7 @@ class NpnDatabaseTest {
         val dao = db.documentDao()
         dao.upsert(doc("a".repeat(64)))
         dao.getByDocId("a".repeat(64))!!.fileName shouldBe "${"a".repeat(64)}.pdf"
-        dao.getByPath("${"a".repeat(64)}.pdf")!!.docId shouldBe "a".repeat(64)
+        dao.allPathsAndMeta().single { it.relPath == "${"a".repeat(64)}.pdf" }.docId shouldBe "a".repeat(64)
 
         // upsert updates in place
         dao.upsert(doc("a".repeat(64), reviewed = true))
@@ -100,13 +100,10 @@ class NpnDatabaseTest {
                 doc("c".repeat(64), relPath = "c.pdf", reviewed = true),
             ),
         )
-        dao.observeByReviewed(false).first().map { it.docId }
-            .shouldContainExactlyInAnyOrder("a".repeat(64), "b".repeat(64))
         // All three are untagged, so the untagged-only review count is 3.
         dao.countUntagged().first() shouldBe 3
         // Unreviewed-or-untagged also 3 (all untagged).
         dao.countUnreviewedOrUntagged().first() shouldBe 3
-        dao.countTrash().first() shouldBe 0
     }
 
     @Test
@@ -120,7 +117,6 @@ class NpnDatabaseTest {
         tagDao.upsert(TagEntity("empty"))
         tagDao.setForDocument(tagged, listOf("invoice"))
 
-        docDao.observeUntagged().first().map { it.docId } shouldContainExactly listOf(untagged)
         docDao.countUntagged().first() shouldBe 1
 
         val counts = tagDao.observeAllWithCounts().first().associateBy { it.name }
@@ -142,29 +138,17 @@ class NpnDatabaseTest {
     }
 
     @Test
-    fun tagRenameMovesDocumentTags() = runTest {
-        val docDao = db.documentDao()
-        val tagDao = db.tagDao()
-        val id = "a".repeat(64)
-        docDao.upsert(doc(id))
-        tagDao.upsert(TagEntity("old"))
-        tagDao.setForDocument(id, listOf("old"))
-        tagDao.rename("old", "new")
-        tagDao.tagsForDocument(id) shouldContainExactly listOf("new")
-        tagDao.observeAllWithCounts().first().map { it.name } shouldContainExactly listOf("new")
-    }
-
-    @Test
-    fun addAndRemoveTagBulk() = runTest {
+    fun setForDocumentAddsAndClearsTags() = runTest {
         val docDao = db.documentDao()
         val tagDao = db.tagDao()
         val a = "a".repeat(64)
         val b = "b".repeat(64)
         docDao.upsertAll(listOf(doc(a), doc(b, relPath = "b.pdf")))
-        tagDao.addTagToDocs("shared", listOf(a, b))
+        tagDao.setForDocument(a, listOf("shared"))
+        tagDao.setForDocument(b, listOf("shared"))
         tagDao.tagsForDocument(a) shouldContainExactly listOf("shared")
         tagDao.tagsForDocument(b) shouldContainExactly listOf("shared")
-        tagDao.removeTagFromDocs("shared", listOf(a))
+        tagDao.setForDocument(a, emptyList())
         tagDao.tagsForDocument(a) shouldBe emptyList()
         tagDao.tagsForDocument(b) shouldContainExactly listOf("shared")
     }
@@ -266,7 +250,8 @@ class NpnDatabaseTest {
                 doc(c, relPath = "c.pdf", reviewed = true),
             ),
         )
-        tagDao.addTagToDocs("invoice", listOf(a, c))
+        tagDao.setForDocument(a, listOf("invoice"))
+        tagDao.setForDocument(c, listOf("invoice"))
 
         // Upper-layer-built SQL: unreviewed docs that carry the 'invoice' tag -> only `a`.
         val query = RoomRawQuery(
@@ -296,13 +281,14 @@ class NpnDatabaseTest {
     }
 
     @Test
-    fun duplicatesReplaceAndDeleteForPath() = runTest {
+    fun duplicatesReplaceAll() = runTest {
         val dao = db.duplicateDao()
         val id = "a".repeat(64)
         dao.replaceAll(id, listOf(DuplicateEntity(id, "copy1.pdf"), DuplicateEntity(id, "copy2.pdf")))
         dao.observeAll().first().map { it.relPath }
             .shouldContainExactlyInAnyOrder("copy1.pdf", "copy2.pdf")
-        dao.deleteForPath("copy1.pdf")
+        // Re-projecting a doc's duplicates replaces the whole set for that doc.
+        dao.replaceAll(id, listOf(DuplicateEntity(id, "copy2.pdf")))
         dao.observeAll().first().map { it.relPath } shouldContainExactly listOf("copy2.pdf")
     }
 

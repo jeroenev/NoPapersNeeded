@@ -193,6 +193,5 @@ interface MetadataProjectionDao {
     companion object {
         const val STATUS_APPLIED = "applied"
         const val STATUS_RETRYABLE = "retryable"
-        const val STATUS_UNSUPPORTED = "unsupported"
     }
 }

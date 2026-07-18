@@ -73,7 +73,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
 
     @Test
     fun explicitViewChoiceIsNotClobberedByLateDefaultSeed() = runTest(dispatcher) {
-        val settings = DeferredDefaultViewSettings()
+        val settings = FakeSettingsRepository(initialDefaultView = null)
         val model = LibraryViewModel(FakeLibrarySession(), settings)
         // User picks GRID before the async default seed (LIST) arrives.
         model.setViewType(ViewType.GRID)
@@ -314,7 +314,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
 
     @Test
     fun applySavedViewSetsFilterSortViewAndMarksOverridden() = runTest(dispatcher) {
-        val settings = DeferredDefaultViewSettings()
+        val settings = FakeSettingsRepository(initialDefaultView = null)
         val model = LibraryViewModel(FakeLibrarySession(), settings)
         val view = SavedView(
             id = "v1",

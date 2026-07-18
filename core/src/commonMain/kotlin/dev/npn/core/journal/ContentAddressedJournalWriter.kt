@@ -9,7 +9,6 @@ import dev.npn.core.fs.sha256Bytes
 data class PublishedTransaction(
     val relPath: String,
     val contentHash: String,
-    val bytes: ByteArray,
     val events: List<JournalEvent>,
 )
 
@@ -42,15 +41,33 @@ class ContentAddressedJournalWriter(
         }
         val bytes = JournalCodec.encodeLines(events).encodeToByteArray()
         val hash = sha256Bytes(bytes)
-        val canonicalPath = NpnPaths.journalObjectPath(hash)
-        val stagingPath = NpnPaths.journalStagingPath(hash, installationId, randomUuidV4())
-        fs.writeBytesOnce(stagingPath, bytes)
-        try {
-            fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, hash)
-        } catch (failure: Throwable) {
-            runCatching { fs.delete(stagingPath) }
-            throw failure
-        }
-        return PublishedTransaction(canonicalPath, hash, bytes, events)
+        val canonicalPath = stageAndPublishVerifiedObject(fs, installationId, hash, bytes, snapshot = false)
+        return PublishedTransaction(canonicalPath, hash, events)
     }
+}
+
+/**
+ * Stage [bytes] under a per-installation `.part` name, then atomically publish them to the
+ * content-addressed object path for [hash] (verified create-no-replace). On any publish failure the
+ * staging file is best-effort deleted and the original failure rethrown, so a partial write never
+ * lingers. Shared by [ContentAddressedJournalWriter] (regular objects) and [SnapshotCompactor]
+ * (snapshots); [snapshot] selects the bucket namespace. Returns the canonical object path.
+ */
+internal suspend fun stageAndPublishVerifiedObject(
+    fs: LibraryFileSystem,
+    installationId: String,
+    hash: String,
+    bytes: ByteArray,
+    snapshot: Boolean,
+): String {
+    val canonicalPath = NpnPaths.journalObjectPath(hash, snapshot = snapshot)
+    val stagingPath = NpnPaths.journalStagingPath(hash, installationId, randomUuidV4(), snapshot = snapshot)
+    fs.writeBytesOnce(stagingPath, bytes)
+    try {
+        fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, hash)
+    } catch (failure: Throwable) {
+        runCatching { fs.delete(stagingPath) }
+        throw failure
+    }
+    return canonicalPath
 }

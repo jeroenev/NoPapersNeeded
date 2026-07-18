@@ -12,10 +12,4 @@ object JournalFolder {
     }
 
     fun fold(events: Iterable<JournalEvent>): FoldedState = fold(events.asSequence())
-
-    /** Apply a single event into an existing accumulator. Returns [state] for chaining. */
-    fun apply(state: FoldedState, event: JournalEvent): FoldedState {
-        state.apply(event)
-        return state
-    }
 }

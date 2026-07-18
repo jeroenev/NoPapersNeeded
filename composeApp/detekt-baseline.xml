@@ -2,7 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>EmptyFunctionBlock:FakeSession.kt:DeferredDefaultViewSettings${}</ID>
     <ID>EmptyFunctionBlock:FakeSession.kt:FakeLibrarySession${}</ID>
     <ID>LongMethod:DocDetailScreen.kt:@Composable fun DocDetailScreen</ID>
     <ID>LongMethod:FilterSheet.kt:@Composable fun FilterSheet</ID>
@@ -23,6 +22,5 @@
     <ID>MaxLineLength:TrashScreen.kt:EmptyState(icon = Icons.Filled.Refresh, title = "No duplicates", subtitle = "Every hash has one canonical path.")</ID>
     <ID>MaxLineLength:TrashScreen.kt:Text("Extra copy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)</ID>
     <ID>TooManyFunctions:DocDetailViewModel.kt:DocDetailViewModel : ViewModel</ID>
-    <ID>TooManyFunctions:LibraryViewModel.kt:LibraryViewModel : ViewModel</ID>
   </CurrentIssues>
 </SmellBaseline>

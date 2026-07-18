@@ -73,15 +73,15 @@ class IndexerTest {
     fun moveDetectionKeepsDocId() = runTest {
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
 
         rig.moveFile("a.pdf", "archive/a.pdf")
         val report = rig.rescan()
 
         report.moved shouldBe 1
         report.added shouldBe 0
-        rig.db.documentDao().getByPath("a.pdf") shouldBe null
-        val moved = rig.db.documentDao().getByPath("archive/a.pdf")!!
+        rig.db.documentDao().rowAtPath("a.pdf") shouldBe null
+        val moved = rig.db.documentDao().rowAtPath("archive/a.pdf")!!
         moved.docId shouldBe docId
         moved.missing.shouldBeFalse()
     }
@@ -92,7 +92,7 @@ class IndexerTest {
     fun externalDuplicateRecordedAndResolved() = runTest {
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
 
         rig.copyFile("a.pdf", "copies/a-copy.pdf")
         val report = rig.rescan()
@@ -115,7 +115,7 @@ class IndexerTest {
     fun externalEditCreatesRelinkCandidateAndCarriesTags() = runTest {
         rig.writePdf("a.pdf", "original")
         rig.rescan()
-        val oldId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val oldId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
 
         // Tag the old doc via a real journal event, then fold it in.
         val writer = rig.writer("dev-main")
@@ -130,7 +130,7 @@ class IndexerTest {
         rig.clock.advance()
         val report = rig.rescan()
 
-        val newId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val newId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
         (newId != oldId).shouldBeTrue()
         rig.db.documentDao().getByDocId(oldId)!!.missing.shouldBeTrue()
         report.relinkCandidates.any { it.oldDocId == oldId && it.newDocId == newId && it.reason == "path-match" }
@@ -154,7 +154,7 @@ class IndexerTest {
     fun disappearAndReappear() = runTest {
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
 
         rig.deleteFile("a.pdf")
         val gone = rig.rescan()
@@ -207,7 +207,7 @@ class IndexerTest {
     fun journalFoldAppliesTagsAndProps() = runTest {
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
 
         val writer = rig.writer("dev-main")
         rig.clock.advance()
@@ -277,7 +277,7 @@ class IndexerTest {
     fun twoDeviceInterleavedTagsFoldDeterministically() = runTest {
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
 
         val devA = rig.writer("device-A")
         val devB = rig.writer("device-B")
@@ -308,7 +308,7 @@ class IndexerTest {
         // This installation writes a segment normally, populating local journal state.
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
         val localState = DbLocalJournalState(kv)
         val writer = SegmentWriter(
             store = rig.fsSegmentStore,
@@ -345,7 +345,7 @@ class IndexerTest {
     fun foldPreservesFtsContentAcrossMetadataChange() = runTest {
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
 
         // Simulate the OCR pipeline writing extracted text into the FTS content column.
         rig.db.ftsDao().replaceDocument(
@@ -385,7 +385,7 @@ class IndexerTest {
     fun rescanPreservesFtsContent() = runTest {
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
 
         rig.db.ftsDao().replaceDocument(
             docId = docId,
@@ -410,7 +410,7 @@ class IndexerTest {
     fun trashResurrectionPreferredFile() = runTest {
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
 
         // Journal says trashed with origPath a.pdf, but the file is still present on disk.
         val writer = rig.writer("dev-main")

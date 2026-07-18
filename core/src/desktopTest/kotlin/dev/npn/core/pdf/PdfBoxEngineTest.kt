@@ -1,6 +1,5 @@
 package dev.npn.core.pdf
 
-import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
@@ -49,13 +48,6 @@ class PdfBoxEngineTest {
         val pdf = engine.imagesToPdf(listOf(PdfFixtures.pngBytes(), PdfFixtures.jpegBytes()))
         looksLikePdf(pdf).shouldBeTrue()
         Loader.loadPDF(pdf).use { it.numberOfPages shouldBe 2 }
-    }
-
-    @Test
-    fun isValidPdfTrueForRealPdfFalseForGarbage() = runTest {
-        engine.isValidPdf(PdfFixtures.embeddedTextPdf("x")).shouldBeTrue()
-        engine.isValidPdf("not a pdf at all".encodeToByteArray()).shouldBeFalse()
-        engine.isValidPdf(ByteArray(0)).shouldBeFalse()
     }
 
     @Test

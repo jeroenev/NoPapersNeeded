@@ -8,13 +8,9 @@ plugins {
 dependencies {
     implementation(projects.composeApp)
     implementation(projects.core)
-    implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
-    implementation(libs.compose.foundation)
     implementation(libs.androidx.work.runtime)
-    implementation(libs.androidx.documentfile)
     implementation(libs.mlkit.document.scanner)
-    implementation(libs.pdfbox.android)
 }
 
 android {

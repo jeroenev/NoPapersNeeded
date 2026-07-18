@@ -1,6 +1,7 @@
 package dev.npn
 
 import android.content.Context
+import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
@@ -45,11 +46,13 @@ class RescanOcrWorker(
             }
             Result.success()
         } catch (t: Throwable) {
+            Log.w(TAG, "rescan/OCR maintenance failed; retrying", t)
             Result.retry()
         }
     }
 
     companion object {
+        private const val TAG = "npn"
         private const val OCR_DRAIN_TIMEOUT_MS = 8L * 60L * 1000L // 8 min, under WM's 10 min limit
     }
 }

@@ -1,6 +1,7 @@
 package dev.npn.app
 
 import dev.npn.app.ui.tags.TagManagementViewModel
+import dev.npn.app.ui.tags.buildTree
 import dev.npn.core.app.TagInfo
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -22,8 +23,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
 
     @Test
     fun buildTreeFlatTags() = runTest(dispatcher) {
-        val model = vm()
-        val tree = model.buildTree(listOf(tag("finance", 3), tag("travel", 1)))
+        val tree = buildTree(listOf(tag("finance", 3), tag("travel", 1)))
         tree.map { it.path } shouldContainExactly listOf("finance", "travel")
         tree.all { it.children.isEmpty() } shouldBe true
         tree.first().count shouldBe 3
@@ -32,9 +32,8 @@ class TagManagementViewModelTest : MainDispatcherTest() {
 
     @Test
     fun buildTreeCreatesIntermediateNamespaceNodes() = runTest(dispatcher) {
-        val model = vm()
         // "finance.tax" exists but "finance" has no tag of its own.
-        val tree = model.buildTree(listOf(tag("finance.tax", 2)))
+        val tree = buildTree(listOf(tag("finance.tax", 2)))
         tree.map { it.path } shouldContainExactly listOf("finance")
         val finance = tree.first()
         finance.info shouldBe null           // intermediate, not a real tag
@@ -47,8 +46,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
 
     @Test
     fun buildTreeRollsUpDescendantCounts() = runTest(dispatcher) {
-        val model = vm()
-        val tree = model.buildTree(
+        val tree = buildTree(
             listOf(tag("a", 1), tag("a.b", 2), tag("a.b.c", 4)),
         )
         val a = tree.single()
@@ -65,8 +63,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
 
     @Test
     fun buildTreeSortsSiblingsAlphabetically() = runTest(dispatcher) {
-        val model = vm()
-        val tree = model.buildTree(listOf(tag("z"), tag("a"), tag("m")))
+        val tree = buildTree(listOf(tag("z"), tag("a"), tag("m")))
         tree.map { it.segment } shouldContainExactly listOf("a", "m", "z")
     }
 

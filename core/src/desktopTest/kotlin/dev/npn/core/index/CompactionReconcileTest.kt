@@ -89,7 +89,7 @@ class CompactionReconcileTest {
         Files.write(p, content.encodeToByteArray())
     }
 
-    /** Index PDFs so getByPath resolves, mirroring a session's initial rescan. */
+    /** Index PDFs so rowAtPath resolves, mirroring a session's initial rescan. */
     private suspend fun initialScan() {
         val state = accumulator.reconcile().state
         indexer.rescan(metadataState = state)
@@ -108,7 +108,7 @@ class CompactionReconcileTest {
         val coordinator = coordinator(threshold = 3)
         initialScan()
         coordinator.refreshState()
-        val docId = db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
 
         // 6 separate transactions -> 6 v2 objects, above the threshold of 3.
         repeat(6) { i ->
@@ -141,7 +141,7 @@ class CompactionReconcileTest {
         val coordinator = coordinator(threshold = 3)
         initialScan()
         coordinator.refreshState()
-        val docId = db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
         repeat(5) { i ->
             clock.advance()
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
@@ -182,7 +182,7 @@ class CompactionReconcileTest {
         val coordinator = coordinator(threshold = 3)
         initialScan()
         coordinator.refreshState()
-        val docId = db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
         repeat(4) { i ->
             clock.advance()
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
@@ -206,7 +206,7 @@ class CompactionReconcileTest {
         val coordinator = coordinator(threshold = 3)
         initialScan()
         coordinator.refreshState()
-        val docId = db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
         repeat(6) { i ->
             clock.advance()
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
@@ -231,7 +231,7 @@ class CompactionReconcileTest {
         val coordinator = coordinator(threshold = 3)
         initialScan()
         coordinator.refreshState()
-        val docId = db.documentDao().getByPath("a.pdf")!!.docId
+        val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
 
         // First snapshot from 6 objects.
         repeat(6) { i ->

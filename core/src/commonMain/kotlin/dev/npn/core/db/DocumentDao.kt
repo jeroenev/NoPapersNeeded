@@ -1,8 +1,6 @@
 package dev.npn.core.db
 
 import androidx.room3.Dao
-import androidx.room3.Insert
-import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
 import androidx.room3.RawQuery
 import androidx.room3.RoomRawQuery
@@ -21,18 +19,12 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE docId = :docId")
     suspend fun getByDocId(docId: String): DocumentEntity?
 
-    @Query("SELECT * FROM documents WHERE relPath = :relPath")
-    suspend fun getByPath(relPath: String): DocumentEntity?
-
     @Query("SELECT * FROM documents WHERE docId = :docId")
     fun observeByDocId(docId: String): Flow<DocumentEntity?>
 
     /** Live tag list for one document (detail view); re-emits on document_tags changes. */
     @Query("SELECT tag FROM document_tags WHERE docId = :docId ORDER BY tag")
     fun observeTagsForDoc(docId: String): Flow<List<String>>
-
-    @Query("DELETE FROM documents WHERE docId = :docId")
-    suspend fun deleteByDocId(docId: String)
 
     /**
      * Filtered library listing. The upper layer builds the SQL (filters, sort, tag joins)
@@ -57,25 +49,11 @@ interface DocumentDao {
     )
     fun observeAll(): Flow<List<DocumentEntity>>
 
-    @Query(
-        "SELECT * FROM documents WHERE reviewed = :reviewed AND trashed = 0 AND deleted = 0 " +
-            "AND missing = 0 ORDER BY addedAt DESC",
-    )
-    fun observeByReviewed(reviewed: Boolean): Flow<List<DocumentEntity>>
-
     @Query("SELECT * FROM documents WHERE trashed = 1 AND deleted = 0 ORDER BY addedAt DESC")
     fun observeTrashed(): Flow<List<DocumentEntity>>
 
     @Query("SELECT * FROM documents WHERE missing = 1 AND deleted = 0 ORDER BY addedAt DESC")
     fun observeMissing(): Flow<List<DocumentEntity>>
-
-    @Query(
-        "SELECT d.* FROM documents d " +
-            "LEFT JOIN document_tags t ON d.docId = t.docId " +
-            "WHERE t.tag IS NULL AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
-            "ORDER BY d.addedAt DESC",
-    )
-    fun observeUntagged(): Flow<List<DocumentEntity>>
 
     // --- Counts ---
 
@@ -96,9 +74,6 @@ interface DocumentDao {
             "(SELECT 1 FROM document_tags t WHERE t.docId = d.docId))",
     )
     fun countUnreviewedOrUntagged(): Flow<Int>
-
-    @Query("SELECT COUNT(*) FROM documents WHERE trashed = 1 AND deleted = 0")
-    fun countTrash(): Flow<Int>
 
     /** Projection for the indexer diff: current known paths + fast-path fields. */
     @Query("SELECT relPath, docId, size, mtime FROM documents WHERE deleted = 0")
@@ -128,7 +103,4 @@ interface DocumentDao {
 
     @Query("DELETE FROM documents")
     suspend fun clearAll()
-
-    @Insert(onConflict = OnConflictStrategy.REPLACE)
-    suspend fun insertForTest(doc: DocumentEntity)
 }

@@ -23,6 +23,7 @@ import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flowOf
 
 /**
@@ -111,7 +112,7 @@ class FakeSavedViewRepository : SavedViewRepository {
     override suspend fun save(view: SavedView) { saved += view }
     override suspend fun delete(id: String) { deleted += id }
     override suspend fun exportJson(): String = "[]"
-    override suspend fun importJson(json: String): Int = 0
+    override suspend fun importJson(text: String): Int = 0
 }
 
 /**
@@ -337,7 +338,7 @@ fun emptyScanReport(): ScanReport = ScanReport(
 
 /** Settings fake backed by [MutableStateFlow]s; setters both record and update the flow. */
 class FakeSettingsRepository(
-    initialDefaultView: ViewType = ViewType.LIST,
+    initialDefaultView: ViewType? = ViewType.LIST,
 ) : SettingsRepository {
     val libraryLocationFlow = MutableStateFlow<String?>(null)
     val ocrLanguageFlow = MutableStateFlow("eng")
@@ -362,7 +363,8 @@ class FakeSettingsRepository(
     override suspend fun setOcrLanguage(lang: String) { setOcrLanguages += lang; ocrLanguageFlow.value = lang }
     override val trashRetentionDays: Flow<Int> get() = trashRetentionDaysFlow
     override suspend fun setTrashRetentionDays(days: Int) { setRetentionDays += days; trashRetentionDaysFlow.value = days }
-    override val defaultViewType: Flow<ViewType> get() = defaultViewTypeFlow
+    override val defaultViewType: Flow<ViewType> get() = defaultViewTypeFlow.filterNotNull()
+    fun emitDefaultView(viewType: ViewType) { defaultViewTypeFlow.value = viewType }
     override suspend fun setDefaultViewType(v: ViewType) { setDefaultViews += v; defaultViewTypeFlow.value = v }
     override val librarySort: Flow<LibrarySort> get() = librarySortFlow
     override suspend fun setLibrarySort(sort: LibrarySort) { setSorts += sort; librarySortFlow.value = sort }
@@ -370,37 +372,4 @@ class FakeSettingsRepository(
     override suspend fun setGridColumnWidth(dp: Int) { setGridWidths += dp; gridColumnWidthFlow.value = dp }
     override val landscapeListColumns: Flow<Boolean> get() = landscapeListColumnsFlow
     override suspend fun setLandscapeListColumns(enabled: Boolean) { setLandscapeFlags += enabled; landscapeListColumnsFlow.value = enabled }
-}
-
-/**
- * A settings fake whose [defaultViewType] flow does not emit until [emitDefaultView] is called,
- * simulating the async default-view seed arriving late (used for the viewOverridden race guard).
- */
-class DeferredDefaultViewSettings : SettingsRepository {
-    private val defaultView = MutableStateFlow<ViewType?>(null)
-    val setDefaultViews = mutableListOf<ViewType>()
-
-    fun emitDefaultView(v: ViewType) { defaultView.value = v }
-
-    override val libraryLocation: Flow<String?> = flowOf(null)
-    override val installationId: Flow<String> = flowOf("test-installation")
-    override suspend fun setLibraryLocation(location: String?) {}
-    override val ocrLanguage: Flow<String> = flowOf("eng")
-    override suspend fun setOcrLanguage(lang: String) {}
-    override val trashRetentionDays: Flow<Int> = flowOf(30)
-    override suspend fun setTrashRetentionDays(days: Int) {}
-
-    // Only emits once a non-null value is set, so `.first()` in the VM suspends until then.
-    override val defaultViewType: Flow<ViewType> =
-        kotlinx.coroutines.flow.flow {
-            defaultView.collect { if (it != null) emit(it) }
-        }
-
-    override suspend fun setDefaultViewType(v: ViewType) { setDefaultViews += v }
-    override val librarySort: Flow<LibrarySort> = flowOf(LibrarySort())
-    override suspend fun setLibrarySort(sort: LibrarySort) {}
-    override val gridColumnWidth: Flow<Int> = flowOf(160)
-    override suspend fun setGridColumnWidth(dp: Int) {}
-    override val landscapeListColumns: Flow<Boolean> = flowOf(false)
-    override suspend fun setLandscapeListColumns(enabled: Boolean) {}
 }

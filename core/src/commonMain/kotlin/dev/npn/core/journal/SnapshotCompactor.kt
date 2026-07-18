@@ -1,9 +1,7 @@
 package dev.npn.core.journal
 
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationCapability
-import dev.npn.core.fs.randomUuidV4
 import dev.npn.core.fs.sha256Bytes
 
 /**
@@ -90,15 +88,7 @@ class SnapshotCompactor(
         val bytes = SnapshotCodec.encodeSnapshot(manifest, events)
         val hash = sha256Bytes(bytes)
         // Never let a snapshot supersede itself (its own hash cannot be an input, but guard anyway).
-        val canonicalPath = NpnPaths.journalObjectPath(hash, snapshot = true)
-        val stagingPath = NpnPaths.journalStagingPath(hash, installationId, randomUuidV4(), snapshot = true)
-        fs.writeBytesOnce(stagingPath, bytes)
-        try {
-            fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, hash)
-        } catch (failure: Throwable) {
-            runCatching { fs.delete(stagingPath) }
-            throw failure
-        }
+        val canonicalPath = stageAndPublishVerifiedObject(fs, installationId, hash, bytes, snapshot = true)
         return PublishedSnapshot(canonicalPath, hash, supersedes, events)
     }
 }

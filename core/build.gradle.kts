@@ -29,7 +29,6 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation(libs.room3.runtime)
             implementation(libs.sqlite.bundled)
-            implementation(libs.datastore.preferences.core)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))

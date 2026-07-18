@@ -1,6 +1,8 @@
 package dev.npn.core.index
 
 import dev.npn.core.app.JournalCoordinator
+import dev.npn.core.db.DocumentDao
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
@@ -109,9 +111,26 @@ class IndexRig private constructor(
     }
 }
 
-/** A hand-cranked [EpochClock] so tests control time and keep HLCs strictly increasing. */
-class MutableClock(start: Long) : EpochClock {
+/**
+ * Test-only reverse path lookup. Production code addresses docs by content hash (docId); the
+ * indexer tests still need "the row currently at this relPath" to assert move/missing outcomes.
+ * Resolves the docId via [DocumentDao.allPathsAndMeta] (deleted rows excluded) then loads the row.
+ */
+suspend fun DocumentDao.rowAtPath(relPath: String): DocumentEntity? =
+    allPathsAndMeta().firstOrNull { it.relPath == relPath }?.let { getByDocId(it.docId) }
+
+/**
+ * Hand-cranked test clock. With [autoTick] off (default) it returns [now] verbatim and only
+ * [advance] moves it — the explicit-advance style the indexer/reconcile tests rely on. With
+ * [autoTick] on it increments before every read, giving the strictly-increasing HLCs the
+ * app/session tests want without manual bookkeeping. Consolidates the former TestClock
+ * (auto-increment) and MutableClock (explicit advance).
+ */
+class MutableClock(start: Long = 1_000L, private val autoTick: Boolean = false) : EpochClock {
     var now: Long = start
-    override fun nowMillis(): Long = now
+    override fun nowMillis(): Long {
+        if (autoTick) now += 1
+        return now
+    }
     fun advance(by: Long = 1L) { now += by }
 }

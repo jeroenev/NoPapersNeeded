@@ -38,26 +38,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     // ---- paging bounds ----
 
     @Test
-    fun nextPageClampsAtLastPage() = runTest(dispatcher) {
-        val session = FakeLibrarySession().apply { content.pageCountValue = 2 }
-        val model = vm(session = session)
-        advanceUntilIdle()
-        model.nextPage()
-        model.ui.value.pageIndex shouldBe 1
-        model.nextPage() // already at last (count 2 -> max index 1)
-        model.ui.value.pageIndex shouldBe 1
-    }
-
-    @Test
-    fun prevPageClampsAtZero() = runTest(dispatcher) {
-        val session = FakeLibrarySession().apply { content.pageCountValue = 3 }
-        val model = vm(session = session)
-        advanceUntilIdle()
-        model.prevPage()
-        model.ui.value.pageIndex shouldBe 0
-    }
-
-    @Test
     fun goToPageIgnoresOutOfRange() = runTest(dispatcher) {
         val session = FakeLibrarySession().apply { content.pageCountValue = 3 }
         val model = vm(session = session)

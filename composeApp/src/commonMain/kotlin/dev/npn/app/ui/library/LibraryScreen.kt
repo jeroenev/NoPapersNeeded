@@ -177,11 +177,11 @@ fun LibraryScreen(
             scanAvailable = scanner.available,
             onOpenFilter = dialogs::openFilter,
             onAddTag = {
-                scope.launch { dialogs.allTagNames = vm.allTagNames() }
+                scope.launch { dialogs.allTagNames = session.tags.allTagNames() }
                 dialogs.openAddTag()
             },
             onRemoveTag = {
-                scope.launch { dialogs.allTagNames = vm.allTagNames() }
+                scope.launch { dialogs.allTagNames = session.tags.allTagNames() }
                 dialogs.openRemoveTag()
             },
         )
@@ -209,8 +209,11 @@ fun LibraryScreen(
                 dialogs.openSaveView()
             },
             onRenameSavedView = dialogs::openRename,
-            onDeleteSavedView = { vm.deleteSavedView(it.id) },
-            onTogglePinSavedView = { vm.togglePinSavedView(it) },
+            // Thin pass-throughs to the session; run on the screen scope (quick fire-and-forget).
+            onDeleteSavedView = { view -> scope.launch { session.savedViews.delete(view.id) } },
+            onTogglePinSavedView = { view ->
+                scope.launch { session.savedViews.save(view.copy(pinned = !view.pinned)) }
+            },
         )
     }
 
@@ -239,8 +242,10 @@ fun LibraryScreen(
         docTypes = docTypes,
         onApplyFilter = vm::setFilter,
         onClearFilter = vm::clearFilter,
-        onSaveView = vm::saveCurrentView,
-        onRenameView = vm::renameSavedView,
+        onSaveView = { name -> scope.launch { session.savedViews.save(newSavedView(ui, name)) } },
+        onRenameView = { view, name ->
+            scope.launch { session.savedViews.save(view.copy(name = name.trim())) }
+        },
         onAddTag = vm::bulkAddTag,
         onRemoveTag = vm::bulkRemoveTag,
     )
@@ -430,170 +435,6 @@ private fun DocList(
                     row(item)
                     HorizontalDivider()
                 }
-            }
-        }
-    }
-}
-
-private const val GRID_ZOOM_COMMIT_DEBOUNCE_MS = 300L
-
-// Layout metrics of the grid, shared with the column-step math below.
-private const val GRID_H_PADDING_DP = 12f
-private const val GRID_SPACING_DP = 8f
-
-/**
- * Column count [GridCells.Adaptive] produces for a min cell [width] in [available] dp
- * (mirrors its formula: floor((available + spacing) / (minSize + spacing)), at least 1).
- */
-internal fun gridColumnsFor(available: Float, width: Float, spacing: Float = GRID_SPACING_DP): Int =
-    ((available + spacing) / (width + spacing)).toInt().coerceAtLeast(1)
-
-/**
- * The largest min cell width (dp) at which [GridCells.Adaptive] yields exactly [columns] in
- * [available] dp. Floored so dp/px rounding cannot tip the layout into one column fewer.
- */
-internal fun gridWidthForColumns(available: Float, columns: Int, spacing: Float = GRID_SPACING_DP): Float =
-    floor((available + spacing) / columns - spacing)
-
-/**
- * Thumbnail grid with direct-manipulation sizing between [GridSizing.MIN_COLUMN_WIDTH] and
- * [GridSizing.MAX_COLUMN_WIDTH] dp: pinch (touch) resizes continuously; ctrl+scroll (desktop)
- * and the overlay zoom buttons step exactly one column per notch/press at the current grid
- * width, since with adaptive cells the column count is the only visible state. Changes preview
- * live via local state and are committed (debounced) through [onColumnWidthChange], which
- * persists them in settings.
- */
-@OptIn(FlowPreview::class)
-@Composable
-private fun DocGrid(
-    docs: List<dev.npn.core.app.DocListItem>,
-    content: dev.npn.core.app.DocContentFacade,
-    tagColors: Map<String, String?>,
-    ui: LibraryUiState,
-    columnWidth: Int,
-    onColumnWidthChange: (Int) -> Unit,
-    onOpen: (String) -> Unit,
-    onToggleSelect: (String) -> Unit,
-    onStartSelection: (String) -> Unit,
-) {
-    // Live cell width; re-seeded when the persisted value changes (e.g. after a commit).
-    var width by remember { mutableStateOf(columnWidth.toFloat()) }
-    LaunchedEffect(columnWidth) { width = columnWidth.toFloat() }
-
-    // Debounced commit so pinches and fine-grained touchpad deltas don't write settings per event.
-    val committed by rememberUpdatedState(columnWidth)
-    LaunchedEffect(Unit) {
-        snapshotFlow { width.roundToInt() }
-            .debounce(GRID_ZOOM_COMMIT_DEBOUNCE_MS)
-            .collect { if (it != committed) onColumnWidthChange(it) }
-    }
-
-    val minWidth = GridSizing.MIN_COLUMN_WIDTH.toFloat()
-    val maxWidth = GridSizing.MAX_COLUMN_WIDTH.toFloat()
-
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Width the adaptive cells actually divide: the grid area minus its content padding.
-        // NOTE: the gesture lambdas below are captured once by pointerInput and never refreshed,
-        // so everything they touch must be backed by State (or read state at call time), never by
-        // plain composition-time locals.
-        val available by rememberUpdatedState(this.maxWidth.value - 2 * GRID_H_PADDING_DP)
-        val columns = gridColumnsFor(available, width)
-        // The width bounds cap how far the count can step in either direction.
-        val fewestColumns = gridColumnsFor(available, maxWidth)
-        val mostColumns = gridColumnsFor(available, minWidth)
-
-        // Zoom in = bigger cells = fewer columns (photo-gallery convention). Reads width/available
-        // at call time so it stays correct when invoked from the stale gesture closure.
-        fun stepColumns(delta: Int) {
-            val avail = available
-            val cols = gridColumnsFor(avail, width)
-            val target = (cols + delta)
-                .coerceIn(gridColumnsFor(avail, maxWidth), gridColumnsFor(avail, minWidth))
-            if (target != cols) {
-                width = gridWidthForColumns(avail, target).coerceIn(minWidth, maxWidth)
-            }
-        }
-
-        // Pinch stays continuous (a fingertip gesture has no natural notion of notches).
-        fun pinchBy(factor: Float) {
-            width = (width * factor).coerceIn(minWidth, maxWidth)
-        }
-
-        // Accumulates fractional touchpad deltas up to one notch; a mouse wheel notch arrives as a
-        // single event with |delta| >= 1 and steps exactly one column regardless of its magnitude.
-        val scrollAccumulated = remember { mutableStateOf(0f) }
-
-        Box(
-            Modifier
-                .fillMaxSize()
-                .pinchToZoom(onZoom = ::pinchBy)
-                .ctrlScrollZoom { delta, _ ->
-                    val acc = scrollAccumulated.value
-                    val sameDirection = acc == 0f || (acc > 0f) == (delta > 0f)
-                    val next = if (sameDirection) acc + delta else delta
-                    if (abs(next) >= 1f) {
-                        // Scroll up = zoom in = one column fewer; scroll down = one more.
-                        stepColumns(if (next > 0f) 1 else -1)
-                        scrollAccumulated.value = 0f
-                    } else {
-                        scrollAccumulated.value = next
-                    }
-                },
-        ) {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(width.roundToInt().dp),
-                modifier = Modifier.fillMaxSize().padding(horizontal = GRID_H_PADDING_DP.dp),
-                horizontalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
-                verticalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
-            ) {
-                items(docs, key = { it.doc.docId }) { item ->
-                    DocGridCard(
-                        item = item,
-                        content = content,
-                        tagColors = tagColors,
-                        selectionMode = ui.selectionMode,
-                        selected = item.doc.docId in ui.selected,
-                        onClick = {
-                            if (ui.selectionMode) onToggleSelect(item.doc.docId)
-                            else onOpen(item.doc.docId)
-                        },
-                        onLongClick = { onStartSelection(item.doc.docId) },
-                    )
-                }
-            }
-
-            // On-screen equivalent of the gestures (discoverability + accessibility).
-            // Bottom-start so it doesn't collide with the FAB.
-            GridZoomControls(
-                canZoomOut = columns < mostColumns,
-                canZoomIn = columns > fewestColumns,
-                onZoomOut = { stepColumns(1) },
-                onZoomIn = { stepColumns(-1) },
-                modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
-            )
-        }
-    }
-}
-
-@Composable
-private fun GridZoomControls(
-    canZoomOut: Boolean,
-    canZoomIn: Boolean,
-    onZoomOut: () -> Unit,
-    onZoomIn: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    Surface(
-        modifier = modifier,
-        shape = MaterialTheme.shapes.large,
-        tonalElevation = 3.dp,
-    ) {
-        Row {
-            IconButton(onClick = onZoomOut, enabled = canZoomOut) {
-                Icon(Icons.Filled.ZoomOut, contentDescription = "Smaller grid items")
-            }
-            IconButton(onClick = onZoomIn, enabled = canZoomIn) {
-                Icon(Icons.Filled.ZoomIn, contentDescription = "Larger grid items")
             }
         }
     }
@@ -850,5 +691,4 @@ private fun sortLabel(field: SortField): String = when (field) {
     SortField.DOC_DATE -> "Doc date"
     SortField.SIZE -> "Size"
 }
-
 

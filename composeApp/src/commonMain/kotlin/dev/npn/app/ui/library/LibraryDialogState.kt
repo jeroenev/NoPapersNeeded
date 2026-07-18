@@ -8,6 +8,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.TagInfo
@@ -86,7 +87,7 @@ fun LibraryDialogHost(
     }
 
     if (state.showSaveView) {
-        NameDialog(
+        TextInputDialog(
             title = "Save current view",
             label = "View name",
             onConfirm = {
@@ -98,7 +99,7 @@ fun LibraryDialogHost(
     }
 
     state.renameView?.let { view ->
-        NameDialog(
+        TextInputDialog(
             title = "Rename saved view",
             label = "View name",
             confirmLabel = "Rename",

@@ -43,6 +43,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.core.app.LibrarySession
 
 private enum class TrashTab(val label: String) {
@@ -161,7 +162,7 @@ private fun TrashList(
                     DocThumbnail(docId = item.doc.docId, content = content, size = 48.dp)
                     Column(Modifier.weight(1f)) {
                         Text(
-                            item.doc.title?.takeIf { it.isNotBlank() } ?: item.doc.fileName,
+                            documentDisplayTitle(item.doc.title, item.doc.fileName),
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
@@ -240,7 +241,7 @@ private fun MissingList(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        doc.title?.takeIf { it.isNotBlank() } ?: doc.fileName,
+                        documentDisplayTitle(doc.title, doc.fileName),
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(
