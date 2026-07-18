@@ -185,6 +185,8 @@ interface SettingsRepository {
     suspend fun setTrashRetentionDays(days: Int)
     val defaultViewType: Flow<ViewType>
     suspend fun setDefaultViewType(v: ViewType)
+    val librarySort: Flow<LibrarySort>      // last explicitly chosen library sort, default LibrarySort()
+    suspend fun setLibrarySort(sort: LibrarySort)
     val gridColumnWidth: Flow<Int>       // min grid cell width in dp; drives adaptive column count, default 160
     suspend fun setGridColumnWidth(dp: Int)
     val landscapeListColumns: Flow<Boolean>  // multi-column list view when the window is landscape, default false

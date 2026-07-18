@@ -299,10 +299,12 @@ class FakeSettingsRepository(
     val ocrLanguageFlow = MutableStateFlow("eng")
     val trashRetentionDaysFlow = MutableStateFlow(30)
     val defaultViewTypeFlow = MutableStateFlow(initialDefaultView)
+    val librarySortFlow = MutableStateFlow(LibrarySort())
     val gridColumnWidthFlow = MutableStateFlow(160)
     val landscapeListColumnsFlow = MutableStateFlow(false)
 
     val setDefaultViews = mutableListOf<ViewType>()
+    val setSorts = mutableListOf<LibrarySort>()
     val setOcrLanguages = mutableListOf<String>()
     val setRetentionDays = mutableListOf<Int>()
     val setGridWidths = mutableListOf<Int>()
@@ -316,6 +318,8 @@ class FakeSettingsRepository(
     override suspend fun setTrashRetentionDays(days: Int) { setRetentionDays += days; trashRetentionDaysFlow.value = days }
     override val defaultViewType: Flow<ViewType> get() = defaultViewTypeFlow
     override suspend fun setDefaultViewType(v: ViewType) { setDefaultViews += v; defaultViewTypeFlow.value = v }
+    override val librarySort: Flow<LibrarySort> get() = librarySortFlow
+    override suspend fun setLibrarySort(sort: LibrarySort) { setSorts += sort; librarySortFlow.value = sort }
     override val gridColumnWidth: Flow<Int> get() = gridColumnWidthFlow
     override suspend fun setGridColumnWidth(dp: Int) { setGridWidths += dp; gridColumnWidthFlow.value = dp }
     override val landscapeListColumns: Flow<Boolean> get() = landscapeListColumnsFlow
@@ -346,6 +350,8 @@ class DeferredDefaultViewSettings : SettingsRepository {
         }
 
     override suspend fun setDefaultViewType(v: ViewType) { setDefaultViews += v }
+    override val librarySort: Flow<LibrarySort> = flowOf(LibrarySort())
+    override suspend fun setLibrarySort(sort: LibrarySort) {}
     override val gridColumnWidth: Flow<Int> = flowOf(160)
     override suspend fun setGridColumnWidth(dp: Int) {}
     override val landscapeListColumns: Flow<Boolean> = flowOf(false)

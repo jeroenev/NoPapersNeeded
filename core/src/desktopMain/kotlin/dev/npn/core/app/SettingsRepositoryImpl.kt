@@ -28,6 +28,7 @@ class SettingsRepositoryImpl(
         val ocrLanguage: String,
         val trashRetentionDays: Int,
         val defaultViewType: ViewType,
+        val librarySort: LibrarySort,
         val gridColumnWidth: Int,
         val landscapeListColumns: Boolean,
     )
@@ -42,6 +43,12 @@ class SettingsRepositoryImpl(
             trashRetentionDays = props.getProperty(KEY_TRASH_DAYS)?.toIntOrNull() ?: 30,
             defaultViewType = props.getProperty(KEY_VIEW_TYPE)?.let { runCatching { ViewType.valueOf(it) }.getOrNull() }
                 ?: ViewType.GRID,
+            librarySort = LibrarySort(
+                field = props.getProperty(KEY_SORT_FIELD)
+                    ?.let { runCatching { SortField.valueOf(it) }.getOrNull() } ?: LibrarySort().field,
+                ascending = props.getProperty(KEY_SORT_ASC)?.toBooleanStrictOrNull()
+                    ?: LibrarySort().ascending,
+            ),
             gridColumnWidth = props.getProperty(KEY_GRID_WIDTH)?.toIntOrNull()
                 ?.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
                 ?: GridSizing.DEFAULT_COLUMN_WIDTH,
@@ -55,6 +62,8 @@ class SettingsRepositoryImpl(
         props.setProperty(KEY_OCR_LANG, snapshot.ocrLanguage)
         props.setProperty(KEY_TRASH_DAYS, snapshot.trashRetentionDays.toString())
         props.setProperty(KEY_VIEW_TYPE, snapshot.defaultViewType.name)
+        props.setProperty(KEY_SORT_FIELD, snapshot.librarySort.field.name)
+        props.setProperty(KEY_SORT_ASC, snapshot.librarySort.ascending.toString())
         props.setProperty(KEY_GRID_WIDTH, snapshot.gridColumnWidth.toString())
         props.setProperty(KEY_LANDSCAPE_LIST, snapshot.landscapeListColumns.toString())
         file.parentFile?.mkdirs()
@@ -65,6 +74,7 @@ class SettingsRepositoryImpl(
     override val ocrLanguage: Flow<String> = state.map { it.ocrLanguage }
     override val trashRetentionDays: Flow<Int> = state.map { it.trashRetentionDays }
     override val defaultViewType: Flow<ViewType> = state.map { it.defaultViewType }
+    override val librarySort: Flow<LibrarySort> = state.map { it.librarySort }
     override val gridColumnWidth: Flow<Int> = state.map { it.gridColumnWidth }
     override val landscapeListColumns: Flow<Boolean> = state.map { it.landscapeListColumns }
 
@@ -92,6 +102,12 @@ class SettingsRepositoryImpl(
         persist(next)
     }
 
+    override suspend fun setLibrarySort(sort: LibrarySort) {
+        val next = state.value.copy(librarySort = sort)
+        state.value = next
+        persist(next)
+    }
+
     override suspend fun setGridColumnWidth(dp: Int) {
         val next = state.value.copy(
             gridColumnWidth = dp.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
@@ -111,6 +127,8 @@ class SettingsRepositoryImpl(
         private const val KEY_OCR_LANG = "ocrLanguage"
         private const val KEY_TRASH_DAYS = "trashRetentionDays"
         private const val KEY_VIEW_TYPE = "defaultViewType"
+        private const val KEY_SORT_FIELD = "librarySortField"
+        private const val KEY_SORT_ASC = "librarySortAscending"
         private const val KEY_GRID_WIDTH = "gridColumnWidth"
         private const val KEY_LANDSCAPE_LIST = "landscapeListColumns"
 

@@ -6,13 +6,14 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Home
-import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Badge
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -69,7 +70,7 @@ fun LibraryDrawerContent(
         NavigationDrawerItem(
             label = { Text(if (inbox) "Review queue" else "Untagged documents") },
             selected = false,
-            icon = { Icon(Icons.AutoMirrored.Filled.List, contentDescription = null) },
+            icon = { Icon(Icons.Filled.Inbox, contentDescription = null) },
             // A backlog of untagged documents is normal, so no attention badge outside the inbox
             // workflow. The count badge only signals a review queue that needs clearing.
             badge = { if (inbox && reviewBadge > 0) Badge { Text(reviewBadge.toString()) } },
@@ -84,7 +85,7 @@ fun LibraryDrawerContent(
         NavigationDrawerItem(
             label = { Text("Tags") },
             selected = false,
-            icon = { Icon(Icons.Filled.Star, contentDescription = null) },
+            icon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) },
             onClick = onTags,
         )
 
@@ -135,7 +136,7 @@ private fun SavedViewRow(
         label = { Text(view.name) },
         selected = false,
         icon = if (view.pinned) {
-            { Icon(Icons.Filled.Star, contentDescription = "Pinned") }
+            { Icon(Icons.Filled.PushPin, contentDescription = "Pinned") }
         } else null,
         badge = {
             Box {
