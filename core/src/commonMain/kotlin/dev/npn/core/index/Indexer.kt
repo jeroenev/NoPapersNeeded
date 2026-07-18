@@ -418,12 +418,16 @@ class Indexer(
         // Also include every doc currently in the DB so trash/delete flags get cleared correctly.
         for (pm in documentDao.allPathsAndMeta()) journalDocs.add(pm.docId)
 
-        // Upsert all tags referenced anywhere (with styles when set).
+        // Upsert all tags referenced anywhere (with styles when set). Diffed against the current
+        // rows so an unchanged fold does not touch the table: every write here invalidates the
+        // `tags` Room flows (tag management screen, tag colors) even when nothing changed.
         val allTags = LinkedHashSet<String>()
         for (doc in journalDocs) allTags.addAll(state.effectiveTags(doc))
+        val existingTagRows = tagDao.all().associateBy { it.name }
         for (tag in allTags) {
             val style = state.tagStyle(tag)
-            tagDao.upsert(TagEntity(name = tag, color = style?.color, icon = style?.icon))
+            val entity = TagEntity(name = tag, color = style?.color, icon = style?.icon)
+            if (existingTagRows[tag] != entity) tagDao.upsert(entity)
         }
 
         // Handle relink supersession: mark old docs deleted where a winning relink resolves to a
@@ -449,19 +453,26 @@ class Indexer(
             val preds = predecessors[doc].orEmpty()
 
             // Tags: this doc's own effective tags plus every predecessor's effective tags.
+            // Diffed: only rewrite the doc's tag rows when the set actually changed, so an
+            // unrelated edit does not invalidate `document_tags` observers for every doc.
             val tagSet = LinkedHashSet<String>()
             tagSet.addAll(state.effectiveTags(doc))
             for (p in preds) tagSet.addAll(state.effectiveTags(p))
             val effTags = tagSet.toList().sorted()
-            tagDao.setForDocument(doc, effTags)
+            val tagsChanged = tagDao.tagsForDocument(doc) != effTags
+            if (tagsChanged) tagDao.setForDocument(doc, effTags)
 
             // Custom fields: own value wins; inherit predecessor keys that this doc doesn't set.
+            // Diffed like tags.
             val effFields = LinkedHashMap<String, String>()
             for (p in preds) effFields.putAll(state.effectiveFields(p))
             effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
-            fieldDao.deleteForDoc(doc)
-            if (effFields.isNotEmpty()) {
-                fieldDao.upsertAll(effFields.map { (k, v) -> DocumentFieldEntity(doc, k, v) })
+            val curFields = fieldDao.fieldsForDocs(listOf(doc)).associate { it.fieldKey to it.fieldValue }
+            if (curFields != effFields) {
+                fieldDao.deleteForDoc(doc)
+                if (effFields.isNotEmpty()) {
+                    fieldDao.upsertAll(effFields.map { (k, v) -> DocumentFieldEntity(doc, k, v) })
+                }
             }
 
             // Props: own value wins; otherwise inherit from a predecessor (first that has it).
@@ -504,39 +515,45 @@ class Indexer(
                 }
             }
 
-            documentDao.upsert(
-                row.copy(
-                    relPath = relPath,
-                    fileName = fileName,
-                    reviewed = reviewed,
-                    correspondent = correspondent,
-                    docType = docType,
-                    docDate = docDate,
-                    title = title,
-                    trashed = trashed,
-                    trashedOrigPath = if (trashed) origPath else null,
-                    deleted = deleted,
-                    missing = missing,
-                ),
+            // Diffed: skip the upsert when the effective row equals what is stored, so a fold
+            // triggered by one edit does not rewrite (and invalidate) every other doc's row.
+            val newRow = row.copy(
+                relPath = relPath,
+                fileName = fileName,
+                reviewed = reviewed,
+                correspondent = correspondent,
+                docType = docType,
+                docDate = docDate,
+                title = title,
+                trashed = trashed,
+                trashedOrigPath = if (trashed) origPath else null,
+                deleted = deleted,
+                missing = missing,
             )
+            val rowChanged = newRow != row
+            if (rowChanged) documentDao.upsert(newRow)
 
             // FTS: preserve the existing extracted-text content (OCR/embedded text written by the
             // OCR pipeline). The fold only owns the metadata-derived columns; carry content
             // forward so a metadata change (tag add, prop set) never wipes full-text search.
             // A brand-new doc has no fts row yet -> null -> empty content until OCR fills it.
             // Under the shared gate so this read-then-replace cannot interleave with an OCR
-            // content write for the same doc (see FtsWriteGate).
+            // content write for the same doc (see FtsWriteGate). All fts metadata columns derive
+            // from the doc row + tags, so when neither changed and a row already exists there is
+            // nothing to write.
             ftsWriteGate.withGate {
-                val existingContent = ftsDao.contentForDoc(doc) ?: ""
-                ftsDao.replaceDocument(
-                    docId = doc,
-                    fileName = fileName,
-                    title = title,
-                    content = existingContent,
-                    tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
-                    correspondent = correspondent,
-                    docType = docType,
-                )
+                val existingContent = ftsDao.contentForDoc(doc)
+                if (rowChanged || tagsChanged || existingContent == null) {
+                    ftsDao.replaceDocument(
+                        docId = doc,
+                        fileName = fileName,
+                        title = title,
+                        content = existingContent ?: "",
+                        tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
+                        correspondent = correspondent,
+                        docType = docType,
+                    )
+                }
             }
         }
 

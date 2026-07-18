@@ -5,8 +5,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -266,21 +264,6 @@ class JvmLibraryFileSystem(private val root: Path) : LibraryFileSystem {
                 watcher.close()
             } catch (_: IOException) {
             }
-        }
-    }
-}
-
-/**
- * Debounce a coarse [FsEvent] flow: collapse bursts into a single trailing emission roughly
- * every [windowMillis]. Uses conflate + a sampling delay so rapid filesystem churn (a big sync
- * batch) produces one event instead of hundreds.
- */
-fun Flow<FsEvent>.debounced(windowMillis: Long = 500L): Flow<FsEvent> {
-    val upstream = this.conflate()
-    return flow {
-        upstream.collect { value ->
-            emit(value)
-            kotlinx.coroutines.delay(windowMillis)
         }
     }
 }

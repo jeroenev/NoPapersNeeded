@@ -55,6 +55,21 @@ object NpnPaths {
         return norm == NPN_DIR || norm.startsWith("$NPN_DIR/")
     }
 
+    /**
+     * True when [relPath] is an internal file that [deviceId] wrote itself: its own journal
+     * directory/segments or its own OCR sidecars. The desktop watcher uses this to drop
+     * self-echo events — the writing code paths already refold/index synchronously, so reacting
+     * to our own `.npn/` writes would turn every metadata edit into a redundant full rescan.
+     * Other devices' journal segments and sidecars (arriving via file sync) are NOT self-writes
+     * and must keep triggering a refresh.
+     */
+    fun isOwnDeviceWrite(relPath: String, deviceId: String): Boolean {
+        val norm = normalize(relPath)
+        val ownJournal = journalDeviceDir(deviceId)
+        if (norm == ownJournal || norm.startsWith("$ownJournal/")) return true
+        return norm.startsWith("$OCR_DIR/") && norm.endsWith(".$deviceId.json")
+    }
+
     /** True when any path segment begins with a dot (hidden file/dir), e.g. `.npn`, `a/.b/c`. */
     fun isHidden(relPath: String): Boolean =
         normalize(relPath).split('/').any { it.isNotEmpty() && it.startsWith('.') }

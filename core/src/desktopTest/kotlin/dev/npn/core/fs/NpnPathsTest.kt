@@ -30,6 +30,23 @@ class NpnPathsTest {
     }
 
     @Test
+    fun isOwnDeviceWrite() {
+        // Own journal dir + segments: self-echo, must be filtered.
+        NpnPaths.isOwnDeviceWrite(".npn/journal/dev1", "dev1").shouldBeTrue()
+        NpnPaths.isOwnDeviceWrite(".npn/journal/dev1/0001.jsonl", "dev1").shouldBeTrue()
+        // Own OCR sidecar: self-echo.
+        NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev1.json", "dev1").shouldBeTrue()
+        // Another device's journal/sidecar (arriving via sync) must keep triggering a refresh.
+        NpnPaths.isOwnDeviceWrite(".npn/journal/dev2/0001.jsonl", "dev1").shouldBeFalse()
+        NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev2.json", "dev1").shouldBeFalse()
+        // A device id that prefixes another must not match the longer one's dir.
+        NpnPaths.isOwnDeviceWrite(".npn/journal/dev12/0001.jsonl", "dev1").shouldBeFalse()
+        // Document-area and trash paths are never self-writes.
+        NpnPaths.isOwnDeviceWrite("inbox/x.pdf", "dev1").shouldBeFalse()
+        NpnPaths.isOwnDeviceWrite(".npn/trash/x__deadbeef.pdf", "dev1").shouldBeFalse()
+    }
+
+    @Test
     fun isHidden() {
         NpnPaths.isHidden(".npn/x").shouldBeTrue()
         NpnPaths.isHidden("a/.hidden/b.pdf").shouldBeTrue()

@@ -1,6 +1,9 @@
 package dev.npn.core.fs
 
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.conflate
+import kotlinx.coroutines.flow.flow
 
 /**
  * Metadata for a single filesystem entry inside the library.
@@ -24,6 +27,21 @@ data class FileMeta(
 sealed interface FsEvent {
     /** Something changed at or under [relPath]; `null` means the watcher lost track and a full rescan is advised. */
     data class Changed(val relPath: String?) : FsEvent
+}
+
+/**
+ * Debounce a coarse [FsEvent] flow: collapse bursts into a single trailing emission roughly
+ * every [windowMillis]. Uses conflate + a sampling delay so rapid filesystem churn (a big sync
+ * batch) produces one event instead of hundreds.
+ */
+fun Flow<FsEvent>.debounced(windowMillis: Long = 500L): Flow<FsEvent> {
+    val upstream = this.conflate()
+    return flow {
+        upstream.collect { value ->
+            emit(value)
+            delay(windowMillis)
+        }
+    }
 }
 
 /**
