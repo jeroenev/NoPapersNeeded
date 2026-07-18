@@ -12,6 +12,7 @@ import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 /**
  * Integration tests for the local index database, run against the real bundled SQLite
@@ -295,21 +296,6 @@ class NpnDatabaseTest {
     }
 
     @Test
-    fun foldedSegmentsReplaceForDevice() = runTest {
-        val dao = db.foldedSegmentDao()
-        dao.replaceForDevice("dev1", listOf("0.jsonl", "1.jsonl"))
-        dao.replaceForDevice("dev2", listOf("0.jsonl"))
-        dao.segmentsForDevice("dev1").map { it.fileName }
-            .shouldContainExactlyInAnyOrder("0.jsonl", "1.jsonl")
-        dao.allSegments().size shouldBe 3
-
-        // refold dev1: replaces its set entirely, leaves dev2 untouched.
-        dao.replaceForDevice("dev1", listOf("snapshot.jsonl"))
-        dao.segmentsForDevice("dev1").map { it.fileName } shouldContainExactly listOf("snapshot.jsonl")
-        dao.segmentsForDevice("dev2").map { it.fileName } shouldContainExactly listOf("0.jsonl")
-    }
-
-    @Test
     fun duplicatesReplaceAndDeleteForPath() = runTest {
         val dao = db.duplicateDao()
         val id = "a".repeat(64)
@@ -343,5 +329,29 @@ class NpnDatabaseTest {
         dao.upsert(doc("a".repeat(64)))
         dao.clearAll()
         dao.observeAll().first() shouldBe emptyList()
+    }
+
+    @Test
+    fun metadataAccumulatorRejectsIdentityAndHlcCollisions() = runTest {
+        val dao = db.metadataProjectionDao()
+        fun source(path: String) = MetadataSourceEntity(path, 1, path, null, "applied")
+        fun event(dev: String, seq: Long, canonical: String, hlcDevice: String = dev) = MetadataEventEntity(
+            deviceId = dev,
+            sequence = seq,
+            canonicalJson = canonical,
+            hlcPhysical = 10,
+            hlcCounter = 0,
+            hlcDevice = hlcDevice,
+            documentId = null,
+            operation = "future",
+        )
+
+        dao.ingestSource(source("one"), listOf(event("dev-a", 1, "a")))
+        assertFailsWith<MetadataIdentityCollision> {
+            dao.ingestSource(source("two"), listOf(event("dev-a", 1, "different")))
+        }
+        assertFailsWith<MetadataIdentityCollision> {
+            dao.ingestSource(source("three"), listOf(event("dev-b", 1, "b", hlcDevice = "dev-a")))
+        }
     }
 }

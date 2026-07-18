@@ -25,9 +25,4 @@ class InMemorySegmentStore : SegmentStore {
         require(!files.containsKey(fileName)) { "Segment already exists: $deviceId/$fileName" }
         files[fileName] = content
     }
-
-    override suspend fun deleteSegment(ref: SegmentRef) = mutex.withLock {
-        data[ref.deviceId]?.remove(ref.fileName)
-        Unit
-    }
 }

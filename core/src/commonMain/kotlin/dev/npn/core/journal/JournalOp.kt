@@ -1,6 +1,7 @@
 package dev.npn.core.journal
 
 import dev.npn.core.model.DocProperty
+import kotlinx.serialization.json.JsonObject
 
 /** A dot uniquely identifies a single event by its author device and per-device sequence. */
 data class Dot(val deviceId: String, val seq: Long)
@@ -80,6 +81,9 @@ sealed class JournalOp {
         override val wire get() = "setting-set"
     }
 
-    /** An op with an `op` string this build does not understand. Skipped during folding. */
-    data class Unknown(override val wire: String) : JournalOp()
+    /** An op this build does not understand. Its payload is retained for migration and diagnostics. */
+    data class Unknown(
+        override val wire: String,
+        val payload: JsonObject = JsonObject(emptyMap()),
+    ) : JournalOp()
 }

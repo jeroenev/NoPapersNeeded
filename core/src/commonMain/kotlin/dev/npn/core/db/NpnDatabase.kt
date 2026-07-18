@@ -1,9 +1,12 @@
 package dev.npn.core.db
 
 import androidx.room3.ConstructedBy
+import androidx.room3.AutoMigration
 import androidx.room3.Database
+import androidx.room3.DeleteTable
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
+import androidx.room3.migration.AutoMigrationSpec
 
 /**
  * Local index database. This is a disposable cache: a materialized view of the file library
@@ -13,22 +16,33 @@ import androidx.room3.RoomDatabaseConstructor
  */
 @Database(
     // v2: documents.status (enum) replaced by documents.reviewed (boolean).
-    // v3: added document_fields (per-document custom metadata). Cache is rebuildable, so the
-    // platform builders drop and rebuild via fallbackToDestructiveMigration.
-    version = 3,
+    // v3: added document_fields. v4 adds the persisted metadata source/event accumulator.
+    // v5: drops the folded_segments cache table (dead JournalIndex fold pipeline removed).
+    // v6: adds metadata_superseded to track compaction snapshot supersession.
+    version = 6,
     exportSchema = true,
+    autoMigrations = [
+        AutoMigration(from = 3, to = 4),
+        AutoMigration(from = 4, to = 5, spec = NpnDatabase.DropFoldedSegments::class),
+        AutoMigration(from = 5, to = 6),
+    ],
     entities = [
         DocumentEntity::class,
         TagEntity::class,
         DocumentTagEntity::class,
         DocumentFieldEntity::class,
         FtsDocumentEntity::class,
-        FoldedSegmentEntity::class,
         SavedViewEntity::class,
         ThumbnailEntity::class,
         DuplicateEntity::class,
         OcrQueueEntity::class,
         KeyValueEntity::class,
+        MetadataSourceEntity::class,
+        MetadataEventEntity::class,
+        MetadataSourceEventEntity::class,
+        MetadataTransactionActorEntity::class,
+        MetadataProjectionStateEntity::class,
+        MetadataSupersededEntity::class,
     ],
 )
 @ConstructedBy(NpnDatabaseConstructor::class)
@@ -37,12 +51,21 @@ abstract class NpnDatabase : RoomDatabase() {
     abstract fun tagDao(): TagDao
     abstract fun ftsDao(): FtsDao
     abstract fun documentFieldDao(): DocumentFieldDao
-    abstract fun foldedSegmentDao(): FoldedSegmentDao
     abstract fun savedViewDao(): SavedViewDao
     abstract fun thumbnailDao(): ThumbnailDao
     abstract fun duplicateDao(): DuplicateDao
     abstract fun ocrQueueDao(): OcrQueueDao
     abstract fun keyValueDao(): KeyValueDao
+    abstract fun metadataProjectionDao(): MetadataProjectionDao
+
+    /**
+     * v4 -> v5: drop the `folded_segments` cache table. It backed the removed JournalIndex fold
+     * pipeline; the metadata accumulator now owns source tracking. Dropping a pure cache table is
+     * safe (the whole DB is rebuildable), but the explicit spec keeps existing installs from
+     * crashing on upgrade instead of relying on destructive fallback.
+     */
+    @DeleteTable(tableName = "folded_segments")
+    class DropFoldedSegments : AutoMigrationSpec
 }
 
 /**

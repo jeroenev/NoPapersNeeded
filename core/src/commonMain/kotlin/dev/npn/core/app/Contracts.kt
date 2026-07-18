@@ -186,6 +186,8 @@ sealed interface ImportOutcome {
 // ---------- settings (app-global, not per library) ----------
 
 interface SettingsRepository {
+    /** Stable app installation identity used only for owned staging-file cleanup and diagnostics. */
+    val installationId: Flow<String>
     val libraryLocation: Flow<String?>   // desktop: absolute path; android: SAF tree uri string
     suspend fun setLibraryLocation(location: String?)
     val ocrLanguage: Flow<String>        // tesseract/mlkit lang code, default "eng"

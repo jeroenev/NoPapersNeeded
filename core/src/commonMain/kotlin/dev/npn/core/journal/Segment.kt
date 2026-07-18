@@ -36,12 +36,12 @@ data class SegmentRef(val deviceId: String, val fileName: String) {
 
         fun plainName(firstSeq: Long): String = "${pad(firstSeq)}$PLAIN_SUFFIX"
 
-        fun snapshotName(firstSeq: Long, lastSeq: Long): String =
-            "${pad(firstSeq)}-${pad(lastSeq)}$SNAP_SUFFIX"
-
         /** True if [fileName] is a name this engine produces (plain or snapshot). */
-        fun isSegmentFile(fileName: String): Boolean =
-            (fileName.endsWith(PLAIN_SUFFIX) || fileName.endsWith(SNAP_SUFFIX))
+        fun isSegmentFile(fileName: String): Boolean {
+            val plain = Regex("^[0-9]+\\.jsonl$")
+            val snapshot = Regex("^[0-9]+-[0-9]+\\.snap\\.jsonl$")
+            return plain.matches(fileName) || snapshot.matches(fileName)
+        }
     }
 }
 
@@ -51,7 +51,6 @@ data class SegmentRef(val deviceId: String, val fileName: String) {
  *
  * Invariants relied upon by the engine:
  * - [writeSegment] is create-once: it must fail if the file already exists.
- * - [deleteSegment] is only ever called on the calling device's own segments (compaction).
  */
 interface SegmentStore {
     suspend fun listSegments(): List<SegmentRef>
@@ -59,7 +58,4 @@ interface SegmentStore {
 
     /** Create-once write; must fail if a file with [fileName] already exists for [deviceId]. */
     suspend fun writeSegment(deviceId: String, fileName: String, content: String)
-
-    /** Delete a segment. Only called on the caller's own device segments (compaction). */
-    suspend fun deleteSegment(ref: SegmentRef)
 }

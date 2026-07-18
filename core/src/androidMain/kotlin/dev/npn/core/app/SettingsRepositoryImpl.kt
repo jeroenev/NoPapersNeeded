@@ -5,6 +5,7 @@ import android.content.SharedPreferences
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import java.util.UUID
 
 /**
  * Android [SettingsRepository] backed by [SharedPreferences]. Values are mirrored into a
@@ -36,6 +37,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         val librarySort: LibrarySort,
         val gridColumnWidth: Int,
         val landscapeListColumns: Boolean,
+        val installationId: String,
     )
 
     private fun load() = Snapshot(
@@ -52,6 +54,9 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         gridColumnWidth = prefs.getInt(KEY_GRID_WIDTH, GridSizing.DEFAULT_COLUMN_WIDTH)
             .coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
         landscapeListColumns = prefs.getBoolean(KEY_LANDSCAPE_LIST, false),
+        installationId = prefs.getString(KEY_INSTALLATION_ID, null) ?: UUID.randomUUID().toString().also {
+            prefs.edit().putString(KEY_INSTALLATION_ID, it).apply()
+        },
     )
 
     override val libraryLocation: Flow<String?> = state.map { it.libraryLocation }
@@ -61,6 +66,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
     override val librarySort: Flow<LibrarySort> = state.map { it.librarySort }
     override val gridColumnWidth: Flow<Int> = state.map { it.gridColumnWidth }
     override val landscapeListColumns: Flow<Boolean> = state.map { it.landscapeListColumns }
+    override val installationId: Flow<String> = state.map { it.installationId }
 
     override suspend fun setLibraryLocation(location: String?) {
         prefs.edit().apply {
@@ -113,5 +119,6 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         private const val KEY_SORT_ASC = "librarySortAscending"
         private const val KEY_GRID_WIDTH = "gridColumnWidth"
         private const val KEY_LANDSCAPE_LIST = "landscapeListColumns"
+        private const val KEY_INSTALLATION_ID = "installationId"
     }
 }

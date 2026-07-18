@@ -15,6 +15,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertFails
 
 class IndexerTest {
 
@@ -24,6 +25,16 @@ class IndexerTest {
 
     @AfterTest fun teardown() { rig.close() }
 
+    @Test
+    fun failedFoldClearsProgress() = runTest {
+        rig.db.close()
+
+        // A rescan against a closed DB fails inside applyFold; the FOLDING progress must clear.
+        assertFails { rig.rescan() }
+
+        rig.indexer.scanState.value shouldBe null
+    }
+
     // 1. fresh library: N pdfs -> N documents, addedAt set, report.added == N
     @Test
     fun freshLibraryIndexesAll() = runTest {
@@ -31,7 +42,7 @@ class IndexerTest {
         rig.writePdf("sub/b.pdf", "bravo")
         rig.writePdf("sub/c.pdf", "charlie")
 
-        val report = rig.indexer.rescan()
+        val report = rig.rescan()
 
         report.added shouldBe 3
         report.hashedCount shouldBe 3
@@ -47,9 +58,9 @@ class IndexerTest {
     fun rescanNoOpHashesNothing() = runTest {
         rig.writePdf("a.pdf", "alpha")
         rig.writePdf("b.pdf", "bravo")
-        rig.indexer.rescan().added shouldBe 2
+        rig.rescan().added shouldBe 2
 
-        val second = rig.indexer.rescan()
+        val second = rig.rescan()
         second.hashedCount shouldBe 0
         second.added shouldBe 0
         second.moved shouldBe 0
@@ -61,11 +72,11 @@ class IndexerTest {
     @Test
     fun moveDetectionKeepsDocId() = runTest {
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
 
         rig.moveFile("a.pdf", "archive/a.pdf")
-        val report = rig.indexer.rescan()
+        val report = rig.rescan()
 
         report.moved shouldBe 1
         report.added shouldBe 0
@@ -80,11 +91,11 @@ class IndexerTest {
     @Test
     fun externalDuplicateRecordedAndResolved() = runTest {
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
 
         rig.copyFile("a.pdf", "copies/a-copy.pdf")
-        val report = rig.indexer.rescan()
+        val report = rig.rescan()
 
         report.duplicates shouldHaveSize 1
         report.duplicates.first().docId shouldBe docId
@@ -103,21 +114,21 @@ class IndexerTest {
     @Test
     fun externalEditCreatesRelinkCandidateAndCarriesTags() = runTest {
         rig.writePdf("a.pdf", "original")
-        rig.indexer.rescan()
+        rig.rescan()
         val oldId = rig.db.documentDao().getByPath("a.pdf")!!.docId
 
         // Tag the old doc via a real journal event, then fold it in.
         val writer = rig.writer("dev-main")
         rig.clock.advance()
         writer.commit(listOf(PendingOp.tagAdd(oldId, "invoice")))
-        rig.indexer.rescan()
+        rig.rescan()
         rig.db.tagDao().tagsForDocument(oldId) shouldContainExactly listOf("invoice")
 
         // Overwrite bytes at the same path (external edit).
         rig.deleteFile("a.pdf")
         rig.writePdf("a.pdf", "edited-content")
         rig.clock.advance()
-        val report = rig.indexer.rescan()
+        val report = rig.rescan()
 
         val newId = rig.db.documentDao().getByPath("a.pdf")!!.docId
         (newId != oldId).shouldBeTrue()
@@ -125,9 +136,13 @@ class IndexerTest {
         report.relinkCandidates.any { it.oldDocId == oldId && it.newDocId == newId && it.reason == "path-match" }
             .shouldBeTrue()
 
-        // Apply relink: metadata carries to new doc, old doc superseded (deleted).
+        // Apply relink: metadata carries to new doc, old doc superseded (deleted). The coordinator
+        // must have its live folded state seeded (production seeds it in openSession) so the
+        // rescan folds against the current dots, not an empty state.
         rig.clock.advance()
-        val relink = RelinkService(rig.coordinator(writer))
+        val coordinator = rig.coordinator(writer)
+        coordinator.refreshState()
+        val relink = RelinkService(coordinator)
         relink.applyRelink(oldId, newId)
 
         rig.db.tagDao().tagsForDocument(newId) shouldContainExactly listOf("invoice")
@@ -138,16 +153,16 @@ class IndexerTest {
     @Test
     fun disappearAndReappear() = runTest {
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
 
         rig.deleteFile("a.pdf")
-        val gone = rig.indexer.rescan()
+        val gone = rig.rescan()
         gone.missingCount shouldBe 1
         rig.db.documentDao().getByDocId(docId)!!.missing.shouldBeTrue()
 
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         rig.db.documentDao().getByDocId(docId)!!.missing.shouldBeFalse()
     }
 
@@ -157,7 +172,7 @@ class IndexerTest {
         rig.writePdf("a.pdf", "alpha")
         rig.writePdf("b.sync-conflict-20260101-120000-ABCDEFG.pdf", "conflicted")
 
-        val report = rig.indexer.rescan()
+        val report = rig.rescan()
         report.conflictFiles shouldContain "b.sync-conflict-20260101-120000-ABCDEFG.pdf"
         report.added shouldBe 1 // only a.pdf indexed
 
@@ -191,7 +206,7 @@ class IndexerTest {
     @Test
     fun journalFoldAppliesTagsAndProps() = runTest {
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
 
         val writer = rig.writer("dev-main")
@@ -203,7 +218,7 @@ class IndexerTest {
                 PendingOp.propSet(docId, DocProperty.CORRESPONDENT, "acme"),
             ),
         )
-        rig.indexer.rescan()
+        rig.rescan()
 
         rig.db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("receipt")
         val row = rig.db.documentDao().getByDocId(docId)!!
@@ -213,7 +228,7 @@ class IndexerTest {
         // tag-rename event -> tags updated
         rig.clock.advance()
         writer.commit(listOf(PendingOp.tagRename("receipt", "invoice")))
-        rig.indexer.rescan()
+        rig.rescan()
         rig.db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("invoice")
     }
 
@@ -261,7 +276,7 @@ class IndexerTest {
     @Test
     fun twoDeviceInterleavedTagsFoldDeterministically() = runTest {
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
 
         val devA = rig.writer("device-A")
@@ -274,11 +289,11 @@ class IndexerTest {
         rig.clock.advance()
         devA.commit(listOf(PendingOp.tagAdd(docId, "2026")))
 
-        rig.indexer.rescan()
+        rig.rescan()
         rig.db.tagDao().tagsForDocument(docId).sorted() shouldContainExactly listOf("2026", "urgent", "work")
 
         // a second rescan folds identically (idempotent)
-        rig.indexer.rescan()
+        rig.rescan()
         rig.db.tagDao().tagsForDocument(docId).sorted() shouldContainExactly listOf("2026", "urgent", "work")
     }
 
@@ -292,7 +307,7 @@ class IndexerTest {
 
         // This installation writes a segment normally, populating local journal state.
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
         val localState = DbLocalJournalState(kv)
         val writer = SegmentWriter(
@@ -329,7 +344,7 @@ class IndexerTest {
     @Test
     fun foldPreservesFtsContentAcrossMetadataChange() = runTest {
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
 
         // Simulate the OCR pipeline writing extracted text into the FTS content column.
@@ -344,16 +359,18 @@ class IndexerTest {
         )
         rig.db.ftsDao().searchDocIds("electricity") shouldContainExactly listOf(docId)
 
-        // A metadata op (tag add + prop set) followed by a fold must not wipe the content.
+        // A metadata op (tag add + prop set) committed through the coordinator projects
+        // incrementally (the live path); it must not wipe the FTS content.
         val writer = rig.writer("dev-main")
+        val coordinator = rig.coordinator(writer)
+        coordinator.refreshState()
         rig.clock.advance()
-        writer.commit(
+        coordinator.commitAndApply(
             listOf(
                 PendingOp.tagAdd(docId, "receipt"),
                 PendingOp.propSet(docId, DocProperty.CORRESPONDENT, "acme"),
             ),
         )
-        rig.indexer.refreshFold()
 
         // Content still searchable.
         rig.db.ftsDao().searchDocIds("electricity") shouldContainExactly listOf(docId)
@@ -367,7 +384,7 @@ class IndexerTest {
     @Test
     fun rescanPreservesFtsContent() = runTest {
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
 
         rig.db.ftsDao().replaceDocument(
@@ -383,7 +400,7 @@ class IndexerTest {
         val writer = rig.writer("dev-main")
         rig.clock.advance()
         writer.commit(listOf(PendingOp.tagAdd(docId, "recipe")))
-        rig.indexer.rescan()
+        rig.rescan()
 
         rig.db.ftsDao().searchDocIds("pasta") shouldContainExactly listOf(docId)
         rig.db.ftsDao().searchDocIds("recipe") shouldContainExactly listOf(docId)
@@ -392,7 +409,7 @@ class IndexerTest {
     @Test
     fun trashResurrectionPreferredFile() = runTest {
         rig.writePdf("a.pdf", "alpha")
-        rig.indexer.rescan()
+        rig.rescan()
         val docId = rig.db.documentDao().getByPath("a.pdf")!!.docId
 
         // Journal says trashed with origPath a.pdf, but the file is still present on disk.
@@ -400,7 +417,7 @@ class IndexerTest {
         rig.clock.advance()
         writer.commit(listOf(PendingOp.docTrash(docId, "a.pdf")))
 
-        val report = rig.indexer.rescan()
+        val report = rig.rescan()
         report.resurrected.any { it.docId == docId }.shouldBeTrue()
         val row = rig.db.documentDao().getByDocId(docId)!!
         row.trashed.shouldBeFalse()

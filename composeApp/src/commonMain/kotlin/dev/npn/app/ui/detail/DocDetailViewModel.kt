@@ -13,6 +13,8 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Transient UI state for the detail viewer (page index, page count, busy flags). Zoom/pan are
@@ -38,6 +40,7 @@ class DocDetailViewModel(
 
     private val _ui = MutableStateFlow(DetailUiState())
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
+    private val metadataMutex = Mutex()
 
     val doc: StateFlow<DocListItem?> =
         session.documents.observeDoc(docId)
@@ -102,27 +105,30 @@ class DocDetailViewModel(
     // ---- metadata edits ----
 
     fun setTitle(title: String?) =
-        launchReporting("save title") { session.meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
+        launchMetadata("save title") { session.meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
     fun setCorrespondent(value: String?) =
-        launchReporting("save correspondent") {
+        launchMetadata("save correspondent") {
             session.meta.setCorrespondent(listOf(docId), value?.takeIf { it.isNotBlank() })
         }
     fun setDocType(value: String?) =
-        launchReporting("save document type") {
+        launchMetadata("save document type") {
             session.meta.setDocType(listOf(docId), value?.takeIf { it.isNotBlank() })
         }
     fun setDocDate(isoDate: String?) =
-        launchReporting("save date") { session.meta.setDocDate(docId, isoDate?.takeIf { it.isNotBlank() }) }
+        launchMetadata("save date") { session.meta.setDocDate(docId, isoDate?.takeIf { it.isNotBlank() }) }
 
-    fun addTag(tag: String) = launchReporting("add tag") { session.meta.addTag(listOf(docId), tag) }
-    fun removeTag(tag: String) = launchReporting("remove tag") { session.meta.removeTag(listOf(docId), tag) }
+    fun addTag(tag: String) = launchMetadata("add tag") { session.meta.addTag(listOf(docId), tag) }
+    fun removeTag(tag: String) = launchMetadata("remove tag") { session.meta.removeTag(listOf(docId), tag) }
 
     fun setField(key: String, value: String?) =
-        launchReporting("save field") { session.meta.setField(docId, key, value) }
-    fun removeField(key: String) = launchReporting("remove field") { session.meta.setField(docId, key, null) }
+        launchMetadata("save field") { session.meta.setField(docId, key, value) }
+    fun removeField(key: String) = launchMetadata("remove field") { session.meta.setField(docId, key, null) }
 
     fun setReviewed(reviewed: Boolean) =
-        launchReporting("update review state") { session.meta.setReviewed(listOf(docId), reviewed) }
+        launchMetadata("update review state") { session.meta.setReviewed(listOf(docId), reviewed) }
+
+    private fun launchMetadata(action: String, block: suspend () -> Unit) =
+        launchReporting(action) { metadataMutex.withLock { block() } }
 
     /** On failure [onDone] is not invoked (the screen stays put) and the error is surfaced. */
     fun trash(onDone: () -> Unit) = launchReporting("move to trash") {

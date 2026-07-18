@@ -11,6 +11,20 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertIs
+import kotlin.test.assertFailsWith
+import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.index.MetadataAccumulator
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.journal.JournalSourceRead
+import dev.npn.core.journal.StorageV2Reader
+import dev.npn.core.journal.Hlc
+import dev.npn.core.journal.JournalCodec
+import dev.npn.core.journal.JournalEvent
+import dev.npn.core.journal.JournalEventVersions
+import dev.npn.core.journal.JournalOp
+import java.nio.file.Files
 
 class MetadataWriterTest {
 
@@ -197,6 +211,209 @@ class MetadataWriterTest {
             session2.close()
         } finally {
             if (db2 !== rig.db) db2.close()
+            rig.close()
+        }
+    }
+
+    @Test
+    fun confirmedDesktopWriterPublishesV2AndBridgeReaderRebuildsIt() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        var secondDb = rig.db
+        try {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.meta.addTag(listOf(id), "v2")
+            val firstAllocator = rig.db.metadataProjectionDao().state()!!.allocatorPhysical
+            rig.session.meta.setTitle(id, "second transaction")
+            (rig.db.metadataProjectionDao().state()!!.allocatorPhysical > firstAllocator) shouldBe true
+
+            val objects = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR)
+                .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+            objects.size shouldBe 2
+            objects.forEach { objectFile ->
+                assertIs<JournalSourceRead.Accepted>(
+                    StorageV2Reader.read(objectFile.relPath, rig.fs.readBytes(objectFile.relPath)),
+                )
+            }
+
+            val (bridgeSession, db2) = rig.secondSession(backgroundScope)
+            secondDb = db2
+            bridgeSession.rescan()
+            val items = bridgeSession.documents.observeDocuments(LibraryFilter(), LibrarySort()).first()
+            tagsOf(items, id) shouldContain "v2"
+            bridgeSession.close()
+        } finally {
+            if (secondDb !== rig.db) secondDb.close()
+            rig.close()
+        }
+    }
+
+    @Test
+    fun bridgeReaderAppliesRemoteV2LifecycleEvents() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        var secondDb = rig.db
+        try {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            val (bridgeSession, db2) = rig.secondSession(backgroundScope)
+            secondDb = db2
+            bridgeSession.rescan()
+
+            rig.session.meta.trashDoc(id)
+            bridgeSession.rescan()
+            db2.metadataProjectionDao().allEvents().map { it.operation } shouldContain "doc-trash"
+            db2.documentDao().getByDocId(id)!!.trashed shouldBe true
+
+            bridgeSession.close()
+        } finally {
+            if (secondDb !== rig.db) secondDb.close()
+            rig.close()
+        }
+    }
+
+    /**
+     * A snapshot produced by device 1 (superseding several of its objects, with those objects
+     * deleted) is folded by device 2 via a plain rescan, and the superseded-object deletions do
+     * NOT block device 2 because an applied snapshot lists their hashes.
+     */
+    @Test
+    fun remoteSnapshotSupersedesDeletedObjectsWithoutBlockingSecondDevice() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        var secondDb = rig.db
+        try {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            repeat(5) { i -> rig.session.meta.addTag(listOf(id), "tag$i") }
+
+            // Device 2 folds all five objects first.
+            val (session2, db2) = rig.secondSession(backgroundScope)
+            secondDb = db2
+            session2.rescan()
+            db2.tagDao().tagsForDocument(id).size shouldBe 5
+
+            // Build a snapshot over device 1's objects, publish it, and delete the objects.
+            val objects = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR)
+                .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+            val candidates = objects.map { file ->
+                val bytes = rig.fs.readBytes(file.relPath)
+                dev.npn.core.journal.CompactionCandidate(
+                    file.relPath, sha256Bytes(bytes),
+                    dev.npn.core.journal.StorageV2Reader.read(file.relPath, bytes)
+                        .let { it as JournalSourceRead.Accepted }.events.map { c -> c.event },
+                    file.mtimeMillis,
+                )
+            }
+            val compactor = dev.npn.core.journal.SnapshotCompactor(rig.fs, "test-installation")
+            val published = compactor.publish(candidates)!!
+            objects.forEach { rig.fs.delete(it.relPath) }
+
+            // Device 2 rescans: applies the snapshot, tolerates the now-missing objects.
+            session2.rescan()
+            db2.tagDao().tagsForDocument(id).size shouldBe 5
+            db2.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_READY
+            session2.close()
+        } finally {
+            if (secondDb !== rig.db) secondDb.close()
+            rig.close()
+        }
+    }
+
+    @Test
+    fun invalidV2ObjectLatchesWriteBlock() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        try {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.meta.addTag(listOf(id), "preserved")
+            val partial = "{".encodeToByteArray()
+            val path = NpnPaths.journalObjectPath(sha256Bytes(partial))
+            rig.fs.writeBytesOnce(path, partial)
+
+            assertFailsWith<MetadataWriteBlocked> { rig.session.rescan() }
+            rig.db.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_FAILED
+            val items = rig.session.documents.observeDocuments(LibraryFilter(), LibrarySort()).first()
+            tagsOf(items, id) shouldContain "preserved"
+            assertFailsWith<IllegalStateException> {
+                rig.session.meta.addTag(listOf(id), "must-not-write")
+            }
+        } finally {
+            rig.close()
+        }
+    }
+
+    @Test
+    fun validConflictCopyPathReplacesCanonicalObjectPath() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        try {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.meta.addTag(listOf(id), "kept")
+            val canonical = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR)
+                .single { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+            val conflictName = "${canonical.name.removeSuffix(".jsonl")} (conflicted copy laptop).jsonl"
+            val conflictPath = canonical.relPath.substringBeforeLast('/') + "/" + conflictName
+            rig.fs.move(canonical.relPath, conflictPath)
+
+            rig.session.rescan()
+            val items = rig.session.documents.observeDocuments(LibraryFilter(), LibrarySort()).first()
+            tagsOf(items, id) shouldContain "kept"
+        } finally {
+            rig.close()
+        }
+    }
+
+    /**
+     * Legacy v1 segments remain readable: a REMOTE v1 device's segment is written directly (v1 is
+     * no longer produced locally), applied via rescan, then rewritten with fewer events. The
+     * tolerant v1 reader + shrink handling must drop events the rewritten source no longer contains.
+     */
+    @Test
+    fun rewrittenLegacySourceDropsEventsItNoLongerContains() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        try {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+
+            // A remote v1 device drops a legacy segment containing a tag we will later rewrite away.
+            val remoteDevice = "remote-v1-device"
+            val legacyPath = NpnPaths.journalSegmentPath(remoteDevice, "0001.jsonl")
+            val original = JournalEvent(
+                version = JournalEventVersions.V1,
+                seq = 1,
+                hlc = Hlc(90_000L, 0, remoteDevice),
+                dev = remoteDevice,
+                doc = id,
+                op = JournalOp.TagAdd("removed-by-rewrite"),
+            )
+            rig.fs.writeBytesOnce(legacyPath, JournalCodec.encodeLines(listOf(original)).encodeToByteArray())
+            rig.session.rescan()
+            var items = rig.session.documents.observeDocuments(LibraryFilter(), LibrarySort()).first()
+            tagsOf(items, id) shouldContain "removed-by-rewrite"
+
+            // The remote device rewrites the same segment file with a different (larger) content.
+            val replacement = JournalEvent(
+                version = JournalEventVersions.V1,
+                seq = 1,
+                hlc = Hlc(99_000L, 0, "replacement-device"),
+                dev = "replacement-device",
+                doc = id,
+                op = JournalOp.TagAdd("replacement"),
+            )
+            val bytes = (JournalCodec.encodeLines(listOf(replacement)) + "\n".repeat(256)).encodeToByteArray()
+            Files.write(rig.libRoot.resolve(legacyPath), bytes)
+
+            rig.session.rescan()
+
+            items = rig.session.documents.observeDocuments(LibraryFilter(), LibrarySort()).first()
+            tagsOf(items, id) shouldNotContain "removed-by-rewrite"
+            tagsOf(items, id) shouldContain "replacement"
+        } finally {
             rig.close()
         }
     }

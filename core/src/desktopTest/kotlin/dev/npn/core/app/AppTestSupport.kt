@@ -67,7 +67,10 @@ class AppSessionRig private constructor(
     }
 
     companion object {
-        suspend fun create(scope: CoroutineScope, ocr: OcrEngine = NoopOcrEngine()): AppSessionRig {
+        suspend fun create(
+            scope: CoroutineScope,
+            ocr: OcrEngine = NoopOcrEngine(),
+        ): AppSessionRig {
             val libRoot = Files.createTempDirectory("npn-app-lib")
             val dbDir = Files.createTempDirectory("npn-app-db").toFile()
             val fs = JvmLibraryFileSystem(libRoot)
@@ -84,6 +87,7 @@ class AppSessionRig private constructor(
                 ocrLanguage = { "eng" },
                 trashRetentionDays = { 30 },
                 clock = clock,
+                installationId = "test-installation",
             )
             val session = LibrarySessionImpl.openSession(deps)
             return AppSessionRig(libRoot, dbDir, fs, db, clock, scope, session)

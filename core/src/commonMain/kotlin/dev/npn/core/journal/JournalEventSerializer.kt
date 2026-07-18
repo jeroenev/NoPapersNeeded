@@ -22,9 +22,8 @@ import kotlinx.serialization.json.jsonPrimitive
 /**
  * Emits and parses the exact envelope described in [JournalEvent].
  *
- * Field order on write: v, seq, hlc, dev, doc, op, p. Unknown op strings decode into
- * [JournalOp.Unknown] with the payload discarded, so a reader from an older build never
- * crashes on a newer event type (forward compatibility).
+ * Field order on write: v, seq, hlc, dev, doc, op, p. Storage readers select and validate the
+ * event version before invoking this v1 serializer.
  */
 object JournalEventSerializer : KSerializer<JournalEvent> {
     private val hlcSerializer = Hlc.serializer()
@@ -51,7 +50,9 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
         val json = (decoder as? JsonDecoder)
             ?: error("JournalEventSerializer only supports JSON")
         val obj = json.decodeJsonElement().jsonObject
-        val version = obj["v"]?.jsonPrimitive?.content?.toIntOrNull() ?: JournalEvent.CURRENT_VERSION
+        val version = obj["v"]?.jsonPrimitive?.content?.toIntOrNull()
+            ?: error("Missing event version")
+        require(version == JournalEventVersions.V1) { "Unsupported event version: $version" }
         val seq = obj["seq"]!!.jsonPrimitive.content.toLong()
         val hlc = json.json.decodeFromJsonElement(hlcSerializer, obj["hlc"]!!)
         val dev = obj["dev"]!!.jsonPrimitive.content
@@ -104,7 +105,7 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
             put("key", JsonPrimitive(op.key))
             put("value", op.value?.let { JsonPrimitive(it) } ?: JsonNull)
         }
-        is JournalOp.Unknown -> JsonObject(emptyMap())
+        is JournalOp.Unknown -> op.payload
     }
 
     private fun decodePayload(opWire: String, p: JsonObject): JournalOp = when (opWire) {
@@ -115,13 +116,13 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
         )
         "prop-set" -> {
             val key = DocProperty.fromWire(p["key"]!!.jsonPrimitive.content)
-                ?: return JournalOp.Unknown(opWire)
+                ?: return JournalOp.Unknown(opWire, p)
             val valueElem = p["value"]
             val value = if (valueElem == null || valueElem is JsonNull) null else valueElem.jsonPrimitive.content
             JournalOp.PropSet(key, value)
         }
         "field-set" -> {
-            val key = p["key"]?.jsonPrimitive?.content ?: return JournalOp.Unknown(opWire)
+            val key = p["key"]?.jsonPrimitive?.content ?: return JournalOp.Unknown(opWire, p)
             val valueElem = p["value"]
             val value = if (valueElem == null || valueElem is JsonNull) null else valueElem.jsonPrimitive.content
             JournalOp.FieldSet(key, value)
@@ -141,7 +142,7 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
             key = p["key"]!!.jsonPrimitive.content,
             value = p["value"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content },
         )
-        else -> JournalOp.Unknown(opWire)
+        else -> JournalOp.Unknown(opWire, p)
     }
 
     private fun decodeDots(elem: JsonElement?): List<Dot> {

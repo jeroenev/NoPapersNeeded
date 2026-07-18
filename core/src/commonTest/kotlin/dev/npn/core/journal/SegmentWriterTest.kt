@@ -71,6 +71,35 @@ class SegmentWriterTest {
     }
 
     @Test
+    fun recover_advances_stale_non_null_local_sequence() = runTest {
+        val store = InMemorySegmentStore()
+        writer(store, InMemoryLocalJournalState()).commit(
+            listOf(PendingOp.tagAdd(doc, "a"), PendingOp.tagAdd(doc, "b")),
+        )
+        val stale = InMemoryLocalJournalState().also { it.setLastSeq(1L) }
+        val recovered = writer(store, stale)
+        assertEquals(2L, recovered.recover())
+        assertEquals(3L, recovered.commit(listOf(PendingOp.tagAdd(doc, "c"))).single().seq)
+    }
+
+    @Test
+    fun recovery_scans_only_once_per_writer_instance() = runTest {
+        class CountingStore(private val delegate: SegmentStore) : SegmentStore by delegate {
+            var listings = 0
+            override suspend fun listSegments(): List<SegmentRef> {
+                listings++
+                return delegate.listSegments()
+            }
+        }
+        val store = CountingStore(InMemorySegmentStore())
+        val instance = writer(store, InMemoryLocalJournalState())
+        instance.commit(listOf(PendingOp.tagAdd(doc, "a")))
+        val afterFirst = store.listings
+        instance.commit(listOf(PendingOp.tagAdd(doc, "b")))
+        assertEquals(afterFirst, store.listings)
+    }
+
+    @Test
     fun fork_detection_when_store_has_unknown_own_segment() = runTest {
         val store = InMemorySegmentStore()
         // dev1 wrote a segment (simulating another install with same id) but local state is empty

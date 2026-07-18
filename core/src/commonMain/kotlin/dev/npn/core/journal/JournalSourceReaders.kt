@@ -1,0 +1,125 @@
+package dev.npn.core.journal
+
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.sha256Bytes
+
+data class JournalDiagnostic(val line: Int?, val message: String)
+
+sealed interface JournalSourceRead {
+    data class Accepted(
+        val events: List<CanonicalJournalEvent>,
+        val diagnostics: List<JournalDiagnostic> = emptyList(),
+    ) : JournalSourceRead
+
+    data class Retryable(val message: String) : JournalSourceRead
+    data class Unsupported(val message: String) : JournalSourceRead
+}
+
+/** Tolerant storage-v1 reader: valid lines remain usable, but malformed lines are reported. */
+object StorageV1Reader {
+    fun read(bytes: ByteArray): JournalSourceRead {
+        val content = try {
+            bytes.decodeToString(throwOnInvalidSequence = true)
+        } catch (_: CharacterCodingException) {
+            return JournalSourceRead.Retryable("Legacy source is not valid UTF-8")
+        }
+        val events = ArrayList<CanonicalJournalEvent>()
+        val diagnostics = ArrayList<JournalDiagnostic>()
+        var unsupported: String? = null
+        content.lineSequence().forEachIndexed { index, line ->
+            if (line.isBlank()) return@forEachIndexed
+            try {
+                val event = EventDecoderRegistry.decode(line, allowMissingV1 = true)
+                if (event.event.op is JournalOp.Unknown) {
+                    unsupported = "Legacy source contains unknown operation ${event.event.op.wire}"
+                    diagnostics += JournalDiagnostic(index + 1, "Unknown operation ${event.event.op.wire}")
+                } else {
+                    events += event
+                }
+            } catch (e: UnsupportedEventVersionException) {
+                unsupported = "Legacy source contains unsupported event version ${e.version}"
+                diagnostics += JournalDiagnostic(index + 1, e.message ?: "Unsupported event version")
+            } catch (e: Exception) {
+                diagnostics += JournalDiagnostic(index + 1, e.message ?: "Malformed journal event")
+            }
+        }
+        return unsupported?.let(JournalSourceRead::Unsupported) ?: JournalSourceRead.Accepted(events, diagnostics)
+    }
+}
+
+/** Strict storage-v2 reader. Any integrity or structural failure applies zero events. */
+object StorageV2Reader {
+    private val uuidV4 = Regex(
+        "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+        RegexOption.IGNORE_CASE,
+    )
+
+    fun read(relPath: String, bytes: ByteArray): JournalSourceRead {
+        val path = NpnPaths.journalPath(relPath)
+        val objectPath = path as? NpnPaths.JournalPath.ObjectV2
+            ?: return JournalSourceRead.Unsupported("Not a supported storage-v2 object path: $relPath")
+        if (sha256Bytes(bytes) != objectPath.expectedHash) {
+            return JournalSourceRead.Retryable("Object hash does not match its path")
+        }
+        return readVerified(bytes)
+    }
+
+    private fun readVerified(bytes: ByteArray): JournalSourceRead {
+        val content = try {
+            bytes.decodeToString(throwOnInvalidSequence = true)
+        } catch (_: CharacterCodingException) {
+            return JournalSourceRead.Retryable("Object is not valid UTF-8")
+        }
+        val lines = content.split('\n').let { split ->
+            if (split.lastOrNull()?.isEmpty() == true) split.dropLast(1) else split
+        }
+        if (lines.isEmpty()) return JournalSourceRead.Retryable("Object has no events")
+        if (lines.any { it.isBlank() }) return JournalSourceRead.Retryable("Object contains a blank event line")
+        val decoded = decodeLines(lines)
+        if (decoded !is JournalSourceRead.Accepted) return decoded
+        val violation = transactionViolation(decoded.events)
+        return if (violation == null) decoded else JournalSourceRead.Retryable(violation)
+    }
+
+    private fun decodeLines(lines: List<String>): JournalSourceRead {
+        val decoded = ArrayList<CanonicalJournalEvent>(lines.size)
+        for ((index, line) in lines.withIndex()) {
+            val event = try {
+                EventDecoderRegistry.decode(line, allowMissingV1 = false)
+            } catch (e: UnsupportedEventVersionException) {
+                return JournalSourceRead.Unsupported(
+                    "Object line ${index + 1} uses unsupported event version ${e.version}",
+                )
+            } catch (e: Exception) {
+                return JournalSourceRead.Retryable("Object line ${index + 1} is invalid: ${e.message}")
+            }
+            if (event.event.op is JournalOp.Unknown) {
+                return JournalSourceRead.Unsupported(
+                    "Object line ${index + 1} uses unknown operation ${event.event.op.wire}",
+                )
+            }
+            decoded += event
+        }
+        return JournalSourceRead.Accepted(decoded)
+    }
+
+    private fun transactionViolation(decoded: List<CanonicalJournalEvent>): String? {
+        val actor = decoded.first().event.dev
+        if (!uuidV4.matches(actor)) return "Transaction actor is not UUIDv4"
+        var previous = Hlc.ZERO
+        for ((index, canonical) in decoded.withIndex()) {
+            val event = canonical.event
+            if (event.dev != actor || event.hlc.deviceId != actor) {
+                return "Object contains multiple transaction actors"
+            }
+            if (event.seq != index + 1L) {
+                return "Object sequences must be exactly 1..N"
+            }
+            if (index > 0 && event.hlc <= previous) {
+                return "Object HLCs must increase in sequence order"
+            }
+            previous = event.hlc
+        }
+        return null
+    }
+}
