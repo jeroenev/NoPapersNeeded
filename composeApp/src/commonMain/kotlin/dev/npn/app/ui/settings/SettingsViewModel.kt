@@ -58,6 +58,14 @@ class SettingsViewModel(
     fun setLandscapeListColumns(enabled: Boolean) =
         viewModelScope.launch { settings.setLandscapeListColumns(enabled) }
 
+    /**
+     * Drop all cached thumbnails so they regenerate at the current render quality. Invokes [onDone]
+     * with the number cleared (for a confirmation snackbar).
+     */
+    fun clearThumbnailCache(onDone: (Int) -> Unit) = viewModelScope.launch {
+        onDone(session.content.clearThumbnailCache())
+    }
+
     /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */
     fun setUntaggedOnlyMode() =
         viewModelScope.launch { session.setReviewMode(ReviewMode.UNTAGGED_ONLY) }

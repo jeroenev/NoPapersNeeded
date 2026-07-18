@@ -2,6 +2,7 @@
 
 package dev.npn.app.ui.detail
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -11,6 +12,8 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
+import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
@@ -30,6 +33,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -37,6 +41,14 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -57,7 +69,9 @@ import kotlinx.coroutines.launch
 fun DocDetailScreen(
     docId: String,
     session: LibrarySession,
+    browse: BrowseContext,
     onBack: () -> Unit,
+    onNavigateToDoc: (String) -> Unit,
 ) {
     val vm: DocDetailViewModel = viewModel(key = "detail-$docId") { DocDetailViewModel(docId, session) }
     val doc by vm.doc.collectAsStateWithLifecycle()
@@ -75,6 +89,17 @@ fun DocDetailScreen(
     var confirmTrash by remember { mutableStateOf(false) }
     var confirmBake by remember { mutableStateOf(false) }
     var showMetaSheet by remember { mutableStateOf(false) }
+
+    // Focus the viewer on entry (and when switching docs) so its keyboard shortcuts work on desktop.
+    val viewerFocus = remember { FocusRequester() }
+    LaunchedEffect(docId) { runCatching { viewerFocus.requestFocus() } }
+
+    // Doc-to-doc paging within the browse order the library handed us.
+    val prevDocId = browse.neighbour(docId, -1)
+    val nextDocId = browse.neighbour(docId, 1)
+    val browsePosition = browse.positionOf(docId)
+    val goPrevDoc: (() -> Unit)? = prevDocId?.let { { onNavigateToDoc(it) } }
+    val goNextDoc: (() -> Unit)? = nextDocId?.let { { onNavigateToDoc(it) } }
 
     androidx.compose.runtime.LaunchedEffect(docId) {
         allTagNames = runCatching { vm.allTagNames() }.getOrDefault(emptyList())
@@ -128,9 +153,21 @@ fun DocDetailScreen(
     val canToggleReviewed = reviewMode == ReviewMode.INBOX_WORKFLOW
 
     Scaffold(
+        modifier = Modifier.onKeyEvent { event ->
+            // Ctrl+Left/Right walks to the prev/next document (desktop).
+            if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) return@onKeyEvent false
+            when (event.key) {
+                Key.DirectionLeft -> goPrevDoc?.let { it(); true } ?: false
+                Key.DirectionRight -> goNextDoc?.let { it(); true } ?: false
+                else -> false
+            }
+        },
         topBar = {
             DetailTopBar(
                 title = current.doc.title?.takeIf { it.isNotBlank() } ?: current.doc.fileName,
+                browsePosition = browsePosition,
+                onPrevDoc = goPrevDoc,
+                onNextDoc = goNextDoc,
                 reviewed = reviewed,
                 canToggleReviewed = canToggleReviewed,
                 baking = ui.baking,
@@ -175,14 +212,11 @@ fun DocDetailScreen(
             PageViewer(
                 pageIndex = ui.pageIndex,
                 pageCount = ui.pageCount,
-                zoom = ui.zoom,
                 render = { p, maxDim -> vm.renderPage(p, maxDim) },
-                onPrev = vm::prevPage,
-                onNext = vm::nextPage,
-                onZoomIn = vm::zoomIn,
-                onZoomOut = vm::zoomOut,
-                onSetZoom = vm::setZoom,
-                modifier = m,
+                onPageChange = vm::goToPage,
+                modifier = m
+                    .focusRequester(viewerFocus)
+                    .focusable(),
             )
         }
 
@@ -267,6 +301,9 @@ fun DocDetailScreen(
 @Composable
 private fun DetailTopBar(
     title: String,
+    browsePosition: Pair<Int, Int>?,
+    onPrevDoc: (() -> Unit)?,
+    onNextDoc: (() -> Unit)?,
     reviewed: Boolean,
     canToggleReviewed: Boolean,
     baking: Boolean,
@@ -281,13 +318,33 @@ private fun DetailTopBar(
 ) {
     var menu by remember { mutableStateOf(false) }
     TopAppBar(
-        title = { Text(title, maxLines = 1) },
+        title = {
+            Column {
+                Text(title, maxLines = 1)
+                if (browsePosition != null && browsePosition.second > 1) {
+                    Text(
+                        "${browsePosition.first} of ${browsePosition.second}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
             }
         },
         actions = {
+            // Prev/next document within the browse order.
+            if (browsePosition != null && browsePosition.second > 1) {
+                IconButton(onClick = { onPrevDoc?.invoke() }, enabled = onPrevDoc != null) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous document")
+                }
+                IconButton(onClick = { onNextDoc?.invoke() }, enabled = onNextDoc != null) {
+                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next document")
+                }
+            }
             if (canToggleReviewed) {
                 IconButton(onClick = onToggleReviewed) {
                     Icon(

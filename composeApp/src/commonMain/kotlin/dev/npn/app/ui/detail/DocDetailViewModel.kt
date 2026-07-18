@@ -13,11 +13,14 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
-/** Transient UI state for the detail viewer (page index, zoom, busy flags). */
+/**
+ * Transient UI state for the detail viewer (page index, page count, busy flags). Zoom/pan are
+ * owned by the viewer itself (see [dev.npn.app.ui.detail.ViewerTransform]) since they need not
+ * survive process death.
+ */
 data class DetailUiState(
     val pageIndex: Int = 0,
     val pageCount: Int = 0,
-    val zoom: Float = 1f,
     val baking: Boolean = false,
     val reindexing: Boolean = false,
 )
@@ -79,14 +82,6 @@ class DocDetailViewModel(
         val cur = _ui.value
         if (index in 0 until cur.pageCount.coerceAtLeast(1)) _ui.value = cur.copy(pageIndex = index)
     }
-
-    fun setZoom(zoom: Float) {
-        _ui.value = _ui.value.copy(zoom = zoom.coerceIn(1f, 5f))
-    }
-
-    fun zoomIn() = setZoom(_ui.value.zoom + 0.5f)
-    fun zoomOut() = setZoom(_ui.value.zoom - 0.5f)
-    fun resetZoom() = setZoom(1f)
 
     // ---- metadata edits ----
 

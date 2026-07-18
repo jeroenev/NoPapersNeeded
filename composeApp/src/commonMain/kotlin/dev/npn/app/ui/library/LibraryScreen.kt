@@ -97,7 +97,7 @@ import kotlinx.coroutines.launch
 fun LibraryScreen(
     session: LibrarySession,
     env: AppEnvironment,
-    onOpenDoc: (String) -> Unit,
+    onOpenDoc: (docId: String, order: List<String>) -> Unit,
     onTrash: () -> Unit,
     onTags: () -> Unit,
     onSettings: () -> Unit,
@@ -105,6 +105,10 @@ fun LibraryScreen(
     val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val docs by vm.documents.collectAsStateWithLifecycle()
+
+    // Opening a doc records the current sorted+filtered order so the detail screen can page between
+    // documents; ids are stable so the order stays valid across navigation.
+    val openDoc: (String) -> Unit = { docId -> onOpenDoc(docId, docs.map { it.doc.docId }) }
     val tags by vm.tags.collectAsStateWithLifecycle()
     val correspondents by vm.correspondents.collectAsStateWithLifecycle()
     val docTypes by vm.docTypes.collectAsStateWithLifecycle()
@@ -166,7 +170,7 @@ fun LibraryScreen(
             ocr = ocr,
             snackbar = snackbar,
             onMenu = { scope.launch { drawerState.open() } },
-            onOpenDoc = onOpenDoc,
+            onOpenDoc = openDoc,
             onTrashBanner = onTrash,
             onImport = { importPicker.launch() },
             onScan = onScan,
@@ -523,7 +527,7 @@ private fun DocGrid(
             Modifier
                 .fillMaxSize()
                 .pinchToZoom(onZoom = ::pinchBy)
-                .ctrlScrollZoom { delta ->
+                .ctrlScrollZoom { delta, _ ->
                     val acc = scrollAccumulated.value
                     val sameDirection = acc == 0f || (acc > 0f) == (delta > 0f)
                     val next = if (sameDirection) acc + delta else delta

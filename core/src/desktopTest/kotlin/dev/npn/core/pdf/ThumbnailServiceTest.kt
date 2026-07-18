@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -86,6 +87,32 @@ class ThumbnailServiceTest {
         val store = RecordingThumbnailStore()
         val service = ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao())
         service.ensureThumbnail("a".repeat(64), "nope.pdf") shouldBe null
+    }
+
+    @Test
+    fun clearCacheDeletesEntriesAndForcesRegeneration() = runTest {
+        val bytes = PdfFixtures.embeddedTextPdf("clear me")
+        fs.writeBytesOnce("doc.pdf", bytes)
+        val docId = fs.sha256("doc.pdf")
+        db.documentDao().upsert(
+            DocumentEntity(
+                docId = docId, relPath = "doc.pdf", fileName = "doc.pdf",
+                size = bytes.size.toLong(), mtime = 1, addedAt = 1,
+            ),
+        )
+        val store = RecordingThumbnailStore()
+        val service = ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao())
+
+        service.ensureThumbnail(docId, "doc.pdf")
+        db.thumbnailDao().get(docId) shouldNotBe null
+
+        service.clearCache() shouldBe 1
+        db.thumbnailDao().get(docId) shouldBe null
+        store.writes.containsKey(docId).shouldBeFalse() // file deleted via store
+
+        // Next ensure regenerates (writes again).
+        service.ensureThumbnail(docId, "doc.pdf")
+        store.writes[docId] shouldBe 1
     }
 }
 

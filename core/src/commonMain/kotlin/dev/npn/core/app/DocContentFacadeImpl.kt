@@ -71,6 +71,9 @@ class DocContentFacadeImpl(
         }
     }
 
+    override suspend fun clearThumbnailCache(): Int =
+        runCatching { thumbnailService.clearCache() }.getOrDefault(0)
+
     override suspend fun rawBytes(docId: String): ByteArray? {
         val doc = documentDao.getByDocId(docId) ?: return null
         return try {

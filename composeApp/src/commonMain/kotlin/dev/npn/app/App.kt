@@ -97,13 +97,18 @@ private fun AppRoot(env: AppEnvironment) {
 @Composable
 private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySession) {
     val nav = rememberNavController()
+    // Ordered doc list for prev/next-document paging in the detail screen; populated on open.
+    val browse = remember { dev.npn.app.ui.detail.BrowseContext() }
 
     NavHost(navController = nav, startDestination = Route.Library) {
         composable<Route.Library> {
             LibraryScreen(
                 session = session,
                 env = env,
-                onOpenDoc = { nav.navigate(Route.DocDetail(it)) },
+                onOpenDoc = { docId, order ->
+                    browse.setOrder(order)
+                    nav.navigate(Route.DocDetail(docId))
+                },
                 onTrash = { nav.navigate(Route.Trash) },
                 onTags = { nav.navigate(Route.TagManagement) },
                 onSettings = { nav.navigate(Route.Settings) },
@@ -114,7 +119,15 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
             DocDetailScreen(
                 docId = route.docId,
                 session = session,
+                browse = browse,
                 onBack = { nav.popBackStack() },
+                onNavigateToDoc = { targetId ->
+                    // Replace the current detail route so the back stack stays "library -> detail".
+                    nav.navigate(Route.DocDetail(targetId)) {
+                        popUpTo(Route.DocDetail(route.docId)) { inclusive = true }
+                        launchSingleTop = true
+                    }
+                },
             )
         }
         composable<Route.Trash> {

@@ -245,8 +245,8 @@ Ordered roughly by value/effort.
 |---|---|---|
 | **A. Foundations** (done) | §0 icons + sweep; §4 sort menu/icon/persistence; §5.1 view toggle; §5.7 empty states | S |
 | **B. Grid zoom** (done) | §1 pinch + ctrl-scroll + buttons, remove settings slider | M |
-| **C. Viewer mechanics** | §2a centroid zoom/pan clamp/double-tap; §2b pager, wheel/ctrl-scroll/keys, go-to-page; §5.3 | L |
-| **D. Doc-to-doc navigation** | §2c browse context + prev/next + triage loop | M |
+| **C. Viewer mechanics** (done) | §2a centroid zoom/pan clamp/double-tap; §2b pager, wheel/ctrl-scroll/keys, go-to-page; §5.3 | L |
+| **D. Doc-to-doc navigation** (done) | §2c browse context + prev/next + triage loop | M |
 | **E. Search & filters** | §3 search-field filter entry + badge, quick chips, sheet fixes, date ranges, `Ctrl+F` | M/L |
 | **F. Polish** | §5.4 selection bar, §5.5 highlighting, §5.6 grid badges, §5.8 shortcut map, §5.9 a11y | M |
 
@@ -260,6 +260,54 @@ handling); the shared gesture helpers live in `ui/common/ZoomGestures.kt` for re
 viewer in phase C. C is the largest single chunk and the riskiest (gesture
 interop between transform, tap, pager, and wheel) — budget device testing on Android + a Wayland
 and X11 desktop session.
+
+Phase C/D implementation notes (2026-07-18):
+- Zoom/pan math is pure in `ui/detail/ViewerTransform.kt` (centroid-anchored zoom, pan clamp,
+  double-tap toggle, pager hand-off predicate `canPagerConsumeHorizontal`); unit-tested in
+  `ViewerTransformTest`. The graphics layer uses `TransformOrigin(0.5,0.5)` with the offset measured
+  from container center — the math accounts for the centering, so the render is exact.
+- `PageViewer` was rewritten around `HorizontalPager` with per-page `ViewerTransform` state. Only the
+  current page is interactive; `userScrollEnabled` is gated on the transform so pan owns horizontal
+  drag until the page edge, then the pager takes over. Ctrl+scroll (cursor-anchored via the extended
+  `ctrlScrollZoom(delta, position)` helper), double-tap, and keyboard (`ViewerKeys.kt`:
+  arrows/PgUp-PgDn/Home/End + `+`/`-`/`0`) are wired; plain wheel is left to the pager. Go-to-page
+  dialog on the `n / N` pill.
+- Render cache is now a small LRU (`PageBitmapCache`, 6 entries) with ±1 prefetch via
+  `beyondViewportPageCount = 1` and stale-bitmap-while-rerendering (`best(page)` shown before the
+  sharper bucket resolves) — fixes the §2a/§5.3 loading flash. Fitted page size is recorded from the
+  decoded bitmap so pan clamping is correct.
+- Zoom left the ViewModel entirely (`DetailUiState.zoom` removed; `setZoom/zoomIn/zoomOut/resetZoom`
+  gone). `DocDetailViewModel` keeps `pageIndex`/`pageCount` as the source of truth
+  (`onPageChange -> goToPage`) so prev/next/go-to stay in sync with the pager.
+- Doc-to-doc nav (D): `BrowseContext` (ordered `List<docId>` + lookups) is created in `MainNav`
+  rather than on `AppEnvironment` — it is throwaway nav state, so the platform env impls need no
+  changes. The library records its current sorted+filtered order when a doc is opened
+  (`onOpenDoc(docId, order)`); the detail screen shows prev/next-document buttons + a "N of M"
+  subtitle and honors `Ctrl+←/→`. Navigation replaces the detail route
+  (`popUpTo(current){inclusive} + launchSingleTop`) so the back stack stays library -> detail.
+  The review-queue filter naturally makes "next" walk the triage queue.
+- Deferred to phase F (still): `Ctrl+F`/`/` search focus, `Ctrl+R` refresh, `Esc` back/clear, and a
+  consolidated/discoverable shortcut map — the viewer/detail key handlers here are local and only
+  active while the viewer holds focus.
+- Not yet device-tested on Android or Wayland/X11 (per the risk note above); the gesture interop
+  should be verified on real hardware before shipping C.
+
+Phase C desktop-input follow-up (2026-07-18): the first cut regressed desktop badly, fixed as
+follows:
+- Root cause of most issues was a stale gesture closure: the tap/transform detectors were keyed
+  `pointerInput(page, container)` and captured `transform` at first composition, so a second
+  double-click read zoom=1 and re-zoomed instead of resetting, and pan applied against a stale
+  base. Now the detectors read a `rememberUpdatedState(transform)` (`pageGestures`).
+- `detectTransformGestures` claimed single-pointer drags, which killed pager swiping and, at 1x,
+  recentered the page (looked like "drag resets to 100%"). Replaced with two purpose-built
+  detectors in `ui/common/ZoomGestures.kt`: `detectPinchTransform` (multitouch only) and
+  `detectDragWhenZoomed` (single-pointer drag that only engages when zoomed, otherwise leaves the
+  pointer unconsumed so the pager gets the swipe).
+- Plain mouse wheel did nothing. Added `Modifier.viewerScroll` (one handler so there's a single
+  consume decision per scroll event): Ctrl+wheel = cursor-anchored zoom; plain wheel = pan when
+  zoomed, else page up/down (PDF-reader convention), with touchpad-delta accumulation to one flip.
+- Restored on-screen prev/next page buttons (the redesign had left only the tappable `n / N`
+  pill, removing the click target desktop users relied on); the pill still opens go-to-page.
 
 ## 7. Testing notes
 

@@ -1,0 +1,40 @@
+package dev.npn.app.ui.detail
+
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+
+/**
+ * The ordered list of documents the user is browsing, so the detail screen can walk to the
+ * prev/next document without round-tripping through the library. Populated with the library's
+ * current sorted+filtered doc ids when a document is opened; ids are stable so the list stays valid
+ * across the navigation.
+ *
+ * Held as plain UI state (created in the nav host) rather than on the session/environment: it is
+ * throwaway navigation state, and keeping it out of the DI graph means the platform environment
+ * implementations need no changes.
+ */
+class BrowseContext {
+    var docIds: List<String> by mutableStateOf(emptyList())
+        private set
+
+    fun setOrder(ids: List<String>) {
+        docIds = ids
+    }
+
+    fun indexOf(docId: String): Int = docIds.indexOf(docId)
+
+    fun neighbour(docId: String, delta: Int): String? {
+        val i = indexOf(docId)
+        if (i < 0) return null
+        val target = i + delta
+        return docIds.getOrNull(target)
+    }
+
+    /** 1-based position and total for a "3 of 41" indicator, or null if the doc is not in the list. */
+    fun positionOf(docId: String): Pair<Int, Int>? {
+        val i = indexOf(docId)
+        if (i < 0) return null
+        return (i + 1) to docIds.size
+    }
+}
