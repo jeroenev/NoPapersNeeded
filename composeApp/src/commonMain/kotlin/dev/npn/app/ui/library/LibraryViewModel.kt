@@ -68,6 +68,8 @@ class LibraryViewModel(
 
     // One-shot user-facing messages (e.g. partial bulk-op failure). Collected by the screen and
     // shown as a snackbar. extraBufferCapacity so emits from viewModelScope never suspend.
+    // Not on MessagesViewModel: this class is at the TooManyFunctions baseline; changing its
+    // supertype would invalidate the grandfathered finding without reducing its size.
     private val _messages = MutableSharedFlow<String>(extraBufferCapacity = 8)
     val messages: SharedFlow<String> = _messages.asSharedFlow()
 

@@ -6,6 +6,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -100,5 +101,26 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         model.setStyle("finance", "#abc", "star")
         advanceUntilIdle()
         session.meta.tagStyles shouldContainExactly listOf(Triple("finance", "#abc", "star"))
+    }
+
+    // ---- failed writes surface a user-facing message ----
+
+    @Test
+    fun failedTagWritesEmitMessages() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply { meta.failTagAdmin = { error("segment write failed") } }
+        val model = vm(session)
+        val messages = mutableListOf<String>()
+        val job = launch { model.messages.collect { messages += it } }
+        advanceUntilIdle()
+        model.delete("gone")
+        model.rename("old", "new")
+        advanceUntilIdle()
+        session.meta.deletedTags shouldBe emptyList()
+        session.meta.renamedTags shouldBe emptyList()
+        messages shouldContainExactly listOf(
+            "Could not delete tag: segment write failed",
+            "Could not rename tag: segment write failed",
+        )
+        job.cancel()
     }
 }

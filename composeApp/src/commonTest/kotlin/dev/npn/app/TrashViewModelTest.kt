@@ -71,4 +71,20 @@ class TrashViewModelTest : MainDispatcherTest() {
         session.meta.restoredDocs shouldContainExactly listOf("d1")
         session.meta.deletedDocs shouldContainExactly listOf("d2")
     }
+
+    // ---- failed writes surface a user-facing message ----
+
+    @Test
+    fun restoreFailureEmitsMessage() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply { meta.failRestore = { error("file exists at original path") } }
+        val model = vm(session)
+        val messages = mutableListOf<String>()
+        val job = launch { model.messages.collect { messages += it } }
+        advanceUntilIdle()
+        model.restore("d1")
+        advanceUntilIdle()
+        session.meta.restoredDocs shouldBe emptyList()
+        messages shouldContainExactly listOf("Could not restore document: file exists at original path")
+        job.cancel()
+    }
 }

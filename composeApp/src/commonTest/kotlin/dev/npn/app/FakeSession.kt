@@ -147,6 +147,15 @@ class FakeMetadataWriter : MetadataWriter {
     /** If set, setTitle throws. */
     var failSetTitle: (() -> Nothing)? = null
 
+    /** If set, setField throws. */
+    var failSetField: (() -> Nothing)? = null
+
+    /** If set, restoreDoc throws. */
+    var failRestore: (() -> Nothing)? = null
+
+    /** If set, every tag-admin op (renameTag/mergeTag/deleteTag/setTagStyle) throws. */
+    var failTagAdmin: (() -> Nothing)? = null
+
     override suspend fun addTag(docIds: List<String>, tag: String) {
         failBatchOps?.invoke()
         addedTags += docIds to tag
@@ -180,13 +189,27 @@ class FakeMetadataWriter : MetadataWriter {
     }
 
     override suspend fun setField(docId: String, key: String, value: String?) {
+        failSetField?.invoke()
         fieldSets += Triple(docId, key, value)
     }
 
-    override suspend fun renameTag(from: String, to: String) { renamedTags += from to to }
-    override suspend fun mergeTag(from: String, to: String) { mergedTags += from to to }
-    override suspend fun deleteTag(name: String) { deletedTags += name }
+    override suspend fun renameTag(from: String, to: String) {
+        failTagAdmin?.invoke()
+        renamedTags += from to to
+    }
+
+    override suspend fun mergeTag(from: String, to: String) {
+        failTagAdmin?.invoke()
+        mergedTags += from to to
+    }
+
+    override suspend fun deleteTag(name: String) {
+        failTagAdmin?.invoke()
+        deletedTags += name
+    }
+
     override suspend fun setTagStyle(tag: String, color: String?, icon: String?) {
+        failTagAdmin?.invoke()
         tagStyles += Triple(tag, color, icon)
     }
 
@@ -195,7 +218,10 @@ class FakeMetadataWriter : MetadataWriter {
         trashedDocs += docId
     }
 
-    override suspend fun restoreDoc(docId: String) { restoredDocs += docId }
+    override suspend fun restoreDoc(docId: String) {
+        failRestore?.invoke()
+        restoredDocs += docId
+    }
     override suspend fun deleteDocPermanently(docId: String) { deletedDocs += docId }
     override suspend fun renameFile(docId: String, newFileName: String) { renamedFiles += docId to newFileName }
     override suspend fun moveFile(docId: String, newDirRelPath: String) { movedFiles += docId to newDirRelPath }
@@ -260,6 +286,7 @@ class FakeLibrarySession : LibrarySession {
     private var importIdx = 0
     var failImport: (() -> Nothing)? = null
     val reOcrIds = mutableListOf<String>()
+    var failReOcr: (() -> Nothing)? = null
 
     override suspend fun setReviewMode(mode: ReviewMode) {
         reviewModeSets += mode
@@ -287,7 +314,10 @@ class FakeLibrarySession : LibrarySession {
     override suspend fun resolveDuplicate(docId: String, extraRelPath: String, keepCanonical: Boolean) {}
     override suspend fun applyRelink(oldDocId: String, newDocId: String) {}
     override suspend fun purgeTrash(olderThanDays: Int) {}
-    override suspend fun reOcr(docId: String) { reOcrIds += docId }
+    override suspend fun reOcr(docId: String) {
+        failReOcr?.invoke()
+        reOcrIds += docId
+    }
     override fun start(scope: CoroutineScope) {}
     override fun close() {}
 }

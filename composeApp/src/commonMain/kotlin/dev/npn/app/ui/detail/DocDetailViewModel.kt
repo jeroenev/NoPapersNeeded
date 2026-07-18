@@ -1,11 +1,11 @@
 package dev.npn.app.ui.detail
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.flow.MutableStateFlow
+import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -34,7 +34,7 @@ data class DetailUiState(
 class DocDetailViewModel(
     val docId: String,
     val session: LibrarySession,
-) : ViewModel() {
+) : MessagesViewModel() {
 
     private val _ui = MutableStateFlow(DetailUiState())
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
@@ -101,41 +101,55 @@ class DocDetailViewModel(
 
     // ---- metadata edits ----
 
-    fun setTitle(title: String?) = launch { session.meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
+    fun setTitle(title: String?) =
+        launchReporting("save title") { session.meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
     fun setCorrespondent(value: String?) =
-        launch { session.meta.setCorrespondent(listOf(docId), value?.takeIf { it.isNotBlank() }) }
+        launchReporting("save correspondent") {
+            session.meta.setCorrespondent(listOf(docId), value?.takeIf { it.isNotBlank() })
+        }
     fun setDocType(value: String?) =
-        launch { session.meta.setDocType(listOf(docId), value?.takeIf { it.isNotBlank() }) }
-    fun setDocDate(isoDate: String?) = launch { session.meta.setDocDate(docId, isoDate?.takeIf { it.isNotBlank() }) }
+        launchReporting("save document type") {
+            session.meta.setDocType(listOf(docId), value?.takeIf { it.isNotBlank() })
+        }
+    fun setDocDate(isoDate: String?) =
+        launchReporting("save date") { session.meta.setDocDate(docId, isoDate?.takeIf { it.isNotBlank() }) }
 
-    fun addTag(tag: String) = launch { session.meta.addTag(listOf(docId), tag) }
-    fun removeTag(tag: String) = launch { session.meta.removeTag(listOf(docId), tag) }
+    fun addTag(tag: String) = launchReporting("add tag") { session.meta.addTag(listOf(docId), tag) }
+    fun removeTag(tag: String) = launchReporting("remove tag") { session.meta.removeTag(listOf(docId), tag) }
 
-    fun setField(key: String, value: String?) = launch { session.meta.setField(docId, key, value) }
-    fun removeField(key: String) = launch { session.meta.setField(docId, key, null) }
+    fun setField(key: String, value: String?) =
+        launchReporting("save field") { session.meta.setField(docId, key, value) }
+    fun removeField(key: String) = launchReporting("remove field") { session.meta.setField(docId, key, null) }
 
-    fun setReviewed(reviewed: Boolean) = launch { session.meta.setReviewed(listOf(docId), reviewed) }
-    fun markReviewed() = setReviewed(true)
-    fun markUnreviewed() = setReviewed(false)
+    fun setReviewed(reviewed: Boolean) =
+        launchReporting("update review state") { session.meta.setReviewed(listOf(docId), reviewed) }
 
-    fun trash(onDone: () -> Unit) = launch {
+    /** On failure [onDone] is not invoked (the screen stays put) and the error is surfaced. */
+    fun trash(onDone: () -> Unit) = launchReporting("move to trash") {
         session.meta.trashDoc(docId)
         onDone()
     }
 
-    fun rename(newFileName: String) = launch { session.meta.renameFile(docId, newFileName) }
+    fun rename(newFileName: String) =
+        launchReporting("rename file") { session.meta.renameFile(docId, newFileName) }
 
-    fun reOcr() = launch {
+    fun reOcr() = launchReporting("re-run OCR") {
         _ui.value = _ui.value.copy(reindexing = true)
-        runCatching { session.reOcr(docId) }
-        _ui.value = _ui.value.copy(reindexing = false)
+        try {
+            session.reOcr(docId)
+        } finally {
+            _ui.value = _ui.value.copy(reindexing = false)
+        }
     }
 
-    fun bakeInPlace(onResult: (Boolean) -> Unit) = launch {
-        _ui.value = _ui.value.copy(baking = true)
-        val ok = runCatching { session.content.bakeInPlace(docId) }.getOrDefault(false)
-        _ui.value = _ui.value.copy(baking = false)
-        onResult(ok)
+    // Failure is reported through onResult(false); the screen owns the message.
+    fun bakeInPlace(onResult: (Boolean) -> Unit) {
+        viewModelScope.launch {
+            _ui.value = _ui.value.copy(baking = true)
+            val ok = runCatching { session.content.bakeInPlace(docId) }.getOrDefault(false)
+            _ui.value = _ui.value.copy(baking = false)
+            onResult(ok)
+        }
     }
 
     suspend fun bakedCopyBytes(): ByteArray? = runCatching { session.content.bakedCopyBytes(docId) }.getOrNull()
@@ -144,8 +158,4 @@ class DocDetailViewModel(
 
     suspend fun renderPage(pageIndex: Int, maxDim: Int): ByteArray? =
         runCatching { session.content.renderPage(docId, pageIndex, maxDim) }.getOrNull()
-
-    private fun launch(block: suspend () -> Unit) {
-        viewModelScope.launch { runCatching { block() } }
-    }
 }
