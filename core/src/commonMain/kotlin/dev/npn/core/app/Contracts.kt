@@ -59,6 +59,7 @@ data class DocListItem(
     val doc: DocumentEntity,
     val tags: List<String>,
     val snippet: String? = null,          // only set for FTS query results
+    val fields: Map<String, String> = emptyMap(),  // custom metadata fields (key -> value)
 )
 
 data class TagInfo(val name: String, val color: String?, val icon: String?, val count: Int)
@@ -73,6 +74,9 @@ interface DocumentRepository {
     fun observeDuplicates(): Flow<List<Pair<String, String>>>  // docId to extra relPath
     fun observeCorrespondents(): Flow<List<String>>
     fun observeDocTypes(): Flow<List<String>>
+
+    /** Distinct custom-field keys in use across the library, for add-field autocomplete. */
+    fun observeFieldKeys(): Flow<List<String>>
 }
 
 interface TagRepository {
@@ -98,6 +102,9 @@ interface MetadataWriter {
     suspend fun setDocType(docIds: List<String>, value: String?)
     suspend fun setDocDate(docId: String, isoDate: String?)
     suspend fun setTitle(docId: String, title: String?)
+
+    /** Set (or clear, when [value] is null/blank) a custom metadata field [key] on [docId]. */
+    suspend fun setField(docId: String, key: String, value: String?)
     suspend fun renameTag(from: String, to: String)
     suspend fun mergeTag(from: String, to: String)
     suspend fun deleteTag(name: String)             // removes tag from all docs
@@ -119,6 +126,7 @@ interface DocContentFacade {
     suspend fun bakeInPlace(docId: String): Boolean                // explicit user action; emits relink
     suspend fun rawBytes(docId: String): ByteArray?
     suspend fun clearThumbnailCache(): Int                         // drop cached thumbnails; returns count cleared
+    suspend fun extractedText(docId: String): String?             // OCR/embedded full text, null if none yet
 }
 
 // ---------- session ----------

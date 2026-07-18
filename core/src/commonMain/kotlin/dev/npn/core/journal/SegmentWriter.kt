@@ -13,6 +13,8 @@ data class PendingOp(val doc: String?, val op: JournalOp) {
             PendingOp(doc, JournalOp.TagRemove(tag, dots))
         fun propSet(doc: String, key: DocProperty, value: String?) =
             PendingOp(doc, JournalOp.PropSet(key, value))
+        fun fieldSet(doc: String, key: String, value: String?) =
+            PendingOp(doc, JournalOp.FieldSet(key, value))
         fun docTrash(doc: String, origPath: String) = PendingOp(doc, JournalOp.DocTrash(origPath))
         fun docRestore(doc: String) = PendingOp(doc, JournalOp.DocRestore)
         fun docDelete(doc: String) = PendingOp(doc, JournalOp.DocDelete)

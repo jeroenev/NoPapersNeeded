@@ -97,6 +97,33 @@ class MetadataWriterTest {
     }
 
     @Test
+    fun setFieldProjectsToDbAndObserveDocAndKeys() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        try {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+
+            rig.session.meta.setField(id, "amount", "42.50")
+            rig.session.meta.setField(id, "vendor", "ACME")
+
+            // Projected into document_fields and surfaced via observeDoc.
+            val item = rig.session.documents.observeDoc(id).first()!!
+            item.fields shouldBe mapOf("amount" to "42.50", "vendor" to "ACME")
+
+            // Distinct keys available for autocomplete.
+            rig.session.documents.observeFieldKeys().first() shouldContainExactlyInAnyOrder
+                listOf("amount", "vendor")
+
+            // Clearing a field removes it.
+            rig.session.meta.setField(id, "amount", null)
+            rig.session.documents.observeDoc(id).first()!!.fields shouldBe mapOf("vendor" to "ACME")
+        } finally {
+            rig.close()
+        }
+    }
+
+    @Test
     fun twoWritersConvergeAfterRescan() = runTest {
         val rig = AppSessionRig.create(backgroundScope)
         var db2 = rig.db

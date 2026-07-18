@@ -76,6 +76,25 @@ data class DocumentTagEntity(
 )
 
 /**
+ * Per-document custom metadata field: a free-form string key (e.g. "amount") and value. Projected
+ * from the journal's [dev.npn.core.journal.JournalOp.FieldSet] LWW state; a cleared field has no
+ * row. One row per (docId, key).
+ */
+@Entity(
+    tableName = "document_fields",
+    primaryKeys = ["docId", "fieldKey"],
+    indices = [
+        Index(value = ["docId"]),
+        Index(value = ["fieldKey"]),
+    ],
+)
+data class DocumentFieldEntity(
+    val docId: String,
+    val fieldKey: String,
+    val fieldValue: String,
+)
+
+/**
  * FTS5 full-text index over the search axes (PLAN.md sec. 5: names, content, tags,
  * correspondent, document type). Plain (regular) FTS5 table: docId lives as an indexed
  * column and updates are done as exact-match delete + reinsert (see [FtsDao.replaceDocument]).

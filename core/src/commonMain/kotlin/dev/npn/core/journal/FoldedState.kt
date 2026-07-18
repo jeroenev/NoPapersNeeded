@@ -38,6 +38,9 @@ class FoldedState {
 
     data class PropVal(val value: String?, val hlc: Hlc)
 
+    // --- raw custom-field data: doc -> free-string key -> winning (value, hlc) ---
+    private val fields = HashMap<String, HashMap<String, PropVal>>()
+
     // --- trash state: doc -> latest (trashed?, origPath, hlc); plus permanent delete tombstones ---
     private val trash = HashMap<String, TrashVal>()
     private val deleted = HashMap<String, Hlc>() // doc -> hlc of the delete tombstone
@@ -72,6 +75,14 @@ class FoldedState {
             is JournalOp.PropSet -> {
                 val doc = event.doc ?: return
                 val byKey = props.getOrPut(doc) { HashMap() }
+                val existing = byKey[op.key]
+                if (existing == null || event.hlc > existing.hlc) {
+                    byKey[op.key] = PropVal(op.value, event.hlc)
+                }
+            }
+            is JournalOp.FieldSet -> {
+                val doc = event.doc ?: return
+                val byKey = fields.getOrPut(doc) { HashMap() }
                 val existing = byKey[op.key]
                 if (existing == null || event.hlc > existing.hlc) {
                     byKey[op.key] = PropVal(op.value, event.hlc)
@@ -158,6 +169,21 @@ class FoldedState {
     fun allProps(doc: String): Map<DocProperty, String?> =
         props[doc]?.mapValues { it.value.value } ?: emptyMap()
 
+    /**
+     * Effective custom fields for a document: only keys whose winning value is non-null (a null
+     * value means the field was cleared). Ordered by key for deterministic projection.
+     */
+    fun effectiveFields(doc: String): Map<String, String> {
+        val byKey = fields[doc] ?: return emptyMap()
+        val out = LinkedHashMap<String, String>()
+        for (key in byKey.keys.sorted()) {
+            byKey[key]?.value?.let { out[key] = it }
+        }
+        return out
+    }
+
+
+
     /** True if the document is permanently deleted (delete tombstone present). Wins forever. */
     fun isDeleted(doc: String): Boolean = deleted.containsKey(doc)
 
@@ -240,8 +266,13 @@ class FoldedState {
         return out
     }
 
-    /** All documents with any prop data. */
-    fun propDocs(): Set<String> = props.keys.toSet()
+    /** All documents this state has any tag, prop, or custom-field data for (before resolveDocId). */
+    fun docsWithMetadata(): Set<String> =
+        LinkedHashSet<String>().apply {
+            addAll(tagAdds.keys)
+            addAll(props.keys)
+            addAll(fields.keys)
+        }
 
     // --------- accessors used by compaction (raw data, read-only copies) ---------
 

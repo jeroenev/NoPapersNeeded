@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -59,6 +60,21 @@ class DocDetailViewModel(
             .map { tags -> tags.associate { it.name to it.color } }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
+    /** Distinct custom-field keys in the library, for add-field key autocomplete. */
+    val fieldKeys: StateFlow<List<String>> =
+        session.documents.observeFieldKeys()
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+
+    /**
+     * Extracted OCR/embedded text for this doc, reloaded when the doc's OCR state changes (so it
+     * appears once background OCR completes). Null until loaded or when there is no text.
+     */
+    val ocrText: StateFlow<String?> =
+        doc.map { it?.doc?.ocrState }
+            .distinctUntilChanged()
+            .map { runCatching { session.content.extractedText(docId) }.getOrNull() }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
+
     init {
         viewModelScope.launch {
             val count = runCatching { session.content.pageCount(docId) }.getOrNull() ?: 0
@@ -94,6 +110,9 @@ class DocDetailViewModel(
 
     fun addTag(tag: String) = launch { session.meta.addTag(listOf(docId), tag) }
     fun removeTag(tag: String) = launch { session.meta.removeTag(listOf(docId), tag) }
+
+    fun setField(key: String, value: String?) = launch { session.meta.setField(docId, key, value) }
+    fun removeField(key: String) = launch { session.meta.setField(docId, key, null) }
 
     fun setReviewed(reviewed: Boolean) = launch { session.meta.setReviewed(listOf(docId), reviewed) }
     fun markReviewed() = setReviewed(true)

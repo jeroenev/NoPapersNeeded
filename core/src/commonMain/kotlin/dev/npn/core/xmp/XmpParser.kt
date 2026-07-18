@@ -31,6 +31,7 @@ object XmpParser {
                 docType = readNpn(xml, "documentType"),
                 docDate = readNpn(xml, "documentDate"),
                 reviewed = readNpn(xml, "reviewed"),
+                fields = readFields(xml),
             )
         } catch (_: Throwable) {
             // Never propagate parse failures; a partial/empty result is the contract.
@@ -95,6 +96,32 @@ object XmpParser {
         if (close < 0) return emptyList()
         val inner = xml.substring(open.endIndex, close)
         return readListItems(inner)
+    }
+
+    /**
+     * Read the `npn:fields` container: an rdf:Bag whose rdf:li each hold an `npn:fieldKey` and
+     * `npn:fieldValue`. Later duplicate keys win. Missing/empty container yields an empty map.
+     */
+    private fun readFields(xml: String): Map<String, String> {
+        val open = findOpenTag(xml, "npn:fields") ?: return emptyMap()
+        if (open.selfClosing) return emptyMap()
+        val close = xml.indexOf("</npn:fields", open.endIndex)
+        if (close < 0) return emptyMap()
+        val inner = xml.substring(open.endIndex, close)
+        val out = LinkedHashMap<String, String>()
+        var cursor = 0
+        while (true) {
+            val li = findOpenTag(inner, "rdf:li", cursor) ?: break
+            if (li.selfClosing) { cursor = li.endIndex; continue }
+            val liClose = inner.indexOf("</rdf:li", li.endIndex)
+            if (liClose < 0) break
+            val liInner = inner.substring(li.endIndex, liClose)
+            val key = elementText(liInner, "npn:fieldKey")
+            val value = elementText(liInner, "npn:fieldValue")
+            if (key != null && value != null) out[key] = value
+            cursor = liClose + "</rdf:li".length
+        }
+        return out
     }
 
     /** Read an rdf:Alt under [containerQName]; return the first (x-default) li text. */

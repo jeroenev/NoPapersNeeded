@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
+import dev.npn.core.db.DocumentFieldEntity
 import dev.npn.core.db.TagEntity
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
@@ -52,6 +53,7 @@ class Indexer(
     private val documentDao get() = db.documentDao()
     private val tagDao get() = db.tagDao()
     private val ftsDao get() = db.ftsDao()
+    private val fieldDao get() = db.documentFieldDao()
     private val duplicateDao get() = db.duplicateDao()
 
     suspend fun rescan(
@@ -411,8 +413,7 @@ class Indexer(
 
         // Collect all docs the journal has any data about.
         val journalDocs = LinkedHashSet<String>()
-        journalDocs.addAll(state.taggedDocs())
-        journalDocs.addAll(state.propDocs())
+        journalDocs.addAll(state.docsWithMetadata())
 
         // Also include every doc currently in the DB so trash/delete flags get cleared correctly.
         for (pm in documentDao.allPathsAndMeta()) journalDocs.add(pm.docId)
@@ -453,6 +454,15 @@ class Indexer(
             for (p in preds) tagSet.addAll(state.effectiveTags(p))
             val effTags = tagSet.toList().sorted()
             tagDao.setForDocument(doc, effTags)
+
+            // Custom fields: own value wins; inherit predecessor keys that this doc doesn't set.
+            val effFields = LinkedHashMap<String, String>()
+            for (p in preds) effFields.putAll(state.effectiveFields(p))
+            effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
+            fieldDao.deleteForDoc(doc)
+            if (effFields.isNotEmpty()) {
+                fieldDao.upsertAll(effFields.map { (k, v) -> DocumentFieldEntity(doc, k, v) })
+            }
 
             // Props: own value wins; otherwise inherit from a predecessor (first that has it).
             fun prop(key: DocProperty): String? {

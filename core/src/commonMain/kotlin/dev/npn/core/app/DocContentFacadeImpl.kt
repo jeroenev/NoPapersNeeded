@@ -74,6 +74,9 @@ class DocContentFacadeImpl(
     override suspend fun clearThumbnailCache(): Int =
         runCatching { thumbnailService.clearCache() }.getOrDefault(0)
 
+    override suspend fun extractedText(docId: String): String? =
+        runCatching { db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } }.getOrNull()
+
     override suspend fun rawBytes(docId: String): ByteArray? {
         val doc = documentDao.getByDocId(docId) ?: return null
         return try {
@@ -132,10 +135,12 @@ class DocContentFacadeImpl(
         }
     }
 
-    /** Assemble the XMP payload from the current DB row + tags. documentId defaults to the hash. */
+    /** Assemble the XMP payload from the current DB row + tags + custom fields. */
     private suspend fun buildXmpData(docId: String): NpnXmpData {
         val doc = documentDao.getByDocId(docId)
         val tags = db.tagDao().tagsForDocument(docId)
+        val fields = db.documentFieldDao().fieldsForDocs(listOf(docId))
+            .associate { it.fieldKey to it.fieldValue }
         return NpnXmpData(
             documentId = docId,
             tags = tags,
@@ -144,6 +149,7 @@ class DocContentFacadeImpl(
             docType = doc?.docType,
             docDate = doc?.docDate,
             reviewed = if (doc?.reviewed == true) "true" else "false",
+            fields = fields,
         )
     }
 }

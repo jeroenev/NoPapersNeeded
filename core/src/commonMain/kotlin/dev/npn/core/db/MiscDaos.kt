@@ -48,6 +48,34 @@ interface SavedViewDao {
 }
 
 @Dao
+interface DocumentFieldDao {
+
+    /** All custom fields for a document, ordered by key. Observed for live UI updates. */
+    @Query("SELECT * FROM document_fields WHERE docId = :docId ORDER BY fieldKey COLLATE NOCASE")
+    fun observeForDoc(docId: String): Flow<List<DocumentFieldEntity>>
+
+    /** Custom fields for a set of documents, for attaching to list items in one pass. */
+    @Query("SELECT * FROM document_fields WHERE docId IN (:docIds)")
+    suspend fun fieldsForDocs(docIds: List<String>): List<DocumentFieldEntity>
+
+    /**
+     * Distinct field keys in use across the library, for add-field key autocomplete. Observed so
+     * suggestions stay fresh as fields are added elsewhere.
+     */
+    @Query("SELECT DISTINCT fieldKey FROM document_fields ORDER BY fieldKey COLLATE NOCASE")
+    fun observeDistinctKeys(): Flow<List<String>>
+
+    @Upsert
+    suspend fun upsertAll(fields: List<DocumentFieldEntity>)
+
+    @Query("DELETE FROM document_fields WHERE docId = :docId")
+    suspend fun deleteForDoc(docId: String)
+
+    @Query("DELETE FROM document_fields")
+    suspend fun clearAll()
+}
+
+@Dao
 interface ThumbnailDao {
 
     @Query("SELECT * FROM thumbnails WHERE docId = :docId")
