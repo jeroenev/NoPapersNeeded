@@ -216,6 +216,9 @@ class FakeDocContentFacade : DocContentFacade {
     }
 
     override suspend fun rawBytes(docId: String): ByteArray? = null
+
+    var clearedThumbnails = 0
+    override suspend fun clearThumbnailCache(): Int = clearedThumbnails
 }
 
 class FakeLibrarySession : LibrarySession {

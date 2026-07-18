@@ -1,5 +1,7 @@
 package dev.npn.core.pdf
 
+import kotlin.math.sqrt
+
 /**
  * An opened PDF document. Backed by a platform PDF library (PDFBox 3.x on desktop,
  * pdfbox-android + android.graphics.pdf.PdfRenderer on Android). Callers must [close] the
@@ -12,10 +14,49 @@ interface PdfDocumentHandle : AutoCloseable {
     fun extractText(pageIndex: Int): String
 
     /**
-     * Render [pageIndex] (0-based) to a PNG image whose longer side is at most
-     * [maxDimensionPx] pixels (aspect preserved).
+     * Render [pageIndex] (0-based) to a PNG image (aspect preserved). The longer side is at most
+     * [maxDimensionPx] pixels, but the shorter side is never starved of resolution on very
+     * elongated pages (see [pageRenderScale]).
      */
     fun renderPagePng(pageIndex: Int, maxDimensionPx: Int): ByteArray
+}
+
+/**
+ * The widest aspect ratio (longer:shorter) treated as "normal" when picking a render scale. Pages
+ * more elongated than this — long store receipts, for instance — are scaled by their shorter
+ * (readable) side instead of their longer side, so the text axis keeps enough pixels and does not
+ * turn blurry when the viewer fits the page to screen. 3:1 covers letter/A4 comfortably.
+ */
+private const val MAX_NORMAL_ASPECT = 3f
+
+/**
+ * Upper bound on rendered pixels (width x height) so a fix for elongated pages can never blow up
+ * memory: a very tall receipt at a high zoom bucket could otherwise render a huge bitmap. Sized to
+ * comfortably hold the largest normal-page render (longest side ~4800px x its shorter side).
+ */
+private const val MAX_RENDER_PIXELS = 4800f * 2600f
+
+/**
+ * Scale factor (px per PDF point, user space is 72 DPI) to render a [widthPoints] x [heightPoints]
+ * page at.
+ *
+ * For pages up to [MAX_NORMAL_ASPECT] the longer side is put at [maxDimensionPx]. For more
+ * elongated pages the *shorter* side is instead put at `maxDimensionPx / MAX_NORMAL_ASPECT`, which
+ * bumps the resolution along the readable axis (a tall receipt would otherwise get a very
+ * low-resolution width and read blurry). Equivalent to capping the aspect ratio used for scaling.
+ * The result is finally capped so total rendered pixels stay under [MAX_RENDER_PIXELS].
+ */
+fun pageRenderScale(widthPoints: Float, heightPoints: Float, maxDimensionPx: Int): Float {
+    val longer = maxOf(widthPoints, heightPoints).coerceAtLeast(1f)
+    val shorter = minOf(widthPoints, heightPoints).coerceAtLeast(1f)
+    val byLonger = maxDimensionPx.toFloat() / longer
+    val byShorter = (maxDimensionPx.toFloat() / MAX_NORMAL_ASPECT) / shorter
+    // maxOf: for normal pages byLonger wins; for elongated pages byShorter is larger and lifts the
+    // resolution so the shorter side is not starved.
+    val scale = maxOf(byLonger, byShorter)
+    // Cap total pixels; kotlin.math.sqrt keeps the aspect ratio while bounding the area.
+    val pixelCap = sqrt(MAX_RENDER_PIXELS / (longer * shorter))
+    return minOf(scale, pixelCap).coerceAtLeast(0.01f)
 }
 
 /**

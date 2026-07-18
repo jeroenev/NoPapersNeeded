@@ -23,6 +23,8 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
@@ -30,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +46,7 @@ import dev.npn.app.ui.common.viewTypeLabel
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
+import kotlinx.coroutines.launch
 
 const val NPN_VERSION = "0.1.0"
 
@@ -57,6 +61,9 @@ fun SettingsScreen(
     val state by vm.state.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
 
+    val snackbar = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
     Scaffold(
         topBar = {
             TopAppBar(
@@ -68,6 +75,7 @@ fun SettingsScreen(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(
             Modifier
@@ -133,6 +141,24 @@ fun SettingsScreen(
             LandscapeListToggle(
                 enabled = state.landscapeListColumns,
                 onToggle = vm::setLandscapeListColumns,
+            )
+
+            HorizontalDivider()
+
+            SectionHeader("Storage")
+            OutlinedButton(onClick = {
+                vm.clearThumbnailCache { count ->
+                    scope.launch {
+                        snackbar.showSnackbar(
+                            if (count > 0) "Cleared $count thumbnail(s)" else "Thumbnail cache already empty",
+                        )
+                    }
+                }
+            }) { Text("Clear thumbnail cache") }
+            Text(
+                "Regenerate library thumbnails at the current quality. Use this if previews look blurry.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             HorizontalDivider()

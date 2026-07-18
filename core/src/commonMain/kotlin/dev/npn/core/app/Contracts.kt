@@ -118,6 +118,7 @@ interface DocContentFacade {
     suspend fun bakedCopyBytes(docId: String): ByteArray?          // export/share with XMP baked
     suspend fun bakeInPlace(docId: String): Boolean                // explicit user action; emits relink
     suspend fun rawBytes(docId: String): ByteArray?
+    suspend fun clearThumbnailCache(): Int                         // drop cached thumbnails; returns count cleared
 }
 
 // ---------- session ----------
@@ -196,6 +197,6 @@ interface SettingsRepository {
 /** Bounds for the user-adjustable grid cell width (dp). */
 object GridSizing {
     const val MIN_COLUMN_WIDTH = 100
-    const val MAX_COLUMN_WIDTH = 280
+    const val MAX_COLUMN_WIDTH = 480
     const val DEFAULT_COLUMN_WIDTH = 160
 }

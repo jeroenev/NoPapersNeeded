@@ -144,8 +144,7 @@ private class AndroidPdfDocumentHandle(
         try {
             val srcW = page.width.coerceAtLeast(1)
             val srcH = page.height.coerceAtLeast(1)
-            val longer = maxOf(srcW, srcH)
-            val scale = (maxDimensionPx.toFloat() / longer).coerceAtMost(1f).coerceAtLeast(0.01f)
+            val scale = pageRenderScale(srcW.toFloat(), srcH.toFloat(), maxDimensionPx)
             val outW = (srcW * scale).toInt().coerceAtLeast(1)
             val outH = (srcH * scale).toInt().coerceAtLeast(1)
             val bitmap = Bitmap.createBitmap(outW, outH, Bitmap.Config.ARGB_8888)

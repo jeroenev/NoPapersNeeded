@@ -82,12 +82,9 @@ private class PdfBoxDocumentHandle(private val doc: PDDocument) : PdfDocumentHan
     }
 
     override fun renderPagePng(pageIndex: Int, maxDimensionPx: Int): ByteArray {
-        // Render at a scale that puts the longer side at ~maxDimensionPx. PDF user-space is
-        // 72 DPI, so scale = maxDimensionPx / (longerSidePoints).
         val page = doc.getPage(pageIndex)
         val box = page.cropBox
-        val longerPoints = maxOf(box.width, box.height).coerceAtLeast(1f)
-        val scale = (maxDimensionPx.toFloat() / longerPoints).coerceAtLeast(0.01f)
+        val scale = pageRenderScale(box.width, box.height, maxDimensionPx)
         val image = renderer.renderImage(pageIndex, scale)
         val out = ByteArrayOutputStream()
         ImageIO.write(image, "png", out)

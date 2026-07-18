@@ -73,4 +73,16 @@ class ThumbnailService(
 
         return cachePath
     }
+
+    /**
+     * Delete every cached thumbnail (files + DB rows) so they regenerate on next display. Used to
+     * pick up render-quality changes for thumbnails cached under an older, lower-resolution render.
+     * Returns the number of cache entries cleared.
+     */
+    suspend fun clearCache(): Int {
+        val all = thumbnailDao.getAll()
+        all.forEach { runCatching { store.delete(it.docId) } }
+        thumbnailDao.deleteAll()
+        return all.size
+    }
 }

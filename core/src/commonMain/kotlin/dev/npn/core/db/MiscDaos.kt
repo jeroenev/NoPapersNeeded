@@ -53,11 +53,17 @@ interface ThumbnailDao {
     @Query("SELECT * FROM thumbnails WHERE docId = :docId")
     suspend fun get(docId: String): ThumbnailEntity?
 
+    @Query("SELECT * FROM thumbnails")
+    suspend fun getAll(): List<ThumbnailEntity>
+
     @Upsert
     suspend fun upsert(thumbnail: ThumbnailEntity)
 
     @Query("DELETE FROM thumbnails WHERE docId = :docId")
     suspend fun delete(docId: String)
+
+    @Query("DELETE FROM thumbnails")
+    suspend fun deleteAll()
 }
 
 @Dao

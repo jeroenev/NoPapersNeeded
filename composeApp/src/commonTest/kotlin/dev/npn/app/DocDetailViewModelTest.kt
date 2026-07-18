@@ -70,28 +70,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         model.ui.value.pageIndex shouldBe 2
     }
 
-    // ---- zoom clamping ----
-
-    @Test
-    fun zoomClampsToRange() = runTest(dispatcher) {
-        val model = vm()
-        model.setZoom(10f)
-        model.ui.value.zoom shouldBe 5f
-        model.setZoom(0.1f)
-        model.ui.value.zoom shouldBe 1f
-    }
-
-    @Test
-    fun zoomInOutAndReset() = runTest(dispatcher) {
-        val model = vm()
-        model.zoomIn()
-        model.ui.value.zoom shouldBe 1.5f
-        model.zoomOut()
-        model.ui.value.zoom shouldBe 1f
-        model.zoomIn()
-        model.resetZoom()
-        model.ui.value.zoom shouldBe 1f
-    }
+    // Zoom/pan are no longer VM state; they live in the viewer's ViewerTransform (see
+    // ViewerTransformTest for the zoom/pan math).
 
     // ---- metadata edits (blank -> null normalization) ----
 
