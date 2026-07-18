@@ -36,6 +36,9 @@ kotlin {
             implementation(libs.compose.components.resources)
             implementation(libs.compose.uiToolingPreview)
             implementation(libs.compose.material.icons.core)
+            // Full icon set so semantically correct icons are available (filter, sort, zoom,
+            // grid/list, label, ...). R8 strips unused vectors on Android; acceptable on desktop.
+            implementation(libs.compose.material.icons.extended)
 
             implementation(libs.navigation.compose)
             implementation(libs.androidx.lifecycle.runtimeCompose)

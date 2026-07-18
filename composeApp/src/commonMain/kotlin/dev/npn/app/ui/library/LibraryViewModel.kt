@@ -75,6 +75,9 @@ class LibraryViewModel(
     // async default-view seed clobbering an explicit choice made before it arrives.
     private var viewOverridden = false
 
+    // Same race guard for the persisted sort seed.
+    private var sortOverridden = false
+
     /** Min grid cell width (dp), user-adjustable via settings; drives the adaptive column count. */
     val gridColumnWidth: StateFlow<Int> =
         settings.gridColumnWidth
@@ -99,6 +102,15 @@ class LibraryViewModel(
             val saved = settings.defaultViewType.first()
             if (!viewOverridden) {
                 _ui.value = _ui.value.copy(viewType = saved)
+            }
+        }
+
+        // Seed the sort from the last explicitly chosen one (separate launch so a slow view-type
+        // seed cannot delay it, and vice versa).
+        viewModelScope.launch {
+            val saved = settings.librarySort.first()
+            if (!sortOverridden) {
+                _ui.value = _ui.value.copy(sort = saved)
             }
         }
 
@@ -192,7 +204,11 @@ class LibraryViewModel(
     }
 
     fun setSort(field: SortField, ascending: Boolean) {
-        _ui.value = _ui.value.copy(sort = LibrarySort(field, ascending))
+        sortOverridden = true
+        val sort = LibrarySort(field, ascending)
+        _ui.value = _ui.value.copy(sort = sort)
+        // Persist so the choice survives restart.
+        viewModelScope.launch { settings.setLibrarySort(sort) }
     }
 
     fun setViewType(v: ViewType) {
@@ -205,8 +221,18 @@ class LibraryViewModel(
 
     fun applySavedView(view: SavedView) {
         viewOverridden = true
+        // Guards the seed only; a saved view's sort is part of the view, not a new default.
+        sortOverridden = true
         _ui.value = _ui.value.copy(filter = view.filter, sort = view.sort, viewType = view.viewType)
         queryInput.value = view.filter.query ?: ""
+    }
+
+    /**
+     * Persist the grid cell width (dp) chosen by direct manipulation (pinch / ctrl+scroll / zoom
+     * buttons) on the grid. The grid previews changes locally and commits through here.
+     */
+    fun setGridColumnWidth(dp: Int) {
+        viewModelScope.launch { settings.setGridColumnWidth(dp) }
     }
 
     // ---- selection ----

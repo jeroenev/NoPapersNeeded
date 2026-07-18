@@ -29,7 +29,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             ocrLanguageFlow.value = "nld"
             trashRetentionDaysFlow.value = 14
             defaultViewTypeFlow.value = ViewType.GRID
-            gridColumnWidthFlow.value = 200
             landscapeListColumnsFlow.value = true
         }
         val model = vm(settings = settings)
@@ -40,7 +39,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
         s.ocrLanguage shouldBe "nld"
         s.trashRetentionDays shouldBe 14
         s.defaultViewType shouldBe ViewType.GRID
-        s.gridColumnWidth shouldBe 200
         s.landscapeListColumns shouldBe true
         job.cancel()
     }
@@ -67,13 +65,11 @@ class SettingsViewModelTest : MainDispatcherTest() {
         model.setOcrLanguage("deu")
         model.setTrashRetentionDays(60)
         model.setDefaultViewType(ViewType.GRID)
-        model.setGridColumnWidth(180)
         model.setLandscapeListColumns(true)
         advanceUntilIdle()
         settings.setOcrLanguages shouldContainExactly listOf("deu")
         settings.setRetentionDays shouldContainExactly listOf(60)
         settings.setDefaultViews shouldContainExactly listOf(ViewType.GRID)
-        settings.setGridWidths shouldContainExactly listOf(180)
         settings.setLandscapeFlags shouldContainExactly listOf(true)
     }
 

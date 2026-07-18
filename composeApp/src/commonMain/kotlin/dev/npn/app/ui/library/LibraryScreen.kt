@@ -17,16 +17,21 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Sort
+import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.Build
-import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.ArrowDownward
+import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.automirrored.filled.List
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.Card
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -41,9 +46,11 @@ import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.PermanentDrawerSheet
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -53,7 +60,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -62,10 +71,13 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.BoxWithConstraintsLayout
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.ctrlScrollZoom
 import dev.npn.app.ui.common.isLandscape
+import dev.npn.app.ui.common.pinchToZoom
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.platformFileToExternalSource
 import dev.npn.app.ui.common.viewTypeLabel
+import dev.npn.core.app.GridSizing
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
@@ -74,6 +86,11 @@ import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.name
+import kotlin.math.abs
+import kotlin.math.floor
+import kotlin.math.roundToInt
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
 
 @Composable
@@ -311,15 +328,23 @@ private fun LibraryContent(
                 modifier = Modifier.fillMaxSize(),
             ) {
                 if (docs.isEmpty()) {
-                    EmptyState(
-                        icon = Icons.AutoMirrored.Filled.List,
-                        title = if (ui.filter.isEmpty) "No documents yet" else "No matches",
-                        subtitle = if (ui.filter.isEmpty) {
-                            "Import a PDF to get started."
-                        } else {
-                            "Try adjusting your search or filters."
-                        },
-                    )
+                    if (ui.filter.isEmpty) {
+                        EmptyState(
+                            icon = Icons.Filled.Description,
+                            title = "No documents yet",
+                            subtitle = "Import a PDF to get started.",
+                            actionLabel = "Import PDF",
+                            onAction = onImport,
+                        )
+                    } else {
+                        EmptyState(
+                            icon = Icons.Filled.Description,
+                            title = "No matches",
+                            subtitle = "Try adjusting your search or filters.",
+                            actionLabel = "Clear filters",
+                            onAction = vm::clearFilter,
+                        )
+                    }
                 } else {
                     when (ui.viewType) {
                         ViewType.GRID -> DocGrid(
@@ -328,6 +353,7 @@ private fun LibraryContent(
                             tagColors = tagColors,
                             ui = ui,
                             columnWidth = gridColumnWidth,
+                            onColumnWidthChange = vm::setGridColumnWidth,
                             onOpen = onOpenDoc,
                             onToggleSelect = vm::toggleSelection,
                             onStartSelection = vm::startSelection,
@@ -405,6 +431,35 @@ private fun DocList(
     }
 }
 
+private const val GRID_ZOOM_COMMIT_DEBOUNCE_MS = 300L
+
+// Layout metrics of the grid, shared with the column-step math below.
+private const val GRID_H_PADDING_DP = 12f
+private const val GRID_SPACING_DP = 8f
+
+/**
+ * Column count [GridCells.Adaptive] produces for a min cell [width] in [available] dp
+ * (mirrors its formula: floor((available + spacing) / (minSize + spacing)), at least 1).
+ */
+internal fun gridColumnsFor(available: Float, width: Float, spacing: Float = GRID_SPACING_DP): Int =
+    ((available + spacing) / (width + spacing)).toInt().coerceAtLeast(1)
+
+/**
+ * The largest min cell width (dp) at which [GridCells.Adaptive] yields exactly [columns] in
+ * [available] dp. Floored so dp/px rounding cannot tip the layout into one column fewer.
+ */
+internal fun gridWidthForColumns(available: Float, columns: Int, spacing: Float = GRID_SPACING_DP): Float =
+    floor((available + spacing) / columns - spacing)
+
+/**
+ * Thumbnail grid with direct-manipulation sizing between [GridSizing.MIN_COLUMN_WIDTH] and
+ * [GridSizing.MAX_COLUMN_WIDTH] dp: pinch (touch) resizes continuously; ctrl+scroll (desktop)
+ * and the overlay zoom buttons step exactly one column per notch/press at the current grid
+ * width, since with adaptive cells the column count is the only visible state. Changes preview
+ * live via local state and are committed (debounced) through [onColumnWidthChange], which
+ * persists them in settings.
+ */
+@OptIn(FlowPreview::class)
 @Composable
 private fun DocGrid(
     docs: List<dev.npn.core.app.DocListItem>,
@@ -412,29 +467,130 @@ private fun DocGrid(
     tagColors: Map<String, String?>,
     ui: LibraryUiState,
     columnWidth: Int,
+    onColumnWidthChange: (Int) -> Unit,
     onOpen: (String) -> Unit,
     onToggleSelect: (String) -> Unit,
     onStartSelection: (String) -> Unit,
 ) {
-    LazyVerticalGrid(
-        columns = GridCells.Adaptive(columnWidth.dp),
-        modifier = Modifier.fillMaxSize().padding(horizontal = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        items(docs, key = { it.doc.docId }) { item ->
-            DocGridCard(
-                item = item,
-                content = content,
-                tagColors = tagColors,
-                selectionMode = ui.selectionMode,
-                selected = item.doc.docId in ui.selected,
-                onClick = {
-                    if (ui.selectionMode) onToggleSelect(item.doc.docId)
-                    else onOpen(item.doc.docId)
+    // Live cell width; re-seeded when the persisted value changes (e.g. after a commit).
+    var width by remember { mutableStateOf(columnWidth.toFloat()) }
+    LaunchedEffect(columnWidth) { width = columnWidth.toFloat() }
+
+    // Debounced commit so pinches and fine-grained touchpad deltas don't write settings per event.
+    val committed by rememberUpdatedState(columnWidth)
+    LaunchedEffect(Unit) {
+        snapshotFlow { width.roundToInt() }
+            .debounce(GRID_ZOOM_COMMIT_DEBOUNCE_MS)
+            .collect { if (it != committed) onColumnWidthChange(it) }
+    }
+
+    val minWidth = GridSizing.MIN_COLUMN_WIDTH.toFloat()
+    val maxWidth = GridSizing.MAX_COLUMN_WIDTH.toFloat()
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        // Width the adaptive cells actually divide: the grid area minus its content padding.
+        // NOTE: the gesture lambdas below are captured once by pointerInput and never refreshed,
+        // so everything they touch must be backed by State (or read state at call time), never by
+        // plain composition-time locals.
+        val available by rememberUpdatedState(this.maxWidth.value - 2 * GRID_H_PADDING_DP)
+        val columns = gridColumnsFor(available, width)
+        // The width bounds cap how far the count can step in either direction.
+        val fewestColumns = gridColumnsFor(available, maxWidth)
+        val mostColumns = gridColumnsFor(available, minWidth)
+
+        // Zoom in = bigger cells = fewer columns (photo-gallery convention). Reads width/available
+        // at call time so it stays correct when invoked from the stale gesture closure.
+        fun stepColumns(delta: Int) {
+            val avail = available
+            val cols = gridColumnsFor(avail, width)
+            val target = (cols + delta)
+                .coerceIn(gridColumnsFor(avail, maxWidth), gridColumnsFor(avail, minWidth))
+            if (target != cols) {
+                width = gridWidthForColumns(avail, target).coerceIn(minWidth, maxWidth)
+            }
+        }
+
+        // Pinch stays continuous (a fingertip gesture has no natural notion of notches).
+        fun pinchBy(factor: Float) {
+            width = (width * factor).coerceIn(minWidth, maxWidth)
+        }
+
+        // Accumulates fractional touchpad deltas up to one notch; a mouse wheel notch arrives as a
+        // single event with |delta| >= 1 and steps exactly one column regardless of its magnitude.
+        val scrollAccumulated = remember { mutableStateOf(0f) }
+
+        Box(
+            Modifier
+                .fillMaxSize()
+                .pinchToZoom(onZoom = ::pinchBy)
+                .ctrlScrollZoom { delta ->
+                    val acc = scrollAccumulated.value
+                    val sameDirection = acc == 0f || (acc > 0f) == (delta > 0f)
+                    val next = if (sameDirection) acc + delta else delta
+                    if (abs(next) >= 1f) {
+                        // Scroll up = zoom in = one column fewer; scroll down = one more.
+                        stepColumns(if (next > 0f) 1 else -1)
+                        scrollAccumulated.value = 0f
+                    } else {
+                        scrollAccumulated.value = next
+                    }
                 },
-                onLongClick = { onStartSelection(item.doc.docId) },
+        ) {
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(width.roundToInt().dp),
+                modifier = Modifier.fillMaxSize().padding(horizontal = GRID_H_PADDING_DP.dp),
+                horizontalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
+                verticalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
+            ) {
+                items(docs, key = { it.doc.docId }) { item ->
+                    DocGridCard(
+                        item = item,
+                        content = content,
+                        tagColors = tagColors,
+                        selectionMode = ui.selectionMode,
+                        selected = item.doc.docId in ui.selected,
+                        onClick = {
+                            if (ui.selectionMode) onToggleSelect(item.doc.docId)
+                            else onOpen(item.doc.docId)
+                        },
+                        onLongClick = { onStartSelection(item.doc.docId) },
+                    )
+                }
+            }
+
+            // On-screen equivalent of the gestures (discoverability + accessibility).
+            // Bottom-start so it doesn't collide with the FAB.
+            GridZoomControls(
+                canZoomOut = columns < mostColumns,
+                canZoomIn = columns > fewestColumns,
+                onZoomOut = { stepColumns(1) },
+                onZoomIn = { stepColumns(-1) },
+                modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
             )
+        }
+    }
+}
+
+@Composable
+private fun GridZoomControls(
+    canZoomOut: Boolean,
+    canZoomIn: Boolean,
+    onZoomOut: () -> Unit,
+    onZoomIn: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier,
+        shape = MaterialTheme.shapes.large,
+        tonalElevation = 3.dp,
+    ) {
+        Row {
+            IconButton(onClick = onZoomOut, enabled = canZoomOut) {
+                Icon(Icons.Filled.ZoomOut, contentDescription = "Smaller grid items")
+            }
+            IconButton(onClick = onZoomIn, enabled = canZoomIn) {
+                Icon(Icons.Filled.ZoomIn, contentDescription = "Larger grid items")
+            }
         }
     }
 }
@@ -460,51 +616,60 @@ private fun LibraryTopBar(
                 Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }
             IconButton(onClick = onOpenFilter) {
-                Icon(Icons.Filled.Build, contentDescription = "Filters")
+                Icon(Icons.Filled.FilterList, contentDescription = "Filters")
             }
-            // View switcher: choose among the ViewType entries.
-            Box {
-                var viewMenu by remember { mutableStateOf(false) }
-                IconButton(onClick = { viewMenu = true }) {
-                    Icon(Icons.AutoMirrored.Filled.List, contentDescription = "Change view")
-                }
-                DropdownMenu(expanded = viewMenu, onDismissRequest = { viewMenu = false }) {
-                    ViewType.entries.forEach { v ->
-                        DropdownMenuItem(
-                            text = { Text(viewTypeLabel(v)) },
-                            trailingIcon = {
-                                if (v == viewType) {
-                                    Icon(Icons.Filled.Check, contentDescription = null)
-                                }
-                            },
-                            onClick = {
-                                onSetView(v)
-                                viewMenu = false
-                            },
-                        )
-                    }
-                }
+            // View switcher: one tap toggles list/grid; the icon shows the view it switches TO.
+            val nextView = if (viewType == ViewType.LIST) ViewType.GRID else ViewType.LIST
+            IconButton(onClick = { onSetView(nextView) }) {
+                Icon(
+                    imageVector = when (nextView) {
+                        ViewType.GRID -> Icons.Filled.GridView
+                        ViewType.LIST -> Icons.AutoMirrored.Filled.ViewList
+                    },
+                    contentDescription = "Switch to ${viewTypeLabel(nextView).lowercase()} view",
+                )
             }
             Box {
                 IconButton(onClick = { sortMenu = true }) {
-                    Icon(Icons.Filled.ArrowDropDown, contentDescription = "Sort")
+                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
                 }
                 DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+                    Text(
+                        "Sort by",
+                        style = MaterialTheme.typography.labelLarge,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                    )
                     SortField.entries.forEach { field ->
-                        listOf(true, false).forEach { asc ->
-                            DropdownMenuItem(
-                                text = { Text("${sortLabel(field)} ${if (asc) "asc" else "desc"}") },
-                                trailingIcon = {
-                                    if (sort.field == field && sort.ascending == asc) {
-                                        Icon(Icons.Filled.Check, contentDescription = null)
-                                    }
-                                },
-                                onClick = {
-                                    onSetSort(field, asc)
+                        val active = sort.field == field
+                        DropdownMenuItem(
+                            text = { Text(sortLabel(field)) },
+                            leadingIcon = { RadioButton(selected = active, onClick = null) },
+                            trailingIcon = {
+                                if (active) {
+                                    Icon(
+                                        imageVector = if (sort.ascending) {
+                                            Icons.Filled.ArrowUpward
+                                        } else {
+                                            Icons.Filled.ArrowDownward
+                                        },
+                                        contentDescription =
+                                            if (sort.ascending) "Ascending" else "Descending",
+                                    )
+                                }
+                            },
+                            onClick = {
+                                if (active) {
+                                    // Tapping the active field flips the direction; keep the menu
+                                    // open so the arrow flip is visible.
+                                    onSetSort(field, !sort.ascending)
+                                } else {
+                                    // Switching field keeps the current direction.
+                                    onSetSort(field, sort.ascending)
                                     sortMenu = false
-                                },
-                            )
-                        }
+                                }
+                            },
+                        )
                     }
                 }
             }

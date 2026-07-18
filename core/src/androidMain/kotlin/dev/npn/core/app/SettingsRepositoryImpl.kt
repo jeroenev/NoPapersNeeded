@@ -33,6 +33,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         val ocrLanguage: String,
         val trashRetentionDays: Int,
         val defaultViewType: ViewType,
+        val librarySort: LibrarySort,
         val gridColumnWidth: Int,
         val landscapeListColumns: Boolean,
     )
@@ -43,6 +44,11 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         trashRetentionDays = prefs.getInt(KEY_TRASH_DAYS, 30),
         defaultViewType = prefs.getString(KEY_VIEW_TYPE, null)
             ?.let { runCatching { ViewType.valueOf(it) }.getOrNull() } ?: ViewType.GRID,
+        librarySort = LibrarySort(
+            field = prefs.getString(KEY_SORT_FIELD, null)
+                ?.let { runCatching { SortField.valueOf(it) }.getOrNull() } ?: LibrarySort().field,
+            ascending = prefs.getBoolean(KEY_SORT_ASC, LibrarySort().ascending),
+        ),
         gridColumnWidth = prefs.getInt(KEY_GRID_WIDTH, GridSizing.DEFAULT_COLUMN_WIDTH)
             .coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
         landscapeListColumns = prefs.getBoolean(KEY_LANDSCAPE_LIST, false),
@@ -52,6 +58,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
     override val ocrLanguage: Flow<String> = state.map { it.ocrLanguage }
     override val trashRetentionDays: Flow<Int> = state.map { it.trashRetentionDays }
     override val defaultViewType: Flow<ViewType> = state.map { it.defaultViewType }
+    override val librarySort: Flow<LibrarySort> = state.map { it.librarySort }
     override val gridColumnWidth: Flow<Int> = state.map { it.gridColumnWidth }
     override val landscapeListColumns: Flow<Boolean> = state.map { it.landscapeListColumns }
 
@@ -77,6 +84,14 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         state.value = load()
     }
 
+    override suspend fun setLibrarySort(sort: LibrarySort) {
+        prefs.edit()
+            .putString(KEY_SORT_FIELD, sort.field.name)
+            .putBoolean(KEY_SORT_ASC, sort.ascending)
+            .apply()
+        state.value = load()
+    }
+
     override suspend fun setGridColumnWidth(dp: Int) {
         val clamped = dp.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
         prefs.edit().putInt(KEY_GRID_WIDTH, clamped).apply()
@@ -94,6 +109,8 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         private const val KEY_OCR_LANG = "ocrLanguage"
         private const val KEY_TRASH_DAYS = "trashRetentionDays"
         private const val KEY_VIEW_TYPE = "defaultViewType"
+        private const val KEY_SORT_FIELD = "librarySortField"
+        private const val KEY_SORT_ASC = "librarySortAscending"
         private const val KEY_GRID_WIDTH = "gridColumnWidth"
         private const val KEY_LANDSCAPE_LIST = "landscapeListColumns"
     }

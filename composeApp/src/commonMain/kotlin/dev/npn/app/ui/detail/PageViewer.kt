@@ -11,8 +11,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.ZoomIn
+import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -137,10 +137,10 @@ fun PageViewer(
         ) {
             Row {
                 IconButton(onClick = onZoomOut, enabled = zoom > 1f) {
-                    Icon(Icons.Filled.Clear, contentDescription = "Zoom out")
+                    Icon(Icons.Filled.ZoomOut, contentDescription = "Zoom out")
                 }
                 IconButton(onClick = onZoomIn, enabled = zoom < 5f) {
-                    Icon(Icons.Filled.Add, contentDescription = "Zoom in")
+                    Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom in")
                 }
             }
         }

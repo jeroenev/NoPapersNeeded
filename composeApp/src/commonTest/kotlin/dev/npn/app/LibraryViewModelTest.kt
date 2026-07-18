@@ -4,6 +4,7 @@ import dev.npn.app.ui.library.ImportSummary
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibraryFilter
+import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
@@ -337,6 +338,46 @@ class LibraryViewModelTest : MainDispatcherTest() {
         model.setSort(SortField.NAME, ascending = true)
         model.ui.value.sort.field shouldBe SortField.NAME
         model.ui.value.sort.ascending shouldBe true
+    }
+
+    @Test
+    fun setSortPersistsToSettings() = runTest(dispatcher) {
+        val settings = FakeSettingsRepository()
+        val model = vm(settings = settings)
+        model.setSort(SortField.SIZE, ascending = true)
+        advanceUntilIdle()
+        settings.setSorts shouldContainExactly listOf(LibrarySort(SortField.SIZE, ascending = true))
+    }
+
+    @Test
+    fun persistedSortSeedAppliesWhenUserHasNotChosen() = runTest(dispatcher) {
+        val settings = FakeSettingsRepository().apply {
+            librarySortFlow.value = LibrarySort(SortField.NAME, ascending = true)
+        }
+        val model = vm(settings = settings)
+        advanceUntilIdle()
+        model.ui.value.sort shouldBe LibrarySort(SortField.NAME, ascending = true)
+    }
+
+    @Test
+    fun explicitSortChoiceIsNotClobberedByLateSeed() = runTest(dispatcher) {
+        val settings = FakeSettingsRepository().apply {
+            librarySortFlow.value = LibrarySort(SortField.NAME, ascending = true)
+        }
+        val model = vm(settings = settings)
+        // User sorts before the async seed runs.
+        model.setSort(SortField.SIZE, ascending = false)
+        advanceUntilIdle()
+        model.ui.value.sort shouldBe LibrarySort(SortField.SIZE, ascending = false)
+    }
+
+    @Test
+    fun setGridColumnWidthPersistsToSettings() = runTest(dispatcher) {
+        val settings = FakeSettingsRepository()
+        val model = vm(settings = settings)
+        model.setGridColumnWidth(220)
+        advanceUntilIdle()
+        settings.setGridWidths shouldContainExactly listOf(220)
     }
 
     // ---- needsReviewCount switches source by review mode ----

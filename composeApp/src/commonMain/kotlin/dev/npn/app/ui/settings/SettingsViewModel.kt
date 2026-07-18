@@ -2,7 +2,6 @@ package dev.npn.app.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import dev.npn.core.app.GridSizing
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.ViewType
@@ -18,7 +17,6 @@ data class SettingsUiState(
     val ocrLanguage: String = "eng",
     val trashRetentionDays: Int = 30,
     val defaultViewType: ViewType = ViewType.GRID,
-    val gridColumnWidth: Int = GridSizing.DEFAULT_COLUMN_WIDTH,
     val landscapeListColumns: Boolean = false,
 )
 
@@ -35,15 +33,14 @@ class SettingsViewModel(
         settings.ocrLanguage,
         settings.trashRetentionDays,
         settings.defaultViewType,
-        combine(settings.gridColumnWidth, settings.landscapeListColumns) { w, l -> w to l },
-    ) { location, lang, retention, viewType, grid ->
+        settings.landscapeListColumns,
+    ) { location, lang, retention, viewType, landscape ->
         SettingsUiState(
             libraryLocation = location,
             ocrLanguage = lang,
             trashRetentionDays = retention,
             defaultViewType = viewType,
-            gridColumnWidth = grid.first,
-            landscapeListColumns = grid.second,
+            landscapeListColumns = landscape,
         )
     }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
@@ -57,9 +54,6 @@ class SettingsViewModel(
 
     fun setDefaultViewType(v: ViewType) =
         viewModelScope.launch { settings.setDefaultViewType(v) }
-
-    fun setGridColumnWidth(dp: Int) =
-        viewModelScope.launch { settings.setGridColumnWidth(dp) }
 
     fun setLandscapeListColumns(enabled: Boolean) =
         viewModelScope.launch { settings.setLandscapeListColumns(enabled) }
