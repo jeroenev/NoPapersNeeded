@@ -117,8 +117,8 @@ class LibrarySessionImpl private constructor(
     override suspend fun rescan(): ScanReport {
         val report = coordinator.rescan()
         _lastScanReport.value = report
-        // Adopt any foreign OCR sidecars picked up by the rescan, then queue/kick + purge trash.
-        ocrPipeline.adoptForeignSidecars()
+        // Adopt/re-select OCR sidecars picked up by the rescan, then queue/kick + purge trash.
+        ocrPipeline.reconcileSidecars()
         queuePendingOcr()
         return report
     }
@@ -153,7 +153,7 @@ class LibrarySessionImpl private constructor(
     }
 
     override suspend fun reOcr(docId: String) {
-        val doc = db.documentDao().getByDocId(docId) ?: return
+        if (db.documentDao().getByDocId(docId) == null) return
         db.ocrQueueDao().upsert(
             OcrQueueEntity(
                 docId = docId,
@@ -161,8 +161,30 @@ class LibrarySessionImpl private constructor(
                 updatedAt = deps.clock.nowMillis(),
             ),
         )
-        db.documentDao().upsert(doc.copy(ocrState = OcrPipeline.OCR_PENDING))
+        // Partial UPDATE so this state flip cannot clobber metadata columns a concurrent
+        // journal fold just projected onto the same row.
+        db.documentDao().updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
         ocrWorker.kick()
+    }
+
+    override suspend fun ocrVersions(docId: String): List<OcrVersion> {
+        val active = db.documentDao().getByDocId(docId)?.ocrEngine
+        return ocrPipeline.listVersions(docId).map {
+            OcrVersion(
+                engine = it.engine,
+                deviceId = it.deviceId,
+                lang = it.lang,
+                createdAt = it.createdAt,
+                active = it.engine == active,
+            )
+        }
+    }
+
+    override suspend fun setOcrEngine(docId: String, engine: String?) {
+        meta.setOcrEngine(docId, engine)
+        // The commit above already folded the override into the doc row; re-select now so this
+        // device's index reflects the choice immediately.
+        ocrPipeline.reselect(docId)
     }
 
     override suspend fun splitPdf(docId: String, segments: List<IntRange>): SplitOutcome {
@@ -221,7 +243,7 @@ class LibrarySessionImpl private constructor(
                     .collect { event ->
                         val rel = (event as? FsEvent.Changed)?.relPath
                         if (rel != null && rel.startsWith("${NpnPaths.OCR_DIR}/")) {
-                            runCatching { ocrPipeline.adoptForeignSidecars() }
+                            runCatching { ocrPipeline.reconcileSidecars() }
                         } else {
                             runCatching { coordinator.reconcileMetadata() }
                             runCatching { doWatchTriggeredRescan() }
@@ -291,9 +313,17 @@ class LibrarySessionImpl private constructor(
         if (route == WatchRoute.PassToRescan) return route
         val rel = (event as? FsEvent.Changed)?.relPath
         when (rel?.let(NpnPaths::journalPath)) {
-            is NpnPaths.JournalPath.ObjectV2 -> runCatching { coordinator.ingestObject(rel) }
+            is NpnPaths.JournalPath.ObjectV2 -> {
+                runCatching { coordinator.ingestObject(rel) }
+                // A remote OCR-engine override may have just folded in; re-select promptly
+                // instead of waiting for the next rescan.
+                runCatching { ocrPipeline.reconcileSidecars() }
+            }
             NpnPaths.JournalPath.Staging, null -> Unit
-            else -> runCatching { coordinator.reconcileMetadata() }
+            else -> {
+                runCatching { coordinator.reconcileMetadata() }
+                runCatching { ocrPipeline.reconcileSidecars() }
+            }
         }
         return route
     }
@@ -343,7 +373,9 @@ class LibrarySessionImpl private constructor(
                         updatedAt = deps.clock.nowMillis(),
                     ),
                 )
-                db.documentDao().upsert(doc.copy(ocrState = OcrPipeline.OCR_PENDING))
+                // Partial UPDATE so this state flip cannot clobber metadata columns a concurrent
+                // journal fold just projected onto the same row.
+                db.documentDao().updateOcrState(doc.docId, OcrPipeline.OCR_PENDING, null, null)
             }
         }
     }

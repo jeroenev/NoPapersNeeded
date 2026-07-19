@@ -19,12 +19,14 @@ import androidx.room3.migration.AutoMigrationSpec
     // v3: added document_fields. v4 adds the persisted metadata source/event accumulator.
     // v5: drops the folded_segments cache table (dead JournalIndex fold pipeline removed).
     // v6: adds metadata_superseded to track compaction snapshot supersession.
-    version = 6,
+    // v7: adds documents.ocrEngine (indexed OCR version) + documents.ocrEngineOverride.
+    version = 7,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
         AutoMigration(from = 4, to = 5, spec = NpnDatabase.DropFoldedSegments::class),
         AutoMigration(from = 5, to = 6),
+        AutoMigration(from = 6, to = 7),
     ],
     entities = [
         DocumentEntity::class,

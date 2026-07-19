@@ -53,6 +53,13 @@ data class DocumentEntity(
     val missing: Boolean = false,
     /** none | pending | done | failed | adopted */
     val ocrState: String = "none",
+    /** Engine of the OCR sidecar currently indexed for search (null until first indexing). */
+    val ocrEngine: String? = null,
+    /**
+     * User override of the searchable OCR engine, projected from the journal's
+     * [dev.npn.core.model.DocProperty.OCR_ENGINE] LWW property. Null = automatic (best engine).
+     */
+    val ocrEngineOverride: String? = null,
 )
 
 @Entity(tableName = "tags")

@@ -141,6 +141,38 @@ class MetadataWriterTest {
     }
 
     /**
+     * [MetadataWriter.setOcrEngine] pins the per-document OCR engine as a `prop-set` journal
+     * event for key `ocrEngine` (the [DocProperty.OCR_ENGINE] wire key), which the Indexer
+     * projects onto [DocumentEntity.ocrEngineOverride]. Clearing (null) removes the override.
+     */
+    @Test
+    fun setOcrEngineCommitsPropSetAndProjectsOverride() = runTest {
+        val rig = AppSessionRig.create(backgroundScope)
+        try {
+            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+
+            rig.session.meta.setOcrEngine(id, "tesseract")
+
+            // Committed as a prop-set event carrying the "ocrEngine" property key.
+            val events = rig.db.metadataProjectionDao().allEvents()
+            val propSet = events.filter { it.operation == "prop-set" }
+            propSet.map { it.documentId } shouldContain id
+            propSet.any { it.canonicalJson.contains("\"ocrEngine\"") } shouldBe true
+
+            // Projected onto the override column (not the indexed-version column).
+            rig.db.documentDao().getByDocId(id)!!.ocrEngineOverride shouldBe "tesseract"
+
+            // Clearing removes the override.
+            rig.session.meta.setOcrEngine(id, null)
+            rig.db.documentDao().getByDocId(id)!!.ocrEngineOverride shouldBe null
+        } finally {
+            rig.close()
+        }
+    }
+
+    /**
      * Regression: [DocumentRepository.observeDoc] must re-emit on tag changes without a
      * re-subscribe (the detail view used to read tags one-shot and only re-emitted on
      * `documents`/`document_fields` invalidations, leaving the screen stale until reopened).

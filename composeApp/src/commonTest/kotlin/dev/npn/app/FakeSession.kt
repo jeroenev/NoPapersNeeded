@@ -9,6 +9,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.OcrStatus
+import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.ScanProgressUi
@@ -139,6 +140,7 @@ class FakeMetadataWriter : MetadataWriter {
     val tagStyles = mutableListOf<Triple<String, String?, String?>>()
     val renamedFiles = mutableListOf<Pair<String, String>>()
     val movedFiles = mutableListOf<Pair<String, String>>()
+    val ocrEngineSets = mutableListOf<Pair<String, String?>>()
 
     /** If set, every batched op (addTag/removeTag/setReviewed) throws this. */
     var failBatchOps: (() -> Nothing)? = null
@@ -193,6 +195,10 @@ class FakeMetadataWriter : MetadataWriter {
     override suspend fun setField(docId: String, key: String, value: String?) {
         failSetField?.invoke()
         fieldSets += Triple(docId, key, value)
+    }
+
+    override suspend fun setOcrEngine(docId: String, engine: String?) {
+        ocrEngineSets += docId to engine
     }
 
     override suspend fun renameTag(from: String, to: String) {
@@ -290,6 +296,11 @@ class FakeLibrarySession : LibrarySession {
     val reOcrIds = mutableListOf<String>()
     var failReOcr: (() -> Nothing)? = null
 
+    /** Backing list returned by [ocrVersions]; tests mutate it to drive the picker. */
+    var ocrVersionsList: List<OcrVersion> = emptyList()
+    val ocrEngineSets = mutableListOf<Pair<String, String?>>()
+    var failSetOcrEngine: (() -> Nothing)? = null
+
     override suspend fun setReviewMode(mode: ReviewMode) {
         reviewModeSets += mode
         reviewModeFlow.value = mode
@@ -319,6 +330,13 @@ class FakeLibrarySession : LibrarySession {
     override suspend fun reOcr(docId: String) {
         failReOcr?.invoke()
         reOcrIds += docId
+    }
+
+    override suspend fun ocrVersions(docId: String): List<OcrVersion> = ocrVersionsList
+
+    override suspend fun setOcrEngine(docId: String, engine: String?) {
+        failSetOcrEngine?.invoke()
+        ocrEngineSets += docId to engine
     }
 
     val splits = mutableListOf<Pair<String, List<IntRange>>>()

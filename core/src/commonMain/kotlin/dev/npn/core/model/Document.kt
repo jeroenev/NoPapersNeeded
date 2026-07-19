@@ -39,7 +39,13 @@ enum class DocProperty(val wire: String) {
     CORRESPONDENT("correspondent"),
     DOC_TYPE("docType"),
     DOC_DATE("docDate"), // ISO-8601 local date, e.g. 2026-07-15
-    TITLE("title");
+    TITLE("title"),
+    /**
+     * User override of the OCR version used for search: an engine name (e.g. "tesseract",
+     * "mlkit", "ai"), or cleared (null) for automatic best-engine selection. Synced like any
+     * other LWW property; devices re-select the indexed sidecar when it changes.
+     */
+    OCR_ENGINE("ocrEngine");
 
     companion object {
         fun fromWire(value: String?): DocProperty? = entries.firstOrNull { it.wire == value }

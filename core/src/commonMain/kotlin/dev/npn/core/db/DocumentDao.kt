@@ -19,6 +19,20 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE docId = :docId")
     suspend fun getByDocId(docId: String): DocumentEntity?
 
+    /**
+     * Targeted update of the OCR bookkeeping columns. A partial UPDATE (not a row upsert) so a
+     * background OCR write can never clobber metadata columns a concurrent journal fold just
+     * projected onto the same row. [pageCount] only fills a NULL page count; a null [engine]
+     * keeps the stored engine.
+     */
+    @Query(
+        "UPDATE documents SET ocrState = :state, " +
+            "pageCount = COALESCE(pageCount, :pageCount), " +
+            "ocrEngine = COALESCE(:engine, ocrEngine) " +
+            "WHERE docId = :docId",
+    )
+    suspend fun updateOcrState(docId: String, state: String, pageCount: Int?, engine: String?)
+
     @Query("SELECT * FROM documents WHERE docId = :docId")
     fun observeByDocId(docId: String): Flow<DocumentEntity?>
 

@@ -83,34 +83,34 @@ object NpnPaths {
         val snapshotBucket = snapshotBucketPattern.matchEntire(dir)
         val bucket = objectBucketPattern.matchEntire(dir)
         return when {
-            snapshotBucket != null -> classifySnapshotFile(snapshotBucket, name)
-            bucket != null -> classifyObjectFile(bucket, name)
+            snapshotBucket != null -> classifyBucketFile(snapshotBucket, name, SNAPSHOT_V2, snapshot = true)
+            bucket != null -> classifyBucketFile(bucket, name, STORAGE_V2, snapshot = false)
             dir.isNotEmpty() && legacySegmentPattern.matches(name) -> JournalPath.Legacy(dir, name)
             else -> JournalPath.Unknown
         }
     }
 
-    private fun classifyObjectFile(bucket: MatchResult, name: String): JournalPath {
+    /**
+     * Classify a file inside a matched object/snapshot bucket. [supported] is the store version
+     * this reader understands ([STORAGE_V2] or [SNAPSHOT_V2]); [snapshot] selects the resulting
+     * canonical path type. Object and snapshot buckets share identical structure, so a single
+     * helper keeps the two in lockstep.
+     */
+    private fun classifyBucketFile(
+        bucket: MatchResult,
+        name: String,
+        supported: Int,
+        snapshot: Boolean,
+    ): JournalPath {
         val version = bucket.groupValues[1].toIntOrNull() ?: Int.MAX_VALUE
         val expected = recoverObjectHash(name)
         val prefixMatches = expected?.startsWith(bucket.groupValues[2].lowercase()) == true
         return when {
-            version != STORAGE_V2 -> JournalPath.UnsupportedObjectStore(version)
+            version != supported -> JournalPath.UnsupportedObjectStore(version)
             objectStagingPattern.matches(name) -> JournalPath.Staging
             expected == null || !prefixMatches -> JournalPath.Unknown
+            snapshot -> JournalPath.SnapshotV2(expected, objectNamePattern.matches(name))
             else -> JournalPath.ObjectV2(expected, objectNamePattern.matches(name))
-        }
-    }
-
-    private fun classifySnapshotFile(bucket: MatchResult, name: String): JournalPath {
-        val version = bucket.groupValues[1].toIntOrNull() ?: Int.MAX_VALUE
-        val expected = recoverObjectHash(name)
-        val prefixMatches = expected?.startsWith(bucket.groupValues[2].lowercase()) == true
-        return when {
-            version != SNAPSHOT_V2 -> JournalPath.UnsupportedObjectStore(version)
-            objectStagingPattern.matches(name) -> JournalPath.Staging
-            expected == null || !prefixMatches -> JournalPath.Unknown
-            else -> JournalPath.SnapshotV2(expected, objectNamePattern.matches(name))
         }
     }
 
@@ -133,9 +133,17 @@ object NpnPaths {
         return version.toIntOrNull() ?: Int.MAX_VALUE
     }
 
-    /** `.npn/ocr/<sha256>.<deviceId>.json` */
-    fun ocrSidecarPath(sha256: String, deviceId: String): String =
-        "$OCR_DIR/$sha256.$deviceId.json"
+    /**
+     * `.npn/ocr/<sha256>.<writerKey>.json`. The writer key is `<deviceId>` for legacy sidecars
+     * (one per device) and `<deviceId>.<engine>` for engine-qualified sidecars (one per
+     * device+engine, letting multiple OCR versions co-exist). Readers treat the whole middle
+     * as an opaque key; see [OcrSidecarFiles.listForHash].
+     */
+    fun ocrSidecarPath(sha256: String, writerKey: String): String =
+        "$OCR_DIR/$sha256.$writerKey.json"
+
+    /** Writer key for an engine-qualified sidecar: `<deviceId>.<engine>`. */
+    fun ocrWriterKey(deviceId: String, engine: String): String = "$deviceId.$engine"
 
     /**
      * `.npn/trash/<baseName>__<first 8 hash chars>.<ext>`
@@ -173,7 +181,13 @@ object NpnPaths {
         val norm = normalize(relPath)
         val ownJournal = journalDeviceDir(deviceId)
         if (norm == ownJournal || norm.startsWith("$ownJournal/")) return true
-        return norm.startsWith("$OCR_DIR/") && norm.endsWith(".$deviceId.json")
+        if (!norm.startsWith("$OCR_DIR/")) return false
+        // Own sidecars: legacy `<hash>.<deviceId>.json` or engine-qualified
+        // `<hash>.<deviceId>.<engine>.json`.
+        if (norm.endsWith(".$deviceId.json")) return true
+        val stem = norm.substringAfterLast('/').removeSuffix(".json")
+        val writerKey = stem.substringAfter('.', "")
+        return writerKey.startsWith("$deviceId.")
     }
 
     /** True when any path segment begins with a dot (hidden file/dir), e.g. `.npn`, `a/.b/c`. */
