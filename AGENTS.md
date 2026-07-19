@@ -39,10 +39,10 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   cache stored outside the library folder and never synced.
 - PDFs are immutable after import (rename/move only). Sole exception: explicit
   bake-in-place, which records a `relink` journal event for the new hash.
-- All app-written files in `.npn/` are write-once and single-writer (per-device journal
-  segments, OCR sidecars keyed by hash+deviceId). Never append to or rewrite an existing
-  segment; never write into another device's journal directory. New journal writes must
-  go through `JournalCoordinator` to preserve the single-writer invariant.
+- All app-written files in `.npn/` are write-once. Journal transactions are content-addressed
+  by their complete-file SHA-256 and require verified create-without-replacement publication;
+  OCR sidecars are keyed by hash+deviceId. Never append to or rewrite a published object. New
+  journal writes must go through `JournalCoordinator`.
 - Document identity = SHA-256 of bytes; duplicates are forbidden (one canonical path per hash).
 - Merge semantics: OR-set for tags, HLC last-writer-wins for single-value properties.
 

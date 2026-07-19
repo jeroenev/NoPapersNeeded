@@ -14,9 +14,9 @@ same library.
 - Documents are immutable. Once a PDF is in the library the app never rewrites its
   bytes (rename/move only). The one exception is the explicit bake-in-place action.
 - Metadata is a journal. Changes (tags, properties, trash, relink) are stored as
-  immutable JSONL transactions under `.npn/journal/`. New-format transactions use
-  their complete-file SHA-256 as the filename; legacy per-device segments remain
-  readable. No published transaction is modified after it is written. Merges are conflict-free:
+  immutable JSONL transactions under `.npn/journal/`. Transactions use their
+  complete-file SHA-256 as the filename. No published transaction is modified after
+  it is written. Merges are conflict-free:
   OR-set semantics for tags, hybrid-logical-clock last-writer-wins for single-value
   properties.
 - SQLite is a rebuildable cache. The index (search, thumbnails, source provenance,
@@ -168,7 +168,6 @@ Library/
   ... your PDFs and subfolders ...
   inbox/                                # optional import/scan target
   .npn/
-    journal/<deviceId>/<seq>.jsonl      # legacy per-device metadata segments
     journal/objects-v2-<00..ff>/
       <sha256>.jsonl                    # content-addressed metadata transactions
     ocr/<sha256>.<deviceId>.json        # OCR sidecars, adopted across devices
@@ -178,12 +177,10 @@ Library/
 The `.npn/` directory syncs with the documents. The device-local index and cached
 thumbnails live outside the library folder and are never synced.
 
-Metadata is written as content-addressed storage-v2 objects on every storage
-provider that supports verified publication (all current desktop and Android/SAF
-libraries). Legacy per-device v1 segments are no longer produced but remain fully
-readable forever, so libraries written by older releases keep folding correctly.
-A provider without a proven atomic create-without-replacement primitive (an unknown
-future backend) would fall back to writing legacy v1 segments.
+Metadata uses content-addressed storage-v2 objects. Metadata writes require verified
+publication with atomic create-without-replacement semantics, supported by all current
+desktop and Android/SAF libraries. A future provider that cannot guarantee this is
+read-only for metadata rather than falling back to another storage format.
 
 ## License
 
