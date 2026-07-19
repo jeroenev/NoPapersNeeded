@@ -15,6 +15,15 @@ class NpnPathsTest {
     }
 
     @Test
+    fun engineQualifiedOcrPaths() {
+        // ocrWriterKey composes the device+engine key; ocrSidecarPath treats it as an opaque
+        // middle so the file lands at `<hash>.<deviceId>.<engine>.json`.
+        val key = NpnPaths.ocrWriterKey("dev1", "tesseract")
+        key shouldBe "dev1.tesseract"
+        NpnPaths.ocrSidecarPath("abc123", key) shouldBe ".npn/ocr/abc123.dev1.tesseract.json"
+    }
+
+    @Test
     fun classifiesVersionedJournalPathsWithoutTreatingObjectsAsLegacy() {
         val hash = "ab" + "0".repeat(62)
         val canonical = NpnPaths.journalObjectPath(hash)
@@ -66,11 +75,13 @@ class NpnPathsTest {
         // Own journal dir + segments: self-echo, must be filtered.
         NpnPaths.isOwnDeviceWrite(".npn/journal/dev1", "dev1").shouldBeTrue()
         NpnPaths.isOwnDeviceWrite(".npn/journal/dev1/0001.jsonl", "dev1").shouldBeTrue()
-        // Own OCR sidecar: self-echo.
+        // Own OCR sidecar: self-echo. Both legacy and engine-qualified forms.
         NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev1.json", "dev1").shouldBeTrue()
+        NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev1.tesseract.json", "dev1").shouldBeTrue()
         // Another device's journal/sidecar (arriving via sync) must keep triggering a refresh.
         NpnPaths.isOwnDeviceWrite(".npn/journal/dev2/0001.jsonl", "dev1").shouldBeFalse()
         NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev2.json", "dev1").shouldBeFalse()
+        NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev2.tesseract.json", "dev1").shouldBeFalse()
         // A device id that prefixes another must not match the longer one's dir.
         NpnPaths.isOwnDeviceWrite(".npn/journal/dev12/0001.jsonl", "dev1").shouldBeFalse()
         // Document-area and trash paths are never self-writes.

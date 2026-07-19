@@ -69,6 +69,11 @@ class MetadataWriterImpl(
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.TITLE, v)))
     }
 
+    override suspend fun setOcrEngine(docId: String, engine: String?) {
+        val v = engine?.trim()?.ifEmpty { null }
+        coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.OCR_ENGINE, v)))
+    }
+
     override suspend fun setField(docId: String, key: String, value: String?) {
         val k = key.trim()
         if (k.isEmpty()) return

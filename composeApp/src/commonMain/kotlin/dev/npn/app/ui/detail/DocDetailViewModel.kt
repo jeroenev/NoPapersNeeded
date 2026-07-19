@@ -3,6 +3,7 @@ package dev.npn.app.ui.detail
 import androidx.lifecycle.viewModelScope
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -80,6 +81,16 @@ class DocDetailViewModel(
             .map { runCatching { session.content.extractedText(docId) }.getOrNull() }
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
+    /**
+     * Stored OCR versions of this doc (best-ranked first), reloaded whenever the indexed OCR
+     * state or engine changes so the picker reflects freshly-adopted sidecars and re-selections.
+     */
+    val ocrVersions: StateFlow<List<OcrVersion>> =
+        doc.map { it?.doc?.ocrState to it?.doc?.ocrEngine }
+            .distinctUntilChanged()
+            .map { runCatching { session.ocrVersions(docId) }.getOrDefault(emptyList()) }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+
     init {
         viewModelScope.launch {
             val count = runCatching { session.content.pageCount(docId) }.getOrNull() ?: 0
@@ -139,6 +150,10 @@ class DocDetailViewModel(
             _ui.value = _ui.value.copy(reindexing = false)
         }
     }
+
+    /** Pin [engine] as the searchable OCR version (null = automatic best-engine selection). */
+    fun setOcrEngine(engine: String?) =
+        launchReporting("change OCR engine") { session.setOcrEngine(docId, engine) }
 
     /**
      * Split into one document per [segments] entry. On success the original is trashed by the

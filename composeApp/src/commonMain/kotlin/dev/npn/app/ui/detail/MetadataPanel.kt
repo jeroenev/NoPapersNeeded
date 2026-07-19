@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
@@ -15,6 +16,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,9 +27,11 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Tab
 import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
@@ -42,6 +47,7 @@ import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.OcrVersion
 import dev.npn.core.model.ReviewMode
 
 /**
@@ -59,6 +65,8 @@ fun MetadataPanel(
     docTypes: List<String>,
     fieldKeys: List<String>,
     ocrText: String?,
+    ocrVersions: List<OcrVersion>,
+    onSetOcrEngine: (String?) -> Unit,
     onCommitTitle: (String) -> Unit,
     onCommitCorrespondent: (String) -> Unit,
     onCommitDocType: (String) -> Unit,
@@ -91,6 +99,8 @@ fun MetadataPanel(
                 correspondents = correspondents,
                 docTypes = docTypes,
                 fieldKeys = fieldKeys,
+                ocrVersions = ocrVersions,
+                onSetOcrEngine = onSetOcrEngine,
                 onCommitTitle = onCommitTitle,
                 onCommitCorrespondent = onCommitCorrespondent,
                 onCommitDocType = onCommitDocType,
@@ -126,6 +136,8 @@ private fun DetailsTab(
     correspondents: List<String>,
     docTypes: List<String>,
     fieldKeys: List<String>,
+    ocrVersions: List<OcrVersion>,
+    onSetOcrEngine: (String?) -> Unit,
     onCommitTitle: (String) -> Unit,
     onCommitCorrespondent: (String) -> Unit,
     onCommitDocType: (String) -> Unit,
@@ -219,6 +231,138 @@ private fun DetailsTab(
             FactRow("Added", formatEpochDate(doc.addedAt))
             doc.pageCount?.let { FactRow("Pages", it.toString()) }
             FactRow("OCR", ocrLabel(doc.ocrState))
+            OcrEngineRow(
+                indexedEngine = doc.ocrEngine,
+                pinned = doc.ocrEngineOverride != null,
+                versions = ocrVersions,
+                onSetEngine = onSetOcrEngine,
+            )
+        }
+    }
+}
+
+/**
+ * Shows the OCR engine whose version is currently indexed for search, with a pin indicator when
+ * the user has overridden automatic selection. Tapping it opens [OcrEnginePickerDialog] when there
+ * are stored versions to choose from.
+ */
+@Composable
+private fun OcrEngineRow(
+    indexedEngine: String?,
+    pinned: Boolean,
+    versions: List<OcrVersion>,
+    onSetEngine: (String?) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    val hasVersions = versions.isNotEmpty()
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(if (hasVersions) Modifier.clickable { showPicker = true } else Modifier),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            "Engine",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.padding(end = 4.dp),
+        )
+        Text(indexedEngine?.let { engineLabel(it) } ?: "—", style = MaterialTheme.typography.bodySmall)
+        if (pinned) {
+            Icon(
+                Icons.Filled.PushPin,
+                contentDescription = "Pinned engine",
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(16.dp),
+            )
+        }
+        if (hasVersions) {
+            Icon(
+                Icons.Filled.ArrowDropDown,
+                contentDescription = "Choose OCR engine",
+                modifier = Modifier.size(20.dp),
+            )
+        }
+    }
+    if (showPicker) {
+        OcrEnginePickerDialog(
+            versions = versions,
+            pinnedEngine = if (pinned) indexedEngine else null,
+            onConfirm = {
+                onSetEngine(it)
+                showPicker = false
+            },
+            onDismiss = { showPicker = false },
+        )
+    }
+}
+
+/**
+ * Radio picker for the searchable OCR engine: "Automatic" plus one entry per distinct stored
+ * engine (labeled with its display name and the source device + date). Selecting "Automatic"
+ * clears the pin; any other choice pins that engine.
+ */
+@Composable
+private fun OcrEnginePickerDialog(
+    versions: List<OcrVersion>,
+    pinnedEngine: String?,
+    onConfirm: (String?) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val engines = remember(versions) { versions.distinctBy { it.engine } }
+    var selected by remember { mutableStateOf(pinnedEngine) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Search text engine") },
+        text = {
+            Column {
+                OcrEngineOption(
+                    label = "Automatic (best available)",
+                    secondary = null,
+                    selected = selected == null,
+                    onClick = { selected = null },
+                )
+                engines.forEach { version ->
+                    OcrEngineOption(
+                        label = engineLabel(version.engine),
+                        secondary = "${version.deviceId} · ${formatEpochDate(version.createdAt)}",
+                        selected = selected == version.engine,
+                        onClick = { selected = version.engine },
+                    )
+                }
+            }
+        },
+        confirmButton = { TextButton(onClick = { onConfirm(selected) }) { Text("Apply") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+    )
+}
+
+@Composable
+private fun OcrEngineOption(
+    label: String,
+    secondary: String?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(vertical = 8.dp),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        RadioButton(selected = selected, onClick = null)
+        Column {
+            Text(label, style = MaterialTheme.typography.bodyMedium)
+            if (secondary != null) {
+                Text(
+                    secondary,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -471,4 +615,13 @@ private fun ocrLabel(state: String): String = when (state) {
     "failed" -> "Failed"
     "adopted" -> "Adopted from another device"
     else -> state
+}
+
+/** Display name for an OCR engine identifier. */
+private fun engineLabel(engine: String): String = when (engine) {
+    "tesseract" -> "Tesseract"
+    "mlkit" -> "MLKit"
+    "ai" -> "AI"
+    "embedded" -> "Embedded text"
+    else -> engine
 }

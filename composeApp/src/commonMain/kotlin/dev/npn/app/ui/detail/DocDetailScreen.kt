@@ -85,6 +85,7 @@ fun DocDetailScreen(
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
     val fieldKeys by vm.fieldKeys.collectAsStateWithLifecycle()
     val ocrText by vm.ocrText.collectAsStateWithLifecycle()
+    val ocrVersions by vm.ocrVersions.collectAsStateWithLifecycle()
 
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -209,6 +210,8 @@ fun DocDetailScreen(
                 docTypes = docTypes,
                 fieldKeys = fieldKeys,
                 ocrText = ocrText,
+                ocrVersions = ocrVersions,
+                onSetOcrEngine = vm::setOcrEngine,
                 onCommitTitle = vm::setTitle,
                 onCommitCorrespondent = vm::setCorrespondent,
                 onCommitDocType = vm::setDocType,

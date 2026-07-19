@@ -1,6 +1,8 @@
 package dev.npn.app
 
 import dev.npn.app.ui.detail.DocDetailViewModel
+import dev.npn.core.app.DocListItem
+import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainExactly
@@ -200,6 +202,69 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         advanceUntilIdle()
         model.ui.value.reindexing shouldBe false
         messages shouldContainExactly listOf("Could not re-run OCR: ocr engine missing")
+        job.cancel()
+    }
+
+    // ---- OCR engine pin ----
+
+    @Test
+    fun setOcrEnginePinsAndClears() = runTest(dispatcher) {
+        val session = FakeLibrarySession()
+        val model = vm(session = session)
+        model.setOcrEngine("tesseract")
+        model.setOcrEngine(null)
+        advanceUntilIdle()
+        session.ocrEngineSets shouldContainExactly listOf(
+            "doc-1" to "tesseract",
+            "doc-1" to null,
+        )
+    }
+
+    @Test
+    fun setOcrEngineFailureEmitsMessage() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply { failSetOcrEngine = { error("reindex failed") } }
+        val model = vm(session = session)
+        val messages = mutableListOf<String>()
+        val job = launch { model.messages.collect { messages += it } }
+        advanceUntilIdle()
+        model.setOcrEngine("mlkit")
+        advanceUntilIdle()
+        session.ocrEngineSets shouldBe emptyList()
+        messages shouldContainExactly listOf("Could not change OCR engine: reindex failed")
+        job.cancel()
+    }
+
+    // ---- OCR versions load + reload on ocrState change ----
+
+    @Test
+    fun ocrVersionsLoadFromSession() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            ocrVersionsList = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
+            documents.singleDoc.value = listItem("doc-1")
+        }
+        val model = vm(session = session)
+        val job = launch { model.ocrVersions.collect {} }
+        advanceUntilIdle()
+        model.ocrVersions.value shouldContainExactly session.ocrVersionsList
+        job.cancel()
+    }
+
+    @Test
+    fun ocrVersionsReloadWhenOcrStateChanges() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            documents.singleDoc.value = DocListItem(doc("doc-1").copy(ocrState = "none"), emptyList())
+        }
+        val model = vm(session = session)
+        val job = launch { model.ocrVersions.collect {} }
+        advanceUntilIdle()
+        model.ocrVersions.value shouldBe emptyList()
+
+        // A newly-completed OCR run (state -> done) should trigger a reload with the fresh version.
+        val fresh = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
+        session.ocrVersionsList = fresh
+        session.documents.singleDoc.value = DocListItem(doc("doc-1").copy(ocrState = "done"), emptyList())
+        advanceUntilIdle()
+        model.ocrVersions.value shouldContainExactly fresh
         job.cancel()
     }
 

@@ -87,10 +87,11 @@ class OcrPipelineTest {
         db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
         db.ftsDao().searchDocIds("invoice") shouldContainExactly listOf(docId)
 
-        // Sidecar written once for this device, engine=embedded.
-        val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA"))
+        // Sidecar written once for this device+engine, engine=embedded.
+        val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.embedded"))
         sidecar.engine shouldBe OcrPipeline.ENGINE_EMBEDDED
         sidecar.pages.size shouldBe 2
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrPipeline.ENGINE_EMBEDDED
     }
 
     @Test
@@ -102,9 +103,10 @@ class OcrPipelineTest {
         pipeline("devA", fake).processDoc(docId)
 
         fake.calls shouldBe 1 // one page
-        val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA"))
+        val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.mlkit"))
         sidecar.engine shouldBe "mlkit"
         db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
         db.ftsDao().searchDocIds("scanned") shouldContainExactly listOf(docId)
     }
 
@@ -203,21 +205,144 @@ class OcrPipelineTest {
     }
 
     @Test
-    fun adoptForeignSidecarsIndexesAndClearsQueue() = runTest {
+    fun reconcileAdoptsForeignSidecarAndClearsQueueWhenNoBetterEngine() = runTest {
         val bytes = PdfFixtures.imageOnlyPdf()
         val docId = stageDoc("scan.pdf", bytes)
-        // Write a foreign sidecar as if produced by another device.
-        val foreign = OcrSidecar(
-            doc = docId, dev = "otherdev", engine = "tesseract", lang = "eng",
-            createdAt = 1, pages = listOf("foreign charlie text"),
-        )
-        OcrSidecarFiles(fs).writeOnce(docId, "otherdev", OcrSidecarCodec.encode(foreign))
+        // Foreign sidecar with the SAME rank as this device's engine: adopt, no upgrade run.
+        writeForeignSidecar(docId, dev = "otherdev", engine = "tesseract", text = "foreign charlie text")
 
-        pipeline("devA", FakeOcrEngine(available = true, name = "mlkit")).adoptForeignSidecars()
+        pipeline("devA", FakeOcrEngine(available = true, name = "tesseract")).reconcileSidecars()
+
+        db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_ADOPTED
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
+        db.ftsDao().searchDocIds("charlie") shouldContainExactly listOf(docId)
+        db.ocrQueueDao().observeQueue().first().none { it.docId == docId } shouldBe true
+    }
+
+    @Test
+    fun reconcileQueuesUpgradeWhenOwnEngineOutranksStoredVersions() = runTest {
+        val bytes = PdfFixtures.imageOnlyPdf()
+        val docId = stageDoc("scan.pdf", bytes)
+        writeForeignSidecar(docId, dev = "otherdev", engine = "tesseract", text = "foreign charlie text")
+
+        // mlkit outranks tesseract: adopt the foreign text now, but queue an own OCR run.
+        pipeline("devA", FakeOcrEngine(available = true, name = "mlkit")).reconcileSidecars()
 
         db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_ADOPTED
         db.ftsDao().searchDocIds("charlie") shouldContainExactly listOf(docId)
-        db.ocrQueueDao().observeQueue().first().none { it.docId == docId } shouldBe true
+        val entry = db.ocrQueueDao().observeQueue().first().first { it.docId == docId }
+        entry.state shouldBe OcrPipeline.STATE_PENDING
+    }
+
+    @Test
+    fun processDocUpgradesToOwnBetterEngineAndIndexesIt() = runTest {
+        val bytes = PdfFixtures.imageOnlyPdf()
+        val docId = stageDoc("scan.pdf", bytes)
+        writeForeignSidecar(docId, dev = "otherdev", engine = "tesseract", text = "foreign charlie text")
+
+        val fake = FakeOcrEngine(available = true, name = "mlkit", canned = "upgraded delta text")
+        pipeline("devA", fake).processDoc(docId)
+
+        fake.calls shouldBeGreaterThan 0
+        // Both versions co-exist on disk; the better one is indexed.
+        OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.mlkit")).engine shouldBe "mlkit"
+        OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "otherdev")).engine shouldBe "tesseract"
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+        db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
+        db.ftsDao().searchDocIds("delta") shouldContainExactly listOf(docId)
+        db.ftsDao().searchDocIds("charlie") shouldBe emptyList()
+    }
+
+    @Test
+    fun selectionPrefersHighestRankedEngineAcrossSidecars() = runTest {
+        val bytes = PdfFixtures.imageOnlyPdf()
+        val docId = stageDoc("scan.pdf", bytes)
+        writeForeignSidecar(docId, dev = "deskdev", engine = "tesseract", text = "tesseract words")
+        writeForeignSidecar(docId, dev = "phonedev", engine = "mlkit", text = "mlkit words")
+        writeForeignSidecar(docId, dev = "olddev", engine = "mixed", text = "legacy mixed words")
+
+        // Own engine does not outrank mlkit -> pure adoption of the best stored version.
+        pipeline("devA", FakeOcrEngine(available = true, name = "mlkit")).processDoc(docId)
+
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+        db.ftsDao().searchDocIds("mlkit") shouldContainExactly listOf(docId)
+        db.ftsDao().searchDocIds("tesseract") shouldBe emptyList()
+        db.ftsDao().searchDocIds("legacy") shouldBe emptyList()
+    }
+
+    @Test
+    fun overridePinsSearchToChosenEngineAndClearingRestoresBest() = runTest {
+        val bytes = PdfFixtures.imageOnlyPdf()
+        val docId = stageDoc("scan.pdf", bytes)
+        writeForeignSidecar(docId, dev = "deskdev", engine = "tesseract", text = "tesseract words")
+        writeForeignSidecar(docId, dev = "phonedev", engine = "mlkit", text = "mlkit words")
+        val pipe = pipeline("devA", FakeOcrEngine(available = false, name = "mlkit"))
+        pipe.processDoc(docId)
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+
+        // Simulate the folded override (the Indexer projects DocProperty.OCR_ENGINE here).
+        setOverride(docId, "tesseract")
+        pipe.reselect(docId)
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
+        db.ftsDao().searchDocIds("tesseract") shouldContainExactly listOf(docId)
+        db.ftsDao().searchDocIds("mlkit") shouldBe emptyList()
+
+        // Clearing the override re-selects the best-ranked version.
+        setOverride(docId, null)
+        pipe.reselect(docId)
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
+        db.ftsDao().searchDocIds("mlkit") shouldContainExactly listOf(docId)
+    }
+
+    @Test
+    fun overrideForMissingEngineFallsBackToBestVersion() = runTest {
+        val bytes = PdfFixtures.imageOnlyPdf()
+        val docId = stageDoc("scan.pdf", bytes)
+        writeForeignSidecar(docId, dev = "deskdev", engine = "tesseract", text = "tesseract words")
+        setOverride(docId, "ai") // no ai sidecar exists (yet)
+
+        pipeline("devA", FakeOcrEngine(available = false, name = "mlkit")).processDoc(docId)
+
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
+        db.ftsDao().searchDocIds("tesseract") shouldContainExactly listOf(docId)
+    }
+
+    @Test
+    fun ownEmbeddedSidecarBlocksPointlessUpgradeRuns() = runTest {
+        val bytes = PdfFixtures.imageOnlyPdf()
+        val docId = stageDoc("scan.pdf", bytes)
+        writeForeignSidecar(docId, dev = "otherdev", engine = "tesseract", text = "foreign charlie text")
+        // This device already established every page has a text layer: engine choice is moot.
+        val own = OcrSidecar(
+            doc = docId, dev = "devA", engine = "embedded", lang = "eng",
+            createdAt = 1, pages = listOf("own embedded text"),
+        )
+        OcrSidecarFiles(fs).writeOnce(docId, "devA.embedded", OcrSidecarCodec.encode(own))
+
+        val fake = FakeOcrEngine(available = true, name = "mlkit", canned = "should-not-run")
+        val pipe = pipeline("devA", fake)
+        pipe.reconcileSidecars()
+        pipe.processDoc(docId)
+
+        fake.calls shouldBe 0
+        db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
+        db.ocrQueueDao().observeQueue().first()
+            .none { it.docId == docId && it.state == OcrPipeline.STATE_PENDING } shouldBe true
+    }
+
+    /** Publish a sidecar as if another device produced it (legacy, non-engine-qualified name). */
+    private suspend fun writeForeignSidecar(docId: String, dev: String, engine: String, text: String) {
+        val sidecar = OcrSidecar(
+            doc = docId, dev = dev, engine = engine, lang = "eng",
+            createdAt = 1, pages = listOf(text),
+        )
+        OcrSidecarFiles(fs).writeOnce(docId, dev, OcrSidecarCodec.encode(sidecar))
+    }
+
+    /** Simulate the journal fold projecting a DocProperty.OCR_ENGINE override onto the row. */
+    private suspend fun setOverride(docId: String, engine: String?) {
+        val doc = db.documentDao().getByDocId(docId)!!
+        db.documentDao().upsert(doc.copy(ocrEngineOverride = engine))
     }
 
     @Test

@@ -105,6 +105,13 @@ interface MetadataWriter {
 
     /** Set (or clear, when [value] is null/blank) a custom metadata field [key] on [docId]. */
     suspend fun setField(docId: String, key: String, value: String?)
+
+    /**
+     * Pin the OCR engine whose version is used for search on [docId] (e.g. "tesseract",
+     * "mlkit", "ai"), or clear the pin (null) for automatic best-engine selection. Synced
+     * across devices as an LWW journal property.
+     */
+    suspend fun setOcrEngine(docId: String, engine: String?)
     suspend fun renameTag(from: String, to: String)
     suspend fun mergeTag(from: String, to: String)
     suspend fun deleteTag(name: String)             // removes tag from all docs
@@ -132,6 +139,18 @@ interface DocContentFacade {
 // ---------- session ----------
 
 data class OcrStatus(val pending: Int, val running: Boolean)
+
+/**
+ * One stored OCR version of a document (an OCR sidecar). [active] marks the version whose
+ * text is currently indexed for search on this device.
+ */
+data class OcrVersion(
+    val engine: String,
+    val deviceId: String,
+    val lang: String,
+    val createdAt: Long,
+    val active: Boolean,
+)
 
 /** Everything scoped to one opened library folder. */
 interface LibrarySession {
@@ -169,6 +188,16 @@ interface LibrarySession {
 
     /** Re-queue a single document for OCR (resets its state to pending and kicks the worker). */
     suspend fun reOcr(docId: String)
+
+    /** All stored OCR versions of [docId], best-ranked first. */
+    suspend fun ocrVersions(docId: String): List<OcrVersion>
+
+    /**
+     * Pin (or clear, when [engine] is null) the OCR engine used for search on [docId], then
+     * immediately re-select and re-index the matching stored version on this device. The pin
+     * itself syncs via the journal; other devices re-select on ingesting the event.
+     */
+    suspend fun setOcrEngine(docId: String, engine: String?)
 
     /**
      * Split a document into one new document per [segments] entry (0-based page ranges; must be

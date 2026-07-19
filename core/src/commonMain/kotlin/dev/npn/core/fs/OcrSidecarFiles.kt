@@ -2,8 +2,10 @@ package dev.npn.core.fs
 
 /**
  * File-level adapter for OCR sidecars (PLAN "OCR sidecars"). Sidecars live at
- * `.npn/ocr/<sha256>.<deviceId>.json`, single-writer by construction (deviceId in the name)
- * and write-once. Devices adopt one another's sidecars instead of re-OCRing.
+ * `.npn/ocr/<sha256>.<writerKey>.json` where the writer key is `<deviceId>` (legacy, one per
+ * device) or `<deviceId>.<engine>` (engine-qualified, one per device+engine so multiple OCR
+ * versions co-exist). Single-writer by construction (writer key in the name) and write-once.
+ * Devices adopt one another's sidecars instead of re-OCRing with the same or a worse engine.
  */
 class OcrSidecarFiles(private val fs: LibraryFileSystem) {
 
@@ -17,14 +19,16 @@ class OcrSidecarFiles(private val fs: LibraryFileSystem) {
         }
     }
 
-    suspend fun read(sha256: String, deviceId: String): String =
-        fs.readBytes(NpnPaths.ocrSidecarPath(sha256, deviceId)).decodeToString()
+    /** Read the sidecar for [sha256] written under [writerKey] (a deviceId or `deviceId.engine`). */
+    suspend fun read(sha256: String, writerKey: String): String =
+        fs.readBytes(NpnPaths.ocrSidecarPath(sha256, writerKey)).decodeToString()
 
-    suspend fun writeOnce(sha256: String, deviceId: String, json: String) {
-        fs.writeBytesOnce(NpnPaths.ocrSidecarPath(sha256, deviceId), json.encodeToByteArray())
+    /** Write-once publish of a sidecar under [writerKey] (a deviceId or `deviceId.engine`). */
+    suspend fun writeOnce(sha256: String, writerKey: String, json: String) {
+        fs.writeBytesOnce(NpnPaths.ocrSidecarPath(sha256, writerKey), json.encodeToByteArray())
     }
 
-    /** Device ids that have a sidecar for [sha256], derived from `<sha256>.<deviceId>.json`. */
+    /** Writer keys that have a sidecar for [sha256], derived from `<sha256>.<writerKey>.json`. */
     suspend fun listForHash(sha256: String): List<String> {
         val filePrefix = "$sha256."
         return list().mapNotNull { meta ->

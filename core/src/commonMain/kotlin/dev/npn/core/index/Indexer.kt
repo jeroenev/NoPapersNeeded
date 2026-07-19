@@ -536,6 +536,7 @@ class Indexer(
         val docType: String?,
         val docDate: String?,
         val title: String?,
+        val ocrEngineOverride: String?,
     )
 
     private fun projectMeta(state: FoldedState, doc: String, preds: List<String>): ProjectedMeta {
@@ -550,6 +551,7 @@ class Indexer(
             docType = prop(DocProperty.DOC_TYPE),
             docDate = prop(DocProperty.DOC_DATE),
             title = prop(DocProperty.TITLE),
+            ocrEngineOverride = prop(DocProperty.OCR_ENGINE),
         )
     }
 
@@ -671,6 +673,7 @@ class Indexer(
             docType = meta.docType,
             docDate = meta.docDate,
             title = meta.title,
+            ocrEngineOverride = meta.ocrEngineOverride,
             trashed = lifecycle.trashed,
             trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
             deleted = lifecycle.deleted,
