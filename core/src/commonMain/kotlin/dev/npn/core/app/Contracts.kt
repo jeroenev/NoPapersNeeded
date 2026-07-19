@@ -170,6 +170,14 @@ interface LibrarySession {
     /** Re-queue a single document for OCR (resets its state to pending and kicks the worker). */
     suspend fun reOcr(docId: String)
 
+    /**
+     * Split a document into one new document per [segments] entry (0-based page ranges; must be
+     * contiguous and cover all pages). Parts are imported as regular new documents (deduped,
+     * OCR queued), tags and single-value properties are copied onto them, and the original is
+     * moved to trash. The original file itself is never modified.
+     */
+    suspend fun splitPdf(docId: String, segments: List<IntRange>): SplitOutcome
+
     /** Start folder watching (desktop), OCR worker, periodic reconciliation. Idempotent. */
     fun start(scope: CoroutineScope)
     fun close()
@@ -181,6 +189,12 @@ sealed interface ImportOutcome {
     data class Imported(val docId: String, val relPath: String) : ImportOutcome
     data class Duplicate(val existingDocId: String, val existingPath: String) : ImportOutcome
     data class Failed(val message: String) : ImportOutcome
+}
+
+sealed interface SplitOutcome {
+    /** One docId per requested segment (an already-existing identical part reuses its docId). */
+    data class Done(val partDocIds: List<String>) : SplitOutcome
+    data class Failed(val message: String) : SplitOutcome
 }
 
 // ---------- settings (app-global, not per library) ----------

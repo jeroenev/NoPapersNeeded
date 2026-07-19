@@ -20,6 +20,7 @@ import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
+import dev.npn.core.index.SplitService
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.HlcWatermarkAllocator
@@ -63,6 +64,7 @@ class LibrarySessionImpl private constructor(
     private val importService: ImportService,
     private val maintenance: MaintenanceService,
     private val relinkService: RelinkService,
+    private val splitService: SplitService,
     private val ocrPipeline: OcrPipeline,
     private val ocrWorker: OcrWorker,
     override val documents: DocumentRepository,
@@ -161,6 +163,36 @@ class LibrarySessionImpl private constructor(
         )
         db.documentDao().upsert(doc.copy(ocrState = OcrPipeline.OCR_PENDING))
         ocrWorker.kick()
+    }
+
+    override suspend fun splitPdf(docId: String, segments: List<IntRange>): SplitOutcome {
+        val result = splitService.split(docId, segments)
+        val parts = when (result) {
+            is SplitService.Result.Failed -> return SplitOutcome.Failed(result.message)
+            is SplitService.Result.Done -> result.parts
+        }
+        val partIds = parts.map {
+            when (it) {
+                is ImportResult.Imported -> it.docId
+                is ImportResult.Duplicate -> it.existingDocId
+            }
+        }
+        copyMetadataToParts(docId, partIds)
+        // Trash last: if anything above fails the original stays untouched next to the parts.
+        meta.trashDoc(docId)
+        ocrWorker.kick()
+        return SplitOutcome.Done(partIds)
+    }
+
+    /** Carry tags and single-value properties of the split source onto its parts. */
+    private suspend fun copyMetadataToParts(docId: String, partIds: List<String>) {
+        val doc = db.documentDao().getByDocId(docId) ?: return
+        for (tag in db.documentDao().tagsForDocs(listOf(docId)).map { it.tag }.distinct()) {
+            meta.addTag(partIds, tag)
+        }
+        doc.correspondent?.let { meta.setCorrespondent(partIds, it) }
+        doc.docType?.let { meta.setDocType(partIds, it) }
+        doc.docDate?.let { date -> partIds.forEach { meta.setDocDate(it, date) } }
     }
 
     override fun start(scope: CoroutineScope) {
@@ -364,6 +396,7 @@ class LibrarySessionImpl private constructor(
             val importService = ImportService(fs, db.documentDao(), db.ocrQueueDao(), deps.clock)
             val maintenance = MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
             val relinkService = RelinkService(coordinator)
+            val splitService = SplitService(fs, deps.pdfEngine, importService, db.documentDao())
 
             val ocrPipeline = OcrPipeline(
                 fs = fs,
@@ -407,6 +440,7 @@ class LibrarySessionImpl private constructor(
                 importService = importService,
                 maintenance = maintenance,
                 relinkService = relinkService,
+                splitService = splitService,
                 ocrPipeline = ocrPipeline,
                 ocrWorker = ocrWorker,
                 documents = documents,

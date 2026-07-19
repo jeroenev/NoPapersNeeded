@@ -13,6 +13,7 @@ import dev.npn.core.app.SavedView
 import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SettingsRepository
+import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TagRepository
 import dev.npn.core.app.ViewType
@@ -318,6 +319,13 @@ class FakeLibrarySession : LibrarySession {
     override suspend fun reOcr(docId: String) {
         failReOcr?.invoke()
         reOcrIds += docId
+    }
+
+    val splits = mutableListOf<Pair<String, List<IntRange>>>()
+    var splitOutcome: SplitOutcome = SplitOutcome.Done(emptyList())
+    override suspend fun splitPdf(docId: String, segments: List<IntRange>): SplitOutcome {
+        splits += docId to segments
+        return splitOutcome
     }
     override fun start(scope: CoroutineScope) {}
     override fun close() {}
