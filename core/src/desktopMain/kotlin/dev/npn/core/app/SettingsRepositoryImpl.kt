@@ -33,6 +33,8 @@ class SettingsRepositoryImpl(
         val gridColumnWidth: Int,
         val landscapeListColumns: Boolean,
         val installationId: String,
+        val watchedFolder: String?,
+        val watchedFolderDeleteAfterImport: Boolean,
     )
 
     private fun load(): Snapshot {
@@ -63,6 +65,8 @@ class SettingsRepositoryImpl(
                 ?: GridSizing.DEFAULT_COLUMN_WIDTH,
             landscapeListColumns = props.getProperty(KEY_LANDSCAPE_LIST)?.toBoolean() ?: false,
             installationId = installationId,
+            watchedFolder = props.getProperty(KEY_WATCHED_FOLDER)?.ifEmpty { null },
+            watchedFolderDeleteAfterImport = props.getProperty(KEY_WATCHED_DELETE)?.toBoolean() ?: false,
         )
     }
 
@@ -77,6 +81,9 @@ class SettingsRepositoryImpl(
         props.setProperty(KEY_GRID_WIDTH, snapshot.gridColumnWidth.toString())
         props.setProperty(KEY_LANDSCAPE_LIST, snapshot.landscapeListColumns.toString())
         props.setProperty(KEY_INSTALLATION_ID, snapshot.installationId)
+        if (snapshot.watchedFolder != null) props.setProperty(KEY_WATCHED_FOLDER, snapshot.watchedFolder)
+        else props.remove(KEY_WATCHED_FOLDER)
+        props.setProperty(KEY_WATCHED_DELETE, snapshot.watchedFolderDeleteAfterImport.toString())
         file.parentFile?.mkdirs()
         file.outputStream().use { props.store(it, "no-papers-needed settings") }
     }
@@ -89,6 +96,9 @@ class SettingsRepositoryImpl(
     override val gridColumnWidth: Flow<Int> = state.map { it.gridColumnWidth }
     override val landscapeListColumns: Flow<Boolean> = state.map { it.landscapeListColumns }
     override val installationId: Flow<String> = state.map { it.installationId }
+    override val watchedFolder: Flow<String?> = state.map { it.watchedFolder }
+    override val watchedFolderDeleteAfterImport: Flow<Boolean> =
+        state.map { it.watchedFolderDeleteAfterImport }
 
     override suspend fun setLibraryLocation(location: String?) {
         val next = state.value.copy(libraryLocation = location?.ifEmpty { null })
@@ -134,6 +144,18 @@ class SettingsRepositoryImpl(
         persist(next)
     }
 
+    override suspend fun setWatchedFolder(location: String?) {
+        val next = state.value.copy(watchedFolder = location?.ifEmpty { null })
+        state.value = next
+        persist(next)
+    }
+
+    override suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean) {
+        val next = state.value.copy(watchedFolderDeleteAfterImport = enabled)
+        state.value = next
+        persist(next)
+    }
+
     companion object {
         private const val KEY_LOCATION = "libraryLocation"
         private const val KEY_OCR_LANG = "ocrLanguage"
@@ -144,6 +166,8 @@ class SettingsRepositoryImpl(
         private const val KEY_GRID_WIDTH = "gridColumnWidth"
         private const val KEY_LANDSCAPE_LIST = "landscapeListColumns"
         private const val KEY_INSTALLATION_ID = "installationId"
+        private const val KEY_WATCHED_FOLDER = "watchedFolder"
+        private const val KEY_WATCHED_DELETE = "watchedFolderDeleteAfterImport"
 
         fun defaultFile(): File {
             val configHome = System.getenv("XDG_CONFIG_HOME")?.ifEmpty { null }

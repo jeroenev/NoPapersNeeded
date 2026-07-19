@@ -8,6 +8,7 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.pdf.PdfBoxEngine
+import dev.npn.core.watch.JvmWatchedFolder
 import dev.npn.core.xmp.PdfBoxXmpIO
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -21,7 +22,10 @@ import java.nio.file.Path
  */
 fun createAppEnvironment(): AppEnvironment {
     val settings = SettingsRepositoryImpl()
-    return DefaultAppEnvironment(settings) { location, scope ->
+    val watchedFolders = WatchedFolderFactory { location ->
+        runCatching { JvmWatchedFolder(Path.of(location)) }.getOrNull()
+    }
+    return DefaultAppEnvironment(settings, watchedFolders) { location, scope ->
         val dirs = desktopAppDirs(location)
         val fs = JvmLibraryFileSystem(Path.of(location))
         val db = npnDatabase(File(dirs.dbDir, "index.db"))

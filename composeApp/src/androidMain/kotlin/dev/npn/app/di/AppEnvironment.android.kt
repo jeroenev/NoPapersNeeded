@@ -10,6 +10,7 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.SafLibraryFileSystem
 import dev.npn.core.ocr.MlKitOcrEngine
 import dev.npn.core.pdf.PdfBoxAndroidEngine
+import dev.npn.core.watch.SafWatchedFolder
 import dev.npn.core.xmp.PdfBoxAndroidXmpIO
 import kotlinx.coroutines.flow.first
 import java.io.File
@@ -23,7 +24,10 @@ import java.io.File
 fun createAppEnvironment(context: Context): AppEnvironment {
     val appContext = context.applicationContext
     val settings = SettingsRepositoryImpl(appContext)
-    return DefaultAppEnvironment(settings) { location, scope ->
+    val watchedFolders = WatchedFolderFactory { location ->
+        runCatching { SafWatchedFolder(appContext, location.toUri()) }.getOrNull()
+    }
+    return DefaultAppEnvironment(settings, watchedFolders) { location, scope ->
         val key = AppDirs.libraryKey(location)
         val fs = SafLibraryFileSystem(appContext, location.toUri())
         val db = npnDatabase(appContext, "npn-index-$key.db")

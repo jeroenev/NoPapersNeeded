@@ -38,6 +38,10 @@ class RescanOcrWorker(
         val session = env.session.first() ?: return Result.success() // no library configured
 
         return try {
+            // Sweep the watched folder first so freshly scanned PDFs are part of this run's
+            // rescan + OCR drain (no-op when no watched folder is configured).
+            runCatching { env.scanWatchedFolder() }
+
             session.rescan()
 
             // Wait for the OCR queue to drain, bounded so we never exceed WorkManager's window.
@@ -60,20 +64,24 @@ class RescanOcrWorker(
 object NpnWork {
     private const val PERIODIC_NAME = "npn-rescan-ocr"
 
-    /** Schedule the unique periodic rescan+OCR job (idempotent; KEEP preserves an existing one). */
+    /**
+     * Schedule the unique periodic rescan+OCR job (idempotent). UPDATE (not KEEP) so an interval
+     * change in an app update replaces the previously enqueued spec instead of keeping the old
+     * period forever; WorkManager preserves the existing enqueued state and next-run timing.
+     */
     fun schedulePeriodic(context: Context) {
         val constraints = Constraints.Builder()
             .setRequiresBatteryNotLow(true)
             .setRequiresStorageNotLow(true)
             .build()
 
-        val request = PeriodicWorkRequestBuilder<RescanOcrWorker>(6, TimeUnit.HOURS)
+        val request = PeriodicWorkRequestBuilder<RescanOcrWorker>(1, TimeUnit.HOURS)
             .setConstraints(constraints)
             .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             PERIODIC_NAME,
-            ExistingPeriodicWorkPolicy.KEEP,
+            ExistingPeriodicWorkPolicy.UPDATE,
             request,
         )
     }

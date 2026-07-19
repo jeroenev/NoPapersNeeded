@@ -380,4 +380,20 @@ class FakeSettingsRepository(
     override suspend fun setGridColumnWidth(dp: Int) { setGridWidths += dp; gridColumnWidthFlow.value = dp }
     override val landscapeListColumns: Flow<Boolean> get() = landscapeListColumnsFlow
     override suspend fun setLandscapeListColumns(enabled: Boolean) { setLandscapeFlags += enabled; landscapeListColumnsFlow.value = enabled }
+
+    val watchedFolderFlow = MutableStateFlow<String?>(null)
+    val watchedFolderDeleteFlow = MutableStateFlow(false)
+    val setWatchedFolders = mutableListOf<String?>()
+    val setWatchedDeleteFlags = mutableListOf<Boolean>()
+
+    override val watchedFolder: Flow<String?> get() = watchedFolderFlow
+    override suspend fun setWatchedFolder(location: String?) {
+        setWatchedFolders += location
+        watchedFolderFlow.value = location
+    }
+    override val watchedFolderDeleteAfterImport: Flow<Boolean> get() = watchedFolderDeleteFlow
+    override suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean) {
+        setWatchedDeleteFlags += enabled
+        watchedFolderDeleteFlow.value = enabled
+    }
 }

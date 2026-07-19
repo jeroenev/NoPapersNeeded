@@ -3,12 +3,18 @@ package dev.npn.app.di
 import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepository
+import dev.npn.core.watch.WatchedFolder
+import dev.npn.core.watch.WatchedFolderImporter
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -31,12 +37,21 @@ fun interface PlatformLibraryFactory {
 }
 
 /**
+ * Platform hook: open a [WatchedFolder] for a persisted location string (desktop: absolute path;
+ * android: SAF tree uri). Returns null when the location cannot be resolved.
+ */
+fun interface WatchedFolderFactory {
+    fun open(location: String): WatchedFolder?
+}
+
+/**
  * Shared [AppEnvironment] implementation. Platform factory functions ([createAppEnvironment])
  * construct it with a platform [SettingsRepository] and a [PlatformLibraryFactory]; all session
  * open/close/swap logic lives here so both platforms behave identically.
  */
 class DefaultAppEnvironment(
     override val settings: SettingsRepository,
+    private val watchedFolderFactory: WatchedFolderFactory = WatchedFolderFactory { null },
     private val factory: PlatformLibraryFactory,
 ) : AppEnvironment {
 
@@ -60,6 +75,33 @@ class DefaultAppEnvironment(
 
     // Closes the resources (db) backing the current session, kept so we can free them on swap.
     private var currentClose: (() -> Unit)? = null
+
+    init {
+        // Watched-folder auto-import: (re)start an importer whenever the open session or the
+        // configured folder changes; collectLatest cancels the previous importer's loops.
+        appScope.launch {
+            combine(_session, settings.watchedFolder.distinctUntilChanged()) { s, loc -> s to loc }
+                .collectLatest { (session, location) ->
+                    if (session == null || location == null) return@collectLatest
+                    val folder = watchedFolderFactory.open(location) ?: return@collectLatest
+                    coroutineScope { buildImporter(session, folder).start(this) }
+                }
+        }
+    }
+
+    private fun buildImporter(session: dev.npn.core.app.LibrarySession, folder: WatchedFolder) =
+        WatchedFolderImporter(
+            session = session,
+            folder = folder,
+            deleteAfterImport = { settings.watchedFolderDeleteAfterImport.first() },
+        )
+
+    override suspend fun scanWatchedFolder(): Int {
+        val location = settings.watchedFolder.first() ?: return 0
+        val session = _session.value ?: return 0
+        val folder = watchedFolderFactory.open(location) ?: return 0
+        return buildImporter(session, folder).scanOnce().imported
+    }
 
     override fun requestOpenLibrary(location: String) {
         // Run on the process-lived appScope, not the caller's (composable) scope, which can be

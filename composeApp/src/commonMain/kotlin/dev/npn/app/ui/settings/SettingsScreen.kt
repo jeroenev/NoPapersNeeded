@@ -42,7 +42,9 @@ import androidx.compose.material3.TextButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.ui.common.persistDirectoryAccess
 import dev.npn.app.ui.common.viewTypeLabel
+import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
@@ -92,6 +94,16 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
             OutlinedButton(onClick = onChangeLibrary) { Text("Change library") }
+
+            HorizontalDivider()
+
+            SectionHeader("Watched folder")
+            WatchedFolderSection(
+                watchedFolder = state.watchedFolder,
+                deleteAfterImport = state.watchedFolderDeleteAfterImport,
+                onSetFolder = vm::setWatchedFolder,
+                onSetDeleteAfterImport = vm::setWatchedFolderDeleteAfterImport,
+            )
 
             HorizontalDivider()
 
@@ -182,6 +194,52 @@ fun SettingsScreen(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+        }
+    }
+}
+
+@Composable
+private fun WatchedFolderSection(
+    watchedFolder: String?,
+    deleteAfterImport: Boolean,
+    onSetFolder: (String?) -> Unit,
+    onSetDeleteAfterImport: (Boolean) -> Unit,
+) {
+    val picker = rememberDirectoryPickerLauncher { dir ->
+        if (dir != null) onSetFolder(persistDirectoryAccess(dir))
+    }
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(
+            "PDFs saved to this folder (for example by a scanner app) are imported into the " +
+                "library automatically and OCR-ed.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            text = watchedFolder ?: "No folder watched",
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedButton(onClick = { picker.launch() }) { Text("Choose folder") }
+            if (watchedFolder != null) {
+                OutlinedButton(onClick = { onSetFolder(null) }) { Text("Stop watching") }
+            }
+        }
+        if (watchedFolder != null) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Remove files after import", style = MaterialTheme.typography.bodyMedium)
+                    Text(
+                        "When on, source files are deleted from the watched folder once they are " +
+                            "safely in the library. When off, they stay and are simply skipped as " +
+                            "duplicates on later scans.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Switch(checked = deleteAfterImport, onCheckedChange = onSetDeleteAfterImport)
+            }
         }
     }
 }
