@@ -38,6 +38,8 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         val gridColumnWidth: Int,
         val landscapeListColumns: Boolean,
         val installationId: String,
+        val watchedFolder: String?,
+        val watchedFolderDeleteAfterImport: Boolean,
     )
 
     private fun load() = Snapshot(
@@ -57,6 +59,8 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         installationId = prefs.getString(KEY_INSTALLATION_ID, null) ?: UUID.randomUUID().toString().also {
             prefs.edit().putString(KEY_INSTALLATION_ID, it).apply()
         },
+        watchedFolder = prefs.getString(KEY_WATCHED_FOLDER, null)?.ifEmpty { null },
+        watchedFolderDeleteAfterImport = prefs.getBoolean(KEY_WATCHED_DELETE, false),
     )
 
     override val libraryLocation: Flow<String?> = state.map { it.libraryLocation }
@@ -67,6 +71,9 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
     override val gridColumnWidth: Flow<Int> = state.map { it.gridColumnWidth }
     override val landscapeListColumns: Flow<Boolean> = state.map { it.landscapeListColumns }
     override val installationId: Flow<String> = state.map { it.installationId }
+    override val watchedFolder: Flow<String?> = state.map { it.watchedFolder }
+    override val watchedFolderDeleteAfterImport: Flow<Boolean> =
+        state.map { it.watchedFolderDeleteAfterImport }
 
     override suspend fun setLibraryLocation(location: String?) {
         prefs.edit().apply {
@@ -109,6 +116,18 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         state.value = load()
     }
 
+    override suspend fun setWatchedFolder(location: String?) {
+        prefs.edit().apply {
+            if (location.isNullOrEmpty()) remove(KEY_WATCHED_FOLDER) else putString(KEY_WATCHED_FOLDER, location)
+        }.apply()
+        state.value = load()
+    }
+
+    override suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_WATCHED_DELETE, enabled).apply()
+        state.value = load()
+    }
+
     companion object {
         private const val PREFS_NAME = "npn_settings"
         private const val KEY_LOCATION = "libraryLocation"
@@ -120,5 +139,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         private const val KEY_GRID_WIDTH = "gridColumnWidth"
         private const val KEY_LANDSCAPE_LIST = "landscapeListColumns"
         private const val KEY_INSTALLATION_ID = "installationId"
+        private const val KEY_WATCHED_FOLDER = "watchedFolder"
+        private const val KEY_WATCHED_DELETE = "watchedFolderDeleteAfterImport"
     }
 }

@@ -41,4 +41,12 @@ interface AppEnvironment {
 
     /** Restore the persisted library on app start, if any. */
     suspend fun openPersistedLibrary()
+
+    /**
+     * One-shot sweep of the configured watched folder into the open library (no-op when either
+     * is missing). The environment also runs a continuous watcher while a session is open; this
+     * explicit hook exists for background workers that must complete a sweep before returning.
+     * Returns the number of newly imported documents.
+     */
+    suspend fun scanWatchedFolder(): Int
 }

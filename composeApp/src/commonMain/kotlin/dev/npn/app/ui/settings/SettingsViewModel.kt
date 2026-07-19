@@ -18,6 +18,8 @@ data class SettingsUiState(
     val trashRetentionDays: Int = 30,
     val defaultViewType: ViewType = ViewType.GRID,
     val landscapeListColumns: Boolean = false,
+    val watchedFolder: String? = null,
+    val watchedFolderDeleteAfterImport: Boolean = false,
 )
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
@@ -29,18 +31,28 @@ class SettingsViewModel(
 ) : ViewModel() {
 
     val state: StateFlow<SettingsUiState> = combine(
-        settings.libraryLocation,
-        settings.ocrLanguage,
-        settings.trashRetentionDays,
-        settings.defaultViewType,
-        settings.landscapeListColumns,
-    ) { location, lang, retention, viewType, landscape ->
+        combine(
+            settings.libraryLocation,
+            settings.ocrLanguage,
+            settings.trashRetentionDays,
+        ) { location, lang, retention -> Triple(location, lang, retention) },
+        combine(
+            settings.defaultViewType,
+            settings.landscapeListColumns,
+        ) { viewType, landscape -> viewType to landscape },
+        combine(
+            settings.watchedFolder,
+            settings.watchedFolderDeleteAfterImport,
+        ) { folder, delete -> folder to delete },
+    ) { (location, lang, retention), (viewType, landscape), (watched, watchedDelete) ->
         SettingsUiState(
             libraryLocation = location,
             ocrLanguage = lang,
             trashRetentionDays = retention,
             defaultViewType = viewType,
             landscapeListColumns = landscape,
+            watchedFolder = watched,
+            watchedFolderDeleteAfterImport = watchedDelete,
         )
     }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
@@ -57,6 +69,12 @@ class SettingsViewModel(
 
     fun setLandscapeListColumns(enabled: Boolean) =
         viewModelScope.launch { settings.setLandscapeListColumns(enabled) }
+
+    fun setWatchedFolder(location: String?) =
+        viewModelScope.launch { settings.setWatchedFolder(location) }
+
+    fun setWatchedFolderDeleteAfterImport(enabled: Boolean) =
+        viewModelScope.launch { settings.setWatchedFolderDeleteAfterImport(enabled) }
 
     /**
      * Drop all cached thumbnails so they regenerate at the current render quality. Invokes [onDone]

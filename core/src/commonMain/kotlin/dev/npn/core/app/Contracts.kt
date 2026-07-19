@@ -216,6 +216,19 @@ interface SettingsRepository {
     suspend fun setGridColumnWidth(dp: Int)
     val landscapeListColumns: Flow<Boolean>  // multi-column list view when the window is landscape, default false
     suspend fun setLandscapeListColumns(enabled: Boolean)
+
+    /**
+     * Folder watched for new PDFs to auto-import (e.g. a scanner app's output folder). Desktop:
+     * absolute path; android: SAF tree uri string (persistable permission taken by the caller).
+     * Null = feature disabled. Device-local by design: paths/uris never make sense on another
+     * device, so this must not sync through the journal.
+     */
+    val watchedFolder: Flow<String?>
+    suspend fun setWatchedFolder(location: String?)
+
+    /** Whether source files in the watched folder are removed after a successful import. Default false. */
+    val watchedFolderDeleteAfterImport: Flow<Boolean>
+    suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean)
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */
