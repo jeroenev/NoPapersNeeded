@@ -69,6 +69,13 @@ interface PdfEngine {
 
     /** Combine JPEG/PNG page images into a single PDF (one image per page). */
     suspend fun imagesToPdf(images: List<ByteArray>): ByteArray
+
+    /**
+     * Build a new PDF containing exactly the pages of [bytes] at [pageIndices] (0-based, in the
+     * given order). Throws [PdfOpenException] on an invalid source and [IllegalArgumentException]
+     * on an empty or out-of-range index list. The source bytes are never modified.
+     */
+    suspend fun extractPages(bytes: ByteArray, pageIndices: List<Int>): ByteArray
 }
 
 class PdfOpenException(message: String, cause: Throwable? = null) : Exception(message, cause)

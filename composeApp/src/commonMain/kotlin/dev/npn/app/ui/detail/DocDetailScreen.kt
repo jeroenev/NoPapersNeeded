@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
@@ -60,6 +61,7 @@ import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SplitOutcome
 import dev.npn.core.model.ReviewMode
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
@@ -98,6 +100,7 @@ fun DocDetailScreen(
     var showRename by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
     var confirmBake by remember { mutableStateOf(false) }
+    var showSplit by remember { mutableStateOf(false) }
     var showMetaSheet by remember { mutableStateOf(false) }
 
     // Focus the viewer on entry (and when switching docs) so its keyboard shortcuts work on desktop.
@@ -187,8 +190,11 @@ fun DocDetailScreen(
                         defaultExtension = "pdf",
                     )
                 },
+                splitting = ui.splitting,
+                canSplit = ui.pageCount > 1,
                 onBakeInPlace = { confirmBake = true },
                 onReOcr = { vm.reOcr() },
+                onSplit = { showSplit = true },
                 onTrash = { confirmTrash = true },
             )
         },
@@ -288,6 +294,24 @@ fun DocDetailScreen(
         )
     }
 
+    if (showSplit) {
+        SplitDialog(
+            pageCount = ui.pageCount,
+            onConfirm = { segments ->
+                showSplit = false
+                vm.split(segments) { outcome ->
+                    when (outcome) {
+                        is SplitOutcome.Done -> onBack() // original is trashed; leave the screen
+                        is SplitOutcome.Failed -> scope.launch {
+                            snackbar.showSnackbar("Split failed: ${outcome.message}")
+                        }
+                    }
+                }
+            },
+            onDismiss = { showSplit = false },
+        )
+    }
+
     if (confirmBake) {
         ConfirmDialog(
             title = "Bake metadata in place",
@@ -318,12 +342,15 @@ private fun DetailTopBar(
     canToggleReviewed: Boolean,
     baking: Boolean,
     reindexing: Boolean,
+    splitting: Boolean,
+    canSplit: Boolean,
     onBack: () -> Unit,
     onToggleReviewed: () -> Unit,
     onRename: () -> Unit,
     onExport: () -> Unit,
     onBakeInPlace: () -> Unit,
     onReOcr: () -> Unit,
+    onSplit: () -> Unit,
     onTrash: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
@@ -381,6 +408,12 @@ private fun DetailTopBar(
                         leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
                         enabled = !reindexing,
                         onClick = { menu = false; onReOcr() },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(if (splitting) "Splitting..." else "Split document") },
+                        leadingIcon = { Icon(Icons.Filled.ContentCut, contentDescription = null) },
+                        enabled = canSplit && !splitting,
+                        onClick = { menu = false; onSplit() },
                     )
                     DropdownMenuItem(
                         text = { Text(if (baking) "Baking..." else "Bake metadata in place") },

@@ -3,6 +3,7 @@ package dev.npn.app.ui.detail
 import androidx.lifecycle.viewModelScope
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SplitOutcome
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.flow.MutableStateFlow
 import dev.npn.app.ui.common.MessagesViewModel
@@ -26,6 +27,7 @@ data class DetailUiState(
     val pageCount: Int = 0,
     val baking: Boolean = false,
     val reindexing: Boolean = false,
+    val splitting: Boolean = false,
 )
 
 /**
@@ -135,6 +137,20 @@ class DocDetailViewModel(
             session.reOcr(docId)
         } finally {
             _ui.value = _ui.value.copy(reindexing = false)
+        }
+    }
+
+    /**
+     * Split into one document per [segments] entry. On success the original is trashed by the
+     * session, so the screen should navigate back; failures surface via [onResult]'s message.
+     */
+    fun split(segments: List<IntRange>, onResult: (SplitOutcome) -> Unit) {
+        viewModelScope.launch {
+            _ui.value = _ui.value.copy(splitting = true)
+            val outcome = runCatching { session.splitPdf(docId, segments) }
+                .getOrElse { SplitOutcome.Failed(it.message ?: "split failed") }
+            _ui.value = _ui.value.copy(splitting = false)
+            onResult(outcome)
         }
     }
 

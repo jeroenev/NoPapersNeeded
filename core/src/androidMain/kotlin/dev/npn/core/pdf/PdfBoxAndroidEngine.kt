@@ -96,6 +96,33 @@ class PdfBoxAndroidEngine(private val context: Context) : PdfEngine {
         }
     }
 
+    override suspend fun extractPages(bytes: ByteArray, pageIndices: List<Int>): ByteArray =
+        withContext(Dispatchers.IO) {
+            ensureInit(context)
+            require(pageIndices.isNotEmpty()) { "pageIndices must not be empty" }
+            val source = try {
+                PDDocument.load(bytes)
+            } catch (t: Throwable) {
+                throw PdfOpenException("Failed to load PDF", t)
+            }
+            try {
+                require(pageIndices.all { it in 0 until source.numberOfPages }) {
+                    "page index out of range (pages: ${source.numberOfPages})"
+                }
+                val dst = PDDocument()
+                try {
+                    for (index in pageIndices) dst.importPage(source.getPage(index))
+                    val out = ByteArrayOutputStream()
+                    dst.save(out)
+                    out.toByteArray()
+                } finally {
+                    dst.close()
+                }
+            } finally {
+                source.close()
+            }
+        }
+
     companion object {
         @Volatile
         private var initialized = false
