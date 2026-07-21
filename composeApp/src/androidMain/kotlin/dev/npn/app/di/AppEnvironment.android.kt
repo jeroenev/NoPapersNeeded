@@ -10,6 +10,7 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.SafLibraryFileSystem
 import dev.npn.core.ocr.MlKitOcrEngine
 import dev.npn.core.pdf.PdfBoxAndroidEngine
+import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.watch.SafWatchedFolder
 import dev.npn.core.xmp.PdfBoxAndroidXmpIO
 import kotlinx.coroutines.flow.first
@@ -45,6 +46,13 @@ fun createAppEnvironment(context: Context): AppEnvironment {
             ocrLanguage = { settings.ocrLanguage.first() },
             trashRetentionDays = { settings.trashRetentionDays.first() },
             installationId = settings.installationId.first(),
+            storagePathRule = {
+                val template = settings.storagePathTemplate.first()
+                val enabled = settings.storagePathEnabled.first()
+                if (template.isNullOrBlank()) null else StoragePathRule(template, enabled)
+            },
+            autoMatchRulesJson = { settings.autoMatchRulesJson.first() },
+            persistAutoMatchRulesJson = settings::setAutoMatchRulesJson,
         )
         OpenedLibrary(deps) { deps.closeDb() }
     }

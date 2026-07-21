@@ -35,6 +35,7 @@ import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.Route
 import dev.npn.app.ui.onboarding.OnboardingScreen
+import dev.npn.app.ui.rules.AutoMatchRulesScreen
 import dev.npn.app.ui.settings.SettingsScreen
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
@@ -105,8 +106,8 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
             LibraryScreen(
                 session = session,
                 env = env,
-                onOpenDoc = { docId, order ->
-                    browse.setOrder(order)
+                onOpenDoc = { docId, order, query ->
+                    browse.setOrder(order, query)
                     nav.navigate(Route.DocDetail(docId))
                 },
                 onTrash = { nav.navigate(Route.Trash) },
@@ -153,6 +154,13 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
                 session = session,
                 onBack = { nav.popBackStack() },
                 onChangeLibrary = { changePicker.launch() },
+                onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
+            )
+        }
+        composable<Route.AutoMatchRules> {
+            AutoMatchRulesScreen(
+                session = session,
+                onBack = { nav.popBackStack() },
             )
         }
     }

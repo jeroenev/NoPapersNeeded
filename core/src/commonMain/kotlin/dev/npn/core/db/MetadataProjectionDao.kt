@@ -51,6 +51,13 @@ interface MetadataProjectionDao {
     @Query("SELECT * FROM metadata_events ORDER BY hlcPhysical, hlcCounter, hlcDevice")
     suspend fun allEvents(): List<MetadataEventEntity>
 
+    /** All events scoped to [documentId], ordered by HLC (causal order). */
+    @Query(
+        "SELECT * FROM metadata_events WHERE documentId = :documentId " +
+            "ORDER BY hlcPhysical, hlcCounter, hlcDevice",
+    )
+    suspend fun eventsForDocument(documentId: String): List<MetadataEventEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertEvent(event: MetadataEventEntity): Long
 

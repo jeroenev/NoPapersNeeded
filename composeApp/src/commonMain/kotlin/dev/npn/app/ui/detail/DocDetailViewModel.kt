@@ -1,6 +1,7 @@
 package dev.npn.app.ui.detail
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.queryTerms
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.OcrVersion
@@ -31,19 +32,52 @@ data class DetailUiState(
     val splitting: Boolean = false,
 )
 
+sealed interface NoteSaveState {
+    data object Idle : NoteSaveState
+    data object Saving : NoteSaveState
+    data object Saved : NoteSaveState
+    data class Error(val message: String) : NoteSaveState
+}
+
+data class NoteEditorState(
+    val draft: String = "",
+    val persisted: String = "",
+    val saveState: NoteSaveState = NoteSaveState.Idle,
+) {
+    val dirty: Boolean get() = draft != persisted
+}
+
+sealed interface HistoryUiState {
+    data object NotLoaded : HistoryUiState
+    data object Loading : HistoryUiState
+    data object Empty : HistoryUiState
+    data class Loaded(val items: List<HistoryItem>) : HistoryUiState
+    data class Error(val message: String) : HistoryUiState
+}
+
 /**
  * View model for a single document. The document row and its tags come from the session's
  * reactive [dev.npn.core.app.DocumentRepository.observeDoc] flow so external edits (journal
  * folds, OCR completion) refresh the screen. Page count is resolved once via the content facade.
  */
+@Suppress("TooManyFunctions")
 class DocDetailViewModel(
     val docId: String,
     val session: LibrarySession,
+    searchQuery: String? = null,
 ) : MessagesViewModel() {
 
     private val _ui = MutableStateFlow(DetailUiState())
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
     private val metadataMutex = Mutex()
+    private val _noteEditor = MutableStateFlow(NoteEditorState())
+    val noteEditor: StateFlow<NoteEditorState> = _noteEditor.asStateFlow()
+
+    /**
+     * Search terms from the library query that opened this document, used to highlight matches
+     * in the OCR text tab.
+     */
+    val highlightTerms: List<String> = searchQuery?.let { queryTerms(it) }.orEmpty()
 
     val doc: StateFlow<DocListItem?> =
         session.documents.observeDoc(docId)
@@ -91,10 +125,24 @@ class DocDetailViewModel(
             .map { runCatching { session.ocrVersions(docId) }.getOrDefault(emptyList()) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
+    private val _history = MutableStateFlow<HistoryUiState>(HistoryUiState.NotLoaded)
+    val history: StateFlow<HistoryUiState> = _history.asStateFlow()
+
     init {
         viewModelScope.launch {
             val count = runCatching { session.content.pageCount(docId) }.getOrNull() ?: 0
             _ui.value = _ui.value.copy(pageCount = count)
+        }
+        viewModelScope.launch {
+            session.documents.observeDoc(docId).collect { item ->
+                val persisted = item?.doc?.notes.orEmpty()
+                val current = _noteEditor.value
+                _noteEditor.value = if (current.dirty) {
+                    current.copy(persisted = persisted)
+                } else {
+                    current.copy(draft = persisted, persisted = persisted)
+                }
+            }
         }
     }
 
@@ -105,10 +153,59 @@ class DocDetailViewModel(
         if (index in 0 until cur.pageCount.coerceAtLeast(1)) _ui.value = cur.copy(pageIndex = index)
     }
 
+    // ---- history ----
+
+    /** Load once when opened. Pass [refresh] only for an explicit retry or refresh request. */
+    fun loadHistory(refresh: Boolean = false) {
+        if (!refresh && _history.value != HistoryUiState.NotLoaded) return
+        if (_history.value == HistoryUiState.Loading) return
+        _history.value = HistoryUiState.Loading
+        viewModelScope.launch {
+            _history.value = runCatching {
+                HistoryMapper.toHistoryItems(session.documents.history(docId))
+            }.fold(
+                onSuccess = { items ->
+                    if (items.isEmpty()) HistoryUiState.Empty else HistoryUiState.Loaded(items)
+                },
+                onFailure = { error ->
+                    HistoryUiState.Error(error.message ?: "Could not load document history")
+                },
+            )
+        }
+    }
+
     // ---- metadata edits ----
 
     fun setTitle(title: String?) =
         launchMetadata("save title") { session.meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
+
+    fun updateNoteDraft(value: String) {
+        _noteEditor.value = _noteEditor.value.copy(draft = value, saveState = NoteSaveState.Idle)
+    }
+
+    fun saveNote() {
+        val current = _noteEditor.value
+        if (!current.dirty || current.saveState == NoteSaveState.Saving) return
+        _noteEditor.value = current.copy(saveState = NoteSaveState.Saving)
+        viewModelScope.launch {
+            runCatching {
+                metadataMutex.withLock { session.meta.setNotes(docId, current.draft) }
+            }.fold(
+                onSuccess = {
+                    val latest = _noteEditor.value
+                    _noteEditor.value = latest.copy(
+                        persisted = current.draft.takeUnless { it.isBlank() }.orEmpty(),
+                        saveState = NoteSaveState.Saved,
+                    )
+                },
+                onFailure = { error ->
+                    _noteEditor.value = _noteEditor.value.copy(
+                        saveState = NoteSaveState.Error(error.message ?: "Could not save note"),
+                    )
+                },
+            )
+        }
+    }
     fun setCorrespondent(value: String?) =
         launchMetadata("save correspondent") {
             session.meta.setCorrespondent(listOf(docId), value?.takeIf { it.isNotBlank() })

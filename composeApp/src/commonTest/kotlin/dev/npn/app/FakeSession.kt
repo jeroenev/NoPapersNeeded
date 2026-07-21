@@ -2,7 +2,9 @@ package dev.npn.app
 
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.AutoMatchRuleRepository
 import dev.npn.core.app.DocumentRepository
+import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
@@ -22,6 +24,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.rules.AutoMatchRule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -92,9 +95,25 @@ class FakeDocumentRepository : DocumentRepository {
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> = duplicates
     val fieldKeys = MutableStateFlow<List<String>>(emptyList())
 
+    /** Backing list returned by [history]; tests mutate it to drive the history panel. */
+    var historyList: List<DocumentHistoryRecord> = emptyList()
+
     override fun observeCorrespondents(): Flow<List<String>> = correspondents
     override fun observeDocTypes(): Flow<List<String>> = docTypes
     override fun observeFieldKeys(): Flow<List<String>> = fieldKeys
+    var historyError: Throwable? = null
+    var historyCalls: Int = 0
+    override suspend fun history(docId: String): List<DocumentHistoryRecord> {
+        historyCalls++
+        historyError?.let { throw it }
+        return historyList
+    }
+
+    /** Backing suggestions returned by [searchSuggestions]. */
+    var suggestionsList: List<String> = emptyList()
+
+    override suspend fun searchSuggestions(query: String, limit: Int): List<String> =
+        suggestionsList.filter { it.startsWith(query, ignoreCase = true) }.take(limit)
 }
 
 class FakeTagRepository : TagRepository {
@@ -103,6 +122,22 @@ class FakeTagRepository : TagRepository {
 
     override fun observeTags(): Flow<List<TagInfo>> = tags
     override suspend fun allTagNames(): List<String> = tagNames
+}
+
+class FakeAutoMatchRuleRepository : AutoMatchRuleRepository {
+    val rules = MutableStateFlow<List<AutoMatchRule>>(emptyList())
+    val saved = mutableListOf<AutoMatchRule>()
+    val deletedIds = mutableListOf<String>()
+    val enabledSets = mutableListOf<Pair<String, Boolean>>()
+
+    override fun observeRules(): Flow<List<AutoMatchRule>> = rules
+    override suspend fun save(rule: AutoMatchRule): String {
+        saved += rule
+        rules.value = rules.value.filter { it.id != rule.id } + rule
+        return rule.id.ifBlank { "rule-${saved.size}" }
+    }
+    override suspend fun delete(id: String) { deletedIds += id }
+    override suspend fun setEnabled(id: String, enabled: Boolean) { enabledSets += id to enabled }
 }
 
 class FakeSavedViewRepository : SavedViewRepository {
@@ -130,6 +165,7 @@ class FakeMetadataWriter : MetadataWriter {
     val restoredDocs = mutableListOf<String>()
     val deletedDocs = mutableListOf<String>()
     val titleSets = mutableListOf<Pair<String, String?>>()
+    val notesSets = mutableListOf<Pair<String, String?>>()
     val correspondentSets = mutableListOf<Pair<List<String>, String?>>()
     val docTypeSets = mutableListOf<Pair<List<String>, String?>>()
     val docDateSets = mutableListOf<Pair<String, String?>>()
@@ -190,6 +226,10 @@ class FakeMetadataWriter : MetadataWriter {
     override suspend fun setTitle(docId: String, title: String?) {
         failSetTitle?.invoke()
         titleSets += docId to title
+    }
+
+    override suspend fun setNotes(docId: String, notes: String?) {
+        notesSets += docId to notes
     }
 
     override suspend fun setField(docId: String, key: String, value: String?) {
@@ -270,6 +310,7 @@ class FakeLibrarySession : LibrarySession {
     override val documents = FakeDocumentRepository()
     override val tags = FakeTagRepository()
     override val savedViews = FakeSavedViewRepository()
+    override val rules = FakeAutoMatchRuleRepository()
     override val meta = FakeMetadataWriter()
     override val content = FakeDocContentFacade()
     override val deviceId: String = "test-device"
@@ -374,6 +415,9 @@ class FakeSettingsRepository(
     val gridColumnWidthFlow = MutableStateFlow(160)
     val landscapeListColumnsFlow = MutableStateFlow(false)
     val installationIdFlow = MutableStateFlow("test-installation")
+    val storagePathTemplateFlow = MutableStateFlow<String?>(null)
+    val storagePathEnabledFlow = MutableStateFlow(false)
+    val autoMatchRulesJsonFlow = MutableStateFlow("[]")
 
     val setDefaultViews = mutableListOf<ViewType>()
     val setSorts = mutableListOf<LibrarySort>()
@@ -381,6 +425,8 @@ class FakeSettingsRepository(
     val setRetentionDays = mutableListOf<Int>()
     val setGridWidths = mutableListOf<Int>()
     val setLandscapeFlags = mutableListOf<Boolean>()
+    val setStoragePathTemplates = mutableListOf<String?>()
+    val setStoragePathEnabledFlags = mutableListOf<Boolean>()
 
     override val libraryLocation: Flow<String?> get() = libraryLocationFlow
     override val installationId: Flow<String> get() = installationIdFlow
@@ -398,6 +444,18 @@ class FakeSettingsRepository(
     override suspend fun setGridColumnWidth(dp: Int) { setGridWidths += dp; gridColumnWidthFlow.value = dp }
     override val landscapeListColumns: Flow<Boolean> get() = landscapeListColumnsFlow
     override suspend fun setLandscapeListColumns(enabled: Boolean) { setLandscapeFlags += enabled; landscapeListColumnsFlow.value = enabled }
+    override val storagePathTemplate: Flow<String?> get() = storagePathTemplateFlow
+    override suspend fun setStoragePathTemplate(template: String?) {
+        setStoragePathTemplates += template
+        storagePathTemplateFlow.value = template
+    }
+    override val storagePathEnabled: Flow<Boolean> get() = storagePathEnabledFlow
+    override suspend fun setStoragePathEnabled(enabled: Boolean) {
+        setStoragePathEnabledFlags += enabled
+        storagePathEnabledFlow.value = enabled
+    }
+    override val autoMatchRulesJson: Flow<String> get() = autoMatchRulesJsonFlow
+    override suspend fun setAutoMatchRulesJson(json: String) { autoMatchRulesJsonFlow.value = json }
 
     val watchedFolderFlow = MutableStateFlow<String?>(null)
     val watchedFolderDeleteFlow = MutableStateFlow(false)

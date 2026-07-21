@@ -23,11 +23,13 @@ import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DocThumbnail
+import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagChip
 import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.formatSize
+import dev.npn.app.ui.common.parseFtsSnippet
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.model.ReviewMode
@@ -101,11 +103,12 @@ fun DocListRow(
                 )
             }
             item.snippet?.let { snip ->
-                Text(
-                    text = snip,
-                    style = MaterialTheme.typography.bodySmall,
-                    fontStyle = FontStyle.Italic,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                HighlightText(
+                    segments = parseFtsSnippet(snip),
+                    style = MaterialTheme.typography.bodySmall.copy(
+                        fontStyle = FontStyle.Italic,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    ),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )

@@ -30,6 +30,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
             trashRetentionDaysFlow.value = 14
             defaultViewTypeFlow.value = ViewType.GRID
             landscapeListColumnsFlow.value = true
+            storagePathTemplateFlow.value = "{doc_date:yyyy}/{title}.pdf"
+            storagePathEnabledFlow.value = true
         }
         val model = vm(settings = settings)
         val job = launch { model.state.collect {} }
@@ -40,6 +42,9 @@ class SettingsViewModelTest : MainDispatcherTest() {
         s.trashRetentionDays shouldBe 14
         s.defaultViewType shouldBe ViewType.GRID
         s.landscapeListColumns shouldBe true
+        s.storagePathEnabled shouldBe true
+        s.storagePathPreview shouldBe "2026/Electricity bill.pdf"
+        s.storagePathError shouldBe null
         job.cancel()
     }
 
@@ -66,11 +71,15 @@ class SettingsViewModelTest : MainDispatcherTest() {
         model.setTrashRetentionDays(60)
         model.setDefaultViewType(ViewType.GRID)
         model.setLandscapeListColumns(true)
+        model.setStoragePathTemplate("{docType}/{title}.pdf")
+        model.setStoragePathEnabled(true)
         advanceUntilIdle()
         settings.setOcrLanguages shouldContainExactly listOf("deu")
         settings.setRetentionDays shouldContainExactly listOf(60)
         settings.setDefaultViews shouldContainExactly listOf(ViewType.GRID)
         settings.setLandscapeFlags shouldContainExactly listOf(true)
+        settings.setStoragePathTemplates shouldContainExactly listOf("{docType}/{title}.pdf")
+        settings.setStoragePathEnabledFlags shouldContainExactly listOf(true)
     }
 
     // ---- review mode switching ----

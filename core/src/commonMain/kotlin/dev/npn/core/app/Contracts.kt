@@ -3,6 +3,8 @@ package dev.npn.core.app
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.SavedViewEntity
 import dev.npn.core.index.ScanReport
+import dev.npn.core.journal.Hlc
+import dev.npn.core.journal.JournalEvent
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -64,6 +66,14 @@ data class DocListItem(
 
 data class TagInfo(val name: String, val color: String?, val icon: String?, val count: Int)
 
+/** One indexed journal row, retaining diagnostics when its canonical event cannot be decoded. */
+data class DocumentHistoryRecord(
+    val hlc: Hlc,
+    val deviceId: String,
+    val operation: String,
+    val event: JournalEvent?,
+)
+
 interface DocumentRepository {
     fun observeDocuments(filter: LibraryFilter, sort: LibrarySort): Flow<List<DocListItem>>
     fun observeDoc(docId: String): Flow<DocListItem?>
@@ -77,6 +87,18 @@ interface DocumentRepository {
 
     /** Distinct custom-field keys in use across the library, for add-field autocomplete. */
     fun observeFieldKeys(): Flow<List<String>>
+
+    /**
+     * Autocomplete suggestions for a partial search query. Combines terms from the FTS5
+     * vocabulary with tag/correspondent/docType values starting with the query prefix.
+     */
+    suspend fun searchSuggestions(query: String, limit: Int = 10): List<String>
+
+    /**
+     * Journal event history for one document, decoded and ordered by HLC. Read-only: the
+     * underlying journal events are immutable once written.
+     */
+    suspend fun history(docId: String): List<DocumentHistoryRecord>
 }
 
 interface TagRepository {
@@ -102,6 +124,8 @@ interface MetadataWriter {
     suspend fun setDocType(docIds: List<String>, value: String?)
     suspend fun setDocDate(docId: String, isoDate: String?)
     suspend fun setTitle(docId: String, title: String?)
+    /** Set a free-text note; null or blank clears it. */
+    suspend fun setNotes(docId: String, notes: String?)
 
     /** Set (or clear, when [value] is null/blank) a custom metadata field [key] on [docId]. */
     suspend fun setField(docId: String, key: String, value: String?)
@@ -157,6 +181,7 @@ interface LibrarySession {
     val documents: DocumentRepository
     val tags: TagRepository
     val savedViews: SavedViewRepository
+    val rules: AutoMatchRuleRepository
     val meta: MetadataWriter
     val content: DocContentFacade
     val deviceId: String
@@ -258,6 +283,18 @@ interface SettingsRepository {
     /** Whether source files in the watched folder are removed after a successful import. Default false. */
     val watchedFolderDeleteAfterImport: Flow<Boolean>
     suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean)
+
+    /** Storage path template, e.g. `{correspondent}/{doc_date:yyyy}/{title}.pdf`. Null = unset. */
+    val storagePathTemplate: Flow<String?>
+    suspend fun setStoragePathTemplate(template: String?)
+
+    /** Whether automatic storage path rule application is enabled. Default false. */
+    val storagePathEnabled: Flow<Boolean>
+    suspend fun setStoragePathEnabled(enabled: Boolean)
+
+    /** Durable device-local JSON source for auto-match rules; Room only projects this value. */
+    val autoMatchRulesJson: Flow<String>
+    suspend fun setAutoMatchRulesJson(json: String)
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */

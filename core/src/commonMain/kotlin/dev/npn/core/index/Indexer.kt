@@ -536,6 +536,7 @@ class Indexer(
         val docType: String?,
         val docDate: String?,
         val title: String?,
+        val notes: String?,
         val ocrEngineOverride: String?,
     )
 
@@ -551,6 +552,7 @@ class Indexer(
             docType = prop(DocProperty.DOC_TYPE),
             docDate = prop(DocProperty.DOC_DATE),
             title = prop(DocProperty.TITLE),
+            notes = prop(DocProperty.NOTES),
             ocrEngineOverride = prop(DocProperty.OCR_ENGINE),
         )
     }
@@ -673,6 +675,7 @@ class Indexer(
             docType = meta.docType,
             docDate = meta.docDate,
             title = meta.title,
+            notes = meta.notes,
             ocrEngineOverride = meta.ocrEngineOverride,
             trashed = lifecycle.trashed,
             trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
@@ -697,6 +700,7 @@ class Indexer(
                     docId = doc,
                     fileName = lifecycle.fileName,
                     title = meta.title,
+                    notes = meta.notes,
                     content = existingContent ?: "",
                     tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
                     correspondent = meta.correspondent,

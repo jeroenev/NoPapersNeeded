@@ -4,6 +4,8 @@ import androidx.room3.RoomRawQuery
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.journal.JournalCodec
+import dev.npn.core.journal.Hlc
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -80,6 +82,33 @@ class DocumentRepositoryImpl(
 
     override fun observeFieldKeys(): Flow<List<String>> = fieldDao.observeDistinctKeys()
 
+    override suspend fun searchSuggestions(query: String, limit: Int): List<String> {
+        val prefix = query.trim().takeIf { it.length >= MIN_SUGGESTION_LENGTH } ?: return emptyList()
+        val sourceLimit = limit.coerceAtLeast(1)
+        val likePrefix = escapeLike(prefix) + "%"
+        val rows = ftsDao.rowsForPrefix("\"${prefix.replace("\"", "\"\"")}\"*", sourceLimit)
+        val contentTerms = rows.asSequence()
+            .flatMap { row -> sequenceOf(row.fileName, row.title, row.content).filterNotNull() }
+            .flatMap { TOKEN_REGEX.findAll(it).map(MatchResult::value) }
+            .filter { it.startsWith(prefix, ignoreCase = true) }
+            .distinctBy { it.lowercase() }
+            .take(sourceLimit)
+            .toList()
+        val sources = listOf(
+            contentTerms,
+            db.tagDao().tagsForPrefix(likePrefix, sourceLimit),
+            documentDao.docTypesForPrefix(likePrefix, sourceLimit),
+            documentDao.correspondentsForPrefix(likePrefix, sourceLimit),
+        )
+        return buildList {
+            var index = 0
+            while (size < limit && sources.any { index < it.size }) {
+                sources.forEach { source -> source.getOrNull(index)?.let(::add) }
+                index++
+            }
+        }.distinctBy { it.lowercase() }.take(limit)
+    }
+
     private suspend fun fieldsFor(docIds: List<String>): Map<String, Map<String, String>> {
         if (docIds.isEmpty()) return emptyMap()
         return fieldDao.fieldsForDocs(docIds)
@@ -105,6 +134,20 @@ class DocumentRepositoryImpl(
     override fun observeCorrespondents(): Flow<List<String>> = documentDao.observeCorrespondents()
 
     override fun observeDocTypes(): Flow<List<String>> = documentDao.observeDocTypes()
+
+    override suspend fun history(docId: String): List<DocumentHistoryRecord> {
+        val dao = db.metadataProjectionDao()
+        return dao.eventsForDocument(docId)
+            .map { row ->
+                DocumentHistoryRecord(
+                    hlc = Hlc(row.hlcPhysical, row.hlcCounter, row.hlcDevice),
+                    deviceId = row.deviceId,
+                    operation = row.operation,
+                    event = JournalCodec.decodeLineOrNull(row.canonicalJson),
+                )
+            }
+            .sortedBy { it.hlc }
+    }
 
     private suspend fun tagsFor(docIds: List<String>): Map<String, List<String>> {
         if (docIds.isEmpty()) return emptyMap()
@@ -208,6 +251,11 @@ class DocumentRepositoryImpl(
 
     private fun escapeLike(s: String): String =
         s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    private companion object {
+        const val MIN_SUGGESTION_LENGTH = 2
+        val TOKEN_REGEX = Regex("[\\p{L}\\p{N}_-]+")
+    }
 
     /**
      * Sanitize a user FTS query into a safe MATCH expression. FTS5 treats bareword tokens as an

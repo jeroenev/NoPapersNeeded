@@ -6,9 +6,12 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.pathrules.StoragePathContext
+import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -20,6 +23,10 @@ data class SettingsUiState(
     val landscapeListColumns: Boolean = false,
     val watchedFolder: String? = null,
     val watchedFolderDeleteAfterImport: Boolean = false,
+    val storagePathTemplate: String = "{doc_date:yyyy}/{title}.pdf",
+    val storagePathEnabled: Boolean = false,
+    val storagePathPreview: String? = null,
+    val storagePathError: String? = null,
 )
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
@@ -44,7 +51,11 @@ class SettingsViewModel(
             settings.watchedFolder,
             settings.watchedFolderDeleteAfterImport,
         ) { folder, delete -> folder to delete },
-    ) { (location, lang, retention), (viewType, landscape), (watched, watchedDelete) ->
+        combine(settings.storagePathTemplate, settings.storagePathEnabled) { template, enabled ->
+            (template ?: DEFAULT_STORAGE_PATH_TEMPLATE) to enabled
+        },
+    ) { (location, lang, retention), (viewType, landscape), (watched, watchedDelete), (template, pathEnabled) ->
+        val preview = StoragePathTemplate.expand(template, PREVIEW_CONTEXT)
         SettingsUiState(
             libraryLocation = location,
             ocrLanguage = lang,
@@ -53,6 +64,10 @@ class SettingsViewModel(
             landscapeListColumns = landscape,
             watchedFolder = watched,
             watchedFolderDeleteAfterImport = watchedDelete,
+            storagePathTemplate = template,
+            storagePathEnabled = pathEnabled,
+            storagePathPreview = preview.getOrNull(),
+            storagePathError = preview.exceptionOrNull()?.message,
         )
     }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
@@ -75,6 +90,21 @@ class SettingsViewModel(
 
     fun setWatchedFolderDeleteAfterImport(enabled: Boolean) =
         viewModelScope.launch { settings.setWatchedFolderDeleteAfterImport(enabled) }
+
+    fun setStoragePathTemplate(template: String) =
+        viewModelScope.launch { settings.setStoragePathTemplate(template) }
+
+    fun setStoragePathEnabled(enabled: Boolean) = viewModelScope.launch {
+        // Re-derive validity from the stored template rather than the projected UI state, which
+        // can be the stale default when nothing is currently collecting `state`.
+        val valid = if (!enabled) {
+            true
+        } else {
+            val template = settings.storagePathTemplate.first() ?: DEFAULT_STORAGE_PATH_TEMPLATE
+            StoragePathTemplate.expand(template, PREVIEW_CONTEXT).isSuccess
+        }
+        if (valid) settings.setStoragePathEnabled(enabled)
+    }
 
     /**
      * Drop all cached thumbnails so they regenerate at the current render quality. Invokes [onDone]
@@ -100,5 +130,17 @@ class SettingsViewModel(
             ReviewMigration.MARK_NONE -> Unit
         }
         session.setReviewMode(ReviewMode.INBOX_WORKFLOW)
+    }
+
+    private companion object {
+        const val DEFAULT_STORAGE_PATH_TEMPLATE = "{doc_date:yyyy}/{title}.pdf"
+        val PREVIEW_CONTEXT = StoragePathContext(
+            title = "Electricity bill",
+            docDate = "2026-07-20",
+            docType = "Invoice",
+            correspondent = "Example Energy",
+            tags = listOf("home", "utilities"),
+            originalFileName = "scan.pdf",
+        )
     }
 }

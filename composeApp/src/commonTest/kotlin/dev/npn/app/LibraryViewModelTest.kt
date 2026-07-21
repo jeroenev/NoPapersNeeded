@@ -61,6 +61,38 @@ class LibraryViewModelTest : MainDispatcherTest() {
         model.ui.value.filter.query.shouldBeNull()
     }
 
+    @Test
+    fun suggestionsUseActiveTokenAndExpandAsynchronously() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            documents.suggestionsList = listOf("invoice", "inventory")
+        }
+        val model = vm(session = session)
+        val job = launch { model.suggestions.collect {} }
+        model.onQueryChange("annual inv")
+        advanceTimeBy(99)
+        runCurrent()
+        model.suggestions.value shouldBe emptyList()
+        advanceTimeBy(2)
+        runCurrent()
+        model.suggestions.value shouldContainExactly listOf("invoice", "inventory")
+        model.acceptSuggestion("invoice")
+        model.queryText.value shouldBe "annual invoice"
+        job.cancel()
+    }
+
+    @Test
+    fun shortOrNoResultSuggestionQueryStaysEmpty() = runTest(dispatcher) {
+        val model = vm()
+        val job = launch { model.suggestions.collect {} }
+        model.onQueryChange("a")
+        advanceUntilIdle()
+        model.suggestions.value shouldBe emptyList()
+        model.onQueryChange("missing")
+        advanceUntilIdle()
+        model.suggestions.value shouldBe emptyList()
+        job.cancel()
+    }
+
     // ---- viewOverridden race guard ----
 
     @Test

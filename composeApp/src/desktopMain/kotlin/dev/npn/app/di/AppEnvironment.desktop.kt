@@ -5,6 +5,7 @@ import dev.npn.core.app.DirThumbnailStore
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.db.npnDatabase
+import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.pdf.PdfBoxEngine
@@ -43,6 +44,13 @@ fun createAppEnvironment(): AppEnvironment {
             ocrLanguage = { settings.ocrLanguage.first() },
             trashRetentionDays = { settings.trashRetentionDays.first() },
             installationId = settings.installationId.first(),
+            storagePathRule = {
+                val template = settings.storagePathTemplate.first()
+                val enabled = settings.storagePathEnabled.first()
+                if (template.isNullOrBlank()) null else StoragePathRule(template, enabled)
+            },
+            autoMatchRulesJson = { settings.autoMatchRulesJson.first() },
+            persistAutoMatchRulesJson = settings::setAutoMatchRulesJson,
         )
         OpenedLibrary(deps) { deps.closeDb() }
     }

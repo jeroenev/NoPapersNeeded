@@ -35,6 +35,9 @@ class SettingsRepositoryImpl(
         val installationId: String,
         val watchedFolder: String?,
         val watchedFolderDeleteAfterImport: Boolean,
+        val storagePathTemplate: String?,
+        val storagePathEnabled: Boolean,
+        val autoMatchRulesJson: String,
     )
 
     private fun load(): Snapshot {
@@ -67,6 +70,9 @@ class SettingsRepositoryImpl(
             installationId = installationId,
             watchedFolder = props.getProperty(KEY_WATCHED_FOLDER)?.ifEmpty { null },
             watchedFolderDeleteAfterImport = props.getProperty(KEY_WATCHED_DELETE)?.toBoolean() ?: false,
+            storagePathTemplate = props.getProperty(KEY_STORAGE_TEMPLATE)?.ifEmpty { null },
+            storagePathEnabled = props.getProperty(KEY_STORAGE_ENABLED)?.toBoolean() ?: false,
+            autoMatchRulesJson = props.getProperty(KEY_AUTO_MATCH_RULES) ?: "[]",
         )
     }
 
@@ -84,6 +90,10 @@ class SettingsRepositoryImpl(
         if (snapshot.watchedFolder != null) props.setProperty(KEY_WATCHED_FOLDER, snapshot.watchedFolder)
         else props.remove(KEY_WATCHED_FOLDER)
         props.setProperty(KEY_WATCHED_DELETE, snapshot.watchedFolderDeleteAfterImport.toString())
+        if (snapshot.storagePathTemplate != null) props.setProperty(KEY_STORAGE_TEMPLATE, snapshot.storagePathTemplate)
+        else props.remove(KEY_STORAGE_TEMPLATE)
+        props.setProperty(KEY_STORAGE_ENABLED, snapshot.storagePathEnabled.toString())
+        props.setProperty(KEY_AUTO_MATCH_RULES, snapshot.autoMatchRulesJson)
         file.parentFile?.mkdirs()
         file.outputStream().use { props.store(it, "no-papers-needed settings") }
     }
@@ -99,6 +109,9 @@ class SettingsRepositoryImpl(
     override val watchedFolder: Flow<String?> = state.map { it.watchedFolder }
     override val watchedFolderDeleteAfterImport: Flow<Boolean> =
         state.map { it.watchedFolderDeleteAfterImport }
+    override val storagePathTemplate: Flow<String?> = state.map { it.storagePathTemplate }
+    override val storagePathEnabled: Flow<Boolean> = state.map { it.storagePathEnabled }
+    override val autoMatchRulesJson: Flow<String> = state.map { it.autoMatchRulesJson }
 
     override suspend fun setLibraryLocation(location: String?) {
         val next = state.value.copy(libraryLocation = location?.ifEmpty { null })
@@ -156,6 +169,24 @@ class SettingsRepositoryImpl(
         persist(next)
     }
 
+    override suspend fun setStoragePathTemplate(template: String?) {
+        val next = state.value.copy(storagePathTemplate = template?.ifEmpty { null })
+        state.value = next
+        persist(next)
+    }
+
+    override suspend fun setStoragePathEnabled(enabled: Boolean) {
+        val next = state.value.copy(storagePathEnabled = enabled)
+        state.value = next
+        persist(next)
+    }
+
+    override suspend fun setAutoMatchRulesJson(json: String) {
+        val next = state.value.copy(autoMatchRulesJson = json)
+        state.value = next
+        persist(next)
+    }
+
     companion object {
         private const val KEY_LOCATION = "libraryLocation"
         private const val KEY_OCR_LANG = "ocrLanguage"
@@ -168,6 +199,9 @@ class SettingsRepositoryImpl(
         private const val KEY_INSTALLATION_ID = "installationId"
         private const val KEY_WATCHED_FOLDER = "watchedFolder"
         private const val KEY_WATCHED_DELETE = "watchedFolderDeleteAfterImport"
+        private const val KEY_STORAGE_TEMPLATE = "storagePathTemplate"
+        private const val KEY_STORAGE_ENABLED = "storagePathEnabled"
+        private const val KEY_AUTO_MATCH_RULES = "autoMatchRulesJson"
 
         fun defaultFile(): File {
             val configHome = System.getenv("XDG_CONFIG_HOME")?.ifEmpty { null }

@@ -1,6 +1,7 @@
 package dev.npn.core.db
 
 import androidx.room3.RoomRawQuery
+import dev.npn.core.app.DocumentRepositoryImpl
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
@@ -185,6 +186,22 @@ class NpnDatabaseTest {
     }
 
     @Test
+    fun ftsIndexesNotesSeparatelyFromOcrContent() = runTest {
+        val fts = db.ftsDao()
+        val id = "n".repeat(64)
+        fts.replaceDocument(id, "doc.pdf", null, "ocr aardvark", null, null, null, "note buffalo")
+
+        fts.searchDocIds("aardvark") shouldContainExactly listOf(id)
+        fts.searchDocIds("buffalo") shouldContainExactly listOf(id)
+        fts.contentForDoc(id) shouldBe "ocr aardvark"
+
+        fts.replaceDocument(id, "renamed.pdf", null, "ocr aardvark", null, null, null, "note condor")
+        fts.searchDocIds("aardvark") shouldContainExactly listOf(id)
+        fts.searchDocIds("buffalo") shouldBe emptyList()
+        fts.searchDocIds("condor") shouldContainExactly listOf(id)
+    }
+
+    @Test
     fun ftsSnippetHighlightsFragment() = runTest {
         val fts = db.ftsDao()
         fts.replaceDocument(
@@ -194,8 +211,7 @@ class NpnDatabaseTest {
         val hits = fts.search("electricity")
         hits.size shouldBe 1
         hits.first().docId shouldBe "a".repeat(64)
-        // snippet() wraps the match in the [ ] markers we passed (original case preserved).
-        hits.first().snippet.lowercase() shouldContain "[electricity]"
+        hits.first().snippet.lowercase() shouldContain "\u0001electricity\u0002"
     }
 
     @Test
@@ -207,6 +223,35 @@ class NpnDatabaseTest {
         )
         fts.searchDocIds("electr*") shouldContainExactly listOf("a".repeat(64))
         fts.searchDocIds("electr").shouldBe(emptyList()) // no prefix operator, no exact token match
+    }
+
+    @Test
+    fun ftsPrefixRowsProvideAutocompleteSource() = runTest {
+        val fts = db.ftsDao()
+        val id = "a".repeat(64)
+        fts.replaceDocument(id, "invoice.pdf", "Annual invoice", "electricity total", null, null, null)
+        fts.rowsForPrefix("\"invo\"*", 5).map { it.docId } shouldContainExactly listOf(id)
+        fts.rowsForPrefix("\"absent\"*", 5) shouldBe emptyList()
+    }
+
+    @Test
+    fun repositorySuggestionsCombineAndEscapeSources() = runTest {
+        val id = "a".repeat(64)
+        db.documentDao().upsertAll(
+            listOf(doc(id, correspondent = "Invoice Corp", docType = "Invoice type")),
+        )
+        db.tagDao().upsert(TagEntity("Invoice tag"))
+        db.ftsDao().replaceDocument(id, "document.pdf", "Invoice title", "invoiced amount", null, null, null)
+
+        val suggestions = DocumentRepositoryImpl(db).searchSuggestions("invo", 8)
+        suggestions shouldContainExactly listOf(
+            "Invoice",
+            "Invoice tag",
+            "Invoice type",
+            "Invoice Corp",
+            "invoiced",
+        )
+        DocumentRepositoryImpl(db).searchSuggestions("%_", 8) shouldBe emptyList()
     }
 
     @Test
