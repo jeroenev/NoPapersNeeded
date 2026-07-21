@@ -10,6 +10,10 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.pathrules.StoragePathContext
+import dev.npn.core.pathrules.StoragePathRule
+import dev.npn.core.pathrules.StoragePathTemplate
+import dev.npn.core.pathrules.resolveUniqueTarget
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -37,6 +41,7 @@ class ImportService(
     private val documentDao: DocumentDao,
     private val ocrQueueDao: OcrQueueDao,
     private val clock: EpochClock = SystemEpochClock,
+    private val ruleProvider: suspend () -> StoragePathRule? = { null },
 ) {
     /** Temp staging dir, inside `.npn/` so it is never indexed. Defined here, not in NpnPaths. */
     private val tmpDir = "${NpnPaths.NPN_DIR}/tmp"
@@ -83,7 +88,7 @@ class ImportService(
         }
 
         val cleanName = ensurePdfName(suggestedName)
-        val target = uniqueTargetPath(toDir, cleanName)
+        val target = chooseImportTarget(cleanName, toDir)
         fs.move(tmpPath, target)
 
         val meta = fs.stat(target) ?: error("Imported file vanished: $target")
@@ -114,6 +119,27 @@ class ImportService(
     private fun ensurePdfName(name: String): String {
         val trimmed = name.trim().ifEmpty { "document" }
         return if (NpnPaths.isPdf(trimmed)) trimmed else "$trimmed.pdf"
+    }
+
+    private suspend fun chooseImportTarget(cleanName: String, toDir: String): String {
+        val rule = ruleProvider()
+        if (rule?.enabled != true || rule.template.isBlank()) {
+            return uniqueTargetPath(toDir, cleanName)
+        }
+        val context = StoragePathContext(
+            title = null,
+            docDate = null,
+            docType = null,
+            correspondent = null,
+            tags = emptyList(),
+            originalFileName = cleanName,
+        )
+        val expanded = StoragePathTemplate.expand(rule.template, context).getOrNull()
+        return if (expanded.isNullOrBlank()) {
+            uniqueTargetPath(toDir, cleanName)
+        } else {
+            resolveUniqueTarget(fs, documentDao, currentDocId = null, target = expanded)
+        }
     }
 
     /** Build `dir/name.pdf`, adding " (2)", " (3)", ... before the extension until free. */

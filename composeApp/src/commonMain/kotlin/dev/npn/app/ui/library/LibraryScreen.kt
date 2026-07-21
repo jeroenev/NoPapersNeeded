@@ -97,7 +97,7 @@ import kotlinx.coroutines.launch
 fun LibraryScreen(
     session: LibrarySession,
     env: AppEnvironment,
-    onOpenDoc: (docId: String, order: List<String>) -> Unit,
+    onOpenDoc: (docId: String, order: List<String>, searchQuery: String?) -> Unit,
     onTrash: () -> Unit,
     onTags: () -> Unit,
     onSettings: () -> Unit,
@@ -107,8 +107,11 @@ fun LibraryScreen(
     val docs by vm.documents.collectAsStateWithLifecycle()
 
     // Opening a doc records the current sorted+filtered order so the detail screen can page between
-    // documents; ids are stable so the order stays valid across navigation.
-    val openDoc: (String) -> Unit = { docId -> onOpenDoc(docId, docs.map { it.doc.docId }) }
+    // documents; ids are stable so the order stays valid across navigation. The originating search
+    // query is also passed through so the detail screen can highlight matching terms.
+    val openDoc: (String) -> Unit = { docId ->
+        onOpenDoc(docId, docs.map { it.doc.docId }, ui.filter.query)
+    }
     val tags by vm.tags.collectAsStateWithLifecycle()
     val correspondents by vm.correspondents.collectAsStateWithLifecycle()
     val docTypes by vm.docTypes.collectAsStateWithLifecycle()
@@ -274,6 +277,7 @@ private fun LibraryContent(
     onRemoveTag: () -> Unit,
 ) {
     val queryText by vm.queryText.collectAsStateWithLifecycle()
+    val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
     val landscapeListColumns by vm.landscapeListColumns.collectAsStateWithLifecycle()
     Scaffold(
@@ -316,6 +320,8 @@ private fun LibraryContent(
                 value = queryText,
                 onValueChange = vm::onQueryChange,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                suggestions = suggestions,
+                onSuggestionSelected = vm::acceptSuggestion,
             )
             ActiveFilters(
                 filter = ui.filter,

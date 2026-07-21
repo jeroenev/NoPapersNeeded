@@ -58,6 +58,7 @@ fun SettingsScreen(
     session: LibrarySession,
     onBack: () -> Unit,
     onChangeLibrary: () -> Unit,
+    onAutoMatchRules: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -158,6 +159,14 @@ fun SettingsScreen(
             HorizontalDivider()
 
             SectionHeader("Storage")
+            StoragePathRuleEditor(
+                template = state.storagePathTemplate,
+                enabled = state.storagePathEnabled,
+                preview = state.storagePathPreview,
+                error = state.storagePathError,
+                onTemplateChange = vm::setStoragePathTemplate,
+                onEnabledChange = vm::setStoragePathEnabled,
+            )
             OutlinedButton(onClick = {
                 vm.clearThumbnailCache { count ->
                     scope.launch {
@@ -184,6 +193,16 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
+            SectionHeader("Auto-matching")
+            OutlinedButton(onClick = onAutoMatchRules) { Text("Auto-matching rules") }
+            Text(
+                "Automatically tag documents and set metadata when imported text matches a rule.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            HorizontalDivider()
+
             SectionHeader("About")
             Text(
                 "No papers needed $NPN_VERSION",
@@ -195,6 +214,50 @@ fun SettingsScreen(
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+@Composable
+private fun StoragePathRuleEditor(
+    template: String,
+    enabled: Boolean,
+    preview: String?,
+    error: String?,
+    onTemplateChange: (String) -> Unit,
+    onEnabledChange: (Boolean) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Organize document paths automatically", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Moves PDFs after import and metadata changes; files are never overwritten.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(
+                checked = enabled,
+                enabled = error == null,
+                onCheckedChange = onEnabledChange,
+            )
+        }
+        OutlinedTextField(
+            value = template,
+            onValueChange = onTemplateChange,
+            label = { Text("Path template") },
+            supportingText = {
+                Text(error ?: "Preview: $preview")
+            },
+            isError = error != null,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Text(
+            "Variables: {title}, {doc_date}, {doc_date:yyyy-MM}, {docType}, " +
+                "{correspondent}, {tags}. Empty variable folders are omitted.",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

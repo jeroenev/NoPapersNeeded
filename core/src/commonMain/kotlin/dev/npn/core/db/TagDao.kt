@@ -21,6 +21,10 @@ interface TagDao {
     @Query("SELECT * FROM tags")
     suspend fun all(): List<TagEntity>
 
+    /** Tag names starting with [prefix], for search autocomplete. */
+    @Query("SELECT name FROM tags WHERE name LIKE :prefix ESCAPE '\\' ORDER BY name COLLATE NOCASE LIMIT :limit")
+    suspend fun tagsForPrefix(prefix: String, limit: Int): List<String>
+
     @Query(
         "SELECT t.name AS name, t.color AS color, t.icon AS icon, " +
             "COUNT(dt.docId) AS count " +

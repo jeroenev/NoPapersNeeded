@@ -8,6 +8,7 @@ import dev.npn.core.index.MutableClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.ThumbnailStore
+import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.xmp.PdfBoxXmpIO
 import kotlinx.coroutines.CoroutineScope
 import java.io.File
@@ -64,6 +65,7 @@ class AppSessionRig private constructor(
         suspend fun create(
             scope: CoroutineScope,
             ocr: OcrEngine = NoopOcrEngine(),
+            storagePathRule: suspend () -> StoragePathRule? = { null },
         ): AppSessionRig {
             val libRoot = Files.createTempDirectory("npn-app-lib")
             val dbDir = Files.createTempDirectory("npn-app-db").toFile()
@@ -82,6 +84,7 @@ class AppSessionRig private constructor(
                 trashRetentionDays = { 30 },
                 clock = clock,
                 installationId = "test-installation",
+                storagePathRule = storagePathRule,
             )
             val session = LibrarySessionImpl.openSession(deps)
             return AppSessionRig(libRoot, dbDir, fs, db, clock, scope, session)

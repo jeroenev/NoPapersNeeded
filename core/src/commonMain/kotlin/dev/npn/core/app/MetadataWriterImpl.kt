@@ -7,7 +7,7 @@ import dev.npn.core.fs.TrashOps
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.DocProperty
-
+import dev.npn.core.pathrules.StoragePathRuleApplicator
 /**
  * Journal-backed write side. Every metadata change is one or more [PendingOp]s committed through
  * the [JournalCoordinator], which serializes access to the live [dev.npn.core.journal.FoldedState]
@@ -25,6 +25,8 @@ class MetadataWriterImpl(
     private val db: NpnDatabase,
     private val fs: LibraryFileSystem,
     private val trashOps: TrashOps,
+    private val pathRuleApplicator: StoragePathRuleApplicator,
+    private val applyAutoMatch: suspend (String) -> Unit = {},
 ) : MetadataWriter {
 
     private val documentDao get() = db.documentDao()
@@ -33,12 +35,14 @@ class MetadataWriterImpl(
         val t = tag.trim()
         if (t.isEmpty() || docIds.isEmpty()) return
         coordinator.commitAndApply(docIds.map { PendingOp.tagAdd(it, t) })
+        docIds.forEach { pathRuleApplicator.applyFor(it) }
     }
 
     override suspend fun removeTag(docIds: List<String>, tag: String) {
         val t = tag.trim()
         if (t.isEmpty() || docIds.isEmpty()) return
         coordinator.commitBuilt { state -> orSetTagRemovals(state, docIds, t) }
+        docIds.forEach { pathRuleApplicator.applyFor(it) }
     }
 
     override suspend fun setReviewed(docIds: List<String>, reviewed: Boolean) {
@@ -51,22 +55,33 @@ class MetadataWriterImpl(
         if (docIds.isEmpty()) return
         val v = value?.trim()?.ifEmpty { null }
         coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.CORRESPONDENT, v) })
+        docIds.forEach { pathRuleApplicator.applyFor(it) }
     }
 
     override suspend fun setDocType(docIds: List<String>, value: String?) {
         if (docIds.isEmpty()) return
         val v = value?.trim()?.ifEmpty { null }
         coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.DOC_TYPE, v) })
+        docIds.forEach { pathRuleApplicator.applyFor(it) }
     }
 
     override suspend fun setDocDate(docId: String, isoDate: String?) {
         val v = isoDate?.trim()?.ifEmpty { null }
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.DOC_DATE, v)))
+        pathRuleApplicator.applyFor(docId)
     }
 
     override suspend fun setTitle(docId: String, title: String?) {
         val v = title?.trim()?.ifEmpty { null }
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.TITLE, v)))
+        applyAutoMatch(docId)
+        pathRuleApplicator.applyFor(docId)
+    }
+
+    override suspend fun setNotes(docId: String, notes: String?) {
+        val value = notes?.takeUnless { it.isBlank() }
+        if (documentDao.getByDocId(docId)?.notes == value) return
+        coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.NOTES, value)))
     }
 
     override suspend fun setOcrEngine(docId: String, engine: String?) {
@@ -85,20 +100,24 @@ class MetadataWriterImpl(
         val f = from.trim(); val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
         coordinator.commitAndApply(listOf(PendingOp.tagRename(f, t)))
+        documentDao.getDocIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
     }
 
     override suspend fun mergeTag(from: String, to: String) {
         val f = from.trim(); val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
         coordinator.commitAndApply(listOf(PendingOp.tagMerge(f, t)))
+        documentDao.getDocIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
     }
 
     override suspend fun deleteTag(name: String) {
         val t = name.trim()
         if (t.isEmpty()) return
+        val affected = documentDao.getDocIdsWithTag(t)
         // No dedicated journal op by design: remove the tag from every doc currently holding it,
         // listing all observed dots (OR-set delete-everywhere).
         coordinator.commitBuilt { state -> orSetTagRemovals(state, state.taggedDocs(), t) }
+        affected.forEach { pathRuleApplicator.applyFor(it) }
     }
 
     override suspend fun setTagStyle(tag: String, color: String?, icon: String?) {
@@ -175,6 +194,8 @@ class MetadataWriterImpl(
         if (NpnPaths.normalize(target) == NpnPaths.normalize(doc.relPath)) return
         fs.move(doc.relPath, target)
         documentDao.upsert(doc.copy(relPath = target, fileName = clean))
+        applyAutoMatch(docId)
+        pathRuleApplicator.applyFor(docId)
         // No journal event: path is file-level state, re-derived on rescan.
     }
 
@@ -185,6 +206,8 @@ class MetadataWriterImpl(
         if (NpnPaths.normalize(target) == NpnPaths.normalize(doc.relPath)) return
         fs.move(doc.relPath, target)
         documentDao.upsert(doc.copy(relPath = target, fileName = target.substringAfterLast('/')))
+        applyAutoMatch(docId)
+        pathRuleApplicator.applyFor(docId)
         // No journal event: path is file-level state, re-derived on rescan.
     }
 

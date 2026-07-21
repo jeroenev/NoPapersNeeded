@@ -38,3 +38,15 @@ fun formatEpochDate(epochMillis: Long): String {
     val d = dt.day.toString().padStart(2, '0')
     return "${dt.year}-$m-$d"
 }
+
+/** Epoch millis -> yyyy-MM-dd HH:mm:ss in the current local time zone. */
+fun formatEpochDateTime(epochMillis: Long): String {
+    val dt = Instant.fromEpochMilliseconds(epochMillis)
+        .toLocalDateTime(TimeZone.currentSystemDefault())
+    val month = (dt.month.ordinal + 1).toString().padStart(2, '0')
+    val day = dt.day.toString().padStart(2, '0')
+    val hour = dt.hour.toString().padStart(2, '0')
+    val minute = dt.minute.toString().padStart(2, '0')
+    val second = dt.second.toString().padStart(2, '0')
+    return "${dt.year}-$month-$day $hour:$minute:$second"
+}

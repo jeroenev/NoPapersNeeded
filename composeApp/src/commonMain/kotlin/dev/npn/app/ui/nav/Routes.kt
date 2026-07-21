@@ -24,5 +24,8 @@ sealed interface Route {
     data object Settings : Route
 
     @Serializable
+    data object AutoMatchRules : Route
+
+    @Serializable
     data class SavedViewRoute(val id: String) : Route
 }

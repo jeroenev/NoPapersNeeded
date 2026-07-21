@@ -76,7 +76,10 @@ fun DocDetailScreen(
     onBack: () -> Unit,
     onNavigateToDoc: (String) -> Unit,
 ) {
-    val vm: DocDetailViewModel = viewModel(key = "detail-$docId") { DocDetailViewModel(docId, session) }
+    val searchQuery = browse.searchQuery
+    val vm: DocDetailViewModel = viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") {
+        DocDetailViewModel(docId, session, searchQuery)
+    }
     val doc by vm.doc.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
     val correspondents by vm.correspondents.collectAsStateWithLifecycle()
@@ -86,6 +89,9 @@ fun DocDetailScreen(
     val fieldKeys by vm.fieldKeys.collectAsStateWithLifecycle()
     val ocrText by vm.ocrText.collectAsStateWithLifecycle()
     val ocrVersions by vm.ocrVersions.collectAsStateWithLifecycle()
+    val history by vm.history.collectAsStateWithLifecycle()
+    val noteEditor by vm.noteEditor.collectAsStateWithLifecycle()
+    val highlightTerms = vm.highlightTerms
 
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -211,8 +217,12 @@ fun DocDetailScreen(
                 fieldKeys = fieldKeys,
                 ocrText = ocrText,
                 ocrVersions = ocrVersions,
+                highlightTerms = highlightTerms,
                 onSetOcrEngine = vm::setOcrEngine,
                 onCommitTitle = vm::setTitle,
+                noteEditor = noteEditor,
+                onNoteChange = vm::updateNoteDraft,
+                onSaveNote = vm::saveNote,
                 onCommitCorrespondent = vm::setCorrespondent,
                 onCommitDocType = vm::setDocType,
                 onCommitDocDate = vm::setDocDate,
@@ -223,6 +233,9 @@ fun DocDetailScreen(
                 onSetReviewed = vm::setReviewed,
                 onAddTag = vm::addTag,
                 onRemoveTag = vm::removeTag,
+                history = history,
+                onLoadHistory = { vm.loadHistory() },
+                onRefreshHistory = { vm.loadHistory(refresh = true) },
                 modifier = m,
             )
         }

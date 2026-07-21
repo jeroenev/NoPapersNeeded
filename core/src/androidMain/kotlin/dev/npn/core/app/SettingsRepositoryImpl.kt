@@ -40,6 +40,9 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         val installationId: String,
         val watchedFolder: String?,
         val watchedFolderDeleteAfterImport: Boolean,
+        val storagePathTemplate: String?,
+        val storagePathEnabled: Boolean,
+        val autoMatchRulesJson: String,
     )
 
     private fun load() = Snapshot(
@@ -61,6 +64,9 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         },
         watchedFolder = prefs.getString(KEY_WATCHED_FOLDER, null)?.ifEmpty { null },
         watchedFolderDeleteAfterImport = prefs.getBoolean(KEY_WATCHED_DELETE, false),
+        storagePathTemplate = prefs.getString(KEY_STORAGE_TEMPLATE, null)?.ifEmpty { null },
+        storagePathEnabled = prefs.getBoolean(KEY_STORAGE_ENABLED, false),
+        autoMatchRulesJson = prefs.getString(KEY_AUTO_MATCH_RULES, "[]") ?: "[]",
     )
 
     override val libraryLocation: Flow<String?> = state.map { it.libraryLocation }
@@ -74,6 +80,9 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
     override val watchedFolder: Flow<String?> = state.map { it.watchedFolder }
     override val watchedFolderDeleteAfterImport: Flow<Boolean> =
         state.map { it.watchedFolderDeleteAfterImport }
+    override val storagePathTemplate: Flow<String?> = state.map { it.storagePathTemplate }
+    override val storagePathEnabled: Flow<Boolean> = state.map { it.storagePathEnabled }
+    override val autoMatchRulesJson: Flow<String> = state.map { it.autoMatchRulesJson }
 
     override suspend fun setLibraryLocation(location: String?) {
         prefs.edit().apply {
@@ -128,6 +137,23 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         state.value = load()
     }
 
+    override suspend fun setStoragePathTemplate(template: String?) {
+        prefs.edit().apply {
+            if (template.isNullOrEmpty()) remove(KEY_STORAGE_TEMPLATE) else putString(KEY_STORAGE_TEMPLATE, template)
+        }.apply()
+        state.value = load()
+    }
+
+    override suspend fun setStoragePathEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_STORAGE_ENABLED, enabled).apply()
+        state.value = load()
+    }
+
+    override suspend fun setAutoMatchRulesJson(json: String) {
+        prefs.edit().putString(KEY_AUTO_MATCH_RULES, json).commit()
+        state.value = load()
+    }
+
     companion object {
         private const val PREFS_NAME = "npn_settings"
         private const val KEY_LOCATION = "libraryLocation"
@@ -141,5 +167,8 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         private const val KEY_INSTALLATION_ID = "installationId"
         private const val KEY_WATCHED_FOLDER = "watchedFolder"
         private const val KEY_WATCHED_DELETE = "watchedFolderDeleteAfterImport"
+        private const val KEY_STORAGE_TEMPLATE = "storagePathTemplate"
+        private const val KEY_STORAGE_ENABLED = "storagePathEnabled"
+        private const val KEY_AUTO_MATCH_RULES = "autoMatchRulesJson"
     }
 }

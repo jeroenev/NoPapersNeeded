@@ -15,9 +15,26 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.CalendarToday
+import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.Help
+import androidx.compose.material.icons.filled.Label
+import androidx.compose.material.icons.filled.LabelOff
+import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.PushPin
+import androidx.compose.material.icons.filled.RestoreFromTrash
+import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -33,6 +50,7 @@ import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -43,18 +61,23 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.formatEpochDate
+import dev.npn.app.ui.common.formatEpochDateTime
+import dev.npn.app.ui.common.parseFtsSnippet
+import dev.npn.app.ui.common.parseQueryHighlight
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.model.ReviewMode
 
 /**
- * Side panel for one document with two tabs: **Details** (editable metadata — title,
- * correspondent, docType, docDate, custom fields, tags, and file/OCR facts) and **Text** (the
- * extracted OCR/embedded full text). Text fields commit on focus loss via the [onCommit*]
- * callbacks; correspondent/docType/field-keys offer existing values as suggestions.
+ * Side panel for one document with three tabs: **Details** (editable metadata — title,
+ * correspondent, docType, docDate, custom fields, tags, and file/OCR facts), **Text** (the
+ * extracted OCR/embedded full text), and **History** (immutable journal timeline). Text fields
+ * commit on focus loss via the [onCommit*] callbacks; correspondent/docType/field-keys offer
+ * existing values as suggestions.
  */
 @Composable
 fun MetadataPanel(
@@ -66,8 +89,12 @@ fun MetadataPanel(
     fieldKeys: List<String>,
     ocrText: String?,
     ocrVersions: List<OcrVersion>,
+    highlightTerms: List<String> = emptyList(),
     onSetOcrEngine: (String?) -> Unit,
     onCommitTitle: (String) -> Unit,
+    noteEditor: NoteEditorState,
+    onNoteChange: (String) -> Unit,
+    onSaveNote: () -> Unit,
     onCommitCorrespondent: (String) -> Unit,
     onCommitDocType: (String) -> Unit,
     onCommitDocDate: (String) -> Unit,
@@ -78,9 +105,17 @@ fun MetadataPanel(
     onSetReviewed: (Boolean) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
+    history: HistoryUiState = HistoryUiState.NotLoaded,
+    onLoadHistory: () -> Unit = {},
+    onRefreshHistory: () -> Unit = {},
     modifier: Modifier = Modifier,
 ) {
     var tab by remember { mutableStateOf(PanelTab.DETAILS) }
+    LaunchedEffect(tab) {
+        if (tab == PanelTab.HISTORY) {
+            onLoadHistory()
+        }
+    }
     Column(modifier) {
         TabRow(selectedTabIndex = tab.ordinal) {
             PanelTab.entries.forEach { t ->
@@ -102,6 +137,9 @@ fun MetadataPanel(
                 ocrVersions = ocrVersions,
                 onSetOcrEngine = onSetOcrEngine,
                 onCommitTitle = onCommitTitle,
+                noteEditor = noteEditor,
+                onNoteChange = onNoteChange,
+                onSaveNote = onSaveNote,
                 onCommitCorrespondent = onCommitCorrespondent,
                 onCommitDocType = onCommitDocType,
                 onCommitDocDate = onCommitDocDate,
@@ -117,6 +155,12 @@ fun MetadataPanel(
             PanelTab.TEXT -> OcrTextTab(
                 text = ocrText,
                 ocrState = item.doc.ocrState,
+                highlightTerms = highlightTerms,
+                modifier = Modifier.fillMaxWidth().weight(1f),
+            )
+            PanelTab.HISTORY -> HistoryTab(
+                history = history,
+                onRefresh = onRefreshHistory,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
         }
@@ -126,9 +170,11 @@ fun MetadataPanel(
 private enum class PanelTab(val label: String) {
     DETAILS("Details"),
     TEXT("Text"),
+    HISTORY("History"),
 }
 
 @Composable
+@Suppress("LongMethod")
 private fun DetailsTab(
     item: DocListItem,
     allTagNames: List<String>,
@@ -139,6 +185,9 @@ private fun DetailsTab(
     ocrVersions: List<OcrVersion>,
     onSetOcrEngine: (String?) -> Unit,
     onCommitTitle: (String) -> Unit,
+    noteEditor: NoteEditorState,
+    onNoteChange: (String) -> Unit,
+    onSaveNote: () -> Unit,
     onCommitCorrespondent: (String) -> Unit,
     onCommitDocType: (String) -> Unit,
     onCommitDocDate: (String) -> Unit,
@@ -180,6 +229,45 @@ private fun DetailsTab(
             placeholder = doc.fileName,
             onCommit = onCommitTitle,
         )
+
+        OutlinedTextField(
+            value = noteEditor.draft,
+            onValueChange = onNoteChange,
+            label = { Text("Note") },
+            minLines = 4,
+            maxLines = 10,
+            modifier = Modifier.fillMaxWidth(),
+        )
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Text(
+                when (val state = noteEditor.saveState) {
+                    NoteSaveState.Idle -> if (noteEditor.dirty) "Unsaved changes" else ""
+                    NoteSaveState.Saving -> "Saving..."
+                    NoteSaveState.Saved -> "Saved"
+                    is NoteSaveState.Error -> state.message
+                },
+                style = MaterialTheme.typography.bodySmall,
+                color = if (noteEditor.saveState is NoteSaveState.Error) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+            )
+            Button(
+                onClick = onSaveNote,
+                enabled = noteEditor.dirty && noteEditor.saveState != NoteSaveState.Saving,
+            ) {
+                if (noteEditor.saveState == NoteSaveState.Saving) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                } else {
+                    Text("Save note")
+                }
+            }
+        }
 
         SuggestField(
             label = "Correspondent",
@@ -571,7 +659,12 @@ private fun AddFieldRow(
 
 /** Read-only extracted text (OCR / embedded), selectable, in a scrolling monospace-ish block. */
 @Composable
-private fun OcrTextTab(text: String?, ocrState: String, modifier: Modifier = Modifier) {
+private fun OcrTextTab(
+    text: String?,
+    ocrState: String,
+    highlightTerms: List<String>,
+    modifier: Modifier = Modifier,
+) {
     Column(
         modifier = modifier
             .verticalScroll(rememberScrollState())
@@ -579,7 +672,15 @@ private fun OcrTextTab(text: String?, ocrState: String, modifier: Modifier = Mod
     ) {
         when {
             text != null -> SelectionContainer {
-                Text(text, style = MaterialTheme.typography.bodySmall)
+                val visibleText = text.take(MAX_OCR_DISPLAY_CHARS)
+                if (highlightTerms.isNotEmpty()) {
+                    HighlightText(
+                        segments = parseQueryHighlight(visibleText, highlightTerms.joinToString(" ")),
+                        style = MaterialTheme.typography.bodySmall,
+                    )
+                } else {
+                    Text(visibleText, style = MaterialTheme.typography.bodySmall)
+                }
             }
             else -> Text(
                 when (ocrState) {
@@ -593,6 +694,87 @@ private fun OcrTextTab(text: String?, ocrState: String, modifier: Modifier = Mod
             )
         }
     }
+}
+
+private const val MAX_OCR_DISPLAY_CHARS = 200_000
+
+/** Immutable journal timeline for the document: HLC-ordered icon + description rows. */
+@Composable
+private fun HistoryTab(
+    history: HistoryUiState,
+    onRefresh: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val scroll = rememberScrollState()
+    Column(
+        modifier = modifier
+            .verticalScroll(scroll)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        when (history) {
+            HistoryUiState.NotLoaded, HistoryUiState.Loading -> CircularProgressIndicator()
+            HistoryUiState.Empty -> Text(
+                "No history events yet.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            is HistoryUiState.Error -> {
+                Text("History could not be loaded: ${history.message}")
+                Button(onClick = onRefresh) { Text("Retry") }
+            }
+            is HistoryUiState.Loaded -> for (item in history.items) {
+                HistoryRow(item = item)
+            }
+        }
+    }
+}
+
+@Composable
+private fun HistoryRow(item: HistoryItem) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            imageVector = item.kind.icon(),
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(20.dp),
+        )
+        Column(Modifier.weight(1f)) {
+            Text(item.description, style = MaterialTheme.typography.bodyMedium)
+            Text(
+                formatHistorySecondary(item),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+private fun formatHistorySecondary(item: HistoryItem): String {
+    val timestamp = formatEpochDateTime(item.hlc.physicalMillis)
+    return "$timestamp · Device ${item.deviceId}"
+}
+
+private fun HistoryEventKind.icon() = when (this) {
+    HistoryEventKind.TAG_ADD -> Icons.Filled.Label
+    HistoryEventKind.TAG_REMOVE -> Icons.Filled.LabelOff
+    HistoryEventKind.PROP_TITLE -> Icons.Filled.Title
+    HistoryEventKind.PROP_NOTES -> Icons.Filled.Description
+    HistoryEventKind.PROP_CORRESPONDENT -> Icons.Filled.Person
+    HistoryEventKind.PROP_DOC_TYPE -> Icons.Filled.Description
+    HistoryEventKind.PROP_DOC_DATE -> Icons.Filled.CalendarToday
+    HistoryEventKind.PROP_REVIEWED -> Icons.Filled.CheckCircle
+    HistoryEventKind.PROP_OCR_ENGINE -> Icons.Filled.Settings
+    HistoryEventKind.FIELD_SET -> Icons.Filled.TextFields
+    HistoryEventKind.FIELD_REMOVE -> Icons.Filled.TextFields
+    HistoryEventKind.TRASH -> Icons.Filled.Delete
+    HistoryEventKind.RESTORE -> Icons.Filled.RestoreFromTrash
+    HistoryEventKind.DELETE -> Icons.Filled.DeleteForever
+    HistoryEventKind.RELINK -> Icons.Filled.Link
+    HistoryEventKind.UNKNOWN -> Icons.Filled.Help
 }
 
 @Composable

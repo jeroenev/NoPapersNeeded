@@ -28,8 +28,12 @@ import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import dev.npn.app.ui.common.activeSearchToken
+import dev.npn.app.ui.common.completeActiveSearchToken
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -55,6 +59,7 @@ data class LibraryUiState(
 )
 
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
+@Suppress("TooManyFunctions")
 class LibraryViewModel(
     val session: LibrarySession,
     private val settings: SettingsRepository,
@@ -129,6 +134,24 @@ class LibraryViewModel(
             .flatMapLatest { (f, s) -> session.documents.observeDocuments(f, s) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
+    /**
+     * Autocomplete suggestions for the current query. Debounced separately from the filter
+     * so suggestions are fast but do not fire on every keystroke.
+     */
+    val suggestions: StateFlow<List<String>> =
+        queryText
+            .debounce(SUGGESTION_DEBOUNCE_MS)
+            .distinctUntilChanged()
+            .flatMapLatest { q ->
+                val prefix = activeSearchToken(q)
+                if (prefix.length < MIN_SUGGESTION_LENGTH) {
+                    flowOf(emptyList())
+                } else {
+                    flow { emit(session.documents.searchSuggestions(prefix, SUGGESTION_LIMIT)) }
+                }
+            }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+
     val tags: StateFlow<List<TagInfo>> =
         session.tags.observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
@@ -173,6 +196,16 @@ class LibraryViewModel(
 
     fun onQueryChange(text: String) {
         queryInput.value = text
+    }
+
+    /**
+     * Apply an autocomplete suggestion: updates the raw query text and the active filter
+     * immediately (bypassing the filter debounce).
+     */
+    fun acceptSuggestion(text: String) {
+        val completed = completeActiveSearchToken(queryInput.value, text)
+        queryInput.value = completed
+        _ui.value = _ui.value.copy(filter = _ui.value.filter.copy(query = completed.ifBlank { null }))
     }
 
     fun setFilter(filter: LibraryFilter) {
@@ -228,6 +261,12 @@ class LibraryViewModel(
      */
     fun setGridColumnWidth(dp: Int) {
         viewModelScope.launch { settings.setGridColumnWidth(dp) }
+    }
+
+    private companion object {
+        const val SUGGESTION_DEBOUNCE_MS = 100L
+        const val SUGGESTION_LIMIT = 8
+        const val MIN_SUGGESTION_LENGTH = 2
     }
 
     // ---- selection ----

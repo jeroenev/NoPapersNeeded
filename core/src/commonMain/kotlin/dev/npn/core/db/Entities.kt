@@ -45,6 +45,8 @@ data class DocumentEntity(
     /** ISO-8601 local date, e.g. 2026-07-15. */
     val docDate: String? = null,
     val title: String? = null,
+    /** User-authored free-text note, projected from the immutable journal. */
+    val notes: String? = null,
     val trashed: Boolean = false,
     val trashedOrigPath: String? = null,
     /** Tombstone: doc-delete journal event applied. */
@@ -121,6 +123,8 @@ data class FtsDocumentEntity(
     val tags: String? = null,
     val correspondent: String? = null,
     val docType: String? = null,
+    /** User notes are indexed separately from extracted PDF/OCR content. */
+    val notes: String? = null,
 )
 
 @Entity(tableName = "saved_views")

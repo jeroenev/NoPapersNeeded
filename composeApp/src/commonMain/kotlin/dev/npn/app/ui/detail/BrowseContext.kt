@@ -8,7 +8,8 @@ import androidx.compose.runtime.setValue
  * The ordered list of documents the user is browsing, so the detail screen can walk to the
  * prev/next document without round-tripping through the library. Populated with the library's
  * current sorted+filtered doc ids when a document is opened; ids are stable so the list stays valid
- * across the navigation.
+ * across the navigation. Also carries the originating search query so the detail screen can
+ * highlight matching terms in the OCR text tab.
  *
  * Held as plain UI state (created in the nav host) rather than on the session/environment: it is
  * throwaway navigation state, and keeping it out of the DI graph means the platform environment
@@ -18,8 +19,13 @@ class BrowseContext {
     var docIds: List<String> by mutableStateOf(emptyList())
         private set
 
-    fun setOrder(ids: List<String>) {
+    /** Search query that produced the current browse order, if any. */
+    var searchQuery: String? by mutableStateOf(null)
+        private set
+
+    fun setOrder(ids: List<String>, query: String? = null) {
         docIds = ids
+        searchQuery = query
     }
 
     fun indexOf(docId: String): Int = docIds.indexOf(docId)

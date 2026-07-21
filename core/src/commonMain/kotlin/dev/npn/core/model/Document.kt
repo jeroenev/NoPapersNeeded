@@ -40,6 +40,7 @@ enum class DocProperty(val wire: String) {
     DOC_TYPE("docType"),
     DOC_DATE("docDate"), // ISO-8601 local date, e.g. 2026-07-15
     TITLE("title"),
+    NOTES("notes"),
     /**
      * User override of the OCR version used for search: an engine name (e.g. "tesseract",
      * "mlkit", "ai"), or cleared (null) for automatic best-engine selection. Synced like any

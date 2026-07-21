@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.toEntity
+
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.fs.ExternalSource
@@ -34,8 +36,12 @@ import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.ocr.OcrWorker
+import dev.npn.core.pathrules.StoragePathRule
+import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
+import dev.npn.core.rules.RuleApplier
+
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.xmp.BakeService
@@ -51,6 +57,8 @@ import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
+import kotlinx.serialization.decodeFromString
+import kotlinx.serialization.json.Json
 
 /**
  * Everything wired for one opened library folder. Constructed by [openSession] (a suspend factory
@@ -70,6 +78,7 @@ class LibrarySessionImpl private constructor(
     override val documents: DocumentRepository,
     override val tags: TagRepository,
     override val savedViews: SavedViewRepository,
+    override val rules: AutoMatchRuleRepository,
     override val meta: MetadataWriter,
     override val content: DocContentFacade,
 ) : LibrarySession {
@@ -389,6 +398,7 @@ class LibrarySessionImpl private constructor(
          * repositories, pipelines, then do the initial fold so [documents] is populated before the
          * caller's initial rescan.
          */
+        @Suppress("LongMethod")
         suspend fun openSession(deps: SessionDeps): LibrarySessionImpl {
             val db = deps.db
             val fs = deps.fs
@@ -425,7 +435,14 @@ class LibrarySessionImpl private constructor(
             val coordinator = createCoordinator(deps, writer, indexer)
             coordinator.refreshState()
 
-            val importService = ImportService(fs, db.documentDao(), db.ocrQueueDao(), deps.clock)
+            val pathRuleApplicator = StoragePathRuleApplicator(fs, db, ftsWriteGate, deps.storagePathRule)
+            val importService = ImportService(
+                fs = fs,
+                documentDao = db.documentDao(),
+                ocrQueueDao = db.ocrQueueDao(),
+                clock = deps.clock,
+                ruleProvider = deps.storagePathRule,
+            )
             val maintenance = MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
             val relinkService = RelinkService(coordinator)
             val splitService = SplitService(fs, deps.pdfEngine, importService, db.documentDao())
@@ -461,8 +478,35 @@ class LibrarySessionImpl private constructor(
             val documents = DocumentRepositoryImpl(db)
             val tags = TagRepositoryImpl(db.tagDao())
             val savedViews = SavedViewRepositoryImpl(db.savedViewDao())
-            val meta = MetadataWriterImpl(coordinator, db, fs, TrashOps(fs))
             val content = DocContentFacadeImpl(db, fs, deps.pdfEngine, thumbnailService, bakeService, coordinator, renderGate)
+
+            val ruleApplier = RuleApplier(
+                ruleDao = db.autoMatchRuleDao(),
+                ftsDao = db.ftsDao(),
+                documentDao = db.documentDao(),
+                coordinator = coordinator,
+                onMetadataApplied = pathRuleApplicator::applyFor,
+            )
+            db.autoMatchRuleDao().clearAll()
+            runCatching {
+                Json.decodeFromString<List<dev.npn.core.rules.AutoMatchRule>>(deps.autoMatchRulesJson())
+            }.getOrDefault(emptyList()).forEach { db.autoMatchRuleDao().upsert(it.toEntity()) }
+            val rules = AutoMatchRuleRepositoryImpl(
+                dao = db.autoMatchRuleDao(),
+                applier = ruleApplier,
+                persist = deps.persistAutoMatchRulesJson,
+            )
+            val meta = MetadataWriterImpl(
+                coordinator,
+                db,
+                fs,
+                TrashOps(fs),
+                pathRuleApplicator,
+                applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
+            )
+            ocrPipeline.onTextIndexed = { docId, text ->
+                ruleApplier.applyToDoc(docId, text)
+            }
 
             return LibrarySessionImpl(
                 deviceId = effectiveDeviceId,
@@ -478,6 +522,7 @@ class LibrarySessionImpl private constructor(
                 documents = documents,
                 tags = tags,
                 savedViews = savedViews,
+                rules = rules,
                 meta = meta,
                 content = content,
             )
@@ -532,6 +577,9 @@ class SessionDeps(
     val scope: CoroutineScope,
     val ocrLanguage: suspend () -> String,
     val trashRetentionDays: suspend () -> Int,
+    val storagePathRule: suspend () -> StoragePathRule? = { null },
+    val autoMatchRulesJson: suspend () -> String = { "[]" },
+    val persistAutoMatchRulesJson: suspend (String) -> Unit = {},
     val clock: EpochClock = SystemEpochClock,
     val installationId: String = "local-installation",
 ) {

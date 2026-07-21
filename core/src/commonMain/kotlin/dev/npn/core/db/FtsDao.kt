@@ -22,6 +22,7 @@ interface FtsDao {
         tags: String?,
         correspondent: String?,
         docType: String?,
+        notes: String? = null,
     ) {
         deleteForDoc(docId)
         insert(
@@ -29,6 +30,7 @@ interface FtsDao {
                 docId = docId,
                 fileName = fileName,
                 title = title,
+                notes = notes,
                 content = content,
                 tags = tags,
                 correspondent = correspondent,
@@ -46,7 +48,7 @@ interface FtsDao {
      * @Query with a subquery form Room can still parse. The docId is column 0.
      */
     @Query(
-        "SELECT docId, snippet(fts_documents, -1, '[', ']', '...', 16) AS snippet " +
+        "SELECT docId, snippet(fts_documents, -1, char(1), char(2), '...', 16) AS snippet " +
             "FROM fts_documents WHERE fts_documents MATCH :query ORDER BY rank",
     )
     suspend fun search(query: String): List<FtsHit>
@@ -64,4 +66,8 @@ interface FtsDao {
      */
     @Query("SELECT content FROM fts_documents WHERE docId = :docId")
     suspend fun contentForDoc(docId: String): String?
+
+    /** Indexed rows containing a token with the requested prefix, used to derive autocomplete. */
+    @Query("SELECT * FROM fts_documents WHERE fts_documents MATCH :query ORDER BY rank LIMIT :limit")
+    suspend fun rowsForPrefix(query: String, limit: Int): List<FtsDocumentEntity>
 }

@@ -53,6 +53,12 @@ class OcrPipeline(
     private val config: OcrConfig = OcrConfig(),
     private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
 ) {
+
+    /**
+     * Optional hook called whenever text is indexed for a document. Used by the auto-matching
+     * rule engine to apply rules once extracted text is available.
+     */
+    var onTextIndexed: (suspend (docId: String, text: String) -> Unit)? = null
     companion object {
         const val STATE_PENDING = "pending"
         const val STATE_RUNNING = "running"
@@ -139,6 +145,7 @@ class OcrPipeline(
                 lastError = null,
             ),
         )
+        onTextIndexed?.invoke(docId, sidecar.fullText())
     }
 
     /**
@@ -271,6 +278,7 @@ class OcrPipeline(
         val state = if (desired.deviceId == deviceId) OCR_DONE else OCR_ADOPTED
         setOcrState(doc.docId, state, pageCount = sidecar.pages.size, engine = sidecar.engine)
         ocrQueueDao.delete(doc.docId)
+        onTextIndexed?.invoke(doc.docId, sidecar.fullText())
     }
 
     /**
@@ -364,6 +372,7 @@ class OcrPipeline(
             docId = docId,
             fileName = doc?.fileName,
             title = doc?.title,
+            notes = doc?.notes,
             content = OcrSidecar.joinPages(pages),
             tags = tags.joinToString(" ").ifEmpty { null },
             correspondent = doc?.correspondent,
