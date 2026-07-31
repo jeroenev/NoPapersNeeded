@@ -1,10 +1,12 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -32,7 +34,9 @@ import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TextFields
 import androidx.compose.material.icons.filled.Title
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
@@ -41,6 +45,7 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
@@ -105,6 +110,11 @@ fun MetadataPanel(
     onSetReviewed: (Boolean) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
+    aiTags: AiTagState = AiTagState(),
+    onSuggestAiTags: () -> Unit = {},
+    onAcceptAiTag: (String) -> Unit = {},
+    onDismissAiTag: (String) -> Unit = {},
+    onClearAiTagSuggestions: () -> Unit = {},
     history: HistoryUiState = HistoryUiState.NotLoaded,
     onLoadHistory: () -> Unit = {},
     onRefreshHistory: () -> Unit = {},
@@ -150,6 +160,11 @@ fun MetadataPanel(
                 onSetReviewed = onSetReviewed,
                 onAddTag = onAddTag,
                 onRemoveTag = onRemoveTag,
+                aiTags = aiTags,
+                onSuggestAiTags = onSuggestAiTags,
+                onAcceptAiTag = onAcceptAiTag,
+                onDismissAiTag = onDismissAiTag,
+                onClearAiTagSuggestions = onClearAiTagSuggestions,
                 modifier = Modifier.fillMaxWidth().weight(1f),
             )
             PanelTab.TEXT -> OcrTextTab(
@@ -198,6 +213,11 @@ private fun DetailsTab(
     onSetReviewed: (Boolean) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
+    aiTags: AiTagState,
+    onSuggestAiTags: () -> Unit,
+    onAcceptAiTag: (String) -> Unit,
+    onDismissAiTag: (String) -> Unit,
+    onClearAiTagSuggestions: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val doc = item.doc
@@ -310,6 +330,14 @@ private fun DetailsTab(
             onRemove = onRemoveTag,
         )
 
+        AiTagSuggestions(
+            state = aiTags,
+            onSuggest = onSuggestAiTags,
+            onAccept = onAcceptAiTag,
+            onDismiss = onDismissAiTag,
+            onClearAll = onClearAiTagSuggestions,
+        )
+
         HorizontalDivider()
 
         // File / OCR facts.
@@ -325,6 +353,70 @@ private fun DetailsTab(
                 versions = ocrVersions,
                 onSetEngine = onSetOcrEngine,
             )
+        }
+    }
+}
+
+/**
+ * AI new-tag suggestions for the current doc. Hidden entirely unless the AI endpoint is configured
+ * ([AiTagState.available]). Offers a "Suggest tags" button (spinner while running) and renders each
+ * suggestion as an [InputChip] visually distinct from real tags: tapping the chip (or its leading +)
+ * accepts it, the trailing × dismisses it; a "Dismiss all" button clears the lot.
+ */
+@Composable
+private fun AiTagSuggestions(
+    state: AiTagState,
+    onSuggest: () -> Unit,
+    onAccept: (String) -> Unit,
+    onDismiss: (String) -> Unit,
+    onClearAll: () -> Unit,
+) {
+    if (state.available != true) return
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onSuggest, enabled = !state.suggesting) {
+                Icon(
+                    Icons.Outlined.AutoAwesome,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text("Suggest tags", modifier = Modifier.padding(start = 8.dp))
+            }
+            if (state.suggesting) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            }
+        }
+        if (state.suggestions.isNotEmpty()) {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                state.suggestions.forEach { tag ->
+                    InputChip(
+                        selected = false,
+                        onClick = { onAccept(tag) },
+                        label = { Text(tag) },
+                        leadingIcon = {
+                            Icon(
+                                Icons.Filled.Add,
+                                contentDescription = "Add $tag",
+                                modifier = Modifier.size(AssistChipDefaults.IconSize),
+                            )
+                        },
+                        trailingIcon = {
+                            Icon(
+                                Icons.Filled.Close,
+                                contentDescription = "Dismiss $tag",
+                                modifier = Modifier
+                                    .size(AssistChipDefaults.IconSize)
+                                    .clickable { onDismiss(tag) },
+                            )
+                        },
+                    )
+                }
+            }
+            TextButton(onClick = onClearAll) { Text("Dismiss all") }
         }
     }
 }

@@ -27,10 +27,22 @@ data class SettingsUiState(
     val storagePathEnabled: Boolean = false,
     val storagePathPreview: String? = null,
     val storagePathError: String? = null,
+    val aiEnabled: Boolean = false,
+    val aiBaseUrl: String = "",
+    val aiApiKey: String = "",
+    val aiModel: String = "",
 )
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
 enum class ReviewMigration { MARK_ALL, MARK_TAGGED, MARK_NONE }
+
+/** Groups the four AI settings flows so they fit a single [combine] slot. */
+private data class AiSettings(
+    val enabled: Boolean,
+    val baseUrl: String,
+    val apiKey: String,
+    val model: String,
+)
 
 class SettingsViewModel(
     private val settings: SettingsRepository,
@@ -54,7 +66,13 @@ class SettingsViewModel(
         combine(settings.storagePathTemplate, settings.storagePathEnabled) { template, enabled ->
             (template ?: DEFAULT_STORAGE_PATH_TEMPLATE) to enabled
         },
-    ) { (location, lang, retention), (viewType, landscape), (watched, watchedDelete), (template, pathEnabled) ->
+        combine(
+            settings.aiEnabled,
+            settings.aiBaseUrl,
+            settings.aiApiKey,
+            settings.aiModel,
+        ) { enabled, baseUrl, apiKey, model -> AiSettings(enabled, baseUrl, apiKey, model) },
+    ) { (location, lang, retention), (viewType, landscape), (watched, watchedDelete), (template, pathEnabled), ai ->
         val preview = StoragePathTemplate.expand(template, PREVIEW_CONTEXT)
         SettingsUiState(
             libraryLocation = location,
@@ -68,6 +86,10 @@ class SettingsViewModel(
             storagePathEnabled = pathEnabled,
             storagePathPreview = preview.getOrNull(),
             storagePathError = preview.exceptionOrNull()?.message,
+            aiEnabled = ai.enabled,
+            aiBaseUrl = ai.baseUrl,
+            aiApiKey = ai.apiKey,
+            aiModel = ai.model,
         )
     }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
@@ -105,6 +127,14 @@ class SettingsViewModel(
         }
         if (valid) settings.setStoragePathEnabled(enabled)
     }
+
+    fun setAiEnabled(enabled: Boolean) = viewModelScope.launch { settings.setAiEnabled(enabled) }
+
+    fun setAiBaseUrl(url: String) = viewModelScope.launch { settings.setAiBaseUrl(url) }
+
+    fun setAiApiKey(key: String) = viewModelScope.launch { settings.setAiApiKey(key) }
+
+    fun setAiModel(model: String) = viewModelScope.launch { settings.setAiModel(model) }
 
     /**
      * Drop all cached thumbnails so they regenerate at the current render quality. Invokes [onDone]

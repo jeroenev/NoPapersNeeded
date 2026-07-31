@@ -32,6 +32,10 @@ class SettingsViewModelTest : MainDispatcherTest() {
             landscapeListColumnsFlow.value = true
             storagePathTemplateFlow.value = "{doc_date:yyyy}/{title}.pdf"
             storagePathEnabledFlow.value = true
+            aiEnabledFlow.value = true
+            aiBaseUrlFlow.value = "http://localhost:11434"
+            aiApiKeyFlow.value = "secret"
+            aiModelFlow.value = "qwen3:8b"
         }
         val model = vm(settings = settings)
         val job = launch { model.state.collect {} }
@@ -45,6 +49,10 @@ class SettingsViewModelTest : MainDispatcherTest() {
         s.storagePathEnabled shouldBe true
         s.storagePathPreview shouldBe "2026/Electricity bill.pdf"
         s.storagePathError shouldBe null
+        s.aiEnabled shouldBe true
+        s.aiBaseUrl shouldBe "http://localhost:11434"
+        s.aiApiKey shouldBe "secret"
+        s.aiModel shouldBe "qwen3:8b"
         job.cancel()
     }
 
@@ -80,6 +88,21 @@ class SettingsViewModelTest : MainDispatcherTest() {
         settings.setLandscapeFlags shouldContainExactly listOf(true)
         settings.setStoragePathTemplates shouldContainExactly listOf("{docType}/{title}.pdf")
         settings.setStoragePathEnabledFlags shouldContainExactly listOf(true)
+    }
+
+    @Test
+    fun aiSettersDelegateToRepository() = runTest(dispatcher) {
+        val settings = FakeSettingsRepository()
+        val model = vm(settings = settings)
+        model.setAiEnabled(true)
+        model.setAiBaseUrl("http://localhost:11434")
+        model.setAiApiKey("secret")
+        model.setAiModel("qwen3:8b")
+        advanceUntilIdle()
+        settings.aiEnabledFlow.value shouldBe true
+        settings.aiBaseUrlFlow.value shouldBe "http://localhost:11434"
+        settings.aiApiKeyFlow.value shouldBe "secret"
+        settings.aiModelFlow.value shouldBe "qwen3:8b"
     }
 
     // ---- review mode switching ----

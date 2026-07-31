@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiFacade
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.SavedViewEntity
 import dev.npn.core.index.ScanReport
@@ -184,6 +185,7 @@ interface LibrarySession {
     val rules: AutoMatchRuleRepository
     val meta: MetadataWriter
     val content: DocContentFacade
+    val ai: AiFacade
     val deviceId: String
 
     val scanProgress: Flow<ScanProgressUi?>        // null when idle
@@ -295,6 +297,24 @@ interface SettingsRepository {
     /** Durable device-local JSON source for auto-match rules; Room only projects this value. */
     val autoMatchRulesJson: Flow<String>
     suspend fun setAutoMatchRulesJson(json: String)
+
+    // --- AI assistant (device-local by design: the API key must never sync via the journal) ---
+
+    /** Master switch for all AI features. Default false. */
+    val aiEnabled: Flow<Boolean>
+    suspend fun setAiEnabled(enabled: Boolean)
+
+    /** OpenAI-compatible server root, e.g. `https://api.openai.com` or `http://localhost:11434`. */
+    val aiBaseUrl: Flow<String>
+    suspend fun setAiBaseUrl(url: String)
+
+    /** Bearer token for the endpoint; blank for local servers without auth. */
+    val aiApiKey: Flow<String>
+    suspend fun setAiApiKey(key: String)
+
+    /** Model id as the endpoint knows it, e.g. `gpt-4.1-mini` or `qwen3:8b`. */
+    val aiModel: Flow<String>
+    suspend fun setAiModel(model: String)
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */

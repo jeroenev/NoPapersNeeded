@@ -3,6 +3,7 @@ package dev.npn.core.app
 import androidx.room3.RoomRawQuery
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
+import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.Hlc
@@ -46,7 +47,7 @@ class DocumentRepositoryImpl(
                 }
             } else {
                 // Two-step FTS: fetch snippets, keep only matched ids, preserve FTS rank order.
-                val hits = ftsDao.search(sanitizeFts(queryText))
+                val hits = ftsDao.search(FtsQuery.sanitize(queryText))
                 val snippetById = hits.associate { it.docId to it.snippet }
                 val order = hits.map { it.docId }.withIndex().associate { it.value to it.index }
                 docs.filter { it.docId in snippetById }
@@ -255,20 +256,5 @@ class DocumentRepositoryImpl(
     private companion object {
         const val MIN_SUGGESTION_LENGTH = 2
         val TOKEN_REGEX = Regex("[\\p{L}\\p{N}_-]+")
-    }
-
-    /**
-     * Sanitize a user FTS query into a safe MATCH expression. FTS5 treats bareword tokens as an
-     * implicit AND; wrapping each token in double quotes avoids syntax errors from stray operator
-     * characters while still matching every term. A trailing `*` is added for prefix matching on
-     * the last token to make search feel incremental.
-     */
-    private fun sanitizeFts(query: String): String {
-        val tokens = query.trim().split(Regex("\\s+")).filter { it.isNotEmpty() }
-        if (tokens.isEmpty()) return "\"\""
-        return tokens.mapIndexed { i, t ->
-            val cleaned = t.replace("\"", "")
-            if (cleaned.isEmpty()) "" else if (i == tokens.lastIndex) "\"$cleaned\"*" else "\"$cleaned\""
-        }.filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { "\"\"" }
     }
 }

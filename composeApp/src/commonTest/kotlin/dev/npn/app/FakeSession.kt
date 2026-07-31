@@ -1,5 +1,8 @@
 package dev.npn.app
 
+import dev.npn.core.ai.AiChatTurn
+import dev.npn.core.ai.AiConfig
+import dev.npn.core.ai.AiFacade
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.AutoMatchRuleRepository
@@ -306,6 +309,38 @@ class FakeDocContentFacade : DocContentFacade {
     override suspend fun extractedText(docId: String): String? = extractedTextValue
 }
 
+/**
+ * AI fake: [askResponses] are consumed in order (last one repeats); [suggestions] backs
+ * [suggestTags]. Failure injection via the `fail*` hooks, call recording via `asked`/
+ * [suggestTagsCalls].
+ */
+class FakeAiFacade : AiFacade {
+    var configValue = AiConfig(enabled = true, baseUrl = "http://localhost:1", model = "test-model")
+    var askResponses: List<String> = listOf("answer")
+    private var askIdx = 0
+    val asked = mutableListOf<Pair<List<AiChatTurn>, String>>()
+    var failAsk: (() -> Nothing)? = null
+    var suggestions: List<String> = emptyList()
+    val suggestTagsCalls = mutableListOf<String>()
+    var failSuggestTags: (() -> Nothing)? = null
+
+    override suspend fun config(): AiConfig = configValue
+
+    override suspend fun ask(history: List<AiChatTurn>, question: String): String {
+        failAsk?.invoke()
+        asked += history to question
+        val response = askResponses.getOrElse(askIdx) { askResponses.last() }
+        askIdx++
+        return response
+    }
+
+    override suspend fun suggestTags(docId: String): List<String> {
+        failSuggestTags?.invoke()
+        suggestTagsCalls += docId
+        return suggestions
+    }
+}
+
 class FakeLibrarySession : LibrarySession {
     override val documents = FakeDocumentRepository()
     override val tags = FakeTagRepository()
@@ -313,6 +348,7 @@ class FakeLibrarySession : LibrarySession {
     override val rules = FakeAutoMatchRuleRepository()
     override val meta = FakeMetadataWriter()
     override val content = FakeDocContentFacade()
+    override val ai = FakeAiFacade()
     override val deviceId: String = "test-device"
 
     val scanProgressFlow = MutableStateFlow<ScanProgressUi?>(null)
@@ -456,6 +492,20 @@ class FakeSettingsRepository(
     }
     override val autoMatchRulesJson: Flow<String> get() = autoMatchRulesJsonFlow
     override suspend fun setAutoMatchRulesJson(json: String) { autoMatchRulesJsonFlow.value = json }
+
+    val aiEnabledFlow = MutableStateFlow(false)
+    val aiBaseUrlFlow = MutableStateFlow("")
+    val aiApiKeyFlow = MutableStateFlow("")
+    val aiModelFlow = MutableStateFlow("")
+
+    override val aiEnabled: Flow<Boolean> get() = aiEnabledFlow
+    override suspend fun setAiEnabled(enabled: Boolean) { aiEnabledFlow.value = enabled }
+    override val aiBaseUrl: Flow<String> get() = aiBaseUrlFlow
+    override suspend fun setAiBaseUrl(url: String) { aiBaseUrlFlow.value = url }
+    override val aiApiKey: Flow<String> get() = aiApiKeyFlow
+    override suspend fun setAiApiKey(key: String) { aiApiKeyFlow.value = key }
+    override val aiModel: Flow<String> get() = aiModelFlow
+    override suspend fun setAiModel(model: String) { aiModelFlow.value = model }
 
     val watchedFolderFlow = MutableStateFlow<String?>(null)
     val watchedFolderDeleteFlow = MutableStateFlow(false)

@@ -31,6 +31,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.Route
@@ -113,6 +114,7 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
                 onTrash = { nav.navigate(Route.Trash) },
                 onTags = { nav.navigate(Route.TagManagement) },
                 onSettings = { nav.navigate(Route.Settings) },
+                onOpenAiChat = { nav.navigate(Route.AiChat) },
             )
         }
         composable<Route.DocDetail> { entry ->
@@ -161,6 +163,13 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
             AutoMatchRulesScreen(
                 session = session,
                 onBack = { nav.popBackStack() },
+            )
+        }
+        composable<Route.AiChat> {
+            AiChatScreen(
+                session = session,
+                onBack = { nav.popBackStack() },
+                onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
             )
         }
     }

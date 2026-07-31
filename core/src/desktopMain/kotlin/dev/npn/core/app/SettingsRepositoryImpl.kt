@@ -4,8 +4,13 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.nio.file.FileAlreadyExistsException
+import java.nio.file.Files
+import java.nio.file.attribute.PosixFilePermissions
 import java.util.Properties
 import java.util.UUID
 
@@ -23,6 +28,7 @@ class SettingsRepositoryImpl(
 
     private val props = Properties()
     private val state = MutableStateFlow(load())
+    private val persistMutex = Mutex()
 
     private data class Snapshot(
         val libraryLocation: String?,
@@ -38,17 +44,25 @@ class SettingsRepositoryImpl(
         val storagePathTemplate: String?,
         val storagePathEnabled: Boolean,
         val autoMatchRulesJson: String,
+        val aiEnabled: Boolean,
+        val aiBaseUrl: String,
+        val aiApiKey: String,
+        val aiModel: String,
     )
+
+    private fun boolProp(key: String): Boolean = props.getProperty(key)?.toBoolean() ?: false
+
+    private fun textProp(key: String): String = props.getProperty(key) ?: ""
 
     private fun load(): Snapshot {
         if (file.exists()) {
+            restrictFilePermissions()
             runCatching { file.inputStream().use { props.load(it) } }
         }
         val installationId = props.getProperty(KEY_INSTALLATION_ID) ?: UUID.randomUUID().toString().also { fresh ->
             props.setProperty(KEY_INSTALLATION_ID, fresh)
             runCatching {
-                file.parentFile?.mkdirs()
-                file.outputStream().use { props.store(it, "no-papers-needed settings") }
+                storeProperties()
             }
         }
         return Snapshot(
@@ -66,13 +80,17 @@ class SettingsRepositoryImpl(
             gridColumnWidth = props.getProperty(KEY_GRID_WIDTH)?.toIntOrNull()
                 ?.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
                 ?: GridSizing.DEFAULT_COLUMN_WIDTH,
-            landscapeListColumns = props.getProperty(KEY_LANDSCAPE_LIST)?.toBoolean() ?: false,
+            landscapeListColumns = boolProp(KEY_LANDSCAPE_LIST),
             installationId = installationId,
             watchedFolder = props.getProperty(KEY_WATCHED_FOLDER)?.ifEmpty { null },
-            watchedFolderDeleteAfterImport = props.getProperty(KEY_WATCHED_DELETE)?.toBoolean() ?: false,
+            watchedFolderDeleteAfterImport = boolProp(KEY_WATCHED_DELETE),
             storagePathTemplate = props.getProperty(KEY_STORAGE_TEMPLATE)?.ifEmpty { null },
-            storagePathEnabled = props.getProperty(KEY_STORAGE_ENABLED)?.toBoolean() ?: false,
+            storagePathEnabled = boolProp(KEY_STORAGE_ENABLED),
             autoMatchRulesJson = props.getProperty(KEY_AUTO_MATCH_RULES) ?: "[]",
+            aiEnabled = boolProp(KEY_AI_ENABLED),
+            aiBaseUrl = textProp(KEY_AI_BASE_URL),
+            aiApiKey = textProp(KEY_AI_API_KEY),
+            aiModel = textProp(KEY_AI_MODEL),
         )
     }
 
@@ -94,8 +112,32 @@ class SettingsRepositoryImpl(
         else props.remove(KEY_STORAGE_TEMPLATE)
         props.setProperty(KEY_STORAGE_ENABLED, snapshot.storagePathEnabled.toString())
         props.setProperty(KEY_AUTO_MATCH_RULES, snapshot.autoMatchRulesJson)
+        props.setProperty(KEY_AI_ENABLED, snapshot.aiEnabled.toString())
+        props.setProperty(KEY_AI_BASE_URL, snapshot.aiBaseUrl)
+        props.setProperty(KEY_AI_API_KEY, snapshot.aiApiKey)
+        props.setProperty(KEY_AI_MODEL, snapshot.aiModel)
+        storeProperties()
+    }
+
+    private fun storeProperties() {
         file.parentFile?.mkdirs()
+        try {
+            Files.createFile(file.toPath(), PosixFilePermissions.asFileAttribute(OWNER_ONLY_PERMISSIONS))
+        } catch (_: FileAlreadyExistsException) {
+            // Existing files are tightened below before they are opened for writing.
+        }
+        restrictFilePermissions()
         file.outputStream().use { props.store(it, "no-papers-needed settings") }
+    }
+
+    private fun restrictFilePermissions() {
+        Files.setPosixFilePermissions(file.toPath(), OWNER_ONLY_PERMISSIONS)
+    }
+
+    private suspend fun update(transform: (Snapshot) -> Snapshot) = persistMutex.withLock {
+        val next = transform(state.value)
+        state.value = next
+        persist(next)
     }
 
     override val libraryLocation: Flow<String?> = state.map { it.libraryLocation }
@@ -112,79 +154,75 @@ class SettingsRepositoryImpl(
     override val storagePathTemplate: Flow<String?> = state.map { it.storagePathTemplate }
     override val storagePathEnabled: Flow<Boolean> = state.map { it.storagePathEnabled }
     override val autoMatchRulesJson: Flow<String> = state.map { it.autoMatchRulesJson }
+    override val aiEnabled: Flow<Boolean> = state.map { it.aiEnabled }
+    override val aiBaseUrl: Flow<String> = state.map { it.aiBaseUrl }
+    override val aiApiKey: Flow<String> = state.map { it.aiApiKey }
+    override val aiModel: Flow<String> = state.map { it.aiModel }
 
     override suspend fun setLibraryLocation(location: String?) {
-        val next = state.value.copy(libraryLocation = location?.ifEmpty { null })
-        state.value = next
-        persist(next)
+        update { it.copy(libraryLocation = location?.ifEmpty { null }) }
     }
 
     override suspend fun setOcrLanguage(lang: String) {
-        val next = state.value.copy(ocrLanguage = lang)
-        state.value = next
-        persist(next)
+        update { it.copy(ocrLanguage = lang) }
     }
 
     override suspend fun setTrashRetentionDays(days: Int) {
-        val next = state.value.copy(trashRetentionDays = days)
-        state.value = next
-        persist(next)
+        update { it.copy(trashRetentionDays = days) }
     }
 
     override suspend fun setDefaultViewType(v: ViewType) {
-        val next = state.value.copy(defaultViewType = v)
-        state.value = next
-        persist(next)
+        update { it.copy(defaultViewType = v) }
     }
 
     override suspend fun setLibrarySort(sort: LibrarySort) {
-        val next = state.value.copy(librarySort = sort)
-        state.value = next
-        persist(next)
+        update { it.copy(librarySort = sort) }
     }
 
     override suspend fun setGridColumnWidth(dp: Int) {
-        val next = state.value.copy(
+        update { it.copy(
             gridColumnWidth = dp.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
-        )
-        state.value = next
-        persist(next)
+        ) }
     }
 
     override suspend fun setLandscapeListColumns(enabled: Boolean) {
-        val next = state.value.copy(landscapeListColumns = enabled)
-        state.value = next
-        persist(next)
+        update { it.copy(landscapeListColumns = enabled) }
     }
 
     override suspend fun setWatchedFolder(location: String?) {
-        val next = state.value.copy(watchedFolder = location?.ifEmpty { null })
-        state.value = next
-        persist(next)
+        update { it.copy(watchedFolder = location?.ifEmpty { null }) }
     }
 
     override suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean) {
-        val next = state.value.copy(watchedFolderDeleteAfterImport = enabled)
-        state.value = next
-        persist(next)
+        update { it.copy(watchedFolderDeleteAfterImport = enabled) }
     }
 
     override suspend fun setStoragePathTemplate(template: String?) {
-        val next = state.value.copy(storagePathTemplate = template?.ifEmpty { null })
-        state.value = next
-        persist(next)
+        update { it.copy(storagePathTemplate = template?.ifEmpty { null }) }
     }
 
     override suspend fun setStoragePathEnabled(enabled: Boolean) {
-        val next = state.value.copy(storagePathEnabled = enabled)
-        state.value = next
-        persist(next)
+        update { it.copy(storagePathEnabled = enabled) }
     }
 
     override suspend fun setAutoMatchRulesJson(json: String) {
-        val next = state.value.copy(autoMatchRulesJson = json)
-        state.value = next
-        persist(next)
+        update { it.copy(autoMatchRulesJson = json) }
+    }
+
+    override suspend fun setAiEnabled(enabled: Boolean) {
+        update { it.copy(aiEnabled = enabled) }
+    }
+
+    override suspend fun setAiBaseUrl(url: String) {
+        update { it.copy(aiBaseUrl = url) }
+    }
+
+    override suspend fun setAiApiKey(key: String) {
+        update { it.copy(aiApiKey = key) }
+    }
+
+    override suspend fun setAiModel(model: String) {
+        update { it.copy(aiModel = model) }
     }
 
     companion object {
@@ -202,6 +240,11 @@ class SettingsRepositoryImpl(
         private const val KEY_STORAGE_TEMPLATE = "storagePathTemplate"
         private const val KEY_STORAGE_ENABLED = "storagePathEnabled"
         private const val KEY_AUTO_MATCH_RULES = "autoMatchRulesJson"
+        private const val KEY_AI_ENABLED = "aiEnabled"
+        private const val KEY_AI_BASE_URL = "aiBaseUrl"
+        private const val KEY_AI_API_KEY = "aiApiKey"
+        private const val KEY_AI_MODEL = "aiModel"
+        private val OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------")
 
         fun defaultFile(): File {
             val configHome = System.getenv("XDG_CONFIG_HOME")?.ifEmpty { null }
