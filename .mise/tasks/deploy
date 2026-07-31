@@ -20,7 +20,7 @@ if [ -z "$serials" ]; then
 fi
 
 # Pick an IP:port serial if present, else the first one.
-target=$(printf '%s\n' "$serials" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$' | head -n1)
+target=$(printf '%s\n' "$serials" | grep -E '^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+:[0-9]+$' | head -n1 || true)
 if [ -z "$target" ]; then
     target=$(printf '%s\n' "$serials" | head -n1)
 fi
