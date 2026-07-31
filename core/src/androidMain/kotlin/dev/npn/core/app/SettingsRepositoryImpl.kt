@@ -43,6 +43,10 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         val storagePathTemplate: String?,
         val storagePathEnabled: Boolean,
         val autoMatchRulesJson: String,
+        val aiEnabled: Boolean,
+        val aiBaseUrl: String,
+        val aiApiKey: String,
+        val aiModel: String,
     )
 
     private fun load() = Snapshot(
@@ -67,6 +71,10 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         storagePathTemplate = prefs.getString(KEY_STORAGE_TEMPLATE, null)?.ifEmpty { null },
         storagePathEnabled = prefs.getBoolean(KEY_STORAGE_ENABLED, false),
         autoMatchRulesJson = prefs.getString(KEY_AUTO_MATCH_RULES, "[]") ?: "[]",
+        aiEnabled = prefs.getBoolean(KEY_AI_ENABLED, false),
+        aiBaseUrl = prefs.getString(KEY_AI_BASE_URL, "") ?: "",
+        aiApiKey = prefs.getString(KEY_AI_API_KEY, "") ?: "",
+        aiModel = prefs.getString(KEY_AI_MODEL, "") ?: "",
     )
 
     override val libraryLocation: Flow<String?> = state.map { it.libraryLocation }
@@ -83,6 +91,10 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
     override val storagePathTemplate: Flow<String?> = state.map { it.storagePathTemplate }
     override val storagePathEnabled: Flow<Boolean> = state.map { it.storagePathEnabled }
     override val autoMatchRulesJson: Flow<String> = state.map { it.autoMatchRulesJson }
+    override val aiEnabled: Flow<Boolean> = state.map { it.aiEnabled }
+    override val aiBaseUrl: Flow<String> = state.map { it.aiBaseUrl }
+    override val aiApiKey: Flow<String> = state.map { it.aiApiKey }
+    override val aiModel: Flow<String> = state.map { it.aiModel }
 
     override suspend fun setLibraryLocation(location: String?) {
         prefs.edit().apply {
@@ -154,6 +166,26 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         state.value = load()
     }
 
+    override suspend fun setAiEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_AI_ENABLED, enabled).apply()
+        state.value = load()
+    }
+
+    override suspend fun setAiBaseUrl(url: String) {
+        prefs.edit().putString(KEY_AI_BASE_URL, url).apply()
+        state.value = load()
+    }
+
+    override suspend fun setAiApiKey(key: String) {
+        prefs.edit().putString(KEY_AI_API_KEY, key).apply()
+        state.value = load()
+    }
+
+    override suspend fun setAiModel(model: String) {
+        prefs.edit().putString(KEY_AI_MODEL, model).apply()
+        state.value = load()
+    }
+
     companion object {
         private const val PREFS_NAME = "npn_settings"
         private const val KEY_LOCATION = "libraryLocation"
@@ -170,5 +202,9 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         private const val KEY_STORAGE_TEMPLATE = "storagePathTemplate"
         private const val KEY_STORAGE_ENABLED = "storagePathEnabled"
         private const val KEY_AUTO_MATCH_RULES = "autoMatchRulesJson"
+        private const val KEY_AI_ENABLED = "aiEnabled"
+        private const val KEY_AI_BASE_URL = "aiBaseUrl"
+        private const val KEY_AI_API_KEY = "aiApiKey"
+        private const val KEY_AI_MODEL = "aiModel"
     }
 }

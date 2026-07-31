@@ -18,8 +18,10 @@ filekit = "0.14.2"
 kotlin = "2.3.21"
 kotlinx-datetime = "0.8.0"
 kotlinx-serialization = "1.11.0"
+koog = "1.1.1"
 kotest = "6.2.2"
 ksp = "2.3.10"
+ktor = "3.3.3"
 mlkit-docscanner = "16.0.0"
 mlkit-textrecognition = "16.0.1"
 pdfbox = "3.0.8"
@@ -45,6 +47,11 @@ compose-ui = { module = "org.jetbrains.compose.ui:ui", version.ref = "composeMul
 compose-uiTooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.ref = "composeMultiplatform" }
 compose-uiToolingPreview = { module = "org.jetbrains.compose.ui:ui-tooling-preview", version.ref = "composeMultiplatform" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
+koog-agents-core = { module = "ai.koog:agents-core", version.ref = "koog" }
+koog-agents-tools = { module = "ai.koog:agents-tools", version.ref = "koog" }
+koog-http-client-ktor = { module = "ai.koog:http-client-ktor", version.ref = "koog" }
+koog-prompt-executor-model = { module = "ai.koog:prompt-executor-model", version.ref = "koog" }
+koog-prompt-executor-openai = { module = "ai.koog:prompt-executor-openai-client", version.ref = "koog" }
 kotest-assertions = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
 kotest-property = { module = "io.kotest:kotest-property", version.ref = "kotest" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }
@@ -52,6 +59,8 @@ kotlinx-coroutines-swing = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-
 kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "coroutines" }
 kotlinx-datetime = { module = "org.jetbrains.kotlinx:kotlinx-datetime", version.ref = "kotlinx-datetime" }
 kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinx-serialization" }
+ktor-client-cio = { module = "io.ktor:ktor-client-cio", version.ref = "ktor" }
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 mlkit-document-scanner = { module = "com.google.android.gms:play-services-mlkit-document-scanner", version.ref = "mlkit-docscanner" }
 mlkit-text-recognition = { module = "com.google.mlkit:text-recognition", version.ref = "mlkit-textrecognition" }
 navigation-compose = { module = "org.jetbrains.androidx.navigation:navigation-compose", version.ref = "compose-navigation" }

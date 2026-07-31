@@ -139,6 +139,27 @@ class NpnDatabaseTest {
     }
 
     @Test
+    fun getLiveWithTagFiltersAndLimitsInDatabase() = runTest {
+        val docDao = db.documentDao()
+        val tagDao = db.tagDao()
+        val liveA = "a".repeat(64)
+        val liveB = "b".repeat(64)
+        val trashed = "c".repeat(64)
+        docDao.upsertAll(
+            listOf(
+                doc(liveA),
+                doc(liveB, relPath = "b.pdf"),
+                doc(trashed, relPath = "c.pdf", trashed = true),
+            ),
+        )
+        listOf(liveA, liveB, trashed).forEach { tagDao.setForDocument(it, listOf("invoice")) }
+
+        docDao.getLiveWithTag("invoice", limit = 1).map { it.docId }.size shouldBe 1
+        docDao.getLiveWithTag("invoice", limit = 10).map { it.docId }
+            .shouldContainExactlyInAnyOrder(liveA, liveB)
+    }
+
+    @Test
     fun setForDocumentAddsAndClearsTags() = runTest {
         val docDao = db.documentDao()
         val tagDao = db.tagDao()

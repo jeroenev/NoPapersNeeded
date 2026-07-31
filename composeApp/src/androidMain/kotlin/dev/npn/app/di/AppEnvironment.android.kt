@@ -2,6 +2,7 @@ package dev.npn.app.di
 
 import android.content.Context
 import androidx.core.net.toUri
+import dev.npn.core.ai.AiConfig
 import dev.npn.core.app.AppDirs
 import dev.npn.core.app.DirThumbnailStore
 import dev.npn.core.app.SessionDeps
@@ -53,6 +54,14 @@ fun createAppEnvironment(context: Context): AppEnvironment {
             },
             autoMatchRulesJson = { settings.autoMatchRulesJson.first() },
             persistAutoMatchRulesJson = settings::setAutoMatchRulesJson,
+            aiConfig = {
+                AiConfig(
+                    enabled = settings.aiEnabled.first(),
+                    baseUrl = settings.aiBaseUrl.first(),
+                    apiKey = settings.aiApiKey.first(),
+                    model = settings.aiModel.first(),
+                )
+            },
         )
         OpenedLibrary(deps) { deps.closeDb() }
     }

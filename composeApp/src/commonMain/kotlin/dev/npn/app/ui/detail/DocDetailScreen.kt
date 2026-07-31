@@ -91,6 +91,7 @@ fun DocDetailScreen(
     val ocrVersions by vm.ocrVersions.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     val noteEditor by vm.noteEditor.collectAsStateWithLifecycle()
+    val aiTags by vm.aiTags.collectAsStateWithLifecycle()
     val highlightTerms = vm.highlightTerms
 
     val scope = rememberCoroutineScope()
@@ -233,6 +234,11 @@ fun DocDetailScreen(
                 onSetReviewed = vm::setReviewed,
                 onAddTag = vm::addTag,
                 onRemoveTag = vm::removeTag,
+                aiTags = aiTags,
+                onSuggestAiTags = vm::suggestAiTags,
+                onAcceptAiTag = vm::acceptAiTag,
+                onDismissAiTag = vm::dismissAiTag,
+                onClearAiTagSuggestions = vm::clearAiTagSuggestions,
                 history = history,
                 onLoadHistory = { vm.loadHistory() },
                 onRefreshHistory = { vm.loadHistory(refresh = true) },

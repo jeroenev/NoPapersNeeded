@@ -30,6 +30,7 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.Card
@@ -58,6 +59,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -101,7 +103,12 @@ fun LibraryScreen(
     onTrash: () -> Unit,
     onTags: () -> Unit,
     onSettings: () -> Unit,
+    onOpenAiChat: () -> Unit,
 ) {
+    // Probe once whether the AI assistant is configured so the entry point stays hidden otherwise.
+    val aiConfigured by produceState(initialValue = false, session) {
+        value = runCatching { session.ai.config().configured }.getOrDefault(false)
+    }
     val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val docs by vm.documents.collectAsStateWithLifecycle()
@@ -174,6 +181,8 @@ fun LibraryScreen(
             snackbar = snackbar,
             onMenu = { scope.launch { drawerState.open() } },
             onOpenDoc = openDoc,
+            aiConfigured = aiConfigured,
+            onOpenAiChat = onOpenAiChat,
             onTrashBanner = onTrash,
             onImport = { importPicker.launch() },
             onScan = onScan,
@@ -268,6 +277,8 @@ private fun LibraryContent(
     snackbar: SnackbarHostState,
     onMenu: () -> Unit,
     onOpenDoc: (String) -> Unit,
+    aiConfigured: Boolean,
+    onOpenAiChat: () -> Unit,
     onTrashBanner: () -> Unit,
     onImport: () -> Unit,
     onScan: () -> Unit,
@@ -296,8 +307,10 @@ private fun LibraryContent(
                 LibraryTopBar(
                     viewType = ui.viewType,
                     sort = ui.sort,
+                    aiConfigured = aiConfigured,
                     onMenu = onMenu,
                     onOpenFilter = onOpenFilter,
+                    onOpenAiChat = onOpenAiChat,
                     onSetSort = vm::setSort,
                     onSetView = vm::setViewType,
                     onRefresh = vm::refresh,
@@ -450,8 +463,10 @@ private fun DocList(
 private fun LibraryTopBar(
     viewType: ViewType,
     sort: dev.npn.core.app.LibrarySort,
+    aiConfigured: Boolean,
     onMenu: () -> Unit,
     onOpenFilter: () -> Unit,
+    onOpenAiChat: () -> Unit,
     onSetSort: (SortField, Boolean) -> Unit,
     onSetView: (ViewType) -> Unit,
     onRefresh: () -> Unit,
@@ -463,6 +478,11 @@ private fun LibraryTopBar(
             IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu") }
         },
         actions = {
+            if (aiConfigured) {
+                IconButton(onClick = onOpenAiChat) {
+                    Icon(Icons.Outlined.AutoAwesome, contentDescription = "AI assistant")
+                }
+            }
             IconButton(onClick = onRefresh) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }

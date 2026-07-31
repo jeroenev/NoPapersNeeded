@@ -29,6 +29,11 @@ kotlin {
             implementation(libs.kotlinx.datetime)
             implementation(libs.room3.runtime)
             implementation(libs.sqlite.bundled)
+            implementation(libs.koog.agents.core)
+            implementation(libs.koog.agents.tools)
+            implementation(libs.koog.prompt.executor.model)
+            implementation(libs.koog.prompt.executor.openai)
+            implementation(libs.koog.http.client.ktor)
         }
         commonTest.dependencies {
             implementation(kotlin("test"))
@@ -39,11 +44,13 @@ kotlin {
             implementation(libs.androidx.documentfile)
             implementation(libs.pdfbox.android)
             implementation(libs.mlkit.text.recognition)
+            implementation(libs.ktor.client.okhttp)
         }
         val desktopMain by getting {
             dependencies {
                 implementation(libs.pdfbox)
                 implementation(libs.pdfbox.xmpbox)
+                implementation(libs.ktor.client.cio)
             }
         }
         val desktopTest by getting {

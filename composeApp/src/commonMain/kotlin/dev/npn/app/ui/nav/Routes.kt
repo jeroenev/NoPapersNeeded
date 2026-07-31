@@ -27,5 +27,8 @@ sealed interface Route {
     data object AutoMatchRules : Route
 
     @Serializable
+    data object AiChat : Route
+
+    @Serializable
     data class SavedViewRoute(val id: String) : Route
 }

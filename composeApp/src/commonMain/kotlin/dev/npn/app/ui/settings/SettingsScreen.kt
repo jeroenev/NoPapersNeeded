@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
@@ -120,6 +121,20 @@ fun SettingsScreen(
                 "Tesseract/MLKit language code, e.g. eng, nld, fra.",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            HorizontalDivider()
+
+            SectionHeader("AI assistant")
+            AiAssistantSection(
+                enabled = state.aiEnabled,
+                baseUrl = state.aiBaseUrl,
+                apiKey = state.aiApiKey,
+                model = state.aiModel,
+                onSetEnabled = vm::setAiEnabled,
+                onSetBaseUrl = vm::setAiBaseUrl,
+                onSetApiKey = vm::setAiApiKey,
+                onSetModel = vm::setAiModel,
             )
 
             HorizontalDivider()
@@ -303,6 +318,77 @@ private fun WatchedFolderSection(
                 }
                 Switch(checked = deleteAfterImport, onCheckedChange = onSetDeleteAfterImport)
             }
+        }
+    }
+}
+
+@Composable
+private fun AiAssistantSection(
+    enabled: Boolean,
+    baseUrl: String,
+    apiKey: String,
+    model: String,
+    onSetEnabled: (Boolean) -> Unit,
+    onSetBaseUrl: (String) -> Unit,
+    onSetApiKey: (String) -> Unit,
+    onSetModel: (String) -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Column(Modifier.weight(1f)) {
+                Text("Enable AI assistant", style = MaterialTheme.typography.bodyLarge)
+                Text(
+                    "Uses an OpenAI-compatible server to suggest tags and answer questions " +
+                        "about your documents.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            Switch(checked = enabled, onCheckedChange = onSetEnabled)
+        }
+        if (enabled) {
+            OutlinedTextField(
+                value = baseUrl,
+                onValueChange = onSetBaseUrl,
+                label = { Text("Server URL") },
+                supportingText = {
+                    Text(
+                        "OpenAI-compatible server, e.g. https://api.openai.com or " +
+                            "http://localhost:11434. A pasted /v1/chat/completions URL also works.",
+                    )
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = apiKey,
+                onValueChange = onSetApiKey,
+                label = { Text("API key") },
+                visualTransformation = PasswordVisualTransformation(),
+                supportingText = {
+                    Text("Stored only on this device; leave empty for local servers")
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            OutlinedTextField(
+                value = model,
+                onValueChange = onSetModel,
+                label = { Text("Model") },
+                supportingText = {
+                    Text(
+                        "Model id exactly as the server lists it (see its /v1/models), " +
+                            "e.g. gpt-4.1-mini or qwen3:8b. Client-side provider prefixes do not apply.",
+                    )
+                },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Text(
+                "Requests send document text to the configured server.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
     }
 }

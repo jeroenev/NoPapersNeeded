@@ -56,6 +56,17 @@ sealed interface HistoryUiState {
 }
 
 /**
+ * AI tag-suggestion state for the detail screen. [available] is null until the endpoint config has
+ * been probed on init (the button stays hidden until it resolves to true), [suggesting] is the
+ * in-flight busy flag, and [suggestions] are the not-yet-accepted new-tag proposals.
+ */
+data class AiTagState(
+    val available: Boolean? = null,
+    val suggesting: Boolean = false,
+    val suggestions: List<String> = emptyList(),
+)
+
+/**
  * View model for a single document. The document row and its tags come from the session's
  * reactive [dev.npn.core.app.DocumentRepository.observeDoc] flow so external edits (journal
  * folds, OCR completion) refresh the screen. Page count is resolved once via the content facade.
@@ -128,10 +139,17 @@ class DocDetailViewModel(
     private val _history = MutableStateFlow<HistoryUiState>(HistoryUiState.NotLoaded)
     val history: StateFlow<HistoryUiState> = _history.asStateFlow()
 
+    private val _aiTags = MutableStateFlow(AiTagState())
+    val aiTags: StateFlow<AiTagState> = _aiTags.asStateFlow()
+
     init {
         viewModelScope.launch {
             val count = runCatching { session.content.pageCount(docId) }.getOrNull() ?: 0
             _ui.value = _ui.value.copy(pageCount = count)
+        }
+        viewModelScope.launch {
+            val configured = runCatching { session.ai.config().configured }.getOrDefault(false)
+            _aiTags.value = _aiTags.value.copy(available = configured)
         }
         viewModelScope.launch {
             session.documents.observeDoc(docId).collect { item ->
@@ -219,6 +237,51 @@ class DocDetailViewModel(
 
     fun addTag(tag: String) = launchMetadata("add tag") { session.meta.addTag(listOf(docId), tag) }
     fun removeTag(tag: String) = launchMetadata("remove tag") { session.meta.removeTag(listOf(docId), tag) }
+
+    // ---- AI tag suggestions ----
+
+    /**
+     * Ask the AI endpoint for new-tag suggestions from this doc's indexed text. No-op while a
+     * request is already in flight. Empty results surface an informational message (the document
+     * likely has no OCR text yet); failures surface the error via [messages].
+     */
+    fun suggestAiTags() {
+        if (_aiTags.value.suggesting) return
+        _aiTags.value = _aiTags.value.copy(suggesting = true)
+        viewModelScope.launch {
+            runCatching { session.ai.suggestTags(docId) }.fold(
+                onSuccess = { suggestions ->
+                    if (suggestions.isEmpty()) {
+                        message("No suggestions — document may not be OCRed yet")
+                    }
+                    _aiTags.value = _aiTags.value.copy(suggesting = false, suggestions = suggestions)
+                },
+                onFailure = { error ->
+                    message(couldNotSuggest(error))
+                    _aiTags.value = _aiTags.value.copy(suggesting = false, suggestions = emptyList())
+                },
+            )
+        }
+    }
+
+    /** Accept a suggestion: add it as a real tag (normal journal path) and drop it from the list. */
+    fun acceptAiTag(tag: String) = launchMetadata("add tag") {
+        session.meta.addTag(listOf(docId), tag)
+        dismissAiTag(tag)
+    }
+
+    fun dismissAiTag(tag: String) {
+        _aiTags.value = _aiTags.value.copy(suggestions = _aiTags.value.suggestions - tag)
+    }
+
+    fun clearAiTagSuggestions() {
+        _aiTags.value = _aiTags.value.copy(suggestions = emptyList())
+    }
+
+    private fun couldNotSuggest(e: Throwable): String {
+        val reason = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "unknown error")
+        return "Could not suggest tags: $reason"
+    }
 
     fun setField(key: String, value: String?) =
         launchMetadata("save field") { session.meta.setField(docId, key, value) }

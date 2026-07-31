@@ -26,6 +26,14 @@ interface DocumentDao {
     @Query("SELECT docId FROM document_tags WHERE tag = :tag")
     suspend fun getDocIdsWithTag(tag: String): List<String>
 
+    /** Bounded live document rows carrying an exact tag, for AI tool context. */
+    @Query(
+        "SELECT d.* FROM documents d INNER JOIN document_tags t ON d.docId = t.docId " +
+            "WHERE t.tag = :tag AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "ORDER BY d.addedAt DESC LIMIT :limit",
+    )
+    suspend fun getLiveWithTag(tag: String, limit: Int): List<DocumentEntity>
+
     /**
      * Targeted update of the OCR bookkeeping columns. A partial UPDATE (not a row upsert) so a
      * background OCR write can never clobber metadata columns a concurrent journal fold just

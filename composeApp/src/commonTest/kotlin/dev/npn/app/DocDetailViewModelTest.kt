@@ -292,6 +292,95 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         model.ui.value.baking shouldBe false
     }
 
+    // ---- AI tag suggestions ----
+
+    @Test
+    fun suggestAiTagsStoresSuggestions() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply { ai.suggestions = listOf("finance", "invoice") }
+        val model = vm(session = session)
+        advanceUntilIdle()
+        model.suggestAiTags()
+        advanceUntilIdle()
+        session.ai.suggestTagsCalls shouldContainExactly listOf("doc-1")
+        model.aiTags.value.suggestions shouldContainExactly listOf("finance", "invoice")
+        model.aiTags.value.suggesting shouldBe false
+    }
+
+    @Test
+    fun acceptAiTagAddsTagAndRemovesSuggestion() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply { ai.suggestions = listOf("finance", "invoice") }
+        val model = vm(session = session)
+        advanceUntilIdle()
+        model.suggestAiTags()
+        advanceUntilIdle()
+        model.acceptAiTag("finance")
+        advanceUntilIdle()
+        session.meta.addedTags shouldContainExactly listOf(listOf("doc-1") to "finance")
+        model.aiTags.value.suggestions shouldContainExactly listOf("invoice")
+    }
+
+    @Test
+    fun acceptAiTagFailureKeepsSuggestion() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            ai.suggestions = listOf("finance", "invoice")
+            meta.failBatchOps = { error("disk full") }
+        }
+        val model = vm(session = session)
+        advanceUntilIdle()
+        model.suggestAiTags()
+        advanceUntilIdle()
+
+        model.acceptAiTag("finance")
+        advanceUntilIdle()
+
+        model.aiTags.value.suggestions shouldContainExactly listOf("finance", "invoice")
+    }
+
+    @Test
+    fun suggestAiTagsEmptySurfacesMessage() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply { ai.suggestions = emptyList() }
+        val model = vm(session = session)
+        val messages = mutableListOf<String>()
+        val job = launch { model.messages.collect { messages += it } }
+        advanceUntilIdle()
+        model.suggestAiTags()
+        advanceUntilIdle()
+        messages shouldContainExactly listOf("No suggestions — document may not be OCRed yet")
+        model.aiTags.value.suggestions shouldBe emptyList()
+        model.aiTags.value.suggesting shouldBe false
+        job.cancel()
+    }
+
+    @Test
+    fun suggestAiTagsFailureSurfacesErrorAndClearsBusy() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply { ai.failSuggestTags = { error("network down") } }
+        val model = vm(session = session)
+        val messages = mutableListOf<String>()
+        val job = launch { model.messages.collect { messages += it } }
+        advanceUntilIdle()
+        model.suggestAiTags()
+        advanceUntilIdle()
+        messages shouldContainExactly listOf("Could not suggest tags: network down")
+        model.aiTags.value.suggestions shouldBe emptyList()
+        model.aiTags.value.suggesting shouldBe false
+        job.cancel()
+    }
+
+    @Test
+    fun aiAvailabilityReflectsConfig() = runTest(dispatcher) {
+        val configured = FakeLibrarySession()
+        val configuredVm = vm(session = configured)
+        advanceUntilIdle()
+        configuredVm.aiTags.value.available shouldBe true
+
+        val disabled = FakeLibrarySession().apply {
+            ai.configValue = ai.configValue.copy(enabled = false)
+        }
+        val disabledVm = vm(session = disabled)
+        advanceUntilIdle()
+        disabledVm.aiTags.value.available shouldBe false
+    }
+
     // ---- tag colors transformation ----
 
     @Test

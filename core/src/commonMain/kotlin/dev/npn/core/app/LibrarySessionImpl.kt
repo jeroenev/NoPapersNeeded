@@ -1,5 +1,8 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiConfig
+import dev.npn.core.ai.AiFacade
+import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.db.toEntity
 
 import dev.npn.core.db.NpnDatabase
@@ -81,6 +84,7 @@ class LibrarySessionImpl private constructor(
     override val rules: AutoMatchRuleRepository,
     override val meta: MetadataWriter,
     override val content: DocContentFacade,
+    override val ai: AiFacade,
 ) : LibrarySession {
 
     private val fs get() = deps.fs
@@ -507,6 +511,7 @@ class LibrarySessionImpl private constructor(
             ocrPipeline.onTextIndexed = { docId, text ->
                 ruleApplier.applyToDoc(docId, text)
             }
+            val ai = AiFacadeImpl(db, deps.aiConfig)
 
             return LibrarySessionImpl(
                 deviceId = effectiveDeviceId,
@@ -525,6 +530,7 @@ class LibrarySessionImpl private constructor(
                 rules = rules,
                 meta = meta,
                 content = content,
+                ai = ai,
             )
         }
 
@@ -580,6 +586,7 @@ class SessionDeps(
     val storagePathRule: suspend () -> StoragePathRule? = { null },
     val autoMatchRulesJson: suspend () -> String = { "[]" },
     val persistAutoMatchRulesJson: suspend (String) -> Unit = {},
+    val aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
     val clock: EpochClock = SystemEpochClock,
     val installationId: String = "local-installation",
 ) {
