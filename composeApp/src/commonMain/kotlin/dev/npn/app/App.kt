@@ -169,7 +169,7 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
                 onBack = { nav.popBackStack() },
             )
         }
-        aiRoutes(nav, session)
+        aiRoutes(nav, session, env.settings)
     }
 }
 
@@ -177,6 +177,7 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
 private fun NavGraphBuilder.aiRoutes(
     nav: NavHostController,
     session: dev.npn.core.app.LibrarySession,
+    settings: dev.npn.core.app.SettingsRepository,
 ) {
     composable<Route.AiChat> {
         AiChatScreen(
@@ -188,6 +189,7 @@ private fun NavGraphBuilder.aiRoutes(
     composable<Route.AiTagging> {
         AiTaggingScreen(
             session = session,
+            settings = settings,
             onBack = { nav.popBackStack() },
         )
     }

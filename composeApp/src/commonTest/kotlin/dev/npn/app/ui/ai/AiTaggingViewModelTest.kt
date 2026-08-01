@@ -1,9 +1,11 @@
 package dev.npn.app.ui.ai
 
 import dev.npn.app.FakeLibrarySession
+import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.doc
 import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocListItem
 import dev.npn.core.model.ReviewMode
 import io.kotest.matchers.collections.shouldContainExactly
@@ -25,7 +27,10 @@ class AiTaggingViewModelTest : MainDispatcherTest() {
     private fun item(id: String, tags: List<String> = emptyList(), title: String? = null): DocListItem =
         DocListItem(doc = doc(id, title = title), tags = tags)
 
-    private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = AiTaggingViewModel(session)
+    private fun vm(
+        session: FakeLibrarySession = FakeLibrarySession(),
+        settings: FakeSettingsRepository = FakeSettingsRepository(),
+    ) = AiTaggingViewModel(session, settings)
 
     @Test
     fun concurrentSuggestionReportsProgressAndPreservesBatchOrder() = runTest(dispatcher) {
@@ -337,8 +342,8 @@ class AiTaggingViewModelTest : MainDispatcherTest() {
     }
 
     @Test
-    fun batchCapsAtMaxBatchDocs() = runTest(dispatcher) {
-        val many = (1..30).map { item("d$it") }
+    fun batchCapsAtDefaultBatchDocs() = runTest(dispatcher) {
+        val many = (1..(AiTagging.DEFAULT_BATCH_DOCS + 5)).map { item("d$it") }
         val session = FakeLibrarySession().apply {
             documents.documents.value = many
             ai.suggestions = listOf(TagSuggestion("t", isNew = false))
@@ -350,7 +355,106 @@ class AiTaggingViewModelTest : MainDispatcherTest() {
         model.start()
         advanceUntilIdle()
 
-        session.ai.suggestTagsCalls shouldHaveSize MAX_BATCH_DOCS
+        session.ai.suggestTagsCalls shouldHaveSize AiTagging.DEFAULT_BATCH_DOCS
+        job.cancel()
+    }
+
+    @Test
+    fun settingsDefaultsAreSeededIntoUiState() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            documents.documents.value = listOf(item("a"))
+        }
+        val settings = FakeSettingsRepository().apply {
+            aiMaxTagsPerDocFlow.value = 12
+            aiMaxNewTagsPerDocFlow.value = 3
+        }
+        val model = vm(session, settings)
+        val job = launch { model.ui.collect {} }
+        advanceUntilIdle()
+
+        model.ui.value.maxTags shouldBe 12
+        model.ui.value.maxNewTags shouldBe 3
+        model.ui.value.batchSize shouldBe AiTagging.DEFAULT_BATCH_DOCS
+        job.cancel()
+    }
+
+    @Test
+    fun setBatchSizeLimitsBatch() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            documents.documents.value = listOf(item("a"), item("b"), item("c"))
+            ai.suggestions = listOf(TagSuggestion("t", isNew = false))
+        }
+        val model = vm(session)
+        val job = launch { model.ui.collect {} }
+        advanceUntilIdle()
+
+        model.setBatchSize(2)
+        model.start()
+        advanceUntilIdle()
+
+        session.ai.suggestTagsCalls shouldHaveSize 2
+        // Suggested tags are existing-vocabulary -> pre-selected; apply then confirm more remain.
+        model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Review>()
+        model.apply()
+        advanceUntilIdle()
+        model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Done>().result.moreRemain shouldBe true
+        job.cancel()
+    }
+
+    @Test
+    fun overridesArePassedToFacadeCalls() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            documents.documents.value = listOf(item("a"))
+            ai.suggestions = listOf(TagSuggestion("t", isNew = false))
+        }
+        val model = vm(session)
+        val job = launch { model.ui.collect {} }
+        advanceUntilIdle()
+
+        model.setMaxTags(11)
+        model.setMaxNewTags(2)
+        model.start()
+        advanceUntilIdle()
+
+        session.ai.suggestTagsTriples shouldContainExactly listOf(Triple("a", 11, 2))
+        job.cancel()
+    }
+
+    @Test
+    fun settersAreNoOpsOutsideIdle() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            documents.documents.value = listOf(item("a"))
+            ai.suggestions = listOf(TagSuggestion("t", isNew = false))
+        }
+        val model = vm(session)
+        val job = launch { model.ui.collect {} }
+        advanceUntilIdle()
+        model.setMaxTags(11)
+        model.start()
+        advanceUntilIdle()
+        model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Review>()
+
+        // In Review, setters must not change the snapshot.
+        model.setMaxTags(4)
+        model.setMaxNewTags(9)
+        model.setBatchSize(2)
+        model.ui.value.maxTags shouldBe 11
+        model.ui.value.batchSize shouldBe AiTagging.DEFAULT_BATCH_DOCS
+        job.cancel()
+    }
+
+    @Test
+    fun settersClampToRange() = runTest(dispatcher) {
+        val model = vm()
+        val job = launch { model.ui.collect {} }
+        advanceUntilIdle()
+
+        model.setMaxTags(999)
+        model.setMaxNewTags(-5)
+        model.setBatchSize(9999)
+        model.ui.value.maxTags shouldBe AiTagging.MAX_TAGS_PER_DOC
+        model.ui.value.maxNewTags shouldBe AiTagging.MIN_NEW_TAGS_PER_DOC
+        model.ui.value.batchSize shouldBe AiTagging.MAX_BATCH_DOCS
         job.cancel()
     }
 

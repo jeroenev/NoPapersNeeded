@@ -348,7 +348,11 @@ class FakeAiFacade : AiFacade {
      */
     var suggestionsByDoc: Map<String, List<TagSuggestion>> = emptyMap()
 
+    /** docId-only view of [suggestTagsTriples] for assertions that only care about which docs. */
     val suggestTagsCalls = mutableListOf<String>()
+
+    /** Every (docId, maxTags, maxNewTags) triple passed to [suggestTags], in dispatch order. */
+    val suggestTagsTriples = mutableListOf<Triple<String, Int?, Int?>>()
     var failSuggestTags: (() -> Nothing)? = null
 
     /** suggestTags throws for these ids only (per-doc partial-failure testing). */
@@ -384,10 +388,15 @@ class FakeAiFacade : AiFacade {
         return listOf(AiChatEvent.TextDelta(text), AiChatEvent.Done(text))
     }
 
-    override suspend fun suggestTags(docId: String): List<TagSuggestion> {
+    override suspend fun suggestTags(
+        docId: String,
+        maxTags: Int?,
+        maxNewTags: Int?,
+    ): List<TagSuggestion> {
         // Record at entry (before the delay) so the call list reflects dispatch order
         // deterministically even when calls run concurrently.
         suggestTagsCalls += docId
+        suggestTagsTriples += Triple(docId, maxTags, maxNewTags)
         val delay = suggestDelayByDoc[docId] ?: suggestDelayMillis
         if (delay > 0) kotlinx.coroutines.delay(delay)
         failSuggestTags?.invoke()

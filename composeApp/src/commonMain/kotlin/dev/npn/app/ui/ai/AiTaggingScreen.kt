@@ -13,7 +13,10 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -30,6 +33,7 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -48,21 +52,25 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.state.ToggleableState
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.DocThumbnail
+import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SettingsRepository
 
 @Composable
 fun AiTaggingScreen(
     session: LibrarySession,
+    settings: SettingsRepository,
     onBack: () -> Unit,
 ) {
-    val vm: AiTaggingViewModel = viewModel { AiTaggingViewModel(session) }
+    val vm: AiTaggingViewModel = viewModel { AiTaggingViewModel(session, settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val count by vm.scopeCount.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
@@ -99,7 +107,7 @@ fun AiTaggingScreen(
 @Composable
 private fun IdlePhase(ui: AiTaggingUiState, count: Int, vm: AiTaggingViewModel) {
     Column(
-        Modifier.fillMaxSize().padding(16.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text("Suggest tags for a set of documents", style = MaterialTheme.typography.titleMedium)
@@ -108,7 +116,32 @@ private fun IdlePhase(ui: AiTaggingUiState, count: Int, vm: AiTaggingViewModel) 
             ScopeOption(TaggingScope.REVIEW_QUEUE, "Review queue", ui.scope, vm::setScope)
         }
         ScopeOption(TaggingScope.ALL, "All documents", ui.scope, vm::setScope)
-        Text(scopeCountLabel(count), style = MaterialTheme.typography.bodyMedium)
+        Text(scopeCountLabel(count, ui.batchSize), style = MaterialTheme.typography.bodyMedium)
+
+        Text("Options", style = MaterialTheme.typography.titleSmall)
+        NumericField(
+            value = ui.maxTags,
+            onSetValue = vm::setMaxTags,
+            range = AiTagging.RANGE,
+            label = "Tags per document",
+            supportingText = "${AiTagging.MIN_TAGS_PER_DOC}-${AiTagging.MAX_TAGS_PER_DOC}",
+        )
+        NumericField(
+            value = ui.maxNewTags,
+            onSetValue = vm::setMaxNewTags,
+            range = AiTagging.NEW_TAGS_RANGE,
+            label = "New tags per document",
+            supportingText = "${AiTagging.MIN_NEW_TAGS_PER_DOC}-${AiTagging.MAX_NEW_TAGS_PER_DOC} " +
+                "(0 = existing only)",
+        )
+        NumericField(
+            value = ui.batchSize,
+            onSetValue = vm::setBatchSize,
+            range = AiTagging.BATCH_RANGE,
+            label = "Documents per batch",
+            supportingText = "${AiTagging.MIN_BATCH_DOCS}-${AiTagging.MAX_BATCH_DOCS}",
+        )
+
         Button(onClick = vm::start, enabled = count > 0) {
             Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
             Text("Start", Modifier.padding(start = 8.dp))
@@ -116,13 +149,42 @@ private fun IdlePhase(ui: AiTaggingUiState, count: Int, vm: AiTaggingViewModel) 
     }
 }
 
-private fun scopeCountLabel(count: Int): String {
+private fun scopeCountLabel(count: Int, batchSize: Int): String {
     val docs = if (count == 1) "document" else "documents"
-    return if (count > MAX_BATCH_DOCS) {
-        "$count $docs — the first $MAX_BATCH_DOCS run in this batch"
+    return if (count > batchSize) {
+        "$count $docs — the first $batchSize run in this batch"
     } else {
         "$count $docs"
     }
+}
+
+/**
+ * Numeric per-run override field. Keeps a local editable string so the user can clear it while
+ * typing; commits (only when the parse falls inside [range]) on every valid parse and re-seeds from
+ * [value] whenever it changes externally (e.g. clamped by the view model). Mirrors SettingsScreen's
+ * private TagCapField; kept local by design rather than shared.
+ */
+@Composable
+private fun NumericField(
+    value: Int,
+    onSetValue: (Int) -> Unit,
+    range: IntRange,
+    label: String,
+    supportingText: String,
+) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { raw ->
+            text = raw.filter { it.isDigit() }.take(3)
+            text.toIntOrNull()?.takeIf { it in range }?.let(onSetValue)
+        },
+        label = { Text(label) },
+        supportingText = { Text(supportingText) },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable
