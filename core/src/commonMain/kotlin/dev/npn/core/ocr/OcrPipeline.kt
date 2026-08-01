@@ -11,11 +11,10 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.pdf.PdfEngine
-import kotlinx.coroutines.flow.first
 import kotlin.time.Clock
 
 /**
- * Tunables for the OCR pipeline (PLAN.md sec. 5, hybrid extract-or-OCR strategy).
+ * Tunables for the hybrid extract-or-OCR pipeline.
  *
  * @param minEmbeddedCharsPerPage per-page threshold: a page whose trimmed embedded text has
  *  at least this many characters is treated as already having a usable text layer, so it is
@@ -36,7 +35,6 @@ data class OcrConfig(
  * ([OcrEngines.rank]) unless the user pinned an engine per document
  * (`DocumentEntity.ocrEngineOverride`, synced via the journal). A device runs its own engine
  * only when that engine outranks every existing version; otherwise it adopts the best sidecar.
- * See PLAN.md "OCR sidecars" and sec. 5.
  *
  * Only touches the `dev.npn.core.ocr`/`dev.npn.core.pdf` surface plus the DAOs it is given.
  */
@@ -53,12 +51,12 @@ class OcrPipeline(
     private val config: OcrConfig = OcrConfig(),
     private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
 ) {
-
     /**
      * Optional hook called whenever text is indexed for a document. Used by the auto-matching
      * rule engine to apply rules once extracted text is available.
      */
     var onTextIndexed: (suspend (docId: String, text: String) -> Unit)? = null
+
     companion object {
         const val STATE_PENDING = "pending"
         const val STATE_RUNNING = "running"
@@ -132,9 +130,7 @@ class OcrPipeline(
             fail(docId, "no readable ocr version for $docId")
             return
         }
-        indexText(docId, sidecar.pages)
-        val state = if (desired.deviceId == deviceId) OCR_DONE else OCR_ADOPTED
-        setOcrState(docId, state, pageCount = sidecar.pages.size, engine = sidecar.engine)
+        indexAndMarkSelected(docId, desired, sidecar)
         // Mark the queue entry done, carrying its attempts count forward.
         ocrQueueDao.upsert(
             OcrQueueEntity(
@@ -155,27 +151,30 @@ class OcrPipeline(
      * error (write-once: never rewrite a published object).
      */
     private suspend fun runOwnOcr(doc: DocumentEntity): String? {
-        val bytes = try {
-            fs.readBytes(doc.relPath)
-        } catch (t: Throwable) {
-            fail(doc.docId, "read failed: ${t.message}")
-            return null
-        }
-        val result = try {
-            extractOrOcr(bytes)
-        } catch (t: Throwable) {
-            fail(doc.docId, "ocr failed: ${t.message}")
-            return null
-        }
+        val bytes =
+            try {
+                fs.readBytes(doc.relPath)
+            } catch (t: Throwable) {
+                fail(doc.docId, "read failed: ${t.message}")
+                return null
+            }
+        val result =
+            try {
+                extractOrOcr(bytes)
+            } catch (t: Throwable) {
+                fail(doc.docId, "ocr failed: ${t.message}")
+                return null
+            }
         val writerKey = NpnPaths.ocrWriterKey(deviceId, result.engine)
-        val sidecar = OcrSidecar(
-            doc = doc.docId,
-            dev = deviceId,
-            engine = result.engine,
-            lang = config.lang,
-            createdAt = now(),
-            pages = result.pages,
-        )
+        val sidecar =
+            OcrSidecar(
+                doc = doc.docId,
+                dev = deviceId,
+                engine = result.engine,
+                lang = config.lang,
+                createdAt = now(),
+                pages = result.pages,
+            )
         try {
             sidecars.writeOnce(doc.docId, writerKey, OcrSidecarCodec.encode(sidecar))
         } catch (_: Throwable) {
@@ -188,7 +187,10 @@ class OcrPipeline(
         return writerKey
     }
 
-    private class PageResult(val pages: List<String>, val engine: String)
+    private class PageResult(
+        val pages: List<String>,
+        val engine: String,
+    )
 
     private suspend fun extractOrOcr(bytes: ByteArray): PageResult {
         val handle = pdfEngine.open(bytes) // throws PdfOpenException on invalid pdf
@@ -251,8 +253,7 @@ class OcrPipeline(
                 decode(docId, v.writerKey)?.let {
                     StoredVersion(v.writerKey, v.deviceId, it.engine, it.lang, it.createdAt)
                 }
-            }
-            .sortedWith(compareByDescending<StoredVersion> { OcrEngines.rank(it.engine) }.thenBy { it.writerKey })
+            }.sortedWith(compareByDescending<StoredVersion> { OcrEngines.rank(it.engine) }.thenBy { it.writerKey })
 
     // --- selection ---
 
@@ -261,7 +262,10 @@ class OcrPipeline(
      * when no override or no match), the highest-ranked engine, tie-broken by the lowest
      * writer key so every device converges on the same choice.
      */
-    private fun select(versions: List<Version>, override: String?): Version? {
+    private fun select(
+        versions: List<Version>,
+        override: String?,
+    ): Version? {
         val pool = versions.filter { it.engine == override }.ifEmpty { versions }
         return pool.maxWithOrNull(
             compareBy<Version> { OcrEngines.rank(it.engine) }.thenByDescending { it.writerKey },
@@ -269,14 +273,15 @@ class OcrPipeline(
     }
 
     /** Index [versions]' selected sidecar when the doc is un-OCR'd or indexed with another engine. */
-    private suspend fun applySelection(doc: DocumentEntity, versions: List<Version>) {
+    private suspend fun applySelection(
+        doc: DocumentEntity,
+        versions: List<Version>,
+    ) {
         val desired = select(versions, doc.ocrEngineOverride) ?: return
         val needsIndex = doc.ocrState in UNPROCESSED_STATES || doc.ocrEngine != desired.engine
         if (!needsIndex) return
         val sidecar = decode(doc.docId, desired.writerKey) ?: return
-        indexText(doc.docId, sidecar.pages)
-        val state = if (desired.deviceId == deviceId) OCR_DONE else OCR_ADOPTED
-        setOcrState(doc.docId, state, pageCount = sidecar.pages.size, engine = sidecar.engine)
+        indexAndMarkSelected(doc.docId, desired, sidecar)
         ocrQueueDao.delete(doc.docId)
         onTextIndexed?.invoke(doc.docId, sidecar.fullText())
     }
@@ -302,7 +307,10 @@ class OcrPipeline(
      * failed entry, and respects the attempts cap: a doc whose own-engine runs kept failing
      * (it adopted a foreign version instead) is not retried until an explicit re-OCR.
      */
-    private suspend fun maybeQueueUpgrade(doc: DocumentEntity, versions: List<Version>) {
+    private suspend fun maybeQueueUpgrade(
+        doc: DocumentEntity,
+        versions: List<Version>,
+    ) {
         if (doc.trashed || doc.deleted || doc.missing) return
         if (!canImprove(versions)) return
         val entry = queueEntry(doc.docId)
@@ -322,16 +330,16 @@ class OcrPipeline(
     /** Hash -> writer keys for every well-formed sidecar in `.npn/ocr/`. */
     private suspend fun sidecarsByHash(): Map<String, List<String>> {
         val prefix = "${NpnPaths.OCR_DIR}/"
-        return sidecars.list()
+        return sidecars
+            .list()
             .mapNotNull { meta ->
                 val fileName = meta.relPath.removePrefix(prefix)
                 // Shared lenient parser; additionally require a full 64-char SHA-256 hash here so
                 // reconciliation only ever keys off a canonical content hash.
                 val (hash, dev) = OcrSidecarFiles.parseSidecarName(fileName) ?: return@mapNotNull null
-                if (hash.length != 64) return@mapNotNull null
+                if (hash.length != NpnPaths.SHA256_HEX_LENGTH) return@mapNotNull null
                 hash to dev
-            }
-            .groupBy({ it.first }, { it.second })
+            }.groupBy({ it.first }, { it.second })
     }
 
     private suspend fun loadVersions(hash: String): List<Version> =
@@ -342,42 +350,64 @@ class OcrPipeline(
      * resolve without I/O; legacy keys (`<deviceId>`) decode the sidecar once to learn its
      * engine (cached). Returns null for unreadable sidecars.
      */
-    private suspend fun versionFor(hash: String, writerKey: String): Version? {
+    private suspend fun versionFor(
+        hash: String,
+        writerKey: String,
+    ): Version? {
         val suffix = writerKey.substringAfterLast('.', "")
         if (suffix.isNotEmpty() && OcrEngines.isKnown(suffix)) {
             return Version(writerKey, writerKey.removeSuffix(".$suffix"), suffix)
         }
         val cacheKey = "$hash.$writerKey"
-        val engine = engineCache[cacheKey]
-            ?: decode(hash, writerKey)?.engine?.also { engineCache[cacheKey] = it }
-            ?: return null
+        val engine =
+            engineCache[cacheKey]
+                ?: decode(hash, writerKey)?.engine?.also { engineCache[cacheKey] = it }
+                ?: return null
         return Version(writerKey, writerKey, engine)
     }
 
     /** Read and decode one sidecar, or null when missing/corrupt. */
-    private suspend fun decode(hash: String, writerKey: String): OcrSidecar? = try {
-        OcrSidecarCodec.decode(sidecars.read(hash, writerKey))
-    } catch (_: Throwable) {
-        null
-    }
+    private suspend fun decode(
+        hash: String,
+        writerKey: String,
+    ): OcrSidecar? =
+        try {
+            OcrSidecarCodec.decode(sidecars.read(hash, writerKey))
+        } catch (_: Throwable) {
+            null
+        }
 
     // --- indexing / state helpers ---
 
-    private suspend fun indexText(docId: String, pages: List<String>) = ftsWriteGate.withGate {
-        // Under the shared gate so this write cannot interleave with a metadata fold's FTS
-        // read-then-replace for the same doc (see FtsWriteGate).
-        val doc = documentDao.getByDocId(docId)
-        val tags = tagDao.tagsForDocument(docId)
-        ftsDao.replaceDocument(
-            docId = docId,
-            fileName = doc?.fileName,
-            title = doc?.title,
-            notes = doc?.notes,
-            content = OcrSidecar.joinPages(pages),
-            tags = tags.joinToString(" ").ifEmpty { null },
-            correspondent = doc?.correspondent,
-            docType = doc?.docType,
-        )
+    /**
+     * Index the selected [sidecar]'s text for [docId] and record the resulting OCR state on the
+     * doc row: [OCR_DONE] when this device produced [desired], else [OCR_ADOPTED]. Shared by the
+     * queue-drain path ([processDoc]) and the reconcile/re-select path ([applySelection]); each
+     * caller handles its own queue-entry bookkeeping and [onTextIndexed] notification afterwards.
+     */
+    private suspend fun indexAndMarkSelected(
+        docId: String,
+        desired: Version,
+        sidecar: OcrSidecar,
+    ) {
+        ftsWriteGate.withGate {
+            // Under the shared gate so this write cannot interleave with a metadata fold's FTS
+            // read-then-replace for the same doc (see FtsWriteGate).
+            val doc = documentDao.getByDocId(docId)
+            val tags = tagDao.tagsForDocument(docId)
+            ftsDao.replaceDocument(
+                docId = docId,
+                fileName = doc?.fileName,
+                title = doc?.title,
+                notes = doc?.notes,
+                content = OcrSidecar.joinPages(sidecar.pages),
+                tags = tags.joinToString(" ").ifEmpty { null },
+                correspondent = doc?.correspondent,
+                docType = doc?.docType,
+            )
+        }
+        val state = if (desired.deviceId == deviceId) OCR_DONE else OCR_ADOPTED
+        setOcrState(docId, state, pageCount = sidecar.pages.size, engine = sidecar.engine)
     }
 
     private suspend fun setOcrState(
@@ -393,7 +423,10 @@ class OcrPipeline(
         documentDao.updateOcrState(docId, state, pageCount, engine)
     }
 
-    private suspend fun fail(docId: String, error: String) {
+    private suspend fun fail(
+        docId: String,
+        error: String,
+    ) {
         val attempts = (queueEntry(docId)?.attempts ?: 0) + 1
         val state = if (attempts >= config.maxAttempts) STATE_FAILED else STATE_PENDING
         ocrQueueDao.upsert(
@@ -408,12 +441,7 @@ class OcrPipeline(
         setOcrState(docId, if (state == STATE_FAILED) OCR_FAILED else OCR_PENDING)
     }
 
-    /**
-     * One-shot read of a queue row. [OcrQueueDao] exposes no single-row suspend getter, only
-     * [OcrQueueDao.observeQueue]; take its first emission (the current snapshot).
-     */
-    private suspend fun queueEntry(docId: String): OcrQueueEntity? =
-        ocrQueueDao.observeQueue().first().firstOrNull { it.docId == docId }
+    private suspend fun queueEntry(docId: String): OcrQueueEntity? = ocrQueueDao.getByDocId(docId)
 
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
 }

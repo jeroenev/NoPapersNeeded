@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">No papers needed</string>
+    <string name="import_library_required">Stel eerst een bibliotheek in en deel daarna opnieuw</string>
+    <string name="import_nothing_found">Niets om te importeren</string>
+    <string name="import_complete">Importeren voltooid</string>
+    <string name="import_summary_separator">", "</string>
+
+    <plurals name="import_summary_imported">
+        <item quantity="one">%1$d geïmporteerd</item>
+        <item quantity="other">%1$d geïmporteerd</item>
+    </plurals>
+    <plurals name="import_summary_duplicate">
+        <item quantity="one">%1$d duplicaat</item>
+        <item quantity="other">%1$d duplicaten</item>
+    </plurals>
+    <plurals name="import_summary_failed">
+        <item quantity="one">%1$d mislukt</item>
+        <item quantity="other">%1$d mislukt</item>
+    </plurals>
+</resources>

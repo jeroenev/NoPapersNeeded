@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_edit">Bewerken</string>
+    <string name="common_create">Aanmaken</string>
+    <string name="common_rename">Hernoemen</string>
+    <string name="common_name">Naam</string>
+    <string name="common_color">Kleur</string>
+
+    <string name="common_rules_title">Regels voor automatisch koppelen</string>
+    <string name="common_rules_add">Regel toevoegen</string>
+    <string name="common_rules_empty_title">Nog geen regels</string>
+    <string name="common_rules_empty_subtitle">Maak een regel om documenten automatisch te taggen op basis van hun tekst.</string>
+    <string name="common_rules_delete_title">Regel verwijderen</string>
+    <string name="common_rules_delete_message">Deze regel verwijderen? Tags die al zijn toegepast, worden niet ongedaan gemaakt.</string>
+    <string name="common_rules_actions_tags">Tags: %1$s</string>
+    <string name="common_rules_actions_correspondent">Correspondent: %1$s</string>
+    <string name="common_rules_actions_type">Type: %1$s</string>
+    <string name="common_rules_join_parts">%1$s · %2$s</string>
+    <string name="common_rules_summary">%1$s · %2$s · %3$s · prioriteit %4$d</string>
+    <string name="common_rules_new_title">Nieuwe regel</string>
+    <string name="common_rules_edit_title">Regel bewerken</string>
+    <string name="common_rules_pattern">Patroon</string>
+    <string name="common_rules_invalid_regex">Ongeldige reguliere expressie</string>
+    <string name="common_rules_priority">Prioriteit</string>
+    <string name="common_rules_tags_to_add">Toe te voegen tags (gescheiden door komma's)</string>
+    <string name="common_rules_set_correspondent">Correspondent instellen (optioneel)</string>
+    <string name="common_rules_set_document_type">Documenttype instellen (optioneel)</string>
+    <string name="common_rules_match_field">Vergelijkingsveld</string>
+    <string name="common_rules_algorithm">Algoritme</string>
+    <string name="common_rules_field_content">Geëxtraheerde tekst</string>
+    <string name="common_rules_field_title">Titel</string>
+    <string name="common_rules_field_file_name">Bestandsnaam</string>
+    <string name="common_rules_algorithm_exact">Exact</string>
+    <string name="common_rules_algorithm_any_word">Willekeurig woord</string>
+    <string name="common_rules_algorithm_all_words">Alle woorden</string>
+    <string name="common_rules_algorithm_regex">Reguliere expressie</string>
+    <string name="common_rules_algorithm_fuzzy">Benaderend</string>
+
+    <string name="common_tags_title">Tags</string>
+    <string name="common_tags_new">Nieuwe tag</string>
+    <string name="common_tags_empty_title">Nog geen tags</string>
+    <string name="common_tags_empty_subtitle">Maak een tag of voeg tags toe aan documenten.</string>
+    <string name="common_tags_rename_title">Tag hernoemen</string>
+    <string name="common_tags_new_name">Nieuwe naam</string>
+    <string name="common_tags_merge_title">&quot;%1$s&quot; samenvoegen met</string>
+    <string name="common_tags_merge">Samenvoegen</string>
+    <string name="common_tags_delete_title">Tag verwijderen</string>
+    <string name="common_tags_delete_message">&quot;%1$s&quot; uit alle documenten verwijderen? Dit kan niet ongedaan worden gemaakt.</string>
+    <string name="common_tags_style_title">Tagstijl</string>
+    <string name="common_tags_namespace_only">%1$s - alleen naamruimte</string>
+    <string name="common_tags_actions">Tagacties</string>
+    <string name="common_tags_merge_into">Samenvoegen met...</string>
+    <string name="common_tags_color_style">Kleur / stijl</string>
+    <string name="common_tags_name_hierarchy">Naam (puntpaden voor hiërarchie)</string>
+    <string name="common_tags_no_color">Geen kleur</string>
+    <string name="common_tags_color_value">Kleur %1$s</string>
+
+    <string name="common_trash_maintenance_title">Prullenbak en onderhoud</string>
+    <string name="common_trash_tab">Prullenbak</string>
+    <string name="common_trash_duplicates_tab">Duplicaten</string>
+    <string name="common_trash_missing_tab">Ontbrekend</string>
+    <string name="common_trash_tab_count">%1$s (%2$d)</string>
+    <string name="common_trash_delete_forever">Definitief verwijderen</string>
+    <string name="common_trash_delete_forever_message">Dit document definitief verwijderen? Het bestand wordt verwijderd en kan niet worden hersteld.</string>
+    <string name="common_trash_empty">De prullenbak is leeg</string>
+    <string name="common_trash_was_path">was: %1$s</string>
+    <string name="common_trash_restore">Herstellen</string>
+    <string name="common_trash_no_duplicates">Geen duplicaten</string>
+    <string name="common_trash_no_duplicates_subtitle">Elke hash heeft één canoniek pad.</string>
+    <string name="common_trash_extra_copy">Extra kopie</string>
+    <string name="common_trash_remove_extra">Extra kopie verwijderen</string>
+    <string name="common_trash_no_missing_files">Geen ontbrekende bestanden</string>
+    <string name="common_trash_missing_from">Ontbreekt in: %1$s</string>
+    <string name="common_trash_no_relink_candidates">Geen kandidaten gevonden om opnieuw te koppelen. Scan opnieuw nadat het bestand is teruggezet.</string>
+    <string name="common_trash_match_reason">Overeenkomst (%1$s)</string>
+    <string name="common_trash_relink">Opnieuw koppelen</string>
+</resources>

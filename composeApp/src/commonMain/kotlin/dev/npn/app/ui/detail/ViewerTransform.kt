@@ -23,12 +23,42 @@ const val MIN_ZOOM = 1f
 const val MAX_ZOOM = 5f
 private const val ZOOM_EPSILON = 0.001f
 
+/** Fixed zoom increment for the +/- buttons and keyboard +/- keys (no cursor position). */
+const val ZOOM_STEP = 0.5f
+
+/**
+ * Zoom-around-center step used when no gesture focus is available (the +/- buttons and the
+ * keyboard +/- keys): adds [delta] to the current zoom, clamps to [[MIN_ZOOM], [MAX_ZOOM]], and
+ * anchors the change at the container center. No-ops before layout is known ([container] is
+ * [Size.Zero]).
+ */
+fun zoomAtCenter(
+    t: ViewerTransform,
+    delta: Float,
+    container: Size,
+    fitted: Size,
+): ViewerTransform {
+    if (container == Size.Zero) return t
+    val center = Offset(container.width / 2f, container.height / 2f)
+    val target = (t.zoom + delta).coerceIn(MIN_ZOOM, MAX_ZOOM)
+    return t.applyGesture(
+        zoomChange = target / t.zoom,
+        pan = Offset.Zero,
+        centroid = center,
+        fittedSize = fitted,
+        container = container,
+    )
+}
+
 /**
  * The size the page bitmap occupies inside [container] at zoom 1, using ContentScale.Fit
  * (letterboxed): scaled uniformly to touch the tighter axis. Returns [Size.Zero] if either
  * dimension is non-positive so callers can no-op before layout is known.
  */
-fun fittedContentSize(content: Size, container: Size): Size {
+fun fittedContentSize(
+    content: Size,
+    container: Size,
+): Size {
     if (content.minDimension <= 0f || container.minDimension <= 0f) return Size.Zero
     val scale = minOf(container.width / content.width, container.height / content.height)
     return Size(content.width * scale, content.height * scale)
@@ -40,8 +70,17 @@ fun fittedContentSize(content: Size, container: Size): Size {
  * further); when it is smaller (or equal) it is pinned centered on that axis. [fittedSize] is the
  * zoom-1 fit size (see [fittedContentSize]); the on-screen size is `fittedSize * zoom`.
  */
-fun clampPan(offset: Offset, fittedSize: Size, container: Size, zoom: Float): Offset {
-    fun clampAxis(value: Float, scaledContent: Float, containerExtent: Float): Float {
+fun clampPan(
+    offset: Offset,
+    fittedSize: Size,
+    container: Size,
+    zoom: Float,
+): Offset {
+    fun clampAxis(
+        value: Float,
+        scaledContent: Float,
+        containerExtent: Float,
+    ): Float {
         // Center the content, then allow travel of half the overflow in each direction.
         val overflow = scaledContent - containerExtent
         if (overflow <= 0f) return 0f // smaller than container: pin centered.
@@ -76,11 +115,12 @@ fun ViewerTransform.applyGesture(
     val focus = centroid - center
     // Keep the content point under the focus fixed: newOffset = focus - (focus - oldOffset) * ratio.
     val ratio = newZoom / zoom
-    val newOffset = if (newZoom <= MIN_ZOOM + ZOOM_EPSILON) {
-        Offset.Zero // fully zoomed out: always recenter.
-    } else {
-        focus - (focus - offset) * ratio + pan
-    }
+    val newOffset =
+        if (newZoom <= MIN_ZOOM + ZOOM_EPSILON) {
+            Offset.Zero // fully zoomed out: always recenter.
+        } else {
+            focus - (focus - offset) * ratio + pan
+        }
     return ViewerTransform(
         zoom = newZoom,
         offset = clampPan(newOffset, fittedSize, container, newZoom),
@@ -115,7 +155,10 @@ fun ViewerTransform.toggleZoom(
  * the page has been panned to its left/right edge; only then may the pager take over in that
  * direction. At 1x the pager is always free.
  */
-fun ViewerTransform.canPagerConsumeHorizontal(fittedSize: Size, container: Size): Boolean {
+fun ViewerTransform.canPagerConsumeHorizontal(
+    fittedSize: Size,
+    container: Size,
+): Boolean {
     if (!isZoomed) return true
     val overflow = fittedSize.width * zoom - container.width
     if (overflow <= 0f) return true // page not wider than container: nothing to pan into.

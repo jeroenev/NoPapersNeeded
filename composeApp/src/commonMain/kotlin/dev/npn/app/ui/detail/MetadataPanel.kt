@@ -49,9 +49,9 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Tab
-import androidx.compose.material3.TabRow
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -67,8 +67,10 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HighlightText
+import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagEditor
+import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.app.ui.common.parseFtsSnippet
@@ -77,6 +79,66 @@ import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.model.ReviewMode
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_apply
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_retry
+import no_papers_needed.composeapp.generated.resources.common_unknown_error
+import no_papers_needed.composeapp.generated.resources.detail_add_field
+import no_papers_needed.composeapp.generated.resources.detail_add_tag
+import no_papers_needed.composeapp.generated.resources.detail_added
+import no_papers_needed.composeapp.generated.resources.detail_automatic_engine
+import no_papers_needed.composeapp.generated.resources.detail_choose_ocr_engine
+import no_papers_needed.composeapp.generated.resources.detail_correspondent
+import no_papers_needed.composeapp.generated.resources.detail_dismiss_all
+import no_papers_needed.composeapp.generated.resources.detail_dismiss_tag
+import no_papers_needed.composeapp.generated.resources.detail_document_date
+import no_papers_needed.composeapp.generated.resources.detail_document_type
+import no_papers_needed.composeapp.generated.resources.detail_engine
+import no_papers_needed.composeapp.generated.resources.detail_engine_ai
+import no_papers_needed.composeapp.generated.resources.detail_engine_embedded
+import no_papers_needed.composeapp.generated.resources.detail_engine_mlkit
+import no_papers_needed.composeapp.generated.resources.detail_engine_source
+import no_papers_needed.composeapp.generated.resources.detail_engine_tesseract
+import no_papers_needed.composeapp.generated.resources.detail_fields
+import no_papers_needed.composeapp.generated.resources.detail_file
+import no_papers_needed.composeapp.generated.resources.detail_history_load_failed
+import no_papers_needed.composeapp.generated.resources.detail_history_secondary
+import no_papers_needed.composeapp.generated.resources.detail_iso_date_template
+import no_papers_needed.composeapp.generated.resources.detail_location
+import no_papers_needed.composeapp.generated.resources.detail_mark_needs_review
+import no_papers_needed.composeapp.generated.resources.detail_mark_reviewed
+import no_papers_needed.composeapp.generated.resources.detail_new_field
+import no_papers_needed.composeapp.generated.resources.detail_no_history
+import no_papers_needed.composeapp.generated.resources.detail_not_available
+import no_papers_needed.composeapp.generated.resources.detail_note
+import no_papers_needed.composeapp.generated.resources.detail_note_save_failed
+import no_papers_needed.composeapp.generated.resources.detail_ocr
+import no_papers_needed.composeapp.generated.resources.detail_ocr_adopted
+import no_papers_needed.composeapp.generated.resources.detail_ocr_done
+import no_papers_needed.composeapp.generated.resources.detail_ocr_failed
+import no_papers_needed.composeapp.generated.resources.detail_ocr_not_processed
+import no_papers_needed.composeapp.generated.resources.detail_ocr_queued
+import no_papers_needed.composeapp.generated.resources.detail_pages
+import no_papers_needed.composeapp.generated.resources.detail_pinned_engine
+import no_papers_needed.composeapp.generated.resources.detail_remove_field
+import no_papers_needed.composeapp.generated.resources.detail_save_note
+import no_papers_needed.composeapp.generated.resources.detail_saved
+import no_papers_needed.composeapp.generated.resources.detail_saving
+import no_papers_needed.composeapp.generated.resources.detail_search_text_engine
+import no_papers_needed.composeapp.generated.resources.detail_suggest_tags
+import no_papers_needed.composeapp.generated.resources.detail_tab_details
+import no_papers_needed.composeapp.generated.resources.detail_tab_history
+import no_papers_needed.composeapp.generated.resources.detail_tab_text
+import no_papers_needed.composeapp.generated.resources.detail_tags
+import no_papers_needed.composeapp.generated.resources.detail_text_failed
+import no_papers_needed.composeapp.generated.resources.detail_text_not_extracted
+import no_papers_needed.composeapp.generated.resources.detail_text_queued
+import no_papers_needed.composeapp.generated.resources.detail_text_unavailable
+import no_papers_needed.composeapp.generated.resources.detail_title
+import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
+import no_papers_needed.composeapp.generated.resources.detail_value
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Side panel for one document with three tabs: **Details** (editable metadata — title,
@@ -128,69 +190,80 @@ fun MetadataPanel(
         }
     }
     Column(modifier) {
-        TabRow(selectedTabIndex = tab.ordinal) {
+        PrimaryTabRow(selectedTabIndex = tab.ordinal) {
             PanelTab.entries.forEach { t ->
                 Tab(
                     selected = tab == t,
                     onClick = { tab = t },
-                    text = { Text(t.label) },
+                    text = {
+                        Text(
+                            when (t) {
+                                PanelTab.DETAILS -> stringResource(Res.string.detail_tab_details)
+                                PanelTab.TEXT -> stringResource(Res.string.detail_tab_text)
+                                PanelTab.HISTORY -> stringResource(Res.string.detail_tab_history)
+                            },
+                        )
+                    },
                 )
             }
         }
         when (tab) {
-            PanelTab.DETAILS -> DetailsTab(
-                item = item,
-                allTagNames = allTagNames,
-                tagColors = tagColors,
-                correspondents = correspondents,
-                docTypes = docTypes,
-                fieldKeys = fieldKeys,
-                ocrVersions = ocrVersions,
-                onSetOcrEngine = onSetOcrEngine,
-                onCommitTitle = onCommitTitle,
-                noteEditor = noteEditor,
-                onNoteChange = onNoteChange,
-                onSaveNote = onSaveNote,
-                onCommitCorrespondent = onCommitCorrespondent,
-                onCommitDocType = onCommitDocType,
-                onCommitDocDate = onCommitDocDate,
-                onCommitField = onCommitField,
-                onRemoveField = onRemoveField,
-                reviewMode = reviewMode,
-                reviewed = reviewed,
-                onSetReviewed = onSetReviewed,
-                onAddTag = onAddTag,
-                onRemoveTag = onRemoveTag,
-                aiTags = aiTags,
-                onSuggestAiTags = onSuggestAiTags,
-                onAcceptAiTag = onAcceptAiTag,
-                onDismissAiTag = onDismissAiTag,
-                onClearAiTagSuggestions = onClearAiTagSuggestions,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
-            PanelTab.TEXT -> OcrTextTab(
-                text = ocrText,
-                ocrState = item.doc.ocrState,
-                highlightTerms = highlightTerms,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
-            PanelTab.HISTORY -> HistoryTab(
-                history = history,
-                onRefresh = onRefreshHistory,
-                modifier = Modifier.fillMaxWidth().weight(1f),
-            )
+            PanelTab.DETAILS -> {
+                DetailsTab(
+                    item = item,
+                    allTagNames = allTagNames,
+                    tagColors = tagColors,
+                    correspondents = correspondents,
+                    docTypes = docTypes,
+                    fieldKeys = fieldKeys,
+                    ocrVersions = ocrVersions,
+                    onSetOcrEngine = onSetOcrEngine,
+                    onCommitTitle = onCommitTitle,
+                    noteEditor = noteEditor,
+                    onNoteChange = onNoteChange,
+                    onSaveNote = onSaveNote,
+                    onCommitCorrespondent = onCommitCorrespondent,
+                    onCommitDocType = onCommitDocType,
+                    onCommitDocDate = onCommitDocDate,
+                    onCommitField = onCommitField,
+                    onRemoveField = onRemoveField,
+                    reviewMode = reviewMode,
+                    reviewed = reviewed,
+                    onSetReviewed = onSetReviewed,
+                    onAddTag = onAddTag,
+                    onRemoveTag = onRemoveTag,
+                    aiTags = aiTags,
+                    onSuggestAiTags = onSuggestAiTags,
+                    onAcceptAiTag = onAcceptAiTag,
+                    onDismissAiTag = onDismissAiTag,
+                    onClearAiTagSuggestions = onClearAiTagSuggestions,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+            }
+
+            PanelTab.TEXT -> {
+                OcrTextTab(
+                    text = ocrText,
+                    ocrState = item.doc.ocrState,
+                    highlightTerms = highlightTerms,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+            }
+
+            PanelTab.HISTORY -> {
+                HistoryTab(
+                    history = history,
+                    onRefresh = onRefreshHistory,
+                    modifier = Modifier.fillMaxWidth().weight(1f),
+                )
+            }
         }
     }
 }
 
-private enum class PanelTab(val label: String) {
-    DETAILS("Details"),
-    TEXT("Text"),
-    HISTORY("History"),
-}
+private enum class PanelTab { DETAILS, TEXT, HISTORY }
 
 @Composable
-@Suppress("LongMethod")
 private fun DetailsTab(
     item: DocListItem,
     allTagNames: List<String>,
@@ -224,91 +297,26 @@ private fun DetailsTab(
     val doc = item.doc
 
     Column(
-        modifier = modifier
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
+        modifier =
+            modifier
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        // Reviewed row. Only the inbox workflow has a review status; without it there is no
-        // badge and no manual toggle (reviewed state is derived from tags).
-        if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                ReviewedBadge(reviewed)
-                OutlinedButton(onClick = { onSetReviewed(!reviewed) }) {
-                    Text(if (reviewed) "Mark needs review" else "Mark reviewed")
-                }
-            }
-        }
-
-        CommitTextField(
-            label = "Title",
-            initial = doc.title ?: "",
-            placeholder = doc.fileName,
-            onCommit = onCommitTitle,
-        )
-
-        OutlinedTextField(
-            value = noteEditor.draft,
-            onValueChange = onNoteChange,
-            label = { Text("Note") },
-            minLines = 4,
-            maxLines = 10,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Text(
-                when (val state = noteEditor.saveState) {
-                    NoteSaveState.Idle -> if (noteEditor.dirty) "Unsaved changes" else ""
-                    NoteSaveState.Saving -> "Saving..."
-                    NoteSaveState.Saved -> "Saved"
-                    is NoteSaveState.Error -> state.message
-                },
-                style = MaterialTheme.typography.bodySmall,
-                color = if (noteEditor.saveState is NoteSaveState.Error) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-            )
-            Button(
-                onClick = onSaveNote,
-                enabled = noteEditor.dirty && noteEditor.saveState != NoteSaveState.Saving,
-            ) {
-                if (noteEditor.saveState == NoteSaveState.Saving) {
-                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-                } else {
-                    Text("Save note")
-                }
-            }
-        }
-
-        SuggestField(
-            label = "Correspondent",
-            initial = doc.correspondent ?: "",
-            suggestions = correspondents,
-            onCommit = onCommitCorrespondent,
-        )
-
-        SuggestField(
-            label = "Document type",
-            initial = doc.docType ?: "",
-            suggestions = docTypes,
-            onCommit = onCommitDocType,
-        )
-
-        CommitTextField(
-            label = "Document date (yyyy-MM-dd)",
-            initial = doc.docDate ?: "",
-            placeholder = "yyyy-MM-dd",
-            onCommit = onCommitDocDate,
+        ReviewStatusSection(reviewMode, reviewed, onSetReviewed)
+        NoteSection(noteEditor, onNoteChange, onSaveNote)
+        DocumentPropertiesSection(
+            title = doc.title,
+            fileName = doc.fileName,
+            correspondent = doc.correspondent,
+            docType = doc.docType,
+            docDate = doc.docDate,
+            correspondents = correspondents,
+            docTypes = docTypes,
+            onCommitTitle = onCommitTitle,
+            onCommitCorrespondent = onCommitCorrespondent,
+            onCommitDocType = onCommitDocType,
+            onCommitDocDate = onCommitDocDate,
         )
 
         HorizontalDivider()
@@ -322,7 +330,11 @@ private fun DetailsTab(
 
         HorizontalDivider()
 
-        Text("Tags", style = MaterialTheme.typography.labelLarge, color = MaterialTheme.colorScheme.primary)
+        Text(
+            stringResource(Res.string.detail_tags),
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
         TagEditor(
             tags = item.tags,
             allTagNames = allTagNames,
@@ -343,11 +355,11 @@ private fun DetailsTab(
 
         // File / OCR facts.
         Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            FactRow("File", doc.fileName)
-            FactRow("Location", doc.relPath)
-            FactRow("Added", formatEpochDate(doc.addedAt))
-            doc.pageCount?.let { FactRow("Pages", it.toString()) }
-            FactRow("OCR", ocrLabel(doc.ocrState))
+            FactRow(stringResource(Res.string.detail_file), doc.fileName)
+            FactRow(stringResource(Res.string.detail_location), doc.relPath)
+            FactRow(stringResource(Res.string.detail_added), formatEpochDate(doc.addedAt))
+            doc.pageCount?.let { FactRow(stringResource(Res.string.detail_pages), it.toString()) }
+            FactRow(stringResource(Res.string.detail_ocr), ocrLabel(doc.ocrState))
             OcrEngineRow(
                 indexedEngine = doc.ocrEngine,
                 pinned = doc.ocrEngineOverride != null,
@@ -356,6 +368,134 @@ private fun DetailsTab(
             )
         }
     }
+}
+
+@Composable
+private fun ReviewStatusSection(
+    reviewMode: ReviewMode,
+    reviewed: Boolean,
+    onSetReviewed: (Boolean) -> Unit,
+) {
+    if (reviewMode != ReviewMode.INBOX_WORKFLOW) return
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        ReviewedBadge(reviewed)
+        OutlinedButton(onClick = { onSetReviewed(!reviewed) }) {
+            Text(
+                stringResource(
+                    if (reviewed) Res.string.detail_mark_needs_review else Res.string.detail_mark_reviewed,
+                ),
+            )
+        }
+    }
+}
+
+@Composable
+private fun NoteSection(
+    noteEditor: NoteEditorState,
+    onNoteChange: (String) -> Unit,
+    onSaveNote: () -> Unit,
+) {
+    OutlinedTextField(
+        value = noteEditor.draft,
+        onValueChange = onNoteChange,
+        label = { Text(stringResource(Res.string.detail_note)) },
+        minLines = 4,
+        maxLines = 10,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            noteSaveLabel(noteEditor),
+            style = MaterialTheme.typography.bodySmall,
+            color =
+                if (noteEditor.saveState is NoteSaveState.Error) {
+                    MaterialTheme.colorScheme.error
+                } else {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                },
+        )
+        Button(
+            onClick = onSaveNote,
+            enabled = noteEditor.dirty && noteEditor.saveState != NoteSaveState.Saving,
+        ) {
+            if (noteEditor.saveState == NoteSaveState.Saving) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            } else {
+                Text(stringResource(Res.string.detail_save_note))
+            }
+        }
+    }
+}
+
+@Composable
+private fun noteSaveLabel(noteEditor: NoteEditorState): String =
+    when (val state = noteEditor.saveState) {
+        NoteSaveState.Idle -> {
+            if (noteEditor.dirty) stringResource(Res.string.detail_unsaved_changes) else ""
+        }
+
+        NoteSaveState.Saving -> {
+            stringResource(Res.string.detail_saving)
+        }
+
+        NoteSaveState.Saved -> {
+            stringResource(Res.string.detail_saved)
+        }
+
+        is NoteSaveState.Error -> {
+            stringResource(
+                Res.string.detail_note_save_failed,
+                state.message.ifBlank { stringResource(Res.string.common_unknown_error) },
+            )
+        }
+    }
+
+@Composable
+private fun DocumentPropertiesSection(
+    title: String?,
+    fileName: String,
+    correspondent: String?,
+    docType: String?,
+    docDate: String?,
+    correspondents: List<String>,
+    docTypes: List<String>,
+    onCommitTitle: (String) -> Unit,
+    onCommitCorrespondent: (String) -> Unit,
+    onCommitDocType: (String) -> Unit,
+    onCommitDocDate: (String) -> Unit,
+) {
+    CommitTextField(
+        label = stringResource(Res.string.detail_title),
+        initial = title.orEmpty(),
+        placeholder = fileName,
+        onCommit = onCommitTitle,
+    )
+    SuggestField(
+        label = stringResource(Res.string.detail_correspondent),
+        initial = correspondent.orEmpty(),
+        suggestions = correspondents,
+        onCommit = onCommitCorrespondent,
+    )
+    SuggestField(
+        label = stringResource(Res.string.detail_document_type),
+        initial = docType.orEmpty(),
+        suggestions = docTypes,
+        onCommit = onCommitDocType,
+    )
+    CommitTextField(
+        label = stringResource(Res.string.detail_document_date),
+        initial = docDate.orEmpty(),
+        placeholder = stringResource(Res.string.detail_iso_date_template),
+        onCommit = onCommitDocDate,
+    )
 }
 
 /**
@@ -385,7 +525,7 @@ private fun AiTagSuggestions(
                     contentDescription = null,
                     modifier = Modifier.size(18.dp),
                 )
-                Text("Suggest tags", modifier = Modifier.padding(start = 8.dp))
+                Text(stringResource(Res.string.detail_suggest_tags), modifier = Modifier.padding(start = 8.dp))
             }
             if (state.suggesting) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
@@ -397,7 +537,7 @@ private fun AiTagSuggestions(
                     AiTagChip(suggestion, onAccept, onDismiss)
                 }
             }
-            TextButton(onClick = onClearAll) { Text("Dismiss all") }
+            TextButton(onClick = onClearAll) { Text(stringResource(Res.string.detail_dismiss_all)) }
         }
     }
 }
@@ -417,167 +557,30 @@ private fun AiTagChip(
     InputChip(
         selected = false,
         onClick = { onAccept(tag) },
-        label = {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(tag)
-                if (suggestion.isNew) {
-                    Text(
-                        "new",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        modifier = Modifier.padding(start = 6.dp),
-                    )
-                }
-            }
-        },
+        label = { TagSuggestionLabel(tag = tag, isNew = suggestion.isNew) },
         leadingIcon = {
             Icon(
                 Icons.Filled.Add,
-                contentDescription = "Add $tag",
+                contentDescription = stringResource(Res.string.detail_add_tag, tag),
                 modifier = Modifier.size(AssistChipDefaults.IconSize),
             )
         },
         trailingIcon = {
             Icon(
                 Icons.Filled.Close,
-                contentDescription = "Dismiss $tag",
-                modifier = Modifier
-                    .size(AssistChipDefaults.IconSize)
-                    .clickable { onDismiss(tag) },
+                contentDescription = stringResource(Res.string.detail_dismiss_tag, tag),
+                modifier =
+                    Modifier
+                        .size(AssistChipDefaults.IconSize)
+                        .clickable { onDismiss(tag) },
             )
         },
     )
-}
-
-/**
- * Shows the OCR engine whose version is currently indexed for search, with a pin indicator when
- * the user has overridden automatic selection. Tapping it opens [OcrEnginePickerDialog] when there
- * are stored versions to choose from.
- */
-@Composable
-private fun OcrEngineRow(
-    indexedEngine: String?,
-    pinned: Boolean,
-    versions: List<OcrVersion>,
-    onSetEngine: (String?) -> Unit,
-) {
-    var showPicker by remember { mutableStateOf(false) }
-    val hasVersions = versions.isNotEmpty()
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .then(if (hasVersions) Modifier.clickable { showPicker = true } else Modifier),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            "Engine",
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            modifier = Modifier.padding(end = 4.dp),
-        )
-        Text(indexedEngine?.let { engineLabel(it) } ?: "—", style = MaterialTheme.typography.bodySmall)
-        if (pinned) {
-            Icon(
-                Icons.Filled.PushPin,
-                contentDescription = "Pinned engine",
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(16.dp),
-            )
-        }
-        if (hasVersions) {
-            Icon(
-                Icons.Filled.ArrowDropDown,
-                contentDescription = "Choose OCR engine",
-                modifier = Modifier.size(20.dp),
-            )
-        }
-    }
-    if (showPicker) {
-        OcrEnginePickerDialog(
-            versions = versions,
-            pinnedEngine = if (pinned) indexedEngine else null,
-            onConfirm = {
-                onSetEngine(it)
-                showPicker = false
-            },
-            onDismiss = { showPicker = false },
-        )
-    }
-}
-
-/**
- * Radio picker for the searchable OCR engine: "Automatic" plus one entry per distinct stored
- * engine (labeled with its display name and the source device + date). Selecting "Automatic"
- * clears the pin; any other choice pins that engine.
- */
-@Composable
-private fun OcrEnginePickerDialog(
-    versions: List<OcrVersion>,
-    pinnedEngine: String?,
-    onConfirm: (String?) -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val engines = remember(versions) { versions.distinctBy { it.engine } }
-    var selected by remember { mutableStateOf(pinnedEngine) }
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        title = { Text("Search text engine") },
-        text = {
-            Column {
-                OcrEngineOption(
-                    label = "Automatic (best available)",
-                    secondary = null,
-                    selected = selected == null,
-                    onClick = { selected = null },
-                )
-                engines.forEach { version ->
-                    OcrEngineOption(
-                        label = engineLabel(version.engine),
-                        secondary = "${version.deviceId} · ${formatEpochDate(version.createdAt)}",
-                        selected = selected == version.engine,
-                        onClick = { selected = version.engine },
-                    )
-                }
-            }
-        },
-        confirmButton = { TextButton(onClick = { onConfirm(selected) }) { Text("Apply") } },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
-    )
-}
-
-@Composable
-private fun OcrEngineOption(
-    label: String,
-    secondary: String?,
-    selected: Boolean,
-    onClick: () -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onClick)
-            .padding(vertical = 8.dp),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        RadioButton(selected = selected, onClick = null)
-        Column {
-            Text(label, style = MaterialTheme.typography.bodyMedium)
-            if (secondary != null) {
-                Text(
-                    secondary,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-        }
-    }
 }
 
 /** Text field that commits its value when the user leaves the field (focus lost) or edits stop. */
 @Composable
-private fun CommitTextField(
+internal fun CommitTextField(
     label: String,
     initial: String,
     placeholder: String? = null,
@@ -591,9 +594,10 @@ private fun CommitTextField(
         label = { Text(label) },
         placeholder = placeholder?.let { { Text(it, maxLines = 1) } },
         singleLine = true,
-        modifier = modifier
-            .fillMaxWidth()
-            .commitOnFocusLost(text, initial, onCommit),
+        modifier =
+            modifier
+                .fillMaxWidth()
+                .commitOnFocusLost(text, initial, onCommit),
     )
 }
 
@@ -605,15 +609,16 @@ private fun Modifier.commitOnFocusLost(
     value: String,
     initial: String,
     onCommit: (String) -> Unit,
-): Modifier = composed {
-    var wasFocused by remember { mutableStateOf(false) }
-    onFocusChanged { fs ->
-        if (wasFocused && !fs.isFocused) {
-            if (value.trim() != initial.trim()) onCommit(value.trim())
+): Modifier =
+    composed {
+        var wasFocused by remember { mutableStateOf(false) }
+        onFocusChanged { fs ->
+            if (wasFocused && !fs.isFocused) {
+                if (value.trim() != initial.trim()) onCommit(value.trim())
+            }
+            wasFocused = fs.isFocused
         }
-        wasFocused = fs.isFocused
     }
-}
 
 @Composable
 private fun SuggestField(
@@ -624,15 +629,22 @@ private fun SuggestField(
 ) {
     var text by remember(initial) { mutableStateOf(initial) }
     var expanded by remember { mutableStateOf(false) }
-    val filtered = remember(text, suggestions) {
-        val q = text.trim()
-        if (q.isEmpty()) suggestions.take(8)
-        else suggestions.filter { it.contains(q, ignoreCase = true) && it != q }.take(8)
-    }
+    val filtered =
+        remember(text, suggestions) {
+            val q = text.trim()
+            if (q.isEmpty()) {
+                suggestions.take(MAX_INLINE_SUGGESTIONS)
+            } else {
+                suggestions.filter { it.contains(q, ignoreCase = true) && it != q }.take(MAX_INLINE_SUGGESTIONS)
+            }
+        }
     androidx.compose.foundation.layout.Box {
         OutlinedTextField(
             value = text,
-            onValueChange = { text = it; expanded = it.isNotBlank() && filtered.isNotEmpty() },
+            onValueChange = {
+                text = it
+                expanded = it.isNotBlank() && filtered.isNotEmpty()
+            },
             label = { Text(label) },
             singleLine = true,
             trailingIcon = {
@@ -644,14 +656,17 @@ private fun SuggestField(
                     )
                 }
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .commitOnFocusLost(text, initial, onCommit),
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .commitOnFocusLost(text, initial, onCommit),
         )
         DropdownMenu(
             expanded = expanded && filtered.isNotEmpty(),
             onDismissRequest = { expanded = false },
-            properties = androidx.compose.ui.window.PopupProperties(focusable = false),
+            properties =
+                androidx.compose.ui.window
+                    .PopupProperties(focusable = false),
         ) {
             filtered.forEach { s ->
                 DropdownMenuItem(
@@ -667,238 +682,11 @@ private fun SuggestField(
     }
 }
 
-/**
- * Custom metadata fields: existing fields render as commit-on-blur text fields (blanking one
- * removes it), plus an add-field row with a key box (autocompleting from [fieldKeys] already used
- * in the library) and a value box.
- */
 @Composable
-private fun CustomFieldsSection(
-    fields: Map<String, String>,
-    fieldKeys: List<String>,
-    onCommitField: (key: String, value: String) -> Unit,
-    onRemoveField: (key: String) -> Unit,
+private fun FactRow(
+    label: String,
+    value: String,
 ) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            "Fields",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
-        // Deterministic order so fields don't jump around as the map re-emits.
-        for (fieldKey in fields.keys.sorted()) {
-            // key() ties each row's composition state (edit buffer, focus) to the field key
-            // instead of its list position. Without it, adding/removing a field shifts rows into
-            // other keys' slots; the reused CommitTextField then holds a stale edit buffer and its
-            // recomposition-induced blur re-commits the old value, silently undoing a just-issued
-            // delete (LWW: the spurious write is newer than the delete).
-            key(fieldKey) {
-                val value = fields.getValue(fieldKey)
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    CommitTextField(
-                        label = fieldKey,
-                        initial = value,
-                        onCommit = { onCommitField(fieldKey, it) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    IconButton(onClick = { onRemoveField(fieldKey) }) {
-                        Icon(Icons.Filled.Close, contentDescription = "Remove field $fieldKey")
-                    }
-                }
-            }
-        }
-        AddFieldRow(existingKeys = fields.keys, fieldKeys = fieldKeys, onAdd = onCommitField)
-    }
-}
-
-@Composable
-private fun AddFieldRow(
-    existingKeys: Set<String>,
-    fieldKeys: List<String>,
-    onAdd: (key: String, value: String) -> Unit,
-) {
-    var key by remember { mutableStateOf("") }
-    var value by remember { mutableStateOf("") }
-    var expanded by remember { mutableStateOf(false) }
-    // Suggest keys used elsewhere in the library that this doc doesn't already have.
-    val suggestions = remember(key, fieldKeys, existingKeys) {
-        val q = key.trim()
-        fieldKeys.filter { it !in existingKeys && (q.isEmpty() || it.contains(q, ignoreCase = true)) }
-            .take(8)
-    }
-    val canAdd = key.isNotBlank() && value.isNotBlank()
-
-    fun commit() {
-        if (canAdd) {
-            onAdd(key.trim(), value.trim())
-            key = ""
-            value = ""
-            expanded = false
-        }
-    }
-
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        androidx.compose.foundation.layout.Box(Modifier.weight(1f)) {
-            OutlinedTextField(
-                value = key,
-                onValueChange = { key = it; expanded = it.isNotBlank() && suggestions.isNotEmpty() },
-                label = { Text("New field") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            DropdownMenu(
-                expanded = expanded && suggestions.isNotEmpty(),
-                onDismissRequest = { expanded = false },
-                properties = androidx.compose.ui.window.PopupProperties(focusable = false),
-            ) {
-                suggestions.forEach { s ->
-                    DropdownMenuItem(text = { Text(s) }, onClick = { key = s; expanded = false })
-                }
-            }
-        }
-        OutlinedTextField(
-            value = value,
-            onValueChange = { value = it },
-            label = { Text("Value") },
-            singleLine = true,
-            modifier = Modifier.weight(1f),
-        )
-        IconButton(onClick = { commit() }, enabled = canAdd) {
-            Icon(Icons.Filled.Add, contentDescription = "Add field")
-        }
-    }
-}
-
-/** Read-only extracted text (OCR / embedded), selectable, in a scrolling monospace-ish block. */
-@Composable
-private fun OcrTextTab(
-    text: String?,
-    ocrState: String,
-    highlightTerms: List<String>,
-    modifier: Modifier = Modifier,
-) {
-    Column(
-        modifier = modifier
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-    ) {
-        when {
-            text != null -> SelectionContainer {
-                val visibleText = text.take(MAX_OCR_DISPLAY_CHARS)
-                if (highlightTerms.isNotEmpty()) {
-                    HighlightText(
-                        segments = parseQueryHighlight(visibleText, highlightTerms.joinToString(" ")),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                } else {
-                    Text(visibleText, style = MaterialTheme.typography.bodySmall)
-                }
-            }
-            else -> Text(
-                when (ocrState) {
-                    "pending" -> "Text extraction is queued for this document."
-                    "failed" -> "Text extraction failed for this document."
-                    "none" -> "No text has been extracted from this document yet."
-                    else -> "No text available."
-                },
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-private const val MAX_OCR_DISPLAY_CHARS = 200_000
-
-/** Immutable journal timeline for the document: HLC-ordered icon + description rows. */
-@Composable
-private fun HistoryTab(
-    history: HistoryUiState,
-    onRefresh: () -> Unit,
-    modifier: Modifier = Modifier,
-) {
-    val scroll = rememberScrollState()
-    Column(
-        modifier = modifier
-            .verticalScroll(scroll)
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        when (history) {
-            HistoryUiState.NotLoaded, HistoryUiState.Loading -> CircularProgressIndicator()
-            HistoryUiState.Empty -> Text(
-                "No history events yet.",
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            is HistoryUiState.Error -> {
-                Text("History could not be loaded: ${history.message}")
-                Button(onClick = onRefresh) { Text("Retry") }
-            }
-            is HistoryUiState.Loaded -> for (item in history.items) {
-                HistoryRow(item = item)
-            }
-        }
-    }
-}
-
-@Composable
-private fun HistoryRow(item: HistoryItem) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Icon(
-            imageVector = item.kind.icon(),
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(20.dp),
-        )
-        Column(Modifier.weight(1f)) {
-            Text(item.description, style = MaterialTheme.typography.bodyMedium)
-            Text(
-                formatHistorySecondary(item),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-private fun formatHistorySecondary(item: HistoryItem): String {
-    val timestamp = formatEpochDateTime(item.hlc.physicalMillis)
-    return "$timestamp · Device ${item.deviceId}"
-}
-
-private fun HistoryEventKind.icon() = when (this) {
-    HistoryEventKind.TAG_ADD -> Icons.Filled.Label
-    HistoryEventKind.TAG_REMOVE -> Icons.Filled.LabelOff
-    HistoryEventKind.PROP_TITLE -> Icons.Filled.Title
-    HistoryEventKind.PROP_NOTES -> Icons.Filled.Description
-    HistoryEventKind.PROP_CORRESPONDENT -> Icons.Filled.Person
-    HistoryEventKind.PROP_DOC_TYPE -> Icons.Filled.Description
-    HistoryEventKind.PROP_DOC_DATE -> Icons.Filled.CalendarToday
-    HistoryEventKind.PROP_REVIEWED -> Icons.Filled.CheckCircle
-    HistoryEventKind.PROP_OCR_ENGINE -> Icons.Filled.Settings
-    HistoryEventKind.FIELD_SET -> Icons.Filled.TextFields
-    HistoryEventKind.FIELD_REMOVE -> Icons.Filled.TextFields
-    HistoryEventKind.TRASH -> Icons.Filled.Delete
-    HistoryEventKind.RESTORE -> Icons.Filled.RestoreFromTrash
-    HistoryEventKind.DELETE -> Icons.Filled.DeleteForever
-    HistoryEventKind.RELINK -> Icons.Filled.Link
-    HistoryEventKind.UNKNOWN -> Icons.Filled.Help
-}
-
-@Composable
-private fun FactRow(label: String, value: String) {
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
             label,
@@ -908,22 +696,4 @@ private fun FactRow(label: String, value: String) {
         )
         Text(value, style = MaterialTheme.typography.bodySmall)
     }
-}
-
-private fun ocrLabel(state: String): String = when (state) {
-    "none" -> "Not processed"
-    "pending" -> "Queued"
-    "done" -> "Done"
-    "failed" -> "Failed"
-    "adopted" -> "Adopted from another device"
-    else -> state
-}
-
-/** Display name for an OCR engine identifier. */
-private fun engineLabel(engine: String): String = when (engine) {
-    "tesseract" -> "Tesseract"
-    "mlkit" -> "MLKit"
-    "ai" -> "AI"
-    "embedded" -> "Embedded text"
-    else -> engine
 }

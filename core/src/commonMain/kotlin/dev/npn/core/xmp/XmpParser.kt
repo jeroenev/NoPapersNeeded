@@ -19,7 +19,6 @@ package dev.npn.core.xmp
  *   these prefixes are not handled.
  */
 object XmpParser {
-
     fun parse(xml: String?): NpnXmpData {
         if (xml.isNullOrEmpty()) return NpnXmpData.EMPTY
         return try {
@@ -40,29 +39,51 @@ object XmpParser {
     }
 
     /** Read an `npn:<local>` value from element form first, then attribute shorthand. */
-    private fun readNpn(xml: String, local: String): String? {
+    private fun readNpn(
+        xml: String,
+        local: String,
+    ): String? {
         val q = "npn:$local"
         elementText(xml, q)?.let { return it }
         return attributeValue(xml, q)
     }
 
     /**
-     * Extract the text content of the first `<qName ...>text</qName>` occurrence. Returns the
-     * unescaped text, or null when the element is absent or self-closing/empty.
+     * Inner content of the first non-self-closing `<qName ...>...</qName>` element, or null when
+     * the element is absent, self-closing, or unterminated. Shared preamble
+     * for every element reader (leaf text, rdf:Bag/Alt containers, npn:fields) so the open-tag +
+     * self-closing + matching-close-tag logic lives in exactly one place.
      */
-    private fun elementText(xml: String, qName: String): String? {
+    private fun elementInner(
+        xml: String,
+        qName: String,
+    ): String? {
         val open = findOpenTag(xml, qName) ?: return null
         if (open.selfClosing) return null
         val close = xml.indexOf("</$qName", open.endIndex)
         if (close < 0) return null
-        val raw = xml.substring(open.endIndex, close)
+        return xml.substring(open.endIndex, close)
+    }
+
+    /**
+     * Extract the text content of the first `<qName ...>text</qName>` occurrence. Returns the
+     * unescaped text, or null when the element is absent or self-closing/empty.
+     */
+    private fun elementText(
+        xml: String,
+        qName: String,
+    ): String? {
+        val raw = elementInner(xml, qName) ?: return null
         // Reject nested markup (this is meant for simple leaf properties only).
         if (raw.contains('<')) return null
         return unescape(raw)
     }
 
     /** Extract an attribute value `qName="..."` (or single-quoted) from anywhere in the doc. */
-    private fun attributeValue(xml: String, qName: String): String? {
+    private fun attributeValue(
+        xml: String,
+        qName: String,
+    ): String? {
         var searchFrom = 0
         while (true) {
             val idx = xml.indexOf(qName, searchFrom)
@@ -89,12 +110,11 @@ object XmpParser {
     }
 
     /** Read an rdf:Bag/rdf:Seq of rdf:li under [containerQName] into an ordered list. */
-    private fun readBag(xml: String, containerQName: String): List<String> {
-        val open = findOpenTag(xml, containerQName) ?: return emptyList()
-        if (open.selfClosing) return emptyList()
-        val close = xml.indexOf("</$containerQName", open.endIndex)
-        if (close < 0) return emptyList()
-        val inner = xml.substring(open.endIndex, close)
+    private fun readBag(
+        xml: String,
+        containerQName: String,
+    ): List<String> {
+        val inner = elementInner(xml, containerQName) ?: return emptyList()
         return readListItems(inner)
     }
 
@@ -103,16 +123,15 @@ object XmpParser {
      * `npn:fieldValue`. Later duplicate keys win. Missing/empty container yields an empty map.
      */
     private fun readFields(xml: String): Map<String, String> {
-        val open = findOpenTag(xml, "npn:fields") ?: return emptyMap()
-        if (open.selfClosing) return emptyMap()
-        val close = xml.indexOf("</npn:fields", open.endIndex)
-        if (close < 0) return emptyMap()
-        val inner = xml.substring(open.endIndex, close)
+        val inner = elementInner(xml, "npn:fields") ?: return emptyMap()
         val out = LinkedHashMap<String, String>()
         var cursor = 0
         while (true) {
             val li = findOpenTag(inner, "rdf:li", cursor) ?: break
-            if (li.selfClosing) { cursor = li.endIndex; continue }
+            if (li.selfClosing) {
+                cursor = li.endIndex
+                continue
+            }
             val liClose = inner.indexOf("</rdf:li", li.endIndex)
             if (liClose < 0) break
             val liInner = inner.substring(li.endIndex, liClose)
@@ -125,12 +144,11 @@ object XmpParser {
     }
 
     /** Read an rdf:Alt under [containerQName]; return the first (x-default) li text. */
-    private fun readAlt(xml: String, containerQName: String): String? {
-        val open = findOpenTag(xml, containerQName) ?: return null
-        if (open.selfClosing) return null
-        val close = xml.indexOf("</$containerQName", open.endIndex)
-        if (close < 0) return null
-        val inner = xml.substring(open.endIndex, close)
+    private fun readAlt(
+        xml: String,
+        containerQName: String,
+    ): String? {
+        val inner = elementInner(xml, containerQName) ?: return null
         return readListItems(inner).firstOrNull()
     }
 
@@ -155,14 +173,22 @@ object XmpParser {
         return out
     }
 
-    private data class OpenTag(val startIndex: Int, val endIndex: Int, val selfClosing: Boolean)
+    private data class OpenTag(
+        val startIndex: Int,
+        val endIndex: Int,
+        val selfClosing: Boolean,
+    )
 
     /**
      * Find the first `<qName` occurrence at/after [from] that is a real element start (followed
      * by whitespace, '>', or '/'), and return its span. [endIndex] points just past the closing
      * '>' of the open tag.
      */
-    private fun findOpenTag(xml: String, qName: String, from: Int = 0): OpenTag? {
+    private fun findOpenTag(
+        xml: String,
+        qName: String,
+        from: Int = 0,
+    ): OpenTag? {
         val needle = "<$qName"
         var searchFrom = from
         while (true) {
@@ -200,14 +226,15 @@ object XmpParser {
                 continue
             }
             val entity = value.substring(i + 1, semi)
-            val decoded = when (entity) {
-                "amp" -> "&"
-                "lt" -> "<"
-                "gt" -> ">"
-                "quot" -> "\""
-                "apos" -> "'"
-                else -> decodeNumeric(entity)
-            }
+            val decoded =
+                when (entity) {
+                    "amp" -> "&"
+                    "lt" -> "<"
+                    "gt" -> ">"
+                    "quot" -> "\""
+                    "apos" -> "'"
+                    else -> decodeNumeric(entity)
+                }
             if (decoded != null) {
                 sb.append(decoded)
                 i = semi + 1
@@ -221,11 +248,12 @@ object XmpParser {
 
     private fun decodeNumeric(entity: String): String? {
         if (entity.isEmpty() || entity[0] != '#') return null
-        val code = if (entity.length > 1 && (entity[1] == 'x' || entity[1] == 'X')) {
-            entity.substring(2).toIntOrNull(16)
-        } else {
-            entity.substring(1).toIntOrNull(10)
-        } ?: return null
+        val code =
+            if (entity.length > 1 && (entity[1] == 'x' || entity[1] == 'X')) {
+                entity.substring(2).toIntOrNull(16)
+            } else {
+                entity.substring(1).toIntOrNull(10)
+            } ?: return null
         if (code < 0 || code > 0x10FFFF) return null
         return buildString { appendCodePointCompat(code) }
     }

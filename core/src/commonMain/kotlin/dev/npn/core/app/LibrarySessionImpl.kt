@@ -3,10 +3,9 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiFacadeImpl
-import dev.npn.core.db.toEntity
-
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.toEntity
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.LibraryFileSystem
@@ -17,19 +16,19 @@ import dev.npn.core.fs.debounced
 import dev.npn.core.index.DbLocalJournalState
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.FsSegmentStore
+import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.ImportService
-import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitService
+import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.HlcWatermarkAllocator
-import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
@@ -43,22 +42,22 @@ import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
-import dev.npn.core.rules.RuleApplier
-
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.pdf.ThumbnailStore
+import dev.npn.core.rules.RuleApplier
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.PdfXmpIO
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
@@ -86,7 +85,6 @@ class LibrarySessionImpl private constructor(
     override val content: DocContentFacade,
     override val ai: AiFacade,
 ) : LibrarySession {
-
     private val fs get() = deps.fs
     private val db get() = deps.db
 
@@ -110,17 +108,22 @@ class LibrarySessionImpl private constructor(
 
     override suspend fun markReviewedForMigration(onlyTagged: Boolean) {
         val dao = db.documentDao()
-        val live = dao.allPathsAndMeta().mapNotNull { dao.getByDocId(it.docId) }
-            .filter { !it.trashed && !it.deleted && !it.missing }
-        val targets = if (!onlyTagged) {
-            live
-        } else {
-            val tagged = dao.tagsForDocs(live.map { it.docId }).map { it.docId }.toHashSet()
-            live.filter { it.docId in tagged }
-        }
-        val ops = targets.map {
-            PendingOp.propSet(it.docId, dev.npn.core.model.DocProperty.REVIEWED, "true")
-        }
+        val live =
+            dao
+                .allPathsAndMeta()
+                .mapNotNull { dao.getByDocId(it.docId) }
+                .filter { !it.trashed && !it.deleted && !it.missing }
+        val targets =
+            if (!onlyTagged) {
+                live
+            } else {
+                val tagged = dao.tagsForDocs(live.map { it.docId }).map { it.docId }.toHashSet()
+                live.filter { it.docId in tagged }
+            }
+        val ops =
+            targets.map {
+                PendingOp.propSet(it.docId, dev.npn.core.model.DocProperty.REVIEWED, "true")
+            }
         if (ops.isNotEmpty()) coordinator.commitAndApply(ops)
     }
 
@@ -136,47 +139,51 @@ class LibrarySessionImpl private constructor(
         return report
     }
 
-    override suspend fun importPdf(source: ExternalSource, suggestedName: String): ImportOutcome =
-        map(importService.importPdf(source, suggestedName)).also { afterImport(it) }
+    override suspend fun importPdf(
+        source: ExternalSource,
+        suggestedName: String,
+    ): ImportOutcome = map(importService.importPdf(source, suggestedName)).also { afterImport(it) }
 
-    override suspend fun importPdfBytes(bytes: ByteArray, suggestedName: String): ImportOutcome =
-        map(importService.importBytes(bytes, suggestedName)).also { afterImport(it) }
+    override suspend fun importPdfBytes(
+        bytes: ByteArray,
+        suggestedName: String,
+    ): ImportOutcome = map(importService.importBytes(bytes, suggestedName)).also { afterImport(it) }
 
-    override suspend fun importImagesAsPdf(images: List<ByteArray>, suggestedName: String): ImportOutcome {
-        return try {
+    override suspend fun importImagesAsPdf(
+        images: List<ByteArray>,
+        suggestedName: String,
+    ): ImportOutcome =
+        try {
             val pdf = deps.pdfEngine.imagesToPdf(images)
             importPdfBytes(pdf, suggestedName)
         } catch (t: Throwable) {
             ImportOutcome.Failed(t.message ?: "image conversion failed")
         }
-    }
 
-    override suspend fun resolveDuplicate(docId: String, extraRelPath: String, keepCanonical: Boolean) {
+    override suspend fun resolveDuplicate(
+        docId: String,
+        extraRelPath: String,
+        keepCanonical: Boolean,
+    ) {
         maintenance.resolveDuplicate(docId, extraRelPath, keepCanonical)
     }
 
-    override suspend fun applyRelink(oldDocId: String, newDocId: String) {
+    override suspend fun applyRelink(
+        oldDocId: String,
+        newDocId: String,
+    ) {
         // commitAndRescan already refreshes the coordinator's folded state under the lock.
         _lastScanReport.value = relinkService.applyRelink(oldDocId, newDocId)
     }
 
     override suspend fun purgeTrash(olderThanDays: Int) {
-        val cutoff = deps.clock.nowMillis() - olderThanDays.toLong() * 24L * 60L * 60L * 1000L
+        val cutoff = deps.clock.nowMillis() - olderThanDays.toLong() * MILLIS_PER_DAY
         trashOps().purgeOlderThan(cutoff)
     }
 
     override suspend fun reOcr(docId: String) {
         if (db.documentDao().getByDocId(docId) == null) return
-        db.ocrQueueDao().upsert(
-            OcrQueueEntity(
-                docId = docId,
-                state = OcrPipeline.STATE_PENDING,
-                updatedAt = deps.clock.nowMillis(),
-            ),
-        )
-        // Partial UPDATE so this state flip cannot clobber metadata columns a concurrent
-        // journal fold just projected onto the same row.
-        db.documentDao().updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
+        enqueuePendingOcr(docId)
         ocrWorker.kick()
     }
 
@@ -193,25 +200,33 @@ class LibrarySessionImpl private constructor(
         }
     }
 
-    override suspend fun setOcrEngine(docId: String, engine: String?) {
+    override suspend fun setOcrEngine(
+        docId: String,
+        engine: String?,
+    ) {
         meta.setOcrEngine(docId, engine)
         // The commit above already folded the override into the doc row; re-select now so this
         // device's index reflects the choice immediately.
         ocrPipeline.reselect(docId)
     }
 
-    override suspend fun splitPdf(docId: String, segments: List<IntRange>): SplitOutcome {
+    override suspend fun splitPdf(
+        docId: String,
+        segments: List<IntRange>,
+    ): SplitOutcome {
         val result = splitService.split(docId, segments)
-        val parts = when (result) {
-            is SplitService.Result.Failed -> return SplitOutcome.Failed(result.message)
-            is SplitService.Result.Done -> result.parts
-        }
-        val partIds = parts.map {
-            when (it) {
-                is ImportResult.Imported -> it.docId
-                is ImportResult.Duplicate -> it.existingDocId
+        val parts =
+            when (result) {
+                is SplitService.Result.Failed -> return SplitOutcome.Failed(result.message)
+                is SplitService.Result.Done -> result.parts
             }
-        }
+        val partIds =
+            parts.map {
+                when (it) {
+                    is ImportResult.Imported -> it.docId
+                    is ImportResult.Duplicate -> it.existingDocId
+                }
+            }
         copyMetadataToParts(docId, partIds)
         // Trash last: if anything above fails the original stays untouched next to the parts.
         meta.trashDoc(docId)
@@ -220,9 +235,16 @@ class LibrarySessionImpl private constructor(
     }
 
     /** Carry tags and single-value properties of the split source onto its parts. */
-    private suspend fun copyMetadataToParts(docId: String, partIds: List<String>) {
+    private suspend fun copyMetadataToParts(
+        docId: String,
+        partIds: List<String>,
+    ) {
         val doc = db.documentDao().getByDocId(docId) ?: return
-        for (tag in db.documentDao().tagsForDocs(listOf(docId)).map { it.tag }.distinct()) {
+        for (tag in db
+            .documentDao()
+            .tagsForDocs(listOf(docId))
+            .map { it.tag }
+            .distinct()) {
             meta.addTag(partIds, tag)
         }
         doc.correspondent?.let { meta.setCorrespondent(partIds, it) }
@@ -246,12 +268,12 @@ class LibrarySessionImpl private constructor(
         // Metadata paths are routed separately so journal sync never scans or hashes PDFs.
         jobs.add(
             scope.launch {
-                fs.watch()
+                fs
+                    .watch()
                     .filterNot { event ->
                         val rel = (event as? FsEvent.Changed)?.relPath
                         rel != null && NpnPaths.isOwnDeviceWrite(rel, deviceId)
-                    }
-                    .filter { event -> routeWatchEvent(event) == WatchRoute.PassToRescan }
+                    }.filter { event -> routeWatchEvent(event) == WatchRoute.PassToRescan }
                     .debounced()
                     .collect { event ->
                         val rel = (event as? FsEvent.Changed)?.relPath
@@ -304,13 +326,17 @@ class LibrarySessionImpl private constructor(
             is NpnPaths.JournalPath.Legacy,
             is NpnPaths.JournalPath.UnsupportedObjectStore,
             NpnPaths.JournalPath.Staging,
-            -> WatchRoute.HandledByMetadata
-            NpnPaths.JournalPath.Unknown ->
+            -> {
+                WatchRoute.HandledByMetadata
+            }
+
+            NpnPaths.JournalPath.Unknown -> {
                 if (rel == NpnPaths.JOURNAL_DIR || rel.startsWith("${NpnPaths.JOURNAL_DIR}/")) {
                     WatchRoute.HandledByMetadata
                 } else {
                     WatchRoute.PassToRescan
                 }
+            }
         }
     }
 
@@ -332,7 +358,11 @@ class LibrarySessionImpl private constructor(
                 // instead of waiting for the next rescan.
                 runCatching { ocrPipeline.reconcileSidecars() }
             }
-            NpnPaths.JournalPath.Staging, null -> Unit
+
+            NpnPaths.JournalPath.Staging, null -> {
+                Unit
+            }
+
             else -> {
                 runCatching { coordinator.reconcileMetadata() }
                 runCatching { ocrPipeline.reconcileSidecars() }
@@ -345,27 +375,29 @@ class LibrarySessionImpl private constructor(
         rescan()
         ocrWorker.kick()
         // Respect the configured retention at call time.
-        val days = runCatching { deps.trashRetentionDays() }.getOrDefault(30)
+        val days =
+            runCatching { deps.trashRetentionDays() }
+                .getOrDefault(TrashSettings.DEFAULT_TRASH_RETENTION_DAYS)
         runCatching { purgeTrash(days) }
     }
 
-    override fun close() {
-        jobs.forEach { it.cancel() }
+    override suspend fun close() {
+        jobs.forEach { it.cancelAndJoin() }
         jobs.clear()
+        ocrWorker.close()
         started = false
-        // DB is closed by the environment when swapping libraries (it owns lifecycle). Leaving it
-        // open here is documented: closing on session.close() would race the swap. See
-        // AppEnvironment impls.
+        // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
     }
 
     // --- helpers ---
 
     private fun trashOps() = TrashOps(fs)
 
-    private fun map(result: ImportResult): ImportOutcome = when (result) {
-        is ImportResult.Imported -> ImportOutcome.Imported(result.docId, result.relPath)
-        is ImportResult.Duplicate -> ImportOutcome.Duplicate(result.existingDocId, result.existingPath)
-    }
+    private fun map(result: ImportResult): ImportOutcome =
+        when (result) {
+            is ImportResult.Imported -> ImportOutcome.Imported(result.docId, result.relPath)
+            is ImportResult.Duplicate -> ImportOutcome.Duplicate(result.existingDocId, result.existingPath)
+        }
 
     private suspend fun afterImport(outcome: ImportOutcome) {
         if (outcome is ImportOutcome.Imported) {
@@ -379,22 +411,30 @@ class LibrarySessionImpl private constructor(
             val doc = db.documentDao().getByDocId(pm.docId) ?: continue
             if (doc.trashed || doc.deleted || doc.missing) continue
             if (doc.ocrState == OcrPipeline.OCR_NONE) {
-                db.ocrQueueDao().upsert(
-                    OcrQueueEntity(
-                        docId = doc.docId,
-                        state = OcrPipeline.STATE_PENDING,
-                        updatedAt = deps.clock.nowMillis(),
-                    ),
-                )
-                // Partial UPDATE so this state flip cannot clobber metadata columns a concurrent
-                // journal fold just projected onto the same row.
-                db.documentDao().updateOcrState(doc.docId, OcrPipeline.OCR_PENDING, null, null)
+                enqueuePendingOcr(doc.docId)
             }
         }
     }
 
+    /**
+     * Mark [docId] pending in the OCR queue and flip its doc-row OCR state to pending. The row
+     * write is a partial UPDATE so this state flip cannot clobber metadata columns a concurrent
+     * journal fold just projected onto the same row.
+     */
+    private suspend fun enqueuePendingOcr(docId: String) {
+        db.ocrQueueDao().upsert(
+            OcrQueueEntity(
+                docId = docId,
+                state = OcrPipeline.STATE_PENDING,
+                updatedAt = deps.clock.nowMillis(),
+            ),
+        )
+        db.documentDao().updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
+    }
+
     companion object {
         private const val METADATA_RECONCILIATION_INTERVAL_MS = 15L * 60L * 1000L
+        private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
 
         /**
          * Boot a session over [deps]: get-or-create the deviceId, run the single-writer fork check
@@ -418,96 +458,105 @@ class LibrarySessionImpl private constructor(
             val localState = DbLocalJournalState(db.keyValueDao())
 
             // Build a provisional writer to run the fork check.
-            val provisional = SegmentWriter(
-                store = segmentStore,
-                deviceId = initialDeviceId,
-                hlcClock = HlcClock(initialDeviceId, deps.clock),
-                localState = localState,
-            )
-            val effectiveDeviceId = identity.ensureSingleWriter(provisional, localState)
-            val writer = if (effectiveDeviceId == initialDeviceId) {
-                provisional
-            } else {
+            val provisional =
                 SegmentWriter(
                     store = segmentStore,
-                    deviceId = effectiveDeviceId,
-                    hlcClock = HlcClock(effectiveDeviceId, deps.clock),
+                    deviceId = initialDeviceId,
+                    hlcClock = HlcClock(initialDeviceId, deps.clock),
                     localState = localState,
                 )
-            }
+            val effectiveDeviceId = identity.ensureSingleWriter(provisional, localState)
+            val writer =
+                if (effectiveDeviceId == initialDeviceId) {
+                    provisional
+                } else {
+                    SegmentWriter(
+                        store = segmentStore,
+                        deviceId = effectiveDeviceId,
+                        hlcClock = HlcClock(effectiveDeviceId, deps.clock),
+                        localState = localState,
+                    )
+                }
 
             val coordinator = createCoordinator(deps, writer, indexer)
             coordinator.refreshState()
 
             val pathRuleApplicator = StoragePathRuleApplicator(fs, db, ftsWriteGate, deps.storagePathRule)
-            val importService = ImportService(
-                fs = fs,
-                documentDao = db.documentDao(),
-                ocrQueueDao = db.ocrQueueDao(),
-                clock = deps.clock,
-                ruleProvider = deps.storagePathRule,
-            )
+            val importService =
+                ImportService(
+                    fs = fs,
+                    documentDao = db.documentDao(),
+                    ocrQueueDao = db.ocrQueueDao(),
+                    clock = deps.clock,
+                    ruleProvider = deps.storagePathRule,
+                )
             val maintenance = MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
             val relinkService = RelinkService(coordinator)
             val splitService = SplitService(fs, deps.pdfEngine, importService, db.documentDao())
 
-            val ocrPipeline = OcrPipeline(
-                fs = fs,
-                sidecars = OcrSidecarFiles(fs),
-                pdfEngine = deps.pdfEngine,
-                ocrEngine = deps.ocrEngine,
-                documentDao = db.documentDao(),
-                ftsDao = db.ftsDao(),
-                ocrQueueDao = db.ocrQueueDao(),
-                tagDao = db.tagDao(),
-                deviceId = effectiveDeviceId,
-                config = OcrConfig(lang = deps.ocrLanguage()),
-                ftsWriteGate = ftsWriteGate,
-            )
+            val ocrPipeline =
+                OcrPipeline(
+                    fs = fs,
+                    sidecars = OcrSidecarFiles(fs),
+                    pdfEngine = deps.pdfEngine,
+                    ocrEngine = deps.ocrEngine,
+                    documentDao = db.documentDao(),
+                    ftsDao = db.ftsDao(),
+                    ocrQueueDao = db.ocrQueueDao(),
+                    tagDao = db.tagDao(),
+                    deviceId = effectiveDeviceId,
+                    config = OcrConfig(lang = deps.ocrLanguage()),
+                    ftsWriteGate = ftsWriteGate,
+                )
             val ocrWorker = OcrWorker(ocrPipeline, deps.scope)
 
             // Single shared gate so thumbnail + page rendering share one bounded concurrency
             // budget and a first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
             val renderGate = RenderGate()
-            val thumbnailService = ThumbnailService(
-                engine = deps.pdfEngine,
-                fs = fs,
-                store = deps.thumbnailStore,
-                thumbnailDao = db.thumbnailDao(),
-                documentDao = db.documentDao(),
-                renderGate = renderGate,
-            )
+            val thumbnailService =
+                ThumbnailService(
+                    engine = deps.pdfEngine,
+                    fs = fs,
+                    store = deps.thumbnailStore,
+                    thumbnailDao = db.thumbnailDao(),
+                    documentDao = db.documentDao(),
+                    renderGate = renderGate,
+                )
             val bakeService = BakeService(fs, deps.xmpIO)
 
             val documents = DocumentRepositoryImpl(db)
             val tags = TagRepositoryImpl(db.tagDao())
             val savedViews = SavedViewRepositoryImpl(db.savedViewDao())
-            val content = DocContentFacadeImpl(db, fs, deps.pdfEngine, thumbnailService, bakeService, coordinator, renderGate)
+            val content =
+                DocContentFacadeImpl(db, fs, deps.pdfEngine, thumbnailService, bakeService, coordinator, renderGate)
 
-            val ruleApplier = RuleApplier(
-                ruleDao = db.autoMatchRuleDao(),
-                ftsDao = db.ftsDao(),
-                documentDao = db.documentDao(),
-                coordinator = coordinator,
-                onMetadataApplied = pathRuleApplicator::applyFor,
-            )
+            val ruleApplier =
+                RuleApplier(
+                    ruleDao = db.autoMatchRuleDao(),
+                    ftsDao = db.ftsDao(),
+                    documentDao = db.documentDao(),
+                    coordinator = coordinator,
+                    onMetadataApplied = pathRuleApplicator::applyFor,
+                )
             db.autoMatchRuleDao().clearAll()
             runCatching {
                 Json.decodeFromString<List<dev.npn.core.rules.AutoMatchRule>>(deps.autoMatchRulesJson())
             }.getOrDefault(emptyList()).forEach { db.autoMatchRuleDao().upsert(it.toEntity()) }
-            val rules = AutoMatchRuleRepositoryImpl(
-                dao = db.autoMatchRuleDao(),
-                applier = ruleApplier,
-                persist = deps.persistAutoMatchRulesJson,
-            )
-            val meta = MetadataWriterImpl(
-                coordinator,
-                db,
-                fs,
-                TrashOps(fs),
-                pathRuleApplicator,
-                applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
-            )
+            val rules =
+                AutoMatchRuleRepositoryImpl(
+                    dao = db.autoMatchRuleDao(),
+                    applier = ruleApplier,
+                    persist = deps.persistAutoMatchRulesJson,
+                )
+            val meta =
+                MetadataWriterImpl(
+                    coordinator,
+                    db,
+                    fs,
+                    TrashOps(fs),
+                    pathRuleApplicator,
+                    applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
+                )
             ocrPipeline.onTextIndexed = { docId, text ->
                 ruleApplier.applyToDoc(docId, text)
             }
@@ -546,11 +595,12 @@ class LibrarySessionImpl private constructor(
             return ContentAddressedJournalWriter(
                 fs = deps.fs,
                 installationId = deps.installationId,
-                allocator = HlcWatermarkAllocator(
-                    clock = deps.clock,
-                    initialPhysicalMillis = state?.allocatorPhysical ?: 0L,
-                    initialCounter = state?.allocatorCounter ?: 0,
-                ),
+                allocator =
+                    HlcWatermarkAllocator(
+                        clock = deps.clock,
+                        initialPhysicalMillis = state?.allocatorPhysical ?: 0L,
+                        initialCounter = state?.allocatorCounter ?: 0,
+                    ),
             ).takeIf { it.supported }
         }
 
@@ -558,13 +608,14 @@ class LibrarySessionImpl private constructor(
             deps: SessionDeps,
             writer: SegmentWriter,
             indexer: Indexer,
-        ): JournalCoordinator = JournalCoordinator(
-            writer = writer,
-            indexer = indexer,
-            accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId),
-            objectWriter = createObjectWriter(deps),
-            compactor = SnapshotCompactor(deps.fs, deps.installationId).takeIf { it.supported },
-        )
+        ): JournalCoordinator =
+            JournalCoordinator(
+                writer = writer,
+                indexer = indexer,
+                accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId),
+                objectWriter = createObjectWriter(deps),
+                compactor = SnapshotCompactor(deps.fs, deps.installationId).takeIf { it.supported },
+            )
     }
 }
 

@@ -85,10 +85,23 @@ below if you prefer to run them directly.
 | `mise package-appimage` | `./gradlew :desktopApp:packageAppImage` |
 | `mise package-jar` | `./gradlew :desktopApp:packageUberJarForCurrentOS` |
 | `mise test` | `./gradlew :core:desktopTest` |
+| `mise test-fast` | Core and shared UI desktop tests |
 | `mise test-all` | `./gradlew allTests :core:desktopTest` |
 | `mise check` | `./gradlew check` |
+| `mise hooks-install` | Enable the version-controlled Git hooks |
 | `mise build` | `./gradlew build` |
 | `mise clean` | `./gradlew clean` |
+
+Formatting is enforced incrementally with Spotless and ktlint. Run
+`./gradlew spotlessCheck` to check it or `./gradlew spotlessApply` to format
+Kotlin and Gradle Kotlin scripts.
+Localization parity, XML placeholders, and obvious hardcoded strings in shared
+Compose UI are checked with `./gradlew checkLocalization`. The task also runs as
+part of `./gradlew check`; intentional language-neutral literals must be listed
+in `config/localization-hardcoded-allowlist.txt`.
+Run `mise hooks-install` once per clone to enable the pre-commit formatting and
+fast-test checks; the hook never formats or stages files. Commit messages are
+prefixed with the current branch name when needed.
 
 ### Deploying to an Android device
 

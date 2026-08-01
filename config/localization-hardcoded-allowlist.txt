@@ -1,0 +1,7 @@
+# Exact intentional Compose literals, formatted as check-kind=value.
+# Keep this restricted to language-neutral symbols and established technical tokens.
+Text=+
+Text=-
+Text=x
+Text=OCR
+Text=PDF

@@ -3,7 +3,6 @@ package dev.npn.core.app
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -19,112 +18,119 @@ import java.util.UUID
  * `~/.config/no-papers-needed/`. Values are held in a [MutableStateFlow] loaded at init; writes
  * update the flow and persist synchronously on [Dispatchers.IO].
  *
- * DataStore is intentionally avoided (task note): a plain properties file sidesteps okio/path
+ * A plain properties file sidesteps okio/path
  * fiddling on desktop and is enough for a handful of app-global settings.
  */
 class SettingsRepositoryImpl(
     private val file: File = defaultFile(),
 ) : SettingsRepository {
-
     private val props = Properties()
     private val state = MutableStateFlow(load())
     private val persistMutex = Mutex()
-
-    private data class Snapshot(
-        val libraryLocation: String?,
-        val ocrLanguage: String,
-        val trashRetentionDays: Int,
-        val defaultViewType: ViewType,
-        val librarySort: LibrarySort,
-        val gridColumnWidth: Int,
-        val landscapeListColumns: Boolean,
-        val installationId: String,
-        val watchedFolder: String?,
-        val watchedFolderDeleteAfterImport: Boolean,
-        val storagePathTemplate: String?,
-        val storagePathEnabled: Boolean,
-        val autoMatchRulesJson: String,
-        val aiEnabled: Boolean,
-        val aiBaseUrl: String,
-        val aiApiKey: String,
-        val aiModel: String,
-        val aiMaxTagsPerDoc: Int,
-        val aiMaxNewTagsPerDoc: Int,
-    )
 
     private fun boolProp(key: String): Boolean = props.getProperty(key)?.toBoolean() ?: false
 
     private fun textProp(key: String): String = props.getProperty(key) ?: ""
 
-    private fun load(): Snapshot {
+    private fun load(): SettingsSnapshot {
         if (file.exists()) {
             restrictFilePermissions()
             runCatching { file.inputStream().use { props.load(it) } }
         }
-        val installationId = props.getProperty(KEY_INSTALLATION_ID) ?: UUID.randomUUID().toString().also { fresh ->
-            props.setProperty(KEY_INSTALLATION_ID, fresh)
-            runCatching {
-                storeProperties()
-            }
-        }
-        return Snapshot(
-            libraryLocation = props.getProperty(KEY_LOCATION)?.ifEmpty { null },
-            ocrLanguage = props.getProperty(KEY_OCR_LANG) ?: "eng",
-            trashRetentionDays = props.getProperty(KEY_TRASH_DAYS)?.toIntOrNull() ?: 30,
-            defaultViewType = props.getProperty(KEY_VIEW_TYPE)?.let { runCatching { ViewType.valueOf(it) }.getOrNull() }
-                ?: ViewType.GRID,
-            librarySort = LibrarySort(
-                field = props.getProperty(KEY_SORT_FIELD)
-                    ?.let { runCatching { SortField.valueOf(it) }.getOrNull() } ?: LibrarySort().field,
-                ascending = props.getProperty(KEY_SORT_ASC)?.toBooleanStrictOrNull()
-                    ?: LibrarySort().ascending,
-            ),
-            gridColumnWidth = props.getProperty(KEY_GRID_WIDTH)?.toIntOrNull()
-                ?.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
-                ?: GridSizing.DEFAULT_COLUMN_WIDTH,
-            landscapeListColumns = boolProp(KEY_LANDSCAPE_LIST),
+        val installationId =
+            props.getProperty(SettingsKeys.INSTALLATION_ID)
+                ?: UUID.randomUUID().toString().also { fresh ->
+                    props.setProperty(SettingsKeys.INSTALLATION_ID, fresh)
+                    runCatching {
+                        storeProperties()
+                    }
+                }
+        return SettingsSnapshot(
             installationId = installationId,
-            watchedFolder = props.getProperty(KEY_WATCHED_FOLDER)?.ifEmpty { null },
-            watchedFolderDeleteAfterImport = boolProp(KEY_WATCHED_DELETE),
-            storagePathTemplate = props.getProperty(KEY_STORAGE_TEMPLATE)?.ifEmpty { null },
-            storagePathEnabled = boolProp(KEY_STORAGE_ENABLED),
-            autoMatchRulesJson = props.getProperty(KEY_AUTO_MATCH_RULES) ?: "[]",
-            aiEnabled = boolProp(KEY_AI_ENABLED),
-            aiBaseUrl = textProp(KEY_AI_BASE_URL),
-            aiApiKey = textProp(KEY_AI_API_KEY),
-            aiModel = textProp(KEY_AI_MODEL),
-            aiMaxTagsPerDoc = props.getProperty(KEY_AI_MAX_TAGS)?.toIntOrNull()
-                ?.coerceIn(AiTagging.RANGE) ?: AiTagging.DEFAULT_TAGS_PER_DOC,
-            aiMaxNewTagsPerDoc = props.getProperty(KEY_AI_MAX_NEW_TAGS)?.toIntOrNull()
-                ?.coerceIn(AiTagging.NEW_TAGS_RANGE) ?: AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
+            libraryLocation = props.getProperty(SettingsKeys.LIBRARY_LOCATION)?.ifEmpty { null },
+            appLanguage = props.getProperty(SettingsKeys.APP_LANGUAGE)?.ifEmpty { null },
+            ocrLanguage = props.getProperty(SettingsKeys.OCR_LANGUAGE) ?: "eng",
+            trashRetentionDays =
+                props.getProperty(SettingsKeys.TRASH_RETENTION_DAYS)?.toIntOrNull()
+                    ?: TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
+            defaultViewType =
+                props
+                    .getProperty(SettingsKeys.DEFAULT_VIEW_TYPE)
+                    ?.let { runCatching { ViewType.valueOf(it) }.getOrNull() }
+                    ?: ViewType.GRID,
+            librarySort =
+                LibrarySort(
+                    field =
+                        props
+                            .getProperty(SettingsKeys.LIBRARY_SORT_FIELD)
+                            ?.let { runCatching { SortField.valueOf(it) }.getOrNull() } ?: LibrarySort().field,
+                    ascending =
+                        props.getProperty(SettingsKeys.LIBRARY_SORT_ASCENDING)?.toBooleanStrictOrNull()
+                            ?: LibrarySort().ascending,
+                ),
+            gridColumnWidth =
+                props
+                    .getProperty(SettingsKeys.GRID_COLUMN_WIDTH)
+                    ?.toIntOrNull()
+                    ?.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
+                    ?: GridSizing.DEFAULT_COLUMN_WIDTH,
+            landscapeListColumns = boolProp(SettingsKeys.LANDSCAPE_LIST_COLUMNS),
+            watchedFolder = props.getProperty(SettingsKeys.WATCHED_FOLDER)?.ifEmpty { null },
+            watchedFolderDeleteAfterImport = boolProp(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT),
+            storagePathTemplate = props.getProperty(SettingsKeys.STORAGE_PATH_TEMPLATE)?.ifEmpty { null },
+            storagePathEnabled = boolProp(SettingsKeys.STORAGE_PATH_ENABLED),
+            autoMatchRulesJson = props.getProperty(SettingsKeys.AUTO_MATCH_RULES_JSON) ?: "[]",
+            aiEnabled = boolProp(SettingsKeys.AI_ENABLED),
+            aiBaseUrl = textProp(SettingsKeys.AI_BASE_URL),
+            aiApiKey = textProp(SettingsKeys.AI_API_KEY),
+            aiModel = textProp(SettingsKeys.AI_MODEL),
+            aiMaxTagsPerDoc =
+                props
+                    .getProperty(SettingsKeys.AI_MAX_TAGS_PER_DOC)
+                    ?.toIntOrNull()
+                    ?.coerceIn(AiTagging.RANGE) ?: AiTagging.DEFAULT_TAGS_PER_DOC,
+            aiMaxNewTagsPerDoc =
+                props
+                    .getProperty(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC)
+                    ?.toIntOrNull()
+                    ?.coerceIn(AiTagging.NEW_TAGS_RANGE) ?: AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
         )
     }
 
-    private suspend fun persist(snapshot: Snapshot) = withContext(Dispatchers.IO) {
-        if (snapshot.libraryLocation != null) props.setProperty(KEY_LOCATION, snapshot.libraryLocation)
-        else props.remove(KEY_LOCATION)
-        props.setProperty(KEY_OCR_LANG, snapshot.ocrLanguage)
-        props.setProperty(KEY_TRASH_DAYS, snapshot.trashRetentionDays.toString())
-        props.setProperty(KEY_VIEW_TYPE, snapshot.defaultViewType.name)
-        props.setProperty(KEY_SORT_FIELD, snapshot.librarySort.field.name)
-        props.setProperty(KEY_SORT_ASC, snapshot.librarySort.ascending.toString())
-        props.setProperty(KEY_GRID_WIDTH, snapshot.gridColumnWidth.toString())
-        props.setProperty(KEY_LANDSCAPE_LIST, snapshot.landscapeListColumns.toString())
-        props.setProperty(KEY_INSTALLATION_ID, snapshot.installationId)
-        if (snapshot.watchedFolder != null) props.setProperty(KEY_WATCHED_FOLDER, snapshot.watchedFolder)
-        else props.remove(KEY_WATCHED_FOLDER)
-        props.setProperty(KEY_WATCHED_DELETE, snapshot.watchedFolderDeleteAfterImport.toString())
-        if (snapshot.storagePathTemplate != null) props.setProperty(KEY_STORAGE_TEMPLATE, snapshot.storagePathTemplate)
-        else props.remove(KEY_STORAGE_TEMPLATE)
-        props.setProperty(KEY_STORAGE_ENABLED, snapshot.storagePathEnabled.toString())
-        props.setProperty(KEY_AUTO_MATCH_RULES, snapshot.autoMatchRulesJson)
-        props.setProperty(KEY_AI_ENABLED, snapshot.aiEnabled.toString())
-        props.setProperty(KEY_AI_BASE_URL, snapshot.aiBaseUrl)
-        props.setProperty(KEY_AI_API_KEY, snapshot.aiApiKey)
-        props.setProperty(KEY_AI_MODEL, snapshot.aiModel)
-        props.setProperty(KEY_AI_MAX_TAGS, snapshot.aiMaxTagsPerDoc.toString())
-        props.setProperty(KEY_AI_MAX_NEW_TAGS, snapshot.aiMaxNewTagsPerDoc.toString())
-        storeProperties()
+    private suspend fun persist(snapshot: SettingsSnapshot) =
+        withContext(Dispatchers.IO) {
+            setOptionalProperty(SettingsKeys.LIBRARY_LOCATION, snapshot.libraryLocation)
+            setOptionalProperty(SettingsKeys.APP_LANGUAGE, snapshot.appLanguage)
+            props.setProperty(SettingsKeys.OCR_LANGUAGE, snapshot.ocrLanguage)
+            props.setProperty(SettingsKeys.TRASH_RETENTION_DAYS, snapshot.trashRetentionDays.toString())
+            props.setProperty(SettingsKeys.DEFAULT_VIEW_TYPE, snapshot.defaultViewType.name)
+            props.setProperty(SettingsKeys.LIBRARY_SORT_FIELD, snapshot.librarySort.field.name)
+            props.setProperty(SettingsKeys.LIBRARY_SORT_ASCENDING, snapshot.librarySort.ascending.toString())
+            props.setProperty(SettingsKeys.GRID_COLUMN_WIDTH, snapshot.gridColumnWidth.toString())
+            props.setProperty(SettingsKeys.LANDSCAPE_LIST_COLUMNS, snapshot.landscapeListColumns.toString())
+            props.setProperty(SettingsKeys.INSTALLATION_ID, snapshot.installationId)
+            setOptionalProperty(SettingsKeys.WATCHED_FOLDER, snapshot.watchedFolder)
+            props.setProperty(
+                SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT,
+                snapshot.watchedFolderDeleteAfterImport.toString(),
+            )
+            setOptionalProperty(SettingsKeys.STORAGE_PATH_TEMPLATE, snapshot.storagePathTemplate)
+            props.setProperty(SettingsKeys.STORAGE_PATH_ENABLED, snapshot.storagePathEnabled.toString())
+            props.setProperty(SettingsKeys.AUTO_MATCH_RULES_JSON, snapshot.autoMatchRulesJson)
+            props.setProperty(SettingsKeys.AI_ENABLED, snapshot.aiEnabled.toString())
+            props.setProperty(SettingsKeys.AI_BASE_URL, snapshot.aiBaseUrl)
+            props.setProperty(SettingsKeys.AI_API_KEY, snapshot.aiApiKey)
+            props.setProperty(SettingsKeys.AI_MODEL, snapshot.aiModel)
+            props.setProperty(SettingsKeys.AI_MAX_TAGS_PER_DOC, snapshot.aiMaxTagsPerDoc.toString())
+            props.setProperty(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, snapshot.aiMaxNewTagsPerDoc.toString())
+            storeProperties()
+        }
+
+    private fun setOptionalProperty(
+        key: String,
+        value: String?,
+    ) {
+        if (value == null) props.remove(key) else props.setProperty(key, value)
     }
 
     private fun storeProperties() {
@@ -142,35 +148,21 @@ class SettingsRepositoryImpl(
         Files.setPosixFilePermissions(file.toPath(), OWNER_ONLY_PERMISSIONS)
     }
 
-    private suspend fun update(transform: (Snapshot) -> Snapshot) = persistMutex.withLock {
-        val next = transform(state.value)
-        state.value = next
-        persist(next)
-    }
+    private suspend fun update(transform: (SettingsSnapshot) -> SettingsSnapshot) =
+        persistMutex.withLock {
+            val next = transform(state.value)
+            state.value = next
+            persist(next)
+        }
 
-    override val libraryLocation: Flow<String?> = state.map { it.libraryLocation }
-    override val ocrLanguage: Flow<String> = state.map { it.ocrLanguage }
-    override val trashRetentionDays: Flow<Int> = state.map { it.trashRetentionDays }
-    override val defaultViewType: Flow<ViewType> = state.map { it.defaultViewType }
-    override val librarySort: Flow<LibrarySort> = state.map { it.librarySort }
-    override val gridColumnWidth: Flow<Int> = state.map { it.gridColumnWidth }
-    override val landscapeListColumns: Flow<Boolean> = state.map { it.landscapeListColumns }
-    override val installationId: Flow<String> = state.map { it.installationId }
-    override val watchedFolder: Flow<String?> = state.map { it.watchedFolder }
-    override val watchedFolderDeleteAfterImport: Flow<Boolean> =
-        state.map { it.watchedFolderDeleteAfterImport }
-    override val storagePathTemplate: Flow<String?> = state.map { it.storagePathTemplate }
-    override val storagePathEnabled: Flow<Boolean> = state.map { it.storagePathEnabled }
-    override val autoMatchRulesJson: Flow<String> = state.map { it.autoMatchRulesJson }
-    override val aiEnabled: Flow<Boolean> = state.map { it.aiEnabled }
-    override val aiBaseUrl: Flow<String> = state.map { it.aiBaseUrl }
-    override val aiApiKey: Flow<String> = state.map { it.aiApiKey }
-    override val aiModel: Flow<String> = state.map { it.aiModel }
-    override val aiMaxTagsPerDoc: Flow<Int> = state.map { it.aiMaxTagsPerDoc }
-    override val aiMaxNewTagsPerDoc: Flow<Int> = state.map { it.aiMaxNewTagsPerDoc }
+    override val settings: Flow<SettingsSnapshot> = state
 
     override suspend fun setLibraryLocation(location: String?) {
         update { it.copy(libraryLocation = location?.ifEmpty { null }) }
+    }
+
+    override suspend fun setAppLanguage(lang: String?) {
+        update { it.copy(appLanguage = lang?.ifEmpty { null }) }
     }
 
     override suspend fun setOcrLanguage(lang: String) {
@@ -190,9 +182,11 @@ class SettingsRepositoryImpl(
     }
 
     override suspend fun setGridColumnWidth(dp: Int) {
-        update { it.copy(
-            gridColumnWidth = dp.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
-        ) }
+        update {
+            it.copy(
+                gridColumnWidth = dp.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
+            )
+        }
     }
 
     override suspend fun setLandscapeListColumns(enabled: Boolean) {
@@ -244,31 +238,12 @@ class SettingsRepositoryImpl(
     }
 
     companion object {
-        private const val KEY_LOCATION = "libraryLocation"
-        private const val KEY_OCR_LANG = "ocrLanguage"
-        private const val KEY_TRASH_DAYS = "trashRetentionDays"
-        private const val KEY_VIEW_TYPE = "defaultViewType"
-        private const val KEY_SORT_FIELD = "librarySortField"
-        private const val KEY_SORT_ASC = "librarySortAscending"
-        private const val KEY_GRID_WIDTH = "gridColumnWidth"
-        private const val KEY_LANDSCAPE_LIST = "landscapeListColumns"
-        private const val KEY_INSTALLATION_ID = "installationId"
-        private const val KEY_WATCHED_FOLDER = "watchedFolder"
-        private const val KEY_WATCHED_DELETE = "watchedFolderDeleteAfterImport"
-        private const val KEY_STORAGE_TEMPLATE = "storagePathTemplate"
-        private const val KEY_STORAGE_ENABLED = "storagePathEnabled"
-        private const val KEY_AUTO_MATCH_RULES = "autoMatchRulesJson"
-        private const val KEY_AI_ENABLED = "aiEnabled"
-        private const val KEY_AI_BASE_URL = "aiBaseUrl"
-        private const val KEY_AI_API_KEY = "aiApiKey"
-        private const val KEY_AI_MODEL = "aiModel"
-        private const val KEY_AI_MAX_TAGS = "aiMaxTagsPerDoc"
-        private const val KEY_AI_MAX_NEW_TAGS = "aiMaxNewTagsPerDoc"
         private val OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------")
 
         fun defaultFile(): File {
-            val configHome = System.getenv("XDG_CONFIG_HOME")?.ifEmpty { null }
-                ?: (System.getProperty("user.home") + "/.config")
+            val configHome =
+                System.getenv("XDG_CONFIG_HOME")?.ifEmpty { null }
+                    ?: (System.getProperty("user.home") + "/.config")
             return File("$configHome/no-papers-needed/settings.properties")
         }
     }

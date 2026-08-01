@@ -5,6 +5,7 @@ plugins {
     alias(libs.plugins.androidMultiplatformLibrary)
     alias(libs.plugins.kotlinxSerialization)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.kover)
     alias(libs.plugins.room3)
 }
 
@@ -14,8 +15,14 @@ kotlin {
 
     androidLibrary {
         namespace = "dev.npn.core"
-        compileSdk = libs.versions.android.compileSdk.get().toInt()
-        minSdk = libs.versions.android.minSdk.get().toInt()
+        compileSdk =
+            libs.versions.android.compileSdk
+                .get()
+                .toInt()
+        minSdk =
+            libs.versions.android.minSdk
+                .get()
+                .toInt()
 
         compilerOptions {
             jvmTarget = JvmTarget.JVM_17

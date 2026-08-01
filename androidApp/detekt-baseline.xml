@@ -1,7 +1,0 @@
-<?xml version="1.0" ?>
-<SmellBaseline>
-  <ManuallySuppressedIssues/>
-  <CurrentIssues>
-    <ID>MaxLineLength:IntentImport.kt:private inline</ID>
-  </CurrentIssues>
-</SmellBaseline>

@@ -4,12 +4,10 @@
   <CurrentIssues>
     <ID>EmptyFunctionBlock:FakeSession.kt:FakeLibrarySession${}</ID>
     <ID>LongMethod:DocDetailScreen.kt:@Composable fun DocDetailScreen</ID>
-    <ID>LongMethod:FilterSheet.kt:@Composable fun FilterSheet</ID>
     <ID>LongMethod:LibraryScreen.kt:@Composable fun LibraryScreen</ID>
     <ID>LongMethod:LibraryScreen.kt:@Composable private fun LibraryContent</ID>
     <ID>LongMethod:PageViewer.kt:@Composable fun PageViewer</ID>
     <ID>LongMethod:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
-    <ID>LongMethod:TagManagementScreen.kt:@Composable fun TagManagementScreen</ID>
     <ID>MatchingDeclarationName:Routes.kt:Route</ID>
     <ID>MaxLineLength:ActiveFilters.kt:filter.tagsNone.forEach { t -&gt; add("NOT $t" to { onFilterChange(filter.copy(tagsNone = filter.tagsNone - t)) }) }</ID>
     <ID>MaxLineLength:DocDetailScreen.kt:tint = if (reviewed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant</ID>

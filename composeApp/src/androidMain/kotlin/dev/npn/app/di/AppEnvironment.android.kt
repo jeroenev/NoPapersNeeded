@@ -10,8 +10,8 @@ import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.SafLibraryFileSystem
 import dev.npn.core.ocr.MlKitOcrEngine
-import dev.npn.core.pdf.PdfBoxAndroidEngine
 import dev.npn.core.pathrules.StoragePathRule
+import dev.npn.core.pdf.PdfBoxAndroidEngine
 import dev.npn.core.watch.SafWatchedFolder
 import dev.npn.core.xmp.PdfBoxAndroidXmpIO
 import kotlinx.coroutines.flow.first
@@ -26,9 +26,10 @@ import java.io.File
 fun createAppEnvironment(context: Context): AppEnvironment {
     val appContext = context.applicationContext
     val settings = SettingsRepositoryImpl(appContext)
-    val watchedFolders = WatchedFolderFactory { location ->
-        runCatching { SafWatchedFolder(appContext, location.toUri()) }.getOrNull()
-    }
+    val watchedFolders =
+        WatchedFolderFactory { location ->
+            runCatching { SafWatchedFolder(appContext, location.toUri()) }.getOrNull()
+        }
     return DefaultAppEnvironment(settings, watchedFolders) { location, scope ->
         val key = AppDirs.libraryKey(location)
         val fs = SafLibraryFileSystem(appContext, location.toUri())
@@ -36,35 +37,37 @@ fun createAppEnvironment(context: Context): AppEnvironment {
 
         val thumbsDir = File(appContext.cacheDir, "thumbs/$key").apply { mkdirs() }
 
-        val deps = SessionDeps(
-            fs = fs,
-            db = db,
-            pdfEngine = PdfBoxAndroidEngine(appContext),
-            ocrEngine = MlKitOcrEngine(),
-            xmpIO = PdfBoxAndroidXmpIO(appContext),
-            thumbnailStore = DirThumbnailStore(thumbsDir.absolutePath),
-            scope = scope,
-            ocrLanguage = { settings.ocrLanguage.first() },
-            trashRetentionDays = { settings.trashRetentionDays.first() },
-            installationId = settings.installationId.first(),
-            storagePathRule = {
-                val template = settings.storagePathTemplate.first()
-                val enabled = settings.storagePathEnabled.first()
-                if (template.isNullOrBlank()) null else StoragePathRule(template, enabled)
-            },
-            autoMatchRulesJson = { settings.autoMatchRulesJson.first() },
-            persistAutoMatchRulesJson = settings::setAutoMatchRulesJson,
-            aiConfig = {
-                AiConfig(
-                    enabled = settings.aiEnabled.first(),
-                    baseUrl = settings.aiBaseUrl.first(),
-                    apiKey = settings.aiApiKey.first(),
-                    model = settings.aiModel.first(),
-                    maxTagsPerDoc = settings.aiMaxTagsPerDoc.first(),
-                    maxNewTagsPerDoc = settings.aiMaxNewTagsPerDoc.first(),
-                )
-            },
-        )
+        val deps =
+            SessionDeps(
+                fs = fs,
+                db = db,
+                pdfEngine = PdfBoxAndroidEngine(appContext),
+                ocrEngine = MlKitOcrEngine(),
+                xmpIO = PdfBoxAndroidXmpIO(appContext),
+                thumbnailStore = DirThumbnailStore(thumbsDir.absolutePath),
+                scope = scope,
+                ocrLanguage = { settings.settings.first().ocrLanguage },
+                trashRetentionDays = { settings.settings.first().trashRetentionDays },
+                installationId = settings.settings.first().installationId,
+                storagePathRule = {
+                    val snapshot = settings.settings.first()
+                    val template = snapshot.storagePathTemplate
+                    if (template.isNullOrBlank()) null else StoragePathRule(template, snapshot.storagePathEnabled)
+                },
+                autoMatchRulesJson = { settings.settings.first().autoMatchRulesJson },
+                persistAutoMatchRulesJson = settings::setAutoMatchRulesJson,
+                aiConfig = {
+                    val snapshot = settings.settings.first()
+                    AiConfig(
+                        enabled = snapshot.aiEnabled,
+                        baseUrl = snapshot.aiBaseUrl,
+                        apiKey = snapshot.aiApiKey,
+                        model = snapshot.aiModel,
+                        maxTagsPerDoc = snapshot.aiMaxTagsPerDoc,
+                        maxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc,
+                    )
+                },
+            )
         OpenedLibrary(deps) { deps.closeDb() }
     }
 }

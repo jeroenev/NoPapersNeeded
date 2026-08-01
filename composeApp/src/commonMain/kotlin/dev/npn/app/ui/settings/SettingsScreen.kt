@@ -13,6 +13,7 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -27,34 +28,124 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.TextButton
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.persistDirectoryAccess
-import dev.npn.app.ui.common.viewTypeLabel
-import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
-import kotlinx.coroutines.launch
+import dev.npn.core.pathrules.StoragePathContext
+import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_app_name
+import no_papers_needed.composeapp.generated.resources.common_back
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_settings_about
+import no_papers_needed.composeapp.generated.resources.common_settings_about_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_assistant
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_request_help
+import no_papers_needed.composeapp.generated.resources.common_settings_api_key
+import no_papers_needed.composeapp.generated.resources.common_settings_api_key_help
+import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching
+import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_help
+import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_rules
+import no_papers_needed.composeapp.generated.resources.common_settings_change_library
+import no_papers_needed.composeapp.generated.resources.common_settings_choose_folder
+import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnail_cache
+import no_papers_needed.composeapp.generated.resources.common_settings_default_view
+import no_papers_needed.composeapp.generated.resources.common_settings_enable_ai
+import no_papers_needed.composeapp.generated.resources.common_settings_enable_inbox
+import no_papers_needed.composeapp.generated.resources.common_settings_grid_size_help
+import no_papers_needed.composeapp.generated.resources.common_settings_inbox_help
+import no_papers_needed.composeapp.generated.resources.common_settings_inbox_migration_question
+import no_papers_needed.composeapp.generated.resources.common_settings_landscape_columns
+import no_papers_needed.composeapp.generated.resources.common_settings_landscape_columns_help
+import no_papers_needed.composeapp.generated.resources.common_settings_language
+import no_papers_needed.composeapp.generated.resources.common_settings_language_dutch
+import no_papers_needed.composeapp.generated.resources.common_settings_language_english
+import no_papers_needed.composeapp.generated.resources.common_settings_language_help
+import no_papers_needed.composeapp.generated.resources.common_settings_language_system
+import no_papers_needed.composeapp.generated.resources.common_settings_library
+import no_papers_needed.composeapp.generated.resources.common_settings_mark_all_reviewed
+import no_papers_needed.composeapp.generated.resources.common_settings_mark_none_reviewed
+import no_papers_needed.composeapp.generated.resources.common_settings_mark_tagged_reviewed
+import no_papers_needed.composeapp.generated.resources.common_settings_max_new_tags
+import no_papers_needed.composeapp.generated.resources.common_settings_max_new_tags_help
+import no_papers_needed.composeapp.generated.resources.common_settings_max_suggested_tags
+import no_papers_needed.composeapp.generated.resources.common_settings_max_suggested_tags_help
+import no_papers_needed.composeapp.generated.resources.common_settings_model
+import no_papers_needed.composeapp.generated.resources.common_settings_model_help
+import no_papers_needed.composeapp.generated.resources.common_settings_no_library
+import no_papers_needed.composeapp.generated.resources.common_settings_no_watched_folder
+import no_papers_needed.composeapp.generated.resources.common_settings_ocr
+import no_papers_needed.composeapp.generated.resources.common_settings_ocr_language_code
+import no_papers_needed.composeapp.generated.resources.common_settings_ocr_language_help
+import no_papers_needed.composeapp.generated.resources.common_settings_product_version
+import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import
+import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import_help
+import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow
+import no_papers_needed.composeapp.generated.resources.common_settings_server_url
+import no_papers_needed.composeapp.generated.resources.common_settings_server_url_help
+import no_papers_needed.composeapp.generated.resources.common_settings_stop_watching
+import no_papers_needed.composeapp.generated.resources.common_settings_storage
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_absolute
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_backslash
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_blank
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_date_format_only
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_invalid
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_invalid_segment
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_reserved
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_traversal
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_unclosed
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_unexpected_closing
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_unknown_variable
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_whitespace
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_organize_help
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_organize_paths
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_path_template
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_preview
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_correspondent
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_tag_home
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_tag_utilities
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_title
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_type
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_variables
+import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
+import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
+import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_help
+import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
+import no_papers_needed.composeapp.generated.resources.common_settings_title
+import no_papers_needed.composeapp.generated.resources.common_settings_trash
+import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
+import no_papers_needed.composeapp.generated.resources.common_settings_views
+import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder
+import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder_help
+import no_papers_needed.composeapp.generated.resources.common_view_grid
+import no_papers_needed.composeapp.generated.resources.common_view_list
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 const val NPN_VERSION = "0.1.0"
+
+/** Accepted range for the trash-retention field (0 = purge immediately; capped at four digits). */
+private val TRASH_RETENTION_RANGE = 0..9999
+private const val TRASH_RETENTION_MAX_DIGITS = 4
 
 @Composable
 fun SettingsScreen(
@@ -67,17 +158,50 @@ fun SettingsScreen(
     val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }
     val state by vm.state.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
+    val storagePath =
+        evaluateStoragePath(
+            state.storagePathTemplate,
+            StoragePathContext(
+                title = stringResource(Res.string.common_settings_storage_sample_title),
+                docDate = "2026-07-20",
+                docType = stringResource(Res.string.common_settings_storage_sample_type),
+                correspondent = stringResource(Res.string.common_settings_storage_sample_correspondent),
+                tags =
+                    listOf(
+                        stringResource(Res.string.common_settings_storage_sample_tag_home),
+                        stringResource(Res.string.common_settings_storage_sample_tag_utilities),
+                    ),
+                originalFileName = "scan.pdf",
+            ),
+        )
 
     val snackbar = remember { SnackbarHostState() }
-    val scope = rememberCoroutineScope()
+    var thumbnailResult by remember { mutableStateOf<Int?>(null) }
+    val thumbnailMessage =
+        thumbnailResult?.let { count ->
+            if (count > 0) {
+                pluralStringResource(Res.plurals.common_settings_thumbnails_cleared, count, count)
+            } else {
+                stringResource(Res.string.common_settings_thumbnail_cache_empty)
+            }
+        }
+    LaunchedEffect(thumbnailMessage) {
+        thumbnailMessage?.let {
+            snackbar.showSnackbar(it)
+            thumbnailResult = null
+        }
+    }
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Settings") },
+                title = { Text(stringResource(Res.string.common_settings_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(Res.string.common_back),
+                        )
                     }
                 },
             )
@@ -92,17 +216,19 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp),
         ) {
-            SectionHeader("Library")
+            SectionHeader(stringResource(Res.string.common_settings_library))
             Text(
-                text = state.libraryLocation ?: "No library selected",
+                text = state.libraryLocation ?: stringResource(Res.string.common_settings_no_library),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            OutlinedButton(onClick = onChangeLibrary) { Text("Change library") }
+            OutlinedButton(onClick = onChangeLibrary) {
+                Text(stringResource(Res.string.common_settings_change_library))
+            }
 
             HorizontalDivider()
 
-            SectionHeader("Watched folder")
+            SectionHeader(stringResource(Res.string.common_settings_watched_folder))
             WatchedFolderSection(
                 watchedFolder = state.watchedFolder,
                 deleteAfterImport = state.watchedFolderDeleteAfterImport,
@@ -112,23 +238,23 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
-            SectionHeader("OCR")
+            SectionHeader(stringResource(Res.string.common_settings_ocr))
             OutlinedTextField(
                 value = state.ocrLanguage,
                 onValueChange = vm::setOcrLanguage,
-                label = { Text("OCR language code") },
+                label = { Text(stringResource(Res.string.common_settings_ocr_language_code)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
             Text(
-                "Tesseract/MLKit language code, e.g. eng, nld, fra.",
+                stringResource(Res.string.common_settings_ocr_language_help, "eng, nld, fra"),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             HorizontalDivider()
 
-            SectionHeader("AI assistant")
+            SectionHeader(stringResource(Res.string.common_settings_ai_assistant))
             AiAssistantSection(
                 enabled = state.aiEnabled,
                 baseUrl = state.aiBaseUrl,
@@ -146,30 +272,24 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
-            SectionHeader("Trash")
-            var retentionText by remember(state.trashRetentionDays) {
-                mutableStateOf(state.trashRetentionDays.toString())
-            }
-            OutlinedTextField(
-                value = retentionText,
-                onValueChange = { new ->
-                    retentionText = new.filter { it.isDigit() }.take(4)
-                    retentionText.toIntOrNull()?.let(vm::setTrashRetentionDays)
-                },
-                label = { Text("Trash retention (days)") },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
+            SectionHeader(stringResource(Res.string.common_settings_trash))
+            NumericField(
+                value = state.trashRetentionDays,
+                onValueChange = vm::setTrashRetentionDays,
+                range = TRASH_RETENTION_RANGE,
+                label = stringResource(Res.string.common_settings_trash_retention_days),
+                maxDigits = TRASH_RETENTION_MAX_DIGITS,
             )
 
             HorizontalDivider()
 
-            SectionHeader("Views")
+            SectionHeader(stringResource(Res.string.common_settings_views))
             DefaultViewTypeDropdown(
                 current = state.defaultViewType,
                 onSelect = vm::setDefaultViewType,
             )
             Text(
-                "Grid size: pinch the grid, use its zoom buttons, or Ctrl+scroll on desktop.",
+                stringResource(Res.string.common_settings_grid_size_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -180,33 +300,40 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
-            SectionHeader("Storage")
-            StoragePathRuleEditor(
-                template = state.storagePathTemplate,
-                enabled = state.storagePathEnabled,
-                preview = state.storagePathPreview,
-                error = state.storagePathError,
-                onTemplateChange = vm::setStoragePathTemplate,
-                onEnabledChange = vm::setStoragePathEnabled,
+            SectionHeader(stringResource(Res.string.common_settings_language))
+            AppLanguageDropdown(
+                current = state.appLanguage,
+                onSelect = vm::setAppLanguage,
             )
-            OutlinedButton(onClick = {
-                vm.clearThumbnailCache { count ->
-                    scope.launch {
-                        snackbar.showSnackbar(
-                            if (count > 0) "Cleared $count thumbnail(s)" else "Thumbnail cache already empty",
-                        )
-                    }
-                }
-            }) { Text("Clear thumbnail cache") }
             Text(
-                "Regenerate library thumbnails at the current quality. Use this if previews look blurry.",
+                stringResource(Res.string.common_settings_language_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             HorizontalDivider()
 
-            SectionHeader("Review workflow")
+            SectionHeader(stringResource(Res.string.common_settings_storage))
+            StoragePathRuleEditor(
+                template = state.storagePathTemplate,
+                enabled = state.storagePathEnabled,
+                preview = storagePath.preview,
+                error = storagePath.error,
+                onTemplateChange = vm::setStoragePathTemplate,
+                onEnabledChange = vm::setStoragePathEnabled,
+            )
+            OutlinedButton(onClick = {
+                vm.clearThumbnailCache { count -> thumbnailResult = count }
+            }) { Text(stringResource(Res.string.common_settings_clear_thumbnail_cache)) }
+            Text(
+                stringResource(Res.string.common_settings_thumbnail_cache_help),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            HorizontalDivider()
+
+            SectionHeader(stringResource(Res.string.common_settings_review_workflow))
             InboxWorkflowToggle(
                 current = reviewMode,
                 onUntaggedOnly = vm::setUntaggedOnlyMode,
@@ -215,23 +342,29 @@ fun SettingsScreen(
 
             HorizontalDivider()
 
-            SectionHeader("Auto-matching")
-            OutlinedButton(onClick = onAutoMatchRules) { Text("Auto-matching rules") }
+            SectionHeader(stringResource(Res.string.common_settings_auto_matching))
+            OutlinedButton(onClick = onAutoMatchRules) {
+                Text(stringResource(Res.string.common_settings_auto_matching_rules))
+            }
             Text(
-                "Automatically tag documents and set metadata when imported text matches a rule.",
+                stringResource(Res.string.common_settings_auto_matching_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
 
             HorizontalDivider()
 
-            SectionHeader("About")
+            SectionHeader(stringResource(Res.string.common_settings_about))
             Text(
-                "No papers needed $NPN_VERSION",
+                stringResource(
+                    Res.string.common_settings_product_version,
+                    stringResource(Res.string.common_app_name),
+                    NPN_VERSION,
+                ),
                 style = MaterialTheme.typography.bodyMedium,
             )
             Text(
-                "Personal, open-source paperless document app. Files are the source of truth.",
+                stringResource(Res.string.common_settings_about_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -244,16 +377,19 @@ private fun StoragePathRuleEditor(
     template: String,
     enabled: Boolean,
     preview: String?,
-    error: String?,
+    error: StoragePathError?,
     onTemplateChange: (String) -> Unit,
     onEnabledChange: (Boolean) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Organize document paths automatically", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Moves PDFs after import and metadata changes; files are never overwritten.",
+                    stringResource(Res.string.common_settings_storage_organize_paths),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    stringResource(Res.string.common_settings_storage_organize_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -267,16 +403,21 @@ private fun StoragePathRuleEditor(
         OutlinedTextField(
             value = template,
             onValueChange = onTemplateChange,
-            label = { Text("Path template") },
+            label = { Text(stringResource(Res.string.common_settings_storage_path_template)) },
             supportingText = {
-                Text(error ?: "Preview: $preview")
+                Text(
+                    error?.localizedMessage()
+                        ?: stringResource(Res.string.common_settings_storage_preview, preview.orEmpty()),
+                )
             },
             isError = error != null,
             modifier = Modifier.fillMaxWidth(),
         )
         Text(
-            "Variables: {title}, {doc_date}, {doc_date:yyyy-MM}, {docType}, " +
-                "{correspondent}, {tags}. Empty variable folders are omitted.",
+            stringResource(
+                Res.string.common_settings_storage_variables,
+                "{title}, {doc_date}, {doc_date:yyyy-MM}, {docType}, {correspondent}, {tags}",
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -290,35 +431,40 @@ private fun WatchedFolderSection(
     onSetFolder: (String?) -> Unit,
     onSetDeleteAfterImport: (Boolean) -> Unit,
 ) {
-    val picker = rememberDirectoryPickerLauncher { dir ->
-        if (dir != null) onSetFolder(persistDirectoryAccess(dir))
-    }
+    val picker =
+        rememberDirectoryPickerLauncher { dir ->
+            if (dir != null) onSetFolder(persistDirectoryAccess(dir))
+        }
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(
-            "PDFs saved to this folder (for example by a scanner app) are imported into the " +
-                "library automatically and OCR-ed.",
+            stringResource(Res.string.common_settings_watched_folder_help),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Text(
-            text = watchedFolder ?: "No folder watched",
+            text = watchedFolder ?: stringResource(Res.string.common_settings_no_watched_folder),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { picker.launch() }) { Text("Choose folder") }
+            OutlinedButton(onClick = { picker.launch() }) {
+                Text(stringResource(Res.string.common_settings_choose_folder))
+            }
             if (watchedFolder != null) {
-                OutlinedButton(onClick = { onSetFolder(null) }) { Text("Stop watching") }
+                OutlinedButton(onClick = { onSetFolder(null) }) {
+                    Text(stringResource(Res.string.common_settings_stop_watching))
+                }
             }
         }
         if (watchedFolder != null) {
             Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                 Column(Modifier.weight(1f)) {
-                    Text("Remove files after import", style = MaterialTheme.typography.bodyMedium)
                     Text(
-                        "When on, source files are deleted from the watched folder once they are " +
-                            "safely in the library. When off, they stay and are simply skipped as " +
-                            "duplicates on later scans.",
+                        stringResource(Res.string.common_settings_remove_after_import),
+                        style = MaterialTheme.typography.bodyMedium,
+                    )
+                    Text(
+                        stringResource(Res.string.common_settings_remove_after_import_help),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -347,10 +493,12 @@ private fun AiAssistantSection(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Enable AI assistant", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "Uses an OpenAI-compatible server to suggest tags and answer questions " +
-                        "about your documents.",
+                    stringResource(Res.string.common_settings_enable_ai),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    stringResource(Res.string.common_settings_ai_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -361,11 +509,15 @@ private fun AiAssistantSection(
             OutlinedTextField(
                 value = baseUrl,
                 onValueChange = onSetBaseUrl,
-                label = { Text("Server URL") },
+                label = { Text(stringResource(Res.string.common_settings_server_url)) },
                 supportingText = {
                     Text(
-                        "OpenAI-compatible server, e.g. https://api.openai.com or " +
-                            "http://localhost:11434. A pasted /v1/chat/completions URL also works.",
+                        stringResource(
+                            Res.string.common_settings_server_url_help,
+                            "https://api.openai.com",
+                            "http://localhost:11434",
+                            "/v1/chat/completions",
+                        ),
                     )
                 },
                 singleLine = true,
@@ -374,10 +526,10 @@ private fun AiAssistantSection(
             OutlinedTextField(
                 value = apiKey,
                 onValueChange = onSetApiKey,
-                label = { Text("API key") },
+                label = { Text(stringResource(Res.string.common_settings_api_key)) },
                 visualTransformation = PasswordVisualTransformation(),
                 supportingText = {
-                    Text("Stored only on this device; leave empty for local servers")
+                    Text(stringResource(Res.string.common_settings_api_key_help))
                 },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -385,37 +537,28 @@ private fun AiAssistantSection(
             OutlinedTextField(
                 value = model,
                 onValueChange = onSetModel,
-                label = { Text("Model") },
+                label = { Text(stringResource(Res.string.common_settings_model)) },
                 supportingText = {
                     Text(
-                        "Model id exactly as the server lists it (see its /v1/models), " +
-                            "e.g. gpt-4.1-mini or qwen3:8b. Client-side provider prefixes do not apply.",
+                        stringResource(
+                            Res.string.common_settings_model_help,
+                            "/v1/models",
+                            "gpt-4.1-mini",
+                            "qwen3:8b",
+                        ),
                     )
                 },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            TagCapField(
-                value = maxTagsPerDoc,
-                onSetValue = onSetMaxTagsPerDoc,
-                range = AiTagging.RANGE,
-                label = "Default max suggested tags per document",
-                supportingText = "Default number of tags the assistant proposes per document " +
-                    "(${AiTagging.MIN_TAGS_PER_DOC}-${AiTagging.MAX_TAGS_PER_DOC}); " +
-                    "can be changed per run on the AI tagging page.",
-            )
-            TagCapField(
-                value = maxNewTagsPerDoc,
-                onSetValue = onSetMaxNewTagsPerDoc,
-                range = AiTagging.NEW_TAGS_RANGE,
-                label = "Default max new tags per document",
-                supportingText = "Default number of brand-new tags (not already in your library) the " +
-                    "assistant may propose per document " +
-                    "(${AiTagging.MIN_NEW_TAGS_PER_DOC}-${AiTagging.MAX_NEW_TAGS_PER_DOC}; 0 = never); " +
-                    "can be changed per run on the AI tagging page.",
+            AiTagCapDefaults(
+                maxTagsPerDoc = maxTagsPerDoc,
+                onSetMaxTagsPerDoc = onSetMaxTagsPerDoc,
+                maxNewTagsPerDoc = maxNewTagsPerDoc,
+                onSetMaxNewTagsPerDoc = onSetMaxNewTagsPerDoc,
             )
             Text(
-                "Requests send document text to the configured server.",
+                stringResource(Res.string.common_settings_ai_request_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -423,31 +566,39 @@ private fun AiAssistantSection(
     }
 }
 
-/**
- * Numeric field for a per-document tag cap. Keeps a local editable string so the user can clear it
- * while typing; commits (only when the parse falls inside [range]) on every valid parse and
- * re-seeds from the persisted [value] whenever it changes externally.
- */
+/** Default per-run tag caps for the AI assistant (overridable on the AI tagging page). */
 @Composable
-private fun TagCapField(
-    value: Int,
-    onSetValue: (Int) -> Unit,
-    range: IntRange,
-    label: String,
-    supportingText: String,
+private fun AiTagCapDefaults(
+    maxTagsPerDoc: Int,
+    onSetMaxTagsPerDoc: (Int) -> Unit,
+    maxNewTagsPerDoc: Int,
+    onSetMaxNewTagsPerDoc: (Int) -> Unit,
 ) {
-    var text by remember(value) { mutableStateOf(value.toString()) }
-    OutlinedTextField(
-        value = text,
-        onValueChange = { raw ->
-            text = raw.filter { it.isDigit() }.take(2)
-            text.toIntOrNull()?.takeIf { it in range }?.let(onSetValue)
-        },
-        label = { Text(label) },
-        supportingText = { Text(supportingText) },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
-        singleLine = true,
-        modifier = Modifier.fillMaxWidth(),
+    NumericField(
+        value = maxTagsPerDoc,
+        onValueChange = onSetMaxTagsPerDoc,
+        range = AiTagging.RANGE,
+        label = stringResource(Res.string.common_settings_max_suggested_tags),
+        supportingText =
+            stringResource(
+                Res.string.common_settings_max_suggested_tags_help,
+                AiTagging.MIN_TAGS_PER_DOC,
+                AiTagging.MAX_TAGS_PER_DOC,
+            ),
+        maxDigits = 2,
+    )
+    NumericField(
+        value = maxNewTagsPerDoc,
+        onValueChange = onSetMaxNewTagsPerDoc,
+        range = AiTagging.NEW_TAGS_RANGE,
+        label = stringResource(Res.string.common_settings_max_new_tags),
+        supportingText =
+            stringResource(
+                Res.string.common_settings_max_new_tags_help,
+                AiTagging.MIN_NEW_TAGS_PER_DOC,
+                AiTagging.MAX_NEW_TAGS_PER_DOC,
+            ),
+        maxDigits = 2,
     )
 }
 
@@ -461,19 +612,27 @@ private fun SectionHeader(text: String) {
 }
 
 @Composable
-private fun DefaultViewTypeDropdown(current: ViewType, onSelect: (ViewType) -> Unit) {
+private fun DefaultViewTypeDropdown(
+    current: ViewType,
+    onSelect: (ViewType) -> Unit,
+) {
     var expanded by remember { mutableStateOf(false) }
     Column {
         OutlinedButton(onClick = { expanded = true }) {
             Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("Default view: ${viewTypeLabel(current)}")
+                Text(
+                    stringResource(
+                        Res.string.common_settings_default_view,
+                        viewTypeLabelResource(current),
+                    ),
+                )
                 Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
             }
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             ViewType.entries.forEach { vt ->
                 DropdownMenuItem(
-                    text = { Text(viewTypeLabel(vt)) },
+                    text = { Text(viewTypeLabelResource(vt)) },
                     onClick = {
                         onSelect(vt)
                         expanded = false
@@ -484,13 +643,58 @@ private fun DefaultViewTypeDropdown(current: ViewType, onSelect: (ViewType) -> U
     }
 }
 
+/** Languages the app UI can be switched to. Null = follow the system locale. */
+private val APP_LANGUAGES: List<String?> = listOf(null, "en", "nl")
+
 @Composable
-private fun LandscapeListToggle(enabled: Boolean, onToggle: (Boolean) -> Unit) {
+private fun appLanguageLabel(language: String?): String =
+    when (language) {
+        null -> stringResource(Res.string.common_settings_language_system)
+        "en" -> stringResource(Res.string.common_settings_language_english)
+        "nl" -> stringResource(Res.string.common_settings_language_dutch)
+        else -> language
+    }
+
+@Composable
+private fun AppLanguageDropdown(
+    current: String?,
+    onSelect: (String?) -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Column {
+        OutlinedButton(onClick = { expanded = true }) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(appLanguageLabel(current))
+                Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+            }
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            APP_LANGUAGES.forEach { lang ->
+                DropdownMenuItem(
+                    text = { Text(appLanguageLabel(lang)) },
+                    onClick = {
+                        onSelect(lang)
+                        expanded = false
+                    },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LandscapeListToggle(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-            Text("Multi-column list in landscape", style = MaterialTheme.typography.bodyMedium)
             Text(
-                "Show the list view in two columns when the window is wider than it is tall.",
+                stringResource(Res.string.common_settings_landscape_columns),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            Text(
+                stringResource(Res.string.common_settings_landscape_columns_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -511,10 +715,12 @@ private fun InboxWorkflowToggle(
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
-                Text("Enable inbox workflow", style = MaterialTheme.typography.bodyLarge)
                 Text(
-                    "New documents land in an inbox and you mark them reviewed by hand. " +
-                        "When off, documents just appear and count as reviewed once tagged.",
+                    stringResource(Res.string.common_settings_enable_inbox),
+                    style = MaterialTheme.typography.bodyLarge,
+                )
+                Text(
+                    stringResource(Res.string.common_settings_inbox_help),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -527,7 +733,7 @@ private fun InboxWorkflowToggle(
             )
         }
         Text(
-            "This setting syncs across your devices.",
+            stringResource(Res.string.common_settings_syncs_across_devices),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -536,29 +742,110 @@ private fun InboxWorkflowToggle(
     if (showMigration) {
         AlertDialog(
             onDismissRequest = { showMigration = false },
-            title = { Text("Enable inbox workflow") },
+            title = { Text(stringResource(Res.string.common_settings_enable_inbox)) },
             text = {
                 Text(
-                    "How should existing documents be marked? New documents will always start as " +
-                        "needing review.",
+                    stringResource(Res.string.common_settings_inbox_migration_question),
                 )
             },
             confirmButton = {
                 Column {
                     TextButton(onClick = {
-                        onInboxWorkflow(ReviewMigration.MARK_ALL); showMigration = false
-                    }) { Text("Mark all as reviewed") }
+                        onInboxWorkflow(ReviewMigration.MARK_ALL)
+                        showMigration = false
+                    }) { Text(stringResource(Res.string.common_settings_mark_all_reviewed)) }
                     TextButton(onClick = {
-                        onInboxWorkflow(ReviewMigration.MARK_TAGGED); showMigration = false
-                    }) { Text("Mark tagged documents as reviewed") }
+                        onInboxWorkflow(ReviewMigration.MARK_TAGGED)
+                        showMigration = false
+                    }) { Text(stringResource(Res.string.common_settings_mark_tagged_reviewed)) }
                     TextButton(onClick = {
-                        onInboxWorkflow(ReviewMigration.MARK_NONE); showMigration = false
-                    }) { Text("Don't mark any (all need review)") }
+                        onInboxWorkflow(ReviewMigration.MARK_NONE)
+                        showMigration = false
+                    }) { Text(stringResource(Res.string.common_settings_mark_none_reviewed)) }
                 }
             },
             dismissButton = {
-                TextButton(onClick = { showMigration = false }) { Text("Cancel") }
+                TextButton(onClick = { showMigration = false }) {
+                    Text(stringResource(Res.string.common_cancel))
+                }
             },
         )
     }
 }
+
+@Composable
+private fun viewTypeLabelResource(viewType: ViewType): String =
+    when (viewType) {
+        ViewType.LIST -> stringResource(Res.string.common_view_list)
+        ViewType.GRID -> stringResource(Res.string.common_view_grid)
+    }
+
+@Composable
+private fun StoragePathError.localizedMessage(): String =
+    when (kind) {
+        StoragePathErrorKind.UNCLOSED_PLACEHOLDER -> {
+            stringResource(
+                Res.string.common_settings_storage_error_unclosed,
+                argument.orEmpty(),
+            )
+        }
+
+        StoragePathErrorKind.UNEXPECTED_CLOSING_BRACE -> {
+            stringResource(
+                Res.string.common_settings_storage_error_unexpected_closing,
+                argument.orEmpty(),
+            )
+        }
+
+        StoragePathErrorKind.DATE_FORMAT_ONLY -> {
+            stringResource(
+                Res.string.common_settings_storage_error_date_format_only,
+                argument.orEmpty(),
+            )
+        }
+
+        StoragePathErrorKind.UNKNOWN_VARIABLE -> {
+            stringResource(
+                Res.string.common_settings_storage_error_unknown_variable,
+                argument.orEmpty(),
+            )
+        }
+
+        StoragePathErrorKind.BLANK -> {
+            stringResource(Res.string.common_settings_storage_error_blank)
+        }
+
+        StoragePathErrorKind.ABSOLUTE -> {
+            stringResource(Res.string.common_settings_storage_error_absolute)
+        }
+
+        StoragePathErrorKind.BACKSLASH -> {
+            stringResource(Res.string.common_settings_storage_error_backslash)
+        }
+
+        StoragePathErrorKind.TRAVERSAL -> {
+            stringResource(Res.string.common_settings_storage_error_traversal)
+        }
+
+        StoragePathErrorKind.RESERVED_DIRECTORY -> {
+            stringResource(
+                Res.string.common_settings_storage_error_reserved,
+                argument.orEmpty(),
+            )
+        }
+
+        StoragePathErrorKind.WHITESPACE -> {
+            stringResource(Res.string.common_settings_storage_error_whitespace)
+        }
+
+        StoragePathErrorKind.INVALID_SEGMENT -> {
+            stringResource(
+                Res.string.common_settings_storage_error_invalid_segment,
+                argument.orEmpty(),
+            )
+        }
+
+        StoragePathErrorKind.INVALID -> {
+            stringResource(Res.string.common_settings_storage_error_invalid)
+        }
+    }

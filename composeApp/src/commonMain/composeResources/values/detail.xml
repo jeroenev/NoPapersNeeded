@@ -1,0 +1,141 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="detail_document">Document</string>
+    <string name="detail_document_unavailable">Document unavailable</string>
+    <string name="detail_document_unavailable_hint">It may have been trashed or moved.</string>
+    <string name="detail_details_metadata">Details &amp; metadata</string>
+    <string name="detail_exported_baked_copy">Exported baked copy</string>
+    <string name="detail_export_failed">Export failed: %1$s</string>
+    <string name="detail_could_not_bake_copy">Could not bake a copy</string>
+    <string name="detail_rename_file">Rename file</string>
+    <string name="detail_new_file_name">New file name</string>
+    <string name="detail_rename">Rename</string>
+    <string name="detail_trash_document">Trash document</string>
+    <string name="detail_trash_prompt">Move this document to trash? You can restore it later.</string>
+    <string name="detail_trash">Trash</string>
+    <string name="detail_split_failed">Split failed: %1$s</string>
+    <string name="detail_bake_metadata_in_place">Bake metadata in place</string>
+    <string name="detail_bake_prompt">This rewrites the library file itself to embed tags and properties as XMP. The file's content hash changes and the rewrite syncs to other devices. Prefer Export for a portable copy that leaves the library untouched. Continue?</string>
+    <string name="detail_bake_in_place">Bake in place</string>
+    <string name="detail_baked_in_place">Baked in place</string>
+    <string name="detail_bake_failed">Bake failed</string>
+    <string name="detail_document_position">%1$d of %2$d</string>
+    <string name="detail_previous_document">Previous document</string>
+    <string name="detail_next_document">Next document</string>
+    <string name="detail_mark_unreviewed">Mark unreviewed</string>
+    <string name="detail_mark_reviewed">Mark reviewed</string>
+    <string name="detail_export_baked_copy">Export baked copy</string>
+    <string name="detail_more_actions">More actions</string>
+    <string name="detail_rerunning_ocr">Re-running OCR...</string>
+    <string name="detail_rerun_ocr">Re-run OCR</string>
+    <string name="detail_splitting">Splitting...</string>
+    <string name="detail_split_document">Split document</string>
+    <string name="detail_baking">Baking...</string>
+
+    <string name="detail_tab_details">Details</string>
+    <string name="detail_tab_text">Text</string>
+    <string name="detail_tab_history">History</string>
+    <string name="detail_mark_needs_review">Mark needs review</string>
+    <string name="detail_title">Title</string>
+    <string name="detail_note">Note</string>
+    <string name="detail_unsaved_changes">Unsaved changes</string>
+    <string name="detail_saving">Saving...</string>
+    <string name="detail_saved">Saved</string>
+    <string name="detail_save_note">Save note</string>
+    <string name="detail_note_save_failed">Could not save note: %1$s</string>
+    <string name="detail_correspondent">Correspondent</string>
+    <string name="detail_document_type">Document type</string>
+    <string name="detail_document_date">Document date (yyyy-MM-dd)</string>
+    <string name="detail_iso_date_template" translatable="false">yyyy-MM-dd</string>
+    <string name="detail_tags">Tags</string>
+    <string name="detail_file">File</string>
+    <string name="detail_location">Location</string>
+    <string name="detail_added">Added</string>
+    <string name="detail_pages">Pages</string>
+    <string name="detail_ocr">OCR</string>
+    <string name="detail_suggest_tags">Suggest tags</string>
+    <string name="detail_dismiss_all">Dismiss all</string>
+    <string name="detail_add_tag">Add %1$s</string>
+    <string name="detail_dismiss_tag">Dismiss %1$s</string>
+    <string name="detail_engine">Engine</string>
+    <string name="detail_not_available" translatable="false">—</string>
+    <string name="detail_pinned_engine">Pinned engine</string>
+    <string name="detail_choose_ocr_engine">Choose OCR engine</string>
+    <string name="detail_search_text_engine">Search text engine</string>
+    <string name="detail_automatic_engine">Automatic (best available)</string>
+    <string name="detail_engine_source">%1$s · %2$s</string>
+    <string name="detail_fields">Fields</string>
+    <string name="detail_remove_field">Remove field %1$s</string>
+    <string name="detail_new_field">New field</string>
+    <string name="detail_value">Value</string>
+    <string name="detail_add_field">Add field</string>
+    <string name="detail_text_queued">Text extraction is queued for this document.</string>
+    <string name="detail_text_failed">Text extraction failed for this document.</string>
+    <string name="detail_text_not_extracted">No text has been extracted from this document yet.</string>
+    <string name="detail_text_unavailable">No text available.</string>
+    <string name="detail_no_history">No history events yet.</string>
+    <string name="detail_history_load_failed">History could not be loaded: %1$s</string>
+    <string name="detail_history_secondary">%1$s · Device %2$s</string>
+    <string name="detail_ocr_not_processed">Not processed</string>
+    <string name="detail_ocr_queued">Queued</string>
+    <string name="detail_ocr_done">Done</string>
+    <string name="detail_ocr_failed">Failed</string>
+    <string name="detail_ocr_adopted">Adopted from another device</string>
+    <string name="detail_engine_tesseract" translatable="false">Tesseract</string>
+    <string name="detail_engine_mlkit" translatable="false">MLKit</string>
+    <string name="detail_engine_ai" translatable="false">AI</string>
+    <string name="detail_engine_embedded">Embedded text</string>
+
+    <string name="detail_split_explanation">Each part becomes a new document with the same tags and properties; the original moves to trash. Enter the pages to split after (1..%1$d), e.g. &quot;3, 5&quot;.</string>
+    <string name="detail_split_after_pages">Split after page(s)</string>
+    <string name="detail_split_part">Part %1$d: %2$s</string>
+    <string name="detail_split">Split</string>
+    <plurals name="detail_split_pages">
+        <item quantity="one">page %1$d</item>
+        <item quantity="other">pages %1$d-%2$d</item>
+    </plurals>
+
+    <string name="detail_page_number">Page %1$d</string>
+    <string name="detail_render_page_failed">Could not render this page.</string>
+    <string name="detail_zoom_out">Zoom out</string>
+    <string name="detail_zoom_in">Zoom in</string>
+    <string name="detail_zoom_percent">%1$d%%</string>
+    <string name="detail_previous_page">Previous page</string>
+    <string name="detail_next_page">Next page</string>
+    <string name="detail_page_position">%1$d / %2$d</string>
+    <string name="detail_go_to_page">Go to page</string>
+    <string name="detail_page_range">Page (1-%1$d)</string>
+    <string name="detail_go">Go</string>
+
+    <string name="detail_history_undecodable">Could not decode journal event '%1$s'</string>
+    <string name="detail_history_tag_added">Added tag '%1$s'</string>
+    <string name="detail_history_tag_removed">Removed tag '%1$s'</string>
+    <string name="detail_history_title_cleared">Cleared title</string>
+    <string name="detail_history_title_changed">Changed title to '%1$s'</string>
+    <string name="detail_history_note_cleared">Cleared note</string>
+    <string name="detail_history_note_updated">Updated note</string>
+    <string name="detail_history_correspondent_cleared">Cleared correspondent</string>
+    <string name="detail_history_correspondent_changed">Changed correspondent to '%1$s'</string>
+    <string name="detail_history_document_type_cleared">Cleared document type</string>
+    <string name="detail_history_document_type_changed">Changed document type to '%1$s'</string>
+    <string name="detail_history_document_date_cleared">Cleared document date</string>
+    <string name="detail_history_document_date_changed">Changed document date to %1$s</string>
+    <string name="detail_history_marked_reviewed">Marked reviewed</string>
+    <string name="detail_history_marked_needs_review">Marked needs review</string>
+    <string name="detail_history_review_state_cleared">Cleared review state</string>
+    <string name="detail_history_review_state_changed">Set review state to '%1$s'</string>
+    <string name="detail_history_ocr_engine_cleared">Cleared OCR engine pin</string>
+    <string name="detail_history_ocr_engine_pinned">Pinned OCR engine to %1$s</string>
+    <string name="detail_history_field_removed">Removed field '%1$s'</string>
+    <string name="detail_history_field_set">Set field '%1$s' to '%2$s'</string>
+    <string name="detail_history_document_trashed">Trashed document from '%1$s'</string>
+    <string name="detail_history_document_restored">Restored document</string>
+    <string name="detail_history_document_deleted">Permanently deleted document</string>
+    <string name="detail_history_document_relinked">Relinked to document %1$s</string>
+    <string name="detail_history_tag_renamed">Tag renamed from '%1$s' to '%2$s'</string>
+    <string name="detail_history_tag_merged">Tag '%1$s' merged into '%2$s'</string>
+    <string name="detail_history_tag_styled">Styled tag '%1$s'</string>
+    <string name="detail_history_setting_changed">Changed setting '%1$s'</string>
+    <string name="detail_history_unknown_event">Unknown event '%1$s'</string>
+    <string name="detail_history_unknown_event_payload">Unknown event '%1$s': %2$s</string>
+</resources>

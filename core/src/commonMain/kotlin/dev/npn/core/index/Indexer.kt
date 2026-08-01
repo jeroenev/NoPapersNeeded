@@ -1,10 +1,10 @@
 package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.DocumentFieldEntity
 import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
-import dev.npn.core.db.DocumentFieldEntity
 import dev.npn.core.db.TagEntity
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
@@ -22,7 +22,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
 /**
- * Reconciles the library folder + metadata journals into the Room index cache (PLAN.md sec. 1-2).
+ * Reconciles the library folder and metadata journals into the Room index cache.
  *
  * Files are the source of truth: the cache is fully rebuildable from a rescan. A rescan:
  *  1. lists the tree and partitions it (indexable PDFs, internal .npn, sync-conflict, temps, other),
@@ -59,79 +59,76 @@ class Indexer(
         metadataState: FoldedState,
         fullHash: Boolean = false,
         onProgress: (IndexProgress) -> Unit = {},
-    ): ScanReport = rescanMutex.withLock {
-        val started = clock.nowMillis()
-        fun report(p: IndexProgress) {
-            _scanState.value = p
-            onProgress(p)
+    ): ScanReport =
+        rescanMutex.withLock {
+            val started = clock.nowMillis()
+
+            fun report(p: IndexProgress) {
+                _scanState.value = p
+                onProgress(p)
+            }
+
+            report(IndexProgress(IndexProgress.Phase.LISTING))
+            try {
+                val all = fs.listAll()
+
+                val (indexable, conflictFiles) = partition(all)
+
+                val dbProjection = documentDao.allPathsAndMeta()
+                val byPath = dbProjection.associateBy { it.relPath }
+                val toHash =
+                    indexable.filter { meta ->
+                        val known = byPath[meta.relPath]
+                        fullHash || known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
+                    }
+
+                report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
+                val hashes = HashMap<String, String>() // relPath -> sha256
+                var hashedCount = 0
+                for (meta in toHash) {
+                    hashes[meta.relPath] = fs.sha256(meta.relPath)
+                    hashedCount++
+                    report(IndexProgress(IndexProgress.Phase.HASHING, hashed = hashedCount, total = toHash.size))
+                }
+
+                report(IndexProgress(IndexProgress.Phase.RECONCILING))
+                val diskPaths = indexable.map { it.relPath }.toHashSet()
+
+                val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
+
+                val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
+                recon.relinkCandidates.addAll(pairRelinks(missing.missingDocs, recon.newDocs, recon.relinkCandidates))
+
+                report(IndexProgress(IndexProgress.Phase.FOLDING))
+                val resurrected =
+                    applyFold(
+                        metadataState,
+                        FoldRequest(diskPaths = diskPaths, reconcileFileState = true),
+                    )
+
+                val dupByDoc = recon.duplicates.groupBy { it.docId }
+                for ((docId, entries) in dupByDoc) {
+                    duplicateDao.replaceAll(docId, entries.map { DuplicateEntity(docId, it.extraRelPath) })
+                }
+
+                report(IndexProgress(IndexProgress.Phase.DONE))
+
+                ScanReport(
+                    added = recon.added,
+                    moved = recon.moved,
+                    changed = recon.changed,
+                    missingCount = missing.missingCount,
+                    duplicates = recon.duplicates,
+                    conflictFiles = conflictFiles,
+                    resurrected = resurrected,
+                    relinkCandidates = recon.relinkCandidates,
+                    hashedCount = hashedCount,
+                    durationMillis = clock.nowMillis() - started,
+                )
+            } finally {
+                _scanState.value = null
+            }
         }
-
-        report(IndexProgress(IndexProgress.Phase.LISTING))
-        try {
-            val all = fs.listAll()
-
-            // --- step 1: partition on-disk files into indexable docs + sync-conflict files ---
-            val (indexable, conflictFiles) = partition(all)
-
-            // --- step 2: fast path vs hash (skip unchanged files by size+mtime) ---
-            val dbProjection = documentDao.allPathsAndMeta()
-            val byPath = dbProjection.associateBy { it.relPath }
-            val toHash = indexable.filter { meta ->
-                val known = byPath[meta.relPath]
-                fullHash || known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
-            }
-
-            // --- step 3: hash the changed/new files ---
-            report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
-            val hashes = HashMap<String, String>() // relPath -> sha256
-            var hashedCount = 0
-            for (meta in toHash) {
-                hashes[meta.relPath] = fs.sha256(meta.relPath)
-                hashedCount++
-                report(IndexProgress(IndexProgress.Phase.HASHING, hashed = hashedCount, total = toHash.size))
-            }
-
-            report(IndexProgress(IndexProgress.Phase.RECONCILING))
-            val diskPaths = indexable.map { it.relPath }.toHashSet()
-
-            // --- step 4: reconcile hashed files against the DB (move/dup/external-edit/new) ---
-            val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
-
-            // --- step 5: disappeared files -> missing, then pair them with new docs for relinks ---
-            val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
-            recon.relinkCandidates.addAll(pairRelinks(missing.missingDocs, recon.newDocs, recon.relinkCandidates))
-
-            // --- step 6: journal fold -> DB projection ---
-            report(IndexProgress(IndexProgress.Phase.FOLDING))
-            val resurrected = applyFold(
-                metadataState,
-                FoldRequest(diskPaths = diskPaths, reconcileFileState = true),
-            )
-
-            // --- step 7: persist external duplicates (replace per doc so re-scans are idempotent) ---
-            val dupByDoc = recon.duplicates.groupBy { it.docId }
-            for ((docId, entries) in dupByDoc) {
-                duplicateDao.replaceAll(docId, entries.map { DuplicateEntity(docId, it.extraRelPath) })
-            }
-
-            report(IndexProgress(IndexProgress.Phase.DONE))
-
-            ScanReport(
-                added = recon.added,
-                moved = recon.moved,
-                changed = recon.changed,
-                missingCount = missing.missingCount,
-                duplicates = recon.duplicates,
-                conflictFiles = conflictFiles,
-                resurrected = resurrected,
-                relinkCandidates = recon.relinkCandidates,
-                hashedCount = hashedCount,
-                durationMillis = clock.nowMillis() - started,
-            )
-        } finally {
-            _scanState.value = null
-        }
-    }
 
     /**
      * Split all on-disk entries into indexable documents and sync-conflict files. Conflict files
@@ -158,8 +155,10 @@ class Indexer(
         var changed = 0
         val duplicates = ArrayList<DuplicateReport>()
         val relinkCandidates = ArrayList<RelinkCandidate>()
+
         // New docs created this scan: docId -> meta, for relink pairing.
         val newDocs = HashMap<String, FileMeta>()
+
         // Canonical rows we loaded/updated, kept current so later steps re-read consistently.
         val existingByDocId = HashMap<String, DocumentEntity>()
     }
@@ -200,20 +199,18 @@ class Indexer(
                 // External edit: mark old missing (keep metadata), create new doc here. The old
                 // doc must vacate the path (relPath is unique) so the new doc can take it; move it
                 // to a per-doc sentinel path under .npn (never indexed) that preserves identity.
-                documentDao.upsert(
-                    docAtPath.copy(relPath = missingSentinel(docAtPath.docId), missing = true),
-                )
-                recon.existingByDocId[docAtPath.docId] = documentDao.getByDocId(docAtPath.docId)!!
+                val missingDoc = docAtPath.copy(relPath = missingSentinel(docAtPath.docId), missing = true)
+                documentDao.upsert(missingDoc)
+                recon.existingByDocId[docAtPath.docId] = missingDoc
                 existingByPath.remove(meta.relPath)
                 insertNewDocument(hash, meta, now)
                 recon.newDocs[hash] = meta
                 recon.added++
                 recon.changed++
                 recon.relinkCandidates.add(
-                    RelinkCandidate(docAtPath.docId, hash, reason = "path-match", score = 100),
+                    RelinkCandidate(docAtPath.docId, hash, reason = "path-match", score = RELINK_SCORE_PATH_MATCH),
                 )
             } else {
-                // Brand new hash at a new path.
                 insertNewDocument(hash, meta, now)
                 recon.newDocs[hash] = meta
                 recon.added++
@@ -237,28 +234,30 @@ class Indexer(
             recon.duplicates.add(DuplicateReport(hash, meta.relPath))
         } else if (oldPath != meta.relPath) {
             // The file moved/renamed: canonical path no longer on disk (or is this path).
-            documentDao.upsert(
+            val movedDoc =
                 existingDoc.copy(
                     relPath = meta.relPath,
                     fileName = meta.name,
                     size = meta.size,
                     mtime = meta.mtimeMillis,
                     missing = false,
-                ),
-            )
-            recon.existingByDocId[hash] = documentDao.getByDocId(hash)!!
+                )
+            documentDao.upsert(movedDoc)
+            recon.existingByDocId[hash] = movedDoc
             recon.moved++
         } else if (existingDoc.missing || existingDoc.size != meta.size || existingDoc.mtime != meta.mtimeMillis) {
             // Same path, bytes unchanged but was flagged (e.g. mtime touched): refresh.
-            documentDao.upsert(
-                existingDoc.copy(size = meta.size, mtime = meta.mtimeMillis, missing = false),
-            )
-            recon.existingByDocId[hash] = documentDao.getByDocId(hash)!!
+            val refreshedDoc = existingDoc.copy(size = meta.size, mtime = meta.mtimeMillis, missing = false)
+            documentDao.upsert(refreshedDoc)
+            recon.existingByDocId[hash] = refreshedDoc
         }
     }
 
     /** Result of the disappeared-files pass. */
-    private class MissingResult(val missingCount: Int, val missingDocs: List<DocumentEntity>)
+    private class MissingResult(
+        val missingCount: Int,
+        val missingDocs: List<DocumentEntity>,
+    )
 
     /** Mark docs whose canonical path is no longer on disk as missing (skipping deleted/trashed). */
     private suspend fun detectMissing(
@@ -340,13 +339,22 @@ class Indexer(
                     // TagRemove needs no extra scope: its affected document is already added via
                     // event.doc above. Rename/merge/relink/style fan out to more docs/tags.
                     when (val op = event.op) {
-                        is JournalOp.TagRename, is JournalOp.TagMerge -> documents.addAll(state.taggedDocs())
-                        is JournalOp.TagStyle -> styledTags += op.tag
+                        is JournalOp.TagRename, is JournalOp.TagMerge -> {
+                            documents.addAll(state.taggedDocs())
+                        }
+
+                        is JournalOp.TagStyle -> {
+                            styledTags += op.tag
+                        }
+
                         is JournalOp.Relink -> {
                             documents.addAll(state.docsWithMetadata())
                             documents += op.newDoc
                         }
-                        else -> Unit
+
+                        else -> {
+                            Unit
+                        }
                     }
                 }
                 documents.toList().forEach { documents += state.resolveDocId(it) }
@@ -368,14 +376,15 @@ class Indexer(
     suspend fun refreshState(
         state: FoldedState,
         preserveLifecycleDocs: Set<String> = emptySet(),
-    ): List<Resurrected> = rescanMutex.withLock {
-        _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-        try {
-            applyFold(state, FoldRequest(preserveLifecycleDocs = preserveLifecycleDocs))
-        } finally {
-            _scanState.value = null
+    ): List<Resurrected> =
+        rescanMutex.withLock {
+            _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
+            try {
+                applyFold(state, FoldRequest(preserveLifecycleDocs = preserveLifecycleDocs))
+            } finally {
+                _scanState.value = null
+            }
         }
-    }
 
     suspend fun <T> withFtsWriteGate(block: suspend () -> T): T = ftsWriteGate.withGate(block)
 
@@ -386,7 +395,11 @@ class Indexer(
      */
     private fun missingSentinel(docId: String): String = "${NpnPaths.NPN_DIR}/missing/$docId"
 
-    private suspend fun insertNewDocument(hash: String, meta: FileMeta, now: Long) {
+    private suspend fun insertNewDocument(
+        hash: String,
+        meta: FileMeta,
+        now: Long,
+    ) {
         documentDao.upsert(
             DocumentEntity(
                 docId = hash,
@@ -401,26 +414,29 @@ class Indexer(
     }
 
     /** Returns (score, reason). score 0 means no candidate. */
-    private fun scoreRelink(missing: DocumentEntity, newMeta: FileMeta): Pair<Int, String> {
+    private fun scoreRelink(
+        missing: DocumentEntity,
+        newMeta: FileMeta,
+    ): Pair<Int, String> {
         var score = 0
         val reasons = ArrayList<String>()
         if (missing.fileName.equals(newMeta.name, ignoreCase = true)) {
-            score += 50
+            score += RELINK_SCORE_NAME
             reasons.add("name")
         }
         if (missing.size == newMeta.size) {
-            score += 40
+            score += RELINK_SCORE_SIZE
             reasons.add("size")
         }
         if (NameSimilarity.parentDir(missing.relPath) == NameSimilarity.parentDir(newMeta.relPath)) {
-            score += 10
+            score += RELINK_SCORE_DIR
             reasons.add("dir")
         }
         if (score == 0) {
             if (NameSimilarity.prefixMatch(missing.fileName, newMeta.name) ||
                 NameSimilarity.fuzzyMatch(missing.fileName, newMeta.name)
             ) {
-                score += 15
+                score += RELINK_SCORE_FUZZY
                 reasons.add("fuzzy-name")
             }
         }
@@ -452,7 +468,10 @@ class Indexer(
      *   pipeline) across metadata-only folds and rescans. A brand-new doc with no fts row yet
      *   gets empty content, which the OCR pipeline fills later via its own path.
      */
-    private suspend fun applyFold(state: FoldedState, request: FoldRequest): List<Resurrected> {
+    private suspend fun applyFold(
+        state: FoldedState,
+        request: FoldRequest,
+    ): List<Resurrected> {
         // Every doc the fold must project: those the journal has data about, plus (for a full
         // fold) every doc currently in the DB so stale trash/delete flags get cleared.
         val journalDocs = LinkedHashSet<String>()
@@ -512,7 +531,10 @@ class Indexer(
      * Mark old docs deleted where a winning relink resolves to a different, known id, and record
      * predecessors so metadata carries onto the resolved target.
      */
-    private suspend fun resolveSupersessions(state: FoldedState, journalDocs: Set<String>): Supersession {
+    private suspend fun resolveSupersessions(
+        state: FoldedState,
+        journalDocs: Set<String>,
+    ): Supersession {
         val superseded = HashSet<String>()
         val predecessors = HashMap<String, MutableList<String>>() // target -> old docs resolving here
         for (doc in journalDocs) {
@@ -540,7 +562,11 @@ class Indexer(
         val ocrEngineOverride: String?,
     )
 
-    private fun projectMeta(state: FoldedState, doc: String, preds: List<String>): ProjectedMeta {
+    private fun projectMeta(
+        state: FoldedState,
+        doc: String,
+        preds: List<String>,
+    ): ProjectedMeta {
         fun prop(key: DocProperty): String? {
             state.effectiveProp(doc, key)?.let { return it }
             for (p in preds) state.effectiveProp(p, key)?.let { return it }
@@ -563,7 +589,11 @@ class Indexer(
      * `document_tags` observers for every doc. Returns the effective (sorted) tags and whether the
      * stored rows changed.
      */
-    private suspend fun projectTags(state: FoldedState, doc: String, preds: List<String>): Pair<List<String>, Boolean> {
+    private suspend fun projectTags(
+        state: FoldedState,
+        doc: String,
+        preds: List<String>,
+    ): Pair<List<String>, Boolean> {
         val tagSet = LinkedHashSet<String>()
         tagSet.addAll(state.effectiveTags(doc))
         for (p in preds) tagSet.addAll(state.effectiveTags(p))
@@ -577,7 +607,11 @@ class Indexer(
      * Custom fields: own value wins; inherit predecessor keys this doc doesn't set. Diffed like
      * tags so an unrelated edit does not rewrite this doc's field rows.
      */
-    private suspend fun projectFields(state: FoldedState, doc: String, preds: List<String>) {
+    private suspend fun projectFields(
+        state: FoldedState,
+        doc: String,
+        preds: List<String>,
+    ) {
         val effFields = LinkedHashMap<String, String>()
         for (p in preds) effFields.putAll(state.effectiveFields(p))
         effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
@@ -660,28 +694,36 @@ class Indexer(
         val (effTags, tagsChanged) = projectTags(state, doc, preds)
         projectFields(state, doc, preds)
         val meta = projectMeta(state, doc, preds)
-        val lifecycle = projectLifecycle(
-            state, doc, row, supersession,
-            request.diskPaths, request.reconcileFileState, request.preserveLifecycleDocs, resurrected,
-        )
+        val lifecycle =
+            projectLifecycle(
+                state,
+                doc,
+                row,
+                supersession,
+                request.diskPaths,
+                request.reconcileFileState,
+                request.preserveLifecycleDocs,
+                resurrected,
+            )
 
         // Diffed: skip the upsert when the effective row equals what is stored, so a fold
         // triggered by one edit does not rewrite (and invalidate) every other doc's row.
-        val newRow = row.copy(
-            relPath = lifecycle.relPath,
-            fileName = lifecycle.fileName,
-            reviewed = meta.reviewed,
-            correspondent = meta.correspondent,
-            docType = meta.docType,
-            docDate = meta.docDate,
-            title = meta.title,
-            notes = meta.notes,
-            ocrEngineOverride = meta.ocrEngineOverride,
-            trashed = lifecycle.trashed,
-            trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
-            deleted = lifecycle.deleted,
-            missing = lifecycle.missing,
-        )
+        val newRow =
+            row.copy(
+                relPath = lifecycle.relPath,
+                fileName = lifecycle.fileName,
+                reviewed = meta.reviewed,
+                correspondent = meta.correspondent,
+                docType = meta.docType,
+                docDate = meta.docDate,
+                title = meta.title,
+                notes = meta.notes,
+                ocrEngineOverride = meta.ocrEngineOverride,
+                trashed = lifecycle.trashed,
+                trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
+                deleted = lifecycle.deleted,
+                missing = lifecycle.missing,
+            )
         val rowChanged = newRow != row
         if (rowChanged) documentDao.upsert(newRow)
 
@@ -709,5 +751,17 @@ class Indexer(
             }
         }
         if (request.ftsGateHeld) updateFts() else ftsWriteGate.withGate { updateFts() }
+    }
+
+    private companion object {
+        const val RELINK_SCORE_NAME = 50
+
+        const val RELINK_SCORE_SIZE = 40
+
+        const val RELINK_SCORE_DIR = 10
+
+        const val RELINK_SCORE_FUZZY = 15
+
+        const val RELINK_SCORE_PATH_MATCH = 100
     }
 }

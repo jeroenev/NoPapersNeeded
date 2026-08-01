@@ -8,7 +8,7 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
- * Manages this installation's `deviceId` (PLAN.md sec. 2, "Device identity").
+ * Manages this installation's `deviceId`.
  *
  * The id is an install-generated UUID stored in the local `kv` table (device-private, never in
  * the synced library). On startup the app must verify the newest segment in its own journal
@@ -17,8 +17,9 @@ import kotlin.uuid.Uuid
  * preserve the single-writer invariant.
  */
 @OptIn(ExperimentalUuidApi::class)
-class DeviceIdentity(private val kv: KeyValueDao) {
-
+class DeviceIdentity(
+    private val kv: KeyValueDao,
+) {
     /** Get the stored device id, generating and persisting a fresh one on first use. */
     suspend fun getOrCreate(): String {
         kv.get(KEY_DEVICE_ID)?.let { return it }
@@ -37,10 +38,16 @@ class DeviceIdentity(private val kv: KeyValueDao) {
      * that was cloned). The caller is expected to build a new [SegmentWriter] with the returned id
      * and this now-reset [localState] when the id differs.
      */
-    suspend fun ensureSingleWriter(writer: SegmentWriter, localState: LocalJournalState): String {
+    suspend fun ensureSingleWriter(
+        writer: SegmentWriter,
+        localState: LocalJournalState,
+    ): String {
         writer.recover()
         return when (writer.checkSingleWriter()) {
-            is ForkCheck.Ok -> writer.deviceId
+            is ForkCheck.Ok -> {
+                writer.deviceId
+            }
+
             is ForkCheck.ForkNeeded -> {
                 val fresh = Uuid.random().toString()
                 kv.put(KEY_DEVICE_ID, fresh)

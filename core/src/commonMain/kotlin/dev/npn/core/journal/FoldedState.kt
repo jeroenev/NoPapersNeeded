@@ -19,15 +19,19 @@ import dev.npn.core.model.DocProperty
  * is deterministic regardless of the order events were applied.
  */
 class FoldedState {
-
     /** A live tag add: which dot created it and at what HLC. */
-    data class TagDot(val dot: Dot, val hlc: Hlc)
+    data class TagDot(
+        val dot: Dot,
+        val hlc: Hlc,
+    )
 
     // --- raw tag data ---
     // doc -> literal tag name -> (dot -> hlc) of live adds
     private val tagAdds = HashMap<String, HashMap<String, HashMap<Dot, Hlc>>>()
+
     // set of all dots ever removed by any tag-remove (tombstones); keep forever
     private val removedDots = HashSet<Dot>()
+
     // library-wide rename/merge ops, unordered; sorted by HLC when computing effective names.
     // The sorted view is derived on demand and cached, invalidated whenever a rename is applied.
     private val renames = ArrayList<RenameOp>()
@@ -37,12 +41,20 @@ class FoldedState {
     private val sortedRenames: List<RenameOp>
         get() = sortedRenamesCache ?: renames.sortedBy { it.hlc }.also { sortedRenamesCache = it }
 
-    data class RenameOp(val from: String, val to: String, val hlc: Hlc, val isMerge: Boolean)
+    data class RenameOp(
+        val from: String,
+        val to: String,
+        val hlc: Hlc,
+        val isMerge: Boolean,
+    )
 
     // --- raw prop data: doc -> key -> winning (value, hlc) ---
     private val props = HashMap<String, HashMap<DocProperty, PropVal>>()
 
-    data class PropVal(val value: String?, val hlc: Hlc)
+    data class PropVal(
+        val value: String?,
+        override val hlc: Hlc,
+    ) : HlcStamped
 
     // --- raw custom-field data: doc -> free-string key -> winning (value, hlc) ---
     private val fields = HashMap<String, HashMap<String, PropVal>>()
@@ -51,17 +63,28 @@ class FoldedState {
     private val trash = HashMap<String, TrashVal>()
     private val deleted = HashMap<String, Hlc>() // doc -> hlc of the delete tombstone
 
-    data class TrashVal(val trashed: Boolean, val origPath: String?, val hlc: Hlc)
+    data class TrashVal(
+        val trashed: Boolean,
+        val origPath: String?,
+        val hlc: Hlc,
+    )
 
     // --- relinks: oldDoc -> all claims; winner is highest hlc ---
     private val relinks = HashMap<String, ArrayList<RelinkClaim>>()
 
-    data class RelinkClaim(val newDoc: String, val hlc: Hlc)
+    data class RelinkClaim(
+        val newDoc: String,
+        val hlc: Hlc,
+    )
 
     // --- tag styles: tag -> LWW (color, icon, hlc) ---
     private val tagStyles = HashMap<String, StyleVal>()
 
-    data class StyleVal(val color: String?, val icon: String?, val hlc: Hlc)
+    data class StyleVal(
+        val color: String?,
+        val icon: String?,
+        override val hlc: Hlc,
+    ) : HlcStamped
 
     // --- library-wide synced settings: key -> LWW (value, hlc) ---
     private val settings = HashMap<String, PropVal>()
@@ -84,67 +107,74 @@ class FoldedState {
                 val dots = byTag.getOrPut(op.tag) { HashMap() }
                 dots[event.dot] = event.hlc
             }
+
             is JournalOp.TagRemove -> {
                 op.dots.forEach { removedDots.add(it) }
             }
+
             is JournalOp.PropSet -> {
                 val doc = event.doc ?: return
-                val byKey = props.getOrPut(doc) { HashMap() }
-                val existing = byKey[op.key]
-                if (existing == null || event.hlc > existing.hlc) {
-                    byKey[op.key] = PropVal(op.value, event.hlc)
-                }
+                props
+                    .getOrPut(doc) { HashMap() }
+                    .putIfNewerHlc(op.key, event.hlc) { PropVal(op.value, event.hlc) }
             }
+
             is JournalOp.FieldSet -> {
                 val doc = event.doc ?: return
-                val byKey = fields.getOrPut(doc) { HashMap() }
-                val existing = byKey[op.key]
-                if (existing == null || event.hlc > existing.hlc) {
-                    byKey[op.key] = PropVal(op.value, event.hlc)
-                }
+                fields
+                    .getOrPut(doc) { HashMap() }
+                    .putIfNewerHlc(op.key, event.hlc) { PropVal(op.value, event.hlc) }
             }
+
             is JournalOp.DocTrash -> {
                 val doc = event.doc ?: return
                 mergeTrash(doc, TrashVal(trashed = true, origPath = op.origPath, hlc = event.hlc))
             }
+
             JournalOp.DocRestore -> {
                 val doc = event.doc ?: return
                 mergeTrash(doc, TrashVal(trashed = false, origPath = null, hlc = event.hlc))
             }
+
             JournalOp.DocDelete -> {
                 val doc = event.doc ?: return
                 val existing = deleted[doc]
                 if (existing == null || event.hlc > existing) deleted[doc] = event.hlc
             }
+
             is JournalOp.Relink -> {
                 val doc = event.doc ?: return
                 relinks.getOrPut(doc) { ArrayList() }.add(RelinkClaim(op.newDoc, event.hlc))
             }
+
             is JournalOp.TagRename -> {
                 renames.add(RenameOp(op.from, op.to, event.hlc, isMerge = false))
                 sortedRenamesCache = null
             }
+
             is JournalOp.TagMerge -> {
                 renames.add(RenameOp(op.from, op.to, event.hlc, isMerge = true))
                 sortedRenamesCache = null
             }
+
             is JournalOp.TagStyle -> {
-                val existing = tagStyles[op.tag]
-                if (existing == null || event.hlc > existing.hlc) {
-                    tagStyles[op.tag] = StyleVal(op.color, op.icon, event.hlc)
-                }
+                tagStyles.putIfNewerHlc(op.tag, event.hlc) { StyleVal(op.color, op.icon, event.hlc) }
             }
+
             is JournalOp.SettingSet -> {
-                val existing = settings[op.key]
-                if (existing == null || event.hlc > existing.hlc) {
-                    settings[op.key] = PropVal(op.value, event.hlc)
-                }
+                settings.putIfNewerHlc(op.key, event.hlc) { PropVal(op.value, event.hlc) }
             }
-            is JournalOp.Unknown -> Unit // tolerant skip
+
+            is JournalOp.Unknown -> {
+                Unit
+            } // tolerant skip
         }
     }
 
-    private fun mergeTrash(doc: String, incoming: TrashVal) {
+    private fun mergeTrash(
+        doc: String,
+        incoming: TrashVal,
+    ) {
         val existing = trash[doc]
         if (existing == null || incoming.hlc > existing.hlc) trash[doc] = incoming
     }
@@ -174,7 +204,11 @@ class FoldedState {
      * `rename.hlc >= addHlc`: a rename concurrent-with-or-after the add follows the add
      * (spec: "an add of the old name concurrent with or after the rename follows the rename").
      */
-    private fun applyRenames(literal: String, addHlc: Hlc, sortedRenames: List<RenameOp>): String {
+    private fun applyRenames(
+        literal: String,
+        addHlc: Hlc,
+        sortedRenames: List<RenameOp>,
+    ): String {
         var name = literal
         for (r in sortedRenames) {
             if (r.hlc >= addHlc && r.from == name) name = r.to
@@ -183,10 +217,12 @@ class FoldedState {
     }
 
     /** Effective value of a single-value property, or null if unset/cleared. */
-    fun effectiveProp(doc: String, key: DocProperty): String? = props[doc]?.get(key)?.value
+    fun effectiveProp(
+        doc: String,
+        key: DocProperty,
+    ): String? = props[doc]?.get(key)?.value
 
-    fun allProps(doc: String): Map<DocProperty, String?> =
-        props[doc]?.mapValues { it.value.value } ?: emptyMap()
+    fun allProps(doc: String): Map<DocProperty, String?> = props[doc]?.mapValues { it.value.value } ?: emptyMap()
 
     /**
      * Effective custom fields for a document: only keys whose winning value is non-null (a null
@@ -200,8 +236,6 @@ class FoldedState {
         }
         return out
     }
-
-
 
     /** True if the document is permanently deleted (delete tombstone present). Wins forever. */
     fun isDeleted(doc: String): Boolean = deleted.containsKey(doc)
@@ -272,7 +306,10 @@ class FoldedState {
      * The literal add name is rewritten through the same rename chain as [effectiveTags], so
      * removing a tag by its current (renamed) name still targets the original add dots.
      */
-    fun liveTagDots(doc: String, effectiveName: String): List<Dot> {
+    fun liveTagDots(
+        doc: String,
+        effectiveName: String,
+    ): List<Dot> {
         val byTag = tagAdds[doc] ?: return emptyList()
         val sortedRenames = sortedRenames
         val out = ArrayList<Dot>()
@@ -296,5 +333,24 @@ class FoldedState {
     // --------- accessors used by compaction (raw data, read-only copies) ---------
 
     internal fun rawRemovedDots(): Set<Dot> = removedDots.toSet()
+
     internal fun isDotLive(dot: Dot): Boolean = dot !in removedDots
+}
+
+interface HlcStamped {
+    val hlc: Hlc
+}
+
+/**
+ * Last-writer-wins insert: store [value] under [key] only when no value exists yet or [hlc]
+ * strictly exceeds the stored value's HLC. Tie-breaking matches every other LWW map (equal HLCs
+ * keep the existing value); [value] is built lazily so it is only allocated when it wins.
+ */
+internal inline fun <K, V : HlcStamped> HashMap<K, V>.putIfNewerHlc(
+    key: K,
+    hlc: Hlc,
+    value: () -> V,
+) {
+    val existing = this[key]
+    if (existing == null || hlc > existing.hlc) this[key] = value()
 }

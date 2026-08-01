@@ -1,7 +1,7 @@
 package dev.npn.core.db
 
-import androidx.room3.ConstructedBy
 import androidx.room3.AutoMigration
+import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.DeleteTable
 import androidx.room3.RoomDatabase
@@ -10,7 +10,7 @@ import androidx.room3.migration.AutoMigrationSpec
 
 /**
  * Local index database. This is a disposable cache: a materialized view of the file library
- * plus the metadata journals (PLAN.md sec. 1). It lives in app-local storage, is never synced,
+ * plus the metadata journals. It lives in app-local storage, is never synced,
  * and is fully rebuildable from the folder alone. Because of that, destructive migration is the
  * correct fallback (see the platform builders): a schema bump just drops and rebuilds.
  */
@@ -54,15 +54,25 @@ import androidx.room3.migration.AutoMigrationSpec
 @ConstructedBy(NpnDatabaseConstructor::class)
 abstract class NpnDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
+
     abstract fun tagDao(): TagDao
+
     abstract fun ftsDao(): FtsDao
+
     abstract fun documentFieldDao(): DocumentFieldDao
+
     abstract fun savedViewDao(): SavedViewDao
+
     abstract fun thumbnailDao(): ThumbnailDao
+
     abstract fun duplicateDao(): DuplicateDao
+
     abstract fun ocrQueueDao(): OcrQueueDao
+
     abstract fun keyValueDao(): KeyValueDao
+
     abstract fun metadataProjectionDao(): MetadataProjectionDao
+
     abstract fun autoMatchRuleDao(): AutoMatchRuleDao
 
     /**
@@ -77,8 +87,8 @@ abstract class NpnDatabase : RoomDatabase() {
 
 /**
  * KSP generates the platform actuals for this constructor. Do not implement it manually.
+ * The compiler expects the actual to be provided by the generated code.
  */
-// The compiler expects the actual to be provided by the generated code.
 @Suppress("KotlinNoActualForExpect")
 expect object NpnDatabaseConstructor : RoomDatabaseConstructor<NpnDatabase> {
     override fun initialize(): NpnDatabase

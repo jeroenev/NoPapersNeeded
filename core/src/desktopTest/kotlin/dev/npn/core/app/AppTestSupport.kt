@@ -6,9 +6,9 @@ import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.MutableClock
 import dev.npn.core.ocr.OcrEngine
+import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.ThumbnailStore
-import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.xmp.PdfBoxXmpIO
 import kotlinx.coroutines.CoroutineScope
 import java.io.File
@@ -19,17 +19,29 @@ import java.nio.file.Path
 class NoopOcrEngine : OcrEngine {
     override val available: Boolean = false
     override val name: String = "noop"
-    override suspend fun recognizePng(png: ByteArray, lang: String): String = ""
+
+    override suspend fun recognizePng(
+        png: ByteArray,
+        lang: String,
+    ): String = ""
 }
 
-class FakeThumbStore(private val dir: File) : ThumbnailStore {
-    override suspend fun write(docId: String, png: ByteArray): String {
+class FakeThumbStore(
+    private val dir: File,
+) : ThumbnailStore {
+    override suspend fun write(
+        docId: String,
+        png: ByteArray,
+    ): String {
         dir.mkdirs()
         val f = File(dir, "$docId.png")
         f.writeBytes(png)
         return f.absolutePath
     }
-    override suspend fun delete(docId: String) { File(dir, "$docId.png").delete() }
+
+    override suspend fun delete(docId: String) {
+        File(dir, "$docId.png").delete()
+    }
 }
 
 /**
@@ -46,7 +58,10 @@ class AppSessionRig private constructor(
     val scope: CoroutineScope,
     val session: LibrarySessionImpl,
 ) {
-    fun writePdf(relPath: String, bytes: ByteArray) {
+    fun writePdf(
+        relPath: String,
+        bytes: ByteArray,
+    ) {
         val p = libRoot.resolve(relPath)
         Files.createDirectories(p.parent ?: libRoot)
         Files.write(p, bytes)
@@ -54,7 +69,7 @@ class AppSessionRig private constructor(
 
     fun exists(relPath: String): Boolean = Files.exists(libRoot.resolve(relPath))
 
-    fun close() {
+    suspend fun close() {
         session.close()
         db.close()
         libRoot.toFile().deleteRecursively()
@@ -72,20 +87,21 @@ class AppSessionRig private constructor(
             val fs = JvmLibraryFileSystem(libRoot)
             val db = npnDatabase(File(dbDir, "index.db"))
             val clock = MutableClock(autoTick = true)
-            val deps = SessionDeps(
-                fs = fs,
-                db = db,
-                pdfEngine = PdfBoxEngine(),
-                ocrEngine = ocr,
-                xmpIO = PdfBoxXmpIO(),
-                thumbnailStore = FakeThumbStore(File(dbDir, "thumbs")),
-                scope = scope,
-                ocrLanguage = { "eng" },
-                trashRetentionDays = { 30 },
-                clock = clock,
-                installationId = "test-installation",
-                storagePathRule = storagePathRule,
-            )
+            val deps =
+                SessionDeps(
+                    fs = fs,
+                    db = db,
+                    pdfEngine = PdfBoxEngine(),
+                    ocrEngine = ocr,
+                    xmpIO = PdfBoxXmpIO(),
+                    thumbnailStore = FakeThumbStore(File(dbDir, "thumbs")),
+                    scope = scope,
+                    ocrLanguage = { "eng" },
+                    trashRetentionDays = { 30 },
+                    clock = clock,
+                    installationId = "test-installation",
+                    storagePathRule = storagePathRule,
+                )
             val session = LibrarySessionImpl.openSession(deps)
             return AppSessionRig(libRoot, dbDir, fs, db, clock, scope, session)
         }
@@ -96,22 +112,26 @@ class AppSessionRig private constructor(
      * distinct deviceId (simulating another device syncing the same folder). Returns the session
      * plus its db so the caller can close it.
      */
-    suspend fun secondSession(scope: CoroutineScope, ocr: OcrEngine = NoopOcrEngine()): Pair<LibrarySessionImpl, NpnDatabase> {
+    suspend fun secondSession(
+        scope: CoroutineScope,
+        ocr: OcrEngine = NoopOcrEngine(),
+    ): Pair<LibrarySessionImpl, NpnDatabase> {
         val db2 = npnDatabase(File(dbDir, "index2.db"))
         // Force a distinct deviceId by seeding the kv before openSession.
         db2.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
-        val deps = SessionDeps(
-            fs = fs,
-            db = db2,
-            pdfEngine = PdfBoxEngine(),
-            ocrEngine = ocr,
-            xmpIO = PdfBoxXmpIO(),
-            thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
-            scope = scope,
-            ocrLanguage = { "eng" },
-            trashRetentionDays = { 30 },
-            clock = MutableClock(50_000L, autoTick = true),
-        )
+        val deps =
+            SessionDeps(
+                fs = fs,
+                db = db2,
+                pdfEngine = PdfBoxEngine(),
+                ocrEngine = ocr,
+                xmpIO = PdfBoxXmpIO(),
+                thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
+                scope = scope,
+                ocrLanguage = { "eng" },
+                trashRetentionDays = { 30 },
+                clock = MutableClock(50_000L, autoTick = true),
+            )
         return LibrarySessionImpl.openSession(deps) to db2
     }
 }

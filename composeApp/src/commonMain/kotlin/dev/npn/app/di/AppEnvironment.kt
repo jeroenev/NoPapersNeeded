@@ -1,5 +1,6 @@
 package dev.npn.app.di
 
+import dev.npn.app.ui.common.UiText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -20,7 +21,7 @@ interface AppEnvironment {
     val opening: StateFlow<Boolean>
 
     /** Last open failure message, or null. Cleared when a new open starts or succeeds. */
-    val openError: StateFlow<String?>
+    val openError: StateFlow<UiText?>
 
     /**
      * Open (or switch to) the library at [location] and persist it as the configured library.

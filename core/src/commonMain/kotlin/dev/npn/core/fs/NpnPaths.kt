@@ -15,14 +15,24 @@ object NpnPaths {
     const val STORAGE_V1 = 1
     const val STORAGE_V2 = 2
 
+    /** Length of a SHA-256 digest rendered as lowercase hex (document/content identity). */
+    const val SHA256_HEX_LENGTH = 64
+
+    /** Number of leading hash characters used to disambiguate write-once trash filenames. */
+    const val TRASH_HASH_PREFIX_LENGTH = 8
+
     /** Device-local source classification for compaction snapshots (not an on-disk store marker). */
     const val STORAGE_SNAPSHOT = 3
 
     private val objectBucketPattern = Regex("^objects-v([1-9][0-9]*)-([0-9a-fA-F]{2})$")
+
     // Snapshots use a DISTINCT bucket namespace so pre-snapshot readers classify them as Unknown
     // (ignored) rather than as an object they must fold or an unsupported store that blocks writes.
     // See METADATA_STORAGE_PLAN.md "Compaction and Retention".
     private val snapshotBucketPattern = Regex("^objects-snap-v([1-9][0-9]*)-([0-9a-fA-F]{2})$")
+
+    /** A canonical lowercase-hex SHA-256 digest (document/content identity), anchored. */
+    private val canonicalHashPattern = Regex("^[0-9a-f]{$SHA256_HEX_LENGTH}$")
     private val objectNamePattern = Regex("^([0-9a-f]{64})\\.jsonl$")
     private val objectStagingPattern = Regex("^\\.[0-9a-f]{64}\\.[^.]+\\.[^.]+\\.part$")
     private val legacySegmentPattern = Regex("^[0-9]+(?:-[0-9]+\\.snap)?\\.jsonl$")
@@ -31,13 +41,28 @@ object NpnPaths {
     const val SNAPSHOT_V2 = 2
 
     sealed interface JournalPath {
-        data class Legacy(val deviceId: String, val fileName: String) : JournalPath
-        data class ObjectV2(val expectedHash: String, val canonical: Boolean) : JournalPath
+        data class Legacy(
+            val deviceId: String,
+            val fileName: String,
+        ) : JournalPath
+
+        data class ObjectV2(
+            val expectedHash: String,
+            val canonical: Boolean,
+        ) : JournalPath
 
         /** A compaction snapshot object (multi-actor events + a supersession manifest). */
-        data class SnapshotV2(val expectedHash: String, val canonical: Boolean) : JournalPath
-        data class UnsupportedObjectStore(val version: Int) : JournalPath
+        data class SnapshotV2(
+            val expectedHash: String,
+            val canonical: Boolean,
+        ) : JournalPath
+
+        data class UnsupportedObjectStore(
+            val version: Int,
+        ) : JournalPath
+
         data object Staging : JournalPath
+
         data object Unknown : JournalPath
     }
 
@@ -53,11 +78,16 @@ object NpnPaths {
     fun journalDeviceDir(deviceId: String): String = "$JOURNAL_DIR/$deviceId"
 
     /** `.npn/journal/<deviceId>/<fileName>` */
-    fun journalSegmentPath(deviceId: String, fileName: String): String =
-        "${journalDeviceDir(deviceId)}/$fileName"
+    fun journalSegmentPath(
+        deviceId: String,
+        fileName: String,
+    ): String = "${journalDeviceDir(deviceId)}/$fileName"
 
-    fun journalObjectPath(hash: String, snapshot: Boolean = false): String {
-        require(hash.matches(Regex("^[0-9a-f]{64}$"))) { "Invalid SHA-256: $hash" }
+    fun journalObjectPath(
+        hash: String,
+        snapshot: Boolean = false,
+    ): String {
+        require(canonicalHashPattern.matches(hash)) { "Invalid SHA-256: $hash" }
         val infix = if (snapshot) "objects-snap-v$SNAPSHOT_V2" else "objects-v$STORAGE_V2"
         return "$JOURNAL_DIR/$infix-${hash.take(2)}/$hash.jsonl"
     }
@@ -67,8 +97,9 @@ object NpnPaths {
         installationId: String,
         nonce: String,
         snapshot: Boolean = false,
-    ): String = journalObjectPath(hash, snapshot).substringBeforeLast('/') +
-        "/.$hash.$installationId.$nonce.part"
+    ): String =
+        journalObjectPath(hash, snapshot).substringBeforeLast('/') +
+            "/.$hash.$installationId.$nonce.part"
 
     /** Classify direct journal source files without letting object buckets masquerade as devices. */
     fun journalPath(relPath: String): JournalPath {
@@ -79,7 +110,10 @@ object NpnPaths {
         return if (parts.size == 2) classifyJournalFile(parts[0], parts[1]) else JournalPath.Unknown
     }
 
-    private fun classifyJournalFile(dir: String, name: String): JournalPath {
+    private fun classifyJournalFile(
+        dir: String,
+        name: String,
+    ): JournalPath {
         val snapshotBucket = snapshotBucketPattern.matchEntire(dir)
         val bucket = objectBucketPattern.matchEntire(dir)
         return when {
@@ -118,8 +152,12 @@ object NpnPaths {
     fun recoverObjectHash(name: String): String? {
         objectNamePattern.matchEntire(name)?.let { return it.groupValues[1] }
         if (!isSyncConflict(name)) return null
-        val matches = Regex("(?:^|[^0-9a-f])([0-9a-f]{64})(?=[^0-9a-f]|$)")
-            .findAll(name.lowercase()).map { it.groupValues[1] }.distinct().toList()
+        val matches =
+            Regex("(?:^|[^0-9a-f])([0-9a-f]{64})(?=[^0-9a-f]|$)")
+                .findAll(name.lowercase())
+                .map { it.groupValues[1] }
+                .distinct()
+                .toList()
         return matches.singleOrNull()
     }
 
@@ -127,9 +165,10 @@ object NpnPaths {
         val norm = normalize(relPath)
         if (!norm.startsWith("$JOURNAL_DIR/")) return null
         val dir = norm.removePrefix("$JOURNAL_DIR/").substringBefore('/')
-        val version = objectBucketPattern.matchEntire(dir)?.groupValues?.get(1)
-            ?: snapshotBucketPattern.matchEntire(dir)?.groupValues?.get(1)
-            ?: return null
+        val version =
+            objectBucketPattern.matchEntire(dir)?.groupValues?.get(1)
+                ?: snapshotBucketPattern.matchEntire(dir)?.groupValues?.get(1)
+                ?: return null
         return version.toIntOrNull() ?: Int.MAX_VALUE
     }
 
@@ -139,11 +178,16 @@ object NpnPaths {
      * device+engine, letting multiple OCR versions co-exist). Readers treat the whole middle
      * as an opaque key; see [OcrSidecarFiles.listForHash].
      */
-    fun ocrSidecarPath(sha256: String, writerKey: String): String =
-        "$OCR_DIR/$sha256.$writerKey.json"
+    fun ocrSidecarPath(
+        sha256: String,
+        writerKey: String,
+    ): String = "$OCR_DIR/$sha256.$writerKey.json"
 
     /** Writer key for an engine-qualified sidecar: `<deviceId>.<engine>`. */
-    fun ocrWriterKey(deviceId: String, engine: String): String = "$deviceId.$engine"
+    fun ocrWriterKey(
+        deviceId: String,
+        engine: String,
+    ): String = "$deviceId.$engine"
 
     /**
      * `.npn/trash/<baseName>__<first 8 hash chars>.<ext>`
@@ -151,8 +195,11 @@ object NpnPaths {
      * The hash suffix keeps trash filenames collision-resistant across devices while staying
      * write-once. Files without an extension are handled (no trailing dot).
      */
-    fun trashPath(originalName: String, sha256: String): String {
-        val hashPrefix = sha256.take(8)
+    fun trashPath(
+        originalName: String,
+        sha256: String,
+    ): String {
+        val hashPrefix = sha256.take(TRASH_HASH_PREFIX_LENGTH)
         val dot = originalName.lastIndexOf('.')
         return if (dot > 0) {
             val base = originalName.substring(0, dot)
@@ -177,7 +224,10 @@ object NpnPaths {
      * Other devices' journal segments and sidecars (arriving via file sync) are NOT self-writes
      * and must keep triggering a refresh.
      */
-    fun isOwnDeviceWrite(relPath: String, deviceId: String): Boolean {
+    fun isOwnDeviceWrite(
+        relPath: String,
+        deviceId: String,
+    ): Boolean {
         val norm = normalize(relPath)
         val ownJournal = journalDeviceDir(deviceId)
         if (norm == ownJournal || norm.startsWith("$ownJournal/")) return true
@@ -191,8 +241,7 @@ object NpnPaths {
     }
 
     /** True when any path segment begins with a dot (hidden file/dir), e.g. `.npn`, `a/.b/c`. */
-    fun isHidden(relPath: String): Boolean =
-        normalize(relPath).split('/').any { it.isNotEmpty() && it.startsWith('.') }
+    fun isHidden(relPath: String): Boolean = normalize(relPath).split('/').any { it.isNotEmpty() && it.startsWith('.') }
 
     /** True when [name] has a `.pdf` extension (case-insensitive). */
     fun isPdf(name: String): Boolean = name.substringAfterLast('.', "").equals("pdf", ignoreCase = true)
@@ -238,9 +287,7 @@ object NpnPaths {
     }
 
     /** Normalize a library-relative path: strip leading/trailing slashes, collapse repeats. */
-    fun normalize(relPath: String): String =
-        relPath.split('/').filter { it.isNotEmpty() }.joinToString("/")
-
+    fun normalize(relPath: String): String = relPath.split('/').filter { it.isNotEmpty() }.joinToString("/")
 }
 
 /** Return [path] or a suffixed free candidate, preserving dotfiles and directory-name dots. */
@@ -254,11 +301,12 @@ suspend fun uniquifyPath(
     if (!exists(path)) return path
     val slash = path.lastIndexOf('/')
     val dot = path.lastIndexOf('.')
-    val (base, ext) = if (dot > slash + 1) {
-        path.substring(0, dot) to path.substring(dot)
-    } else {
-        path to ""
-    }
+    val (base, ext) =
+        if (dot > slash + 1) {
+            path.substring(0, dot) to path.substring(dot)
+        } else {
+            path to ""
+        }
     if (firstSuffix != null) {
         val first = "$base$firstSuffix$ext"
         if (!exists(first)) return first

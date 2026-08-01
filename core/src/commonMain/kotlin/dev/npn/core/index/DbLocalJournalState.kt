@@ -9,12 +9,13 @@ import kotlinx.serialization.json.Json
 /**
  * [LocalJournalState] backed by the local index database's `kv` table. This is device-private
  * bookkeeping (last assigned seq + known own segment file names for fork detection); it lives in
- * the disposable cache, never inside the synced library folder (PLAN.md sec. 1, journal design).
+ * the disposable cache, never inside the synced library folder.
  *
  * The known-own-segments set is JSON-encoded into a single kv row.
  */
-class DbLocalJournalState(private val kv: KeyValueDao) : LocalJournalState {
-
+class DbLocalJournalState(
+    private val kv: KeyValueDao,
+) : LocalJournalState {
     override suspend fun getLastSeq(): Long? = kv.get(KEY_LAST_SEQ)?.toLongOrNull()
 
     override suspend fun setLastSeq(seq: Long) {

@@ -1,4 +1,6 @@
 package dev.npn.app.ui.common
 
-internal fun documentDisplayTitle(title: String?, fileName: String): String =
-    title?.takeIf { it.isNotBlank() } ?: fileName
+fun documentDisplayTitle(
+    title: String?,
+    fileName: String,
+): String = title?.takeIf { it.isNotBlank() } ?: fileName

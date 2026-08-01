@@ -3,7 +3,6 @@
 package dev.npn.app.ui.tags
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -33,7 +32,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,10 +44,35 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.parseHexColor
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_back
+import no_papers_needed.composeapp.generated.resources.common_create
+import no_papers_needed.composeapp.generated.resources.common_delete
+import no_papers_needed.composeapp.generated.resources.common_document_count
+import no_papers_needed.composeapp.generated.resources.common_rename
+import no_papers_needed.composeapp.generated.resources.common_save
+import no_papers_needed.composeapp.generated.resources.common_tags_actions
+import no_papers_needed.composeapp.generated.resources.common_tags_color_style
+import no_papers_needed.composeapp.generated.resources.common_tags_delete_message
+import no_papers_needed.composeapp.generated.resources.common_tags_delete_title
+import no_papers_needed.composeapp.generated.resources.common_tags_empty_subtitle
+import no_papers_needed.composeapp.generated.resources.common_tags_empty_title
+import no_papers_needed.composeapp.generated.resources.common_tags_merge
+import no_papers_needed.composeapp.generated.resources.common_tags_merge_into
+import no_papers_needed.composeapp.generated.resources.common_tags_merge_title
+import no_papers_needed.composeapp.generated.resources.common_tags_namespace_only
+import no_papers_needed.composeapp.generated.resources.common_tags_new
+import no_papers_needed.composeapp.generated.resources.common_tags_new_name
+import no_papers_needed.composeapp.generated.resources.common_tags_rename_title
+import no_papers_needed.composeapp.generated.resources.common_tags_style_title
+import no_papers_needed.composeapp.generated.resources.common_tags_title
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun TagManagementScreen(
@@ -68,35 +91,96 @@ fun TagManagementScreen(
     var styleTarget by remember { mutableStateOf<Pair<String, String?>?>(null) }
 
     val snackbar = remember { SnackbarHostState() }
-    // Surface one-shot VM messages (failed tag writes) as snackbars.
-    LaunchedEffect(vm, snackbar) {
-        vm.messages.collect { snackbar.showSnackbar(it) }
-    }
+    SnackbarMessages(vm.messages, snackbar)
 
+    TagListScaffold(
+        tree = tree,
+        isEmpty = tags.isEmpty(),
+        snackbar = snackbar,
+        onBack = onBack,
+        onCreate = { showCreate = true },
+        onRename = { renameTarget = it },
+        onMerge = { mergeTarget = it },
+        onDelete = { deleteTarget = it },
+        onStyle = { name, color -> styleTarget = name to color },
+    )
+
+    TagEditDialogs(
+        showCreate = showCreate,
+        renameTarget = renameTarget,
+        styleTarget = styleTarget,
+        onCreate = { name, color ->
+            vm.create(name, color, null)
+            showCreate = false
+        },
+        onDismissCreate = { showCreate = false },
+        onRename = { from, to ->
+            vm.rename(from, to)
+            renameTarget = null
+        },
+        onDismissRename = { renameTarget = null },
+        onSetStyle = { name, color ->
+            vm.setStyle(name, color, null)
+            styleTarget = null
+        },
+        onDismissStyle = { styleTarget = null },
+    )
+    TagMergeDeleteDialogs(
+        mergeTarget = mergeTarget,
+        deleteTarget = deleteTarget,
+        tagNames = flatNames,
+        onMerge = { from, into ->
+            vm.merge(from, into)
+            mergeTarget = null
+        },
+        onDismissMerge = { mergeTarget = null },
+        onDelete = { name ->
+            vm.delete(name)
+            deleteTarget = null
+        },
+        onDismissDelete = { deleteTarget = null },
+    )
+}
+
+@Composable
+private fun TagListScaffold(
+    tree: List<TagNode>,
+    isEmpty: Boolean,
+    snackbar: SnackbarHostState,
+    onBack: () -> Unit,
+    onCreate: () -> Unit,
+    onRename: (String) -> Unit,
+    onMerge: (String) -> Unit,
+    onDelete: (String) -> Unit,
+    onStyle: (String, String?) -> Unit,
+) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Tags") },
+                title = { Text(stringResource(Res.string.common_tags_title)) },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(Res.string.common_back),
+                        )
                     }
                 },
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showCreate = true }) {
-                Icon(Icons.Filled.Add, contentDescription = "New tag")
+            FloatingActionButton(onClick = onCreate) {
+                Icon(Icons.Filled.Add, contentDescription = stringResource(Res.string.common_tags_new))
             }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        if (tags.isEmpty()) {
+        if (isEmpty) {
             Box(Modifier.fillMaxSize().padding(padding)) {
                 EmptyState(
                     icon = Icons.Filled.Add,
-                    title = "No tags yet",
-                    subtitle = "Create a tag or add tags to documents.",
+                    title = stringResource(Res.string.common_tags_empty_title),
+                    subtitle = stringResource(Res.string.common_tags_empty_subtitle),
                 )
             }
         } else {
@@ -105,85 +189,98 @@ fun TagManagementScreen(
                 items(flatTree, key = { it.path }) { node ->
                     TagRow(
                         node = node,
-                        onRename = { renameTarget = node.path },
-                        onMerge = { mergeTarget = node.path },
-                        onDelete = { deleteTarget = node.path },
-                        onStyle = { styleTarget = node.path to node.info?.color },
+                        onRename = { onRename(node.path) },
+                        onMerge = { onMerge(node.path) },
+                        onDelete = { onDelete(node.path) },
+                        onStyle = { onStyle(node.path, node.info?.color) },
                     )
                     HorizontalDivider()
                 }
             }
         }
     }
+}
 
+@Composable
+private fun TagEditDialogs(
+    showCreate: Boolean,
+    renameTarget: String?,
+    styleTarget: Pair<String, String?>?,
+    onCreate: (String, String?) -> Unit,
+    onDismissCreate: () -> Unit,
+    onRename: (String, String) -> Unit,
+    onDismissRename: () -> Unit,
+    onSetStyle: (String, String?) -> Unit,
+    onDismissStyle: () -> Unit,
+) {
     if (showCreate) {
         TagFormDialog(
-            title = "New tag",
+            title = stringResource(Res.string.common_tags_new),
             initialName = "",
             initialColor = null,
-            confirmLabel = "Create",
-            onConfirm = { name, color ->
-                vm.create(name, color, null)
-                showCreate = false
-            },
-            onDismiss = { showCreate = false },
+            confirmLabel = stringResource(Res.string.common_create),
+            onConfirm = onCreate,
+            onDismiss = onDismissCreate,
         )
     }
 
     renameTarget?.let { from ->
         TextInputDialog(
-            title = "Rename tag",
-            label = "New name",
+            title = stringResource(Res.string.common_tags_rename_title),
+            label = stringResource(Res.string.common_tags_new_name),
             initial = from,
-            confirmLabel = "Rename",
+            confirmLabel = stringResource(Res.string.common_rename),
             // Block confirming until the name is non-blank and actually changed.
             confirmEnabled = { it.isNotBlank() && it.trim() != from },
             onConfirm = { to ->
-                vm.rename(from, to)
-                renameTarget = null
+                onRename(from, to)
             },
-            onDismiss = { renameTarget = null },
-        )
-    }
-
-    mergeTarget?.let { from ->
-        TagPickDialog(
-            title = "Merge \"$from\" into",
-            options = flatNames.filter { it != from },
-            confirmLabel = "Merge",
-            onConfirm = { into ->
-                vm.merge(from, into)
-                mergeTarget = null
-            },
-            onDismiss = { mergeTarget = null },
-        )
-    }
-
-    deleteTarget?.let { name ->
-        ConfirmDialog(
-            title = "Delete tag",
-            message = "Remove \"$name\" from all documents? This cannot be undone.",
-            confirmLabel = "Delete",
-            onConfirm = {
-                vm.delete(name)
-                deleteTarget = null
-            },
-            onDismiss = { deleteTarget = null },
+            onDismiss = onDismissRename,
         )
     }
 
     styleTarget?.let { (name, color) ->
         TagFormDialog(
-            title = "Tag style",
+            title = stringResource(Res.string.common_tags_style_title),
             initialName = name,
             initialColor = color,
-            confirmLabel = "Save",
+            confirmLabel = stringResource(Res.string.common_save),
             nameEditable = false,
-            onConfirm = { _, newColor ->
-                vm.setStyle(name, newColor, null)
-                styleTarget = null
+            onConfirm = { _, newColor -> onSetStyle(name, newColor) },
+            onDismiss = onDismissStyle,
+        )
+    }
+}
+
+@Composable
+private fun TagMergeDeleteDialogs(
+    mergeTarget: String?,
+    deleteTarget: String?,
+    tagNames: List<String>,
+    onMerge: (String, String) -> Unit,
+    onDismissMerge: () -> Unit,
+    onDelete: (String) -> Unit,
+    onDismissDelete: () -> Unit,
+) {
+    mergeTarget?.let { from ->
+        TagPickDialog(
+            title = stringResource(Res.string.common_tags_merge_title, from),
+            options = tagNames.filter { it != from },
+            confirmLabel = stringResource(Res.string.common_tags_merge),
+            onConfirm = { into -> onMerge(from, into) },
+            onDismiss = onDismissMerge,
+        )
+    }
+
+    deleteTarget?.let { name ->
+        ConfirmDialog(
+            title = stringResource(Res.string.common_tags_delete_title),
+            message = stringResource(Res.string.common_tags_delete_message, name),
+            confirmLabel = stringResource(Res.string.common_delete),
+            onConfirm = {
+                onDelete(name)
             },
-            onDismiss = { styleTarget = null },
+            onDismiss = onDismissDelete,
         )
     }
 }
@@ -209,10 +306,18 @@ private fun TagRow(
         Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
         Column(Modifier.weight(1f)) {
             Text(node.segment, style = MaterialTheme.typography.bodyLarge)
-            val subtitle = buildString {
-                append("${node.descendantCount} doc(s)")
-                if (node.info == null) append(" - namespace only")
-            }
+            val documentCount =
+                pluralStringResource(
+                    Res.plurals.common_document_count,
+                    node.descendantCount,
+                    node.descendantCount,
+                )
+            val subtitle =
+                if (node.info == null) {
+                    stringResource(Res.string.common_tags_namespace_only, documentCount)
+                } else {
+                    documentCount
+                }
             Text(
                 subtitle,
                 style = MaterialTheme.typography.bodySmall,
@@ -221,13 +326,37 @@ private fun TagRow(
         }
         Box {
             IconButton(onClick = { menu = true }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = "Tag actions")
+                Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.common_tags_actions))
             }
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() })
-                DropdownMenuItem(text = { Text("Merge into...") }, onClick = { menu = false; onMerge() })
-                DropdownMenuItem(text = { Text("Color / style") }, onClick = { menu = false; onStyle() })
-                DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.common_rename)) },
+                    onClick = {
+                        menu = false
+                        onRename()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.common_tags_merge_into)) },
+                    onClick = {
+                        menu = false
+                        onMerge()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.common_tags_color_style)) },
+                    onClick = {
+                        menu = false
+                        onStyle()
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.common_delete)) },
+                    onClick = {
+                        menu = false
+                        onDelete()
+                    },
+                )
             }
         }
     }
@@ -248,13 +377,18 @@ internal fun buildTree(flat: List<TagInfo>): List<TagNode> {
         }
     }
 
-    fun childrenOf(prefix: String, depth: Int): List<TagNode> {
+    fun childrenOf(
+        prefix: String,
+        depth: Int,
+    ): List<TagNode> {
         val prefixDot = if (prefix.isEmpty()) "" else "$prefix."
-        val direct = allPaths.filter { path ->
-            path != prefix &&
-                path.startsWith(prefixDot) &&
-                !path.removePrefix(prefixDot).contains('.')
-        }.sorted()
+        val direct =
+            allPaths
+                .filter { path ->
+                    path != prefix &&
+                        path.startsWith(prefixDot) &&
+                        !path.removePrefix(prefixDot).contains('.')
+                }.sorted()
 
         return direct.map { path ->
             val kids = childrenOf(path, depth + 1)
@@ -277,6 +411,7 @@ internal fun buildTree(flat: List<TagInfo>): List<TagNode> {
 
 private fun flatten(nodes: List<TagNode>): List<TagNode> {
     val out = ArrayList<TagNode>()
+
     fun walk(list: List<TagNode>) {
         for (n in list) {
             out.add(n)

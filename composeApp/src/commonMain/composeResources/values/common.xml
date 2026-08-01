@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_app_name" translatable="false">No papers needed</string>
+    <string name="common_back">Back</string>
+    <string name="common_cancel">Cancel</string>
+    <string name="common_confirm">Confirm</string>
+    <string name="common_apply">Apply</string>
+    <string name="common_delete">Delete</string>
+    <string name="common_retry">Retry</string>
+    <string name="common_menu">Menu</string>
+    <string name="common_save">Save</string>
+    <string name="common_try_again">Try again</string>
+    <string name="common_search_documents">Search documents</string>
+    <string name="common_clear_search">Clear search</string>
+    <string name="common_add_tag">Add tag</string>
+    <string name="common_remove_tag">Remove %1$s</string>
+    <string name="common_create_tag_hint">Press + to create &quot;%1$s&quot;</string>
+    <string name="common_new">new</string>
+    <string name="common_reviewed">Reviewed</string>
+    <string name="common_needs_review">Needs review</string>
+    <string name="common_view_list">List</string>
+    <string name="common_view_grid">Grid</string>
+    <string name="common_unknown_error">unknown error</string>
+    <string name="common_could_not_open_library">Could not open the library.</string>
+
+    <string name="common_opening_library">Opening library...</string>
+    <string name="common_open_saved_library_failed">Could not open the saved library.</string>
+    <string name="common_open_library_title">Could not open your library</string>
+    <string name="common_pick_folder_again">Pick folder again</string>
+
+    <string name="common_onboarding_intro">Your documents live in a plain folder of PDFs. That folder is the source of truth: every device with it has everything.</string>
+    <string name="common_onboarding_sync">Point Syncthing (or any sync tool) at the folder to keep devices in sync. Tags, dates and status are stored inside the folder too, so nothing is lost and sync conflicts on app data cannot happen.</string>
+    <string name="common_choose_library_folder">Choose library folder</string>
+
+    <string name="common_could_not_action">Could not %1$s: %2$s</string>
+    <string name="common_no_ai_tag_suggestions">No suggestions - document may not be OCRed yet</string>
+    <string name="common_ai_assistant_unreachable">Could not reach the AI assistant: %1$s</string>
+    <string name="common_ai_assistant_empty_answer">The assistant returned an empty answer.</string>
+    <string name="common_scan_imported">Scan imported</string>
+    <string name="common_scan_already_in_library">Scan already in library</string>
+    <string name="common_scan_import_failed">Scan import failed: %1$s</string>
+    <string name="common_tagging_done_empty">No documents to tag</string>
+    <string name="common_join_items">%1$s, %2$s</string>
+    <string name="common_tagging_apply_summary">Add %1$s across %2$s</string>
+    <string name="common_tagging_done_summary">Added %1$s across %2$s</string>
+
+    <string name="common_action_save_title">save title</string>
+    <string name="common_action_save_correspondent">save correspondent</string>
+    <string name="common_action_save_document_type">save document type</string>
+    <string name="common_action_save_date">save date</string>
+    <string name="common_action_add_tag">add tag</string>
+    <string name="common_action_remove_tag">remove tag</string>
+    <string name="common_action_save_field">save field</string>
+    <string name="common_action_remove_field">remove field</string>
+    <string name="common_action_update_review_state">update review state</string>
+    <string name="common_action_move_to_trash">move to trash</string>
+    <string name="common_action_rename_file">rename file</string>
+    <string name="common_action_rerun_ocr">re-run OCR</string>
+    <string name="common_action_change_ocr_engine">change OCR engine</string>
+    <string name="common_action_create_tag">create tag</string>
+    <string name="common_action_rename_tag">rename tag</string>
+    <string name="common_action_merge_tags">merge tags</string>
+    <string name="common_action_delete_tag">delete tag</string>
+    <string name="common_action_update_tag_style">update tag style</string>
+    <string name="common_action_restore_document">restore document</string>
+    <string name="common_action_delete_document">delete document</string>
+    <string name="common_action_remove_duplicate">remove duplicate</string>
+    <string name="common_action_relink_document">relink document</string>
+    <string name="common_action_save_rule">save rule</string>
+    <string name="common_action_delete_rule">delete rule</string>
+    <string name="common_action_update_rule">update rule</string>
+    <string name="common_action_update">update</string>
+    <string name="common_action_trash">trash</string>
+    <string name="common_action_suggest_tags">suggest tags</string>
+    <string name="common_action_tag">tag</string>
+
+    <plurals name="common_could_not_documents">
+        <item quantity="one">Could not %1$s %2$d document</item>
+        <item quantity="other">Could not %1$s %2$d documents</item>
+    </plurals>
+    <plurals name="common_could_not_partial_documents">
+        <item quantity="one">Could not %1$s %2$d of %3$d document</item>
+        <item quantity="other">Could not %1$s %2$d of %3$d documents</item>
+    </plurals>
+    <plurals name="common_could_not_suggest_tags_partial">
+        <item quantity="one">Could not suggest tags for %1$d of %2$d document</item>
+        <item quantity="other">Could not suggest tags for %1$d of %2$d documents</item>
+    </plurals>
+    <plurals name="common_imported_count">
+        <item quantity="one">%1$d imported</item>
+        <item quantity="other">%1$d imported</item>
+    </plurals>
+    <plurals name="common_duplicate_count">
+        <item quantity="one">%1$d duplicate</item>
+        <item quantity="other">%1$d duplicates</item>
+    </plurals>
+    <plurals name="common_failed_count">
+        <item quantity="one">%1$d failed</item>
+        <item quantity="other">%1$d failed</item>
+    </plurals>
+    <plurals name="common_document_count">
+        <item quantity="one">%1$d document</item>
+        <item quantity="other">%1$d documents</item>
+    </plurals>
+    <plurals name="common_tag_count">
+        <item quantity="one">%1$d tag</item>
+        <item quantity="other">%1$d tags</item>
+    </plurals>
+    <plurals name="common_tagging_scope_count_batch">
+        <item quantity="one">%1$d document - the first %2$d run in this batch</item>
+        <item quantity="other">%1$d documents - the first %2$d run in this batch</item>
+    </plurals>
+</resources>

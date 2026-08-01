@@ -12,14 +12,17 @@ import kotlin.time.Clock
  */
 interface ThumbnailStore {
     /** Persist [png] for [docId]; returns the absolute cache path. */
-    suspend fun write(docId: String, png: ByteArray): String
+    suspend fun write(
+        docId: String,
+        png: ByteArray,
+    ): String
 
     suspend fun delete(docId: String)
 }
 
 /**
- * Cached-or-generate first-page thumbnails (PLAN.md sec. 5, library views). Thumbnails are a
- * disposable cache; the [ThumbnailEntity] row records the cache path and generation time.
+ * Cached-or-generate first-page thumbnails. Thumbnails are disposable; the [ThumbnailEntity] row
+ * records the cache path and generation time.
  */
 class ThumbnailService(
     private val engine: PdfEngine,
@@ -34,27 +37,36 @@ class ThumbnailService(
      * absent. Also backfills [dev.npn.core.db.DocumentEntity.pageCount] when it is null (the
      * document is open anyway). Returns null if the file cannot be opened/rendered.
      */
-    suspend fun ensureThumbnail(docId: String, relPath: String, maxDim: Int = 480): String? {
+    suspend fun ensureThumbnail(
+        docId: String,
+        relPath: String,
+        maxDim: Int = 480,
+    ): String? {
         thumbnailDao.get(docId)?.let { return it.cachePath }
 
-        val bytes = try {
-            fs.readBytes(relPath)
-        } catch (_: Throwable) {
-            return null
-        }
+        val bytes =
+            try {
+                fs.readBytes(relPath)
+            } catch (_: Throwable) {
+                return null
+            }
 
-        val (png, pageCount) = try {
-            // Gate the heavy open+render so 200 first-load thumbnails cannot run at once and
-            // freeze the UI; the gate caps concurrency and uses a CPU-bound dispatcher.
-            renderGate.render {
-                engine.open(bytes).use { handle ->
-                    if (handle.pageCount <= 0) null
-                    else handle.renderPagePng(0, maxDim) to handle.pageCount
-                }
-            } ?: return null
-        } catch (_: Throwable) {
-            return null
-        }
+        val (png, pageCount) =
+            try {
+                // Gate the heavy open+render so 200 first-load thumbnails cannot run at once and
+                // freeze the UI; the gate caps concurrency and uses a CPU-bound dispatcher.
+                renderGate.render {
+                    engine.open(bytes).use { handle ->
+                        if (handle.pageCount <= 0) {
+                            null
+                        } else {
+                            handle.renderPagePng(0, maxDim) to handle.pageCount
+                        }
+                    }
+                } ?: return null
+            } catch (_: Throwable) {
+                return null
+            }
 
         val cachePath = store.write(docId, png)
         thumbnailDao.upsert(

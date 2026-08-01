@@ -10,6 +10,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathTemplate
@@ -17,18 +18,21 @@ import dev.npn.core.pathrules.resolveUniqueTarget
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-/** Outcome of an import attempt. */
 sealed interface ImportResult {
-    /** The file was imported. */
-    data class Imported(val docId: String, val relPath: String) : ImportResult
+    data class Imported(
+        val docId: String,
+        val relPath: String,
+    ) : ImportResult
 
     /** An identical (by hash) non-deleted document already exists; nothing was added. */
-    data class Duplicate(val existingDocId: String, val existingPath: String) : ImportResult
+    data class Duplicate(
+        val existingDocId: String,
+        val existingPath: String,
+    ) : ImportResult
 }
 
 /**
- * Imports external PDFs (or byte payloads) into the library (PLAN.md sec. 5, "Scanning" /
- * "Import always dedups").
+ * Imports external PDFs or byte payloads into the library, deduplicating by content hash.
  *
  * Because [LibraryFileSystem.sha256] hashes a library-relative path (there is no stream-hash of an
  * [ExternalSource]), imports stage into `.npn/tmp/` first, hash there, dedup-check, then move into
@@ -101,10 +105,10 @@ class ImportService(
                 size = meta.size,
                 mtime = meta.mtimeMillis,
                 addedAt = now,
-                ocrState = "pending",
+                ocrState = OcrPipeline.OCR_PENDING,
             ),
         )
-        ocrQueueDao.upsert(OcrQueueEntity(docId = hash, state = "pending", updatedAt = now))
+        ocrQueueDao.upsert(OcrQueueEntity(docId = hash, state = OcrPipeline.STATE_PENDING, updatedAt = now))
         return ImportResult.Imported(hash, target)
     }
 
@@ -121,19 +125,23 @@ class ImportService(
         return if (NpnPaths.isPdf(trimmed)) trimmed else "$trimmed.pdf"
     }
 
-    private suspend fun chooseImportTarget(cleanName: String, toDir: String): String {
+    private suspend fun chooseImportTarget(
+        cleanName: String,
+        toDir: String,
+    ): String {
         val rule = ruleProvider()
         if (rule?.enabled != true || rule.template.isBlank()) {
             return uniqueTargetPath(toDir, cleanName)
         }
-        val context = StoragePathContext(
-            title = null,
-            docDate = null,
-            docType = null,
-            correspondent = null,
-            tags = emptyList(),
-            originalFileName = cleanName,
-        )
+        val context =
+            StoragePathContext(
+                title = null,
+                docDate = null,
+                docType = null,
+                correspondent = null,
+                tags = emptyList(),
+                originalFileName = cleanName,
+            )
         val expanded = StoragePathTemplate.expand(rule.template, context).getOrNull()
         return if (expanded.isNullOrBlank()) {
             uniqueTargetPath(toDir, cleanName)
@@ -143,7 +151,10 @@ class ImportService(
     }
 
     /** Build `dir/name.pdf`, adding " (2)", " (3)", ... before the extension until free. */
-    private suspend fun uniqueTargetPath(dir: String, name: String): String {
+    private suspend fun uniqueTargetPath(
+        dir: String,
+        name: String,
+    ): String {
         val normDir = NpnPaths.normalize(dir)
         val target = if (normDir.isEmpty()) name else "$normDir/$name"
         return uniquifyPath(target, startIndex = 2, suffix = { " ($it)" }, exists = fs::exists)

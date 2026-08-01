@@ -70,6 +70,10 @@ run = "./gradlew :desktopApp:packageUberJarForCurrentOS"
 description = "Run the core test suite"
 run = "./gradlew :core:desktopTest"
 
+[tasks.test-fast]
+description = "Run the core and shared UI desktop tests"
+run = "./gradlew :core:desktopTest :composeApp:desktopTest"
+
 [tasks.test-all]
 description = "Run all module tests"
 run = "./gradlew allTests :core:desktopTest"
@@ -85,3 +89,7 @@ run = "./gradlew build"
 [tasks.clean]
 description = "Delete all build outputs"
 run = "./gradlew clean"
+
+[tasks.hooks-install]
+description = "Use the repository's version-controlled Git hooks"
+run = "git config --local core.hooksPath .githooks"

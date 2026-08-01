@@ -29,8 +29,10 @@ enum class VerifiedPublicationResult {
     ALREADY_PRESENT,
 }
 
-class VerifiedPublicationUnavailableException(message: String, cause: Throwable? = null) :
-    IllegalStateException(message, cause)
+class VerifiedPublicationUnavailableException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
 
 /**
  * A coarse change signal from the platform watcher. Coarse granularity is intentional: the
@@ -39,7 +41,9 @@ class VerifiedPublicationUnavailableException(message: String, cause: Throwable?
  */
 sealed interface FsEvent {
     /** Something changed at or under [relPath]; `null` means the watcher lost track and a full rescan is advised. */
-    data class Changed(val relPath: String?) : FsEvent
+    data class Changed(
+        val relPath: String?,
+    ) : FsEvent
 }
 
 /**
@@ -69,7 +73,7 @@ expect class ExternalSource
 /**
  * Filesystem abstraction over a paperless library folder.
  *
- * Design invariants (see PLAN sections 1-4):
+ * Design invariants:
  * - The library is a plain folder of immutable PDFs plus a `.npn/` metadata directory.
  * - The app only ever creates new, write-once files (journal segments, OCR sidecars) and
  *   moves/renames PDFs. It never appends to or rewrites an existing file through this API
@@ -98,7 +102,10 @@ interface LibraryFileSystem {
      * [IllegalStateException] if the target already exists. Atomic where the platform allows
      * (temp file + rename on desktop). Never appends or overwrites.
      */
-    suspend fun writeBytesOnce(relPath: String, bytes: ByteArray)
+    suspend fun writeBytesOnce(
+        relPath: String,
+        bytes: ByteArray,
+    )
 
     /**
      * Atomically expose [stagingPath] as [canonicalPath], refusing replacement. Both paths must be
@@ -111,7 +118,10 @@ interface LibraryFileSystem {
     ): VerifiedPublicationResult
 
     /** Move/rename, creating parent dirs of the target. Fails if the target already exists. */
-    suspend fun move(fromRelPath: String, toRelPath: String)
+    suspend fun move(
+        fromRelPath: String,
+        toRelPath: String,
+    )
 
     suspend fun delete(relPath: String)
 
@@ -121,10 +131,16 @@ interface LibraryFileSystem {
     suspend fun sha256(relPath: String): String
 
     /** Copy an external file into the library at [toRelPath]. Fails if the target already exists. */
-    suspend fun importExternal(source: ExternalSource, toRelPath: String)
+    suspend fun importExternal(
+        source: ExternalSource,
+        toRelPath: String,
+    )
 
     /** Export a library file to an external location. */
-    suspend fun copyOut(relPath: String, target: ExternalSource)
+    suspend fun copyOut(
+        relPath: String,
+        target: ExternalSource,
+    )
 
     /**
      * Live change events. Desktop uses a [java.nio.file.WatchService]; the android SAF impl

@@ -12,6 +12,17 @@ import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.TagInfo
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.library_add
+import no_papers_needed.composeapp.generated.resources.library_add_tag_to_documents
+import no_papers_needed.composeapp.generated.resources.library_remove
+import no_papers_needed.composeapp.generated.resources.library_remove_tag_from_documents
+import no_papers_needed.composeapp.generated.resources.library_rename
+import no_papers_needed.composeapp.generated.resources.library_rename_saved_view
+import no_papers_needed.composeapp.generated.resources.library_save_current_view
+import no_papers_needed.composeapp.generated.resources.library_view_name
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Holds the transient dialog state for [LibraryScreen] (which sheet/dialog is open and the tag-name
@@ -33,20 +44,45 @@ class LibraryDialogState {
     /** Tag names shown by the add/remove pickers; loaded lazily when a picker opens. */
     var allTagNames by mutableStateOf<List<String>>(emptyList())
 
-    fun openFilter() { showFilter = true }
-    fun dismissFilter() { showFilter = false }
+    fun openFilter() {
+        showFilter = true
+    }
 
-    fun openSaveView() { showSaveView = true }
-    fun dismissSaveView() { showSaveView = false }
+    fun dismissFilter() {
+        showFilter = false
+    }
 
-    fun openAddTag() { showAddTag = true }
-    fun dismissAddTag() { showAddTag = false }
+    fun openSaveView() {
+        showSaveView = true
+    }
 
-    fun openRemoveTag() { showRemoveTag = true }
-    fun dismissRemoveTag() { showRemoveTag = false }
+    fun dismissSaveView() {
+        showSaveView = false
+    }
 
-    fun openRename(view: SavedView) { renameView = view }
-    fun dismissRename() { renameView = null }
+    fun openAddTag() {
+        showAddTag = true
+    }
+
+    fun dismissAddTag() {
+        showAddTag = false
+    }
+
+    fun openRemoveTag() {
+        showRemoveTag = true
+    }
+
+    fun dismissRemoveTag() {
+        showRemoveTag = false
+    }
+
+    fun openRename(view: SavedView) {
+        renameView = view
+    }
+
+    fun dismissRename() {
+        renameView = null
+    }
 }
 
 @Composable
@@ -88,8 +124,8 @@ fun LibraryDialogHost(
 
     if (state.showSaveView) {
         TextInputDialog(
-            title = "Save current view",
-            label = "View name",
+            title = stringResource(Res.string.library_save_current_view),
+            label = stringResource(Res.string.library_view_name),
             onConfirm = {
                 onSaveView(it)
                 state.dismissSaveView()
@@ -100,9 +136,9 @@ fun LibraryDialogHost(
 
     state.renameView?.let { view ->
         TextInputDialog(
-            title = "Rename saved view",
-            label = "View name",
-            confirmLabel = "Rename",
+            title = stringResource(Res.string.library_rename_saved_view),
+            label = stringResource(Res.string.library_view_name),
+            confirmLabel = stringResource(Res.string.library_rename),
             onConfirm = {
                 onRenameView(view, it)
                 state.dismissRename()
@@ -113,9 +149,14 @@ fun LibraryDialogHost(
 
     if (state.showAddTag) {
         TagPickerDialog(
-            title = "Add tag to $selectedCount document(s)",
+            title =
+                pluralStringResource(
+                    Res.plurals.library_add_tag_to_documents,
+                    selectedCount,
+                    selectedCount,
+                ),
             allTagNames = state.allTagNames,
-            confirmLabel = "Add",
+            confirmLabel = stringResource(Res.string.library_add),
             onConfirm = {
                 onAddTag(it)
                 state.dismissAddTag()
@@ -126,9 +167,14 @@ fun LibraryDialogHost(
 
     if (state.showRemoveTag) {
         TagPickerDialog(
-            title = "Remove tag from $selectedCount document(s)",
+            title =
+                pluralStringResource(
+                    Res.plurals.library_remove_tag_from_documents,
+                    selectedCount,
+                    selectedCount,
+                ),
             allTagNames = state.allTagNames,
-            confirmLabel = "Remove",
+            confirmLabel = stringResource(Res.string.library_remove),
             onConfirm = {
                 onRemoveTag(it)
                 state.dismissRemoveTag()

@@ -20,7 +20,9 @@ kotlinx-datetime = "0.8.0"
 kotlinx-serialization = "1.11.0"
 koog = "1.1.1"
 kotest = "6.2.2"
+kover = "0.9.9"
 ksp = "2.3.10"
+ktlint = "1.8.0"
 ktor = "3.3.3"
 mlkit-docscanner = "16.0.0"
 mlkit-textrecognition = "16.0.1"
@@ -28,6 +30,7 @@ pdfbox = "3.0.8"
 pdfbox-android = "2.0.27.0"
 room3 = "3.0.0"
 sqlite = "2.7.0"
+spotless = "8.9.0"
 
 [libraries]
 androidx-activity-compose = { module = "androidx.activity:activity-compose", version.ref = "androidx-activity" }
@@ -80,5 +83,7 @@ detekt = { id = "dev.detekt", version.ref = "detekt" }
 kotlinJvm = { id = "org.jetbrains.kotlin.jvm", version.ref = "kotlin" }
 kotlinMultiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
 kotlinxSerialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+kover = { id = "org.jetbrains.kotlinx.kover", version.ref = "kover" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 room3 = { id = "androidx.room3", version.ref = "room3" }
+spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }

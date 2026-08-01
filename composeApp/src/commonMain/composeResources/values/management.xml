@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_edit">Edit</string>
+    <string name="common_create">Create</string>
+    <string name="common_rename">Rename</string>
+    <string name="common_name">Name</string>
+    <string name="common_color">Color</string>
+
+    <string name="common_rules_title">Auto-matching rules</string>
+    <string name="common_rules_add">Add rule</string>
+    <string name="common_rules_empty_title">No rules yet</string>
+    <string name="common_rules_empty_subtitle">Create a rule to tag documents automatically based on their text.</string>
+    <string name="common_rules_delete_title">Delete rule</string>
+    <string name="common_rules_delete_message">Remove this rule? It will not undo tags already applied.</string>
+    <string name="common_rules_actions_tags">Tags: %1$s</string>
+    <string name="common_rules_actions_correspondent">Correspondent: %1$s</string>
+    <string name="common_rules_actions_type">Type: %1$s</string>
+    <string name="common_rules_join_parts">%1$s · %2$s</string>
+    <string name="common_rules_summary">%1$s · %2$s · %3$s · priority %4$d</string>
+    <string name="common_rules_new_title">New rule</string>
+    <string name="common_rules_edit_title">Edit rule</string>
+    <string name="common_rules_pattern">Pattern</string>
+    <string name="common_rules_invalid_regex">Invalid regular expression</string>
+    <string name="common_rules_priority">Priority</string>
+    <string name="common_rules_tags_to_add">Tags to add (comma separated)</string>
+    <string name="common_rules_set_correspondent">Set correspondent (optional)</string>
+    <string name="common_rules_set_document_type">Set document type (optional)</string>
+    <string name="common_rules_match_field">Match field</string>
+    <string name="common_rules_algorithm">Algorithm</string>
+    <string name="common_rules_field_content">Extracted text</string>
+    <string name="common_rules_field_title">Title</string>
+    <string name="common_rules_field_file_name">File name</string>
+    <string name="common_rules_algorithm_exact">Exact</string>
+    <string name="common_rules_algorithm_any_word">Any word</string>
+    <string name="common_rules_algorithm_all_words">All words</string>
+    <string name="common_rules_algorithm_regex">Regex</string>
+    <string name="common_rules_algorithm_fuzzy">Fuzzy</string>
+
+    <string name="common_tags_title">Tags</string>
+    <string name="common_tags_new">New tag</string>
+    <string name="common_tags_empty_title">No tags yet</string>
+    <string name="common_tags_empty_subtitle">Create a tag or add tags to documents.</string>
+    <string name="common_tags_rename_title">Rename tag</string>
+    <string name="common_tags_new_name">New name</string>
+    <string name="common_tags_merge_title">Merge &quot;%1$s&quot; into</string>
+    <string name="common_tags_merge">Merge</string>
+    <string name="common_tags_delete_title">Delete tag</string>
+    <string name="common_tags_delete_message">Remove &quot;%1$s&quot; from all documents? This cannot be undone.</string>
+    <string name="common_tags_style_title">Tag style</string>
+    <string name="common_tags_namespace_only">%1$s - namespace only</string>
+    <string name="common_tags_actions">Tag actions</string>
+    <string name="common_tags_merge_into">Merge into...</string>
+    <string name="common_tags_color_style">Color / style</string>
+    <string name="common_tags_name_hierarchy">Name (dot paths for hierarchy)</string>
+    <string name="common_tags_no_color">No color</string>
+    <string name="common_tags_color_value">Color %1$s</string>
+    <string name="common_tags_no_color_marker" translatable="false">x</string>
+
+    <string name="common_trash_maintenance_title">Trash &amp; maintenance</string>
+    <string name="common_trash_tab">Trash</string>
+    <string name="common_trash_duplicates_tab">Duplicates</string>
+    <string name="common_trash_missing_tab">Missing</string>
+    <string name="common_trash_tab_count">%1$s (%2$d)</string>
+    <string name="common_trash_delete_forever">Delete forever</string>
+    <string name="common_trash_delete_forever_message">Permanently delete this document? The file is removed and cannot be recovered.</string>
+    <string name="common_trash_empty">Trash is empty</string>
+    <string name="common_trash_was_path">was: %1$s</string>
+    <string name="common_trash_restore">Restore</string>
+    <string name="common_trash_no_duplicates">No duplicates</string>
+    <string name="common_trash_no_duplicates_subtitle">Every hash has one canonical path.</string>
+    <string name="common_trash_extra_copy">Extra copy</string>
+    <string name="common_trash_remove_extra">Remove extra</string>
+    <string name="common_trash_no_missing_files">No missing files</string>
+    <string name="common_trash_missing_from">Missing from: %1$s</string>
+    <string name="common_trash_no_relink_candidates">No relink candidates found. Rescan after the file returns.</string>
+    <string name="common_trash_match_reason">Match (%1$s)</string>
+    <string name="common_trash_relink">Relink</string>
+</resources>

@@ -7,12 +7,10 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.uniquifyPath
 
-/** How to resolve an external sync-conflict file. */
 sealed interface ConflictAction {
     /** Keep the file: strip the conflict suffix (uniquify if taken), then it is picked up on rescan. */
     data object Keep : ConflictAction
 
-    /** Discard: delete the file. */
     data object Discard : ConflictAction
 
     /** Import as a new document via [ImportService] with a cleaned name. */
@@ -20,8 +18,7 @@ sealed interface ConflictAction {
 }
 
 /**
- * Maintenance operations for the duplicates and conflict-file flows (PLAN.md sec. 5, "Duplicate
- * handling" and sync-conflict handling).
+ * Maintenance operations for external duplicates and sync-conflict files.
  */
 class MaintenanceService(
     private val fs: LibraryFileSystem,
@@ -38,7 +35,11 @@ class MaintenanceService(
      *
      * The duplicates table row for [extraRelPath] is removed either way.
      */
-    suspend fun resolveDuplicate(docId: String, extraRelPath: String, keepCanonical: Boolean) {
+    suspend fun resolveDuplicate(
+        docId: String,
+        extraRelPath: String,
+        keepCanonical: Boolean,
+    ) {
         val doc = documentDao.getByDocId(docId)
         if (keepCanonical || doc == null) {
             if (fs.exists(extraRelPath)) runCatching { fs.delete(extraRelPath) }
@@ -52,7 +53,6 @@ class MaintenanceService(
                 ),
             )
         }
-        // Remove just this extra path from the duplicates table.
         val remaining = duplicateDao.forDoc(docId).filter { it.relPath != extraRelPath }
         duplicateDao.replaceAll(docId, remaining)
     }
@@ -67,18 +67,23 @@ class MaintenanceService(
      * - [ConflictAction.ImportAsNew]: route through [ImportService] with the cleaned name; the
      *   original conflict file is deleted after a successful import. Returns the imported path.
      */
-    suspend fun resolveConflictFile(relPath: String, action: ConflictAction): String? {
+    suspend fun resolveConflictFile(
+        relPath: String,
+        action: ConflictAction,
+    ): String? {
         when (action) {
             is ConflictAction.Discard -> {
                 if (fs.exists(relPath)) fs.delete(relPath)
                 return null
             }
+
             is ConflictAction.Keep -> {
                 val cleaned = cleanConflictName(relPath)
                 val target = uniquify(cleaned)
                 fs.move(relPath, target)
                 return target
             }
+
             is ConflictAction.ImportAsNew -> {
                 val cleanName = cleanConflictName(relPath).substringAfterLast('/')
                 val bytes = fs.readBytes(relPath)

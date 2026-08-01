@@ -14,7 +14,6 @@ import dev.npn.app.platform.LocalDocumentScanner
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
-
     private lateinit var env: AppEnvironment
     private lateinit var scanner: MlKitDocumentScanner
 
@@ -46,26 +45,55 @@ class MainActivity : ComponentActivity() {
         if (!IntentImport.isImportIntent(intent)) return
         val importIntent = intent ?: return
         lifecycleScope.launch {
-            val result = runCatching { IntentImport.import(this@MainActivity, env, importIntent) }
-                .getOrNull()
+            val result =
+                runCatching { IntentImport.import(this@MainActivity, env, importIntent) }
+                    .getOrNull()
             when {
-                result == null ->
-                    toast("Set up a library first, then share again")
+                result == null -> {
+                    toast(getString(R.string.import_library_required))
+                }
 
-                result.total == 0 ->
-                    toast("Nothing to import")
+                result.isEmpty -> {
+                    toast(getString(R.string.import_nothing_found))
+                }
 
                 else -> {
-                    val parts = buildList {
-                        if (result.imported > 0) add("${result.imported} imported")
-                        if (result.duplicates > 0) add("${result.duplicates} duplicate")
-                        if (result.failed > 0) add("${result.failed} failed")
-                    }
-                    toast(parts.joinToString(", ").ifEmpty { "Import complete" })
+                    toast(importSummary(result).ifEmpty { getString(R.string.import_complete) })
                 }
             }
         }
     }
+
+    private fun importSummary(result: IntentImport.Result): String =
+        buildList {
+            if (result.imported > 0) {
+                add(
+                    resources.getQuantityString(
+                        R.plurals.import_summary_imported,
+                        result.imported,
+                        result.imported,
+                    ),
+                )
+            }
+            if (result.duplicates > 0) {
+                add(
+                    resources.getQuantityString(
+                        R.plurals.import_summary_duplicate,
+                        result.duplicates,
+                        result.duplicates,
+                    ),
+                )
+            }
+            if (result.failed > 0) {
+                add(
+                    resources.getQuantityString(
+                        R.plurals.import_summary_failed,
+                        result.failed,
+                        result.failed,
+                    ),
+                )
+            }
+        }.joinToString(getString(R.string.import_summary_separator))
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()

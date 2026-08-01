@@ -5,8 +5,8 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
- * OCR sidecar payload (PLAN.md "OCR sidecars"). Serialized to
- * `.npn/ocr/<sha256>.<deviceId>.json`, single-writer and write-once. Compact by design
+ * OCR sidecar payload serialized to `.npn/ocr/<sha256>.<deviceId>.json`, single-writer and
+ * write-once. Compact by design
  * (text only). Field names are the exact wire keys.
  *
  * Example:
@@ -39,10 +39,11 @@ data class OcrSidecar(
 
 /** Serialization codec for [OcrSidecar]. Keeps output compact (no pretty-printing). */
 object OcrSidecarCodec {
-    private val json = Json {
-        encodeDefaults = true
-        ignoreUnknownKeys = true
-    }
+    private val json =
+        Json {
+            encodeDefaults = true
+            ignoreUnknownKeys = true
+        }
 
     fun encode(sidecar: OcrSidecar): String = json.encodeToString(OcrSidecar.serializer(), sidecar)
 

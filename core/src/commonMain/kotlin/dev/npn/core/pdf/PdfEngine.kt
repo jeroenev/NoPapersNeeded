@@ -18,7 +18,10 @@ interface PdfDocumentHandle : AutoCloseable {
      * [maxDimensionPx] pixels, but the shorter side is never starved of resolution on very
      * elongated pages (see [pageRenderScale]).
      */
-    fun renderPagePng(pageIndex: Int, maxDimensionPx: Int): ByteArray
+    fun renderPagePng(
+        pageIndex: Int,
+        maxDimensionPx: Int,
+    ): ByteArray
 }
 
 /**
@@ -46,7 +49,11 @@ private const val MAX_RENDER_PIXELS = 4800f * 2600f
  * low-resolution width and read blurry). Equivalent to capping the aspect ratio used for scaling.
  * The result is finally capped so total rendered pixels stay under [MAX_RENDER_PIXELS].
  */
-fun pageRenderScale(widthPoints: Float, heightPoints: Float, maxDimensionPx: Int): Float {
+fun pageRenderScale(
+    widthPoints: Float,
+    heightPoints: Float,
+    maxDimensionPx: Int,
+): Float {
     val longer = maxOf(widthPoints, heightPoints).coerceAtLeast(1f)
     val shorter = minOf(widthPoints, heightPoints).coerceAtLeast(1f)
     val byLonger = maxDimensionPx.toFloat() / longer
@@ -60,8 +67,8 @@ fun pageRenderScale(widthPoints: Float, heightPoints: Float, maxDimensionPx: Int
 }
 
 /**
- * Platform PDF engine (PLAN.md sec. 5, "OCR pipeline" / viewer). Behind an interface so a
- * desktop PDFBox 3.x actual and an Android pdfbox-android/PdfRenderer actual can differ.
+ * Platform PDF engine. The interface allows the desktop PDFBox 3.x and Android
+ * pdfbox-android/PdfRenderer implementations to differ.
  */
 interface PdfEngine {
     /** Open [bytes] as a PDF; throws [PdfOpenException] on an invalid/corrupt file. */
@@ -75,10 +82,16 @@ interface PdfEngine {
      * given order). Throws [PdfOpenException] on an invalid source and [IllegalArgumentException]
      * on an empty or out-of-range index list. The source bytes are never modified.
      */
-    suspend fun extractPages(bytes: ByteArray, pageIndices: List<Int>): ByteArray
+    suspend fun extractPages(
+        bytes: ByteArray,
+        pageIndices: List<Int>,
+    ): ByteArray
 }
 
-class PdfOpenException(message: String, cause: Throwable? = null) : Exception(message, cause)
+class PdfOpenException(
+    message: String,
+    cause: Throwable? = null,
+) : Exception(message, cause)
 
 /** JPEG magic bytes: FF D8 FF. */
 internal fun isJpeg(bytes: ByteArray): Boolean =

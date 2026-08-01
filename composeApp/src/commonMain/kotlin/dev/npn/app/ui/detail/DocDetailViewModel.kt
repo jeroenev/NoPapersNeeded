@@ -1,7 +1,13 @@
 package dev.npn.app.ui.detail
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiAction
+import dev.npn.app.ui.common.UiTextKey
+import dev.npn.app.ui.common.WhileSubscribedTimeout
+import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.queryTerms
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
@@ -9,8 +15,6 @@ import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.flow.MutableStateFlow
-import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
@@ -35,9 +39,14 @@ data class DetailUiState(
 
 sealed interface NoteSaveState {
     data object Idle : NoteSaveState
+
     data object Saving : NoteSaveState
+
     data object Saved : NoteSaveState
-    data class Error(val message: String) : NoteSaveState
+
+    data class Error(
+        val message: String,
+    ) : NoteSaveState
 }
 
 data class NoteEditorState(
@@ -50,10 +59,18 @@ data class NoteEditorState(
 
 sealed interface HistoryUiState {
     data object NotLoaded : HistoryUiState
+
     data object Loading : HistoryUiState
+
     data object Empty : HistoryUiState
-    data class Loaded(val items: List<HistoryItem>) : HistoryUiState
-    data class Error(val message: String) : HistoryUiState
+
+    data class Loaded(
+        val items: List<HistoryItem>,
+    ) : HistoryUiState
+
+    data class Error(
+        val message: String,
+    ) : HistoryUiState
 }
 
 /**
@@ -78,7 +95,6 @@ class DocDetailViewModel(
     val session: LibrarySession,
     searchQuery: String? = null,
 ) : MessagesViewModel() {
-
     private val _ui = MutableStateFlow(DetailUiState())
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
     private val metadataMutex = Mutex()
@@ -92,7 +108,8 @@ class DocDetailViewModel(
     val highlightTerms: List<String> = searchQuery?.let { queryTerms(it) }.orEmpty()
 
     val doc: StateFlow<DocListItem?> =
-        session.documents.observeDoc(docId)
+        session.documents
+            .observeDoc(docId)
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     val reviewMode: StateFlow<ReviewMode> =
@@ -100,21 +117,25 @@ class DocDetailViewModel(
             .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     val correspondents: StateFlow<List<String>> =
-        session.documents.observeCorrespondents()
+        session.documents
+            .observeCorrespondents()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val docTypes: StateFlow<List<String>> =
-        session.documents.observeDocTypes()
+        session.documents
+            .observeDocTypes()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val tagColors: StateFlow<Map<String, String?>> =
-        session.tags.observeTags()
+        session.tags
+            .observeTags()
             .map { tags -> tags.associate { it.name to it.color } }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
     /** Distinct custom-field keys in the library, for add-field key autocomplete. */
     val fieldKeys: StateFlow<List<String>> =
-        session.documents.observeFieldKeys()
+        session.documents
+            .observeFieldKeys()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /**
@@ -122,7 +143,8 @@ class DocDetailViewModel(
      * appears once background OCR completes). Null until loaded or when there is no text.
      */
     val ocrText: StateFlow<String?> =
-        doc.map { it?.doc?.ocrState }
+        doc
+            .map { it?.doc?.ocrState }
             .distinctUntilChanged()
             .map { runCatching { session.content.extractedText(docId) }.getOrNull() }
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
@@ -132,7 +154,8 @@ class DocDetailViewModel(
      * state or engine changes so the picker reflects freshly-adopted sidecars and re-selections.
      */
     val ocrVersions: StateFlow<List<OcrVersion>> =
-        doc.map { it?.doc?.ocrState to it?.doc?.ocrEngine }
+        doc
+            .map { it?.doc?.ocrState to it?.doc?.ocrEngine }
             .distinctUntilChanged()
             .map { runCatching { session.ocrVersions(docId) }.getOrDefault(emptyList()) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
@@ -149,18 +172,19 @@ class DocDetailViewModel(
             _ui.value = _ui.value.copy(pageCount = count)
         }
         viewModelScope.launch {
-            val configured = runCatching { session.ai.config().configured }.getOrDefault(false)
+            val configured = session.ai.isConfiguredOrFalse()
             _aiTags.value = _aiTags.value.copy(available = configured)
         }
         viewModelScope.launch {
             session.documents.observeDoc(docId).collect { item ->
                 val persisted = item?.doc?.notes.orEmpty()
                 val current = _noteEditor.value
-                _noteEditor.value = if (current.dirty) {
-                    current.copy(persisted = persisted)
-                } else {
-                    current.copy(draft = persisted, persisted = persisted)
-                }
+                _noteEditor.value =
+                    if (current.dirty) {
+                        current.copy(persisted = persisted)
+                    } else {
+                        current.copy(draft = persisted, persisted = persisted)
+                    }
             }
         }
     }
@@ -180,23 +204,24 @@ class DocDetailViewModel(
         if (_history.value == HistoryUiState.Loading) return
         _history.value = HistoryUiState.Loading
         viewModelScope.launch {
-            _history.value = runCatching {
-                HistoryMapper.toHistoryItems(session.documents.history(docId))
-            }.fold(
-                onSuccess = { items ->
-                    if (items.isEmpty()) HistoryUiState.Empty else HistoryUiState.Loaded(items)
-                },
-                onFailure = { error ->
-                    HistoryUiState.Error(error.message ?: "Could not load document history")
-                },
-            )
+            _history.value =
+                runCatching {
+                    HistoryMapper.toHistoryItems(session.documents.history(docId))
+                }.fold(
+                    onSuccess = { items ->
+                        if (items.isEmpty()) HistoryUiState.Empty else HistoryUiState.Loaded(items)
+                    },
+                    onFailure = { error ->
+                        HistoryUiState.Error(error.message.orEmpty())
+                    },
+                )
         }
     }
 
     // ---- metadata edits ----
 
     fun setTitle(title: String?) =
-        launchMetadata("save title") { session.meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
+        launchMetadata(UiAction.SAVE_TITLE) { session.meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
 
     fun updateNoteDraft(value: String) {
         _noteEditor.value = _noteEditor.value.copy(draft = value, saveState = NoteSaveState.Idle)
@@ -212,32 +237,38 @@ class DocDetailViewModel(
             }.fold(
                 onSuccess = {
                     val latest = _noteEditor.value
-                    _noteEditor.value = latest.copy(
-                        persisted = current.draft.takeUnless { it.isBlank() }.orEmpty(),
-                        saveState = NoteSaveState.Saved,
-                    )
+                    _noteEditor.value =
+                        latest.copy(
+                            persisted = current.draft.takeUnless { it.isBlank() }.orEmpty(),
+                            saveState = NoteSaveState.Saved,
+                        )
                 },
                 onFailure = { error ->
-                    _noteEditor.value = _noteEditor.value.copy(
-                        saveState = NoteSaveState.Error(error.message ?: "Could not save note"),
-                    )
+                    _noteEditor.value =
+                        _noteEditor.value.copy(
+                            saveState = NoteSaveState.Error(error.message.orEmpty()),
+                        )
                 },
             )
         }
     }
+
     fun setCorrespondent(value: String?) =
-        launchMetadata("save correspondent") {
+        launchMetadata(UiAction.SAVE_CORRESPONDENT) {
             session.meta.setCorrespondent(listOf(docId), value?.takeIf { it.isNotBlank() })
         }
+
     fun setDocType(value: String?) =
-        launchMetadata("save document type") {
+        launchMetadata(UiAction.SAVE_DOCUMENT_TYPE) {
             session.meta.setDocType(listOf(docId), value?.takeIf { it.isNotBlank() })
         }
-    fun setDocDate(isoDate: String?) =
-        launchMetadata("save date") { session.meta.setDocDate(docId, isoDate?.takeIf { it.isNotBlank() }) }
 
-    fun addTag(tag: String) = launchMetadata("add tag") { session.meta.addTag(listOf(docId), tag) }
-    fun removeTag(tag: String) = launchMetadata("remove tag") { session.meta.removeTag(listOf(docId), tag) }
+    fun setDocDate(isoDate: String?) =
+        launchMetadata(UiAction.SAVE_DATE) { session.meta.setDocDate(docId, isoDate?.takeIf { it.isNotBlank() }) }
+
+    fun addTag(tag: String) = launchMetadata(UiAction.ADD_TAG) { session.meta.addTag(listOf(docId), tag) }
+
+    fun removeTag(tag: String) = launchMetadata(UiAction.REMOVE_TAG) { session.meta.removeTag(listOf(docId), tag) }
 
     // ---- AI tag suggestions ----
 
@@ -253,12 +284,12 @@ class DocDetailViewModel(
             runCatching { session.ai.suggestTags(docId) }.fold(
                 onSuccess = { suggestions ->
                     if (suggestions.isEmpty()) {
-                        message("No suggestions — document may not be OCRed yet")
+                        message(uiText(UiTextKey.NO_AI_TAG_SUGGESTIONS))
                     }
                     _aiTags.value = _aiTags.value.copy(suggesting = false, suggestions = suggestions)
                 },
                 onFailure = { error ->
-                    message(couldNotSuggest(error))
+                    message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_TAGS, reasonOf(error)))
                     _aiTags.value = _aiTags.value.copy(suggesting = false, suggestions = emptyList())
                 },
             )
@@ -266,67 +297,75 @@ class DocDetailViewModel(
     }
 
     /** Accept a suggestion: add it as a real tag (normal journal path) and drop it from the list. */
-    fun acceptAiTag(tag: String) = launchMetadata("add tag") {
-        session.meta.addTag(listOf(docId), tag)
-        dismissAiTag(tag)
-    }
+    fun acceptAiTag(tag: String) =
+        launchMetadata(UiAction.ADD_TAG) {
+            session.meta.addTag(listOf(docId), tag)
+            dismissAiTag(tag)
+        }
 
     fun dismissAiTag(tag: String) {
-        _aiTags.value = _aiTags.value.copy(
-            suggestions = _aiTags.value.suggestions.filterNot { it.tag == tag },
-        )
+        _aiTags.value =
+            _aiTags.value.copy(
+                suggestions = _aiTags.value.suggestions.filterNot { it.tag == tag },
+            )
     }
 
     fun clearAiTagSuggestions() {
         _aiTags.value = _aiTags.value.copy(suggestions = emptyList())
     }
 
-    private fun couldNotSuggest(e: Throwable): String {
-        val reason = e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "unknown error")
-        return "Could not suggest tags: $reason"
-    }
+    fun setField(
+        key: String,
+        value: String?,
+    ) = launchMetadata(UiAction.SAVE_FIELD) { session.meta.setField(docId, key, value) }
 
-    fun setField(key: String, value: String?) =
-        launchMetadata("save field") { session.meta.setField(docId, key, value) }
-    fun removeField(key: String) = launchMetadata("remove field") { session.meta.setField(docId, key, null) }
+    fun removeField(key: String) = launchMetadata(UiAction.REMOVE_FIELD) { session.meta.setField(docId, key, null) }
 
     fun setReviewed(reviewed: Boolean) =
-        launchMetadata("update review state") { session.meta.setReviewed(listOf(docId), reviewed) }
+        launchMetadata(UiAction.UPDATE_REVIEW_STATE) { session.meta.setReviewed(listOf(docId), reviewed) }
 
-    private fun launchMetadata(action: String, block: suspend () -> Unit) =
-        launchReporting(action) { metadataMutex.withLock { block() } }
+    private fun launchMetadata(
+        action: UiAction,
+        block: suspend () -> Unit,
+    ) = launchReporting(action) { metadataMutex.withLock { block() } }
 
     /** On failure [onDone] is not invoked (the screen stays put) and the error is surfaced. */
-    fun trash(onDone: () -> Unit) = launchReporting("move to trash") {
-        session.meta.trashDoc(docId)
-        onDone()
-    }
+    fun trash(onDone: () -> Unit) =
+        launchReporting(UiAction.MOVE_TO_TRASH) {
+            session.meta.trashDoc(docId)
+            onDone()
+        }
 
     fun rename(newFileName: String) =
-        launchReporting("rename file") { session.meta.renameFile(docId, newFileName) }
+        launchReporting(UiAction.RENAME_FILE) { session.meta.renameFile(docId, newFileName) }
 
-    fun reOcr() = launchReporting("re-run OCR") {
-        _ui.value = _ui.value.copy(reindexing = true)
-        try {
-            session.reOcr(docId)
-        } finally {
-            _ui.value = _ui.value.copy(reindexing = false)
+    fun reOcr() =
+        launchReporting(UiAction.RERUN_OCR) {
+            _ui.value = _ui.value.copy(reindexing = true)
+            try {
+                session.reOcr(docId)
+            } finally {
+                _ui.value = _ui.value.copy(reindexing = false)
+            }
         }
-    }
 
     /** Pin [engine] as the searchable OCR version (null = automatic best-engine selection). */
     fun setOcrEngine(engine: String?) =
-        launchReporting("change OCR engine") { session.setOcrEngine(docId, engine) }
+        launchReporting(UiAction.CHANGE_OCR_ENGINE) { session.setOcrEngine(docId, engine) }
 
     /**
      * Split into one document per [segments] entry. On success the original is trashed by the
      * session, so the screen should navigate back; failures surface via [onResult]'s message.
      */
-    fun split(segments: List<IntRange>, onResult: (SplitOutcome) -> Unit) {
+    fun split(
+        segments: List<IntRange>,
+        onResult: (SplitOutcome) -> Unit,
+    ) {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(splitting = true)
-            val outcome = runCatching { session.splitPdf(docId, segments) }
-                .getOrElse { SplitOutcome.Failed(it.message ?: "split failed") }
+            val outcome =
+                runCatching { session.splitPdf(docId, segments) }
+                    .getOrElse { SplitOutcome.Failed(it.message.orEmpty()) }
             _ui.value = _ui.value.copy(splitting = false)
             onResult(outcome)
         }
@@ -344,6 +383,8 @@ class DocDetailViewModel(
 
     suspend fun bakedCopyBytes(): ByteArray? = runCatching { session.content.bakedCopyBytes(docId) }.getOrNull()
 
-    suspend fun renderPage(pageIndex: Int, maxDim: Int): ByteArray? =
-        runCatching { session.content.renderPage(docId, pageIndex, maxDim) }.getOrNull()
+    suspend fun renderPage(
+        pageIndex: Int,
+        maxDim: Int,
+    ): ByteArray? = runCatching { session.content.renderPage(docId, pageIndex, maxDim) }.getOrNull()
 }

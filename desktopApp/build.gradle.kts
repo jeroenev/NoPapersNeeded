@@ -1,10 +1,10 @@
 import org.gradle.jvm.toolchain.JavaLanguageVersion
+import org.gradle.process.ExecOperations
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import java.io.File
 import java.net.URI
 import java.util.Base64
 import javax.inject.Inject
-import org.gradle.process.ExecOperations
 
 plugins {
     alias(libs.plugins.kotlinJvm)
@@ -14,14 +14,16 @@ plugins {
 
 // jpackage/jlink must come from the toolchain JDK 17, not the system JVM. The system JVM here
 // is a JDK 25 install without jlink/jpackage, which fails compose.desktop's checkRuntime.
-val jdk17 = javaToolchains.launcherFor {
-    languageVersion.set(JavaLanguageVersion.of(17))
-}
+val jdk17 =
+    javaToolchains.launcherFor {
+        languageVersion.set(JavaLanguageVersion.of(17))
+    }
 
 dependencies {
     implementation(project(":composeApp"))
     implementation(project(":core"))
     implementation(compose.desktop.currentOs)
+    implementation(libs.compose.components.resources)
     implementation(libs.kotlinx.coroutines.swing)
 }
 
@@ -37,7 +39,10 @@ compose.desktop {
         mainClass = "dev.npn.desktop.MainKt"
 
         // Use the toolchain JDK 17 (foojay-provisioned) for jlink/jpackage.
-        javaHome = jdk17.get().metadata.installationPath.asFile.absolutePath
+        javaHome =
+            jdk17
+                .get()
+                .metadata.installationPath.asFile.absolutePath
 
         nativeDistributions {
             // jlink strips the runtime to a minimal module set. FileKit's Linux file picker
@@ -96,113 +101,117 @@ val downloadAppImageTool by tasks.registering(DownloadAppImageToolTask::class) {
     outFile.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
 }
 
-abstract class PackageAppImageTask @Inject constructor(
-    private val execOps: ExecOperations,
-) : DefaultTask() {
+abstract class PackageAppImageTask
+    @Inject
+    constructor(
+        private val execOps: ExecOperations,
+    ) : DefaultTask() {
+        @get:InputDirectory
+        abstract val appImageSrc: DirectoryProperty
 
-    @get:InputDirectory
-    abstract val appImageSrc: DirectoryProperty
+        @get:InputFile
+        abstract val appImageTool: RegularFileProperty
 
-    @get:InputFile
-    abstract val appImageTool: RegularFileProperty
+        @get:Input
+        abstract val appName: Property<String>
 
-    @get:Input
-    abstract val appName: Property<String>
+        @get:Input
+        abstract val arch: Property<String>
 
-    @get:Input
-    abstract val arch: Property<String>
+        @get:Internal
+        abstract val appDir: DirectoryProperty
 
-    @get:Internal
-    abstract val appDir: DirectoryProperty
+        @get:OutputFile
+        abstract val outFile: RegularFileProperty
 
-    @get:OutputFile
-    abstract val outFile: RegularFileProperty
+        @TaskAction
+        fun build() {
+            val name = appName.get()
+            val src = appImageSrc.get().asFile
+            require(src.isDirectory) { "jpackage app-image not found at $src" }
 
-    @TaskAction
-    fun build() {
-        val name = appName.get()
-        val src = appImageSrc.get().asFile
-        require(src.isDirectory) { "jpackage app-image not found at $src" }
+            val dir = appDir.get().asFile
+            dir.deleteRecursively()
+            dir.mkdirs()
 
-        val dir = appDir.get().asFile
-        dir.deleteRecursively()
-        dir.mkdirs()
+            // Copy the self-contained app-image (bundled JRE + launcher) into AppDir/usr.
+            // Kotlin's copyRecursively does not preserve the executable bit, so restore it
+            // afterwards on the launcher and every ELF/.so under the runtime.
+            val usrDir = File(dir, "usr")
+            src.copyRecursively(usrDir, overwrite = true)
 
-        // Copy the self-contained app-image (bundled JRE + launcher) into AppDir/usr.
-        // Kotlin's copyRecursively does not preserve the executable bit, so restore it
-        // afterwards on the launcher and every ELF/.so under the runtime.
-        val usrDir = File(dir, "usr")
-        src.copyRecursively(usrDir, overwrite = true)
+            val launcherFile = File(dir, "usr/bin/$name")
+            require(launcherFile.exists()) { "launcher not found at usr/bin/$name inside app-image" }
+            val launcher = "usr/bin/$name"
 
-        val launcherFile = File(dir, "usr/bin/$name")
-        require(launcherFile.exists()) { "launcher not found at usr/bin/$name inside app-image" }
-        val launcher = "usr/bin/$name"
-
-        // Restore executable permission for the launcher and bundled native binaries.
-        usrDir.walkTopDown().forEach { f ->
-            if (!f.isFile) return@forEach
-            val underBin = f.parentFile?.name == "bin"
-            val isNative = f.extension.equals("so", ignoreCase = true) ||
-                f.name.contains(".so.")
-            if (underBin || isNative) {
-                f.setExecutable(true, false)
+            // Restore executable permission for the launcher and bundled native binaries.
+            usrDir.walkTopDown().forEach { f ->
+                if (!f.isFile) return@forEach
+                val underBin = f.parentFile?.name == "bin"
+                val isNative =
+                    f.extension.equals("so", ignoreCase = true) ||
+                        f.name.contains(".so.")
+                if (underBin || isNative) {
+                    f.setExecutable(true, false)
+                }
             }
-        }
 
-        // AppRun -> the bundled launcher.
-        val appRun = File(dir, "AppRun")
-        appRun.writeText(
-            """
-            #!/bin/sh
-            HERE="${'$'}(dirname "${'$'}(readlink -f "${'$'}0")")"
-            exec "${'$'}HERE/$launcher" "${'$'}@"
-            """.trimIndent() + "\n",
-        )
-        appRun.setExecutable(true)
-
-        // Minimal .desktop entry (required by appimagetool).
-        File(dir, "$name.desktop").writeText(
-            """
-            [Desktop Entry]
-            Type=Application
-            Name=no papers needed
-            Exec=$name
-            Icon=$name
-            Categories=Office;Utility;
-            Terminal=false
-            """.trimIndent() + "\n",
-        )
-
-        // Icon: reuse a packaged PNG if present, else write a 1x1 placeholder so
-        // appimagetool is satisfied. Ship real branding via
-        // nativeDistributions.linux.iconFile.
-        val iconTarget = File(dir, "$name.png")
-        val shippedIcon = usrDir.walkTopDown().firstOrNull {
-            it.isFile && it.extension.equals("png", ignoreCase = true)
-        }
-        if (shippedIcon != null) {
-            shippedIcon.copyTo(iconTarget, overwrite = true)
-        } else {
-            iconTarget.writeBytes(
-                Base64.getDecoder().decode(
-                    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-                ),
+            // AppRun -> the bundled launcher.
+            val appRun = File(dir, "AppRun")
+            appRun.writeText(
+                """
+                #!/bin/sh
+                HERE="${'$'}(dirname "${'$'}(readlink -f "${'$'}0")")"
+                exec "${'$'}HERE/$launcher" "${'$'}@"
+                """.trimIndent() + "\n",
             )
+            appRun.setExecutable(true)
+
+            // Minimal .desktop entry (required by appimagetool).
+            File(dir, "$name.desktop").writeText(
+                """
+                [Desktop Entry]
+                Type=Application
+                Name=no papers needed
+                Exec=$name
+                Icon=$name
+                Categories=Office;Utility;
+                Terminal=false
+                """.trimIndent() + "\n",
+            )
+
+            // Icon: reuse a packaged PNG if present, else write a 1x1 placeholder so
+            // appimagetool is satisfied. Ship real branding via
+            // nativeDistributions.linux.iconFile.
+            val iconTarget = File(dir, "$name.png")
+            val shippedIcon =
+                usrDir.walkTopDown().firstOrNull {
+                    it.isFile && it.extension.equals("png", ignoreCase = true)
+                }
+            if (shippedIcon != null) {
+                shippedIcon.copyTo(iconTarget, overwrite = true)
+            } else {
+                iconTarget.writeBytes(
+                    Base64.getDecoder().decode(
+                        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
+                    ),
+                )
+            }
+
+            val out = outFile.get().asFile
+            out.parentFile.mkdirs()
+
+            logger.lifecycle("Running appimagetool -> ${out.absolutePath}")
+            execOps
+                .exec {
+                    executable = appImageTool.get().asFile.absolutePath
+                    // --appimage-extract-and-run avoids needing host FUSE at build time.
+                    args = listOf("--appimage-extract-and-run", dir.absolutePath, out.absolutePath)
+                    environment("ARCH", arch.get())
+                }.assertNormalExitValue()
+            logger.lifecycle("AppImage written: ${out.absolutePath}")
         }
-
-        val out = outFile.get().asFile
-        out.parentFile.mkdirs()
-
-        logger.lifecycle("Running appimagetool -> ${out.absolutePath}")
-        execOps.exec {
-            executable = appImageTool.get().asFile.absolutePath
-            // --appimage-extract-and-run avoids needing host FUSE at build time.
-            args = listOf("--appimage-extract-and-run", dir.absolutePath, out.absolutePath)
-            environment("ARCH", arch.get())
-        }.assertNormalExitValue()
-        logger.lifecycle("AppImage written: ${out.absolutePath}")
     }
-}
 
 val packageAppImage by tasks.registering(PackageAppImageTask::class) {
     group = "compose desktop"

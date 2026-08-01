@@ -25,13 +25,17 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.window.PopupProperties
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_clear_search
+import no_papers_needed.composeapp.generated.resources.common_search_documents
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun SearchField(
     value: String,
     onValueChange: (String) -> Unit,
     modifier: Modifier = Modifier,
-    placeholder: String = "Search documents",
+    placeholder: String? = null,
     suggestions: List<String> = emptyList(),
     onSuggestionSelected: ((String) -> Unit)? = null,
 ) {
@@ -52,30 +56,46 @@ fun SearchField(
                 onValueChange(it)
                 expanded = it.isNotBlank() && hasSuggestions
             },
-            modifier = Modifier
-                .fillMaxWidth()
-                .onFocusChanged { focused = it.isFocused }
-                .onPreviewKeyEvent { event ->
-                    if (!expanded || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                    when (event.key) {
-                        Key.DirectionDown -> selectedIndex = (selectedIndex + 1).coerceAtMost(suggestions.lastIndex)
-                        Key.DirectionUp -> selectedIndex = (selectedIndex - 1).coerceAtLeast(0)
-                        Key.Enter -> {
-                            suggestions.getOrNull(selectedIndex)?.let { onSuggestionSelected?.invoke(it) }
-                            expanded = false
+            modifier =
+                Modifier
+                    .fillMaxWidth()
+                    .onFocusChanged { focused = it.isFocused }
+                    .onPreviewKeyEvent { event ->
+                        if (!expanded || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        when (event.key) {
+                            Key.DirectionDown -> {
+                                selectedIndex = (selectedIndex + 1).coerceAtMost(suggestions.lastIndex)
+                            }
+
+                            Key.DirectionUp -> {
+                                selectedIndex = (selectedIndex - 1).coerceAtLeast(0)
+                            }
+
+                            Key.Enter -> {
+                                suggestions.getOrNull(selectedIndex)?.let { onSuggestionSelected?.invoke(it) }
+                                expanded = false
+                            }
+
+                            Key.Escape -> {
+                                expanded = false
+                            }
+
+                            else -> {
+                                return@onPreviewKeyEvent false
+                            }
                         }
-                        Key.Escape -> expanded = false
-                        else -> return@onPreviewKeyEvent false
-                    }
-                    true
-                },
+                        true
+                    },
             singleLine = true,
-            placeholder = { Text(placeholder) },
+            placeholder = { Text(placeholder ?: stringResource(Res.string.common_search_documents)) },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
             trailingIcon = {
                 if (value.isNotEmpty()) {
                     IconButton(onClick = { onValueChange("") }) {
-                        Icon(Icons.Filled.Clear, contentDescription = "Clear search")
+                        Icon(
+                            Icons.Filled.Clear,
+                            contentDescription = stringResource(Res.string.common_clear_search),
+                        )
                     }
                 }
             },

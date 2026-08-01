@@ -30,11 +30,15 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ctrlScrollZoom
 import dev.npn.app.ui.common.pinchToZoom
 import dev.npn.core.app.GridSizing
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.library_larger_grid_items
+import no_papers_needed.composeapp.generated.resources.library_smaller_grid_items
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.abs
 import kotlin.math.floor
 import kotlin.math.roundToInt
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
 
 private const val GRID_ZOOM_COMMIT_DEBOUNCE_MS = 300L
 
@@ -46,15 +50,21 @@ private const val GRID_SPACING_DP = 8f
  * Column count [GridCells.Adaptive] produces for a min cell [width] in [available] dp
  * (mirrors its formula: floor((available + spacing) / (minSize + spacing)), at least 1).
  */
-internal fun gridColumnsFor(available: Float, width: Float, spacing: Float = GRID_SPACING_DP): Int =
-    ((available + spacing) / (width + spacing)).toInt().coerceAtLeast(1)
+internal fun gridColumnsFor(
+    available: Float,
+    width: Float,
+    spacing: Float = GRID_SPACING_DP,
+): Int = ((available + spacing) / (width + spacing)).toInt().coerceAtLeast(1)
 
 /**
  * The largest min cell width (dp) at which [GridCells.Adaptive] yields exactly [columns] in
  * [available] dp. Floored so dp/px rounding cannot tip the layout into one column fewer.
  */
-internal fun gridWidthForColumns(available: Float, columns: Int, spacing: Float = GRID_SPACING_DP): Float =
-    floor((available + spacing) / columns - spacing)
+internal fun gridWidthForColumns(
+    available: Float,
+    columns: Int,
+    spacing: Float = GRID_SPACING_DP,
+): Float = floor((available + spacing) / columns - spacing)
 
 /**
  * Thumbnail grid with direct-manipulation sizing between [GridSizing.MIN_COLUMN_WIDTH] and
@@ -108,8 +118,9 @@ internal fun DocGrid(
         fun stepColumns(delta: Int) {
             val avail = available
             val cols = gridColumnsFor(avail, width)
-            val target = (cols + delta)
-                .coerceIn(gridColumnsFor(avail, maxWidth), gridColumnsFor(avail, minWidth))
+            val target =
+                (cols + delta)
+                    .coerceIn(gridColumnsFor(avail, maxWidth), gridColumnsFor(avail, minWidth))
             if (target != cols) {
                 width = gridWidthForColumns(avail, target).coerceIn(minWidth, maxWidth)
             }
@@ -155,8 +166,11 @@ internal fun DocGrid(
                         selectionMode = ui.selectionMode,
                         selected = item.doc.docId in ui.selected,
                         onClick = {
-                            if (ui.selectionMode) onToggleSelect(item.doc.docId)
-                            else onOpen(item.doc.docId)
+                            if (ui.selectionMode) {
+                                onToggleSelect(item.doc.docId)
+                            } else {
+                                onOpen(item.doc.docId)
+                            }
                         },
                         onLongClick = { onStartSelection(item.doc.docId) },
                     )
@@ -191,10 +205,16 @@ private fun GridZoomControls(
     ) {
         Row {
             IconButton(onClick = onZoomOut, enabled = canZoomOut) {
-                Icon(Icons.Filled.ZoomOut, contentDescription = "Smaller grid items")
+                Icon(
+                    Icons.Filled.ZoomOut,
+                    contentDescription = stringResource(Res.string.library_smaller_grid_items),
+                )
             }
             IconButton(onClick = onZoomIn, enabled = canZoomIn) {
-                Icon(Icons.Filled.ZoomIn, contentDescription = "Larger grid items")
+                Icon(
+                    Icons.Filled.ZoomIn,
+                    contentDescription = stringResource(Res.string.library_larger_grid_items),
+                )
             }
         }
     }

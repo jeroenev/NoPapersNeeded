@@ -1,18 +1,18 @@
 package dev.npn.core.app
 
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.ScanReport
-import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.VerifiedPublicationUnavailableException
-import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SegmentWriter
-import dev.npn.core.journal.SegmentRef
+import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.PublishedTransaction
+import dev.npn.core.journal.SegmentRef
+import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.ReviewMode
@@ -50,92 +50,97 @@ class JournalCoordinator(
     private var objectWriter = objectWriter
     private var writeBlockReason: String? = null
 
-    private val _state = MutableStateFlow(FoldedState())
+    private val mutableState = MutableStateFlow(FoldedState())
     private var state: FoldedState
-        get() = _state.value
-        set(value) { _state.value = value }
+        get() = mutableState.value
+        set(value) {
+            mutableState.value = value
+        }
 
     /** Observable folded state; re-emits after every refresh/commit. */
-    val stateFlow: StateFlow<FoldedState> = _state.asStateFlow()
+    val stateFlow: StateFlow<FoldedState> = mutableState.asStateFlow()
 
-    private val _settings = MutableStateFlow<Map<String, String?>>(emptyMap())
+    private val mutableSettings = MutableStateFlow<Map<String, String?>>(emptyMap())
 
-    fun settingFlow(key: String): kotlinx.coroutines.flow.Flow<String?> =
-        _settings.map { it[key] }
+    fun settingFlow(key: String): kotlinx.coroutines.flow.Flow<String?> = mutableSettings.map { it[key] }
 
     /**
      * Refresh the in-memory [FoldedState] from the store. Called at boot and after any external
      * rescan so that dot lookups reflect other devices' segments too. Does not touch the DB.
      */
-    suspend fun refreshState(preserveLifecycleDocs: Set<String> = emptySet()) = mutex.withLock {
-        try {
-            state = accumulator.reconcile().state
-            observeSourceHlc()
-            seedSettings()
-            indexer.refreshState(state, preserveLifecycleDocs)
-            accumulator.markReady(state.maxHlc)
-            writeBlockReason = null
-        } catch (failure: Throwable) {
-            blockWrites(failure)
-            throw failure
+    suspend fun refreshState(preserveLifecycleDocs: Set<String> = emptySet()) =
+        mutex.withLock {
+            try {
+                state = accumulator.reconcile().state
+                observeSourceHlc()
+                seedSettings()
+                indexer.refreshState(state, preserveLifecycleDocs)
+                accumulator.markReady(state.maxHlc)
+                writeBlockReason = null
+            } catch (failure: Throwable) {
+                blockWrites(failure)
+                throw failure
+            }
         }
-    }
 
     /** The current folded state. Safe to read for dot lookups; treat as a snapshot. */
     val currentState: FoldedState get() = state
 
-    suspend fun ingestObject(relPath: String) = mutex.withLock {
-        withDurableProjectionRecovery {
-            var events: List<JournalEvent> = emptyList()
-            indexer.withFtsWriteGate {
-                accumulator.withProjectionTransaction {
-                    events = accumulator.ingestObject(relPath)
-                    if (events.isEmpty()) return@withProjectionTransaction
-                    events.forEach(state::apply)
-                    observeSourceHlc()
-                    indexer.refreshEvents(state, events, ftsGateHeld = true)
+    suspend fun ingestObject(relPath: String) =
+        mutex.withLock {
+            withDurableProjectionRecovery {
+                var events: List<JournalEvent> = emptyList()
+                indexer.withFtsWriteGate {
+                    accumulator.withProjectionTransaction {
+                        events = accumulator.ingestObject(relPath)
+                        if (events.isEmpty()) return@withProjectionTransaction
+                        events.forEach(state::apply)
+                        observeSourceHlc()
+                        indexer.refreshEvents(state, events, ftsGateHeld = true)
+                    }
                 }
+                updateSettings(events)
             }
-            updateSettings(events)
         }
-    }
 
     /** Strictly reconcile metadata before touching the document projection. */
-    suspend fun rescan(): ScanReport = mutex.withLock {
-        try {
-            state = accumulator.reconcile(state).state
-            observeSourceHlc()
-            seedSettings()
-            val report = indexer.rescan(metadataState = state)
-            accumulator.markReady(state.maxHlc)
-            writeBlockReason = null
-            report
-        } catch (failure: Throwable) {
-            blockWrites(failure)
-            throw failure
-        }
-    }
-
-    suspend fun reconcileMetadata() = mutex.withLock {
-        try {
-            val reconciliation = accumulator.reconcile(state)
-            state = reconciliation.state
-            observeSourceHlc()
-            seedSettings()
-            // Bounded projection when reconcile only ADDED events onto the prior state; otherwise
-            // full reproject (source removed/invalidated, mutation, full refold, first load).
-            if (reconciliation.incremental) {
-                indexer.refreshEvents(state, reconciliation.newEvents)
-            } else if (reconciliation.sourcesRead > 0) {
-                indexer.refreshState(state)
+    suspend fun rescan(): ScanReport =
+        mutex.withLock {
+            try {
+                state = accumulator.reconcile(state).state
+                observeSourceHlc()
+                seedSettings()
+                val report = indexer.rescan(metadataState = state)
+                accumulator.markReady(state.maxHlc)
+                writeBlockReason = null
+                report
+            } catch (failure: Throwable) {
+                blockWrites(failure)
+                throw failure
             }
-            accumulator.markReady(state.maxHlc)
-            writeBlockReason = null
-        } catch (failure: Throwable) {
-            blockWrites(failure)
-            throw failure
         }
-    }
+
+    suspend fun reconcileMetadata() =
+        mutex.withLock {
+            try {
+                val reconciliation = accumulator.reconcile(state)
+                state = reconciliation.state
+                observeSourceHlc()
+                seedSettings()
+                // Bounded projection when reconcile only ADDED events onto the prior state; otherwise
+                // full reproject (source removed/invalidated, mutation, full refold, first load).
+                if (reconciliation.incremental) {
+                    indexer.refreshEvents(state, reconciliation.newEvents)
+                } else if (reconciliation.sourcesRead > 0) {
+                    indexer.refreshState(state)
+                }
+                accumulator.markReady(state.maxHlc)
+                writeBlockReason = null
+            } catch (failure: Throwable) {
+                blockWrites(failure)
+                throw failure
+            }
+        }
 
     /**
      * Compact old, stable storage-v2 objects into one supersession snapshot, then delete the
@@ -149,29 +154,33 @@ class JournalCoordinator(
      *
      * Returns the snapshot's content hash if one was published, else null.
      */
-    suspend fun compact(nowMillis: Long = systemNowMillis()): String? = mutex.withLock {
-        val activeCompactor = compactor ?: return@withLock null
-        if (!activeCompactor.supported || writeBlockReason != null) return@withLock null
-        val support = accumulator.snapshotSupport
-        val (objects, snapshots) = support.compactionCandidates()
-        val plan = activeCompactor.plan(
-            objects = objects,
-            snapshots = snapshots,
-            threshold = compactionThreshold,
-            nowMillis = nowMillis,
-            stabilityWindowMs = compactionStabilityWindowMs,
-        ) ?: return@withLock null
-        withContext(NonCancellable) {
-            val published = activeCompactor.publish(plan) ?: return@withContext null
-            withDurableProjectionRecovery {
-                accumulator.withProjectionTransaction { support.recordLocalSnapshot(published) }
-                support.deleteSupersededFiles(published.supersedes.mapNotNull { hash ->
-                    plan.firstOrNull { it.contentHash == hash }?.relPath
-                })
-                published.contentHash
+    suspend fun compact(nowMillis: Long = systemNowMillis()): String? =
+        mutex.withLock {
+            val activeCompactor = compactor ?: return@withLock null
+            if (!activeCompactor.supported || writeBlockReason != null) return@withLock null
+            val support = accumulator.snapshotSupport
+            val (objects, snapshots) = support.compactionCandidates()
+            val plan =
+                activeCompactor.plan(
+                    objects = objects,
+                    snapshots = snapshots,
+                    threshold = compactionThreshold,
+                    nowMillis = nowMillis,
+                    stabilityWindowMs = compactionStabilityWindowMs,
+                ) ?: return@withLock null
+            withContext(NonCancellable) {
+                val published = activeCompactor.publish(plan) ?: return@withContext null
+                withDurableProjectionRecovery {
+                    accumulator.withProjectionTransaction { support.recordLocalSnapshot(published) }
+                    support.deleteSupersededFiles(
+                        published.supersedes.mapNotNull { hash ->
+                            plan.firstOrNull { it.contentHash == hash }?.relPath
+                        },
+                    )
+                    published.contentHash
+                }
             }
         }
-    }
 
     /**
      * Read the current folded state under the lock, letting [block] build the ops it needs from
@@ -179,34 +188,50 @@ class JournalCoordinator(
      *
      * Returns true if anything was committed (non-empty op list), false for a no-op.
      */
-    suspend fun commitBuilt(block: (FoldedState) -> List<PendingOp>): Boolean = mutex.withLock {
-        ensureWritable()
-        val ops = block(state)
-        if (ops.isEmpty()) return@withLock false
-        // Once the write-once segment exists, cancellation must not leave the disposable DB
-        // projection stale until the next rescan or edit.
-        withContext(NonCancellable) {
-            val (published, written) = writeTransaction(ops)
-            val path = published?.relPath ?: NpnPaths.journalSegmentPath(
-                writer.deviceId, SegmentRef.plainName(written.first().seq),
-            )
-            val version = if (published == null) NpnPaths.STORAGE_V1 else NpnPaths.STORAGE_V2
-            withDurableProjectionRecovery {
-                indexer.withFtsWriteGate {
-                    accumulator.withProjectionTransaction {
-                        accumulator.recordLocalSource(path, version, published?.contentHash, written)
-                        written.forEach(state::apply)
-                        observeSourceHlc()
-                        indexer.refreshEvents(state, written, ftsGateHeld = true)
-                    }
-                }
-                updateSettings(written)
+    suspend fun commitBuilt(block: (FoldedState) -> List<PendingOp>): Boolean =
+        mutex.withLock {
+            ensureWritable()
+            val ops = block(state)
+            if (ops.isEmpty()) return@withLock false
+            // Once the write-once segment exists, cancellation must not leave the disposable DB
+            // projection stale until the next rescan or edit.
+            withContext(NonCancellable) {
+                val (published, written) = writeTransaction(ops)
+                projectWrittenTransaction(published, written)
             }
+            true
         }
-        true
+
+    /**
+     * Shared projection pipeline for an ALREADY-published/written transaction: record the local
+     * source, fold the frozen events into the live state, and incrementally project one DB
+     * transaction under the durable-recovery, FTS write-gate, and projection-transaction wrappers,
+     * then update synced settings. Callers own the enclosing mutex + [NonCancellable] scope.
+     */
+    private suspend fun projectWrittenTransaction(
+        published: PublishedTransaction?,
+        written: List<JournalEvent>,
+        preserveLifecycleDocs: Set<String> = emptySet(),
+    ) {
+        val (path, version) = sourcePathAndVersion(published, written)
+        withDurableProjectionRecovery {
+            indexer.withFtsWriteGate {
+                accumulator.withProjectionTransaction {
+                    accumulator.recordLocalSource(path, version, published?.contentHash, written)
+                    written.forEach(state::apply)
+                    observeSourceHlc()
+                    indexer.refreshEvents(
+                        state,
+                        written,
+                        ftsGateHeld = true,
+                        preserveLifecycleDocs = preserveLifecycleDocs,
+                    )
+                }
+            }
+            updateSettings(written)
+        }
     }
 
-    /** Convenience for op lists that do not depend on current dots. */
     suspend fun commitAndApply(ops: List<PendingOp>): Boolean = commitBuilt { ops }
 
     /**
@@ -227,32 +252,17 @@ class JournalCoordinator(
         ops: List<PendingOp>,
         lifecycleDocs: Set<String>,
         optimisticWrite: suspend () -> Unit,
-    ): Boolean = mutex.withLock {
-        ensureWritable()
-        optimisticWrite()
-        if (ops.isEmpty()) return@withLock false
-        withContext(NonCancellable) {
-            val (published, written) = writeTransaction(ops)
-            val path = published?.relPath ?: NpnPaths.journalSegmentPath(
-                writer.deviceId, SegmentRef.plainName(written.first().seq),
-            )
-            val version = if (published == null) NpnPaths.STORAGE_V1 else NpnPaths.STORAGE_V2
-            withDurableProjectionRecovery {
-                indexer.withFtsWriteGate {
-                    accumulator.withProjectionTransaction {
-                        accumulator.recordLocalSource(path, version, published?.contentHash, written)
-                        written.forEach(state::apply)
-                        observeSourceHlc()
-                        indexer.refreshEvents(
-                            state, written, ftsGateHeld = true, preserveLifecycleDocs = lifecycleDocs,
-                        )
-                    }
-                }
-                updateSettings(written)
+    ): Boolean =
+        mutex.withLock {
+            ensureWritable()
+            optimisticWrite()
+            if (ops.isEmpty()) return@withLock false
+            withContext(NonCancellable) {
+                val (published, written) = writeTransaction(ops)
+                projectWrittenTransaction(published, written, preserveLifecycleDocs = lifecycleDocs)
             }
+            true
         }
-        true
-    }
 
     /**
      * Commit [ops] as one segment and run a full [Indexer.rescan] inside the same critical section.
@@ -264,40 +274,58 @@ class JournalCoordinator(
      *
      * Returns the resulting [ScanReport]. Refreshes [currentState] from the store after the rescan.
      */
-    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport = mutex.withLock {
-        ensureWritable()
-        withContext(NonCancellable) {
-            val (published, written) = writeTransaction(ops)
-            if (written.isNotEmpty()) {
-                val path = published?.relPath ?: NpnPaths.journalSegmentPath(
-                    writer.deviceId, SegmentRef.plainName(written.first().seq),
-                )
-                val version = if (published == null) NpnPaths.STORAGE_V1 else NpnPaths.STORAGE_V2
-                accumulator.recordLocalSource(path, version, published?.contentHash, written)
-                // Fold the freshly-written events into the live state up front. reconcile()'s
-                // fast path returns currentState unchanged when it read no new sources (the events
-                // were just recorded directly), so the projection rescan below must see them here.
-                written.forEach(state::apply)
+    suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport =
+        mutex.withLock {
+            ensureWritable()
+            withContext(NonCancellable) {
+                val (published, written) = writeTransaction(ops)
+                if (written.isNotEmpty()) {
+                    val (path, version) = sourcePathAndVersion(published, written)
+                    accumulator.recordLocalSource(path, version, published?.contentHash, written)
+                    // Fold the freshly-written events into the live state up front. reconcile()'s
+                    // fast path returns currentState unchanged when it read no new sources (the events
+                    // were just recorded directly), so the projection rescan below must see them here.
+                    written.forEach(state::apply)
+                }
+                state = accumulator.reconcile(state).state
+                observeSourceHlc()
+                seedSettings()
+                val report = indexer.rescan(metadataState = state)
+                accumulator.markReady(state.maxHlc)
+                report
             }
-            state = accumulator.reconcile(state).state
-            observeSourceHlc()
-            seedSettings()
-            val report = indexer.rescan(metadataState = state)
-            accumulator.markReady(state.maxHlc)
-            report
         }
-    }
 
     private fun seedSettings() {
-        _settings.value = mapOf(ReviewMode.WIRE_KEY to state.effectiveSetting(ReviewMode.WIRE_KEY))
+        mutableSettings.value = mapOf(ReviewMode.WIRE_KEY to state.effectiveSetting(ReviewMode.WIRE_KEY))
     }
 
     private fun updateSettings(events: List<JournalEvent>) {
         val changed = events.mapNotNull { (it.op as? JournalOp.SettingSet)?.key }.toSet()
         if (changed.isEmpty()) return
-        _settings.value = _settings.value.toMutableMap().apply {
-            changed.forEach { key -> put(key, state.effectiveSetting(key)) }
-        }
+        mutableSettings.value =
+            mutableSettings.value.toMutableMap().apply {
+                changed.forEach { key -> put(key, state.effectiveSetting(key)) }
+            }
+    }
+
+    /**
+     * Storage-relative path and version for a just-written transaction: a published
+     * content-addressed object contributes its own relPath and [NpnPaths.STORAGE_V2]; a legacy
+     * [SegmentWriter] write (published == null) contributes the v1 segment path for this device's
+     * first written seq and [NpnPaths.STORAGE_V1].
+     */
+    private fun sourcePathAndVersion(
+        published: PublishedTransaction?,
+        written: List<JournalEvent>,
+    ): Pair<String, Int> {
+        val path =
+            published?.relPath ?: NpnPaths.journalSegmentPath(
+                writer.deviceId,
+                SegmentRef.plainName(written.first().seq),
+            )
+        val version = if (published == null) NpnPaths.STORAGE_V1 else NpnPaths.STORAGE_V2
+        return path to version
     }
 
     private suspend fun writeTransaction(ops: List<PendingOp>): Pair<PublishedTransaction?, List<JournalEvent>> {

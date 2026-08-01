@@ -2,7 +2,6 @@ package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.pager.PagerState
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -26,33 +25,50 @@ fun Modifier.viewerKeys(
     containerSize: () -> Size,
     fittedSize: () -> Size,
     onPage: (Int) -> Unit,
-): Modifier = onKeyEvent { event ->
-    if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
-    val page = pagerState.currentPage
-    fun zoom(delta: Float) = onTransform(zoomAtCenter(transform(), delta, containerSize(), fittedSize()))
-    when (event.key) {
-        Key.DirectionLeft, Key.PageUp -> { onPage(page - 1); true }
-        Key.DirectionRight, Key.PageDown -> { onPage(page + 1); true }
-        Key.MoveHome -> { onPage(0); true }
-        Key.MoveEnd -> { onPage(pageCount - 1); true }
-        Key.Plus, Key.Equals -> { zoom(ZOOM_KEY_STEP); true }
-        Key.Minus -> { zoom(-ZOOM_KEY_STEP); true }
-        Key.Zero -> { onTransform(ViewerTransform()); true }
-        else -> false
+): Modifier =
+    onKeyEvent { event ->
+        if (event.type != KeyEventType.KeyDown) return@onKeyEvent false
+        val page = pagerState.currentPage
+
+        fun zoom(delta: Float) = onTransform(zoomAtCenter(transform(), delta, containerSize(), fittedSize()))
+        when (event.key) {
+            Key.DirectionLeft, Key.PageUp -> {
+                onPage(page - 1)
+                true
+            }
+
+            Key.DirectionRight, Key.PageDown -> {
+                onPage(page + 1)
+                true
+            }
+
+            Key.MoveHome -> {
+                onPage(0)
+                true
+            }
+
+            Key.MoveEnd -> {
+                onPage(pageCount - 1)
+                true
+            }
+
+            Key.Plus, Key.Equals -> {
+                zoom(ZOOM_STEP)
+                true
+            }
+
+            Key.Minus -> {
+                zoom(-ZOOM_STEP)
+                true
+            }
+
+            Key.Zero -> {
+                onTransform(ViewerTransform())
+                true
+            }
+
+            else -> {
+                false
+            }
+        }
     }
-}
-
-private const val ZOOM_KEY_STEP = 0.5f
-
-private fun zoomAtCenter(t: ViewerTransform, delta: Float, container: Size, fitted: Size): ViewerTransform {
-    if (container == Size.Zero) return t
-    val center = Offset(container.width / 2f, container.height / 2f)
-    val target = (t.zoom + delta).coerceIn(MIN_ZOOM, MAX_ZOOM)
-    return t.applyGesture(
-        zoomChange = target / t.zoom,
-        pan = Offset.Zero,
-        centroid = center,
-        fittedSize = fitted,
-        container = container,
-    )
-}
