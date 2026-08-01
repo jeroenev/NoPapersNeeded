@@ -15,7 +15,8 @@ import java.util.UUID
 
 /**
  * Desktop [SettingsRepository] persisted to a `settings.properties` file under
- * `~/.config/no-papers-needed/`. Values are held in a [MutableStateFlow] loaded at init; writes
+ * the platform config dir (`no-papers-needed/` in XDG_CONFIG_HOME on Unix,
+ * %APPDATA% on Windows). Values are held in a [MutableStateFlow] loaded at init; writes
  * update the flow and persist synchronously on [Dispatchers.IO].
  *
  * A plain properties file sidesteps okio/path
@@ -25,6 +26,8 @@ class SettingsRepositoryImpl(
     private val file: File = defaultFile(),
 ) : SettingsRepository {
     private val props = Properties()
+    private val isWindows =
+        System.getProperty("os.name")?.startsWith("Windows", ignoreCase = true) ?: false
     private val state = MutableStateFlow(load())
     private val persistMutex = Mutex()
 
@@ -135,17 +138,21 @@ class SettingsRepositoryImpl(
 
     private fun storeProperties() {
         file.parentFile?.mkdirs()
-        try {
-            Files.createFile(file.toPath(), PosixFilePermissions.asFileAttribute(OWNER_ONLY_PERMISSIONS))
-        } catch (_: FileAlreadyExistsException) {
-            // Existing files are tightened below before they are opened for writing.
+        if (!isWindows) {
+            try {
+                Files.createFile(file.toPath(), PosixFilePermissions.asFileAttribute(OWNER_ONLY_PERMISSIONS))
+            } catch (_: FileAlreadyExistsException) {
+                // Existing files are tightened below before they are opened for writing.
+            }
+            restrictFilePermissions()
         }
-        restrictFilePermissions()
         file.outputStream().use { props.store(it, "no-papers-needed settings") }
     }
 
     private fun restrictFilePermissions() {
-        Files.setPosixFilePermissions(file.toPath(), OWNER_ONLY_PERMISSIONS)
+        if (!isWindows) {
+            Files.setPosixFilePermissions(file.toPath(), OWNER_ONLY_PERMISSIONS)
+        }
     }
 
     private suspend fun update(transform: (SettingsSnapshot) -> SettingsSnapshot) =
@@ -241,9 +248,7 @@ class SettingsRepositoryImpl(
         private val OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------")
 
         fun defaultFile(): File {
-            val configHome =
-                System.getenv("XDG_CONFIG_HOME")?.ifEmpty { null }
-                    ?: (System.getProperty("user.home") + "/.config")
+            val configHome = PlatformDirs.configHome()
             return File("$configHome/no-papers-needed/settings.properties")
         }
     }

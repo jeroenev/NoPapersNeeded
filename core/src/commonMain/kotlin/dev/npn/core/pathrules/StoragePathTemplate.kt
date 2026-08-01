@@ -21,7 +21,6 @@ import kotlinx.datetime.Month
  * Literal braces can be escaped as `{{` and `}}`.
  */
 object StoragePathTemplate {
-
     private const val PLACEHOLDER_START = '{'
     private const val PLACEHOLDER_END = '}'
     private const val FORMAT_SEPARATOR = ':'
@@ -30,16 +29,19 @@ object StoragePathTemplate {
 
     private const val DEFAULT_FALLBACK_TITLE = "document"
 
-    private val invalidSegmentChars = setOf('/', '\\', ':', '*', '?', '"', '<', '>', '|')
-
     /**
      * Expand [template] with [context] and normalize the result. The returned path is
      * library-relative, uses '/' separators, and has no leading or trailing slashes.
      */
-    fun expand(template: String, context: StoragePathContext): Result<String> =
-        runCatching { expandInternal(template, context) }
+    fun expand(
+        template: String,
+        context: StoragePathContext,
+    ): Result<String> = runCatching { expandInternal(template, context) }
 
-    private fun expandInternal(template: String, context: StoragePathContext): String {
+    private fun expandInternal(
+        template: String,
+        context: StoragePathContext,
+    ): String {
         val sb = StringBuilder()
         var index = 0
         while (index < template.length) {
@@ -49,10 +51,12 @@ object StoragePathTemplate {
                     sb.append(PLACEHOLDER_START)
                     index += ESCAPED_BRACE_LENGTH
                 }
+
                 char == PLACEHOLDER_END && isEscapedBrace(template, index) -> {
                     sb.append(PLACEHOLDER_END)
                     index += ESCAPED_BRACE_LENGTH
                 }
+
                 char == PLACEHOLDER_START -> {
                     val end = template.indexOf(PLACEHOLDER_END, index)
                     require(end != -1) { "Unclosed placeholder starting at $index" }
@@ -63,7 +67,11 @@ object StoragePathTemplate {
                     sb.append(resolve(name.trim(), format?.trim(), context))
                     index = end + 1
                 }
-                char == PLACEHOLDER_END -> error("Unexpected '}' at $index")
+
+                char == PLACEHOLDER_END -> {
+                    error("Unexpected '}' at $index")
+                }
+
                 else -> {
                     sb.append(char)
                     index++
@@ -73,28 +81,55 @@ object StoragePathTemplate {
         return validateExpandedPath(template, sb.toString())
     }
 
-    private fun isEscapedBrace(template: String, index: Int): Boolean =
-        index + 1 < template.length && template[index + 1] == template[index]
+    private fun isEscapedBrace(
+        template: String,
+        index: Int,
+    ): Boolean = index + 1 < template.length && template[index + 1] == template[index]
 
-    private fun resolve(name: String, format: String?, context: StoragePathContext): String =
+    private fun resolve(
+        name: String,
+        format: String?,
+        context: StoragePathContext,
+    ): String =
         when (name) {
             "title" -> {
                 require(format.isNullOrBlank()) { "Formatting is only supported for doc_date" }
                 resolveTitle(context)
             }
-            "docDate", "doc_date" -> sanitizeSegment(resolveDate(context.docDate, format))
-            "docType" -> formatless(format) { sanitizeSegment(context.docType ?: "") }
-            "correspondent" -> formatless(format) { sanitizeSegment(context.correspondent ?: "") }
-            "tags" -> formatless(format) { resolveTags(context.tags) }
-            else -> error("Unknown template variable '$name'")
+
+            "docDate", "doc_date" -> {
+                sanitizeSegment(resolveDate(context.docDate, format))
+            }
+
+            "docType" -> {
+                formatless(format) { sanitizeSegment(context.docType ?: "") }
+            }
+
+            "correspondent" -> {
+                formatless(format) { sanitizeSegment(context.correspondent ?: "") }
+            }
+
+            "tags" -> {
+                formatless(format) { resolveTags(context.tags) }
+            }
+
+            else -> {
+                error("Unknown template variable '$name'")
+            }
         }
 
-    private inline fun formatless(format: String?, value: () -> String): String {
+    private inline fun formatless(
+        format: String?,
+        value: () -> String,
+    ): String {
         require(format.isNullOrBlank()) { "Formatting is only supported for doc_date" }
         return value()
     }
 
-    private fun validateExpandedPath(template: String, expanded: String): String {
+    private fun validateExpandedPath(
+        template: String,
+        expanded: String,
+    ): String {
         require(template.isNotBlank()) { "Path must not be blank" }
         require(!template.startsWith('/') && !template.startsWith('\\')) { "Absolute paths are not allowed" }
         require(!Regex("^[A-Za-z]:[/\\\\]").containsMatchIn(template)) { "Absolute paths are not allowed" }
@@ -106,7 +141,7 @@ object StoragePathTemplate {
             require(segment != "." && segment != "..") { "Path traversal is not allowed" }
             require(!segment.equals(NpnPaths.NPN_DIR, ignoreCase = true)) { "The .npn directory is reserved" }
             require(segment == segment.trim()) { "Path segments may not start or end with whitespace" }
-            require(segment.none { it.code < 0x20 || it in invalidSegmentChars }) {
+            require(NpnPaths.sanitizeSegment(segment) == segment) {
                 "Invalid filename segment '$segment'"
             }
         }
@@ -114,13 +149,17 @@ object StoragePathTemplate {
     }
 
     private fun resolveTitle(context: StoragePathContext): String {
-        val raw = context.title?.ifBlank { null }
-            ?: context.originalFileName?.baseName()?.ifBlank { null }
-            ?: DEFAULT_FALLBACK_TITLE
+        val raw =
+            context.title?.ifBlank { null }
+                ?: context.originalFileName?.baseName()?.ifBlank { null }
+                ?: DEFAULT_FALLBACK_TITLE
         return sanitizeSegment(raw)
     }
 
-    private fun resolveDate(isoDate: String?, format: String?): String {
+    private fun resolveDate(
+        isoDate: String?,
+        format: String?,
+    ): String {
         if (isoDate.isNullOrBlank()) return ""
         val date = runCatching { LocalDate.parse(isoDate) }.getOrNull() ?: return isoDate
         return if (format.isNullOrBlank()) {
@@ -131,7 +170,8 @@ object StoragePathTemplate {
     }
 
     private fun resolveTags(tags: List<String>): String =
-        tags.asSequence()
+        tags
+            .asSequence()
             .map { it.trim() }
             .filter { it.isNotEmpty() }
             .sorted()
@@ -140,19 +180,10 @@ object StoragePathTemplate {
             .joinToString(", ")
 
     /**
-     * Sanitize a single path segment. Directory separators and reserved filesystem characters are
-     * replaced with '_'; leading/trailing spaces and dots are trimmed to avoid reserved names.
+     * Sanitize a single path segment. Delegates to [NpnPaths.sanitizeSegment], which replaces
+     * directory separators and Windows-reserved characters with '_' and trims edge whitespace/dots.
      */
-    fun sanitizeSegment(input: String): String {
-        val cleaned = StringBuilder(input.length)
-        for (char in input) {
-            when {
-                char.code < 0x20 || char in invalidSegmentChars -> cleaned.append('_')
-                else -> cleaned.append(char)
-            }
-        }
-        return cleaned.toString().trim { it.isWhitespace() || it == '.' }
-    }
+    fun sanitizeSegment(input: String): String = NpnPaths.sanitizeSegment(input)
 
     private fun String.baseName(): String {
         val dot = lastIndexOf('.')
@@ -161,7 +192,10 @@ object StoragePathTemplate {
 
     /** Format [date] using a tiny subset of Java date-pattern symbols. */
     @Suppress("CyclomaticComplexMethod")
-    private fun formatDate(date: LocalDate, pattern: String): String {
+    private fun formatDate(
+        date: LocalDate,
+        pattern: String,
+    ): String {
         val out = StringBuilder()
         var index = 0
         while (index < pattern.length) {
@@ -172,34 +206,42 @@ object StoragePathTemplate {
                     out.append(date.year.toString().padStart(4, '0'))
                     index += 4
                 }
+
                 char == 'y' && remaining >= 2 && pattern.startsWith("yy", index) -> {
                     out.append((date.year % 100).toString().padStart(2, '0'))
                     index += 2
                 }
+
                 char == 'M' && remaining >= 4 && pattern.startsWith("MMMM", index) -> {
                     out.append(monthName(date.month))
                     index += 4
                 }
+
                 char == 'M' && remaining >= 3 && pattern.startsWith("MMM", index) -> {
                     out.append(monthName(date.month).take(3))
                     index += 3
                 }
+
                 char == 'M' && remaining >= 2 && pattern.startsWith("MM", index) -> {
                     out.append(date.monthNumber.toString().padStart(2, '0'))
                     index += 2
                 }
+
                 char == 'M' -> {
                     out.append(date.monthNumber)
                     index++
                 }
+
                 char == 'd' && remaining >= 2 && pattern.startsWith("dd", index) -> {
                     out.append(date.day.toString().padStart(2, '0'))
                     index += 2
                 }
+
                 char == 'd' -> {
                     out.append(date.day)
                     index++
                 }
+
                 else -> {
                     out.append(char)
                     index++
@@ -209,8 +251,7 @@ object StoragePathTemplate {
         return out.toString()
     }
 
-    private fun monthName(month: Month): String =
-        month.name.lowercase().replaceFirstChar { it.uppercase() }
+    private fun monthName(month: Month): String = month.name.lowercase().replaceFirstChar { it.uppercase() }
 }
 
 /**
@@ -226,11 +267,12 @@ suspend fun resolveUniqueTarget(
     target: String,
 ): String {
     val normalized = NpnPaths.normalize(target)
-    val withExtension = if (NpnPaths.isPdf(normalized.substringAfterLast('/'))) {
-        normalized
-    } else {
-        "$normalized.pdf"
-    }
+    val withExtension =
+        if (NpnPaths.isPdf(normalized.substringAfterLast('/'))) {
+            normalized
+        } else {
+            "$normalized.pdf"
+        }
     val exists: suspend (String) -> Boolean = { candidate ->
         // relPath has a unique index (DocumentEntity), so at most one row can own a candidate.
         val owner = documentDao.getByRelPath(candidate)

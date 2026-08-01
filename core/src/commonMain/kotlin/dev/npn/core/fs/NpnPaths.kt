@@ -5,6 +5,7 @@ package dev.npn.core.fs
  * folder layout"). No I/O here; everything is string manipulation on library-relative,
  * '/'-separated paths.
  */
+@Suppress("TooManyFunctions")
 object NpnPaths {
     const val NPN_DIR = ".npn"
     const val JOURNAL_DIR = ".npn/journal"
@@ -245,6 +246,48 @@ object NpnPaths {
 
     /** True when [name] has a `.pdf` extension (case-insensitive). */
     fun isPdf(name: String): Boolean = name.substringAfterLast('.', "").equals("pdf", ignoreCase = true)
+
+    /** Reserved filesystem characters within a path segment: Windows-invalid plus '/' and '\\'. */
+    private val invalidSegmentChars = setOf('/', '\\', ':', '*', '?', '"', '<', '>', '|')
+
+    /** Windows-reserved device names; any exact-case base matching one is prefixed with '_'. */
+    private val reservedWindowsDeviceNames =
+        setOf("CON", "PRN", "AUX", "NUL") +
+            (1..9).map { "COM$it" } +
+            (1..9).map { "LPT$it" }
+
+    /**
+     * Sanitize a single path SEGMENT. Directory separators and Windows-reserved characters
+     * (`<>:"/\|?*`) are replaced with '_'; control characters too. Leading/trailing whitespace
+     * and dots are trimmed to avoid hidden files and Windows-reserved names.
+     */
+    fun sanitizeSegment(input: String): String {
+        val cleaned = StringBuilder(input.length)
+        for (char in input) {
+            when {
+                char.code < 0x20 || char in invalidSegmentChars -> cleaned.append('_')
+                else -> cleaned.append(char)
+            }
+        }
+        return cleaned.toString().trim { it.isWhitespace() || it == '.' }
+    }
+
+    /**
+     * Sanitize a full file name, preserving its extension. The part after the LAST dot is treated
+     * as an extension only when a non-empty base precedes it and a non-empty extension follows it;
+     * otherwise the whole string is the base (so trailing-dot names like `x.` cannot come back).
+     * The base is sanitized via [sanitizeSegment]; Windows-reserved device names (CON, PRN, AUX,
+     * NUL, COM1-9, LPT1-9) get a '_' prefix. Identity for already-valid names.
+     */
+    fun sanitizeFileName(name: String): String {
+        val dot = name.lastIndexOf('.')
+        val hasExtension = dot > 0 && dot < name.lastIndex
+        val base = if (hasExtension) name.substring(0, dot) else name
+        val ext = if (hasExtension) name.substring(dot) else ""
+        val cleanBase = sanitizeSegment(base)
+        val safeBase = if (cleanBase.uppercase() in reservedWindowsDeviceNames) "_$cleanBase" else cleanBase
+        return if (ext.isEmpty()) safeBase else "$safeBase$ext"
+    }
 
     /**
      * Detects sync-conflict files created by external sync tools. Families covered:

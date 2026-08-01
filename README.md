@@ -150,7 +150,10 @@ Desktop, build a native distribution for the current OS:
 Note: only the `.deb` format is enabled by default because building `.rpm` requires
 the `rpmbuild` tooling, which is not present on Debian/Ubuntu build hosts. To also
 build an `.rpm`, install the rpm-build tooling and add `TargetFormat.Rpm` to the
-`nativeDistributions` block in `desktopApp/build.gradle.kts`.
+`nativeDistributions` block in `desktopApp/build.gradle.kts`. On Windows the same
+task produces `.msi` and `.exe` installers (via WiX, downloaded automatically at
+build time, so network access is needed); the Windows installer currently uses the
+default Java icon until branding is wired.
 
 Desktop, build a Linux AppImage:
 

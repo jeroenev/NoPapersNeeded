@@ -121,8 +121,8 @@ class ImportService(
     }
 
     private fun ensurePdfName(name: String): String {
-        val trimmed = name.trim().ifEmpty { "document" }
-        return if (NpnPaths.isPdf(trimmed)) trimmed else "$trimmed.pdf"
+        val sanitized = NpnPaths.sanitizeFileName(name.trim()).ifEmpty { "document" }
+        return if (NpnPaths.isPdf(sanitized)) sanitized else "$sanitized.pdf"
     }
 
     private suspend fun chooseImportTarget(

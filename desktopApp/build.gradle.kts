@@ -51,15 +51,27 @@ compose.desktop {
             // java.sql and jdk.unsupported are commonly needed by JVM libraries too.
             modules("jdk.security.auth", "java.sql", "jdk.unsupported")
 
-            // Deb only: building Rpm requires rpmbuild, which is not present on Debian/Ubuntu
-            // build hosts. Add TargetFormat.Rpm on a host with the rpm-build tooling installed.
-            targetFormats(TargetFormat.Deb)
+            // The Compose plugin filters formats per current OS, so on Linux only Deb is
+            // produced while Windows builds produce Msi + Exe. Deb only: building Rpm requires
+            // rpmbuild, which is not present on Debian/Ubuntu build hosts. Add TargetFormat.Rpm
+            // on a host with the rpm-build tooling installed.
+            targetFormats(TargetFormat.Deb, TargetFormat.Msi, TargetFormat.Exe)
             packageName = npnAppName
             packageVersion = npnAppVersion
             description = "Personal paperless document library"
             licenseFile.set(rootProject.file("LICENSE"))
             linux {
                 shortcut = true
+            }
+            windows {
+                menuGroup = "No Papers Needed"
+                shortcut = true
+                // Fixed per-app GUID so MSI upgrades replace prior installs instead of stacking.
+                upgradeUuid = "8757e6c9-527e-412d-99a5-548042266c22"
+                // Icon not wired yet, so jpackage falls back to the default Java icon; ship
+                // real branding via nativeDistributions.windows.iconFile. Building the MSI
+                // downloads WiX tooling at build time (needs network), like appimagetool for
+                // AppImage.
             }
         }
     }
