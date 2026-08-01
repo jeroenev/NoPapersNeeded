@@ -315,6 +315,18 @@ interface SettingsRepository {
     /** Model id as the endpoint knows it, e.g. `gpt-4.1-mini` or `qwen3:8b`. */
     val aiModel: Flow<String>
     suspend fun setAiModel(model: String)
+
+    /** Max tag suggestions produced per document. Default 8, coerced into [AiTagging.RANGE]. */
+    val aiMaxTagsPerDoc: Flow<Int>
+    suspend fun setAiMaxTagsPerDoc(value: Int)
+}
+
+/** Bounds for the user-adjustable "max suggested tags per document" setting. */
+object AiTagging {
+    const val MIN_TAGS_PER_DOC = 1
+    const val MAX_TAGS_PER_DOC = 15
+    const val DEFAULT_TAGS_PER_DOC = 8
+    val RANGE = MIN_TAGS_PER_DOC..MAX_TAGS_PER_DOC
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */

@@ -73,6 +73,7 @@ import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.app.ui.common.parseFtsSnippet
 import dev.npn.app.ui.common.parseQueryHighlight
+import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.model.ReviewMode
@@ -392,33 +393,60 @@ private fun AiTagSuggestions(
         }
         if (state.suggestions.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                state.suggestions.forEach { tag ->
-                    InputChip(
-                        selected = false,
-                        onClick = { onAccept(tag) },
-                        label = { Text(tag) },
-                        leadingIcon = {
-                            Icon(
-                                Icons.Filled.Add,
-                                contentDescription = "Add $tag",
-                                modifier = Modifier.size(AssistChipDefaults.IconSize),
-                            )
-                        },
-                        trailingIcon = {
-                            Icon(
-                                Icons.Filled.Close,
-                                contentDescription = "Dismiss $tag",
-                                modifier = Modifier
-                                    .size(AssistChipDefaults.IconSize)
-                                    .clickable { onDismiss(tag) },
-                            )
-                        },
-                    )
+                state.suggestions.forEach { suggestion ->
+                    AiTagChip(suggestion, onAccept, onDismiss)
                 }
             }
             TextButton(onClick = onClearAll) { Text("Dismiss all") }
         }
     }
+}
+
+/**
+ * One AI tag suggestion chip: tapping (or the leading +) accepts, the trailing × dismisses. New
+ * (non-vocabulary) tags carry a small "new" badge after the label so the user can tell brand-new
+ * tags from reused library tags before accepting.
+ */
+@Composable
+private fun AiTagChip(
+    suggestion: TagSuggestion,
+    onAccept: (String) -> Unit,
+    onDismiss: (String) -> Unit,
+) {
+    val tag = suggestion.tag
+    InputChip(
+        selected = false,
+        onClick = { onAccept(tag) },
+        label = {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(tag)
+                if (suggestion.isNew) {
+                    Text(
+                        "new",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.padding(start = 6.dp),
+                    )
+                }
+            }
+        },
+        leadingIcon = {
+            Icon(
+                Icons.Filled.Add,
+                contentDescription = "Add $tag",
+                modifier = Modifier.size(AssistChipDefaults.IconSize),
+            )
+        },
+        trailingIcon = {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = "Dismiss $tag",
+                modifier = Modifier
+                    .size(AssistChipDefaults.IconSize)
+                    .clickable { onDismiss(tag) },
+            )
+        },
+    )
 }
 
 /**

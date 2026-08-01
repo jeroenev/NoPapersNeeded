@@ -36,6 +36,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             aiBaseUrlFlow.value = "http://localhost:11434"
             aiApiKeyFlow.value = "secret"
             aiModelFlow.value = "qwen3:8b"
+            aiMaxTagsPerDocFlow.value = 12
         }
         val model = vm(settings = settings)
         val job = launch { model.state.collect {} }
@@ -53,6 +54,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
         s.aiBaseUrl shouldBe "http://localhost:11434"
         s.aiApiKey shouldBe "secret"
         s.aiModel shouldBe "qwen3:8b"
+        s.aiMaxTagsPerDoc shouldBe 12
         job.cancel()
     }
 
@@ -98,11 +100,13 @@ class SettingsViewModelTest : MainDispatcherTest() {
         model.setAiBaseUrl("http://localhost:11434")
         model.setAiApiKey("secret")
         model.setAiModel("qwen3:8b")
+        model.setAiMaxTagsPerDoc(5)
         advanceUntilIdle()
         settings.aiEnabledFlow.value shouldBe true
         settings.aiBaseUrlFlow.value shouldBe "http://localhost:11434"
         settings.aiApiKeyFlow.value shouldBe "secret"
         settings.aiModelFlow.value shouldBe "qwen3:8b"
+        settings.aiMaxTagsPerDocFlow.value shouldBe 5
     }
 
     // ---- review mode switching ----

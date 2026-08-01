@@ -1,6 +1,7 @@
 package dev.npn.app
 
 import dev.npn.app.ui.detail.DocDetailViewModel
+import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
@@ -18,6 +19,9 @@ class DocDetailViewModelTest : MainDispatcherTest() {
 
     private fun vm(session: FakeLibrarySession = FakeLibrarySession(), docId: String = "doc-1") =
         DocDetailViewModel(docId, session)
+
+    private fun tagSuggestions(vararg tags: String): List<TagSuggestion> =
+        tags.map { TagSuggestion(it, isNew = false) }
 
     // ---- page count resolution ----
 
@@ -296,19 +300,19 @@ class DocDetailViewModelTest : MainDispatcherTest() {
 
     @Test
     fun suggestAiTagsStoresSuggestions() = runTest(dispatcher) {
-        val session = FakeLibrarySession().apply { ai.suggestions = listOf("finance", "invoice") }
+        val session = FakeLibrarySession().apply { ai.suggestions = tagSuggestions("finance", "invoice") }
         val model = vm(session = session)
         advanceUntilIdle()
         model.suggestAiTags()
         advanceUntilIdle()
         session.ai.suggestTagsCalls shouldContainExactly listOf("doc-1")
-        model.aiTags.value.suggestions shouldContainExactly listOf("finance", "invoice")
+        model.aiTags.value.suggestions shouldContainExactly tagSuggestions("finance", "invoice")
         model.aiTags.value.suggesting shouldBe false
     }
 
     @Test
     fun acceptAiTagAddsTagAndRemovesSuggestion() = runTest(dispatcher) {
-        val session = FakeLibrarySession().apply { ai.suggestions = listOf("finance", "invoice") }
+        val session = FakeLibrarySession().apply { ai.suggestions = tagSuggestions("finance", "invoice") }
         val model = vm(session = session)
         advanceUntilIdle()
         model.suggestAiTags()
@@ -316,13 +320,13 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         model.acceptAiTag("finance")
         advanceUntilIdle()
         session.meta.addedTags shouldContainExactly listOf(listOf("doc-1") to "finance")
-        model.aiTags.value.suggestions shouldContainExactly listOf("invoice")
+        model.aiTags.value.suggestions shouldContainExactly tagSuggestions("invoice")
     }
 
     @Test
     fun acceptAiTagFailureKeepsSuggestion() = runTest(dispatcher) {
         val session = FakeLibrarySession().apply {
-            ai.suggestions = listOf("finance", "invoice")
+            ai.suggestions = tagSuggestions("finance", "invoice")
             meta.failBatchOps = { error("disk full") }
         }
         val model = vm(session = session)
@@ -333,7 +337,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         model.acceptAiTag("finance")
         advanceUntilIdle()
 
-        model.aiTags.value.suggestions shouldContainExactly listOf("finance", "invoice")
+        model.aiTags.value.suggestions shouldContainExactly tagSuggestions("finance", "invoice")
     }
 
     @Test

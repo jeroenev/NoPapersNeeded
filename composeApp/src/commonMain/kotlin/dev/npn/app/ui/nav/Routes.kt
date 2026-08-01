@@ -30,5 +30,8 @@ sealed interface Route {
     data object AiChat : Route
 
     @Serializable
+    data object AiTagging : Route
+
+    @Serializable
     data class SavedViewRoute(val id: String) : Route
 }

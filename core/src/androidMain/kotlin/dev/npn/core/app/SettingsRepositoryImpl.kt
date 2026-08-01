@@ -47,6 +47,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         val aiBaseUrl: String,
         val aiApiKey: String,
         val aiModel: String,
+        val aiMaxTagsPerDoc: Int,
     )
 
     private fun load() = Snapshot(
@@ -75,6 +76,8 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         aiBaseUrl = prefs.getString(KEY_AI_BASE_URL, "") ?: "",
         aiApiKey = prefs.getString(KEY_AI_API_KEY, "") ?: "",
         aiModel = prefs.getString(KEY_AI_MODEL, "") ?: "",
+        aiMaxTagsPerDoc = prefs.getInt(KEY_AI_MAX_TAGS, AiTagging.DEFAULT_TAGS_PER_DOC)
+            .coerceIn(AiTagging.RANGE),
     )
 
     override val libraryLocation: Flow<String?> = state.map { it.libraryLocation }
@@ -95,6 +98,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
     override val aiBaseUrl: Flow<String> = state.map { it.aiBaseUrl }
     override val aiApiKey: Flow<String> = state.map { it.aiApiKey }
     override val aiModel: Flow<String> = state.map { it.aiModel }
+    override val aiMaxTagsPerDoc: Flow<Int> = state.map { it.aiMaxTagsPerDoc }
 
     override suspend fun setLibraryLocation(location: String?) {
         prefs.edit().apply {
@@ -186,6 +190,11 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         state.value = load()
     }
 
+    override suspend fun setAiMaxTagsPerDoc(value: Int) {
+        prefs.edit().putInt(KEY_AI_MAX_TAGS, value.coerceIn(AiTagging.RANGE)).apply()
+        state.value = load()
+    }
+
     companion object {
         private const val PREFS_NAME = "npn_settings"
         private const val KEY_LOCATION = "libraryLocation"
@@ -206,5 +215,6 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         private const val KEY_AI_BASE_URL = "aiBaseUrl"
         private const val KEY_AI_API_KEY = "aiApiKey"
         private const val KEY_AI_MODEL = "aiModel"
+        private const val KEY_AI_MAX_TAGS = "aiMaxTagsPerDoc"
     }
 }

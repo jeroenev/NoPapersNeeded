@@ -1,9 +1,10 @@
 package dev.npn.core.ai
 
-import ai.koog.agents.core.agent.AIAgent
-import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.dsl.prompt
 import dev.npn.core.db.NpnDatabase
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emitAll
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -18,42 +19,66 @@ class AiFacadeImpl(
 ) : AiFacade {
 
     private val runtimeMutex = Mutex()
-    private var cachedRuntime: Pair<AiConfig, AiRuntime>? = null
+    private var cachedRuntime: Pair<RuntimeKey, AiRuntime>? = null
+
+    /**
+     * The subset of [AiConfig] that actually shapes the built [AiRuntime] (endpoint client + model
+     * — see [AiRuntime.build]). Cache identity is keyed on this so tuning a runtime-irrelevant
+     * setting like [AiConfig.maxTagsPerDoc] does NOT rebuild the client and abort in-flight requests.
+     */
+    private data class RuntimeKey(
+        val enabled: Boolean,
+        val baseUrl: String,
+        val apiKey: String,
+        val model: String,
+    )
+
+    private fun AiConfig.runtimeKey() = RuntimeKey(enabled, baseUrl, apiKey, model)
 
     override suspend fun config(): AiConfig = configProvider()
 
-    override suspend fun ask(history: List<AiChatTurn>, question: String): String {
+    override fun ask(history: List<AiChatTurn>, question: String): Flow<AiChatEvent> = flow {
+        // Resolve the runtime lazily inside the cold flow so config errors surface on collection
+        // (as flow exceptions), matching the "throws on endpoint errors" contract.
         val runtime = runtime()
-        val agent = AIAgent(
-            promptExecutor = runtime.executor,
-            llmModel = runtime.model,
+        val loop = AiChatLoop(
+            executor = runtime.executor,
+            model = runtime.model,
+            tools = LibraryAiTools.chatToolsFor(db),
             systemPrompt = CHAT_SYSTEM_PROMPT,
-            toolRegistry = ToolRegistry { tools(LibraryAiTools.forDatabase(db)) },
             maxIterations = MAX_AGENT_ITERATIONS,
         )
-        return agent.run(AiText.renderChatInput(history, question))
+        emitAll(loop.run(history, question))
     }
 
-    override suspend fun suggestTags(docId: String): List<String> {
+    override suspend fun suggestTags(docId: String): List<TagSuggestion> {
         val runtime = runtime()
+        val maxTags = configProvider().maxTagsPerDoc
         val doc = db.documentDao().getByDocId(docId) ?: return emptyList()
         val text = db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } ?: return emptyList()
         val currentTags = db.tagDao().tagsForDocument(docId)
         val vocabulary = db.tagDao().all().map { it.name }
         val request = prompt("npn-tag-suggest") {
-            system(TAG_SYSTEM_PROMPT)
+            system(tagSystemPrompt(maxTags))
             user(renderTagRequest(doc.fileName, doc.title, vocabulary, currentTags, text))
         }
         val response = runtime.executor.execute(request, runtime.model)
-        return AiText.parseTagSuggestions(response.textContent(), currentTags)
+        return AiText.rankTagSuggestions(response.textContent(), currentTags, vocabulary, perDocMax = maxTags)
     }
 
     private suspend fun runtime(): AiRuntime {
         val config = configProvider()
         check(config.configured) { "AI endpoint is not configured (see Settings > AI assistant)" }
+        val key = config.runtimeKey()
         return runtimeMutex.withLock {
-            cachedRuntime?.takeIf { it.first == config }?.second
-                ?: AiRuntime.build(config).also { cachedRuntime = config to it }
+            val cached = cachedRuntime
+            cached?.takeIf { it.first == key }?.second ?: run {
+                // Runtime-relevant config changed: close the stale runtime's HTTP client before
+                // swapping. Any in-flight request still holding the old runtime will fail once its
+                // client is closed — acceptable, since the endpoint changed out from under it.
+                cached?.second?.close()
+                AiRuntime.build(config).also { cachedRuntime = key to it }
+            }
         }
     }
 
@@ -92,14 +117,15 @@ class AiFacadeImpl(
             the user writes in. Be concise. If nothing matches, say so plainly.
         """.trimIndent()
 
-        val TAG_SYSTEM_PROMPT = """
-            You suggest tags for a document in a personal paperless archive. Prefer reusing the
-            library's existing tags when they fit; only propose new tags for clearly missing
-            concepts. Tags are short lowercase labels (topic, document kind, organisation,
-            year). Never suggest tags already on the document.
+        fun tagSystemPrompt(max: Int): String = """
+            You suggest tags for a document in a personal paperless archive. Strongly prefer
+            reusing the library's existing tags: when an existing tag fits, copy it VERBATIM
+            (exact spelling and case) from the provided vocabulary. Only invent a new tag when
+            no existing one fits the document. Tags are short lowercase labels (topic, document
+            kind, organisation, year). Never suggest tags already on the document.
 
-            Reply with ONLY a JSON array of tag strings, at most ${AiText.MAX_TAG_SUGGESTIONS},
-            best first. No prose, no code fences.
+            Reply with ONLY a JSON array of tag strings, at most $max, best first. No prose,
+            no code fences.
         """.trimIndent()
     }
 }

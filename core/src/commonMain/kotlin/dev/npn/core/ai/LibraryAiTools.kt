@@ -2,6 +2,7 @@ package dev.npn.core.ai
 
 import ai.koog.agents.core.tools.SimpleTool
 import ai.koog.agents.core.tools.ToolBase
+import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.serialization.typeToken
 import dev.npn.core.db.DocumentDao
@@ -11,7 +12,9 @@ import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TagDao
 import kotlinx.coroutines.flow.first
+import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
 
 /**
  * Read-only tools the chat agent can call to search the library index: OCR/embedded text,
@@ -32,6 +35,41 @@ object LibraryAiTools {
         GetDocumentTool(db.documentDao(), db.tagDao()),
         GetDocumentTextTool(db.ftsDao()),
     )
+
+    /**
+     * The same tools wrapped as [AiChatTool]s the streaming loop can drive: each exposes its
+     * Koog [ToolDescriptor] (advertised to the model) and a name-keyed dispatcher that decodes
+     * a raw arguments JSON string with kotlinx.serialization and runs the tool. We hand-roll the
+     * decode instead of going through Koog's `ToolRegistry` because the streaming API hands us the
+     * raw args JSON, and decoding it against our own `@Serializable Args` types is the smaller,
+     * type-safe path.
+     */
+    fun chatToolsFor(db: NpnDatabase): List<AiChatTool> {
+        val json = Json { ignoreUnknownKeys = true; isLenient = true }
+        return listOf(
+            SearchDocumentsTool(db.ftsDao(), db.documentDao())
+                .asChatTool(SearchDocumentsTool.Args.serializer(), json),
+            ListTagsTool(db.tagDao()).asChatTool(ListTagsTool.Args.serializer(), json),
+            DocumentsWithTagTool(db.documentDao())
+                .asChatTool(DocumentsWithTagTool.Args.serializer(), json),
+            SearchFileNamesTool(db.documentDao())
+                .asChatTool(SearchFileNamesTool.Args.serializer(), json),
+            GetDocumentTool(db.documentDao(), db.tagDao())
+                .asChatTool(GetDocumentTool.Args.serializer(), json),
+            GetDocumentTextTool(db.ftsDao()).asChatTool(GetDocumentTextTool.Args.serializer(), json),
+        )
+    }
+
+    private fun <A> SimpleTool<A>.asChatTool(serializer: KSerializer<A>, json: Json): AiChatTool =
+        object : AiChatTool {
+            override val name: String = this@asChatTool.name
+            override val descriptor: ToolDescriptor = this@asChatTool.descriptor
+
+            override suspend fun call(argsJson: String): String {
+                val args = json.decodeFromString(serializer, argsJson.ifBlank { "{}" })
+                return execute(args)
+            }
+        }
 
     internal fun docLine(doc: DocumentEntity, snippet: String? = null): String = buildString {
         append("- [doc:").append(doc.docId).append("] file=\"").append(doc.fileName).append('"')
@@ -215,7 +253,7 @@ object LibraryAiTools {
             val index = args.chunk.coerceIn(0, chunks - 1)
             val start = index * TEXT_CHUNK_CHARS
             val end = minOf(start + TEXT_CHUNK_CHARS, text.length)
-            return "Chunk ${index + 1} of $chunks (chars $start..$end of ${text.length}):\n" +
+            return "Chunk ${index + 1} of $chunks (chars $start until $end of ${text.length}):\n" +
                 text.substring(start, end)
         }
     }

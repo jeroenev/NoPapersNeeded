@@ -16,12 +16,21 @@ import ai.koog.prompt.llm.LLModel
 internal class AiRuntime(
     val executor: PromptExecutor,
     val model: LLModel,
+    private val client: OpenAILLMClient,
 ) {
+    /** Release the underlying HTTP client. Call once the runtime is no longer cached. */
+    fun close() {
+        client.close()
+    }
+
     companion object {
         private const val DEFAULT_CONTEXT_LENGTH = 128_000L
 
         fun build(config: AiConfig): AiRuntime {
-            val client = OpenAILLMClient(
+            // TolerantOpenAILLMClient subclasses OpenAILLMClient to skip non-standard trailing SSE
+            // chunks (cost/usage frames) that would otherwise abort streaming after real frames but
+            // before Koog's terminal End frame. See TolerantOpenAILLMClient for the Koog seam facts.
+            val client = TolerantOpenAILLMClient(
                 apiKey = config.apiKey.ifBlank { "unused" },
                 settings = OpenAIClientSettings(baseUrl = normalizeBaseUrl(config.baseUrl)),
                 httpClientFactory = KtorKoogHttpClient.Factory(),
@@ -41,7 +50,7 @@ internal class AiRuntime(
                 ),
                 contextLength = DEFAULT_CONTEXT_LENGTH,
             )
-            return AiRuntime(MultiLLMPromptExecutor(LLMProvider.OpenAI to client), model)
+            return AiRuntime(MultiLLMPromptExecutor(LLMProvider.OpenAI to client), model, client)
         }
 
         /**
