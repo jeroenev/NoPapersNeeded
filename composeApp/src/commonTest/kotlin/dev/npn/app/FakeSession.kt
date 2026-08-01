@@ -314,7 +314,11 @@ class FakeDocContentFacade : DocContentFacade {
     override suspend fun clearThumbnailCache(): Int = clearedThumbnails
 
     var extractedTextValue: String? = null
-    override suspend fun extractedText(docId: String): String? = extractedTextValue
+
+    /** Per-doc extracted text; a docId present here wins over [extractedTextValue]. */
+    var extractedTextByDoc: Map<String, String?> = emptyMap()
+    override suspend fun extractedText(docId: String): String? =
+        if (docId in extractedTextByDoc) extractedTextByDoc[docId] else extractedTextValue
 }
 
 /**
@@ -353,6 +357,9 @@ class FakeAiFacade : AiFacade {
     /** Optional per-call delay so tests can observe progress and cancel mid-run. */
     var suggestDelayMillis: Long = 0
 
+    /** Per-doc delay override (wins over [suggestDelayMillis]); lets tests skew completion order. */
+    var suggestDelayByDoc: Map<String, Long> = emptyMap()
+
     override suspend fun config(): AiConfig = configValue
 
     override fun ask(history: List<AiChatTurn>, question: String): Flow<AiChatEvent> {
@@ -378,10 +385,13 @@ class FakeAiFacade : AiFacade {
     }
 
     override suspend fun suggestTags(docId: String): List<TagSuggestion> {
-        if (suggestDelayMillis > 0) kotlinx.coroutines.delay(suggestDelayMillis)
+        // Record at entry (before the delay) so the call list reflects dispatch order
+        // deterministically even when calls run concurrently.
+        suggestTagsCalls += docId
+        val delay = suggestDelayByDoc[docId] ?: suggestDelayMillis
+        if (delay > 0) kotlinx.coroutines.delay(delay)
         failSuggestTags?.invoke()
         if (docId in failSuggestTagsForDocs) error("suggest failed for $docId")
-        suggestTagsCalls += docId
         return suggestionsByDoc[docId] ?: suggestions
     }
 }
@@ -544,6 +554,8 @@ class FakeSettingsRepository(
     val aiModelFlow = MutableStateFlow("")
     val aiMaxTagsPerDocFlow = MutableStateFlow(8)
     val setAiMaxTagsPerDocValues = mutableListOf<Int>()
+    val aiMaxNewTagsPerDocFlow = MutableStateFlow(5)
+    val setAiMaxNewTagsPerDocValues = mutableListOf<Int>()
 
     override val aiEnabled: Flow<Boolean> get() = aiEnabledFlow
     override suspend fun setAiEnabled(enabled: Boolean) { aiEnabledFlow.value = enabled }
@@ -557,6 +569,11 @@ class FakeSettingsRepository(
     override suspend fun setAiMaxTagsPerDoc(value: Int) {
         setAiMaxTagsPerDocValues += value
         aiMaxTagsPerDocFlow.value = value.coerceIn(AiTagging.RANGE)
+    }
+    override val aiMaxNewTagsPerDoc: Flow<Int> get() = aiMaxNewTagsPerDocFlow
+    override suspend fun setAiMaxNewTagsPerDoc(value: Int) {
+        setAiMaxNewTagsPerDocValues += value
+        aiMaxNewTagsPerDocFlow.value = value.coerceIn(AiTagging.NEW_TAGS_RANGE)
     }
 
     val watchedFolderFlow = MutableStateFlow<String?>(null)

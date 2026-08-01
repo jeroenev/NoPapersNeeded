@@ -18,8 +18,12 @@ object AiText {
 
     const val MAX_TAG_SUGGESTIONS = 8
 
-    /** Hard cap on genuinely-new (non-vocabulary) tags proposed per document, ranked last. */
-    const val MAX_NEW_TAGS_PER_DOC = 2
+    /**
+     * Default cap on genuinely-new (non-vocabulary) tags proposed per document, ranked last.
+     * User-configurable via settings ([dev.npn.core.app.AiTagging.NEW_TAGS_RANGE]); this constant
+     * is only the fallback when no explicit cap is supplied.
+     */
+    const val MAX_NEW_TAGS_PER_DOC = 5
 
     /**
      * Character budget for conversation history sent as real user/assistant messages. Derived

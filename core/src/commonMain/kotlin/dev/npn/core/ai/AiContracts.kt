@@ -18,6 +18,8 @@ data class AiConfig(
     val model: String = "",
     /** User-configured cap on tag suggestions produced per document (device-local, 1..15). */
     val maxTagsPerDoc: Int = 8,
+    /** User-configured cap on genuinely-new (non-vocabulary) tags per document (device-local, 0..10). */
+    val maxNewTagsPerDoc: Int = 5,
 ) {
     val configured: Boolean
         get() = enabled && baseUrl.isNotBlank() && model.isNotBlank()

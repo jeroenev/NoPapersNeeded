@@ -140,6 +140,8 @@ fun SettingsScreen(
                 onSetApiKey = vm::setAiApiKey,
                 onSetModel = vm::setAiModel,
                 onSetMaxTagsPerDoc = vm::setAiMaxTagsPerDoc,
+                maxNewTagsPerDoc = state.aiMaxNewTagsPerDoc,
+                onSetMaxNewTagsPerDoc = vm::setAiMaxNewTagsPerDoc,
             )
 
             HorizontalDivider()
@@ -339,6 +341,8 @@ private fun AiAssistantSection(
     onSetApiKey: (String) -> Unit,
     onSetModel: (String) -> Unit,
     onSetMaxTagsPerDoc: (Int) -> Unit,
+    maxNewTagsPerDoc: Int,
+    onSetMaxNewTagsPerDoc: (Int) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -391,7 +395,23 @@ private fun AiAssistantSection(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
-            MaxTagsPerDocField(maxTagsPerDoc, onSetMaxTagsPerDoc)
+            TagCapField(
+                value = maxTagsPerDoc,
+                onSetValue = onSetMaxTagsPerDoc,
+                range = AiTagging.RANGE,
+                label = "Max suggested tags per document",
+                supportingText = "How many tags the assistant proposes per document " +
+                    "(${AiTagging.MIN_TAGS_PER_DOC}-${AiTagging.MAX_TAGS_PER_DOC}).",
+            )
+            TagCapField(
+                value = maxNewTagsPerDoc,
+                onSetValue = onSetMaxNewTagsPerDoc,
+                range = AiTagging.NEW_TAGS_RANGE,
+                label = "Max new tags per document",
+                supportingText = "How many brand-new tags (not already in your library) the " +
+                    "assistant may propose per document " +
+                    "(${AiTagging.MIN_NEW_TAGS_PER_DOC}-${AiTagging.MAX_NEW_TAGS_PER_DOC}; 0 = never).",
+            )
             Text(
                 "Requests send document text to the configured server.",
                 style = MaterialTheme.typography.bodySmall,
@@ -402,23 +422,27 @@ private fun AiAssistantSection(
 }
 
 /**
- * Numeric field for the per-document tag-suggestion cap. Keeps a local editable string so the user
- * can clear it while typing; commits (clamped into [AiTagging.RANGE]) on every valid parse and
+ * Numeric field for a per-document tag cap. Keeps a local editable string so the user can clear it
+ * while typing; commits (only when the parse falls inside [range]) on every valid parse and
  * re-seeds from the persisted [value] whenever it changes externally.
  */
 @Composable
-private fun MaxTagsPerDocField(value: Int, onSetValue: (Int) -> Unit) {
+private fun TagCapField(
+    value: Int,
+    onSetValue: (Int) -> Unit,
+    range: IntRange,
+    label: String,
+    supportingText: String,
+) {
     var text by remember(value) { mutableStateOf(value.toString()) }
     OutlinedTextField(
         value = text,
         onValueChange = { raw ->
             text = raw.filter { it.isDigit() }.take(2)
-            text.toIntOrNull()?.takeIf { it in AiTagging.RANGE }?.let(onSetValue)
+            text.toIntOrNull()?.takeIf { it in range }?.let(onSetValue)
         },
-        label = { Text("Max suggested tags per document") },
-        supportingText = {
-            Text("How many tags the assistant proposes per document (1-15).")
-        },
+        label = { Text(label) },
+        supportingText = { Text(supportingText) },
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),

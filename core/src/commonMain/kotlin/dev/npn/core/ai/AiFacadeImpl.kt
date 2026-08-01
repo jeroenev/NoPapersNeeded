@@ -24,7 +24,8 @@ class AiFacadeImpl(
     /**
      * The subset of [AiConfig] that actually shapes the built [AiRuntime] (endpoint client + model
      * — see [AiRuntime.build]). Cache identity is keyed on this so tuning a runtime-irrelevant
-     * setting like [AiConfig.maxTagsPerDoc] does NOT rebuild the client and abort in-flight requests.
+     * setting like [AiConfig.maxTagsPerDoc] or [AiConfig.maxNewTagsPerDoc] does NOT rebuild the
+     * client and abort in-flight requests.
      */
     private data class RuntimeKey(
         val enabled: Boolean,
@@ -53,17 +54,25 @@ class AiFacadeImpl(
 
     override suspend fun suggestTags(docId: String): List<TagSuggestion> {
         val runtime = runtime()
-        val maxTags = configProvider().maxTagsPerDoc
+        val config = configProvider()
+        val maxTags = config.maxTagsPerDoc
+        val maxNew = config.maxNewTagsPerDoc
         val doc = db.documentDao().getByDocId(docId) ?: return emptyList()
         val text = db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } ?: return emptyList()
         val currentTags = db.tagDao().tagsForDocument(docId)
         val vocabulary = db.tagDao().all().map { it.name }
         val request = prompt("npn-tag-suggest") {
-            system(tagSystemPrompt(maxTags))
+            system(tagSystemPrompt(maxTags, maxNew))
             user(renderTagRequest(doc.fileName, doc.title, vocabulary, currentTags, text))
         }
         val response = runtime.executor.execute(request, runtime.model)
-        return AiText.rankTagSuggestions(response.textContent(), currentTags, vocabulary, perDocMax = maxTags)
+        return AiText.rankTagSuggestions(
+            response.textContent(),
+            currentTags,
+            vocabulary,
+            perDocMax = maxTags,
+            maxNew = maxNew,
+        )
     }
 
     private suspend fun runtime(): AiRuntime {
@@ -117,15 +126,24 @@ class AiFacadeImpl(
             the user writes in. Be concise. If nothing matches, say so plainly.
         """.trimIndent()
 
-        fun tagSystemPrompt(max: Int): String = """
-            You suggest tags for a document in a personal paperless archive. Strongly prefer
-            reusing the library's existing tags: when an existing tag fits, copy it VERBATIM
-            (exact spelling and case) from the provided vocabulary. Only invent a new tag when
-            no existing one fits the document. Tags are short lowercase labels (topic, document
-            kind, organisation, year). Never suggest tags already on the document.
+        fun tagSystemPrompt(max: Int, maxNew: Int): String {
+            val newTagRule = if (maxNew <= 0) {
+                "Do NOT invent any brand-new tags: use ONLY tags from the provided vocabulary."
+            } else {
+                "Strongly prefer existing vocabulary tags and propose at most $maxNew brand-new tags."
+            }
+            return """
+                You suggest tags for a document in a personal paperless archive. Strongly prefer
+                reusing the library's existing tags: when an existing tag fits, copy it VERBATIM
+                (exact spelling and case) from the provided vocabulary. Only invent a new tag when
+                no existing one fits the document. Tags are short lowercase labels (topic, document
+                kind, organisation, year). Never suggest tags already on the document.
 
-            Reply with ONLY a JSON array of tag strings, at most $max, best first. No prose,
-            no code fences.
-        """.trimIndent()
+                $newTagRule
+
+                Reply with ONLY a JSON array of tag strings, at most $max, best first. No prose,
+                no code fences.
+            """.trimIndent()
+        }
     }
 }
