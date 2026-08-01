@@ -56,6 +56,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BoxWithConstraintsLayout
 import dev.npn.app.ui.common.ConfirmDialog
+import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TextInputDialog
@@ -224,6 +225,10 @@ fun DocDetailScreen(
     // Manual reviewed toggle only makes sense in inbox-workflow mode (derived otherwise).
     val canToggleReviewed = reviewMode == ReviewMode.INBOX_WORKFLOW
 
+    // Reflect the open document in the native window title (desktop); inert elsewhere.
+    val displayTitle = documentDisplayTitle(current.doc.title, current.doc.fileName)
+    LaunchedEffect(displayTitle) { DesktopBridge.windowTitle.value = displayTitle }
+
     Scaffold(
         modifier =
             Modifier.onKeyEvent { event ->
@@ -251,7 +256,7 @@ fun DocDetailScreen(
             },
         topBar = {
             DetailTopBar(
-                title = documentDisplayTitle(current.doc.title, current.doc.fileName),
+                title = displayTitle,
                 browsePosition = browsePosition,
                 onPrevDoc = goPrevDoc,
                 onNextDoc = goNextDoc,
@@ -369,9 +374,10 @@ fun DocDetailScreen(
         )
 
         if (showMetaSheet) {
+            // ModalBottomSheet already draws the M3 drag handle; partial expansion lets it peek.
             ModalBottomSheet(
                 onDismissRequest = { showMetaSheet = false },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false),
             ) {
                 panel(Modifier.fillMaxWidth())
             }

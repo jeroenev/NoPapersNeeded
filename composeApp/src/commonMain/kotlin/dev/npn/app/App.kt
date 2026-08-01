@@ -26,15 +26,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.ai.AiTaggingScreen
+import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.library.LibraryScreen
@@ -48,11 +51,15 @@ import dev.npn.app.ui.trash.TrashScreen
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_open_library_title
 import no_papers_needed.composeapp.generated.resources.common_open_saved_library_failed
 import no_papers_needed.composeapp.generated.resources.common_opening_library
 import no_papers_needed.composeapp.generated.resources.common_pick_folder_again
 import no_papers_needed.composeapp.generated.resources.common_retry
+import no_papers_needed.composeapp.generated.resources.library_settings
+import no_papers_needed.composeapp.generated.resources.library_tags
+import no_papers_needed.composeapp.generated.resources.library_trash
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -129,6 +136,7 @@ private fun MainNav(
                 .BrowseContext()
         }
 
+    DriveWindowTitle(nav)
     NavHost(navController = nav, startDestination = Route.Library) {
         composable<Route.Library> {
             LibraryScreen(
@@ -198,6 +206,41 @@ private fun MainNav(
             )
         }
         aiRoutes(nav, session, env.settings)
+    }
+}
+
+/**
+ * Drive the native window title from the current route. The document detail route is skipped: that
+ * screen publishes the real document title to the same flow once its document has loaded.
+ */
+@Composable
+private fun DriveWindowTitle(nav: NavHostController) {
+    val currentEntry by nav.currentBackStackEntryAsState()
+    val destination = currentEntry?.destination
+    val windowTitle: String? =
+        when {
+            destination?.hasRoute<Route.DocDetail>() == true -> {
+                null
+            }
+
+            destination?.hasRoute<Route.Trash>() == true -> {
+                stringResource(Res.string.library_trash)
+            }
+
+            destination?.hasRoute<Route.TagManagement>() == true -> {
+                stringResource(Res.string.library_tags)
+            }
+
+            destination?.hasRoute<Route.Settings>() == true -> {
+                stringResource(Res.string.library_settings)
+            }
+
+            else -> {
+                stringResource(Res.string.common_app_name)
+            }
+        }
+    LaunchedEffect(windowTitle) {
+        if (windowTitle != null) DesktopBridge.windowTitle.value = windowTitle
     }
 }
 

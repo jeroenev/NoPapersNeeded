@@ -506,9 +506,11 @@ class LibraryViewModelTest : MainDispatcherTest() {
                 }
             val model = vm(session = session)
             val emitted = mutableListOf<Int>()
-            val job = launch { model.documents.collect { emitted += it.size } }
+            val job = launch { model.documents.collect { emitted += it?.size ?: 0 } }
             advanceUntilIdle()
-            model.documents.value.map { it.doc.docId } shouldBe listOf("d1", "d2")
+            model.documents.value
+                .orEmpty()
+                .map { it.doc.docId } shouldBe listOf("d1", "d2")
             session.documents.observedFilters
                 .first()
                 .first shouldBe LibraryFilter()

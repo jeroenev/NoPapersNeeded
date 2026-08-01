@@ -48,6 +48,10 @@ import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.common_delete
+import no_papers_needed.composeapp.generated.resources.common_empty_trash
+import no_papers_needed.composeapp.generated.resources.common_empty_trash_question
+import no_papers_needed.composeapp.generated.resources.common_restore_all
+import no_papers_needed.composeapp.generated.resources.common_restore_all_question
 import no_papers_needed.composeapp.generated.resources.common_trash_delete_forever
 import no_papers_needed.composeapp.generated.resources.common_trash_delete_forever_message
 import no_papers_needed.composeapp.generated.resources.common_trash_duplicates_tab
@@ -68,9 +72,12 @@ import no_papers_needed.composeapp.generated.resources.common_trash_tab
 import no_papers_needed.composeapp.generated.resources.common_trash_tab_count
 import no_papers_needed.composeapp.generated.resources.common_trash_was_path
 import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 private enum class TrashTab { TRASH, DUPLICATES, MISSING }
+
+private enum class TrashBulkAction { RESTORE_ALL, EMPTY_TRASH }
 
 private data class TrashContentState(
     val trashed: List<dev.npn.core.app.DocListItem>,
@@ -84,6 +91,11 @@ private data class TrashActions(
     val onDeleteForever: (String) -> Unit,
     val onResolveDuplicate: (String, String) -> Unit,
     val onRelink: (String, String) -> Unit,
+)
+
+private data class TrashBulkActions(
+    val onRestoreAll: () -> Unit,
+    val onEmptyTrash: () -> Unit,
 )
 
 @Composable
@@ -110,6 +122,7 @@ fun TrashScreen(
 
     var tab by remember { mutableStateOf(TrashTab.TRASH) }
     var confirmDelete by remember { mutableStateOf<String?>(null) }
+    var confirmBulk by remember { mutableStateOf<TrashBulkAction?>(null) }
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
@@ -128,6 +141,11 @@ fun TrashScreen(
                 onResolveDuplicate = vm::resolveDuplicate,
                 onRelink = vm::applyRelink,
             ),
+        bulkActions =
+            TrashBulkActions(
+                onRestoreAll = { confirmBulk = TrashBulkAction.RESTORE_ALL },
+                onEmptyTrash = { confirmBulk = TrashBulkAction.EMPTY_TRASH },
+            ),
     )
 
     confirmDelete?.let { docId ->
@@ -138,6 +156,37 @@ fun TrashScreen(
             },
             onDismiss = { confirmDelete = null },
         )
+    }
+
+    confirmBulk?.let { bulk ->
+        val count = trashed.size
+        when (bulk) {
+            TrashBulkAction.RESTORE_ALL -> {
+                ConfirmDialog(
+                    title = stringResource(Res.string.common_restore_all),
+                    message = pluralStringResource(Res.plurals.common_restore_all_question, count, count),
+                    confirmLabel = stringResource(Res.string.common_restore_all),
+                    onConfirm = {
+                        vm.restoreAll()
+                        confirmBulk = null
+                    },
+                    onDismiss = { confirmBulk = null },
+                )
+            }
+
+            TrashBulkAction.EMPTY_TRASH -> {
+                ConfirmDialog(
+                    title = stringResource(Res.string.common_empty_trash),
+                    message = pluralStringResource(Res.plurals.common_empty_trash_question, count, count),
+                    confirmLabel = stringResource(Res.string.common_empty_trash),
+                    onConfirm = {
+                        vm.emptyTrash()
+                        confirmBulk = null
+                    },
+                    onDismiss = { confirmBulk = null },
+                )
+            }
+        }
     }
 }
 
@@ -150,6 +199,7 @@ private fun TrashScaffold(
     onBack: () -> Unit,
     onSelectTab: (TrashTab) -> Unit,
     actions: TrashActions,
+    bulkActions: TrashBulkActions,
 ) {
     Scaffold(
         topBar = {
@@ -161,6 +211,16 @@ private fun TrashScaffold(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(Res.string.common_back),
                         )
+                    }
+                },
+                actions = {
+                    if (tab == TrashTab.TRASH && state.trashed.isNotEmpty()) {
+                        TextButton(onClick = bulkActions.onRestoreAll) {
+                            Text(stringResource(Res.string.common_restore_all))
+                        }
+                        TextButton(onClick = bulkActions.onEmptyTrash) {
+                            Text(stringResource(Res.string.common_empty_trash))
+                        }
                     }
                 },
             )

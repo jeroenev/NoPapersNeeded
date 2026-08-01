@@ -12,7 +12,7 @@
     <string name="common_settings_trash">Prullenbak</string>
     <string name="common_settings_trash_retention_days">Bewaartermijn prullenbak (dagen)</string>
     <string name="common_settings_views">Weergaven</string>
-    <string name="common_settings_grid_size_help">Rastergrootte: knijp op het raster, gebruik de zoomknoppen of Ctrl+scrollen op de desktop.</string>
+    <string name="common_settings_grid_size_help">Rastergrootte: knijp op het raster, gebruik de zoomknoppen of gebruik Ctrl+scrollen op desktop.</string>
     <string name="common_settings_storage">Opslag</string>
     <string name="common_settings_clear_thumbnail_cache">Miniaturencache wissen</string>
     <string name="common_settings_thumbnail_cache_empty">Miniaturencache is al leeg</string>
@@ -20,11 +20,11 @@
         <item quantity="one">%1$d miniatuur gewist</item>
         <item quantity="other">%1$d miniaturen gewist</item>
     </plurals>
-    <string name="common_settings_thumbnail_cache_help">Maak bibliotheekminiaturen opnieuw aan met de huidige kwaliteit. Gebruik dit als voorbeelden onscherp zijn.</string>
+    <string name="common_settings_thumbnail_cache_help">Maak bibliotheekminiaturen opnieuw aan met de huidige kwaliteit. Gebruik dit als voorvertoningen onscherp zijn.</string>
     <string name="common_settings_review_workflow">Beoordelingsworkflow</string>
-    <string name="common_settings_auto_matching">Automatisch vergelijken</string>
-    <string name="common_settings_auto_matching_rules">Regels voor automatisch vergelijken</string>
-    <string name="common_settings_auto_matching_help">Ken automatisch tags en metagegevens toe wanneer geïmporteerde tekst met een regel overeenkomt.</string>
+    <string name="common_settings_auto_matching">Automatisch taggen</string>
+    <string name="common_settings_auto_matching_rules">Tagregels beheren</string>
+    <string name="common_settings_auto_matching_help">Tag documenten en vul metadata in op basis van geïmporteerde tekst.</string>
     <string name="common_settings_about">Over</string>
     <string name="common_settings_product_version">%1$s %2$s</string>
     <string name="common_settings_about_help">Persoonlijke, opensource-app voor papierloos documentbeheer. Bestanden zijn de bron.</string>
@@ -47,18 +47,18 @@
     <string name="common_settings_storage_error_blank">Pad mag niet leeg zijn</string>
     <string name="common_settings_storage_error_absolute">Absolute paden zijn niet toegestaan</string>
     <string name="common_settings_storage_error_backslash">Backslashes zijn niet toegestaan</string>
-    <string name="common_settings_storage_error_traversal">Padtraversatie is niet toegestaan</string>
+    <string name="common_settings_storage_error_traversal">Doorgang naar bovenliggende mappen is niet toegestaan</string>
     <string name="common_settings_storage_error_reserved">De map %1$s is gereserveerd</string>
     <string name="common_settings_storage_error_whitespace">Padsegmenten mogen niet met witruimte beginnen of eindigen</string>
     <string name="common_settings_storage_error_invalid_segment">Ongeldig bestandsnaamsegment %1$s</string>
     <string name="common_settings_storage_error_invalid">Ongeldig padsjabloon</string>
 
-    <string name="common_settings_watched_folder_help">Pdf-bestanden die in deze map worden opgeslagen (bijvoorbeeld door een scanner-app), worden automatisch in de bibliotheek geïmporteerd en met OCR verwerkt.</string>
+    <string name="common_settings_watched_folder_help">Pdf-bestanden in deze map worden automatisch geïmporteerd en met OCR verwerkt.</string>
     <string name="common_settings_no_watched_folder">Geen bewaakte map</string>
     <string name="common_settings_choose_folder">Map kiezen</string>
     <string name="common_settings_stop_watching">Niet meer bewaken</string>
     <string name="common_settings_remove_after_import">Bestanden na importeren verwijderen</string>
-    <string name="common_settings_remove_after_import_help">Als dit aanstaat, worden bronbestanden uit de bewaakte map verwijderd zodra ze veilig in de bibliotheek staan. Als dit uitstaat, blijven ze staan en worden ze bij latere scans als duplicaten overgeslagen.</string>
+    <string name="common_settings_remove_after_import_help">Aan: verwijder bronbestanden na veilige import. Uit: laat ze staan en sla ze bij volgende scans over.</string>
 
     <string name="common_settings_enable_ai">AI-assistent inschakelen</string>
     <string name="common_settings_ai_help">Gebruikt een OpenAI-compatibele server om tags voor te stellen en vragen over je documenten te beantwoorden.</string>
@@ -70,9 +70,9 @@
     <string name="common_settings_model_help">Model-ID exact zoals de server het vermeldt (zie %1$s), bijvoorbeeld %2$s of %3$s. Voorvoegsels van clientproviders zijn niet van toepassing.</string>
     <string name="common_settings_ai_request_help">Bij aanvragen wordt documenttekst naar de ingestelde server verzonden.</string>
     <string name="common_settings_max_suggested_tags">Standaardmaximum voorgestelde tags per document</string>
-    <string name="common_settings_max_suggested_tags_help">Standaardaantal tags dat de assistent per document voorstelt (%1$d-%2$d); kan per uitvoering op de AI-tagpagina worden gewijzigd.</string>
+    <string name="common_settings_max_suggested_tags_help">Aantal tags dat de assistent per document voorstelt (%1$d-%2$d). Per uitvoering aanpasbaar.</string>
     <string name="common_settings_max_new_tags">Standaardmaximum nieuwe tags per document</string>
-    <string name="common_settings_max_new_tags_help">Standaardaantal volledig nieuwe tags (die nog niet in je bibliotheek staan) dat de assistent per document mag voorstellen (%1$d-%2$d; 0 = nooit); kan per uitvoering op de AI-tagpagina worden gewijzigd.</string>
+    <string name="common_settings_max_new_tags_help">Aantal nieuwe tags per document (%1$d-%2$d; 0 = nooit). Per uitvoering aanpasbaar.</string>
 
     <string name="common_settings_default_view">Standaardweergave: %1$s</string>
     <string name="common_settings_landscape_columns">Lijst met meerdere kolommen in liggende stand</string>
@@ -80,11 +80,11 @@
     <string name="common_settings_language">Taal</string>
     <string name="common_settings_language_help">Interfacetaal voor dit apparaat. Systeemstandaard volgt het besturingssysteem.</string>
     <string name="common_settings_language_system">Systeemstandaard</string>
-    <string name="common_settings_language_english">English</string>
+    <string name="common_settings_language_english">Engels</string>
     <string name="common_settings_language_dutch">Nederlands</string>
     <string name="common_settings_enable_inbox">Inboxworkflow inschakelen</string>
-    <string name="common_settings_inbox_help">Nieuwe documenten komen in een inbox terecht en je markeert ze handmatig als beoordeeld. Als dit uitstaat, verschijnen documenten direct en gelden ze als beoordeeld zodra ze een tag hebben.</string>
-    <string name="common_settings_syncs_across_devices">Deze instelling wordt tussen je apparaten gesynchroniseerd.</string>
+    <string name="common_settings_inbox_help">Nieuwe documenten komen eerst in de inbox. Uit: documenten verschijnen direct en zijn beoordeeld zodra ze een tag hebben.</string>
+    <string name="common_settings_syncs_across_devices">Deze instelling wordt met je andere apparaten gesynchroniseerd.</string>
     <string name="common_settings_inbox_migration_question">Hoe moeten bestaande documenten worden gemarkeerd? Nieuwe documenten moeten altijd eerst worden beoordeeld.</string>
     <string name="common_settings_mark_all_reviewed">Alles als beoordeeld markeren</string>
     <string name="common_settings_mark_tagged_reviewed">Documenten met tags als beoordeeld markeren</string>

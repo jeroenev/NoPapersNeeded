@@ -141,4 +141,11 @@
     <string name="detail_history_setting_changed">Changed setting '%1$s'</string>
     <string name="detail_history_unknown_event">Unknown event '%1$s'</string>
     <string name="detail_history_unknown_event_payload">Unknown event '%1$s': %2$s</string>
+
+    <string name="detail_title_hint">Title is metadata. Use "Rename file" to change the file name.</string>
+    <string name="detail_find_in_text">Find in text</string>
+    <string name="detail_find_previous">Previous match</string>
+    <string name="detail_find_next">Next match</string>
+    <string name="detail_no_matches_found">No matches found</string>
+    <string name="detail_find_position">%1$d / %2$d</string>
 </resources>

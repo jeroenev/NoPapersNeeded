@@ -27,12 +27,12 @@
     <string name="common_open_library_title">Je bibliotheek kon niet worden geopend</string>
     <string name="common_pick_folder_again">Map opnieuw kiezen</string>
 
-    <string name="common_onboarding_intro">Je documenten staan als pdf-bestanden in een gewone map. Die map is de bron: elk apparaat dat de map heeft, heeft alles.</string>
-    <string name="common_onboarding_sync">Laat Syncthing (of een ander synchronisatieprogramma) de map tussen apparaten synchroniseren. Tags, datums en statussen worden ook in de map opgeslagen. Zo gaat er niets verloren en kunnen er geen synchronisatieconflicten in appgegevens ontstaan.</string>
+    <string name="common_onboarding_intro">Je documenten staan als pdf-bestanden in een gewone map. Die map is de bron van waarheid: elk apparaat met die map heeft alles.</string>
+    <string name="common_onboarding_sync">Laat Syncthing (of een ander synchronisatieprogramma) de map synchroniseren tussen apparaten. Tags, datums en statussen worden ook in de map opgeslagen. Zo gaat er niets verloren en kunnen er geen synchronisatieconflicten in appgegevens ontstaan.</string>
     <string name="common_choose_library_folder">Bibliotheekmap kiezen</string>
 
     <string name="common_could_not_action">%1$s mislukt: %2$s</string>
-    <string name="common_no_ai_tag_suggestions">Geen suggesties - het document is mogelijk nog niet met OCR verwerkt</string>
+    <string name="common_no_ai_tag_suggestions">Geen suggesties - het document is mogelijk nog niet met OCR verwerkt.</string>
     <string name="common_ai_assistant_unreachable">De AI-assistent kon niet worden bereikt: %1$s</string>
     <string name="common_ai_assistant_empty_answer">De assistent gaf een leeg antwoord.</string>
     <string name="common_scan_imported">Scan geïmporteerd</string>
@@ -69,21 +69,21 @@
     <string name="common_action_delete_rule">regel verwijderen</string>
     <string name="common_action_update_rule">regel bijwerken</string>
     <string name="common_action_update">bijwerken</string>
-    <string name="common_action_trash">verwijderen</string>
+    <string name="common_action_trash">naar de prullenbak verplaatsen</string>
     <string name="common_action_suggest_tags">tags voorstellen</string>
     <string name="common_action_tag">taggen</string>
 
     <plurals name="common_could_not_documents">
-        <item quantity="one">%1$s van %2$d document mislukt</item>
-        <item quantity="other">%1$s van %2$d documenten mislukt</item>
+        <item quantity="one">Kon %1$s voor %2$d document niet uitvoeren</item>
+        <item quantity="other">Kon %1$s voor %2$d documenten niet uitvoeren</item>
     </plurals>
     <plurals name="common_could_not_partial_documents">
-        <item quantity="one">%1$s van %2$d van %3$d document mislukt</item>
-        <item quantity="other">%1$s van %2$d van %3$d documenten mislukt</item>
+        <item quantity="one">Kon %1$s voor %2$d van de %3$d documenten niet uitvoeren</item>
+        <item quantity="other">Kon %1$s voor %2$d van de %3$d documenten niet uitvoeren</item>
     </plurals>
     <plurals name="common_could_not_suggest_tags_partial">
-        <item quantity="one">Kon geen tags voorstellen voor %1$d van %2$d document</item>
-        <item quantity="other">Kon geen tags voorstellen voor %1$d van %2$d documenten</item>
+        <item quantity="one">Kon geen tags voorstellen voor %1$d van de %2$d documenten</item>
+        <item quantity="other">Kon geen tags voorstellen voor %1$d van de %2$d documenten</item>
     </plurals>
     <plurals name="common_imported_count">
         <item quantity="one">%1$d geïmporteerd</item>
@@ -109,4 +109,22 @@
         <item quantity="one">%1$d document - de eerste %2$d worden in deze batch uitgevoerd</item>
         <item quantity="other">%1$d documenten - de eerste %2$d worden in deze batch uitgevoerd</item>
     </plurals>
+
+    <string name="common_choose_date">Datum kiezen</string>
+    <string name="common_clear_date">Datum wissen</string>
+    <string name="common_select_all">Alles selecteren</string>
+    <string name="common_restore_all">Alles herstellen</string>
+    <string name="common_empty_trash">Prullenbak legen</string>
+    <plurals name="common_restore_all_question">
+        <item quantity="one">%1$d document herstellen?</item>
+        <item quantity="other">%1$d documenten herstellen?</item>
+    </plurals>
+    <plurals name="common_empty_trash_question">
+        <item quantity="one">%1$d document definitief verwijderen? Dit kan niet ongedaan worden gemaakt.</item>
+        <item quantity="other">%1$d documenten definitief verwijderen? Dit kan niet ongedaan worden gemaakt.</item>
+    </plurals>
+
+    <string name="common_create_new_library">Nieuwe bibliotheekmap aanmaken</string>
+    <string name="common_new_library_folder_name">Naam van nieuwe map</string>
+
 </resources>

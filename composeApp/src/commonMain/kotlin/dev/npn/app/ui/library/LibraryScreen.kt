@@ -2,15 +2,18 @@
 
 package dev.npn.app.ui.library
 
+import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -33,6 +36,7 @@ import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -55,6 +59,7 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -65,11 +70,19 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
-import dev.npn.app.ui.common.BoxWithConstraintsLayout
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.SnackbarMessages
@@ -89,6 +102,7 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_add_tag
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_menu
+import no_papers_needed.composeapp.generated.resources.common_select_all
 import no_papers_needed.composeapp.generated.resources.common_view_grid
 import no_papers_needed.composeapp.generated.resources.common_view_list
 import no_papers_needed.composeapp.generated.resources.library_add
@@ -152,7 +166,7 @@ fun LibraryScreen(
     // documents; ids are stable so the order stays valid across navigation. The originating search
     // query is also passed through so the detail screen can highlight matching terms.
     val openDoc: (String) -> Unit = { docId ->
-        onOpenDoc(docId, docs.map { it.doc.docId }, ui.filter.query)
+        onOpenDoc(docId, docs.orEmpty().map { it.doc.docId }, ui.filter.query)
     }
     val tags by vm.tags.collectAsStateWithLifecycle()
     val correspondents by vm.correspondents.collectAsStateWithLifecycle()
@@ -265,38 +279,113 @@ fun LibraryScreen(
         )
     }
 
-    // Responsive: permanent drawer when wide (>840dp), modal otherwise.
-    BoxWithConstraintsLayout(
-        wideContent = {
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth > 840.dp
+        if (wide) {
             Row(Modifier.fillMaxSize()) {
                 PermanentDrawerSheet(Modifier.padding(end = 0.dp)) { drawer() }
-                Box(Modifier.weight(1f)) { content() }
+                Row(Modifier.weight(1f)) {
+                    Box(Modifier.weight(1f)) { content() }
+                    if (dialogs.showFilter) {
+                        FilterPanel(
+                            filter = ui.filter,
+                            tags = tags,
+                            correspondents = correspondents,
+                            docTypes = docTypes,
+                            onApply = {
+                                vm.setFilter(it)
+                                dialogs.dismissFilter()
+                            },
+                            onClearAll = vm::clearFilter,
+                            onDismiss = dialogs::dismissFilter,
+                            fillHeight = true,
+                            modifier = Modifier.width(380.dp).fillMaxHeight(),
+                        )
+                    }
+                }
             }
-        },
-        narrowContent = {
+        } else {
             ModalNavigationDrawer(
                 drawerState = drawerState,
                 drawerContent = { ModalDrawerSheet { drawer() } },
             ) { content() }
-        },
-    )
+        }
 
-    LibraryDialogHost(
-        state = dialogs,
-        filter = ui.filter,
-        selectedCount = ui.selected.size,
-        tags = tags,
-        correspondents = correspondents,
-        docTypes = docTypes,
-        onApplyFilter = vm::setFilter,
-        onClearFilter = vm::clearFilter,
-        onSaveView = { name -> scope.launch { session.savedViews.save(newSavedView(ui, name)) } },
-        onRenameView = { view, name ->
-            scope.launch { session.savedViews.save(view.copy(name = name.trim())) }
-        },
-        onAddTag = vm::bulkAddTag,
-        onRemoveTag = vm::bulkRemoveTag,
-    )
+        LibraryDialogHost(
+            state = dialogs,
+            filter = ui.filter,
+            selectedCount = ui.selected.size,
+            tags = tags,
+            correspondents = correspondents,
+            docTypes = docTypes,
+            onApplyFilter = { applied ->
+                vm.setFilter(applied)
+                dialogs.dismissFilter()
+            },
+            onClearFilter = vm::clearFilter,
+            onSaveView = { name -> scope.launch { session.savedViews.save(newSavedView(ui, name)) } },
+            onRenameView = { view, name ->
+                scope.launch { session.savedViews.save(view.copy(name = name.trim())) }
+            },
+            onAddTag = vm::bulkAddTag,
+            onRemoveTag = vm::bulkRemoveTag,
+            renderFilter = !wide,
+        )
+    }
+}
+
+/** Desktop keyboard shortcuts for the library screen. Returns true when the event was handled. */
+private fun handleLibraryKeyEvent(
+    event: KeyEvent,
+    searchFocused: Boolean,
+    searchFocus: FocusRequester,
+    selectionMode: Boolean,
+    onImport: () -> Unit,
+    onSelectAll: () -> Unit,
+    onRequestTrash: () -> Unit,
+    onClearSelection: () -> Unit,
+    onClearQuery: () -> Unit,
+): Boolean {
+    if (event.type != KeyEventType.KeyDown || searchFocused) return false
+    return when {
+        event.isCtrlPressed && event.key == Key.F -> {
+            searchFocus.requestFocus()
+            true
+        }
+
+        event.isCtrlPressed && event.key == Key.O -> {
+            onImport()
+            true
+        }
+
+        event.isCtrlPressed && event.key == Key.A -> {
+            onSelectAll()
+            true
+        }
+
+        event.key == Key.Slash -> {
+            searchFocus.requestFocus()
+            true
+        }
+
+        event.key == Key.Delete && selectionMode -> {
+            onRequestTrash()
+            true
+        }
+
+        event.key == Key.Escape -> {
+            if (selectionMode) {
+                onClearSelection()
+            } else {
+                onClearQuery()
+            }
+            true
+        }
+
+        else -> {
+            false
+        }
+    }
 }
 
 @Composable
@@ -304,7 +393,7 @@ private fun LibraryContent(
     vm: LibraryViewModel,
     ui: LibraryUiState,
     session: LibrarySession,
-    docs: List<dev.npn.core.app.DocListItem>,
+    docs: List<dev.npn.core.app.DocListItem>?,
     tagColors: Map<String, String?>,
     reviewMode: ReviewMode,
     scanProgress: dev.npn.core.app.ScanProgressUi?,
@@ -325,17 +414,26 @@ private fun LibraryContent(
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
     val landscapeListColumns by vm.landscapeListColumns.collectAsStateWithLifecycle()
+    val allDocIds = docs.orEmpty().map { it.doc.docId }
+    val searchFocus = remember { FocusRequester() }
+    val contentFocus = remember { FocusRequester() }
+    var searchFocused by remember { mutableStateOf(false) }
+    var confirmTrash by remember { mutableStateOf(false) }
+    // Give the shortcut host focus on entry; key events only reach it once something is focused.
+    LaunchedEffect(Unit) { runCatching { contentFocus.requestFocus() } }
     Scaffold(
         topBar = {
             if (ui.selectionMode) {
                 SelectionTopBar(
                     count = ui.selected.size,
+                    total = allDocIds.size,
                     reviewMode = reviewMode,
                     onClose = vm::clearSelection,
+                    onSelectAll = { vm.selectAll(allDocIds) },
                     onAddTag = onAddTag,
                     onRemoveTag = onRemoveTag,
                     onSetReviewed = vm::bulkSetReviewed,
-                    onTrash = vm::bulkTrash,
+                    onRequestTrash = { confirmTrash = true },
                 )
             } else {
                 LibraryTopBar(
@@ -360,13 +458,37 @@ private fun LibraryContent(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        Column(Modifier.fillMaxSize().padding(padding)) {
+        // Desktop shortcuts. The container is focusable and takes focus on entry so the keys work
+        // before anything is clicked; they only fire when the search field does not hold focus, so
+        // typing and the field's own keys (escape to close suggestions) are never swallowed.
+        Column(
+            Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .focusRequester(contentFocus)
+                .focusable()
+                .onKeyEvent { event ->
+                    handleLibraryKeyEvent(
+                        event = event,
+                        searchFocused = searchFocused,
+                        searchFocus = searchFocus,
+                        selectionMode = ui.selectionMode,
+                        onImport = onImport,
+                        onSelectAll = { if (allDocIds.isNotEmpty()) vm.selectAll(allDocIds) },
+                        onRequestTrash = { confirmTrash = true },
+                        onClearSelection = vm::clearSelection,
+                        onClearQuery = { vm.onQueryChange("") },
+                    )
+                },
+        ) {
             SearchField(
                 value = queryText,
                 onValueChange = vm::onQueryChange,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 suggestions = suggestions,
                 onSuggestionSelected = vm::acceptSuggestion,
+                focusRequester = searchFocus,
+                onFocusChange = { searchFocused = it },
             )
             ActiveFilters(
                 filter = ui.filter,
@@ -387,7 +509,11 @@ private fun LibraryContent(
                 onRefresh = vm::refresh,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (docs.isEmpty()) {
+                if (docs == null) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                } else if (docs.isEmpty()) {
                     if (ui.filter.isEmpty) {
                         EmptyState(
                             icon = Icons.Filled.Description,
@@ -438,6 +564,23 @@ private fun LibraryContent(
                 }
             }
         }
+    }
+    if (confirmTrash) {
+        dev.npn.app.ui.common.ConfirmDialog(
+            title = stringResource(Res.string.library_trash_documents),
+            message =
+                pluralStringResource(
+                    Res.plurals.library_move_to_trash_question,
+                    ui.selected.size,
+                    ui.selected.size,
+                ),
+            confirmLabel = stringResource(Res.string.library_trash),
+            onConfirm = {
+                vm.bulkTrash()
+                confirmTrash = false
+            },
+            onDismiss = { confirmTrash = false },
+        )
     }
 }
 
@@ -596,15 +739,16 @@ private fun LibraryTopBar(
 @Composable
 private fun SelectionTopBar(
     count: Int,
+    total: Int,
     reviewMode: ReviewMode,
     onClose: () -> Unit,
+    onSelectAll: () -> Unit,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
     onSetReviewed: (Boolean) -> Unit,
-    onTrash: () -> Unit,
+    onRequestTrash: () -> Unit,
 ) {
     var reviewMenu by remember { mutableStateOf(false) }
-    var confirmTrash by remember { mutableStateOf(false) }
     TopAppBar(
         title = { Text(pluralStringResource(Res.plurals.library_selected_count, count, count)) },
         navigationIcon = {
@@ -613,6 +757,9 @@ private fun SelectionTopBar(
             }
         },
         actions = {
+            TextButton(onClick = onSelectAll, enabled = total > 0) {
+                Text(stringResource(Res.string.common_select_all))
+            }
             TextButton(onClick = onAddTag) { Text(stringResource(Res.string.common_add_tag)) }
             TextButton(onClick = onRemoveTag) { Text(stringResource(Res.string.library_remove_tag)) }
             // Manual reviewed marker only applies in the inbox-workflow mode.
@@ -637,23 +784,11 @@ private fun SelectionTopBar(
                     }
                 }
             }
-            IconButton(onClick = { confirmTrash = true }) {
+            IconButton(onClick = onRequestTrash) {
                 Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.library_trash))
             }
         },
     )
-    if (confirmTrash) {
-        dev.npn.app.ui.common.ConfirmDialog(
-            title = stringResource(Res.string.library_trash_documents),
-            message = pluralStringResource(Res.plurals.library_move_to_trash_question, count, count),
-            confirmLabel = stringResource(Res.string.library_trash),
-            onConfirm = {
-                onTrash()
-                confirmTrash = false
-            },
-            onDismiss = { confirmTrash = false },
-        )
-    }
 }
 
 @Composable

@@ -10,12 +10,12 @@
     <string name="detail_rename_file">Bestand hernoemen</string>
     <string name="detail_new_file_name">Nieuwe bestandsnaam</string>
     <string name="detail_rename">Hernoemen</string>
-    <string name="detail_trash_document">Document verwijderen</string>
+    <string name="detail_trash_document">Document naar prullenbak verplaatsen</string>
     <string name="detail_trash_prompt">Dit document naar de prullenbak verplaatsen? Je kunt het later herstellen.</string>
-    <string name="detail_trash">Verwijderen</string>
+    <string name="detail_trash">Naar prullenbak</string>
     <string name="detail_split_failed">Splitsen mislukt: %1$s</string>
     <string name="detail_bake_metadata_in_place">Metadata in het bestand insluiten</string>
-    <string name="detail_bake_prompt">Hiermee wordt het bibliotheekbestand zelf herschreven om tags en eigenschappen als XMP in te sluiten. De inhoudshash van het bestand verandert en de wijziging wordt met andere apparaten gesynchroniseerd. Kies bij voorkeur Exporteren voor een overdraagbare kopie zonder de bibliotheek te wijzigen. Doorgaan?</string>
+    <string name="detail_bake_prompt">Het bibliotheekbestand wordt herschreven met tags en eigenschappen als XMP. De hash verandert en de wijziging wordt gesynchroniseerd. Gebruik Exporteren om de bibliotheek niet te wijzigen. Doorgaan?</string>
     <string name="detail_bake_in_place">In bestand insluiten</string>
     <string name="detail_baked_in_place">Metadata in bestand ingesloten</string>
     <string name="detail_bake_failed">Insluiten mislukt</string>
@@ -85,7 +85,7 @@
     <string name="detail_engine_embedded">Ingesloten tekst</string>
 
     <string name="detail_split_explanation">Elk deel wordt een nieuw document met dezelfde tags en eigenschappen; het origineel gaat naar de prullenbak. Voer de pagina's in waarna moet worden gesplitst (1..%1$d), bijvoorbeeld &quot;3, 5&quot;.</string>
-    <string name="detail_split_after_pages">Splitsen na pagina('s)</string>
+    <string name="detail_split_after_pages">Splitsen na pagina's</string>
     <string name="detail_split_part">Deel %1$d: %2$s</string>
     <string name="detail_split">Splitsen</string>
     <plurals name="detail_split_pages">
@@ -136,4 +136,11 @@
     <string name="detail_history_setting_changed">Instelling '%1$s' gewijzigd</string>
     <string name="detail_history_unknown_event">Onbekende gebeurtenis '%1$s'</string>
     <string name="detail_history_unknown_event_payload">Onbekende gebeurtenis '%1$s': %2$s</string>
+
+    <string name="detail_title_hint">Titel is metadata. Gebruik "Bestand hernoemen" om de bestandsnaam te wijzigen.</string>
+    <string name="detail_find_in_text">Zoeken in tekst</string>
+    <string name="detail_find_previous">Vorig resultaat</string>
+    <string name="detail_find_next">Volgend resultaat</string>
+    <string name="detail_no_matches_found">Geen resultaten gevonden</string>
+    <string name="detail_find_position">%1$d / %2$d</string>
 </resources>

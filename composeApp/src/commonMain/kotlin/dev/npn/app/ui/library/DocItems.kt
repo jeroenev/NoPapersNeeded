@@ -17,8 +17,14 @@ import androidx.compose.material3.Checkbox
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.input.pointer.PointerEventPass
+import androidx.compose.ui.input.pointer.isCtrlPressed
+import androidx.compose.ui.input.pointer.isMetaPressed
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -34,16 +40,39 @@ import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.model.ReviewMode
 
-private fun DocListItem.displayTitle(): String =
-    documentDisplayTitle(doc.title, doc.fileName)
+private fun DocListItem.displayTitle(): String = documentDisplayTitle(doc.title, doc.fileName)
 
 /**
  * Effective reviewed state for display. In UNTAGGED_ONLY the marker is derived (reviewed == has
  * any tag); in INBOX_WORKFLOW the stored reviewed flag is authoritative.
  */
-fun DocListItem.effectiveReviewed(mode: ReviewMode): Boolean = when (mode) {
-    ReviewMode.UNTAGGED_ONLY -> tags.isNotEmpty()
-    ReviewMode.INBOX_WORKFLOW -> doc.reviewed
+fun DocListItem.effectiveReviewed(mode: ReviewMode): Boolean =
+    when (mode) {
+        ReviewMode.UNTAGGED_ONLY -> tags.isNotEmpty()
+        ReviewMode.INBOX_WORKFLOW -> doc.reviewed
+    }
+
+/**
+ * Desktop convenience: Ctrl/Cmd+click toggles the document's selection instead of opening it.
+ * The press is consumed on the [PointerEventPass.Initial] pass so [combinedClickable]'s tap
+ * detector never sees it; all other gestures pass straight through. Toggling happens on press
+ * (the consumed down makes an up/cancel wait return immediately, so there is nothing to await).
+ */
+@Composable
+private fun Modifier.ctrlClickToggle(onToggleSelect: () -> Unit): Modifier {
+    val current by rememberUpdatedState(onToggleSelect)
+    return pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val press = event.changes.firstOrNull { it.pressed && !it.previousPressed } ?: continue
+                if (event.keyboardModifiers.isCtrlPressed || event.keyboardModifiers.isMetaPressed) {
+                    press.consume()
+                    current()
+                }
+            }
+        }
+    }
 }
 
 @Composable
@@ -59,10 +88,12 @@ fun DocListRow(
     onToggleSelect: () -> Unit,
 ) {
     Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-            .padding(horizontal = 16.dp, vertical = 10.dp),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .ctrlClickToggle(onToggleSelect)
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -105,10 +136,11 @@ fun DocListRow(
             item.snippet?.let { snip ->
                 HighlightText(
                     segments = parseFtsSnippet(snip),
-                    style = MaterialTheme.typography.bodySmall.copy(
-                        fontStyle = FontStyle.Italic,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    ),
+                    style =
+                        MaterialTheme.typography.bodySmall.copy(
+                            fontStyle = FontStyle.Italic,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
                 )
@@ -126,11 +158,14 @@ fun DocGridCard(
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
+    onToggleSelect: () -> Unit,
 ) {
     Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+        modifier =
+            Modifier
+                .fillMaxWidth()
+                .ctrlClickToggle(onToggleSelect)
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick),
     ) {
         Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Row(
@@ -145,7 +180,7 @@ fun DocGridCard(
                     modifier = Modifier.weight(1f).aspectRatio(0.75f),
                 )
                 if (selectionMode) {
-                    Checkbox(checked = selected, onCheckedChange = null)
+                    Checkbox(checked = selected, onCheckedChange = { onToggleSelect() })
                 }
             }
             Text(

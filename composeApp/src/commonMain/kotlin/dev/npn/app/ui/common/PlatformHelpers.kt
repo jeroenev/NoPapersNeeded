@@ -32,6 +32,21 @@ expect fun persistDirectoryAccess(dir: PlatformFile): String
 expect fun supportsSharing(): Boolean
 
 /**
+ * Whether the platform can create a new library folder directly (desktop). Platforms that cannot
+ * (Android's SAF tree picker) only offer choosing an existing folder.
+ */
+expect fun supportsLibraryFolderCreation(): Boolean
+
+/**
+ * Create a new library folder named [name] inside [parentLocation] and return its location string,
+ * or null on failure. Only called when [supportsLibraryFolderCreation] is true.
+ */
+expect suspend fun createLibraryFolder(
+    parentLocation: String,
+    name: String,
+): String?
+
+/**
  * Hand the given baked PDF bytes to the platform share sheet (e.g. ACTION_SEND on Android).
  * Only called when [supportsSharing] is true. Throws if sharing could not be offered.
  */

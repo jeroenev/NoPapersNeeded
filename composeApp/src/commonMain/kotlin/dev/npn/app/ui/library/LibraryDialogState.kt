@@ -106,8 +106,9 @@ fun LibraryDialogHost(
     onRenameView: (SavedView, String) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
+    renderFilter: Boolean = true,
 ) {
-    if (state.showFilter) {
+    if (state.showFilter && renderFilter) {
         FilterSheet(
             filter = filter,
             tags = tags,

@@ -110,4 +110,22 @@
         <item quantity="one">%1$d document - the first %2$d run in this batch</item>
         <item quantity="other">%1$d documents - the first %2$d run in this batch</item>
     </plurals>
+
+    <string name="common_choose_date">Choose date</string>
+    <string name="common_clear_date">Clear date</string>
+    <string name="common_select_all">Select all</string>
+    <string name="common_restore_all">Restore all</string>
+    <string name="common_empty_trash">Empty trash</string>
+    <plurals name="common_restore_all_question">
+        <item quantity="one">Restore %1$d document?</item>
+        <item quantity="other">Restore %1$d documents?</item>
+    </plurals>
+    <plurals name="common_empty_trash_question">
+        <item quantity="one">Permanently delete %1$d document? This cannot be undone.</item>
+        <item quantity="other">Permanently delete %1$d documents? This cannot be undone.</item>
+    </plurals>
+
+    <string name="common_create_new_library">Create new library folder</string>
+    <string name="common_new_library_folder_name">New folder name</string>
+
 </resources>

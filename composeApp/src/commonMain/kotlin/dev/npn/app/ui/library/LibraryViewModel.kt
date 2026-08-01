@@ -133,13 +133,15 @@ class LibraryViewModel(
         }
     }
 
-    val documents: StateFlow<List<DocListItem>> =
+    // null until the first query result arrives from Room, so the screen can show a loading
+    // indicator instead of flashing the empty state on a slow initial load.
+    val documents: StateFlow<List<DocListItem>?> =
         combine(
             _ui.map { it.filter }.distinctUntilChanged(),
             _ui.map { it.sort }.distinctUntilChanged(),
         ) { f, s -> f to s }
             .flatMapLatest { (f, s) -> session.documents.observeDocuments(f, s) }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /**
      * Autocomplete suggestions for the current query. Debounced separately from the filter
@@ -295,6 +297,11 @@ class LibraryViewModel(
 
     fun startSelection(docId: String) {
         _ui.value = _ui.value.copy(selectionMode = true, selected = setOf(docId))
+    }
+
+    /** Enter selection mode with every visible document selected (desktop Ctrl+A / Select all). */
+    fun selectAll(docIds: List<String>) {
+        _ui.value = _ui.value.copy(selectionMode = true, selected = docIds.toSet())
     }
 
     fun clearSelection() {

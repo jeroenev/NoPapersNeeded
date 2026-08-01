@@ -31,10 +31,10 @@
     <string name="common_rules_field_title">Titel</string>
     <string name="common_rules_field_file_name">Bestandsnaam</string>
     <string name="common_rules_algorithm_exact">Exact</string>
-    <string name="common_rules_algorithm_any_word">Willekeurig woord</string>
+    <string name="common_rules_algorithm_any_word">Een willekeurig woord</string>
     <string name="common_rules_algorithm_all_words">Alle woorden</string>
-    <string name="common_rules_algorithm_regex">Reguliere expressie</string>
-    <string name="common_rules_algorithm_fuzzy">Benaderend</string>
+    <string name="common_rules_algorithm_regex">Regex</string>
+    <string name="common_rules_algorithm_fuzzy">Benaderend zoeken</string>
 
     <string name="common_tags_title">Tags</string>
     <string name="common_tags_new">Nieuwe tag</string>

@@ -173,6 +173,7 @@ internal fun DocGrid(
                             }
                         },
                         onLongClick = { onStartSelection(item.doc.docId) },
+                        onToggleSelect = { onToggleSelect(item.doc.docId) },
                     )
                 }
             }

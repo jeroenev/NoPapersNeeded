@@ -64,9 +64,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
+import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isCtrlPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onKeyEvent
+import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HighlightText
+import dev.npn.app.ui.common.IsoDatePickerDialog
 import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagEditor
@@ -82,6 +90,7 @@ import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_apply
 import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_choose_date
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.common_unknown_error
 import no_papers_needed.composeapp.generated.resources.detail_add_field
@@ -136,6 +145,7 @@ import no_papers_needed.composeapp.generated.resources.detail_text_not_extracted
 import no_papers_needed.composeapp.generated.resources.detail_text_queued
 import no_papers_needed.composeapp.generated.resources.detail_text_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_title
+import no_papers_needed.composeapp.generated.resources.detail_title_hint
 import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
 import no_papers_needed.composeapp.generated.resources.detail_value
 import org.jetbrains.compose.resources.stringResource
@@ -148,6 +158,7 @@ import org.jetbrains.compose.resources.stringResource
  * existing values as suggestions.
  */
 @Composable
+@Suppress("LongMethod")
 fun MetadataPanel(
     item: DocListItem,
     allTagNames: List<String>,
@@ -189,7 +200,22 @@ fun MetadataPanel(
             onLoadHistory()
         }
     }
-    Column(modifier) {
+    // Shared with OcrTextTab so Ctrl+F can move focus into its find field. Focus is only requested
+    // when Ctrl+F raises the counter, never on a plain tab tap (which would pop the keyboard).
+    val findFocus = remember { FocusRequester() }
+    var findRequestCounter by remember { mutableStateOf(0) }
+    Column(
+        modifier.onKeyEvent { event ->
+            // Ctrl+F jumps to the Text tab and focuses the find field (desktop).
+            if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.F) {
+                tab = PanelTab.TEXT
+                findRequestCounter++
+                true
+            } else {
+                false
+            }
+        },
+    ) {
         PrimaryTabRow(selectedTabIndex = tab.ordinal) {
             PanelTab.entries.forEach { t ->
                 Tab(
@@ -246,6 +272,8 @@ fun MetadataPanel(
                     text = ocrText,
                     ocrState = item.doc.ocrState,
                     highlightTerms = highlightTerms,
+                    focusRequester = findFocus,
+                    focusRequest = findRequestCounter,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
@@ -472,12 +500,19 @@ private fun DocumentPropertiesSection(
     onCommitDocType: (String) -> Unit,
     onCommitDocDate: (String) -> Unit,
 ) {
-    CommitTextField(
-        label = stringResource(Res.string.detail_title),
-        initial = title.orEmpty(),
-        placeholder = fileName,
-        onCommit = onCommitTitle,
-    )
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        CommitTextField(
+            label = stringResource(Res.string.detail_title),
+            initial = title.orEmpty(),
+            placeholder = fileName,
+            onCommit = onCommitTitle,
+        )
+        Text(
+            stringResource(Res.string.detail_title_hint),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
     SuggestField(
         label = stringResource(Res.string.detail_correspondent),
         initial = correspondent.orEmpty(),
@@ -490,12 +525,55 @@ private fun DocumentPropertiesSection(
         suggestions = docTypes,
         onCommit = onCommitDocType,
     )
-    CommitTextField(
-        label = stringResource(Res.string.detail_document_date),
-        initial = docDate.orEmpty(),
-        placeholder = stringResource(Res.string.detail_iso_date_template),
+    DocumentDateField(
+        docDate = docDate,
         onCommit = onCommitDocDate,
     )
+}
+
+/**
+ * Document-date field: manual ISO entry via [CommitTextField] plus a trailing calendar action that
+ * opens an [IsoDatePickerDialog]. Picking commits immediately and also seeds the field's text (keyed
+ * on [docDate] so it resets when the doc changes) so the blur-commit never fires with stale text.
+ */
+@Composable
+private fun DocumentDateField(
+    docDate: String?,
+    onCommit: (String) -> Unit,
+) {
+    var showPicker by remember { mutableStateOf(false) }
+    var picked by remember(docDate) { mutableStateOf<String?>(null) }
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CommitTextField(
+            label = stringResource(Res.string.detail_document_date),
+            initial = picked ?: docDate.orEmpty(),
+            placeholder = stringResource(Res.string.detail_iso_date_template),
+            modifier = Modifier.weight(1f),
+            onCommit = onCommit,
+        )
+        IconButton(onClick = { showPicker = true }) {
+            Icon(
+                Icons.Filled.CalendarToday,
+                contentDescription = stringResource(Res.string.common_choose_date),
+            )
+        }
+    }
+    if (showPicker) {
+        IsoDatePickerDialog(
+            initial = docDate,
+            title = stringResource(Res.string.detail_document_date),
+            onSelect = { iso ->
+                showPicker = false
+                picked = iso.orEmpty()
+                onCommit(iso.orEmpty())
+            },
+            onDismiss = { showPicker = false },
+        )
+    }
 }
 
 /**
