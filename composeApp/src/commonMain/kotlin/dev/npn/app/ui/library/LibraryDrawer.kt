@@ -14,6 +14,8 @@ import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material3.Badge
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -42,6 +44,9 @@ fun LibraryDrawerContent(
     onReviewQueue: () -> Unit,
     onTrash: () -> Unit,
     onTags: () -> Unit,
+    aiConfigured: Boolean,
+    onAiChat: () -> Unit,
+    onAiTagging: () -> Unit,
     onSettings: () -> Unit,
     onSavedView: (SavedView) -> Unit,
     onSaveCurrentView: () -> Unit,
@@ -88,6 +93,8 @@ fun LibraryDrawerContent(
             icon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) },
             onClick = onTags,
         )
+        // AI entry points only appear once the assistant is configured (same probe as the screen).
+        if (aiConfigured) AiDrawerItems(onAiChat = onAiChat, onAiTagging = onAiTagging)
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text(
@@ -121,6 +128,25 @@ fun LibraryDrawerContent(
             onClick = onSettings,
         )
     }
+}
+
+@Composable
+private fun AiDrawerItems(
+    onAiChat: () -> Unit,
+    onAiTagging: () -> Unit,
+) {
+    NavigationDrawerItem(
+        label = { Text("AI assistant") },
+        selected = false,
+        icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
+        onClick = onAiChat,
+    )
+    NavigationDrawerItem(
+        label = { Text("AI tagging") },
+        selected = false,
+        icon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
+        onClick = onAiTagging,
+    )
 }
 
 @Composable

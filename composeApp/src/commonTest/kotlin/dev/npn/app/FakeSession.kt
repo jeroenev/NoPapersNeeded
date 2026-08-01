@@ -1,14 +1,17 @@
 package dev.npn.app
 
+import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiFacade
+import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.AutoMatchRuleRepository
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.ImportOutcome
+import dev.npn.core.app.AiTagging
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
@@ -32,6 +35,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 
 /**
@@ -184,6 +188,9 @@ class FakeMetadataWriter : MetadataWriter {
     /** If set, every batched op (addTag/removeTag/setReviewed) throws this. */
     var failBatchOps: (() -> Nothing)? = null
 
+    /** addTag throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
+    var failAddTagForDocs: Set<String> = emptySet()
+
     /** trashDoc throws for these ids only. */
     var failTrashDocIds: Set<String> = emptySet()
 
@@ -201,6 +208,7 @@ class FakeMetadataWriter : MetadataWriter {
 
     override suspend fun addTag(docIds: List<String>, tag: String) {
         failBatchOps?.invoke()
+        if (docIds.any { it in failAddTagForDocs }) error("addTag failed for $docIds")
         addedTags += docIds to tag
     }
 
@@ -310,34 +318,71 @@ class FakeDocContentFacade : DocContentFacade {
 }
 
 /**
- * AI fake: [askResponses] are consumed in order (last one repeats); [suggestions] backs
- * [suggestTags]. Failure injection via the `fail*` hooks, call recording via `asked`/
- * [suggestTagsCalls].
+ * AI fake: [askScripts] are event lists consumed in order (last one repeats); each backs one
+ * [ask] flow. [askResponses] is a convenience: a plain answer string is turned into a
+ * `TextDelta` + `Done` script. [suggestions] backs [suggestTags]. Failure injection via the
+ * `fail*` hooks ([failAsk] throws when the returned flow is collected), call recording via
+ * `asked`/[suggestTagsCalls]. [askDelayMillis] delays each emitted event so tests can observe
+ * intermediate streaming state and cancellation.
  */
 class FakeAiFacade : AiFacade {
     var configValue = AiConfig(enabled = true, baseUrl = "http://localhost:1", model = "test-model")
-    var askResponses: List<String> = listOf("answer")
+    var askScripts: List<List<AiChatEvent>> = emptyList()
+    var askResponses: List<String> = emptyList()
+    var askDelayMillis: Long = 0
     private var askIdx = 0
     val asked = mutableListOf<Pair<List<AiChatTurn>, String>>()
     var failAsk: (() -> Nothing)? = null
-    var suggestions: List<String> = emptyList()
+    /** When set, the ask flow throws after emitting this many events (mid-stream failure). */
+    var failAskAfter: Int? = null
+    var suggestions: List<TagSuggestion> = emptyList()
+
+    /**
+     * Per-doc suggestion scripts for the bulk tagging flow. When a docId has an entry here it wins
+     * over [suggestions]; docs absent from the map fall back to [suggestions]. Lets tests drive
+     * distinct results (including empty lists for the "no suggestions" grouping) per document.
+     */
+    var suggestionsByDoc: Map<String, List<TagSuggestion>> = emptyMap()
+
     val suggestTagsCalls = mutableListOf<String>()
     var failSuggestTags: (() -> Nothing)? = null
 
+    /** suggestTags throws for these ids only (per-doc partial-failure testing). */
+    var failSuggestTagsForDocs: Set<String> = emptySet()
+
+    /** Optional per-call delay so tests can observe progress and cancel mid-run. */
+    var suggestDelayMillis: Long = 0
+
     override suspend fun config(): AiConfig = configValue
 
-    override suspend fun ask(history: List<AiChatTurn>, question: String): String {
-        failAsk?.invoke()
-        asked += history to question
-        val response = askResponses.getOrElse(askIdx) { askResponses.last() }
+    override fun ask(history: List<AiChatTurn>, question: String): Flow<AiChatEvent> {
+        val script = scriptFor(askIdx)
         askIdx++
-        return response
+        asked += history to question
+        return flow {
+            failAsk?.invoke()
+            var emitted = 0
+            for (event in script) {
+                if (failAskAfter == emitted) error("stream interrupted")
+                if (askDelayMillis > 0) kotlinx.coroutines.delay(askDelayMillis)
+                emit(event)
+                emitted++
+            }
+        }
     }
 
-    override suspend fun suggestTags(docId: String): List<String> {
+    private fun scriptFor(index: Int): List<AiChatEvent> {
+        if (askScripts.isNotEmpty()) return askScripts.getOrElse(index) { askScripts.last() }
+        val text = askResponses.getOrElse(index) { askResponses.lastOrNull() ?: "answer" }
+        return listOf(AiChatEvent.TextDelta(text), AiChatEvent.Done(text))
+    }
+
+    override suspend fun suggestTags(docId: String): List<TagSuggestion> {
+        if (suggestDelayMillis > 0) kotlinx.coroutines.delay(suggestDelayMillis)
         failSuggestTags?.invoke()
+        if (docId in failSuggestTagsForDocs) error("suggest failed for $docId")
         suggestTagsCalls += docId
-        return suggestions
+        return suggestionsByDoc[docId] ?: suggestions
     }
 }
 
@@ -497,6 +542,8 @@ class FakeSettingsRepository(
     val aiBaseUrlFlow = MutableStateFlow("")
     val aiApiKeyFlow = MutableStateFlow("")
     val aiModelFlow = MutableStateFlow("")
+    val aiMaxTagsPerDocFlow = MutableStateFlow(8)
+    val setAiMaxTagsPerDocValues = mutableListOf<Int>()
 
     override val aiEnabled: Flow<Boolean> get() = aiEnabledFlow
     override suspend fun setAiEnabled(enabled: Boolean) { aiEnabledFlow.value = enabled }
@@ -506,6 +553,11 @@ class FakeSettingsRepository(
     override suspend fun setAiApiKey(key: String) { aiApiKeyFlow.value = key }
     override val aiModel: Flow<String> get() = aiModelFlow
     override suspend fun setAiModel(model: String) { aiModelFlow.value = model }
+    override val aiMaxTagsPerDoc: Flow<Int> get() = aiMaxTagsPerDocFlow
+    override suspend fun setAiMaxTagsPerDoc(value: Int) {
+        setAiMaxTagsPerDocValues += value
+        aiMaxTagsPerDocFlow.value = value.coerceIn(AiTagging.RANGE)
+    }
 
     val watchedFolderFlow = MutableStateFlow<String?>(null)
     val watchedFolderDeleteFlow = MutableStateFlow(false)

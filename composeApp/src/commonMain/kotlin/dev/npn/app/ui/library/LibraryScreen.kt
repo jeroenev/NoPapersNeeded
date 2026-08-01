@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.Card
@@ -103,7 +102,8 @@ fun LibraryScreen(
     onTrash: () -> Unit,
     onTags: () -> Unit,
     onSettings: () -> Unit,
-    onOpenAiChat: () -> Unit,
+    onAiChat: () -> Unit,
+    onAiTagging: () -> Unit,
 ) {
     // Probe once whether the AI assistant is configured so the entry point stays hidden otherwise.
     val aiConfigured by produceState(initialValue = false, session) {
@@ -181,8 +181,6 @@ fun LibraryScreen(
             snackbar = snackbar,
             onMenu = { scope.launch { drawerState.open() } },
             onOpenDoc = openDoc,
-            aiConfigured = aiConfigured,
-            onOpenAiChat = onOpenAiChat,
             onTrashBanner = onTrash,
             onImport = { importPicker.launch() },
             onScan = onScan,
@@ -211,6 +209,9 @@ fun LibraryScreen(
             onReviewQueue = { vm.applyReviewPreset(); scope.launch { drawerState.close() } },
             onTrash = { scope.launch { drawerState.close() }; onTrash() },
             onTags = { scope.launch { drawerState.close() }; onTags() },
+            aiConfigured = aiConfigured,
+            onAiChat = { scope.launch { drawerState.close() }; onAiChat() },
+            onAiTagging = { scope.launch { drawerState.close() }; onAiTagging() },
             onSettings = { scope.launch { drawerState.close() }; onSettings() },
             onSavedView = { view ->
                 vm.applySavedView(view)
@@ -277,8 +278,6 @@ private fun LibraryContent(
     snackbar: SnackbarHostState,
     onMenu: () -> Unit,
     onOpenDoc: (String) -> Unit,
-    aiConfigured: Boolean,
-    onOpenAiChat: () -> Unit,
     onTrashBanner: () -> Unit,
     onImport: () -> Unit,
     onScan: () -> Unit,
@@ -307,10 +306,8 @@ private fun LibraryContent(
                 LibraryTopBar(
                     viewType = ui.viewType,
                     sort = ui.sort,
-                    aiConfigured = aiConfigured,
                     onMenu = onMenu,
                     onOpenFilter = onOpenFilter,
-                    onOpenAiChat = onOpenAiChat,
                     onSetSort = vm::setSort,
                     onSetView = vm::setViewType,
                     onRefresh = vm::refresh,
@@ -463,10 +460,8 @@ private fun DocList(
 private fun LibraryTopBar(
     viewType: ViewType,
     sort: dev.npn.core.app.LibrarySort,
-    aiConfigured: Boolean,
     onMenu: () -> Unit,
     onOpenFilter: () -> Unit,
-    onOpenAiChat: () -> Unit,
     onSetSort: (SortField, Boolean) -> Unit,
     onSetView: (ViewType) -> Unit,
     onRefresh: () -> Unit,
@@ -478,11 +473,6 @@ private fun LibraryTopBar(
             IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu") }
         },
         actions = {
-            if (aiConfigured) {
-                IconButton(onClick = onOpenAiChat) {
-                    Icon(Icons.Outlined.AutoAwesome, contentDescription = "AI assistant")
-                }
-            }
             IconButton(onClick = onRefresh) {
                 Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
             }

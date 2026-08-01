@@ -36,6 +36,8 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.AlertDialog
@@ -46,6 +48,7 @@ import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.persistDirectoryAccess
 import dev.npn.app.ui.common.viewTypeLabel
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
+import dev.npn.core.app.AiTagging
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
@@ -131,10 +134,12 @@ fun SettingsScreen(
                 baseUrl = state.aiBaseUrl,
                 apiKey = state.aiApiKey,
                 model = state.aiModel,
+                maxTagsPerDoc = state.aiMaxTagsPerDoc,
                 onSetEnabled = vm::setAiEnabled,
                 onSetBaseUrl = vm::setAiBaseUrl,
                 onSetApiKey = vm::setAiApiKey,
                 onSetModel = vm::setAiModel,
+                onSetMaxTagsPerDoc = vm::setAiMaxTagsPerDoc,
             )
 
             HorizontalDivider()
@@ -328,10 +333,12 @@ private fun AiAssistantSection(
     baseUrl: String,
     apiKey: String,
     model: String,
+    maxTagsPerDoc: Int,
     onSetEnabled: (Boolean) -> Unit,
     onSetBaseUrl: (String) -> Unit,
     onSetApiKey: (String) -> Unit,
     onSetModel: (String) -> Unit,
+    onSetMaxTagsPerDoc: (Int) -> Unit,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
@@ -384,6 +391,7 @@ private fun AiAssistantSection(
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            MaxTagsPerDocField(maxTagsPerDoc, onSetMaxTagsPerDoc)
             Text(
                 "Requests send document text to the configured server.",
                 style = MaterialTheme.typography.bodySmall,
@@ -391,6 +399,30 @@ private fun AiAssistantSection(
             )
         }
     }
+}
+
+/**
+ * Numeric field for the per-document tag-suggestion cap. Keeps a local editable string so the user
+ * can clear it while typing; commits (clamped into [AiTagging.RANGE]) on every valid parse and
+ * re-seeds from the persisted [value] whenever it changes externally.
+ */
+@Composable
+private fun MaxTagsPerDocField(value: Int, onSetValue: (Int) -> Unit) {
+    var text by remember(value) { mutableStateOf(value.toString()) }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { raw ->
+            text = raw.filter { it.isDigit() }.take(2)
+            text.toIntOrNull()?.takeIf { it in AiTagging.RANGE }?.let(onSetValue)
+        },
+        label = { Text("Max suggested tags per document") },
+        supportingText = {
+            Text("How many tags the assistant proposes per document (1-15).")
+        },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
 }
 
 @Composable

@@ -2,6 +2,7 @@ package dev.npn.app.ui.detail
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.queryTerms
+import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.OcrVersion
@@ -63,7 +64,7 @@ sealed interface HistoryUiState {
 data class AiTagState(
     val available: Boolean? = null,
     val suggesting: Boolean = false,
-    val suggestions: List<String> = emptyList(),
+    val suggestions: List<TagSuggestion> = emptyList(),
 )
 
 /**
@@ -271,7 +272,9 @@ class DocDetailViewModel(
     }
 
     fun dismissAiTag(tag: String) {
-        _aiTags.value = _aiTags.value.copy(suggestions = _aiTags.value.suggestions - tag)
+        _aiTags.value = _aiTags.value.copy(
+            suggestions = _aiTags.value.suggestions.filterNot { it.tag == tag },
+        )
     }
 
     fun clearAiTagSuggestions() {

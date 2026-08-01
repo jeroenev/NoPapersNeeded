@@ -31,6 +31,7 @@ data class SettingsUiState(
     val aiBaseUrl: String = "",
     val aiApiKey: String = "",
     val aiModel: String = "",
+    val aiMaxTagsPerDoc: Int = 8,
 )
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
@@ -42,6 +43,7 @@ private data class AiSettings(
     val baseUrl: String,
     val apiKey: String,
     val model: String,
+    val maxTagsPerDoc: Int,
 )
 
 class SettingsViewModel(
@@ -71,7 +73,10 @@ class SettingsViewModel(
             settings.aiBaseUrl,
             settings.aiApiKey,
             settings.aiModel,
-        ) { enabled, baseUrl, apiKey, model -> AiSettings(enabled, baseUrl, apiKey, model) },
+            settings.aiMaxTagsPerDoc,
+        ) { enabled, baseUrl, apiKey, model, maxTags ->
+            AiSettings(enabled, baseUrl, apiKey, model, maxTags)
+        },
     ) { (location, lang, retention), (viewType, landscape), (watched, watchedDelete), (template, pathEnabled), ai ->
         val preview = StoragePathTemplate.expand(template, PREVIEW_CONTEXT)
         SettingsUiState(
@@ -90,6 +95,7 @@ class SettingsViewModel(
             aiBaseUrl = ai.baseUrl,
             aiApiKey = ai.apiKey,
             aiModel = ai.model,
+            aiMaxTagsPerDoc = ai.maxTagsPerDoc,
         )
     }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
@@ -135,6 +141,9 @@ class SettingsViewModel(
     fun setAiApiKey(key: String) = viewModelScope.launch { settings.setAiApiKey(key) }
 
     fun setAiModel(model: String) = viewModelScope.launch { settings.setAiModel(model) }
+
+    fun setAiMaxTagsPerDoc(value: Int) =
+        viewModelScope.launch { settings.setAiMaxTagsPerDoc(value) }
 
     /**
      * Drop all cached thumbnails so they regenerate at the current render quality. Invokes [onDone]

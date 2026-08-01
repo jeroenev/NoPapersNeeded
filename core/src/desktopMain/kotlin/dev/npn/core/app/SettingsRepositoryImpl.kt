@@ -48,6 +48,7 @@ class SettingsRepositoryImpl(
         val aiBaseUrl: String,
         val aiApiKey: String,
         val aiModel: String,
+        val aiMaxTagsPerDoc: Int,
     )
 
     private fun boolProp(key: String): Boolean = props.getProperty(key)?.toBoolean() ?: false
@@ -91,6 +92,8 @@ class SettingsRepositoryImpl(
             aiBaseUrl = textProp(KEY_AI_BASE_URL),
             aiApiKey = textProp(KEY_AI_API_KEY),
             aiModel = textProp(KEY_AI_MODEL),
+            aiMaxTagsPerDoc = props.getProperty(KEY_AI_MAX_TAGS)?.toIntOrNull()
+                ?.coerceIn(AiTagging.RANGE) ?: AiTagging.DEFAULT_TAGS_PER_DOC,
         )
     }
 
@@ -116,6 +119,7 @@ class SettingsRepositoryImpl(
         props.setProperty(KEY_AI_BASE_URL, snapshot.aiBaseUrl)
         props.setProperty(KEY_AI_API_KEY, snapshot.aiApiKey)
         props.setProperty(KEY_AI_MODEL, snapshot.aiModel)
+        props.setProperty(KEY_AI_MAX_TAGS, snapshot.aiMaxTagsPerDoc.toString())
         storeProperties()
     }
 
@@ -158,6 +162,7 @@ class SettingsRepositoryImpl(
     override val aiBaseUrl: Flow<String> = state.map { it.aiBaseUrl }
     override val aiApiKey: Flow<String> = state.map { it.aiApiKey }
     override val aiModel: Flow<String> = state.map { it.aiModel }
+    override val aiMaxTagsPerDoc: Flow<Int> = state.map { it.aiMaxTagsPerDoc }
 
     override suspend fun setLibraryLocation(location: String?) {
         update { it.copy(libraryLocation = location?.ifEmpty { null }) }
@@ -225,6 +230,10 @@ class SettingsRepositoryImpl(
         update { it.copy(aiModel = model) }
     }
 
+    override suspend fun setAiMaxTagsPerDoc(value: Int) {
+        update { it.copy(aiMaxTagsPerDoc = value.coerceIn(AiTagging.RANGE)) }
+    }
+
     companion object {
         private const val KEY_LOCATION = "libraryLocation"
         private const val KEY_OCR_LANG = "ocrLanguage"
@@ -244,6 +253,7 @@ class SettingsRepositoryImpl(
         private const val KEY_AI_BASE_URL = "aiBaseUrl"
         private const val KEY_AI_API_KEY = "aiApiKey"
         private const val KEY_AI_MODEL = "aiModel"
+        private const val KEY_AI_MAX_TAGS = "aiMaxTagsPerDoc"
         private val OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------")
 
         fun defaultFile(): File {
