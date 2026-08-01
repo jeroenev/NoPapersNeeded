@@ -18,15 +18,21 @@ class SettingsRepositoryImplTest {
                 val file = directory.resolve("settings.properties").toFile()
                 SettingsRepositoryImpl(file).setAiApiKey("secret")
 
-                Files.getPosixFilePermissions(file.toPath()) shouldBe
-                    setOf(
-                        PosixFilePermission.OWNER_READ,
-                        PosixFilePermission.OWNER_WRITE,
-                    )
+                if (supportsPosixView(file)) {
+                    Files.getPosixFilePermissions(file.toPath()) shouldBe
+                        setOf(
+                            PosixFilePermission.OWNER_READ,
+                            PosixFilePermission.OWNER_WRITE,
+                        )
+                }
             } finally {
                 directory.toFile().deleteRecursively()
             }
         }
+
+    private fun supportsPosixView(file: java.io.File): Boolean =
+        runCatching { Files.getFileStore(file.toPath()).supportsFileAttributeView("posix") }
+            .getOrDefault(false)
 
     @Test
     fun concurrentUpdatesPersistOneCombinedSnapshot() =

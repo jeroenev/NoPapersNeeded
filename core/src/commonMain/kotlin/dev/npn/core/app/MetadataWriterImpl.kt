@@ -233,7 +233,7 @@ class MetadataWriterImpl(
         newFileName: String,
     ) {
         relocate(docId) { doc ->
-            val clean = newFileName.trim().ifEmpty { return@relocate null }
+            val clean = NpnPaths.sanitizeFileName(newFileName.trim()).ifEmpty { return@relocate null }
             val dir = doc.relPath.substringBeforeLast('/', "")
             val target = if (dir.isEmpty()) clean else "$dir/$clean"
             target to clean

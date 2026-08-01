@@ -6,15 +6,19 @@ package dev.npn.core.fs
  * syncs, but is excluded from the index. Filenames get a hash suffix to avoid collisions;
  * further collisions get a numeric `-1`, `-2`, ... suffix so the move stays write-once.
  */
-class TrashOps(private val fs: LibraryFileSystem) {
-
+class TrashOps(
+    private val fs: LibraryFileSystem,
+) {
     /**
      * Move [relPath] into `.npn/trash/`, returning the trash-relative path used. The base
      * trash name is [NpnPaths.trashPath]; if that already exists, `-1`, `-2`, ... is inserted
      * before the extension until a free name is found.
      */
-    suspend fun moveToTrash(relPath: String, sha256: String): String {
-        val name = relPath.substringAfterLast('/')
+    suspend fun moveToTrash(
+        relPath: String,
+        sha256: String,
+    ): String {
+        val name = NpnPaths.sanitizeFileName(relPath.substringAfterLast('/'))
         val base = NpnPaths.trashPath(name, sha256)
         val target = uniquify(base)
         fs.move(relPath, target)
@@ -25,7 +29,10 @@ class TrashOps(private val fs: LibraryFileSystem) {
      * Restore a file from trash to [toRelPath]. If the target is taken, a
      * `name (restored).pdf`-style suffix is inserted (then `(restored 1)`, ...) until free.
      */
-    suspend fun restore(trashRelPath: String, toRelPath: String): String {
+    suspend fun restore(
+        trashRelPath: String,
+        toRelPath: String,
+    ): String {
         val target = uniquifyRestored(toRelPath)
         fs.move(trashRelPath, target)
         return target

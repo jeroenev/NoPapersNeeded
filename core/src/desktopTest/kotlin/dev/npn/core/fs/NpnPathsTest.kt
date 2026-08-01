@@ -6,7 +6,6 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 class NpnPathsTest {
-
     @Test
     fun journalAndOcrPaths() {
         NpnPaths.journalDeviceDir("dev1") shouldBe ".npn/journal/dev1"
@@ -102,6 +101,26 @@ class NpnPathsTest {
         NpnPaths.isPdf("X.PDF").shouldBeTrue()
         NpnPaths.isPdf("x.txt").shouldBeFalse()
         NpnPaths.isPdf("pdf").shouldBeFalse()
+    }
+
+    @Test
+    fun sanitizeSegment() {
+        NpnPaths.sanitizeSegment("invoice/July: final") shouldBe "invoice_July_ final"
+        NpnPaths.sanitizeSegment("  padded  ") shouldBe "padded"
+        NpnPaths.sanitizeSegment("already-fine") shouldBe "already-fine"
+    }
+
+    @Test
+    fun sanitizeFileName() {
+        NpnPaths.sanitizeFileName("Invoice: 2026?.pdf") shouldBe "Invoice_ 2026_.pdf"
+        NpnPaths.sanitizeFileName("report.tar.gz") shouldBe "report.tar.gz"
+        NpnPaths.sanitizeFileName("notes...pdf") shouldBe "notes.pdf"
+        NpnPaths.sanitizeFileName("CON.pdf") shouldBe "_CON.pdf"
+        NpnPaths.sanitizeFileName("nul") shouldBe "_nul"
+        NpnPaths.sanitizeFileName("com5") shouldBe "_com5"
+        NpnPaths.sanitizeFileName("Invoice 2026.pdf") shouldBe "Invoice 2026.pdf"
+        NpnPaths.sanitizeFileName("x.") shouldBe "x"
+        NpnPaths.sanitizeFileName("x..") shouldBe "x"
     }
 
     @Test
