@@ -399,18 +399,20 @@ private fun AiAssistantSection(
                 value = maxTagsPerDoc,
                 onSetValue = onSetMaxTagsPerDoc,
                 range = AiTagging.RANGE,
-                label = "Max suggested tags per document",
-                supportingText = "How many tags the assistant proposes per document " +
-                    "(${AiTagging.MIN_TAGS_PER_DOC}-${AiTagging.MAX_TAGS_PER_DOC}).",
+                label = "Default max suggested tags per document",
+                supportingText = "Default number of tags the assistant proposes per document " +
+                    "(${AiTagging.MIN_TAGS_PER_DOC}-${AiTagging.MAX_TAGS_PER_DOC}); " +
+                    "can be changed per run on the AI tagging page.",
             )
             TagCapField(
                 value = maxNewTagsPerDoc,
                 onSetValue = onSetMaxNewTagsPerDoc,
                 range = AiTagging.NEW_TAGS_RANGE,
-                label = "Max new tags per document",
-                supportingText = "How many brand-new tags (not already in your library) the " +
+                label = "Default max new tags per document",
+                supportingText = "Default number of brand-new tags (not already in your library) the " +
                     "assistant may propose per document " +
-                    "(${AiTagging.MIN_NEW_TAGS_PER_DOC}-${AiTagging.MAX_NEW_TAGS_PER_DOC}; 0 = never).",
+                    "(${AiTagging.MIN_NEW_TAGS_PER_DOC}-${AiTagging.MAX_NEW_TAGS_PER_DOC}; 0 = never); " +
+                    "can be changed per run on the AI tagging page.",
             )
             Text(
                 "Requests send document text to the configured server.",

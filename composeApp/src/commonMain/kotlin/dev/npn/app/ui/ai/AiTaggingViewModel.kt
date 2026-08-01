@@ -4,10 +4,12 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SettingsRepository
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -31,9 +33,6 @@ import kotlinx.coroutines.sync.withPermit
 
 /** Document scope for a bulk tagging run. */
 enum class TaggingScope { UNTAGGED, REVIEW_QUEUE, ALL }
-
-/** Cap on how many documents one bulk run processes; the rest carry over to the next batch. */
-const val MAX_BATCH_DOCS = 25
 
 /**
  * One suggested (doc, tag) pairing in the review phase. [selected] drives whether Apply writes it;
@@ -88,20 +87,28 @@ sealed interface TaggingPhase {
 /**
  * Full UI state. [scope] and [reviewQueueAvailable] drive the Idle controls; [phase] is the current
  * step. Selection toggles live inside [TaggingPhase.Review.docs].
+ *
+ * [maxTags], [maxNewTags] and [batchSize] are per-run overrides, seeded from the Settings defaults
+ * and editable in the Idle phase; they parametrize the suggestion calls and the batch size.
  */
 data class AiTaggingUiState(
     val scope: TaggingScope = TaggingScope.UNTAGGED,
     val reviewQueueAvailable: Boolean = false,
     val phase: TaggingPhase = TaggingPhase.Idle,
+    val maxTags: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
+    val maxNewTags: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
+    val batchSize: Int = AiTagging.DEFAULT_BATCH_DOCS,
 )
 
 /**
  * Drives the bulk AI tagging screen for one opened library. State machine (plan section E):
  * `Idle → Suggesting → Review → Applying → Done`.
  *
- * - Idle: pick a [TaggingScope]; the document count for the current scope is observed via
- *   [scopeCount]. Start runs [dev.npn.core.ai.AiFacade.suggestTags] calls over the first
- *   [MAX_BATCH_DOCS] docs with bounded concurrency ([SUGGEST_CONCURRENCY]), reporting progress as
+ * - Idle: pick a [TaggingScope] and optionally tweak the per-run overrides ([AiTaggingUiState.maxTags],
+ *   [AiTaggingUiState.maxNewTags], [AiTaggingUiState.batchSize]), which are seeded from the Settings
+ *   defaults. The document count for the current scope is observed via [scopeCount]. Start runs
+ *   [dev.npn.core.ai.AiFacade.suggestTags] calls over the first [AiTaggingUiState.batchSize] docs with
+ *   bounded concurrency ([SUGGEST_CONCURRENCY]), passing the tag overrides, reporting progress as
  *   each doc completes; cancellable via the shared [run] job and by leaving the screen
  *   (viewModelScope). Results are re-ordered to match the original batch order.
  * - Review: per-doc suggestion chips, existing tags pre-selected and new tags pre-deselected; tap
@@ -116,8 +123,10 @@ data class AiTaggingUiState(
  * their own once tagged).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
+@Suppress("TooManyFunctions")
 class AiTaggingViewModel(
     val session: LibrarySession,
+    private val settings: SettingsRepository,
 ) : MessagesViewModel() {
 
     private val scope = MutableStateFlow(TaggingScope.UNTAGGED)
@@ -141,6 +150,15 @@ class AiTaggingViewModel(
             val mode = runCatching { session.reviewMode.first() }.getOrDefault(ReviewMode.DEFAULT)
             _ui.update { it.copy(reviewQueueAvailable = mode == ReviewMode.INBOX_WORKFLOW) }
         }
+        // Seed the per-run overrides from the persisted Settings defaults (once); keep the
+        // AiTagging defaults on failure.
+        viewModelScope.launch {
+            val maxTags = runCatching { settings.aiMaxTagsPerDoc.first() }
+                .getOrDefault(AiTagging.DEFAULT_TAGS_PER_DOC)
+            val maxNewTags = runCatching { settings.aiMaxNewTagsPerDoc.first() }
+                .getOrDefault(AiTagging.DEFAULT_NEW_TAGS_PER_DOC)
+            _ui.update { it.copy(maxTags = maxTags, maxNewTags = maxNewTags) }
+        }
     }
 
     /** Change the scope (Idle only); the review-queue option is ignored when unavailable. */
@@ -151,7 +169,25 @@ class AiTaggingViewModel(
         _ui.update { it.copy(scope = scope) }
     }
 
-    /** Kick off the sequential suggestion run over the next batch of the current scope. */
+    /** Set the per-run max suggested tags per document (Idle only); clamped to [AiTagging.RANGE]. */
+    fun setMaxTags(value: Int) {
+        if (_ui.value.phase != TaggingPhase.Idle) return
+        _ui.update { it.copy(maxTags = value.coerceIn(AiTagging.RANGE)) }
+    }
+
+    /** Set the per-run max new tags per document (Idle only); clamped to [AiTagging.NEW_TAGS_RANGE]. */
+    fun setMaxNewTags(value: Int) {
+        if (_ui.value.phase != TaggingPhase.Idle) return
+        _ui.update { it.copy(maxNewTags = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
+    }
+
+    /** Set the per-run batch size (Idle only); clamped to [AiTagging.BATCH_RANGE]. */
+    fun setBatchSize(value: Int) {
+        if (_ui.value.phase != TaggingPhase.Idle) return
+        _ui.update { it.copy(batchSize = value.coerceIn(AiTagging.BATCH_RANGE)) }
+    }
+
+    /** Kick off the concurrent suggestion run over the next batch of the current scope. */
     fun start() {
         if (run?.isActive == true) return
         run = viewModelScope.launch { suggestBatch() }
@@ -207,6 +243,9 @@ class AiTaggingViewModel(
     }
 
     private suspend fun suggestBatch() {
+        // Snapshot the per-run overrides once so mid-run state changes cannot affect this batch.
+        val maxTags = _ui.value.maxTags
+        val maxNewTags = _ui.value.maxNewTags
         val batch = nextBatchDocs()
         if (batch.isEmpty()) {
             _ui.update { it.copy(phase = TaggingPhase.Done(ApplyResult(0, 0, moreRemain = false))) }
@@ -227,7 +266,7 @@ class AiTaggingViewModel(
                 async {
                     semaphore.withPermit {
                         val outcome = runCatching {
-                            val suggestions = session.ai.suggestTags(item.doc.docId)
+                            val suggestions = session.ai.suggestTags(item.doc.docId, maxTags, maxNewTags)
                             reviewDoc(item, suggestions, snippetFor(item.doc.docId))
                         }
                         // CancellationException must propagate so the whole scope tears down.
@@ -334,7 +373,7 @@ class AiTaggingViewModel(
     }
 
     private suspend fun nextBatchDocs(): List<DocListItem> =
-        currentScopeDocs().filter { it.doc.docId !in processedIds }.take(MAX_BATCH_DOCS)
+        currentScopeDocs().filter { it.doc.docId !in processedIds }.take(_ui.value.batchSize)
 
     /** Whether the scope still has unprocessed docs (drives the "Next batch" affordance). */
     private suspend fun moreRemain(): Boolean = nextBatchDocs().isNotEmpty()

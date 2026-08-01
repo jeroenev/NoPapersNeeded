@@ -1,6 +1,7 @@
 package dev.npn.core.ai
 
 import ai.koog.prompt.dsl.prompt
+import dev.npn.core.app.AiTagging
 import dev.npn.core.db.NpnDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -52,11 +53,15 @@ class AiFacadeImpl(
         emitAll(loop.run(history, question))
     }
 
-    override suspend fun suggestTags(docId: String): List<TagSuggestion> {
+    override suspend fun suggestTags(
+        docId: String,
+        maxTags: Int?,
+        maxNewTags: Int?,
+    ): List<TagSuggestion> {
         val runtime = runtime()
         val config = configProvider()
-        val maxTags = config.maxTagsPerDoc
-        val maxNew = config.maxNewTagsPerDoc
+        val maxTags = (maxTags ?: config.maxTagsPerDoc).coerceIn(AiTagging.RANGE)
+        val maxNew = (maxNewTags ?: config.maxNewTagsPerDoc).coerceIn(AiTagging.NEW_TAGS_RANGE)
         val doc = db.documentDao().getByDocId(docId) ?: return emptyList()
         val text = db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } ?: return emptyList()
         val currentTags = db.tagDao().tagsForDocument(docId)

@@ -91,6 +91,14 @@ interface AiFacade {
      * spelling; [TagSuggestion.isNew] marks genuinely new tags (capped per doc, ranked last).
      * Returns suggestions only (never writes); accepting one goes through the normal
      * MetadataWriter/journal path. Empty when the doc has no indexed text yet.
+     *
+     * [maxTags] and [maxNewTags] are optional per-call overrides of the configured defaults
+     * (from settings): null means use the configured default. Both are clamped to
+     * `AiTagging.RANGE` / `AiTagging.NEW_TAGS_RANGE` respectively.
      */
-    suspend fun suggestTags(docId: String): List<TagSuggestion>
+    suspend fun suggestTags(
+        docId: String,
+        maxTags: Int? = null,
+        maxNewTags: Int? = null,
+    ): List<TagSuggestion>
 }

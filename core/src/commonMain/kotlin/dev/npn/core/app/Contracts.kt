@@ -341,6 +341,15 @@ object AiTagging {
 
     /** Allowed range for the new-tag cap; 0 means never propose brand-new tags. */
     val NEW_TAGS_RANGE = MIN_NEW_TAGS_PER_DOC..MAX_NEW_TAGS_PER_DOC
+
+    /**
+     * Bounds for how many documents one bulk-tagging run processes. This cap is per run and
+     * adjustable on the AI tagging page (Idle phase); the remainder carries over to the next batch.
+     */
+    const val MIN_BATCH_DOCS = 1
+    const val MAX_BATCH_DOCS = 100
+    const val DEFAULT_BATCH_DOCS = 25
+    val BATCH_RANGE = MIN_BATCH_DOCS..MAX_BATCH_DOCS
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */
