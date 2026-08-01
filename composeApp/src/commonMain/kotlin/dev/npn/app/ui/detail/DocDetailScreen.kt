@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -59,6 +60,8 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.documentDisplayTitle
+import dev.npn.app.ui.common.sharePdfBytes
+import dev.npn.app.ui.common.supportsSharing
 import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
@@ -96,6 +99,9 @@ import no_papers_needed.composeapp.generated.resources.detail_rename
 import no_papers_needed.composeapp.generated.resources.detail_rename_file
 import no_papers_needed.composeapp.generated.resources.detail_rerun_ocr
 import no_papers_needed.composeapp.generated.resources.detail_rerunning_ocr
+import no_papers_needed.composeapp.generated.resources.detail_share_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_share_failed
+import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_split_document
 import no_papers_needed.composeapp.generated.resources.detail_split_failed
 import no_papers_needed.composeapp.generated.resources.detail_splitting
@@ -159,6 +165,7 @@ fun DocDetailScreen(
 
     // Export: bake a copy to a user-chosen destination.
     val exportedBakedCopy = stringResource(Res.string.detail_exported_baked_copy)
+    val sharedBakedCopy = stringResource(Res.string.detail_shared_baked_copy)
     val couldNotBakeCopy = stringResource(Res.string.detail_could_not_bake_copy)
     val unknownError = stringResource(Res.string.common_unknown_error)
     val saver =
@@ -255,6 +262,23 @@ fun DocDetailScreen(
                 onBack = onBack,
                 onToggleReviewed = { vm.setReviewed(!reviewed) },
                 onRename = { showRename = true },
+                sharingSupported = supportsSharing(),
+                onShare = {
+                    scope.launch {
+                        val bytes = vm.bakedCopyBytes()
+                        if (bytes != null) {
+                            runCatching { sharePdfBytes(exportName(current) + ".pdf", bytes) }
+                                .onSuccess { snackbar.showSnackbar(sharedBakedCopy) }
+                                .onFailure {
+                                    snackbar.showSnackbar(
+                                        getString(Res.string.detail_share_failed, it.message ?: unknownError),
+                                    )
+                                }
+                        } else {
+                            snackbar.showSnackbar(couldNotBakeCopy)
+                        }
+                    }
+                },
                 onExport = {
                     saver.launch(
                         suggestedName = exportName(current),
@@ -449,6 +473,8 @@ private fun DetailTopBar(
     onBack: () -> Unit,
     onToggleReviewed: () -> Unit,
     onRename: () -> Unit,
+    sharingSupported: Boolean,
+    onShare: () -> Unit,
     onExport: () -> Unit,
     onBakeInPlace: () -> Unit,
     onReOcr: () -> Unit,
@@ -518,11 +544,20 @@ private fun DetailTopBar(
                     )
                 }
             }
-            IconButton(onClick = onExport) {
-                Icon(
-                    Icons.Filled.Share,
-                    contentDescription = stringResource(Res.string.detail_export_baked_copy),
-                )
+            if (sharingSupported) {
+                IconButton(onClick = onShare) {
+                    Icon(
+                        Icons.Filled.Share,
+                        contentDescription = stringResource(Res.string.detail_share_baked_copy),
+                    )
+                }
+            } else {
+                IconButton(onClick = onExport) {
+                    Icon(
+                        Icons.Filled.Save,
+                        contentDescription = stringResource(Res.string.detail_export_baked_copy),
+                    )
+                }
             }
             Box {
                 IconButton(onClick = { menu = true }) {

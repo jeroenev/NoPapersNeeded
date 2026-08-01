@@ -25,6 +25,9 @@
     <string name="detail_mark_unreviewed">Mark unreviewed</string>
     <string name="detail_mark_reviewed">Mark reviewed</string>
     <string name="detail_export_baked_copy">Export baked copy</string>
+    <string name="detail_share_baked_copy">Share baked copy</string>
+    <string name="detail_shared_baked_copy">Shared baked copy</string>
+    <string name="detail_share_failed">Share failed: %1$s</string>
     <string name="detail_more_actions">More actions</string>
     <string name="detail_rerunning_ocr">Re-running OCR...</string>
     <string name="detail_rerun_ocr">Re-run OCR</string>
