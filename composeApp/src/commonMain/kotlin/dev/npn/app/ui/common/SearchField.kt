@@ -18,6 +18,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
@@ -38,6 +40,8 @@ fun SearchField(
     placeholder: String? = null,
     suggestions: List<String> = emptyList(),
     onSuggestionSelected: ((String) -> Unit)? = null,
+    focusRequester: FocusRequester? = null,
+    onFocusChange: ((Boolean) -> Unit)? = null,
 ) {
     var expanded by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
@@ -59,8 +63,11 @@ fun SearchField(
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .onFocusChanged { focused = it.isFocused }
-                    .onPreviewKeyEvent { event ->
+                    .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                    .onFocusChanged {
+                        focused = it.isFocused
+                        onFocusChange?.invoke(it.isFocused)
+                    }.onPreviewKeyEvent { event ->
                         if (!expanded || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                         when (event.key) {
                             Key.DirectionDown -> {

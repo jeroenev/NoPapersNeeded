@@ -7,24 +7,33 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -32,25 +41,36 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.DatePickerField
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.TagInfo
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_needs_review
 import no_papers_needed.composeapp.generated.resources.common_reviewed
 import no_papers_needed.composeapp.generated.resources.library_any
 import no_papers_needed.composeapp.generated.resources.library_apply_filters
 import no_papers_needed.composeapp.generated.resources.library_clear_all
 import no_papers_needed.composeapp.generated.resources.library_correspondent_filter
+import no_papers_needed.composeapp.generated.resources.library_document_date_filter
 import no_papers_needed.composeapp.generated.resources.library_document_type_filter
 import no_papers_needed.composeapp.generated.resources.library_filter_tags_help
 import no_papers_needed.composeapp.generated.resources.library_filters
+import no_papers_needed.composeapp.generated.resources.library_from
 import no_papers_needed.composeapp.generated.resources.library_no_tags_yet
 import no_papers_needed.composeapp.generated.resources.library_reviewed_filter
+import no_papers_needed.composeapp.generated.resources.library_search_correspondent
+import no_papers_needed.composeapp.generated.resources.library_search_document_type
+import no_papers_needed.composeapp.generated.resources.library_search_tags
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_all
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_any
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_none
+import no_papers_needed.composeapp.generated.resources.library_to
 import no_papers_needed.composeapp.generated.resources.library_untagged_only
 import org.jetbrains.compose.resources.stringResource
+
+/** Max height of the tag multi-select list before it becomes internally scrollable. */
+private val TagListMaxHeight = 200.dp
 
 /**
  * Filter panel. Tag multi-select is split into three sections (AND/OR/NOT); cycling a tag
@@ -66,70 +86,125 @@ fun FilterSheet(
     onClearAll: () -> Unit,
     onDismiss: () -> Unit,
 ) {
+    ModalBottomSheet(onDismissRequest = onDismiss) {
+        FilterPanel(
+            filter = filter,
+            tags = tags,
+            correspondents = correspondents,
+            docTypes = docTypes,
+            onApply = onApply,
+            onClearAll = onClearAll,
+            onDismiss = onDismiss,
+            modifier = Modifier.fillMaxWidth(),
+        )
+    }
+}
+
+@Composable
+@Suppress("LongMethod")
+fun FilterPanel(
+    filter: LibraryFilter,
+    tags: List<TagInfo>,
+    correspondents: List<String>,
+    docTypes: List<String>,
+    onApply: (LibraryFilter) -> Unit,
+    onClearAll: () -> Unit,
+    onDismiss: (() -> Unit)? = null,
+    fillHeight: Boolean = false,
+    modifier: Modifier = Modifier,
+) {
     var draft by remember { mutableStateOf(filter) }
 
-    ModalBottomSheet(onDismissRequest = onDismiss) {
-        Column(
-            Modifier
-                .fillMaxWidth()
-                .verticalScroll(rememberScrollState())
-                .padding(horizontal = 16.dp)
-                .padding(bottom = 24.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
-        ) {
+    Surface(modifier = modifier, tonalElevation = 3.dp) {
+        Column(if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
             Row(
-                Modifier.fillMaxWidth(),
+                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(stringResource(Res.string.library_filters), style = MaterialTheme.typography.titleLarge)
-                TextButton(onClick = {
-                    draft = LibraryFilter()
-                    onClearAll()
-                }) { Text(stringResource(Res.string.library_clear_all)) }
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    TextButton(onClick = {
+                        draft = LibraryFilter()
+                        onClearAll()
+                    }) { Text(stringResource(Res.string.library_clear_all)) }
+                    onDismiss?.let {
+                        IconButton(onClick = it) {
+                            Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.common_cancel))
+                        }
+                    }
+                }
             }
 
-            TagFilterSection(tags, draft) { draft = it }
-
-            SectionLabel(stringResource(Res.string.library_reviewed_filter))
-            EnumDropdown(
-                current = ReviewFilter.from(draft.reviewed),
-                options = ReviewFilter.entries,
-                label = ::reviewFilterLabel,
-                onSelect = { draft = draft.copy(reviewed = it.value) },
-            )
-
-            SectionLabel(stringResource(Res.string.library_correspondent_filter))
-            EnumDropdown(
-                current = optionalFilterValue(draft.correspondent),
-                options = optionalFilterOptions(correspondents),
-                label = ::optionalFilterLabel,
-                onSelect = { draft = draft.copy(correspondent = it.valueOrNull()) },
-            )
-
-            SectionLabel(stringResource(Res.string.library_document_type_filter))
-            EnumDropdown(
-                current = optionalFilterValue(draft.docType),
-                options = optionalFilterOptions(docTypes),
-                label = ::optionalFilterLabel,
-                onSelect = { draft = draft.copy(docType = it.valueOrNull()) },
-            )
-
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
+            Column(
+                Modifier
+                    .weight(1f, fill = false)
+                    .verticalScroll(rememberScrollState())
+                    .padding(horizontal = 16.dp)
+                    .padding(bottom = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                Text(stringResource(Res.string.library_untagged_only))
-                Switch(
-                    checked = draft.untaggedOnly,
-                    onCheckedChange = { draft = draft.copy(untaggedOnly = it) },
+                TagFilterSection(tags, draft) { draft = it }
+
+                SectionLabel(stringResource(Res.string.library_reviewed_filter))
+                EnumDropdown(
+                    current = ReviewFilter.from(draft.reviewed),
+                    options = ReviewFilter.entries,
+                    label = ::reviewFilterLabel,
+                    onSelect = { draft = draft.copy(reviewed = it.value) },
                 )
+
+                SectionLabel(stringResource(Res.string.library_correspondent_filter))
+                EnumDropdown(
+                    current = optionalFilterValue(draft.correspondent),
+                    options = optionalFilterOptions(correspondents),
+                    label = ::optionalFilterLabel,
+                    onSelect = { draft = draft.copy(correspondent = it.valueOrNull()) },
+                    searchLabel = stringResource(Res.string.library_search_correspondent),
+                    searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
+                )
+
+                SectionLabel(stringResource(Res.string.library_document_type_filter))
+                EnumDropdown(
+                    current = optionalFilterValue(draft.docType),
+                    options = optionalFilterOptions(docTypes),
+                    label = ::optionalFilterLabel,
+                    onSelect = { draft = draft.copy(docType = it.valueOrNull()) },
+                    searchLabel = stringResource(Res.string.library_search_document_type),
+                    searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
+                )
+
+                SectionLabel(stringResource(Res.string.library_document_date_filter))
+                DatePickerField(
+                    value = draft.docDateFrom,
+                    label = stringResource(Res.string.library_from),
+                    onCommit = { draft = draft.copy(docDateFrom = it) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                DatePickerField(
+                    value = draft.docDateTo,
+                    label = stringResource(Res.string.library_to),
+                    onCommit = { draft = draft.copy(docDateTo = it) },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(stringResource(Res.string.library_untagged_only))
+                    Switch(
+                        checked = draft.untaggedOnly,
+                        onCheckedChange = { draft = draft.copy(untaggedOnly = it) },
+                    )
+                }
             }
 
+            HorizontalDivider()
             OutlinedButton(
                 onClick = { onApply(draft) },
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier.fillMaxWidth().padding(16.dp),
             ) { Text(stringResource(Res.string.library_apply_filters)) }
         }
     }
@@ -142,21 +217,40 @@ private fun TagFilterSection(
     onFilterChange: (LibraryFilter) -> Unit,
 ) {
     SectionLabel(stringResource(Res.string.library_filter_tags_help))
-    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-        tags.forEach { tag ->
-            val bucket = tagBucket(filter, tag.name)
-            FilterChip(
-                selected = bucket != TagBucket.OFF,
-                onClick = { onFilterChange(cycleTag(filter, tag.name)) },
-                label = { Text(tagFilterLabel(bucket, tag.name)) },
-            )
-        }
-        if (tags.isEmpty()) {
-            Text(
-                stringResource(Res.string.library_no_tags_yet),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    var tagQuery by remember { mutableStateOf("") }
+    OutlinedTextField(
+        value = tagQuery,
+        onValueChange = { tagQuery = it },
+        label = { Text(stringResource(Res.string.library_search_tags)) },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth(),
+    )
+    val visibleTags = tags.filter { tagQuery.isBlank() || it.name.contains(tagQuery.trim(), ignoreCase = true) }
+    // Cap the list so a large tag set cannot push the rest of the sheet out of view; the search box
+    // above narrows the list when the cap clips it.
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .heightIn(max = TagListMaxHeight)
+            .verticalScroll(rememberScrollState())
+            .padding(bottom = 4.dp),
+    ) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            visibleTags.forEach { tag ->
+                val bucket = tagBucket(filter, tag.name)
+                FilterChip(
+                    selected = bucket != TagBucket.OFF,
+                    onClick = { onFilterChange(cycleTag(filter, tag.name)) },
+                    label = { Text(tagFilterLabel(bucket, tag.name)) },
+                )
+            }
+            if (tags.isEmpty()) {
+                Text(
+                    stringResource(Res.string.library_no_tags_yet),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -176,15 +270,39 @@ private fun <T> EnumDropdown(
     options: List<T>,
     label: @Composable (T) -> String,
     onSelect: (T) -> Unit,
+    searchLabel: String? = null,
+    searchText: (T) -> String = { it.toString() },
 ) {
     var expanded by remember { mutableStateOf(false) }
+    var searchQuery by remember { mutableStateOf("") }
+    // Only long lists (e.g. correspondents/doc types) get the in-menu search box; the small
+    // reviewed dropdown stays clean.
+    val searchable = searchLabel != null && options.size > 8
+    LaunchedEffect(expanded) {
+        if (expanded) searchQuery = ""
+    }
     Column {
         OutlinedButton(onClick = { expanded = true }) {
             Text(label(current))
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { opt ->
+            if (searchable) {
+                OutlinedTextField(
+                    value = searchQuery,
+                    onValueChange = { searchQuery = it },
+                    label = { Text(searchLabel) },
+                    singleLine = true,
+                    modifier = Modifier.width(280.dp).padding(horizontal = 12.dp, vertical = 4.dp),
+                )
+            }
+            val shown =
+                if (searchable) {
+                    options.filter { searchText(it).contains(searchQuery.trim(), ignoreCase = true) }
+                } else {
+                    options
+                }
+            shown.forEach { opt ->
                 DropdownMenuItem(
                     text = { Text(label(opt)) },
                     onClick = {

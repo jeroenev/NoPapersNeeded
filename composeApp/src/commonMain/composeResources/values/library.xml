@@ -104,4 +104,13 @@
 
     <string name="library_smaller_grid_items">Smaller grid items</string>
     <string name="library_larger_grid_items">Larger grid items</string>
+
+    <string name="library_search_tags">Search tags</string>
+    <string name="library_search_correspondent">Search correspondent</string>
+    <string name="library_search_document_type">Search document type</string>
+    <string name="library_document_date_filter">Document date</string>
+    <string name="library_from">From</string>
+    <string name="library_to">To</string>
+    <string name="library_date_from">From %1$s</string>
+    <string name="library_date_to">To %1$s</string>
 </resources>

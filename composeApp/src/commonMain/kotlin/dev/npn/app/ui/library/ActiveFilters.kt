@@ -18,6 +18,8 @@ import dev.npn.core.app.LibraryFilter
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_needs_review
 import no_papers_needed.composeapp.generated.resources.common_reviewed
+import no_papers_needed.composeapp.generated.resources.library_date_from
+import no_papers_needed.composeapp.generated.resources.library_date_to
 import no_papers_needed.composeapp.generated.resources.library_remove_filter
 import no_papers_needed.composeapp.generated.resources.library_review_queue
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_all
@@ -28,6 +30,7 @@ import org.jetbrains.compose.resources.stringResource
 
 /** Removable chips for each active filter facet under the search bar. */
 @Composable
+@Suppress("LongMethod")
 fun ActiveFilters(
     filter: LibraryFilter,
     onFilterChange: (LibraryFilter) -> Unit,
@@ -65,6 +68,20 @@ fun ActiveFilters(
             }
             filter.correspondent?.let { c -> add(c to { onFilterChange(filter.copy(correspondent = null)) }) }
             filter.docType?.let { d -> add(d to { onFilterChange(filter.copy(docType = null)) }) }
+            filter.docDateFrom?.let { from ->
+                add(
+                    stringResource(Res.string.library_date_from, from) to {
+                        onFilterChange(filter.copy(docDateFrom = null))
+                    },
+                )
+            }
+            filter.docDateTo?.let { to ->
+                add(
+                    stringResource(Res.string.library_date_to, to) to {
+                        onFilterChange(filter.copy(docDateTo = null))
+                    },
+                )
+            }
             if (filter.untaggedOnly) {
                 add(
                     stringResource(Res.string.library_untagged) to {

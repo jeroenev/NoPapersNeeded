@@ -18,6 +18,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -47,18 +49,29 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.isShiftPressed
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.core.app.LibrarySession
+import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -71,7 +84,6 @@ import no_papers_needed.composeapp.generated.resources.ai_collapse
 import no_papers_needed.composeapp.generated.resources.ai_configure_in_settings
 import no_papers_needed.composeapp.generated.resources.ai_expand
 import no_papers_needed.composeapp.generated.resources.ai_no_output
-import no_papers_needed.composeapp.generated.resources.ai_open_document
 import no_papers_needed.composeapp.generated.resources.ai_send
 import no_papers_needed.composeapp.generated.resources.ai_stop
 import no_papers_needed.composeapp.generated.resources.ai_tool_listed_tagged_documents
@@ -102,6 +114,7 @@ fun AiChatScreen(
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
     val lastLen = (ui.turns.lastOrNull() as? TranscriptItem.AssistantTurn)?.text?.length ?: 0
+    val docTitles = remember { mutableStateMapOf<String, String>() }
 
     // Keep the newest turn visible as the transcript grows or the streaming answer lengthens.
     LaunchedEffect(ui.turns.size, lastLen) {
@@ -134,7 +147,10 @@ fun AiChatScreen(
                             // Skip a finished, empty assistant turn entirely (no blank bubble); a
                             // still-streaming turn may legitimately be empty before the first token
                             // and keeps rendering so the in-progress bubble is visible.
-                            if (item.text.isNotEmpty() || item.streaming) AssistantBubble(item, onOpenDoc)
+                            if (item.text.isNotEmpty() || item.streaming) {
+                                LoadDocTitles(item.docRefs, docTitles, session)
+                                AssistantBubble(item, onOpenDoc, docTitles)
+                            }
                         }
 
                         is TranscriptItem.ToolUse -> {
@@ -205,10 +221,31 @@ private fun UserBubble(item: TranscriptItem.UserTurn) {
     }
 }
 
+/** Resolve missing docRefs to their display titles into [docTitles] (one-shot, keyed by docId). */
+@Composable
+private fun LoadDocTitles(
+    docRefs: List<String>,
+    docTitles: SnapshotStateMap<String, String>,
+    session: LibrarySession,
+) {
+    LaunchedEffect(docRefs) {
+        docRefs.forEach { docId ->
+            if (docId !in docTitles) {
+                runCatching { session.documents.observeDoc(docId).first() }
+                    .getOrNull()
+                    ?.let { item ->
+                        docTitles[docId] = documentDisplayTitle(item.doc.title, item.doc.fileName)
+                    }
+            }
+        }
+    }
+}
+
 @Composable
 private fun AssistantBubble(
     item: TranscriptItem.AssistantTurn,
     onOpenDoc: (String) -> Unit,
+    docTitles: SnapshotStateMap<String, String>,
 ) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
         Bubble(fromUser = false) {
@@ -227,7 +264,7 @@ private fun AssistantBubble(
                     AssistChip(
                         onClick = { onOpenDoc(docId) },
                         label = {
-                            Text(stringResource(Res.string.ai_open_document, docId.take(DOC_REF_LABEL_HEX)))
+                            Text(docTitles[docId] ?: docId.take(DOC_REF_LABEL_HEX))
                         },
                         leadingIcon = {
                             Icon(Icons.AutoMirrored.Filled.OpenInNew, contentDescription = null)
@@ -332,6 +369,8 @@ private fun InputRow(
     onSend: () -> Unit,
     onStop: () -> Unit,
 ) {
+    // Plain Enter sends (and is consumed so no newline is inserted); Shift+Enter inserts one.
+    val send = { if (!busy && value.isNotBlank()) onSend() }
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -340,10 +379,24 @@ private fun InputRow(
         OutlinedTextField(
             value = value,
             onValueChange = onValueChange,
-            modifier = Modifier.weight(1f),
+            modifier =
+                Modifier
+                    .weight(1f)
+                    .onPreviewKeyEvent { event ->
+                        if (event.type != KeyEventType.KeyDown) {
+                            false
+                        } else if (event.key == Key.Enter && !event.isShiftPressed) {
+                            send()
+                            true
+                        } else {
+                            false
+                        }
+                    },
             placeholder = { Text(stringResource(Res.string.ai_ask_documents)) },
             enabled = !busy,
             maxLines = 4,
+            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Send),
+            keyboardActions = KeyboardActions(onSend = { send() }),
         )
         if (busy) {
             IconButton(onClick = onStop) {

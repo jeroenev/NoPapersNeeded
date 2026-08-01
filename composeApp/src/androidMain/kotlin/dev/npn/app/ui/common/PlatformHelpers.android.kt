@@ -43,6 +43,13 @@ actual fun persistDirectoryAccess(dir: PlatformFile): String {
 
 actual fun supportsSharing(): Boolean = true
 
+actual fun supportsLibraryFolderCreation(): Boolean = false
+
+actual suspend fun createLibraryFolder(
+    parentLocation: String,
+    name: String,
+): String? = null
+
 actual suspend fun sharePdfBytes(
     fileName: String,
     bytes: ByteArray,

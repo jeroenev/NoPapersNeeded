@@ -23,8 +23,8 @@
     <string name="library_review">Beoordelen</string>
     <string name="library_mark_reviewed">Markeren als beoordeeld</string>
     <string name="library_mark_needs_review">Markeren als te beoordelen</string>
-    <string name="library_trash">Prullenbak</string>
-    <string name="library_trash_documents">Documenten verwijderen</string>
+    <string name="library_trash">Naar prullenbak</string>
+    <string name="library_trash_documents">Documenten naar prullenbak verplaatsen</string>
     <plurals name="library_selected_count">
         <item quantity="one">%1$d geselecteerd</item>
         <item quantity="other">%1$d geselecteerd</item>
@@ -75,7 +75,7 @@
     <string name="library_rename">Hernoemen</string>
 
     <string name="library_clear_all">Alles wissen</string>
-    <string name="library_filter_tags_help">Tags (tik om te wisselen: alle -> een of meer -> geen)</string>
+    <string name="library_filter_tags_help">Tags (tik: alle -> een of meer -> geen)</string>
     <string name="library_no_tags_yet">Nog geen tags</string>
     <string name="library_reviewed_filter">Beoordeeld</string>
     <string name="library_correspondent_filter">Correspondent</string>
@@ -104,4 +104,13 @@
 
     <string name="library_smaller_grid_items">Kleinere rasteritems</string>
     <string name="library_larger_grid_items">Grotere rasteritems</string>
+
+    <string name="library_search_tags">Tags zoeken</string>
+    <string name="library_search_correspondent">Correspondent zoeken</string>
+    <string name="library_search_document_type">Documenttype zoeken</string>
+    <string name="library_document_date_filter">Documentdatum</string>
+    <string name="library_from">Van</string>
+    <string name="library_to">Tot</string>
+    <string name="library_date_from">Vanaf %1$s</string>
+    <string name="library_date_to">Tot %1$s</string>
 </resources>

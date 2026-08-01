@@ -3,6 +3,7 @@ package dev.npn.desktop
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Modifier
@@ -16,9 +17,11 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import dev.npn.app.App
 import dev.npn.app.di.createAppEnvironment
+import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.ExternalSource
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
@@ -47,13 +50,19 @@ fun main() =
         val env = remember { createAppEnvironment() }
         val scope = rememberCoroutineScope()
 
+        val appName = stringResource(Res.string.common_app_name)
         Window(
             onCloseRequest = ::exitApplication,
-            title = stringResource(Res.string.common_app_name),
+            title = appName,
             state = rememberWindowState(width = 1200.dp, height = 800.dp),
         ) {
             // Enforce a sensible minimum window size (jpackage/AWT window).
             window.minimumSize = java.awt.Dimension(800, 600)
+
+            // Mirror the shared UI's window-title flow into the native window title.
+            LaunchedEffect(Unit) {
+                DesktopBridge.windowTitle.collect { window.title = it ?: appName }
+            }
 
             val dropTarget = remember { pdfDropTarget(env, scope) }
 
