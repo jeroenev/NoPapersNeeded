@@ -169,12 +169,29 @@ class RankTagSuggestionsTest {
             response = "[\"n1\", \"n2\", \"n3\", \"n4\"]",
             currentTags = emptyList(),
             vocabulary = emptyList(),
+            maxNew = 2,
         )
         result shouldContainExactly listOf(
             TagSuggestion("n1", isNew = true),
             TagSuggestion("n2", isNew = true),
         )
-        AiText.MAX_NEW_TAGS_PER_DOC shouldBe 2
+    }
+
+    @Test
+    fun rankUsesDefaultNewCapOfFive() {
+        val result = AiText.rankTagSuggestions(
+            response = "[\"n1\", \"n2\", \"n3\", \"n4\", \"n5\", \"n6\", \"n7\"]",
+            currentTags = emptyList(),
+            vocabulary = emptyList(),
+        )
+        result shouldContainExactly listOf(
+            TagSuggestion("n1", isNew = true),
+            TagSuggestion("n2", isNew = true),
+            TagSuggestion("n3", isNew = true),
+            TagSuggestion("n4", isNew = true),
+            TagSuggestion("n5", isNew = true),
+        )
+        AiText.MAX_NEW_TAGS_PER_DOC shouldBe 5
     }
 
     @Test

@@ -48,6 +48,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         val aiApiKey: String,
         val aiModel: String,
         val aiMaxTagsPerDoc: Int,
+        val aiMaxNewTagsPerDoc: Int,
     )
 
     private fun load() = Snapshot(
@@ -78,6 +79,8 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         aiModel = prefs.getString(KEY_AI_MODEL, "") ?: "",
         aiMaxTagsPerDoc = prefs.getInt(KEY_AI_MAX_TAGS, AiTagging.DEFAULT_TAGS_PER_DOC)
             .coerceIn(AiTagging.RANGE),
+        aiMaxNewTagsPerDoc = prefs.getInt(KEY_AI_MAX_NEW_TAGS, AiTagging.DEFAULT_NEW_TAGS_PER_DOC)
+            .coerceIn(AiTagging.NEW_TAGS_RANGE),
     )
 
     override val libraryLocation: Flow<String?> = state.map { it.libraryLocation }
@@ -99,6 +102,7 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
     override val aiApiKey: Flow<String> = state.map { it.aiApiKey }
     override val aiModel: Flow<String> = state.map { it.aiModel }
     override val aiMaxTagsPerDoc: Flow<Int> = state.map { it.aiMaxTagsPerDoc }
+    override val aiMaxNewTagsPerDoc: Flow<Int> = state.map { it.aiMaxNewTagsPerDoc }
 
     override suspend fun setLibraryLocation(location: String?) {
         prefs.edit().apply {
@@ -195,6 +199,11 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         state.value = load()
     }
 
+    override suspend fun setAiMaxNewTagsPerDoc(value: Int) {
+        prefs.edit().putInt(KEY_AI_MAX_NEW_TAGS, value.coerceIn(AiTagging.NEW_TAGS_RANGE)).apply()
+        state.value = load()
+    }
+
     companion object {
         private const val PREFS_NAME = "npn_settings"
         private const val KEY_LOCATION = "libraryLocation"
@@ -216,5 +225,6 @@ class SettingsRepositoryImpl(context: Context) : SettingsRepository {
         private const val KEY_AI_API_KEY = "aiApiKey"
         private const val KEY_AI_MODEL = "aiModel"
         private const val KEY_AI_MAX_TAGS = "aiMaxTagsPerDoc"
+        private const val KEY_AI_MAX_NEW_TAGS = "aiMaxNewTagsPerDoc"
     }
 }

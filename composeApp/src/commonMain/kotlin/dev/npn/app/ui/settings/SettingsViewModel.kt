@@ -2,6 +2,7 @@ package dev.npn.app.ui.settings
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.npn.core.app.AiTagging
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.ViewType
@@ -32,6 +33,7 @@ data class SettingsUiState(
     val aiApiKey: String = "",
     val aiModel: String = "",
     val aiMaxTagsPerDoc: Int = 8,
+    val aiMaxNewTagsPerDoc: Int = 5,
 )
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
@@ -44,6 +46,7 @@ private data class AiSettings(
     val apiKey: String,
     val model: String,
     val maxTagsPerDoc: Int,
+    val maxNewTagsPerDoc: Int,
 )
 
 class SettingsViewModel(
@@ -69,14 +72,17 @@ class SettingsViewModel(
             (template ?: DEFAULT_STORAGE_PATH_TEMPLATE) to enabled
         },
         combine(
-            settings.aiEnabled,
-            settings.aiBaseUrl,
-            settings.aiApiKey,
-            settings.aiModel,
-            settings.aiMaxTagsPerDoc,
-        ) { enabled, baseUrl, apiKey, model, maxTags ->
-            AiSettings(enabled, baseUrl, apiKey, model, maxTags)
-        },
+            combine(
+                settings.aiEnabled,
+                settings.aiBaseUrl,
+                settings.aiApiKey,
+                settings.aiModel,
+                settings.aiMaxTagsPerDoc,
+            ) { enabled, baseUrl, apiKey, model, maxTags ->
+                AiSettings(enabled, baseUrl, apiKey, model, maxTags, AiTagging.DEFAULT_NEW_TAGS_PER_DOC)
+            },
+            settings.aiMaxNewTagsPerDoc,
+        ) { ai, maxNew -> ai.copy(maxNewTagsPerDoc = maxNew) },
     ) { (location, lang, retention), (viewType, landscape), (watched, watchedDelete), (template, pathEnabled), ai ->
         val preview = StoragePathTemplate.expand(template, PREVIEW_CONTEXT)
         SettingsUiState(
@@ -96,6 +102,7 @@ class SettingsViewModel(
             aiApiKey = ai.apiKey,
             aiModel = ai.model,
             aiMaxTagsPerDoc = ai.maxTagsPerDoc,
+            aiMaxNewTagsPerDoc = ai.maxNewTagsPerDoc,
         )
     }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
@@ -144,6 +151,9 @@ class SettingsViewModel(
 
     fun setAiMaxTagsPerDoc(value: Int) =
         viewModelScope.launch { settings.setAiMaxTagsPerDoc(value) }
+
+    fun setAiMaxNewTagsPerDoc(value: Int) =
+        viewModelScope.launch { settings.setAiMaxNewTagsPerDoc(value) }
 
     /**
      * Drop all cached thumbnails so they regenerate at the current render quality. Invokes [onDone]

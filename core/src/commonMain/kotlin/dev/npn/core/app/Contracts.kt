@@ -319,6 +319,13 @@ interface SettingsRepository {
     /** Max tag suggestions produced per document. Default 8, coerced into [AiTagging.RANGE]. */
     val aiMaxTagsPerDoc: Flow<Int>
     suspend fun setAiMaxTagsPerDoc(value: Int)
+
+    /**
+     * Max genuinely-new (non-vocabulary) tags proposed per document. Default 5, coerced into
+     * [AiTagging.NEW_TAGS_RANGE] (0 disables proposing new tags entirely).
+     */
+    val aiMaxNewTagsPerDoc: Flow<Int>
+    suspend fun setAiMaxNewTagsPerDoc(value: Int)
 }
 
 /** Bounds for the user-adjustable "max suggested tags per document" setting. */
@@ -327,6 +334,13 @@ object AiTagging {
     const val MAX_TAGS_PER_DOC = 15
     const val DEFAULT_TAGS_PER_DOC = 8
     val RANGE = MIN_TAGS_PER_DOC..MAX_TAGS_PER_DOC
+
+    const val MIN_NEW_TAGS_PER_DOC = 0
+    const val MAX_NEW_TAGS_PER_DOC = 10
+    const val DEFAULT_NEW_TAGS_PER_DOC = 5
+
+    /** Allowed range for the new-tag cap; 0 means never propose brand-new tags. */
+    val NEW_TAGS_RANGE = MIN_NEW_TAGS_PER_DOC..MAX_NEW_TAGS_PER_DOC
 }
 
 /** Bounds for the user-adjustable grid cell width (dp). */

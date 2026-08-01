@@ -11,6 +11,9 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,9 +23,11 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.currentCoroutineContext
-import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.Semaphore
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 
 /** Document scope for a bulk tagging run. */
 enum class TaggingScope { UNTAGGED, REVIEW_QUEUE, ALL }
@@ -36,14 +41,21 @@ const val MAX_BATCH_DOCS = 25
  */
 data class ReviewChip(val tag: String, val isNew: Boolean, val selected: Boolean)
 
-/** One document's row in the review phase: its display label plus its suggestion chips. */
+/**
+ * One document's row in the review phase: its display label, an optional extracted-text
+ * [snippet] preview so the user can recognise the document, plus its suggestion chips.
+ */
 data class ReviewDoc(
     val docId: String,
     val label: String,
+    val snippet: String?,
     val chips: List<ReviewChip>,
 )
 
-/** Sequential-suggestion progress: currently on document [done]+1 of [total], named [currentLabel]. */
+/**
+ * Suggestion progress: [done] of [total] documents have completed; [currentLabel] is the most
+ * recently completed document's label.
+ */
 data class SuggestProgress(val done: Int, val total: Int, val currentLabel: String)
 
 /**
@@ -57,7 +69,7 @@ sealed interface TaggingPhase {
     /** Scope selection + Start. */
     data object Idle : TaggingPhase
 
-    /** Sequential `suggestTags` calls in progress. */
+    /** Concurrent `suggestTags` calls in progress. */
     data class Suggesting(val progress: SuggestProgress) : TaggingPhase
 
     /** Per-doc suggestion chips awaiting the user's confirmation; nothing written yet. */
@@ -88,14 +100,16 @@ data class AiTaggingUiState(
  * `Idle → Suggesting → Review → Applying → Done`.
  *
  * - Idle: pick a [TaggingScope]; the document count for the current scope is observed via
- *   [scopeCount]. Start runs sequential [dev.npn.core.ai.AiFacade.suggestTags] calls over the first
- *   [MAX_BATCH_DOCS] docs, reporting progress; cancellable between docs and by leaving the screen
- *   (viewModelScope).
+ *   [scopeCount]. Start runs [dev.npn.core.ai.AiFacade.suggestTags] calls over the first
+ *   [MAX_BATCH_DOCS] docs with bounded concurrency ([SUGGEST_CONCURRENCY]), reporting progress as
+ *   each doc completes; cancellable via the shared [run] job and by leaving the screen
+ *   (viewModelScope). Results are re-ordered to match the original batch order.
  * - Review: per-doc suggestion chips, existing tags pre-selected and new tags pre-deselected; tap
  *   toggles. Docs that produced no suggestions land in a collapsed group. Nothing is written here.
- * - Apply: one `addTag` journal call per selected (doc, tag) pair; per-doc failures are collected
- *   and surfaced, successes are not rolled back (mirrors the bulk-op convention). Failed docs' still
- *   keep their unapplied selections so the user can retry.
+ * - Apply: selected (doc, tag) pairs are grouped by tag and written with one `addTag` journal call
+ *   per distinct tag (a multi-doc op list committed in a single transaction); per-tag failures are
+ *   collected and surfaced, successes are not rolled back (mirrors the bulk-op convention). Failed
+ *   docs keep their unapplied selections so the user can retry.
  *
  * [processedIds] remembers already-tagged docs for the session so the "next batch" continuation
  * excludes them (needed for ALL / review-queue scopes; UNTAGGED docs drop out of the scope query on
@@ -161,6 +175,24 @@ class AiTaggingViewModel(
         state.copy(phase = review.copy(docs = docs))
     }
 
+    /** Select or deselect every chip of one document (Review phase only; no-op otherwise). */
+    fun setDocSelection(docId: String, selected: Boolean) = _ui.update { state ->
+        val review = state.phase as? TaggingPhase.Review ?: return@update state
+        val docs = review.docs.map { doc ->
+            if (doc.docId != docId) doc else doc.copy(chips = doc.chips.map { it.copy(selected = selected) })
+        }
+        state.copy(phase = review.copy(docs = docs))
+    }
+
+    /** Select or deselect every chip of every document (Review phase only; no-op otherwise). */
+    fun setAllSelection(selected: Boolean) = _ui.update { state ->
+        val review = state.phase as? TaggingPhase.Review ?: return@update state
+        val docs = review.docs.map { doc ->
+            doc.copy(chips = doc.chips.map { it.copy(selected = selected) })
+        }
+        state.copy(phase = review.copy(docs = docs))
+    }
+
     /** Write the selected (doc, tag) pairs; see class docs for partial-failure semantics. */
     fun apply() {
         val review = _ui.value.phase as? TaggingPhase.Review ?: return
@@ -180,25 +212,51 @@ class AiTaggingViewModel(
             _ui.update { it.copy(phase = TaggingPhase.Done(ApplyResult(0, 0, moreRemain = false))) }
             return
         }
-        val results = mutableListOf<ReviewDoc>()
+        _ui.update {
+            it.copy(phase = TaggingPhase.Suggesting(SuggestProgress(0, batch.size, labelOf(batch.first()))))
+        }
+        // Results are indexed by their original batch position so the completion order (which is
+        // non-deterministic under bounded concurrency) never leaks into the Review order.
+        val results = arrayOfNulls<ReviewDoc>(batch.size)
         val failures = mutableListOf<String>()
-        batch.forEachIndexed { index, item ->
-            if (!currentCoroutineContext().isActive) return
-            _ui.update {
-                it.copy(phase = TaggingPhase.Suggesting(SuggestProgress(index, batch.size, labelOf(item))))
-            }
-            runCatching { session.ai.suggestTags(item.doc.docId) }
-                .onSuccess { results += reviewDoc(item, it) }
-                .onFailure { e ->
-                    if (e is CancellationException) throw e
-                    failures += labelOf(item)
+        val semaphore = Semaphore(SUGGEST_CONCURRENCY)
+        val progress = Mutex()
+        var done = 0
+        coroutineScope {
+            batch.mapIndexed { index, item ->
+                async {
+                    semaphore.withPermit {
+                        val outcome = runCatching {
+                            val suggestions = session.ai.suggestTags(item.doc.docId)
+                            reviewDoc(item, suggestions, snippetFor(item.doc.docId))
+                        }
+                        // CancellationException must propagate so the whole scope tears down.
+                        outcome.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+                        progress.withLock {
+                            outcome
+                                .onSuccess { results[index] = it }
+                                .onFailure { failures += labelOf(item) }
+                            done++
+                            val prog = SuggestProgress(done, batch.size, labelOf(item))
+                            _ui.update { s -> s.copy(phase = TaggingPhase.Suggesting(prog)) }
+                        }
+                    }
                 }
+            }.awaitAll()
         }
         if (failures.isNotEmpty()) {
             message("Could not suggest tags for ${failures.size} of ${batch.size} document(s)")
         }
-        enterReview(results)
+        enterReview(results.filterNotNull())
     }
+
+    /** First ~[SNIPPET_LENGTH] chars of extracted text, whitespace-collapsed; null when unavailable. */
+    private suspend fun snippetFor(docId: String): String? =
+        runCatching { session.content.extractedText(docId) }.getOrNull()
+            ?.replace(Regex("\\s+"), " ")
+            ?.trim()
+            ?.takeIf { it.isNotBlank() }
+            ?.take(SNIPPET_LENGTH)
 
     private fun enterReview(results: List<ReviewDoc>) {
         // Mark EVERY reviewed doc (incl. no-suggestion ones) processed now, not on apply, so the
@@ -231,11 +289,19 @@ class AiTaggingViewModel(
         }
         val failedDocs = mutableSetOf<String>()
         val succeeded = mutableSetOf<Pair<String, String>>()
-        for (pair in pending) {
-            val (docId, tag) = pair
-            runCatching { session.meta.addTag(listOf(docId), tag) }
-                .onSuccess { succeeded += pair; processedIds += docId }
-                .onFailure { failedDocs += docId }
+        // Group by tag so each distinct tag is written once for all its docs in a single journal
+        // transaction (MetadataWriter.addTag commits a multi-doc op list atomically). A tag's call
+        // is all-or-nothing: on failure every (doc, tag) pair for that tag is retained for retry.
+        val byTag = pending.groupBy({ it.second }, { it.first })
+        for ((tag, docIds) in byTag) {
+            runCatching { session.meta.addTag(docIds, tag) }
+                .onSuccess {
+                    docIds.forEach { docId ->
+                        succeeded += docId to tag
+                        processedIds += docId
+                    }
+                }
+                .onFailure { failedDocs += docIds }
         }
         finishApply(review, succeeded, failedDocs)
     }
@@ -276,10 +342,11 @@ class AiTaggingViewModel(
     private suspend fun currentScopeDocs(): List<DocListItem> =
         session.documents.observeDocuments(scopeFilter(scope.value), SORT).first()
 
-    private fun reviewDoc(item: DocListItem, suggestions: List<TagSuggestion>): ReviewDoc =
+    private fun reviewDoc(item: DocListItem, suggestions: List<TagSuggestion>, snippet: String?): ReviewDoc =
         ReviewDoc(
             docId = item.doc.docId,
             label = labelOf(item),
+            snippet = snippet,
             chips = suggestions.map { ReviewChip(it.tag, it.isNew, selected = !it.isNew) },
         )
 
@@ -294,5 +361,14 @@ class AiTaggingViewModel(
 
     private companion object {
         val SORT = LibrarySort()
+
+        /**
+         * Max in-flight `suggestTags` (LLM) calls. Bounds load on the model/backend while still
+         * overlapping the mostly-IO-bound calls for a large speedup over serial execution.
+         */
+        const val SUGGEST_CONCURRENCY = 4
+
+        /** Max characters of extracted text kept for a Review row's preview snippet. */
+        const val SNIPPET_LENGTH = 200
     }
 }

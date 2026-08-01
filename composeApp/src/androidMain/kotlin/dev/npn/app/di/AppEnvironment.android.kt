@@ -61,6 +61,7 @@ fun createAppEnvironment(context: Context): AppEnvironment {
                     apiKey = settings.aiApiKey.first(),
                     model = settings.aiModel.first(),
                     maxTagsPerDoc = settings.aiMaxTagsPerDoc.first(),
+                    maxNewTagsPerDoc = settings.aiMaxNewTagsPerDoc.first(),
                 )
             },
         )

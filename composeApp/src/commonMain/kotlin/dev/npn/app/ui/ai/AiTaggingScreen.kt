@@ -36,7 +36,9 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.TriStateCheckbox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,10 +47,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.DocThumbnail
+import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibrarySession
 
 @Composable
@@ -80,7 +86,7 @@ fun AiTaggingScreen(
             when (val phase = ui.phase) {
                 is TaggingPhase.Idle -> IdlePhase(ui, count, vm)
                 is TaggingPhase.Suggesting -> SuggestingPhase(phase.progress, vm::cancel)
-                is TaggingPhase.Review -> ReviewPhase(phase, vm, vm::skipReview)
+                is TaggingPhase.Review -> ReviewPhase(phase, vm, session.content, vm::skipReview)
                 is TaggingPhase.Applying -> CenteredProgress("Applying tags…")
                 is TaggingPhase.Done -> DonePhase(phase.result, vm::nextBatch, onBack)
             }
@@ -161,8 +167,14 @@ private fun SuggestingPhase(progress: SuggestProgress, onCancel: () -> Unit) {
 // ---- Review: per-doc chips + apply bar ----
 
 @Composable
-private fun ReviewPhase(phase: TaggingPhase.Review, vm: AiTaggingViewModel, onSkip: () -> Unit) {
+private fun ReviewPhase(
+    phase: TaggingPhase.Review,
+    vm: AiTaggingViewModel,
+    content: DocContentFacade,
+    onSkip: () -> Unit,
+) {
     val selected = phase.docs.sumOf { doc -> doc.chips.count { it.selected } }
+    val total = phase.docs.sumOf { doc -> doc.chips.size }
     val docsWithSelection = phase.docs.count { doc -> doc.chips.any { it.selected } }
     Column(Modifier.fillMaxSize()) {
         LazyColumn(
@@ -170,7 +182,10 @@ private fun ReviewPhase(phase: TaggingPhase.Review, vm: AiTaggingViewModel, onSk
             contentPadding = androidx.compose.foundation.layout.PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            items(phase.docs, key = { it.docId }) { doc -> ReviewRow(doc, vm::toggleChip) }
+            item { BatchSelectionHeader(selected, total, vm::setAllSelection) }
+            items(phase.docs, key = { it.docId }) { doc ->
+                ReviewRow(doc, content, vm::toggleChip, vm::setDocSelection)
+            }
             if (phase.emptyDocs.isNotEmpty()) {
                 item { NoSuggestionsSection(phase.emptyDocs) }
             }
@@ -180,29 +195,76 @@ private fun ReviewPhase(phase: TaggingPhase.Review, vm: AiTaggingViewModel, onSk
 }
 
 @Composable
-private fun ReviewRow(doc: ReviewDoc, onToggle: (String, String) -> Unit) {
-    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Text(doc.label, style = MaterialTheme.typography.titleSmall)
-        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-            doc.chips.forEach { chip ->
-                FilterChip(
-                    selected = chip.selected,
-                    onClick = { onToggle(doc.docId, chip.tag) },
-                    label = { ChipLabel(chip) },
-                    leadingIcon = if (chip.selected) {
-                        {
-                            Icon(
-                                Icons.Filled.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                            )
-                        }
-                    } else {
-                        null
-                    },
+private fun BatchSelectionHeader(selected: Int, total: Int, onSetAll: (Boolean) -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Text(
+            "$selected of $total tags selected",
+            Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        TextButton(onClick = { onSetAll(true) }) { Text("Select all") }
+        TextButton(onClick = { onSetAll(false) }) { Text("Clear") }
+    }
+}
+
+@Composable
+private fun ReviewRow(
+    doc: ReviewDoc,
+    content: DocContentFacade,
+    onToggle: (String, String) -> Unit,
+    onSetDoc: (String, Boolean) -> Unit,
+) {
+    val allSelected = doc.chips.all { it.selected }
+    val noneSelected = doc.chips.none { it.selected }
+    val toggleState = when {
+        allSelected -> ToggleableState.On
+        noneSelected -> ToggleableState.Off
+        else -> ToggleableState.Indeterminate
+    }
+    Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
+        DocThumbnail(docId = doc.docId, content = content, size = 56.dp)
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Text(doc.label, style = MaterialTheme.typography.titleSmall)
+            doc.snippet?.let {
+                Text(
+                    it,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
                 )
             }
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                doc.chips.forEach { chip ->
+                    FilterChip(
+                        selected = chip.selected,
+                        onClick = { onToggle(doc.docId, chip.tag) },
+                        label = { ChipLabel(chip) },
+                        leadingIcon = if (chip.selected) {
+                            {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = null,
+                                    modifier = Modifier.size(FilterChipDefaults.IconSize),
+                                )
+                            }
+                        } else {
+                            null
+                        },
+                    )
+                }
+            }
         }
+        TriStateCheckbox(
+            state = toggleState,
+            // On/Indeterminate → clear; Off → select all.
+            onClick = { onSetDoc(doc.docId, !allSelected) },
+        )
     }
 }
 

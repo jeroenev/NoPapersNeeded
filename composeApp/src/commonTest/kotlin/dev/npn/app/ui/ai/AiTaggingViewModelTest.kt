@@ -28,10 +28,12 @@ class AiTaggingViewModelTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = AiTaggingViewModel(session)
 
     @Test
-    fun sequentialSuggestionProgressInOrder() = runTest(dispatcher) {
+    fun concurrentSuggestionReportsProgressAndPreservesBatchOrder() = runTest(dispatcher) {
+        // Skew completion order (c finishes first, then b, then a) to prove results are re-ordered
+        // back to batch order and progress climbs as docs COMPLETE.
         val session = FakeLibrarySession().apply {
             documents.documents.value = listOf(item("a"), item("b"), item("c"))
-            ai.suggestDelayMillis = 100
+            ai.suggestDelayByDoc = mapOf("a" to 300, "b" to 200, "c" to 100)
             ai.suggestionsByDoc = mapOf(
                 "a" to listOf(TagSuggestion("x", isNew = false)),
                 "b" to listOf(TagSuggestion("y", isNew = false)),
@@ -53,11 +55,36 @@ class AiTaggingViewModelTest : MainDispatcherTest() {
         model.start()
         advanceUntilIdle()
 
-        session.ai.suggestTagsCalls shouldContainExactly listOf("a", "b", "c")
-        progress shouldContainExactly listOf(0, 1, 2)
+        // All three dispatched (concurrency 4 >= 3); completion count reaches total.
+        session.ai.suggestTagsCalls shouldContainExactlyInAnyOrder listOf("a", "b", "c")
+        progress.last() shouldBe 3
+        progress shouldContainExactly listOf(0, 1, 2, 3)
         val review = model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Review>()
         review.docs.map { it.docId } shouldContainExactly listOf("a", "b", "c")
         jobs.forEach { it.cancel() }
+    }
+
+    @Test
+    fun suggestionConcurrencyIsBounded() = runTest(dispatcher) {
+        // 6 docs, concurrency 4: only 4 calls should be dispatched before any completes.
+        val docs = (1..6).map { item("d$it") }
+        val session = FakeLibrarySession().apply {
+            documents.documents.value = docs
+            ai.suggestDelayMillis = 100
+            ai.suggestions = listOf(TagSuggestion("t", isNew = false))
+        }
+        val model = vm(session)
+        val job = launch { model.ui.collect {} }
+        advanceUntilIdle()
+
+        model.start()
+        advanceTimeBy(50) // permits granted, none completed yet
+        runCurrent()
+
+        session.ai.suggestTagsCalls shouldHaveSize 4
+        advanceUntilIdle()
+        session.ai.suggestTagsCalls shouldHaveSize 6
+        job.cancel()
     }
 
     @Test
@@ -133,6 +160,91 @@ class AiTaggingViewModelTest : MainDispatcherTest() {
     }
 
     @Test
+    fun applyGroupsPairsByTagIntoOneCallPerTag() = runTest(dispatcher) {
+        // a and b both suggest "shared"; a also suggests "onlyA". Expect one addTag(["a","b"],
+        // "shared") and one addTag(["a"], "onlyA") — grouped by tag, not per (doc, tag) pair.
+        val session = FakeLibrarySession().apply {
+            documents.documents.value = listOf(item("a"), item("b"))
+            ai.suggestionsByDoc = mapOf(
+                "a" to listOf(TagSuggestion("shared", isNew = false), TagSuggestion("onlyA", isNew = false)),
+                "b" to listOf(TagSuggestion("shared", isNew = false)),
+            )
+        }
+        val model = vm(session)
+        val job = launch { model.ui.collect {} }
+        advanceUntilIdle()
+        model.start()
+        advanceUntilIdle()
+
+        model.apply()
+        advanceUntilIdle()
+
+        session.meta.addedTags shouldContainExactlyInAnyOrder listOf(
+            listOf("a", "b") to "shared",
+            listOf("a") to "onlyA",
+        )
+        val done = model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Done>()
+        done.result.tagsAdded shouldBe 3
+        done.result.docsTagged shouldBe 2
+        job.cancel()
+    }
+
+    @Test
+    fun setAllAndSetDocSelectionToggleChips() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            documents.documents.value = listOf(item("a"), item("b"))
+            ai.suggestionsByDoc = mapOf(
+                "a" to listOf(TagSuggestion("t1", isNew = false), TagSuggestion("new1", isNew = true)),
+                "b" to listOf(TagSuggestion("t2", isNew = false)),
+            )
+        }
+        val model = vm(session)
+        val job = launch { model.ui.collect {} }
+        advanceUntilIdle()
+        model.start()
+        advanceUntilIdle()
+
+        // Clear everything.
+        model.setAllSelection(false)
+        var review = model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Review>()
+        review.docs.flatMap { it.chips }.all { !it.selected } shouldBe true
+
+        // Select everything.
+        model.setAllSelection(true)
+        review = model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Review>()
+        review.docs.flatMap { it.chips }.all { it.selected } shouldBe true
+
+        // Deselect just doc a.
+        model.setDocSelection("a", false)
+        review = model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Review>()
+        review.docs.single { it.docId == "a" }.chips.all { !it.selected } shouldBe true
+        review.docs.single { it.docId == "b" }.chips.all { it.selected } shouldBe true
+        job.cancel()
+    }
+
+    @Test
+    fun snippetPopulatedFromExtractedText() = runTest(dispatcher) {
+        val session = FakeLibrarySession().apply {
+            documents.documents.value = listOf(item("a"), item("b"))
+            ai.suggestions = listOf(TagSuggestion("t", isNew = false))
+            content.extractedTextByDoc = mapOf(
+                "a" to "  Invoice   #123\n\tAcme  Corp  ",
+                "b" to "   ", // blank -> null snippet
+            )
+        }
+        val model = vm(session)
+        val job = launch { model.ui.collect {} }
+        advanceUntilIdle()
+        model.start()
+        advanceUntilIdle()
+
+        val review = model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Review>()
+        review.docs.single { it.docId == "a" }.snippet shouldBe "Invoice #123 Acme Corp"
+        review.docs.single { it.docId == "b" }.snippet shouldBe null
+        job.cancel()
+    }
+
+    @Test
     fun partialFailureSurfacesMessageAndKeepsUnappliedSelections() = runTest(dispatcher) {
         val session = FakeLibrarySession().apply {
             documents.documents.value = listOf(item("a"), item("b"))
@@ -167,7 +279,7 @@ class AiTaggingViewModelTest : MainDispatcherTest() {
     }
 
     @Test
-    fun cancellationMidRunStopsOutstandingCalls() = runTest(dispatcher) {
+    fun cancellationMidRunStopsRunAndReturnsToIdle() = runTest(dispatcher) {
         val session = FakeLibrarySession().apply {
             documents.documents.value = listOf(item("a"), item("b"), item("c"))
             ai.suggestDelayMillis = 1_000
@@ -178,12 +290,12 @@ class AiTaggingViewModelTest : MainDispatcherTest() {
         advanceUntilIdle()
 
         model.start()
-        advanceTimeBy(1_500) // first doc done, second in flight
+        advanceTimeBy(500) // all in flight, none completed yet
         runCurrent()
         model.cancel()
         advanceUntilIdle()
 
-        session.ai.suggestTagsCalls shouldContainExactly listOf("a")
+        // Cancelling tears down the whole scope: no Review produced, back to Idle.
         model.ui.value.phase.shouldBeInstanceOf<TaggingPhase.Idle>()
         job.cancel()
     }
