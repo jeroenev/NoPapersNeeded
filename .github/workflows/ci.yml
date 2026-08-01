@@ -67,27 +67,27 @@ jobs:
         run: ./gradlew :desktopApp:packageAppImage
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: androidApp-debug
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
 
       - name: Upload AppImage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: no-papers-needed-appimage
           path: desktopApp/build/appimage/*.AppImage
 
       - name: Upload core test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: core-test-reports
           path: core/build/reports/tests/desktopTest
 
       - name: Upload coverage reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kover-coverage-reports
           path: composeApp/build/reports/kover
@@ -136,7 +136,7 @@ jobs:
         run: ./gradlew.bat :desktopApp:packageDistributionForCurrentOS
 
       - name: Upload Windows installer artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: no-papers-needed-windows-installers
           path: |
@@ -145,7 +145,7 @@ jobs:
 
       - name: Upload core test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-core-test-reports
           path: core/build/reports/tests/desktopTest
