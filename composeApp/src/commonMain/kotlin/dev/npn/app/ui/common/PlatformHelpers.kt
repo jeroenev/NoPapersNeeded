@@ -23,3 +23,19 @@ expect fun platformFileToExternalSource(file: PlatformFile): ExternalSource
  * takes a persistable uri permission and returns the tree uri string.
  */
 expect fun persistDirectoryAccess(dir: PlatformFile): String
+
+/**
+ * Whether the platform offers a native share sheet. Platforms that do (Android) show a Share
+ * action that hands the file to the OS share menu; platforms that don't (desktop) show an
+ * Export action that saves the file via a file dialog instead.
+ */
+expect fun supportsSharing(): Boolean
+
+/**
+ * Hand the given baked PDF bytes to the platform share sheet (e.g. ACTION_SEND on Android).
+ * Only called when [supportsSharing] is true. Throws if sharing could not be offered.
+ */
+expect suspend fun sharePdfBytes(
+    fileName: String,
+    bytes: ByteArray,
+)

@@ -25,6 +25,9 @@
     <string name="detail_mark_unreviewed">Als niet beoordeeld markeren</string>
     <string name="detail_mark_reviewed">Als beoordeeld markeren</string>
     <string name="detail_export_baked_copy">Kopie met ingesloten metadata exporteren</string>
+    <string name="detail_share_baked_copy">Kopie met ingesloten metadata delen</string>
+    <string name="detail_shared_baked_copy">Kopie met ingesloten metadata gedeeld</string>
+    <string name="detail_share_failed">Delen mislukt: %1$s</string>
     <string name="detail_more_actions">Meer acties</string>
     <string name="detail_rerunning_ocr">OCR opnieuw uitvoeren...</string>
     <string name="detail_rerun_ocr">OCR opnieuw uitvoeren</string>
