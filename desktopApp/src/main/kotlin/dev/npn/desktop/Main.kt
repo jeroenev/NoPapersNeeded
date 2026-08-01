@@ -21,82 +21,110 @@ import dev.npn.core.fs.ExternalSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_app_name
+import org.jetbrains.compose.resources.stringResource
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
+
+private const val EXT_PDF = ".pdf"
+private const val FILE_URI_PREFIX = "file:"
+private const val FALLBACK_DROPPED_PDF = "dropped.pdf"
+private const val LOG_PREFIX = "[npn] "
+
+private fun log(message: String) = println(LOG_PREFIX + message)
 
 @OptIn(
     androidx.compose.foundation.ExperimentalFoundationApi::class,
     androidx.compose.ui.ExperimentalComposeUiApi::class,
 )
-fun main() = application {
-    // Process-wide environment. The desktop LibrarySession self-starts its WatchService rescan loop
-    // and OCR worker in start() (called from openLibrary), so no extra background loop wiring is
-    // needed here.
-    val env = remember { createAppEnvironment() }
-    val scope = rememberCoroutineScope()
+fun main() =
+    application {
+        // Process-wide environment. The desktop LibrarySession self-starts its WatchService rescan loop
+        // and OCR worker in start() (called from openLibrary), so no extra background loop wiring is
+        // needed here.
+        val env = remember { createAppEnvironment() }
+        val scope = rememberCoroutineScope()
 
-    Window(
-        onCloseRequest = ::exitApplication,
-        title = "no papers needed",
-        state = rememberWindowState(width = 1200.dp, height = 800.dp),
-    ) {
-        // Enforce a sensible minimum window size (jpackage/AWT window).
-        window.minimumSize = java.awt.Dimension(800, 600)
+        Window(
+            onCloseRequest = ::exitApplication,
+            title = stringResource(Res.string.common_app_name),
+            state = rememberWindowState(width = 1200.dp, height = 800.dp),
+        ) {
+            // Enforce a sensible minimum window size (jpackage/AWT window).
+            window.minimumSize = java.awt.Dimension(800, 600)
 
-        val dropTarget = remember {
-            object : DragAndDropTarget {
-                override fun onDrop(event: DragAndDropEvent): Boolean {
-                    val data = event.dragData()
-                    if (data !is DragData.FilesList) return false
-                    val paths = data.readFiles().mapNotNull { toPath(it) }
-                        .filter { it.toString().endsWith(".pdf", ignoreCase = true) }
-                    if (paths.isEmpty()) return false
-                    scope.launch { importDroppedFiles(env, paths) }
-                    return true
-                }
+            val dropTarget = remember { pdfDropTarget(env, scope) }
+
+            Box(
+                Modifier.fillMaxSize().dragAndDropTarget(
+                    shouldStartDragAndDrop = { event -> event.dragData() is DragData.FilesList },
+                    target = dropTarget,
+                ),
+            ) {
+                // NoDocumentScanner is the default for LocalDocumentScanner, so no provider needed on
+                // desktop (v1 has no camera capture).
+                App(env)
             }
         }
+    }
 
-        Box(
-            Modifier.fillMaxSize().dragAndDropTarget(
-                shouldStartDragAndDrop = { event -> event.dragData() is DragData.FilesList },
-                target = dropTarget,
-            ),
-        ) {
-            // NoDocumentScanner is the default for LocalDocumentScanner, so no provider needed on
-            // desktop (v1 has no camera capture).
-            App(env)
+/** Drop target that imports dropped PDF files through the [env]'s session on [scope]. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+private fun pdfDropTarget(
+    env: dev.npn.app.di.AppEnvironment,
+    scope: kotlinx.coroutines.CoroutineScope,
+): DragAndDropTarget =
+    object : DragAndDropTarget {
+        override fun onDrop(event: DragAndDropEvent): Boolean {
+            val data = event.dragData()
+            if (data !is DragData.FilesList) return false
+            val paths =
+                data
+                    .readFiles()
+                    .mapNotNull { toPath(it) }
+                    .filter { it.toString().endsWith(EXT_PDF, ignoreCase = true) }
+            if (paths.isEmpty()) return false
+            scope.launch { importDroppedFiles(env, paths) }
+            return true
         }
     }
-}
 
 private suspend fun importDroppedFiles(
     env: dev.npn.app.di.AppEnvironment,
     paths: List<Path>,
 ) {
-    val session = env.session.value ?: run {
-        println("[npn] drag-drop import ignored: no library configured")
-        return
-    }
+    val session =
+        env.session.value ?: run {
+            log("drag-drop import ignored: no library configured")
+            return
+        }
     withContext(Dispatchers.IO) {
         for (path in paths) {
             if (!Files.isRegularFile(path)) continue
-            val name = path.fileName?.toString() ?: "dropped.pdf"
-            when (val outcome = session.importPdf(ExternalSource(path), name)) {
-                is ImportOutcome.Imported -> println("[npn] imported $name -> ${outcome.relPath}")
-                is ImportOutcome.Duplicate -> println("[npn] duplicate $name (already ${outcome.existingPath})")
-                is ImportOutcome.Failed -> println("[npn] failed $name: ${outcome.message}")
-            }
+            val name = path.fileName?.toString() ?: FALLBACK_DROPPED_PDF
+            log(importLogLine(name, session.importPdf(ExternalSource(path), name)))
         }
     }
 }
 
-/** Convert a dropped file reference (a `file:` URI or a plain path) to a [Path]. */
-private fun toPath(fileRef: String): Path? = runCatching {
-    if (fileRef.startsWith("file:")) {
-        Path.of(URI(fileRef))
-    } else {
-        Path.of(fileRef)
+private fun importLogLine(
+    name: String,
+    outcome: ImportOutcome,
+): String =
+    when (outcome) {
+        is ImportOutcome.Imported -> "imported $name -> ${outcome.relPath}"
+        is ImportOutcome.Duplicate -> "duplicate $name (already ${outcome.existingPath})"
+        is ImportOutcome.Failed -> "failed $name: ${outcome.message}"
     }
-}.getOrNull()
+
+/** Convert a dropped file reference (a `file:` URI or a plain path) to a [Path]. */
+private fun toPath(fileRef: String): Path? =
+    runCatching {
+        if (fileRef.startsWith(FILE_URI_PREFIX)) {
+            Path.of(URI(fileRef))
+        } else {
+            Path.of(fileRef)
+        }
+    }.getOrNull()

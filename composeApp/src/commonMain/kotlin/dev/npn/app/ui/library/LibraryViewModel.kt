@@ -1,15 +1,23 @@
 package dev.npn.app.ui.library
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiAction
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.UiTextKey
+import dev.npn.app.ui.common.WhileSubscribedTimeout
+import dev.npn.app.ui.common.activeSearchToken
+import dev.npn.app.ui.common.completeActiveSearchToken
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
-import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.OcrStatus
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.ScanProgressUi
+import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.ViewType
@@ -19,8 +27,6 @@ import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
-import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.WhileSubscribedTimeout
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
@@ -32,20 +38,17 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
-import dev.npn.app.ui.common.activeSearchToken
-import dev.npn.app.ui.common.completeActiveSearchToken
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /** Import result summary shown as a snackbar. */
-data class ImportSummary(val imported: Int, val duplicate: Int, val failed: Int) {
-    val message: String
-        get() = buildString {
-            append("$imported imported")
-            if (duplicate > 0) append(", $duplicate duplicate")
-            if (failed > 0) append(", $failed failed")
-        }
+data class ImportSummary(
+    val imported: Int,
+    val duplicate: Int,
+    val failed: Int,
+) {
+    fun asUiText(): UiText = uiText(UiTextKey.IMPORT_SUMMARY, imported, duplicate, failed)
 }
 
 data class LibraryUiState(
@@ -64,7 +67,6 @@ class LibraryViewModel(
     val session: LibrarySession,
     private val settings: SettingsRepository,
 ) : MessagesViewModel() {
-
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
 
@@ -80,12 +82,16 @@ class LibraryViewModel(
 
     /** Min grid cell width (dp), user-adjustable via settings; drives the adaptive column count. */
     val gridColumnWidth: StateFlow<Int> =
-        settings.gridColumnWidth
+        settings.settings
+            .map { it.gridColumnWidth }
+            .distinctUntilChanged()
             .stateIn(viewModelScope, WhileSubscribedTimeout, 160)
 
     /** When true, the list view uses multiple columns while the window is landscape. */
     val landscapeListColumns: StateFlow<Boolean> =
-        settings.landscapeListColumns
+        settings.settings
+            .map { it.landscapeListColumns }
+            .distinctUntilChanged()
             .stateIn(viewModelScope, WhileSubscribedTimeout, false)
 
     // Raw query text, debounced before it hits the filter. The search field reads this directly
@@ -99,7 +105,7 @@ class LibraryViewModel(
         // Seed the initial view from the persisted default. Only applies the first value and only
         // if the user has not already switched the view this session.
         viewModelScope.launch {
-            val saved = settings.defaultViewType.first()
+            val saved = settings.settings.first().defaultViewType
             if (!viewOverridden) {
                 _ui.value = _ui.value.copy(viewType = saved)
             }
@@ -108,7 +114,7 @@ class LibraryViewModel(
         // Seed the sort from the last explicitly chosen one (separate launch so a slow view-type
         // seed cannot delay it, and vice versa).
         viewModelScope.launch {
-            val saved = settings.librarySort.first()
+            val saved = settings.settings.first().librarySort
             if (!sortOverridden) {
                 _ui.value = _ui.value.copy(sort = saved)
             }
@@ -116,12 +122,13 @@ class LibraryViewModel(
 
         viewModelScope.launch {
             queryInput
-                .debounce(300)
+                .debounce(QUERY_DEBOUNCE_MS)
                 .distinctUntilChanged()
                 .collect { q ->
-                    _ui.value = _ui.value.copy(
-                        filter = _ui.value.filter.copy(query = q.ifBlank { null }),
-                    )
+                    _ui.value =
+                        _ui.value.copy(
+                            filter = _ui.value.filter.copy(query = q.ifBlank { null }),
+                        )
                 }
         }
     }
@@ -149,19 +156,21 @@ class LibraryViewModel(
                 } else {
                     flow { emit(session.documents.searchSuggestions(prefix, SUGGESTION_LIMIT)) }
                 }
-            }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+            }.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val tags: StateFlow<List<TagInfo>> =
-        session.tags.observeTags()
+        session.tags
+            .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val correspondents: StateFlow<List<String>> =
-        session.documents.observeCorrespondents()
+        session.documents
+            .observeCorrespondents()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val docTypes: StateFlow<List<String>> =
-        session.documents.observeDocTypes()
+        session.documents
+            .observeDocTypes()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val reviewMode: StateFlow<ReviewMode> =
@@ -169,15 +178,17 @@ class LibraryViewModel(
             .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     val needsReviewCount: StateFlow<Int> =
-        session.reviewMode.flatMapLatest { mode ->
-            when (mode) {
-                ReviewMode.UNTAGGED_ONLY -> session.documents.observeUntaggedCount()
-                ReviewMode.INBOX_WORKFLOW -> session.documents.observeUnreviewedOrUntaggedCount()
-            }
-        }.stateIn(viewModelScope, WhileSubscribedTimeout, 0)
+        session.reviewMode
+            .flatMapLatest { mode ->
+                when (mode) {
+                    ReviewMode.UNTAGGED_ONLY -> session.documents.observeUntaggedCount()
+                    ReviewMode.INBOX_WORKFLOW -> session.documents.observeUnreviewedOrUntaggedCount()
+                }
+            }.stateIn(viewModelScope, WhileSubscribedTimeout, 0)
 
     val savedViews: StateFlow<List<SavedView>> =
-        session.savedViews.observeSavedViews()
+        session.savedViews
+            .observeSavedViews()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val scanProgress: StateFlow<ScanProgressUi?> =
@@ -223,15 +234,19 @@ class LibraryViewModel(
      * it filters documents that are unreviewed or untagged. Replaces any active filter.
      */
     fun applyReviewPreset() {
-        val filter = when (reviewMode.value) {
-            ReviewMode.UNTAGGED_ONLY -> LibraryFilter(untaggedOnly = true)
-            ReviewMode.INBOX_WORKFLOW -> LibraryFilter(unreviewedOrUntagged = true)
-        }
+        val filter =
+            when (reviewMode.value) {
+                ReviewMode.UNTAGGED_ONLY -> LibraryFilter(untaggedOnly = true)
+                ReviewMode.INBOX_WORKFLOW -> LibraryFilter(unreviewedOrUntagged = true)
+            }
         _ui.value = _ui.value.copy(filter = filter)
         queryInput.value = ""
     }
 
-    fun setSort(field: SortField, ascending: Boolean) {
+    fun setSort(
+        field: SortField,
+        ascending: Boolean,
+    ) {
         sortOverridden = true
         val sort = LibrarySort(field, ascending)
         _ui.value = _ui.value.copy(sort = sort)
@@ -264,6 +279,7 @@ class LibraryViewModel(
     }
 
     private companion object {
+        const val QUERY_DEBOUNCE_MS = 300L
         const val SUGGESTION_DEBOUNCE_MS = 100L
         const val SUGGESTION_LIMIT = 8
         const val MIN_SUGGESTION_LENGTH = 2
@@ -303,10 +319,13 @@ class LibraryViewModel(
 
     // Tag/reviewed writes are a single batched session call (perDoc = false); trash is per-doc so
     // one failure does not abort the rest (perDoc = true). See [runOnSelection].
-    fun bulkAddTag(tag: String) = runOnSelection("add tag") { session.meta.addTag(it, tag) }
-    fun bulkRemoveTag(tag: String) = runOnSelection("remove tag") { session.meta.removeTag(it, tag) }
-    fun bulkSetReviewed(reviewed: Boolean) = runOnSelection("update") { session.meta.setReviewed(it, reviewed) }
-    fun bulkTrash() = runOnSelection("trash", perDoc = true) { session.meta.trashDoc(it.single()) }
+    fun bulkAddTag(tag: String) = runOnSelection(UiAction.ADD_TAG) { session.meta.addTag(it, tag) }
+
+    fun bulkRemoveTag(tag: String) = runOnSelection(UiAction.REMOVE_TAG) { session.meta.removeTag(it, tag) }
+
+    fun bulkSetReviewed(reviewed: Boolean) = runOnSelection(UiAction.UPDATE) { session.meta.setReviewed(it, reviewed) }
+
+    fun bulkTrash() = runOnSelection(UiAction.TRASH, perDoc = true) { session.meta.trashDoc(it.single()) }
 
     /**
      * Run a bulk op over the current selection.
@@ -319,7 +338,7 @@ class LibraryViewModel(
      * On full success the selection is cleared. [action] names the op for the failure message.
      */
     private fun runOnSelection(
-        action: String,
+        action: UiAction,
         perDoc: Boolean = false,
         block: suspend (List<String>) -> Unit,
     ) {
@@ -332,48 +351,52 @@ class LibraryViewModel(
                     clearSelection()
                 } else {
                     _ui.value = _ui.value.copy(selected = failed.toSet(), selectionMode = true)
-                    message("Could not $action ${failed.size} of ${ids.size} document(s)")
+                    message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, action, failed.size, ids.size))
                 }
             } else if (runCatching { block(ids) }.isSuccess) {
                 clearSelection()
             } else {
-                message("Could not $action ${ids.size} document(s)")
+                message(uiText(UiTextKey.COULD_NOT_DOCUMENTS, action, ids.size))
             }
         }
     }
 
     // ---- import ----
 
-    /** Import PDFs from external sources, tallying the per-source outcome into an [ImportSummary]. */
-    fun import(sources: List<Pair<ExternalSource, String>>, onDone: (ImportSummary) -> Unit) {
+    /** Import PDFs from external sources, tallying the per-source outcome into a message. */
+    fun import(sources: List<Pair<ExternalSource, String>>) {
         viewModelScope.launch {
             var imported = 0
             var duplicate = 0
             var failed = 0
             sources.forEach { (src, name) ->
-                when (runCatching { session.importPdf(src, name) }.getOrElse { ImportOutcome.Failed(it.message ?: "error") }) {
+                val outcome = runCatching { session.importPdf(src, name) }.getOrNull()
+                when (outcome) {
                     is ImportOutcome.Imported -> imported++
                     is ImportOutcome.Duplicate -> duplicate++
-                    is ImportOutcome.Failed -> failed++
+                    is ImportOutcome.Failed, null -> failed++
                 }
             }
-            onDone(ImportSummary(imported, duplicate, failed))
+            message(ImportSummary(imported, duplicate, failed).asUiText())
         }
     }
 
     /** Import a scanned PDF (raw bytes from the platform scanner) through the staging import path. */
-    fun importScannedPdf(bytes: ByteArray, onDone: (String) -> Unit) {
+    fun importScannedPdf(bytes: ByteArray) {
         viewModelScope.launch {
             val name = "scan-${randomId()}.pdf"
-            val msg = when (
-                val r = runCatching { session.importPdfBytes(bytes, name) }
-                    .getOrElse { ImportOutcome.Failed(it.message ?: "error") }
-            ) {
-                is ImportOutcome.Imported -> "Scan imported"
-                is ImportOutcome.Duplicate -> "Scan already in library"
-                is ImportOutcome.Failed -> "Scan import failed: ${r.message}"
-            }
-            onDone(msg)
+            val msg =
+                runCatching { session.importPdfBytes(bytes, name) }.fold(
+                    onSuccess = { outcome ->
+                        when (outcome) {
+                            is ImportOutcome.Imported -> uiText(UiTextKey.SCAN_IMPORTED)
+                            is ImportOutcome.Duplicate -> uiText(UiTextKey.SCAN_ALREADY_IN_LIBRARY)
+                            is ImportOutcome.Failed -> uiText(UiTextKey.SCAN_IMPORT_FAILED, outcome.message)
+                        }
+                    },
+                    onFailure = { uiText(UiTextKey.SCAN_IMPORT_FAILED, reasonOf(it)) },
+                )
+            message(msg)
         }
     }
 
@@ -387,7 +410,10 @@ class LibraryViewModel(
 private fun randomId(): String = Uuid.random().toString()
 
 /** Capture [ui] (filter/sort/view) as a new [SavedView] named [name]. */
-internal fun newSavedView(ui: LibraryUiState, name: String): SavedView =
+internal fun newSavedView(
+    ui: LibraryUiState,
+    name: String,
+): SavedView =
     SavedView(
         id = randomId(),
         name = name,

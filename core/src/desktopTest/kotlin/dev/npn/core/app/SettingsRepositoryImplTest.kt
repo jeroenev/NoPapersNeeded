@@ -10,42 +10,64 @@ import java.nio.file.attribute.PosixFilePermission
 import kotlin.test.Test
 
 class SettingsRepositoryImplTest {
+    @Test
+    fun settingsFileIsOwnerOnly() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                val file = directory.resolve("settings.properties").toFile()
+                SettingsRepositoryImpl(file).setAiApiKey("secret")
+
+                Files.getPosixFilePermissions(file.toPath()) shouldBe
+                    setOf(
+                        PosixFilePermission.OWNER_READ,
+                        PosixFilePermission.OWNER_WRITE,
+                    )
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
 
     @Test
-    fun settingsFileIsOwnerOnly() = runTest {
-        val directory = Files.createTempDirectory("npn-settings-test")
-        try {
-            val file = directory.resolve("settings.properties").toFile()
-            SettingsRepositoryImpl(file).setAiApiKey("secret")
+    fun concurrentUpdatesPersistOneCombinedSnapshot() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                val file = directory.resolve("settings.properties").toFile()
+                val repository = SettingsRepositoryImpl(file)
 
-            Files.getPosixFilePermissions(file.toPath()) shouldBe setOf(
-                PosixFilePermission.OWNER_READ,
-                PosixFilePermission.OWNER_WRITE,
-            )
-        } finally {
-            directory.toFile().deleteRecursively()
+                listOf(
+                    async { repository.setAiBaseUrl("https://example.test") },
+                    async { repository.setAiApiKey("secret") },
+                    async { repository.setAiModel("model") },
+                ).awaitAll()
+
+                val reloaded = SettingsRepositoryImpl(file)
+                val snapshot = reloaded.settings.first()
+                snapshot.aiBaseUrl shouldBe "https://example.test"
+                snapshot.aiApiKey shouldBe "secret"
+                snapshot.aiModel shouldBe "model"
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
         }
-    }
 
     @Test
-    fun concurrentUpdatesPersistOneCombinedSnapshot() = runTest {
-        val directory = Files.createTempDirectory("npn-settings-test")
-        try {
-            val file = directory.resolve("settings.properties").toFile()
-            val repository = SettingsRepositoryImpl(file)
+    fun appLanguagePersistsAndClears() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                val file = directory.resolve("settings.properties").toFile()
+                SettingsRepositoryImpl(file).setAppLanguage("nl")
 
-            listOf(
-                async { repository.setAiBaseUrl("https://example.test") },
-                async { repository.setAiApiKey("secret") },
-                async { repository.setAiModel("model") },
-            ).awaitAll()
+                var reloaded = SettingsRepositoryImpl(file)
+                reloaded.settings.first().appLanguage shouldBe "nl"
 
-            val reloaded = SettingsRepositoryImpl(file)
-            reloaded.aiBaseUrl.first() shouldBe "https://example.test"
-            reloaded.aiApiKey.first() shouldBe "secret"
-            reloaded.aiModel.first() shouldBe "model"
-        } finally {
-            directory.toFile().deleteRecursively()
+                SettingsRepositoryImpl(file).setAppLanguage(null)
+                reloaded = SettingsRepositoryImpl(file)
+                reloaded.settings.first().appLanguage shouldBe null
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
         }
-    }
 }

@@ -7,7 +7,7 @@ import androidx.room3.PrimaryKey
 
 /**
  * Materialized document row. This is a disposable cache: it is a fold of the file library
- * plus the metadata journals and can be rebuilt from the folder alone (see PLAN.md sec. 1).
+ * plus the metadata journals and can be rebuilt from the folder alone.
  *
  * docId is the SHA-256 hex of the file bytes (stable identity). Stored as a plain TEXT column;
  * the DocId value class is only used at higher layers.
@@ -104,12 +104,10 @@ data class DocumentFieldEntity(
 )
 
 /**
- * FTS5 full-text index over the search axes (PLAN.md sec. 5: names, content, tags,
- * correspondent, document type). Plain (regular) FTS5 table: docId lives as an indexed
+ * FTS5 full-text index over names, content, tags, correspondent, and document type. Plain
+ * (regular) FTS5 table: docId lives as an indexed
  * column and updates are done as exact-match delete + reinsert (see [FtsDao.replaceDocument]).
- *
- * KEY SPIKE (PLAN.md 0.2 / risk table): verify @Fts5 works on the JVM target with the
- * bundled SQLite driver.
+ * The JVM integration test verifies that [Fts5] works with the bundled SQLite driver.
  */
 @Fts5
 @Entity(tableName = "fts_documents")
@@ -145,8 +143,8 @@ data class ThumbnailEntity(
 )
 
 /**
- * Extra paths holding the same content hash: externally created duplicates flagged for
- * cleanup (PLAN.md sec. 2: duplicates are forbidden, every hash has one canonical path).
+ * Extra paths holding the same content hash. The document row retains the one canonical path;
+ * externally created copies remain here until cleanup.
  */
 @Entity(
     tableName = "duplicates",

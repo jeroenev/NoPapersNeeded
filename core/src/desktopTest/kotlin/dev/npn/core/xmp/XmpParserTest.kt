@@ -4,7 +4,6 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 class XmpParserTest {
-
     @Test
     fun nullAndEmptyYieldEmpty() {
         XmpParser.parse(null) shouldBe NpnXmpData.EMPTY
@@ -22,7 +21,8 @@ class XmpParserTest {
 
     @Test
     fun foreignPacketWithDcSubject() {
-        val foreign = """
+        val foreign =
+            """
             <?xpacket begin="" id="W5M0MpCehiHzreSzNTczkc9d"?>
             <x:xmpmeta xmlns:x="adobe:ns:meta/">
               <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
@@ -45,7 +45,7 @@ class XmpParserTest {
               </rdf:RDF>
             </x:xmpmeta>
             <?xpacket end="w"?>
-        """.trimIndent()
+            """.trimIndent()
 
         val data = XmpParser.parse(foreign)
         data.tags shouldBe listOf("keyword one", "keyword two")
@@ -57,12 +57,13 @@ class XmpParserTest {
 
     @Test
     fun npnAttributeShorthand() {
-        val xml = """
+        val xml =
+            """
             <rdf:Description rdf:about=""
                 xmlns:npn="https://npn.dev/xmp/1.0/"
                 npn:documentId="deadbeef"
                 npn:reviewed="true"/>
-        """.trimIndent()
+            """.trimIndent()
         val data = XmpParser.parse(xml)
         data.documentId shouldBe "deadbeef"
         data.reviewed shouldBe "true"
@@ -71,24 +72,62 @@ class XmpParserTest {
     @Test
     fun falseTagPrefixNotMatched() {
         // dc:subjectMatter must not be read as dc:subject.
-        val xml = """
+        val xml =
+            """
             <rdf:Description>
               <dc:subjectMatter>nope</dc:subjectMatter>
             </rdf:Description>
-        """.trimIndent()
+            """.trimIndent()
         XmpParser.parse(xml).tags shouldBe emptyList()
     }
 
     @Test
     fun selfClosingElementsHandled() {
-        val xml = """
+        val xml =
+            """
             <rdf:Description>
               <dc:subject/>
               <npn:documentId/>
             </rdf:Description>
-        """.trimIndent()
+            """.trimIndent()
         val data = XmpParser.parse(xml)
         data.tags shouldBe emptyList()
         data.documentId shouldBe null
+    }
+
+    @Test
+    fun selfClosingAndUnterminatedContainersYieldEmpty() {
+        XmpParser
+            .parse(
+                """
+                <rdf:Description xmlns:npn="https://npn.dev/xmp/1.0/">
+                  <npn:fields/>
+                </rdf:Description>
+                """.trimIndent(),
+            ).fields shouldBe emptyMap()
+
+        XmpParser.parse("<dc:title><rdf:Alt><rdf:li>partial").title shouldBe null
+    }
+
+    @Test
+    fun fieldsContainerParsedFromElementForm() {
+        val xml =
+            """
+            <rdf:Description xmlns:npn="https://npn.dev/xmp/1.0/">
+              <npn:fields>
+                <rdf:Bag>
+                  <rdf:li>
+                    <npn:fieldKey>amount</npn:fieldKey>
+                    <npn:fieldValue>42.50</npn:fieldValue>
+                  </rdf:li>
+                  <rdf:li>
+                    <npn:fieldKey>ref</npn:fieldKey>
+                    <npn:fieldValue>INV-1</npn:fieldValue>
+                  </rdf:li>
+                </rdf:Bag>
+              </npn:fields>
+            </rdf:Description>
+            """.trimIndent()
+        XmpParser.parse(xml).fields shouldBe mapOf("amount" to "42.50", "ref" to "INV-1")
     }
 }

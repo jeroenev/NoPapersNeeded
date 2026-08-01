@@ -13,8 +13,8 @@ import kotlinx.coroutines.flow.FlowCollector
 import kotlinx.coroutines.flow.flow
 
 /**
- * Explicit agentic chat loop over a Koog [PromptExecutor], replacing the opaque `AIAgent` run so
- * the UI can see token streaming and tool use. Emits [AiChatEvent]s as a cold [Flow]; nothing runs
+ * Agentic chat loop over a Koog [PromptExecutor] that exposes token streaming and tool use to the
+ * UI. Emits [AiChatEvent]s as a cold [Flow]; nothing runs
  * until collected and cancelling the collection stops the request.
  *
  * Each iteration builds a fresh prompt (system prompt + budget-trimmed history + this run's
@@ -30,49 +30,51 @@ class AiChatLoop(
     private val systemPrompt: String,
     private val maxIterations: Int,
 ) {
-
     private val toolsByName: Map<String, AiChatTool> = tools.associateBy { it.name }
     private val toolDescriptors = tools.map { it.descriptor }
 
-    fun run(history: List<AiChatTurn>, question: String): Flow<AiChatEvent> = flow {
-        val trimmed = AiText.trimHistory(history)
-        val scratch = mutableListOf<ScratchMessage>()
-        val answer = StringBuilder()
-        var iteration = 0
+    fun run(
+        history: List<AiChatTurn>,
+        question: String,
+    ): Flow<AiChatEvent> =
+        flow {
+            val trimmed = AiText.trimHistory(history)
+            val scratch = mutableListOf<ScratchMessage>()
+            val answer = StringBuilder()
+            var iteration = 0
 
-        while (iteration < maxIterations) {
-            val prompt = buildPrompt(trimmed, question, scratch)
-            val turn = streamTurn(prompt, firstIteration = iteration == 0, answer)
+            while (iteration < maxIterations) {
+                val prompt = buildPrompt(trimmed, question, scratch)
+                val turn = streamTurn(prompt, firstIteration = iteration == 0, answer)
 
-            if (turn.toolCalls.isEmpty()) {
-                emit(AiChatEvent.Done(answer.toString()))
-                return@flow
+                if (turn.toolCalls.isEmpty()) {
+                    emit(AiChatEvent.Done(answer.toString()))
+                    return@flow
+                }
+
+                // Record this turn's own narration BEFORE its tool-call messages so subsequent
+                // iterations replay the pre-tool text the model emitted (standard OpenAI-compatible
+                // shape: an assistant text message followed by assistant tool-call messages).
+                scratch += ScratchMessage.AssistantToolCalls(turn.text, turn.toolCalls)
+                for (call in turn.toolCalls) {
+                    emit(AiChatEvent.ToolCallStarted(call.name, call.argsJson))
+                    val result = dispatch(call)
+                    emit(AiChatEvent.ToolCallFinished(call.name, call.argsJson, result))
+                    scratch += ScratchMessage.ToolResult(call.id, call.name, result)
+                }
+                iteration++
             }
 
-            // Record this turn's own narration BEFORE its tool-call messages so subsequent
-            // iterations replay the pre-tool text the model emitted (standard OpenAI-compatible
-            // shape: an assistant text message followed by assistant tool-call messages).
-            scratch += ScratchMessage.AssistantToolCalls(turn.text, turn.toolCalls)
-            for (call in turn.toolCalls) {
-                emit(AiChatEvent.ToolCallStarted(call.name, call.argsJson))
-                val result = dispatch(call)
-                emit(AiChatEvent.ToolCallFinished(call.name, call.argsJson, result))
-                scratch += ScratchMessage.ToolResult(call.id, call.name, result)
-            }
-            iteration++
+            // Return accumulated text at the iteration cap so a tool-heavy run still produces a
+            // usable partial answer instead of an error.
+            emit(AiChatEvent.Done(answer.toString()))
         }
-
-        // Iteration cap: match the old AIAgent maxIterations semantics loosely by ending the run
-        // with whatever text accumulated rather than throwing, so a tool-happy model still returns
-        // a usable (if partial) answer instead of an error.
-        emit(AiChatEvent.Done(answer.toString()))
-    }
 
     /**
      * Stream one assistant turn. Forwards text deltas and collects completed tool calls. On a
      * transport/decode error the recovery depends on what was already captured:
      * - Nothing captured yet on the FIRST iteration -> silently retry that turn non-streaming and
-     *   emit the whole answer as one delta (see plan risk note).
+     *   emit the whole answer as one delta.
      * - Frames were already seen when the stream throws (e.g. a well-formed turn cut short by a
      *   malformed trailing SSE chunk that aborts before Koog's terminal End frame): rescue whatever
      *   was captured rather than discarding a completed turn's work. Tool calls -> return them so
@@ -132,8 +134,14 @@ class AiChatLoop(
                 turnText.append(frame.text)
                 emit(AiChatEvent.TextDelta(frame.text))
             }
-            is StreamFrame.ToolCallComplete -> toolCalls += frame.toToolCall(toolCalls.size)
-            else -> Unit
+
+            is StreamFrame.ToolCallComplete -> {
+                toolCalls += frame.toToolCall(toolCalls.size)
+            }
+
+            else -> {
+                Unit
+            }
         }
     }
 
@@ -166,23 +174,24 @@ class AiChatLoop(
         history: TrimmedHistory,
         question: String,
         scratch: List<ScratchMessage>,
-    ): Prompt = prompt("npn-chat") {
-        system(systemPrompt)
-        if (history.omittedEarlier) system(OMITTED_NOTE)
-        for (turn in history.turns) {
-            when (turn.role) {
-                AiRole.USER -> user(turn.text)
-                AiRole.ASSISTANT -> assistant(turn.text)
+    ): Prompt =
+        prompt("npn-chat") {
+            system(systemPrompt)
+            if (history.omittedEarlier) system(OMITTED_NOTE)
+            for (turn in history.turns) {
+                when (turn.role) {
+                    AiRole.USER -> user(turn.text)
+                    AiRole.ASSISTANT -> assistant(turn.text)
+                }
+            }
+            user(question)
+            for (message in scratch) {
+                when (message) {
+                    is ScratchMessage.AssistantToolCalls -> appendAssistantTurn(message)
+                    is ScratchMessage.ToolResult -> toolResult(message.name, message.result, message.id)
+                }
             }
         }
-        user(question)
-        for (message in scratch) {
-            when (message) {
-                is ScratchMessage.AssistantToolCalls -> appendAssistantTurn(message)
-                is ScratchMessage.ToolResult -> toolResult(message.name, message.result, message.id)
-            }
-        }
-    }
 
     /**
      * Replay one executed assistant turn as a SINGLE `Message.Assistant` carrying the turn's
@@ -214,14 +223,29 @@ class AiChatLoop(
     private fun StreamFrame.ToolCallComplete.toToolCall(index: Int): ToolCall =
         ToolCall(id = id ?: "call_$index", name = name, argsJson = content)
 
-    private data class ToolCall(val id: String, val name: String, val argsJson: String)
+    private data class ToolCall(
+        val id: String,
+        val name: String,
+        val argsJson: String,
+    )
 
-    private data class TurnResult(val text: String, val toolCalls: List<ToolCall>)
+    private data class TurnResult(
+        val text: String,
+        val toolCalls: List<ToolCall>,
+    )
 
     private sealed interface ScratchMessage {
         /** The narration [text] the model emitted this turn (may be blank) plus its tool [calls]. */
-        data class AssistantToolCalls(val text: String, val calls: List<ToolCall>) : ScratchMessage
-        data class ToolResult(val id: String, val name: String, val result: String) : ScratchMessage
+        data class AssistantToolCalls(
+            val text: String,
+            val calls: List<ToolCall>,
+        ) : ScratchMessage
+
+        data class ToolResult(
+            val id: String,
+            val name: String,
+            val result: String,
+        ) : ScratchMessage
     }
 
     private companion object {

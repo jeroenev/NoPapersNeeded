@@ -11,6 +11,10 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_save
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Single-text-field entry dialog shared by the "save/rename view" and "rename tag/file" flows. The
@@ -25,7 +29,7 @@ fun TextInputDialog(
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
     initial: String = "",
-    confirmLabel: String = "Save",
+    confirmLabel: String? = null,
     confirmEnabled: (String) -> Boolean = { it.isNotBlank() },
 ) {
     var text by remember { mutableStateOf(initial) }
@@ -45,8 +49,10 @@ fun TextInputDialog(
             TextButton(
                 enabled = confirmEnabled(text),
                 onClick = { onConfirm(text.trim()) },
-            ) { Text(confirmLabel) }
+            ) { Text(confirmLabel ?: stringResource(Res.string.common_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
+        },
     )
 }

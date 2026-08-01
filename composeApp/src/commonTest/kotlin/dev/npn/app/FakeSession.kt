@@ -5,13 +5,13 @@ import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.app.AiTagging
+import dev.npn.core.app.AutoMatchRuleRepository
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
-import dev.npn.core.app.AutoMatchRuleRepository
-import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.DocumentHistoryRecord
+import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.ImportOutcome
-import dev.npn.core.app.AiTagging
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
@@ -22,6 +22,7 @@ import dev.npn.core.app.SavedView
 import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SettingsRepository
+import dev.npn.core.app.SettingsSnapshot
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TagRepository
@@ -57,23 +58,27 @@ fun doc(
     docDate: String? = null,
     title: String? = null,
     trashed: Boolean = false,
-): DocumentEntity = DocumentEntity(
-    docId = docId,
-    relPath = relPath,
-    fileName = fileName,
-    size = 0L,
-    mtime = 0L,
-    addedAt = 0L,
-    reviewed = reviewed,
-    correspondent = correspondent,
-    docType = docType,
-    docDate = docDate,
-    title = title,
-    trashed = trashed,
-)
+): DocumentEntity =
+    DocumentEntity(
+        docId = docId,
+        relPath = relPath,
+        fileName = fileName,
+        size = 0L,
+        mtime = 0L,
+        addedAt = 0L,
+        reviewed = reviewed,
+        correspondent = correspondent,
+        docType = docType,
+        docDate = docDate,
+        title = title,
+        trashed = trashed,
+    )
 
-fun listItem(docId: String, tags: List<String> = emptyList(), snippet: String? = null): DocListItem =
-    DocListItem(doc = doc(docId), tags = tags, snippet = snippet)
+fun listItem(
+    docId: String,
+    tags: List<String> = emptyList(),
+    snippet: String? = null,
+): DocListItem = DocListItem(doc = doc(docId), tags = tags, snippet = snippet)
 
 class FakeDocumentRepository : DocumentRepository {
     val documents = MutableStateFlow<List<DocListItem>>(emptyList())
@@ -89,27 +94,40 @@ class FakeDocumentRepository : DocumentRepository {
     /** Records every (filter, sort) the view model subscribed with. */
     val observedFilters = mutableListOf<Pair<LibraryFilter, LibrarySort>>()
 
-    override fun observeDocuments(filter: LibraryFilter, sort: LibrarySort): Flow<List<DocListItem>> {
+    override fun observeDocuments(
+        filter: LibraryFilter,
+        sort: LibrarySort,
+    ): Flow<List<DocListItem>> {
         observedFilters += filter to sort
         return documents
     }
 
     override fun observeDoc(docId: String): Flow<DocListItem?> = singleDoc
+
     override fun observeUntaggedCount(): Flow<Int> = untaggedCount
+
     override fun observeUnreviewedOrUntaggedCount(): Flow<Int> = unreviewedOrUntaggedCount
+
     override fun observeTrashed(): Flow<List<DocListItem>> = trashed
+
     override fun observeMissing(): Flow<List<DocumentEntity>> = missing
+
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> = duplicates
+
     val fieldKeys = MutableStateFlow<List<String>>(emptyList())
 
     /** Backing list returned by [history]; tests mutate it to drive the history panel. */
     var historyList: List<DocumentHistoryRecord> = emptyList()
 
     override fun observeCorrespondents(): Flow<List<String>> = correspondents
+
     override fun observeDocTypes(): Flow<List<String>> = docTypes
+
     override fun observeFieldKeys(): Flow<List<String>> = fieldKeys
+
     var historyError: Throwable? = null
     var historyCalls: Int = 0
+
     override suspend fun history(docId: String): List<DocumentHistoryRecord> {
         historyCalls++
         historyError?.let { throw it }
@@ -119,8 +137,10 @@ class FakeDocumentRepository : DocumentRepository {
     /** Backing suggestions returned by [searchSuggestions]. */
     var suggestionsList: List<String> = emptyList()
 
-    override suspend fun searchSuggestions(query: String, limit: Int): List<String> =
-        suggestionsList.filter { it.startsWith(query, ignoreCase = true) }.take(limit)
+    override suspend fun searchSuggestions(
+        query: String,
+        limit: Int,
+    ): List<String> = suggestionsList.filter { it.startsWith(query, ignoreCase = true) }.take(limit)
 }
 
 class FakeTagRepository : TagRepository {
@@ -128,6 +148,7 @@ class FakeTagRepository : TagRepository {
     var tagNames: List<String> = emptyList()
 
     override fun observeTags(): Flow<List<TagInfo>> = tags
+
     override suspend fun allTagNames(): List<String> = tagNames
 }
 
@@ -138,13 +159,23 @@ class FakeAutoMatchRuleRepository : AutoMatchRuleRepository {
     val enabledSets = mutableListOf<Pair<String, Boolean>>()
 
     override fun observeRules(): Flow<List<AutoMatchRule>> = rules
+
     override suspend fun save(rule: AutoMatchRule): String {
         saved += rule
         rules.value = rules.value.filter { it.id != rule.id } + rule
         return rule.id.ifBlank { "rule-${saved.size}" }
     }
-    override suspend fun delete(id: String) { deletedIds += id }
-    override suspend fun setEnabled(id: String, enabled: Boolean) { enabledSets += id to enabled }
+
+    override suspend fun delete(id: String) {
+        deletedIds += id
+    }
+
+    override suspend fun setEnabled(
+        id: String,
+        enabled: Boolean,
+    ) {
+        enabledSets += id to enabled
+    }
 }
 
 class FakeSavedViewRepository : SavedViewRepository {
@@ -153,9 +184,17 @@ class FakeSavedViewRepository : SavedViewRepository {
     val deleted = mutableListOf<String>()
 
     override fun observeSavedViews(): Flow<List<SavedView>> = views
-    override suspend fun save(view: SavedView) { saved += view }
-    override suspend fun delete(id: String) { deleted += id }
+
+    override suspend fun save(view: SavedView) {
+        saved += view
+    }
+
+    override suspend fun delete(id: String) {
+        deleted += id
+    }
+
     override suspend fun exportJson(): String = "[]"
+
     override suspend fun importJson(text: String): Int = 0
 }
 
@@ -206,58 +245,95 @@ class FakeMetadataWriter : MetadataWriter {
     /** If set, every tag-admin op (renameTag/mergeTag/deleteTag/setTagStyle) throws. */
     var failTagAdmin: (() -> Nothing)? = null
 
-    override suspend fun addTag(docIds: List<String>, tag: String) {
+    override suspend fun addTag(
+        docIds: List<String>,
+        tag: String,
+    ) {
         failBatchOps?.invoke()
         if (docIds.any { it in failAddTagForDocs }) error("addTag failed for $docIds")
         addedTags += docIds to tag
     }
 
-    override suspend fun removeTag(docIds: List<String>, tag: String) {
+    override suspend fun removeTag(
+        docIds: List<String>,
+        tag: String,
+    ) {
         failBatchOps?.invoke()
         removedTags += docIds to tag
     }
 
-    override suspend fun setReviewed(docIds: List<String>, reviewed: Boolean) {
+    override suspend fun setReviewed(
+        docIds: List<String>,
+        reviewed: Boolean,
+    ) {
         failBatchOps?.invoke()
         reviewedSets += docIds to reviewed
     }
 
-    override suspend fun setCorrespondent(docIds: List<String>, value: String?) {
+    override suspend fun setCorrespondent(
+        docIds: List<String>,
+        value: String?,
+    ) {
         correspondentSets += docIds to value
     }
 
-    override suspend fun setDocType(docIds: List<String>, value: String?) {
+    override suspend fun setDocType(
+        docIds: List<String>,
+        value: String?,
+    ) {
         docTypeSets += docIds to value
     }
 
-    override suspend fun setDocDate(docId: String, isoDate: String?) {
+    override suspend fun setDocDate(
+        docId: String,
+        isoDate: String?,
+    ) {
         docDateSets += docId to isoDate
     }
 
-    override suspend fun setTitle(docId: String, title: String?) {
+    override suspend fun setTitle(
+        docId: String,
+        title: String?,
+    ) {
         failSetTitle?.invoke()
         titleSets += docId to title
     }
 
-    override suspend fun setNotes(docId: String, notes: String?) {
+    override suspend fun setNotes(
+        docId: String,
+        notes: String?,
+    ) {
         notesSets += docId to notes
     }
 
-    override suspend fun setField(docId: String, key: String, value: String?) {
+    override suspend fun setField(
+        docId: String,
+        key: String,
+        value: String?,
+    ) {
         failSetField?.invoke()
         fieldSets += Triple(docId, key, value)
     }
 
-    override suspend fun setOcrEngine(docId: String, engine: String?) {
+    override suspend fun setOcrEngine(
+        docId: String,
+        engine: String?,
+    ) {
         ocrEngineSets += docId to engine
     }
 
-    override suspend fun renameTag(from: String, to: String) {
+    override suspend fun renameTag(
+        from: String,
+        to: String,
+    ) {
         failTagAdmin?.invoke()
         renamedTags += from to to
     }
 
-    override suspend fun mergeTag(from: String, to: String) {
+    override suspend fun mergeTag(
+        from: String,
+        to: String,
+    ) {
         failTagAdmin?.invoke()
         mergedTags += from to to
     }
@@ -267,7 +343,11 @@ class FakeMetadataWriter : MetadataWriter {
         deletedTags += name
     }
 
-    override suspend fun setTagStyle(tag: String, color: String?, icon: String?) {
+    override suspend fun setTagStyle(
+        tag: String,
+        color: String?,
+        icon: String?,
+    ) {
         failTagAdmin?.invoke()
         tagStyles += Triple(tag, color, icon)
     }
@@ -281,9 +361,24 @@ class FakeMetadataWriter : MetadataWriter {
         failRestore?.invoke()
         restoredDocs += docId
     }
-    override suspend fun deleteDocPermanently(docId: String) { deletedDocs += docId }
-    override suspend fun renameFile(docId: String, newFileName: String) { renamedFiles += docId to newFileName }
-    override suspend fun moveFile(docId: String, newDirRelPath: String) { movedFiles += docId to newDirRelPath }
+
+    override suspend fun deleteDocPermanently(docId: String) {
+        deletedDocs += docId
+    }
+
+    override suspend fun renameFile(
+        docId: String,
+        newFileName: String,
+    ) {
+        renamedFiles += docId to newFileName
+    }
+
+    override suspend fun moveFile(
+        docId: String,
+        newDirRelPath: String,
+    ) {
+        movedFiles += docId to newDirRelPath
+    }
 }
 
 class FakeDocContentFacade : DocContentFacade {
@@ -295,13 +390,20 @@ class FakeDocContentFacade : DocContentFacade {
     val bakedInPlace = mutableListOf<String>()
 
     override suspend fun thumbnailPath(docId: String): String? = null
+
     override suspend fun pageCount(docId: String): Int? {
         failPageCount?.invoke()
         return pageCountValue
     }
 
-    override suspend fun renderPage(docId: String, pageIndex: Int, maxDim: Int): ByteArray? = null
+    override suspend fun renderPage(
+        docId: String,
+        pageIndex: Int,
+        maxDim: Int,
+    ): ByteArray? = null
+
     override suspend fun bakedCopyBytes(docId: String): ByteArray? = bakedBytes
+
     override suspend fun bakeInPlace(docId: String): Boolean {
         failBake?.invoke()
         bakedInPlace += docId
@@ -311,12 +413,14 @@ class FakeDocContentFacade : DocContentFacade {
     override suspend fun rawBytes(docId: String): ByteArray? = null
 
     var clearedThumbnails = 0
+
     override suspend fun clearThumbnailCache(): Int = clearedThumbnails
 
     var extractedTextValue: String? = null
 
     /** Per-doc extracted text; a docId present here wins over [extractedTextValue]. */
     var extractedTextByDoc: Map<String, String?> = emptyMap()
+
     override suspend fun extractedText(docId: String): String? =
         if (docId in extractedTextByDoc) extractedTextByDoc[docId] else extractedTextValue
 }
@@ -337,6 +441,7 @@ class FakeAiFacade : AiFacade {
     private var askIdx = 0
     val asked = mutableListOf<Pair<List<AiChatTurn>, String>>()
     var failAsk: (() -> Nothing)? = null
+
     /** When set, the ask flow throws after emitting this many events (mid-stream failure). */
     var failAskAfter: Int? = null
     var suggestions: List<TagSuggestion> = emptyList()
@@ -366,7 +471,10 @@ class FakeAiFacade : AiFacade {
 
     override suspend fun config(): AiConfig = configValue
 
-    override fun ask(history: List<AiChatTurn>, question: String): Flow<AiChatEvent> {
+    override fun ask(
+        history: List<AiChatTurn>,
+        question: String,
+    ): Flow<AiChatEvent> {
         val script = scriptFor(askIdx)
         askIdx++
         asked += history to question
@@ -447,7 +555,9 @@ class FakeLibrarySession : LibrarySession {
         reviewModeFlow.value = mode
     }
 
-    override suspend fun markReviewedForMigration(onlyTagged: Boolean) { migrations += onlyTagged }
+    override suspend fun markReviewedForMigration(onlyTagged: Boolean) {
+        migrations += onlyTagged
+    }
 
     override suspend fun rescan(): ScanReport {
         failRescan?.invoke()
@@ -461,13 +571,34 @@ class FakeLibrarySession : LibrarySession {
         return o
     }
 
-    override suspend fun importPdf(source: ExternalSource, suggestedName: String): ImportOutcome = nextOutcome()
-    override suspend fun importPdfBytes(bytes: ByteArray, suggestedName: String): ImportOutcome = nextOutcome()
-    override suspend fun importImagesAsPdf(images: List<ByteArray>, suggestedName: String): ImportOutcome = nextOutcome()
+    override suspend fun importPdf(
+        source: ExternalSource,
+        suggestedName: String,
+    ): ImportOutcome = nextOutcome()
 
-    override suspend fun resolveDuplicate(docId: String, extraRelPath: String, keepCanonical: Boolean) {}
-    override suspend fun applyRelink(oldDocId: String, newDocId: String) {}
+    override suspend fun importPdfBytes(
+        bytes: ByteArray,
+        suggestedName: String,
+    ): ImportOutcome = nextOutcome()
+
+    override suspend fun importImagesAsPdf(
+        images: List<ByteArray>,
+        suggestedName: String,
+    ): ImportOutcome = nextOutcome()
+
+    override suspend fun resolveDuplicate(
+        docId: String,
+        extraRelPath: String,
+        keepCanonical: Boolean,
+    ) {}
+
+    override suspend fun applyRelink(
+        oldDocId: String,
+        newDocId: String,
+    ) {}
+
     override suspend fun purgeTrash(olderThanDays: Int) {}
+
     override suspend fun reOcr(docId: String) {
         failReOcr?.invoke()
         reOcrIds += docId
@@ -475,49 +606,60 @@ class FakeLibrarySession : LibrarySession {
 
     override suspend fun ocrVersions(docId: String): List<OcrVersion> = ocrVersionsList
 
-    override suspend fun setOcrEngine(docId: String, engine: String?) {
+    override suspend fun setOcrEngine(
+        docId: String,
+        engine: String?,
+    ) {
         failSetOcrEngine?.invoke()
         ocrEngineSets += docId to engine
     }
 
     val splits = mutableListOf<Pair<String, List<IntRange>>>()
     var splitOutcome: SplitOutcome = SplitOutcome.Done(emptyList())
-    override suspend fun splitPdf(docId: String, segments: List<IntRange>): SplitOutcome {
+
+    override suspend fun splitPdf(
+        docId: String,
+        segments: List<IntRange>,
+    ): SplitOutcome {
         splits += docId to segments
         return splitOutcome
     }
+
     override fun start(scope: CoroutineScope) {}
-    override fun close() {}
+
+    override suspend fun close() {}
 }
 
-fun emptyScanReport(): ScanReport = ScanReport(
-    added = 0,
-    moved = 0,
-    changed = 0,
-    missingCount = 0,
-    duplicates = emptyList(),
-    conflictFiles = emptyList(),
-    resurrected = emptyList(),
-    relinkCandidates = emptyList(),
-    hashedCount = 0,
-    durationMillis = 0L,
-)
+fun emptyScanReport(): ScanReport =
+    ScanReport(
+        added = 0,
+        moved = 0,
+        changed = 0,
+        missingCount = 0,
+        duplicates = emptyList(),
+        conflictFiles = emptyList(),
+        resurrected = emptyList(),
+        relinkCandidates = emptyList(),
+        hashedCount = 0,
+        durationMillis = 0L,
+    )
 
-/** Settings fake backed by [MutableStateFlow]s; setters both record and update the flow. */
+/** Settings fake backed by one snapshot flow; setters both record and update the snapshot. */
 class FakeSettingsRepository(
     initialDefaultView: ViewType? = ViewType.LIST,
 ) : SettingsRepository {
-    val libraryLocationFlow = MutableStateFlow<String?>(null)
-    val ocrLanguageFlow = MutableStateFlow("eng")
-    val trashRetentionDaysFlow = MutableStateFlow(30)
-    val defaultViewTypeFlow = MutableStateFlow(initialDefaultView)
-    val librarySortFlow = MutableStateFlow(LibrarySort())
-    val gridColumnWidthFlow = MutableStateFlow(160)
-    val landscapeListColumnsFlow = MutableStateFlow(false)
-    val installationIdFlow = MutableStateFlow("test-installation")
-    val storagePathTemplateFlow = MutableStateFlow<String?>(null)
-    val storagePathEnabledFlow = MutableStateFlow(false)
-    val autoMatchRulesJsonFlow = MutableStateFlow("[]")
+    val settingsFlow =
+        MutableStateFlow(
+            initialDefaultView?.let {
+                SettingsSnapshot(installationId = "test-installation", defaultViewType = it)
+            },
+        )
+
+    override val settings: Flow<SettingsSnapshot> = settingsFlow.filterNotNull()
+
+    fun updateSettings(transform: (SettingsSnapshot) -> SettingsSnapshot) {
+        settingsFlow.value = transform(settingsFlow.value ?: defaultSnapshot())
+    }
 
     val setDefaultViews = mutableListOf<ViewType>()
     val setSorts = mutableListOf<LibrarySort>()
@@ -527,77 +669,96 @@ class FakeSettingsRepository(
     val setLandscapeFlags = mutableListOf<Boolean>()
     val setStoragePathTemplates = mutableListOf<String?>()
     val setStoragePathEnabledFlags = mutableListOf<Boolean>()
+    val setAppLanguages = mutableListOf<String?>()
 
-    override val libraryLocation: Flow<String?> get() = libraryLocationFlow
-    override val installationId: Flow<String> get() = installationIdFlow
-    override suspend fun setLibraryLocation(location: String?) { libraryLocationFlow.value = location }
-    override val ocrLanguage: Flow<String> get() = ocrLanguageFlow
-    override suspend fun setOcrLanguage(lang: String) { setOcrLanguages += lang; ocrLanguageFlow.value = lang }
-    override val trashRetentionDays: Flow<Int> get() = trashRetentionDaysFlow
-    override suspend fun setTrashRetentionDays(days: Int) { setRetentionDays += days; trashRetentionDaysFlow.value = days }
-    override val defaultViewType: Flow<ViewType> get() = defaultViewTypeFlow.filterNotNull()
-    fun emitDefaultView(viewType: ViewType) { defaultViewTypeFlow.value = viewType }
-    override suspend fun setDefaultViewType(v: ViewType) { setDefaultViews += v; defaultViewTypeFlow.value = v }
-    override val librarySort: Flow<LibrarySort> get() = librarySortFlow
-    override suspend fun setLibrarySort(sort: LibrarySort) { setSorts += sort; librarySortFlow.value = sort }
-    override val gridColumnWidth: Flow<Int> get() = gridColumnWidthFlow
-    override suspend fun setGridColumnWidth(dp: Int) { setGridWidths += dp; gridColumnWidthFlow.value = dp }
-    override val landscapeListColumns: Flow<Boolean> get() = landscapeListColumnsFlow
-    override suspend fun setLandscapeListColumns(enabled: Boolean) { setLandscapeFlags += enabled; landscapeListColumnsFlow.value = enabled }
-    override val storagePathTemplate: Flow<String?> get() = storagePathTemplateFlow
+    override suspend fun setLibraryLocation(location: String?) = updateSettings { it.copy(libraryLocation = location) }
+
+    override suspend fun setAppLanguage(lang: String?) {
+        setAppLanguages += lang
+        updateSettings { it.copy(appLanguage = lang) }
+    }
+
+    override suspend fun setOcrLanguage(lang: String) {
+        setOcrLanguages += lang
+        updateSettings { it.copy(ocrLanguage = lang) }
+    }
+
+    override suspend fun setTrashRetentionDays(days: Int) {
+        setRetentionDays += days
+        updateSettings { it.copy(trashRetentionDays = days) }
+    }
+
+    fun emitDefaultView(viewType: ViewType) = updateSettings { it.copy(defaultViewType = viewType) }
+
+    override suspend fun setDefaultViewType(v: ViewType) {
+        setDefaultViews += v
+        updateSettings { it.copy(defaultViewType = v) }
+    }
+
+    override suspend fun setLibrarySort(sort: LibrarySort) {
+        setSorts += sort
+        updateSettings { it.copy(librarySort = sort) }
+    }
+
+    override suspend fun setGridColumnWidth(dp: Int) {
+        setGridWidths += dp
+        updateSettings { it.copy(gridColumnWidth = dp) }
+    }
+
+    override suspend fun setLandscapeListColumns(enabled: Boolean) {
+        setLandscapeFlags += enabled
+        updateSettings { it.copy(landscapeListColumns = enabled) }
+    }
+
     override suspend fun setStoragePathTemplate(template: String?) {
         setStoragePathTemplates += template
-        storagePathTemplateFlow.value = template
+        updateSettings { it.copy(storagePathTemplate = template) }
     }
-    override val storagePathEnabled: Flow<Boolean> get() = storagePathEnabledFlow
+
     override suspend fun setStoragePathEnabled(enabled: Boolean) {
         setStoragePathEnabledFlags += enabled
-        storagePathEnabledFlow.value = enabled
+        updateSettings { it.copy(storagePathEnabled = enabled) }
     }
-    override val autoMatchRulesJson: Flow<String> get() = autoMatchRulesJsonFlow
-    override suspend fun setAutoMatchRulesJson(json: String) { autoMatchRulesJsonFlow.value = json }
 
-    val aiEnabledFlow = MutableStateFlow(false)
-    val aiBaseUrlFlow = MutableStateFlow("")
-    val aiApiKeyFlow = MutableStateFlow("")
-    val aiModelFlow = MutableStateFlow("")
-    val aiMaxTagsPerDocFlow = MutableStateFlow(8)
+    override suspend fun setAutoMatchRulesJson(json: String) = updateSettings { it.copy(autoMatchRulesJson = json) }
+
     val setAiMaxTagsPerDocValues = mutableListOf<Int>()
-    val aiMaxNewTagsPerDocFlow = MutableStateFlow(5)
     val setAiMaxNewTagsPerDocValues = mutableListOf<Int>()
 
-    override val aiEnabled: Flow<Boolean> get() = aiEnabledFlow
-    override suspend fun setAiEnabled(enabled: Boolean) { aiEnabledFlow.value = enabled }
-    override val aiBaseUrl: Flow<String> get() = aiBaseUrlFlow
-    override suspend fun setAiBaseUrl(url: String) { aiBaseUrlFlow.value = url }
-    override val aiApiKey: Flow<String> get() = aiApiKeyFlow
-    override suspend fun setAiApiKey(key: String) { aiApiKeyFlow.value = key }
-    override val aiModel: Flow<String> get() = aiModelFlow
-    override suspend fun setAiModel(model: String) { aiModelFlow.value = model }
-    override val aiMaxTagsPerDoc: Flow<Int> get() = aiMaxTagsPerDocFlow
+    override suspend fun setAiEnabled(enabled: Boolean) = updateSettings { it.copy(aiEnabled = enabled) }
+
+    override suspend fun setAiBaseUrl(url: String) = updateSettings { it.copy(aiBaseUrl = url) }
+
+    override suspend fun setAiApiKey(key: String) = updateSettings { it.copy(aiApiKey = key) }
+
+    override suspend fun setAiModel(model: String) = updateSettings { it.copy(aiModel = model) }
+
     override suspend fun setAiMaxTagsPerDoc(value: Int) {
         setAiMaxTagsPerDocValues += value
-        aiMaxTagsPerDocFlow.value = value.coerceIn(AiTagging.RANGE)
-    }
-    override val aiMaxNewTagsPerDoc: Flow<Int> get() = aiMaxNewTagsPerDocFlow
-    override suspend fun setAiMaxNewTagsPerDoc(value: Int) {
-        setAiMaxNewTagsPerDocValues += value
-        aiMaxNewTagsPerDocFlow.value = value.coerceIn(AiTagging.NEW_TAGS_RANGE)
+        updateSettings { it.copy(aiMaxTagsPerDoc = value.coerceIn(AiTagging.RANGE)) }
     }
 
-    val watchedFolderFlow = MutableStateFlow<String?>(null)
-    val watchedFolderDeleteFlow = MutableStateFlow(false)
+    override suspend fun setAiMaxNewTagsPerDoc(value: Int) {
+        setAiMaxNewTagsPerDocValues += value
+        updateSettings { it.copy(aiMaxNewTagsPerDoc = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
+    }
+
     val setWatchedFolders = mutableListOf<String?>()
     val setWatchedDeleteFlags = mutableListOf<Boolean>()
 
-    override val watchedFolder: Flow<String?> get() = watchedFolderFlow
     override suspend fun setWatchedFolder(location: String?) {
         setWatchedFolders += location
-        watchedFolderFlow.value = location
+        updateSettings { it.copy(watchedFolder = location) }
     }
-    override val watchedFolderDeleteAfterImport: Flow<Boolean> get() = watchedFolderDeleteFlow
+
     override suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean) {
         setWatchedDeleteFlags += enabled
-        watchedFolderDeleteFlow.value = enabled
+        updateSettings { it.copy(watchedFolderDeleteAfterImport = enabled) }
     }
+
+    private fun defaultSnapshot() =
+        SettingsSnapshot(
+            installationId = "test-installation",
+            defaultViewType = ViewType.LIST,
+        )
 }

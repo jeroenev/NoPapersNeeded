@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_settings_title">Settings</string>
+    <string name="common_settings_library">Library</string>
+    <string name="common_settings_no_library">No library selected</string>
+    <string name="common_settings_change_library">Change library</string>
+    <string name="common_settings_watched_folder">Watched folder</string>
+    <string name="common_settings_ocr">OCR</string>
+    <string name="common_settings_ocr_language_code">OCR language code</string>
+    <string name="common_settings_ocr_language_help">Tesseract/MLKit language code, e.g. %1$s.</string>
+    <string name="common_settings_ai_assistant">AI assistant</string>
+    <string name="common_settings_trash">Trash</string>
+    <string name="common_settings_trash_retention_days">Trash retention (days)</string>
+    <string name="common_settings_views">Views</string>
+    <string name="common_settings_grid_size_help">Grid size: pinch the grid, use its zoom buttons, or Ctrl+scroll on desktop.</string>
+    <string name="common_settings_storage">Storage</string>
+    <string name="common_settings_clear_thumbnail_cache">Clear thumbnail cache</string>
+    <string name="common_settings_thumbnail_cache_empty">Thumbnail cache already empty</string>
+    <plurals name="common_settings_thumbnails_cleared">
+        <item quantity="one">Cleared %1$d thumbnail</item>
+        <item quantity="other">Cleared %1$d thumbnails</item>
+    </plurals>
+    <string name="common_settings_thumbnail_cache_help">Regenerate library thumbnails at the current quality. Use this if previews look blurry.</string>
+    <string name="common_settings_review_workflow">Review workflow</string>
+    <string name="common_settings_auto_matching">Auto-matching</string>
+    <string name="common_settings_auto_matching_rules">Auto-matching rules</string>
+    <string name="common_settings_auto_matching_help">Automatically tag documents and set metadata when imported text matches a rule.</string>
+    <string name="common_settings_about">About</string>
+    <string name="common_settings_product_version">%1$s %2$s</string>
+    <string name="common_settings_about_help">Personal, open-source paperless document app. Files are the source of truth.</string>
+
+    <string name="common_settings_storage_organize_paths">Organize document paths automatically</string>
+    <string name="common_settings_storage_organize_help">Moves PDFs after import and metadata changes; files are never overwritten.</string>
+    <string name="common_settings_storage_path_template">Path template</string>
+    <string name="common_settings_storage_preview">Preview: %1$s</string>
+    <string name="common_settings_storage_variables">Variables: %1$s. Empty variable folders are omitted.</string>
+    <string name="common_settings_storage_sample_title">Electricity bill</string>
+    <string name="common_settings_storage_sample_type">Invoice</string>
+    <string name="common_settings_storage_sample_correspondent">Example Energy</string>
+    <string name="common_settings_storage_sample_tag_home">home</string>
+    <string name="common_settings_storage_sample_tag_utilities">utilities</string>
+
+    <string name="common_settings_storage_error_unclosed">Unclosed placeholder starting at position %1$s</string>
+    <string name="common_settings_storage_error_unexpected_closing">Unexpected closing brace at position %1$s</string>
+    <string name="common_settings_storage_error_date_format_only">Formatting is only supported for %1$s</string>
+    <string name="common_settings_storage_error_unknown_variable">Unknown template variable %1$s</string>
+    <string name="common_settings_storage_error_blank">Path must not be blank</string>
+    <string name="common_settings_storage_error_absolute">Absolute paths are not allowed</string>
+    <string name="common_settings_storage_error_backslash">Backslashes are not allowed</string>
+    <string name="common_settings_storage_error_traversal">Path traversal is not allowed</string>
+    <string name="common_settings_storage_error_reserved">The %1$s directory is reserved</string>
+    <string name="common_settings_storage_error_whitespace">Path segments may not start or end with whitespace</string>
+    <string name="common_settings_storage_error_invalid_segment">Invalid filename segment %1$s</string>
+    <string name="common_settings_storage_error_invalid">Invalid path template</string>
+
+    <string name="common_settings_watched_folder_help">PDFs saved to this folder (for example by a scanner app) are imported into the library automatically and processed with OCR.</string>
+    <string name="common_settings_no_watched_folder">No folder watched</string>
+    <string name="common_settings_choose_folder">Choose folder</string>
+    <string name="common_settings_stop_watching">Stop watching</string>
+    <string name="common_settings_remove_after_import">Remove files after import</string>
+    <string name="common_settings_remove_after_import_help">When on, source files are deleted from the watched folder once they are safely in the library. When off, they stay and are simply skipped as duplicates on later scans.</string>
+
+    <string name="common_settings_enable_ai">Enable AI assistant</string>
+    <string name="common_settings_ai_help">Uses an OpenAI-compatible server to suggest tags and answer questions about your documents.</string>
+    <string name="common_settings_server_url">Server URL</string>
+    <string name="common_settings_server_url_help">OpenAI-compatible server, e.g. %1$s or %2$s. A pasted %3$s URL also works.</string>
+    <string name="common_settings_api_key">API key</string>
+    <string name="common_settings_api_key_help">Stored only on this device; leave empty for local servers</string>
+    <string name="common_settings_model">Model</string>
+    <string name="common_settings_model_help">Model ID exactly as the server lists it (see its %1$s), e.g. %2$s or %3$s. Client-side provider prefixes do not apply.</string>
+    <string name="common_settings_ai_request_help">Requests send document text to the configured server.</string>
+    <string name="common_settings_max_suggested_tags">Default max suggested tags per document</string>
+    <string name="common_settings_max_suggested_tags_help">Default number of tags the assistant proposes per document (%1$d-%2$d); can be changed per run on the AI tagging page.</string>
+    <string name="common_settings_max_new_tags">Default max new tags per document</string>
+    <string name="common_settings_max_new_tags_help">Default number of brand-new tags (not already in your library) the assistant may propose per document (%1$d-%2$d; 0 = never); can be changed per run on the AI tagging page.</string>
+
+    <string name="common_settings_default_view">Default view: %1$s</string>
+    <string name="common_settings_landscape_columns">Multi-column list in landscape</string>
+    <string name="common_settings_landscape_columns_help">Show the list view in two columns when the window is wider than it is tall.</string>
+    <string name="common_settings_language">Language</string>
+    <string name="common_settings_language_help">Interface language for this device. System default follows the operating system.</string>
+    <string name="common_settings_language_system">System default</string>
+    <string name="common_settings_language_english">English</string>
+    <string name="common_settings_language_dutch">Nederlands</string>
+    <string name="common_settings_enable_inbox">Enable inbox workflow</string>
+    <string name="common_settings_inbox_help">New documents land in an inbox and you mark them reviewed by hand. When off, documents just appear and count as reviewed once tagged.</string>
+    <string name="common_settings_syncs_across_devices">This setting syncs across your devices.</string>
+    <string name="common_settings_inbox_migration_question">How should existing documents be marked? New documents will always start as needing review.</string>
+    <string name="common_settings_mark_all_reviewed">Mark all as reviewed</string>
+    <string name="common_settings_mark_tagged_reviewed">Mark tagged documents as reviewed</string>
+    <string name="common_settings_mark_none_reviewed">Don&apos;t mark any (all need review)</string>
+</resources>

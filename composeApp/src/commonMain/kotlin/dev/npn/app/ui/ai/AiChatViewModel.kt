@@ -2,6 +2,9 @@ package dev.npn.app.ui.ai
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiTextKey
+import dev.npn.app.ui.common.isConfiguredOrFalse
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiRole
@@ -18,7 +21,9 @@ import kotlinx.coroutines.launch
 /** One rendered item in the chat transcript: a user turn, a tool use, or an assistant turn. */
 sealed interface TranscriptItem {
     /** A question the user asked. */
-    data class UserTurn(val text: String) : TranscriptItem
+    data class UserTurn(
+        val text: String,
+    ) : TranscriptItem
 
     /**
      * One tool invocation. [argsSummary] is the raw arguments JSON (the UI maps it to a label);
@@ -62,7 +67,6 @@ data class AiChatUiState(
 class AiChatViewModel(
     val session: LibrarySession,
 ) : MessagesViewModel() {
-
     private val _ui = MutableStateFlow(AiChatUiState())
     val ui: StateFlow<AiChatUiState> = _ui.asStateFlow()
 
@@ -70,7 +74,7 @@ class AiChatViewModel(
 
     init {
         viewModelScope.launch {
-            val configured = runCatching { session.ai.config().configured }.getOrDefault(false)
+            val configured = session.ai.isConfiguredOrFalse()
             _ui.update { it.copy(configured = configured) }
         }
     }
@@ -88,15 +92,16 @@ class AiChatViewModel(
             )
         }
 
-        job = viewModelScope.launch {
-            runCatching { collectAnswer(history, trimmed) }
-                .onFailure { e ->
-                    if (e is CancellationException) throw e
-                    finishStreaming()
-                    _ui.update { it.copy(busy = false) }
-                    message("Could not reach the AI assistant: ${reason(e)}")
-                }
-        }
+        job =
+            viewModelScope.launch {
+                runCatching { collectAnswer(history, trimmed) }
+                    .onFailure { e ->
+                        if (e is CancellationException) throw e
+                        finishStreaming()
+                        _ui.update { it.copy(busy = false) }
+                        message(uiText(UiTextKey.AI_ASSISTANT_UNREACHABLE, reasonOf(e)))
+                    }
+            }
     }
 
     /** Stop a streaming request: finalise the partial assistant turn (kept in history). */
@@ -114,7 +119,10 @@ class AiChatViewModel(
         _ui.update { it.copy(turns = emptyList(), busy = false) }
     }
 
-    private suspend fun collectAnswer(history: List<AiChatTurn>, question: String) {
+    private suspend fun collectAnswer(
+        history: List<AiChatTurn>,
+        question: String,
+    ) {
         session.ai.ask(history, question).collect { event -> fold(event) }
         _ui.update { it.copy(busy = false) }
     }
@@ -128,31 +136,40 @@ class AiChatViewModel(
         }
     }
 
-    private fun appendDelta(delta: String) = _ui.update { state ->
-        val last = state.turns.lastOrNull()
-        if (last is TranscriptItem.AssistantTurn && last.streaming) {
-            state.copy(turns = state.turns.dropLast(1) + last.copy(text = last.text + delta))
-        } else {
-            state.copy(
-                turns = state.turns + TranscriptItem.AssistantTurn(delta, emptyList(), streaming = true),
-            )
+    private fun appendDelta(delta: String) =
+        _ui.update { state ->
+            val last = state.turns.lastOrNull()
+            if (last is TranscriptItem.AssistantTurn && last.streaming) {
+                state.copy(turns = state.turns.dropLast(1) + last.copy(text = last.text + delta))
+            } else {
+                state.copy(
+                    turns = state.turns + TranscriptItem.AssistantTurn(delta, emptyList(), streaming = true),
+                )
+            }
         }
-    }
 
-    private fun startTool(name: String, argsJson: String) = _ui.update { state ->
+    private fun startTool(
+        name: String,
+        argsJson: String,
+    ) = _ui.update { state ->
         // A tool call ends the current narration turn: finalise the trailing streaming assistant
         // turn (extracting its own docRefs) so pre-tool text is committed once and never merged
         // with post-tool text or overwritten by the run's full answer later.
         state.copy(
-            turns = finaliseTrailingAssistant(state.turns) +
-                TranscriptItem.ToolUse(name, argsJson, result = "", running = true),
+            turns =
+                finaliseTrailingAssistant(state.turns) +
+                    TranscriptItem.ToolUse(name, argsJson, result = "", running = true),
         )
     }
 
-    private fun finishTool(name: String, result: String) = _ui.update { state ->
-        val index = state.turns.indexOfLast {
-            it is TranscriptItem.ToolUse && it.name == name && it.running
-        }
+    private fun finishTool(
+        name: String,
+        result: String,
+    ) = _ui.update { state ->
+        val index =
+            state.turns.indexOfLast {
+                it is TranscriptItem.ToolUse && it.name == name && it.running
+            }
         if (index < 0) return@update state
         val tool = state.turns[index] as TranscriptItem.ToolUse
         val updated = state.turns.toMutableList()
@@ -173,31 +190,34 @@ class AiChatViewModel(
                 // No delta ever arrived (e.g. an answer produced entirely through the non-streaming
                 // fallback that only emits Done): materialise the full answer as one finished turn.
                 state.copy(
-                    turns = state.turns +
-                        TranscriptItem.AssistantTurn(fullText, AiText.extractDocRefs(fullText), streaming = false),
+                    turns =
+                        state.turns +
+                            TranscriptItem.AssistantTurn(fullText, AiText.extractDocRefs(fullText), streaming = false),
                 )
             }
         }
         // A run that ends blank with nothing visible (no text bubble, no tool rows) would leave no
         // trace at all — the finished empty bubble is skipped by the screen — so surface it.
         if (fullText.isBlank() && !hasVisibleContent()) {
-            message("The assistant returned an empty answer.")
+            message(uiText(UiTextKey.AI_ASSISTANT_EMPTY_ANSWER))
         }
     }
 
     /** True when the transcript shows any tool row or any non-blank assistant text. */
-    private fun hasVisibleContent(): Boolean = _ui.value.turns.any { item ->
-        when (item) {
-            is TranscriptItem.ToolUse -> true
-            is TranscriptItem.AssistantTurn -> item.text.isNotBlank()
-            is TranscriptItem.UserTurn -> false
+    private fun hasVisibleContent(): Boolean =
+        _ui.value.turns.any { item ->
+            when (item) {
+                is TranscriptItem.ToolUse -> true
+                is TranscriptItem.AssistantTurn -> item.text.isNotBlank()
+                is TranscriptItem.UserTurn -> false
+            }
         }
-    }
 
     /** Mark any trailing still-streaming assistant turn as complete (keeps partial text). */
-    private fun finishStreaming() = _ui.update { state ->
-        state.copy(turns = finaliseTrailingAssistant(state.turns))
-    }
+    private fun finishStreaming() =
+        _ui.update { state ->
+            state.copy(turns = finaliseTrailingAssistant(state.turns))
+        }
 
     /**
      * If the trailing item is a still-streaming [TranscriptItem.AssistantTurn], mark it complete
@@ -213,14 +233,12 @@ class AiChatViewModel(
     }
 
     /** History for the next ask: user/assistant text turns only (tool items excluded). */
-    private fun historyForAsk(): List<AiChatTurn> = _ui.value.turns.mapNotNull { item ->
-        when (item) {
-            is TranscriptItem.UserTurn -> AiChatTurn(AiRole.USER, item.text)
-            is TranscriptItem.AssistantTurn -> AiChatTurn(AiRole.ASSISTANT, item.text)
-            is TranscriptItem.ToolUse -> null
+    private fun historyForAsk(): List<AiChatTurn> =
+        _ui.value.turns.mapNotNull { item ->
+            when (item) {
+                is TranscriptItem.UserTurn -> AiChatTurn(AiRole.USER, item.text)
+                is TranscriptItem.AssistantTurn -> AiChatTurn(AiRole.ASSISTANT, item.text)
+                is TranscriptItem.ToolUse -> null
+            }
         }
-    }
-
-    private fun reason(e: Throwable): String =
-        e.message?.takeIf { it.isNotBlank() } ?: (e::class.simpleName ?: "unknown error")
 }

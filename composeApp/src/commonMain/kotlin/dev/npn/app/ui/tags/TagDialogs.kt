@@ -33,13 +33,32 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.parseHexColor
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_color
+import no_papers_needed.composeapp.generated.resources.common_tags_color_value
+import no_papers_needed.composeapp.generated.resources.common_tags_name_hierarchy
+import no_papers_needed.composeapp.generated.resources.common_tags_no_color
+import no_papers_needed.composeapp.generated.resources.common_tags_no_color_marker
+import org.jetbrains.compose.resources.stringResource
 
-private val Palette = listOf(
-    "#4C5CC7", "#2E7D32", "#C62828", "#EF6C00", "#6A1B9A",
-    "#00838F", "#AD1457", "#5D4037", "#455A64", "#F9A825",
-)
+private val Palette =
+    listOf(
+        "#4C5CC7",
+        "#2E7D32",
+        "#C62828",
+        "#EF6C00",
+        "#6A1B9A",
+        "#00838F",
+        "#AD1457",
+        "#5D4037",
+        "#455A64",
+        "#F9A825",
+    )
 
 /** Create/edit a tag with an optional name field and a color palette. */
 @Composable
@@ -63,12 +82,12 @@ fun TagFormDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name (dot paths for hierarchy)") },
+                    label = { Text(stringResource(Res.string.common_tags_name_hierarchy)) },
                     singleLine = true,
                     enabled = nameEditable,
                     modifier = Modifier.fillMaxWidth(),
                 )
-                Text("Color", style = MaterialTheme.typography.labelLarge)
+                Text(stringResource(Res.string.common_color), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // "None" swatch.
                     ColorSwatch(
@@ -92,13 +111,23 @@ fun TagFormDialog(
                 onClick = { onConfirm(name.trim(), color) },
             ) { Text(confirmLabel) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
     )
 }
 
 @Composable
-private fun ColorSwatch(color: String?, selected: Boolean, onClick: () -> Unit) {
+private fun ColorSwatch(
+    color: String?,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
     val c = parseHexColor(color) ?: MaterialTheme.colorScheme.surfaceVariant
+    val description =
+        if (color == null) {
+            stringResource(Res.string.common_tags_no_color)
+        } else {
+            stringResource(Res.string.common_tags_color_value, color)
+        }
     androidx.compose.foundation.layout.Box(
         Modifier
             .size(32.dp)
@@ -108,12 +137,16 @@ private fun ColorSwatch(color: String?, selected: Boolean, onClick: () -> Unit) 
                 width = if (selected) 3.dp else 1.dp,
                 color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
                 shape = CircleShape,
-            )
+            ).semantics { contentDescription = description }
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         if (color == null) {
-            Text("x", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(
+                stringResource(Res.string.common_tags_no_color_marker),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
         }
         if (selected) {
             Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White)
@@ -146,9 +179,14 @@ fun TagPickDialog(
                         horizontalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
                         if (selected == name) {
-                            Icon(Icons.Filled.Check, contentDescription = null, tint = MaterialTheme.colorScheme.primary)
+                            Icon(
+                                Icons.Filled.Check,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.primary,
+                            )
                         } else {
-                            androidx.compose.foundation.layout.Box(Modifier.size(24.dp))
+                            androidx.compose.foundation.layout
+                                .Box(Modifier.size(24.dp))
                         }
                         Text(name)
                     }
@@ -158,6 +196,6 @@ fun TagPickDialog(
         confirmButton = {
             TextButton(enabled = selected != null, onClick = { onConfirm(selected!!) }) { Text(confirmLabel) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
     )
 }

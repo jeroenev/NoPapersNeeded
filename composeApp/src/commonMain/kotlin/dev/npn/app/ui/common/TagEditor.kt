@@ -33,6 +33,11 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.unit.dp
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_add_tag
+import no_papers_needed.composeapp.generated.resources.common_create_tag_hint
+import no_papers_needed.composeapp.generated.resources.common_remove_tag
+import org.jetbrains.compose.resources.stringResource
 
 /**
  * Inline tag editor: current tags as removable chips plus an add field with autocomplete over
@@ -49,14 +54,19 @@ fun TagEditor(
     modifier: Modifier = Modifier,
 ) {
     var input by remember { mutableStateOf("") }
+    val addTagLabel = stringResource(Res.string.common_add_tag)
 
-    val suggestions = remember(input, allTagNames, tags) {
-        val q = input.trim()
-        if (q.isEmpty()) emptyList()
-        else allTagNames
-            .filter { it !in tags && it.contains(q, ignoreCase = true) }
-            .take(8)
-    }
+    val suggestions =
+        remember(input, allTagNames, tags) {
+            val q = input.trim()
+            if (q.isEmpty()) {
+                emptyList()
+            } else {
+                allTagNames
+                    .filter { it !in tags && it.contains(q, ignoreCase = true) }
+                    .take(MAX_INLINE_SUGGESTIONS)
+            }
+        }
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (tags.isNotEmpty()) {
@@ -66,18 +76,10 @@ fun TagEditor(
                         selected = false,
                         onClick = { onRemove(tag) },
                         label = { Text(tag) },
-                        leadingIcon = {
-                            val c = parseHexColor(tagColors[tag])
-                            if (c != null) {
-                                androidx.compose.foundation.layout.Box(
-                                    Modifier
-                                        .size(10.dp)
-                                        .clip(androidx.compose.foundation.shape.CircleShape)
-                                        .background(c),
-                                )
-                            }
+                        leadingIcon = { TagColorDot(tagColors[tag]) },
+                        trailingIcon = {
+                            Icon(Icons.Filled.Clear, stringResource(Res.string.common_remove_tag, tag))
                         },
-                        trailingIcon = { Icon(Icons.Filled.Clear, contentDescription = "Remove $tag") },
                     )
                 }
             }
@@ -86,7 +88,7 @@ fun TagEditor(
         OutlinedTextField(
             value = input,
             onValueChange = { input = it },
-            label = { Text("Add tag") },
+            label = { Text(addTagLabel) },
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
             trailingIcon = {
@@ -94,7 +96,7 @@ fun TagEditor(
                     IconButton(onClick = {
                         onAdd(input.trim())
                         input = ""
-                    }) { Icon(Icons.Filled.Add, contentDescription = "Add tag") }
+                    }) { Icon(Icons.Filled.Add, contentDescription = addTagLabel) }
                 }
             },
         )
@@ -110,24 +112,36 @@ fun TagEditor(
                         Text(
                             text = name,
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable {
-                                    onAdd(name)
-                                    input = ""
-                                }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable {
+                                        onAdd(name)
+                                        input = ""
+                                    }.padding(horizontal = 12.dp, vertical = 10.dp),
                         )
                     }
                 }
             }
         } else if (input.isNotBlank()) {
             Text(
-                "Press + to create \"${input.trim()}\"",
+                stringResource(Res.string.common_create_tag_hint, input.trim()),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 4.dp),
             )
         }
+    }
+}
+
+@Composable
+private fun TagColorDot(color: String?) {
+    parseHexColor(color)?.let {
+        androidx.compose.foundation.layout.Box(
+            Modifier
+                .size(10.dp)
+                .clip(androidx.compose.foundation.shape.CircleShape)
+                .background(it),
+        )
     }
 }

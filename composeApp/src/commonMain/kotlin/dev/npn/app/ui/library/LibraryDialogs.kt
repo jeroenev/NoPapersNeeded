@@ -23,21 +23,30 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_apply
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.library_tag
+import org.jetbrains.compose.resources.stringResource
 
 /** Tag pick dialog with autocomplete from existing tag names (used for bulk add/remove). */
 @Composable
 fun TagPickerDialog(
     title: String,
     allTagNames: List<String>,
-    confirmLabel: String = "Apply",
+    confirmLabel: String? = null,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
     var text by remember { mutableStateOf("") }
-    val suggestions = remember(text, allTagNames) {
-        if (text.isBlank()) allTagNames
-        else allTagNames.filter { it.contains(text, ignoreCase = true) }
-    }
+    val suggestions =
+        remember(text, allTagNames) {
+            if (text.isBlank()) {
+                allTagNames
+            } else {
+                allTagNames.filter { it.contains(text, ignoreCase = true) }
+            }
+        }
     AlertDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
@@ -46,7 +55,7 @@ fun TagPickerDialog(
                 OutlinedTextField(
                     value = text,
                     onValueChange = { text = it },
-                    label = { Text("Tag") },
+                    label = { Text(stringResource(Res.string.library_tag)) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth(),
                 )
@@ -55,10 +64,11 @@ fun TagPickerDialog(
                         Text(
                             text = name,
                             style = MaterialTheme.typography.bodyMedium,
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .clickable { text = name }
-                                .padding(vertical = 8.dp),
+                            modifier =
+                                Modifier
+                                    .fillMaxWidth()
+                                    .clickable { text = name }
+                                    .padding(vertical = 8.dp),
                         )
                     }
                 }
@@ -68,8 +78,10 @@ fun TagPickerDialog(
             TextButton(
                 enabled = text.isNotBlank(),
                 onClick = { onConfirm(text.trim()) },
-            ) { Text(confirmLabel) }
+            ) { Text(confirmLabel ?: stringResource(Res.string.common_apply)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
+        },
     )
 }

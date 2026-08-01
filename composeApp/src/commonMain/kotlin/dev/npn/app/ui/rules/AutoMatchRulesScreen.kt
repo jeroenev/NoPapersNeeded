@@ -38,7 +38,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -50,10 +49,49 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_back
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_delete
+import no_papers_needed.composeapp.generated.resources.common_edit
+import no_papers_needed.composeapp.generated.resources.common_name
+import no_papers_needed.composeapp.generated.resources.common_rules_actions_correspondent
+import no_papers_needed.composeapp.generated.resources.common_rules_actions_tags
+import no_papers_needed.composeapp.generated.resources.common_rules_actions_type
+import no_papers_needed.composeapp.generated.resources.common_rules_add
+import no_papers_needed.composeapp.generated.resources.common_rules_algorithm
+import no_papers_needed.composeapp.generated.resources.common_rules_algorithm_all_words
+import no_papers_needed.composeapp.generated.resources.common_rules_algorithm_any_word
+import no_papers_needed.composeapp.generated.resources.common_rules_algorithm_exact
+import no_papers_needed.composeapp.generated.resources.common_rules_algorithm_fuzzy
+import no_papers_needed.composeapp.generated.resources.common_rules_algorithm_regex
+import no_papers_needed.composeapp.generated.resources.common_rules_delete_message
+import no_papers_needed.composeapp.generated.resources.common_rules_delete_title
+import no_papers_needed.composeapp.generated.resources.common_rules_edit_title
+import no_papers_needed.composeapp.generated.resources.common_rules_empty_subtitle
+import no_papers_needed.composeapp.generated.resources.common_rules_empty_title
+import no_papers_needed.composeapp.generated.resources.common_rules_field_content
+import no_papers_needed.composeapp.generated.resources.common_rules_field_file_name
+import no_papers_needed.composeapp.generated.resources.common_rules_field_title
+import no_papers_needed.composeapp.generated.resources.common_rules_invalid_regex
+import no_papers_needed.composeapp.generated.resources.common_rules_join_parts
+import no_papers_needed.composeapp.generated.resources.common_rules_match_field
+import no_papers_needed.composeapp.generated.resources.common_rules_new_title
+import no_papers_needed.composeapp.generated.resources.common_rules_pattern
+import no_papers_needed.composeapp.generated.resources.common_rules_priority
+import no_papers_needed.composeapp.generated.resources.common_rules_set_correspondent
+import no_papers_needed.composeapp.generated.resources.common_rules_set_document_type
+import no_papers_needed.composeapp.generated.resources.common_rules_summary
+import no_papers_needed.composeapp.generated.resources.common_rules_tags_to_add
+import no_papers_needed.composeapp.generated.resources.common_rules_title
+import no_papers_needed.composeapp.generated.resources.common_save
+import org.jetbrains.compose.resources.StringResource
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun AutoMatchRulesScreen(
@@ -63,55 +101,27 @@ fun AutoMatchRulesScreen(
     val vm: AutoMatchRulesViewModel = viewModel { AutoMatchRulesViewModel(session) }
     val rules by vm.rules.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
-    LaunchedEffect(vm, snackbar) { vm.messages.collect { snackbar.showSnackbar(it) } }
+    SnackbarMessages(vm.messages, snackbar)
 
     var showForm by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf<AutoMatchRule?>(null) }
     var deleteTarget by remember { mutableStateOf<String?>(null) }
 
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text("Auto-matching rules") },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
-                    }
-                },
-            )
+    AutoMatchRulesScaffold(
+        rules = rules,
+        snackbar = snackbar,
+        onBack = onBack,
+        onAdd = {
+            editing = null
+            showForm = true
         },
-        floatingActionButton = {
-            FloatingActionButton(onClick = {
-                editing = null
-                showForm = true
-            }) {
-                Icon(Icons.Filled.Add, contentDescription = "Add rule")
-            }
+        onEdit = {
+            editing = it
+            showForm = true
         },
-        snackbarHost = { SnackbarHost(snackbar) },
-    ) { padding ->
-        if (rules.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding)) {
-                EmptyState(
-                    icon = Icons.Filled.Add,
-                    title = "No rules yet",
-                    subtitle = "Create a rule to tag documents automatically based on their text.",
-                )
-            }
-        } else {
-            LazyColumn(Modifier.fillMaxSize().padding(padding)) {
-                items(rules, key = { it.id }) { rule ->
-                    RuleCard(
-                        rule = rule,
-                        onEdit = { editing = it; showForm = true },
-                        onDelete = { deleteTarget = it.id },
-                        onToggle = { id, enabled -> vm.setEnabled(id, enabled) },
-                    )
-                    HorizontalDivider()
-                }
-            }
-        }
-    }
+        onDelete = { deleteTarget = it.id },
+        onToggle = vm::setEnabled,
+    )
 
     if (showForm) {
         RuleFormDialog(
@@ -129,10 +139,7 @@ fun AutoMatchRulesScreen(
     }
 
     deleteTarget?.let { id ->
-        ConfirmDialog(
-            title = "Delete rule",
-            message = "Remove this rule? It will not undo tags already applied.",
-            confirmLabel = "Delete",
+        DeleteRuleDialog(
             onConfirm = {
                 vm.delete(id)
                 deleteTarget = null
@@ -140,6 +147,75 @@ fun AutoMatchRulesScreen(
             onDismiss = { deleteTarget = null },
         )
     }
+}
+
+@Composable
+private fun AutoMatchRulesScaffold(
+    rules: List<AutoMatchRule>,
+    snackbar: SnackbarHostState,
+    onBack: () -> Unit,
+    onAdd: () -> Unit,
+    onEdit: (AutoMatchRule) -> Unit,
+    onDelete: (AutoMatchRule) -> Unit,
+    onToggle: (String, Boolean) -> Unit,
+) {
+    Scaffold(
+        topBar = {
+            TopAppBar(
+                title = { Text(stringResource(Res.string.common_rules_title)) },
+                navigationIcon = {
+                    IconButton(onClick = onBack) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack,
+                            contentDescription = stringResource(Res.string.common_back),
+                        )
+                    }
+                },
+            )
+        },
+        floatingActionButton = {
+            FloatingActionButton(onClick = onAdd) {
+                Icon(Icons.Filled.Add, contentDescription = stringResource(Res.string.common_rules_add))
+            }
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
+    ) { padding ->
+        if (rules.isEmpty()) {
+            Box(Modifier.fillMaxSize().padding(padding)) {
+                EmptyState(
+                    icon = Icons.Filled.Add,
+                    title = stringResource(Res.string.common_rules_empty_title),
+                    subtitle = stringResource(Res.string.common_rules_empty_subtitle),
+                )
+            }
+        } else {
+            LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+                items(rules, key = { it.id }) { rule ->
+                    RuleCard(
+                        rule = rule,
+                        onEdit = onEdit,
+                        onDelete = onDelete,
+                        onToggle = onToggle,
+                    )
+                    HorizontalDivider()
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun DeleteRuleDialog(
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    ConfirmDialog(
+        title = stringResource(Res.string.common_rules_delete_title),
+        message = stringResource(Res.string.common_rules_delete_message),
+        confirmLabel = stringResource(Res.string.common_delete),
+        onConfirm = onConfirm,
+        onDismiss = onDismiss,
+    )
 }
 
 @Composable
@@ -177,31 +253,40 @@ private fun RuleCard(
             }
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 IconButton(onClick = { onEdit(rule) }) {
-                    Icon(Icons.Filled.Edit, contentDescription = "Edit")
+                    Icon(Icons.Filled.Edit, contentDescription = stringResource(Res.string.common_edit))
                 }
                 IconButton(onClick = { onDelete(rule) }) {
-                    Icon(Icons.Filled.Delete, contentDescription = "Delete")
+                    Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.common_delete))
                 }
             }
         }
     }
 }
 
-private fun buildActionsLabel(rule: AutoMatchRule): String = buildString {
-    if (rule.tags.isNotEmpty()) append("Tags: ${rule.tags.joinToString(", ")}")
-    if (rule.correspondent != null) {
-        if (isNotEmpty()) append("  ·  ")
-        append("Correspondent: ${rule.correspondent}")
-    }
-    if (rule.docType != null) {
-        if (isNotEmpty()) append("  ·  ")
-        append("Type: ${rule.docType}")
-    }
+@Composable
+private fun buildActionsLabel(rule: AutoMatchRule): String {
+    val parts =
+        buildList {
+            if (rule.tags.isNotEmpty()) {
+                add(stringResource(Res.string.common_rules_actions_tags, rule.tags.joinToString(", ")))
+            }
+            rule.correspondent?.let {
+                add(stringResource(Res.string.common_rules_actions_correspondent, it))
+            }
+            rule.docType?.let { add(stringResource(Res.string.common_rules_actions_type, it)) }
+        }
+    return parts.reduce { summary, part -> stringResource(Res.string.common_rules_join_parts, summary, part) }
 }
 
+@Composable
 private fun buildRuleSummary(rule: AutoMatchRule): String =
-    "${fieldLabel(rule.field)} · ${algorithmLabel(rule.algorithm)} · " +
-        "${rule.pattern} · priority ${rule.position}"
+    stringResource(
+        Res.string.common_rules_summary,
+        fieldLabel(rule.field),
+        algorithmLabel(rule.algorithm),
+        rule.pattern,
+        rule.position,
+    )
 
 @Composable
 private fun RuleFormDialog(
@@ -215,7 +300,13 @@ private fun RuleFormDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(if (rule == null) "New rule" else "Edit rule") },
+        title = {
+            Text(
+                stringResource(
+                    if (rule == null) Res.string.common_rules_new_title else Res.string.common_rules_edit_title,
+                ),
+            )
+        },
         text = {
             RuleFormFields(state, regexValid) { state = it }
         },
@@ -230,7 +321,11 @@ private fun RuleFormDialog(
                             field = state.field,
                             algorithm = state.algorithm,
                             pattern = state.pattern.trim(),
-                            tags = state.tags.split(',').map { it.trim() }.filter { it.isNotEmpty() },
+                            tags =
+                                state.tags
+                                    .split(',')
+                                    .map { it.trim() }
+                                    .filter { it.isNotEmpty() },
                             correspondent = state.correspondent.trim().ifEmpty { null },
                             docType = state.docType.trim().ifEmpty { null },
                             position = state.position.toIntOrNull() ?: 0,
@@ -238,9 +333,9 @@ private fun RuleFormDialog(
                     )
                 },
                 enabled = canSave,
-            ) { Text("Save") }
+            ) { Text(stringResource(Res.string.common_save)) }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
     )
 }
 
@@ -255,58 +350,88 @@ private data class RuleFormState(
     val position: String = "0",
 )
 
-private fun AutoMatchRule?.toFormState(): RuleFormState = if (this == null) {
-    RuleFormState()
-} else {
-    RuleFormState(
-        name = name,
-        field = field,
-        algorithm = algorithm,
-        pattern = pattern,
-        tags = tags.joinToString(", "),
-        correspondent = correspondent ?: "",
-        docType = docType ?: "",
-        position = position.toString(),
-    )
-}
+private fun AutoMatchRule?.toFormState(): RuleFormState =
+    if (this == null) {
+        RuleFormState()
+    } else {
+        RuleFormState(
+            name = name,
+            field = field,
+            algorithm = algorithm,
+            pattern = pattern,
+            tags = tags.joinToString(", "),
+            correspondent = correspondent ?: "",
+            docType = docType ?: "",
+            position = position.toString(),
+        )
+    }
 
 @Composable
-private fun RuleFormFields(state: RuleFormState, regexValid: Boolean, onChange: (RuleFormState) -> Unit) {
+private fun RuleFormFields(
+    state: RuleFormState,
+    regexValid: Boolean,
+    onChange: (RuleFormState) -> Unit,
+) {
     Column(
         Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        OutlinedTextField(state.name, { onChange(state.copy(name = it)) }, label = { Text("Name") }, singleLine = true)
+        OutlinedTextField(
+            state.name,
+            { onChange(state.copy(name = it)) },
+            label = { Text(stringResource(Res.string.common_name)) },
+            singleLine = true,
+        )
         FieldDropdown(state.field) { onChange(state.copy(field = it)) }
         AlgorithmDropdown(state.algorithm) { onChange(state.copy(algorithm = it)) }
         OutlinedTextField(
             state.pattern,
             { onChange(state.copy(pattern = it)) },
-            label = { Text("Pattern") },
-            supportingText = if (regexValid) null else ({ Text("Invalid regular expression") }),
+            label = { Text(stringResource(Res.string.common_rules_pattern)) },
+            supportingText =
+                if (regexValid) {
+                    null
+                } else {
+                    (
+                        {
+                            Text(stringResource(Res.string.common_rules_invalid_regex))
+                        }
+                    )
+                },
             isError = !regexValid,
             singleLine = true,
         )
-        FormTextField(state.position, "Priority") {
+        FormTextField(state.position, stringResource(Res.string.common_rules_priority)) {
             onChange(state.copy(position = it.filter(Char::isDigit)))
         }
-        FormTextField(state.tags, "Tags to add (comma separated)") { onChange(state.copy(tags = it)) }
-        FormTextField(state.correspondent, "Set correspondent (optional)") {
+        FormTextField(state.tags, stringResource(Res.string.common_rules_tags_to_add)) {
+            onChange(state.copy(tags = it))
+        }
+        FormTextField(state.correspondent, stringResource(Res.string.common_rules_set_correspondent)) {
             onChange(state.copy(correspondent = it))
         }
-        FormTextField(state.docType, "Set document type (optional)") { onChange(state.copy(docType = it)) }
+        FormTextField(state.docType, stringResource(Res.string.common_rules_set_document_type)) {
+            onChange(state.copy(docType = it))
+        }
     }
 }
 
 @Composable
-private fun FormTextField(value: String, label: String, onChange: (String) -> Unit) {
+private fun FormTextField(
+    value: String,
+    label: String,
+    onChange: (String) -> Unit,
+) {
     OutlinedTextField(value, onChange, label = { Text(label) }, singleLine = true)
 }
 
 @Composable
-private fun FieldDropdown(current: RuleField, onSelect: (RuleField) -> Unit) {
+private fun FieldDropdown(
+    current: RuleField,
+    onSelect: (RuleField) -> Unit,
+) {
     SimpleDropdown(
-        label = "Match field",
+        label = stringResource(Res.string.common_rules_match_field),
         current = fieldLabel(current),
         options = RuleField.entries,
         labelOf = ::fieldLabel,
@@ -315,9 +440,12 @@ private fun FieldDropdown(current: RuleField, onSelect: (RuleField) -> Unit) {
 }
 
 @Composable
-private fun AlgorithmDropdown(current: MatchAlgorithm, onSelect: (MatchAlgorithm) -> Unit) {
+private fun AlgorithmDropdown(
+    current: MatchAlgorithm,
+    onSelect: (MatchAlgorithm) -> Unit,
+) {
     SimpleDropdown(
-        label = "Algorithm",
+        label = stringResource(Res.string.common_rules_algorithm),
         current = algorithmLabel(current),
         options = MatchAlgorithm.entries,
         labelOf = ::algorithmLabel,
@@ -330,7 +458,7 @@ private fun <T> SimpleDropdown(
     label: String,
     current: String,
     options: List<T>,
-    labelOf: (T) -> String,
+    labelOf: @Composable (T) -> String,
     onSelect: (T) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
@@ -353,16 +481,26 @@ private fun <T> SimpleDropdown(
     }
 }
 
-private fun fieldLabel(field: RuleField): String = when (field) {
-    RuleField.CONTENT -> "Extracted text"
-    RuleField.TITLE -> "Title"
-    RuleField.FILE_NAME -> "File name"
-}
+@Composable
+private fun fieldLabel(field: RuleField): String = stringResource(field.labelResource)
 
-private fun algorithmLabel(algorithm: MatchAlgorithm): String = when (algorithm) {
-    MatchAlgorithm.EXACT -> "Exact"
-    MatchAlgorithm.ANY_WORD -> "Any word"
-    MatchAlgorithm.ALL_WORDS -> "All words"
-    MatchAlgorithm.REGEX -> "Regex"
-    MatchAlgorithm.FUZZY -> "Fuzzy"
-}
+private val RuleField.labelResource: StringResource
+    get() =
+        when (this) {
+            RuleField.CONTENT -> Res.string.common_rules_field_content
+            RuleField.TITLE -> Res.string.common_rules_field_title
+            RuleField.FILE_NAME -> Res.string.common_rules_field_file_name
+        }
+
+@Composable
+private fun algorithmLabel(algorithm: MatchAlgorithm): String = stringResource(algorithm.labelResource)
+
+private val MatchAlgorithm.labelResource: StringResource
+    get() =
+        when (this) {
+            MatchAlgorithm.EXACT -> Res.string.common_rules_algorithm_exact
+            MatchAlgorithm.ANY_WORD -> Res.string.common_rules_algorithm_any_word
+            MatchAlgorithm.ALL_WORDS -> Res.string.common_rules_algorithm_all_words
+            MatchAlgorithm.REGEX -> Res.string.common_rules_algorithm_regex
+            MatchAlgorithm.FUZZY -> Res.string.common_rules_algorithm_fuzzy
+        }

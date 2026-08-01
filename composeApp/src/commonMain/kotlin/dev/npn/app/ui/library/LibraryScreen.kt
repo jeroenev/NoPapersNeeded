@@ -12,10 +12,10 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
@@ -42,7 +42,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.material3.ModalDrawerSheet
 import androidx.compose.material3.ModalNavigationDrawer
 import androidx.compose.material3.PermanentDrawerSheet
@@ -54,8 +53,8 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.produceState
@@ -72,13 +71,11 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.BoxWithConstraintsLayout
 import dev.npn.app.ui.common.EmptyState
-import dev.npn.app.ui.common.ctrlScrollZoom
-import dev.npn.app.ui.common.isLandscape
-import dev.npn.app.ui.common.pinchToZoom
 import dev.npn.app.ui.common.SearchField
+import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.isConfiguredOrFalse
+import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.platformFileToExternalSource
-import dev.npn.app.ui.common.viewTypeLabel
-import dev.npn.core.app.GridSizing
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
@@ -87,12 +84,50 @@ import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
 import io.github.vinceglb.filekit.dialogs.compose.rememberFilePickerLauncher
 import io.github.vinceglb.filekit.name
-import kotlin.math.abs
-import kotlin.math.floor
-import kotlin.math.roundToInt
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_add_tag
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_menu
+import no_papers_needed.composeapp.generated.resources.common_view_grid
+import no_papers_needed.composeapp.generated.resources.common_view_list
+import no_papers_needed.composeapp.generated.resources.library_add
+import no_papers_needed.composeapp.generated.resources.library_clear_filters
+import no_papers_needed.composeapp.generated.resources.library_conflict_file_count
+import no_papers_needed.composeapp.generated.resources.library_dismiss
+import no_papers_needed.composeapp.generated.resources.library_documents
+import no_papers_needed.composeapp.generated.resources.library_duplicate_count
+import no_papers_needed.composeapp.generated.resources.library_filters
+import no_papers_needed.composeapp.generated.resources.library_import
+import no_papers_needed.composeapp.generated.resources.library_import_pdf
+import no_papers_needed.composeapp.generated.resources.library_mark_needs_review
+import no_papers_needed.composeapp.generated.resources.library_mark_reviewed
+import no_papers_needed.composeapp.generated.resources.library_move_to_trash_question
+import no_papers_needed.composeapp.generated.resources.library_no_documents_subtitle
+import no_papers_needed.composeapp.generated.resources.library_no_documents_title
+import no_papers_needed.composeapp.generated.resources.library_no_matches_subtitle
+import no_papers_needed.composeapp.generated.resources.library_no_matches_title
+import no_papers_needed.composeapp.generated.resources.library_ocr_pending
+import no_papers_needed.composeapp.generated.resources.library_ocr_pending_running
+import no_papers_needed.composeapp.generated.resources.library_refresh
+import no_papers_needed.composeapp.generated.resources.library_remove_tag
+import no_papers_needed.composeapp.generated.resources.library_review
+import no_papers_needed.composeapp.generated.resources.library_scan_document
+import no_papers_needed.composeapp.generated.resources.library_scan_progress
+import no_papers_needed.composeapp.generated.resources.library_selected_count
+import no_papers_needed.composeapp.generated.resources.library_sort
+import no_papers_needed.composeapp.generated.resources.library_sort_added
+import no_papers_needed.composeapp.generated.resources.library_sort_ascending
+import no_papers_needed.composeapp.generated.resources.library_sort_by
+import no_papers_needed.composeapp.generated.resources.library_sort_descending
+import no_papers_needed.composeapp.generated.resources.library_sort_doc_date
+import no_papers_needed.composeapp.generated.resources.library_sort_name
+import no_papers_needed.composeapp.generated.resources.library_sort_size
+import no_papers_needed.composeapp.generated.resources.library_switch_view
+import no_papers_needed.composeapp.generated.resources.library_trash
+import no_papers_needed.composeapp.generated.resources.library_trash_documents
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun LibraryScreen(
@@ -107,7 +142,7 @@ fun LibraryScreen(
 ) {
     // Probe once whether the AI assistant is configured so the entry point stays hidden otherwise.
     val aiConfigured by produceState(initialValue = false, session) {
-        value = runCatching { session.ai.config().configured }.getOrDefault(false)
+        value = session.ai.isConfiguredOrFalse()
     }
     val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -131,38 +166,32 @@ fun LibraryScreen(
 
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
-    val drawerState = androidx.compose.material3.rememberDrawerState(
-        androidx.compose.material3.DrawerValue.Closed,
-    )
-
-    // Surface one-shot VM messages (e.g. partial bulk-op failures) as snackbars.
-    LaunchedEffect(vm, snackbar) {
-        vm.messages.collect { snackbar.showSnackbar(it) }
-    }
+    SnackbarMessages(vm.messages, snackbar)
+    val drawerState =
+        androidx.compose.material3.rememberDrawerState(
+            androidx.compose.material3.DrawerValue.Closed,
+        )
 
     val dialogs = rememberLibraryDialogState()
 
     val tagColors = remember(tags) { tags.associate { it.name to it.color } }
 
-    val importPicker = rememberFilePickerLauncher(
-        type = FileKitType.File("pdf"),
-        mode = FileKitMode.Multiple(),
-    ) { files ->
-        if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
-        val sources = files.map { platformFileToExternalSource(it) to it.name }
-        vm.import(sources) { summary ->
-            scope.launch { snackbar.showSnackbar(summary.message) }
+    val importPicker =
+        rememberFilePickerLauncher(
+            type = FileKitType.File("pdf"),
+            mode = FileKitMode.Multiple(),
+        ) { files ->
+            if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
+            val sources = files.map { platformFileToExternalSource(it) to it.name }
+            vm.import(sources)
         }
-    }
 
     val scanner = dev.npn.app.platform.LocalDocumentScanner.current
     val onScan: () -> Unit = {
         scope.launch {
             val bytes = runCatching { scanner.scanToPdf() }.getOrNull()
             if (bytes != null) {
-                vm.importScannedPdf(bytes) { outcome ->
-                    scope.launch { snackbar.showSnackbar(outcome) }
-                }
+                vm.importScannedPdf(bytes)
             }
         }
     }
@@ -197,6 +226,12 @@ fun LibraryScreen(
         )
     }
 
+    fun closeDrawerThen(action: () -> Unit): () -> Unit =
+        {
+            scope.launch { drawerState.close() }
+            action()
+        }
+
     val drawer: @Composable () -> Unit = {
         LibraryDrawerContent(
             reviewMode = reviewMode,
@@ -206,21 +241,21 @@ fun LibraryScreen(
                 vm.clearFilter()
                 scope.launch { drawerState.close() }
             },
-            onReviewQueue = { vm.applyReviewPreset(); scope.launch { drawerState.close() } },
-            onTrash = { scope.launch { drawerState.close() }; onTrash() },
-            onTags = { scope.launch { drawerState.close() }; onTags() },
+            onReviewQueue = {
+                vm.applyReviewPreset()
+                scope.launch { drawerState.close() }
+            },
+            onTrash = closeDrawerThen(onTrash),
+            onTags = closeDrawerThen(onTags),
             aiConfigured = aiConfigured,
-            onAiChat = { scope.launch { drawerState.close() }; onAiChat() },
-            onAiTagging = { scope.launch { drawerState.close() }; onAiTagging() },
-            onSettings = { scope.launch { drawerState.close() }; onSettings() },
+            onAiChat = closeDrawerThen(onAiChat),
+            onAiTagging = closeDrawerThen(onAiTagging),
+            onSettings = closeDrawerThen(onSettings),
             onSavedView = { view ->
                 vm.applySavedView(view)
                 scope.launch { drawerState.close() }
             },
-            onSaveCurrentView = {
-                scope.launch { drawerState.close() }
-                dialogs.openSaveView()
-            },
+            onSaveCurrentView = closeDrawerThen { dialogs.openSaveView() },
             onRenameSavedView = dialogs::openRename,
             // Thin pass-throughs to the session; run on the screen scope (quick fire-and-forget).
             onDeleteSavedView = { view -> scope.launch { session.savedViews.delete(view.id) } },
@@ -356,44 +391,49 @@ private fun LibraryContent(
                     if (ui.filter.isEmpty) {
                         EmptyState(
                             icon = Icons.Filled.Description,
-                            title = "No documents yet",
-                            subtitle = "Import a PDF to get started.",
-                            actionLabel = "Import PDF",
+                            title = stringResource(Res.string.library_no_documents_title),
+                            subtitle = stringResource(Res.string.library_no_documents_subtitle),
+                            actionLabel = stringResource(Res.string.library_import_pdf),
                             onAction = onImport,
                         )
                     } else {
                         EmptyState(
                             icon = Icons.Filled.Description,
-                            title = "No matches",
-                            subtitle = "Try adjusting your search or filters.",
-                            actionLabel = "Clear filters",
+                            title = stringResource(Res.string.library_no_matches_title),
+                            subtitle = stringResource(Res.string.library_no_matches_subtitle),
+                            actionLabel = stringResource(Res.string.library_clear_filters),
                             onAction = vm::clearFilter,
                         )
                     }
                 } else {
                     when (ui.viewType) {
-                        ViewType.GRID -> DocGrid(
-                            docs = docs,
-                            content = session.content,
-                            tagColors = tagColors,
-                            ui = ui,
-                            columnWidth = gridColumnWidth,
-                            onColumnWidthChange = vm::setGridColumnWidth,
-                            onOpen = onOpenDoc,
-                            onToggleSelect = vm::toggleSelection,
-                            onStartSelection = vm::startSelection,
-                        )
-                        ViewType.LIST -> DocList(
-                            docs = docs,
-                            content = session.content,
-                            tagColors = tagColors,
-                            reviewMode = reviewMode,
-                            ui = ui,
-                            landscapeColumns = landscapeListColumns,
-                            onOpen = onOpenDoc,
-                            onToggleSelect = vm::toggleSelection,
-                            onStartSelection = vm::startSelection,
-                        )
+                        ViewType.GRID -> {
+                            DocGrid(
+                                docs = docs,
+                                content = session.content,
+                                tagColors = tagColors,
+                                ui = ui,
+                                columnWidth = gridColumnWidth,
+                                onColumnWidthChange = vm::setGridColumnWidth,
+                                onOpen = onOpenDoc,
+                                onToggleSelect = vm::toggleSelection,
+                                onStartSelection = vm::startSelection,
+                            )
+                        }
+
+                        ViewType.LIST -> {
+                            DocList(
+                                docs = docs,
+                                content = session.content,
+                                tagColors = tagColors,
+                                reviewMode = reviewMode,
+                                ui = ui,
+                                landscapeColumns = landscapeListColumns,
+                                onOpen = onOpenDoc,
+                                onToggleSelect = vm::toggleSelection,
+                                onStartSelection = vm::startSelection,
+                            )
+                        }
                     }
                 }
             }
@@ -422,8 +462,11 @@ private fun DocList(
             selectionMode = ui.selectionMode,
             selected = item.doc.docId in ui.selected,
             onClick = {
-                if (ui.selectionMode) onToggleSelect(item.doc.docId)
-                else onOpen(item.doc.docId)
+                if (ui.selectionMode) {
+                    onToggleSelect(item.doc.docId)
+                } else {
+                    onOpen(item.doc.docId)
+                }
             },
             onLongClick = { onStartSelection(item.doc.docId) },
             onToggleSelect = { onToggleSelect(item.doc.docId) },
@@ -468,35 +511,42 @@ private fun LibraryTopBar(
 ) {
     var sortMenu by remember { mutableStateOf(false) }
     TopAppBar(
-        title = { Text("Documents") },
+        title = { Text(stringResource(Res.string.library_documents)) },
         navigationIcon = {
-            IconButton(onClick = onMenu) { Icon(Icons.Filled.Menu, contentDescription = "Menu") }
+            IconButton(onClick = onMenu) {
+                Icon(Icons.Filled.Menu, contentDescription = stringResource(Res.string.common_menu))
+            }
         },
         actions = {
             IconButton(onClick = onRefresh) {
-                Icon(Icons.Filled.Refresh, contentDescription = "Refresh")
+                Icon(Icons.Filled.Refresh, contentDescription = stringResource(Res.string.library_refresh))
             }
             IconButton(onClick = onOpenFilter) {
-                Icon(Icons.Filled.FilterList, contentDescription = "Filters")
+                Icon(Icons.Filled.FilterList, contentDescription = stringResource(Res.string.library_filters))
             }
             // View switcher: one tap toggles list/grid; the icon shows the view it switches TO.
             val nextView = if (viewType == ViewType.LIST) ViewType.GRID else ViewType.LIST
             IconButton(onClick = { onSetView(nextView) }) {
                 Icon(
-                    imageVector = when (nextView) {
-                        ViewType.GRID -> Icons.Filled.GridView
-                        ViewType.LIST -> Icons.AutoMirrored.Filled.ViewList
-                    },
-                    contentDescription = "Switch to ${viewTypeLabel(nextView).lowercase()} view",
+                    imageVector =
+                        when (nextView) {
+                            ViewType.GRID -> Icons.Filled.GridView
+                            ViewType.LIST -> Icons.AutoMirrored.Filled.ViewList
+                        },
+                    contentDescription =
+                        stringResource(
+                            Res.string.library_switch_view,
+                            viewTypeLabel(nextView).lowercase(),
+                        ),
                 )
             }
             Box {
                 IconButton(onClick = { sortMenu = true }) {
-                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = "Sort")
+                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = stringResource(Res.string.library_sort))
                 }
                 DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
                     Text(
-                        "Sort by",
+                        stringResource(Res.string.library_sort_by),
                         style = MaterialTheme.typography.labelLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
@@ -509,13 +559,18 @@ private fun LibraryTopBar(
                             trailingIcon = {
                                 if (active) {
                                     Icon(
-                                        imageVector = if (sort.ascending) {
-                                            Icons.Filled.ArrowUpward
-                                        } else {
-                                            Icons.Filled.ArrowDownward
-                                        },
+                                        imageVector =
+                                            if (sort.ascending) {
+                                                Icons.Filled.ArrowUpward
+                                            } else {
+                                                Icons.Filled.ArrowDownward
+                                            },
                                         contentDescription =
-                                            if (sort.ascending) "Ascending" else "Descending",
+                                            if (sort.ascending) {
+                                                stringResource(Res.string.library_sort_ascending)
+                                            } else {
+                                                stringResource(Res.string.library_sort_descending)
+                                            },
                                     )
                                 }
                             },
@@ -551,39 +606,47 @@ private fun SelectionTopBar(
     var reviewMenu by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
     TopAppBar(
-        title = { Text("$count selected") },
+        title = { Text(pluralStringResource(Res.plurals.library_selected_count, count, count)) },
         navigationIcon = {
-            IconButton(onClick = onClose) { Icon(Icons.Filled.Clear, contentDescription = "Cancel") }
+            IconButton(onClick = onClose) {
+                Icon(Icons.Filled.Clear, contentDescription = stringResource(Res.string.common_cancel))
+            }
         },
         actions = {
-            TextButton(onClick = onAddTag) { Text("Add tag") }
-            TextButton(onClick = onRemoveTag) { Text("Remove tag") }
+            TextButton(onClick = onAddTag) { Text(stringResource(Res.string.common_add_tag)) }
+            TextButton(onClick = onRemoveTag) { Text(stringResource(Res.string.library_remove_tag)) }
             // Manual reviewed marker only applies in the inbox-workflow mode.
             if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
                 Box {
-                    TextButton(onClick = { reviewMenu = true }) { Text("Review") }
+                    TextButton(onClick = { reviewMenu = true }) { Text(stringResource(Res.string.library_review)) }
                     DropdownMenu(expanded = reviewMenu, onDismissRequest = { reviewMenu = false }) {
                         DropdownMenuItem(
-                            text = { Text("Mark reviewed") },
-                            onClick = { onSetReviewed(true); reviewMenu = false },
+                            text = { Text(stringResource(Res.string.library_mark_reviewed)) },
+                            onClick = {
+                                onSetReviewed(true)
+                                reviewMenu = false
+                            },
                         )
                         DropdownMenuItem(
-                            text = { Text("Mark needs review") },
-                            onClick = { onSetReviewed(false); reviewMenu = false },
+                            text = { Text(stringResource(Res.string.library_mark_needs_review)) },
+                            onClick = {
+                                onSetReviewed(false)
+                                reviewMenu = false
+                            },
                         )
                     }
                 }
             }
             IconButton(onClick = { confirmTrash = true }) {
-                Icon(Icons.Filled.Delete, contentDescription = "Trash")
+                Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.library_trash))
             }
         },
     )
     if (confirmTrash) {
         dev.npn.app.ui.common.ConfirmDialog(
-            title = "Trash documents",
-            message = "Move $count document(s) to trash?",
-            confirmLabel = "Trash",
+            title = stringResource(Res.string.library_trash_documents),
+            message = pluralStringResource(Res.plurals.library_move_to_trash_question, count, count),
+            confirmLabel = stringResource(Res.string.library_trash),
             onConfirm = {
                 onTrash()
                 confirmTrash = false
@@ -603,67 +666,98 @@ private fun Banners(
     onGoToTrash: () -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
-        if (scanProgress != null) {
-            Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Column(Modifier.padding(12.dp)) {
-                    Text(
-                        "${scanProgress.phase} (${scanProgress.done}/${scanProgress.total})",
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    val fraction = if (scanProgress.total > 0) {
-                        scanProgress.done.toFloat() / scanProgress.total
-                    } else 0f
-                    LinearProgressIndicator(
-                        progress = { fraction },
-                        modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
-                    )
-                }
-            }
-        }
-
+        scanProgress?.let { ScanProgressBanner(it) }
         val conflicts = lastScan?.conflictFiles.orEmpty()
         val dupes = lastScan?.duplicates.orEmpty()
         if (!dismissed && (conflicts.isNotEmpty() || dupes.isNotEmpty())) {
-            Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
-                Row(
-                    Modifier.padding(12.dp).fillMaxWidth(),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    Icon(Icons.Filled.Warning, contentDescription = null)
-                    Text(
-                        buildString {
-                            if (conflicts.isNotEmpty()) append("${conflicts.size} conflict file(s). ")
-                            if (dupes.isNotEmpty()) append("${dupes.size} duplicate(s).")
-                        },
-                        modifier = Modifier.weight(1f),
-                        style = MaterialTheme.typography.bodySmall,
-                    )
-                    TextButton(onClick = onGoToTrash) { Text("Review") }
-                    TextButton(onClick = onDismiss) { Text("Dismiss") }
-                }
-            }
+            ScanIssuesBanner(conflicts.size, dupes.size, onGoToTrash, onDismiss)
         }
+        if (ocr.pending > 0) OcrStatusIndicator(ocr)
+    }
+}
 
-        if (ocr.pending > 0) {
-            Row(
-                Modifier.padding(vertical = 4.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
-            ) {
-                Icon(
-                    Icons.Filled.Refresh,
-                    contentDescription = null,
-                    modifier = Modifier.size(16.dp),
-                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-                Text(
-                    "OCR pending: ${ocr.pending}${if (ocr.running) " (running)" else ""}",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+@Composable
+private fun ScanProgressBanner(scanProgress: dev.npn.core.app.ScanProgressUi) {
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Column(Modifier.padding(12.dp)) {
+            Text(
+                stringResource(
+                    Res.string.library_scan_progress,
+                    scanProgress.phase,
+                    scanProgress.done,
+                    scanProgress.total,
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+            )
+            val fraction =
+                if (scanProgress.total > 0) scanProgress.done.toFloat() / scanProgress.total else 0f
+            LinearProgressIndicator(
+                progress = { fraction },
+                modifier = Modifier.fillMaxWidth().padding(top = 6.dp),
+            )
         }
+    }
+}
+
+@Composable
+private fun ScanIssuesBanner(
+    conflictCount: Int,
+    duplicateCount: Int,
+    onGoToTrash: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
+        Row(
+            Modifier.padding(12.dp).fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(Icons.Filled.Warning, contentDescription = null)
+            val conflictText =
+                if (conflictCount > 0) {
+                    pluralStringResource(Res.plurals.library_conflict_file_count, conflictCount, conflictCount)
+                } else {
+                    null
+                }
+            val duplicateText =
+                if (duplicateCount > 0) {
+                    pluralStringResource(Res.plurals.library_duplicate_count, duplicateCount, duplicateCount)
+                } else {
+                    null
+                }
+            Text(
+                listOfNotNull(conflictText, duplicateText).joinToString(" "),
+                modifier = Modifier.weight(1f),
+                style = MaterialTheme.typography.bodySmall,
+            )
+            TextButton(onClick = onGoToTrash) { Text(stringResource(Res.string.library_review)) }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.library_dismiss)) }
+        }
+    }
+}
+
+@Composable
+private fun OcrStatusIndicator(ocr: dev.npn.core.app.OcrStatus) {
+    Row(
+        Modifier.padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            Icons.Filled.Refresh,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            if (ocr.running) {
+                pluralStringResource(Res.plurals.library_ocr_pending_running, ocr.pending, ocr.pending)
+            } else {
+                pluralStringResource(Res.plurals.library_ocr_pending, ocr.pending, ocr.pending)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 
@@ -677,7 +771,7 @@ private fun LibraryFab(
         ExtendedFloatingActionButton(
             onClick = onImport,
             icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            text = { Text("Import") },
+            text = { Text(stringResource(Res.string.library_import)) },
         )
         return
     }
@@ -686,25 +780,39 @@ private fun LibraryFab(
         ExtendedFloatingActionButton(
             onClick = { expanded = true },
             icon = { Icon(Icons.Filled.Add, contentDescription = null) },
-            text = { Text("Add") },
+            text = { Text(stringResource(Res.string.library_add)) },
         )
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
-                text = { Text("Scan document") },
-                onClick = { expanded = false; onScan() },
+                text = { Text(stringResource(Res.string.library_scan_document)) },
+                onClick = {
+                    expanded = false
+                    onScan()
+                },
             )
             DropdownMenuItem(
-                text = { Text("Import PDF") },
-                onClick = { expanded = false; onImport() },
+                text = { Text(stringResource(Res.string.library_import_pdf)) },
+                onClick = {
+                    expanded = false
+                    onImport()
+                },
             )
         }
     }
 }
 
-private fun sortLabel(field: SortField): String = when (field) {
-    SortField.NAME -> "Name"
-    SortField.ADDED -> "Added"
-    SortField.DOC_DATE -> "Doc date"
-    SortField.SIZE -> "Size"
-}
+@Composable
+private fun sortLabel(field: SortField): String =
+    when (field) {
+        SortField.NAME -> stringResource(Res.string.library_sort_name)
+        SortField.ADDED -> stringResource(Res.string.library_sort_added)
+        SortField.DOC_DATE -> stringResource(Res.string.library_sort_doc_date)
+        SortField.SIZE -> stringResource(Res.string.library_sort_size)
+    }
 
+@Composable
+private fun viewTypeLabel(viewType: ViewType): String =
+    when (viewType) {
+        ViewType.LIST -> stringResource(Res.string.common_view_list)
+        ViewType.GRID -> stringResource(Res.string.common_view_grid)
+    }

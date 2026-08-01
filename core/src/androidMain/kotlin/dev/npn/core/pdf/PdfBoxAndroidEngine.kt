@@ -7,6 +7,7 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
@@ -15,7 +16,6 @@ import com.tom_roush.pdfbox.pdmodel.graphics.image.JPEGFactory
 import com.tom_roush.pdfbox.pdmodel.graphics.image.LosslessFactory
 import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import com.tom_roush.pdfbox.text.PDFTextStripper
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
@@ -25,8 +25,7 @@ import java.io.File
 /**
  * Android [PdfEngine]. Text extraction and image->PDF use pdfbox-android (2.x API:
  * `PDDocument.load(bytes)`, not the 3.x `Loader`). Rendering uses the platform
- * `android.graphics.pdf.PdfRenderer` instead, because pdfbox-android's own renderer is
- * unreliable (PLAN.md / task note).
+ * `android.graphics.pdf.PdfRenderer` instead because pdfbox-android's renderer is unreliable.
  *
  * App-wiring caveats:
  * - `PDFBoxResourceLoader.init(context)` must run once before any pdfbox-android use; done
@@ -34,77 +33,89 @@ import java.io.File
  * - `PdfRenderer` needs a seekable file, so bytes are written to a cache temp file that is
  *   deleted when the handle is closed.
  */
-class PdfBoxAndroidEngine(private val context: Context) : PdfEngine {
-
-    override suspend fun open(bytes: ByteArray): PdfDocumentHandle = withContext(Dispatchers.IO) {
-        ensureInit(context)
-        val pdDoc = try {
-            PDDocument.load(bytes)
-        } catch (t: Throwable) {
-            throw PdfOpenException("Failed to load PDF", t)
-        }
-        // Temp file for the platform PdfRenderer.
-        val temp = File.createTempFile("npn-pdf-", ".pdf", context.cacheDir)
-        try {
-            temp.writeBytes(bytes)
-        } catch (t: Throwable) {
-            pdDoc.close()
-            temp.delete()
-            throw PdfOpenException("Failed to stage PDF for rendering", t)
-        }
-        val pfd = try {
-            ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY)
-        } catch (t: Throwable) {
-            pdDoc.close()
-            temp.delete()
-            throw PdfOpenException("Failed to open PDF for rendering", t)
-        }
-        val renderer = try {
-            PdfRenderer(pfd)
-        } catch (t: Throwable) {
-            pfd.close()
-            pdDoc.close()
-            temp.delete()
-            throw PdfOpenException("Failed to create renderer", t)
-        }
-        AndroidPdfDocumentHandle(pdDoc, renderer, pfd, temp)
-    }
-
-    override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray = withContext(Dispatchers.IO) {
-        ensureInit(context)
-        val doc = PDDocument()
-        try {
-            for (imageBytes in images) {
-                val image: PDImageXObject = if (isJpeg(imageBytes)) {
-                    JPEGFactory.createFromByteArray(doc, imageBytes)
-                } else {
-                    val bitmap = BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
-                        ?: error("Unsupported image bytes (not decodable)")
-                    LosslessFactory.createFromImage(doc, bitmap)
+class PdfBoxAndroidEngine(
+    private val context: Context,
+) : PdfEngine {
+    override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
+        withContext(Dispatchers.IO) {
+            ensureInit(context)
+            val pdDoc =
+                try {
+                    PDDocument.load(bytes)
+                } catch (t: Throwable) {
+                    throw PdfOpenException("Failed to load PDF", t)
                 }
-                val page = PDPage(PDRectangle(image.width.toFloat(), image.height.toFloat()))
-                doc.addPage(page)
-                PDPageContentStream(doc, page).use { cs ->
-                    cs.drawImage(image, 0f, 0f, image.width.toFloat(), image.height.toFloat())
-                }
+            // Temp file for the platform PdfRenderer.
+            val temp = File.createTempFile("npn-pdf-", ".pdf", context.cacheDir)
+            try {
+                temp.writeBytes(bytes)
+            } catch (t: Throwable) {
+                pdDoc.close()
+                temp.delete()
+                throw PdfOpenException("Failed to stage PDF for rendering", t)
             }
-            val out = ByteArrayOutputStream()
-            doc.save(out)
-            out.toByteArray()
-        } finally {
-            doc.close()
+            val pfd =
+                try {
+                    ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY)
+                } catch (t: Throwable) {
+                    pdDoc.close()
+                    temp.delete()
+                    throw PdfOpenException("Failed to open PDF for rendering", t)
+                }
+            val renderer =
+                try {
+                    PdfRenderer(pfd)
+                } catch (t: Throwable) {
+                    pfd.close()
+                    pdDoc.close()
+                    temp.delete()
+                    throw PdfOpenException("Failed to create renderer", t)
+                }
+            AndroidPdfDocumentHandle(pdDoc, renderer, pfd, temp)
         }
-    }
 
-    override suspend fun extractPages(bytes: ByteArray, pageIndices: List<Int>): ByteArray =
+    override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray =
+        withContext(Dispatchers.IO) {
+            ensureInit(context)
+            val doc = PDDocument()
+            try {
+                for (imageBytes in images) {
+                    val image: PDImageXObject =
+                        if (isJpeg(imageBytes)) {
+                            JPEGFactory.createFromByteArray(doc, imageBytes)
+                        } else {
+                            val bitmap =
+                                BitmapFactory.decodeByteArray(imageBytes, 0, imageBytes.size)
+                                    ?: error("Unsupported image bytes (not decodable)")
+                            LosslessFactory.createFromImage(doc, bitmap)
+                        }
+                    val page = PDPage(PDRectangle(image.width.toFloat(), image.height.toFloat()))
+                    doc.addPage(page)
+                    PDPageContentStream(doc, page).use { cs ->
+                        cs.drawImage(image, 0f, 0f, image.width.toFloat(), image.height.toFloat())
+                    }
+                }
+                val out = ByteArrayOutputStream()
+                doc.save(out)
+                out.toByteArray()
+            } finally {
+                doc.close()
+            }
+        }
+
+    override suspend fun extractPages(
+        bytes: ByteArray,
+        pageIndices: List<Int>,
+    ): ByteArray =
         withContext(Dispatchers.IO) {
             ensureInit(context)
             require(pageIndices.isNotEmpty()) { "pageIndices must not be empty" }
-            val source = try {
-                PDDocument.load(bytes)
-            } catch (t: Throwable) {
-                throw PdfOpenException("Failed to load PDF", t)
-            }
+            val source =
+                try {
+                    PDDocument.load(bytes)
+                } catch (t: Throwable) {
+                    throw PdfOpenException("Failed to load PDF", t)
+                }
             try {
                 require(pageIndices.all { it in 0 until source.numberOfPages }) {
                     "page index out of range (pages: ${source.numberOfPages})"
@@ -145,7 +156,6 @@ private class AndroidPdfDocumentHandle(
     private val pfd: ParcelFileDescriptor,
     private val tempFile: File,
 ) : PdfDocumentHandle {
-
     override val pageCount: Int get() = pdDoc.numberOfPages
 
     override fun extractText(pageIndex: Int): String {
@@ -155,7 +165,10 @@ private class AndroidPdfDocumentHandle(
         return stripper.getText(pdDoc).trim()
     }
 
-    override fun renderPagePng(pageIndex: Int, maxDimensionPx: Int): ByteArray {
+    override fun renderPagePng(
+        pageIndex: Int,
+        maxDimensionPx: Int,
+    ): ByteArray {
         val page = renderer.openPage(pageIndex)
         try {
             val srcW = page.width.coerceAtLeast(1)

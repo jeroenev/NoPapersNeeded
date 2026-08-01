@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ai_assistant_title">AI-assistent</string>
+    <string name="ai_clear_conversation">Gesprek wissen</string>
+    <string name="ai_open_document">%1$s openen</string>
+    <string name="ai_collapse">Inklappen</string>
+    <string name="ai_expand">Uitklappen</string>
+    <string name="ai_no_output">(geen uitvoer)</string>
+    <string name="ai_ask_documents">Stel een vraag over je documenten</string>
+    <string name="ai_stop">Stoppen</string>
+    <string name="ai_send">Verzenden</string>
+    <string name="ai_configure_in_settings">Configureer de AI-assistent in Instellingen</string>
+    <string name="ai_tool_searched_documents">Documenten doorzocht: %1$s</string>
+    <string name="ai_tool_searched_file_names">Bestandsnamen doorzocht: %1$s</string>
+    <string name="ai_tool_listed_tagged_documents">Documenten met de tag %1$s vermeld</string>
+    <string name="ai_tool_listed_tags">Tags vermeld</string>
+    <string name="ai_tool_read_document">Document %1$s gelezen</string>
+    <string name="ai_tool_read_document_text">Tekst van %1$s gelezen</string>
+    <string name="ai_unknown_value">(onbekend)</string>
+    <string name="ai_unspecified_document">een document</string>
+
+    <string name="ai_tagging_title">Taggen met AI</string>
+    <string name="ai_tagging_applying">Tags toepassen...</string>
+    <string name="ai_tagging_intro">Tags voorstellen voor een reeks documenten</string>
+    <string name="ai_tagging_untagged_documents">Documenten zonder tags</string>
+    <string name="ai_tagging_review_queue">Beoordelingswachtrij</string>
+    <string name="ai_tagging_all_documents">Alle documenten</string>
+    <string name="ai_tagging_options">Opties</string>
+    <string name="ai_tagging_tags_per_document">Tags per document</string>
+    <string name="ai_tagging_new_tags_per_document">Nieuwe tags per document</string>
+    <string name="ai_tagging_documents_per_batch">Documenten per batch</string>
+    <string name="ai_tagging_range">%1$d-%2$d</string>
+    <string name="ai_tagging_new_tags_range">%1$d-%2$d (%3$d = alleen bestaande)</string>
+    <string name="ai_tagging_start">Starten</string>
+    <string name="ai_tagging_suggesting_progress">Tags voorstellen - %1$d van %2$d</string>
+    <string name="ai_tagging_select_all">Alles selecteren</string>
+    <string name="ai_tagging_clear_selection">Wissen</string>
+    <string name="ai_tagging_skip">Overslaan</string>
+    <string name="ai_tagging_next_batch">Volgende batch</string>
+    <string name="ai_tagging_done">Gereed</string>
+
+    <plurals name="ai_tagging_tags_selected">
+        <item quantity="one">%1$d van %2$d tag geselecteerd</item>
+        <item quantity="other">%1$d van %2$d tags geselecteerd</item>
+    </plurals>
+    <plurals name="ai_tagging_no_suggestions">
+        <item quantity="one">Geen suggesties (%1$d document)</item>
+        <item quantity="other">Geen suggesties (%1$d documenten)</item>
+    </plurals>
+</resources>

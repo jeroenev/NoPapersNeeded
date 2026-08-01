@@ -41,9 +41,48 @@ enum class HistoryEventKind {
 data class HistoryItem(
     val hlc: Hlc,
     val kind: HistoryEventKind,
-    val description: String,
+    val description: HistoryDescription,
     val deviceId: String,
 )
+
+data class HistoryDescription(
+    val key: HistoryTextKey,
+    val arguments: List<String> = emptyList(),
+)
+
+enum class HistoryTextKey {
+    UNDECODABLE,
+    TAG_ADDED,
+    TAG_REMOVED,
+    TITLE_CLEARED,
+    TITLE_CHANGED,
+    NOTE_CLEARED,
+    NOTE_UPDATED,
+    CORRESPONDENT_CLEARED,
+    CORRESPONDENT_CHANGED,
+    DOCUMENT_TYPE_CLEARED,
+    DOCUMENT_TYPE_CHANGED,
+    DOCUMENT_DATE_CLEARED,
+    DOCUMENT_DATE_CHANGED,
+    MARKED_REVIEWED,
+    MARKED_NEEDS_REVIEW,
+    REVIEW_STATE_CLEARED,
+    REVIEW_STATE_CHANGED,
+    OCR_ENGINE_CLEARED,
+    OCR_ENGINE_PINNED,
+    FIELD_REMOVED,
+    FIELD_SET,
+    DOCUMENT_TRASHED,
+    DOCUMENT_RESTORED,
+    DOCUMENT_DELETED,
+    DOCUMENT_RELINKED,
+    TAG_RENAMED,
+    TAG_MERGED,
+    TAG_STYLED,
+    SETTING_CHANGED,
+    UNKNOWN_EVENT,
+    UNKNOWN_EVENT_WITH_PAYLOAD,
+}
 
 /**
  * Maps decoded journal events into human-readable timeline items. The input is already ordered by
@@ -55,7 +94,7 @@ object HistoryMapper {
             record.event?.let(::toHistoryItem) ?: HistoryItem(
                 hlc = record.hlc,
                 kind = HistoryEventKind.UNKNOWN,
-                description = "Could not decode journal event '${record.operation}'",
+                description = historyText(HistoryTextKey.UNDECODABLE, record.operation),
                 deviceId = record.deviceId,
             )
         }
@@ -63,24 +102,64 @@ object HistoryMapper {
     private fun toHistoryItem(event: JournalEvent): HistoryItem {
         val op = event.op
         val kind = opKind(op)
-        val description = when (op) {
-            is JournalOp.TagAdd -> "Added tag '${op.tag}'"
-            is JournalOp.TagRemove -> "Removed tag '${op.tag}'"
-            is JournalOp.PropSet -> propDescription(op.key, op.value)
-            is JournalOp.FieldSet -> fieldDescription(op.key, op.value)
-            is JournalOp.DocTrash -> "Trashed document from '${op.origPath}'"
-            JournalOp.DocRestore -> "Restored document"
-            JournalOp.DocDelete -> "Permanently deleted document"
-            is JournalOp.Relink -> "Relinked to document ${shortId(op.newDoc)}"
-            is JournalOp.TagRename -> "Tag renamed from '${op.from}' to '${op.to}'"
-            is JournalOp.TagMerge -> "Tag '${op.from}' merged into '${op.to}'"
-            is JournalOp.TagStyle -> "Styled tag '${op.tag}'"
-            is JournalOp.SettingSet -> "Changed setting '${op.key}'"
-            is JournalOp.Unknown -> buildString {
-                append("Unknown event '${op.wire}'")
-                if (op.payload.isNotEmpty()) append(": ${op.payload}")
+        val description =
+            when (op) {
+                is JournalOp.TagAdd -> {
+                    historyText(HistoryTextKey.TAG_ADDED, op.tag)
+                }
+
+                is JournalOp.TagRemove -> {
+                    historyText(HistoryTextKey.TAG_REMOVED, op.tag)
+                }
+
+                is JournalOp.PropSet -> {
+                    propDescription(op.key, op.value)
+                }
+
+                is JournalOp.FieldSet -> {
+                    fieldDescription(op.key, op.value)
+                }
+
+                is JournalOp.DocTrash -> {
+                    historyText(HistoryTextKey.DOCUMENT_TRASHED, op.origPath)
+                }
+
+                JournalOp.DocRestore -> {
+                    historyText(HistoryTextKey.DOCUMENT_RESTORED)
+                }
+
+                JournalOp.DocDelete -> {
+                    historyText(HistoryTextKey.DOCUMENT_DELETED)
+                }
+
+                is JournalOp.Relink -> {
+                    historyText(HistoryTextKey.DOCUMENT_RELINKED, shortId(op.newDoc))
+                }
+
+                is JournalOp.TagRename -> {
+                    historyText(HistoryTextKey.TAG_RENAMED, op.from, op.to)
+                }
+
+                is JournalOp.TagMerge -> {
+                    historyText(HistoryTextKey.TAG_MERGED, op.from, op.to)
+                }
+
+                is JournalOp.TagStyle -> {
+                    historyText(HistoryTextKey.TAG_STYLED, op.tag)
+                }
+
+                is JournalOp.SettingSet -> {
+                    historyText(HistoryTextKey.SETTING_CHANGED, op.key)
+                }
+
+                is JournalOp.Unknown -> {
+                    if (op.payload.isEmpty()) {
+                        historyText(HistoryTextKey.UNKNOWN_EVENT, op.wire)
+                    } else {
+                        historyText(HistoryTextKey.UNKNOWN_EVENT_WITH_PAYLOAD, op.wire, op.payload.toString())
+                    }
+                }
             }
-        }
         return HistoryItem(
             hlc = event.hlc,
             kind = kind,
@@ -89,58 +168,130 @@ object HistoryMapper {
         )
     }
 
-    private fun opKind(op: JournalOp): HistoryEventKind = when (op) {
-        is JournalOp.TagAdd -> HistoryEventKind.TAG_ADD
-        is JournalOp.TagRemove -> HistoryEventKind.TAG_REMOVE
-        is JournalOp.PropSet -> when (op.key) {
-            DocProperty.TITLE -> HistoryEventKind.PROP_TITLE
-            DocProperty.NOTES -> HistoryEventKind.PROP_NOTES
-            DocProperty.CORRESPONDENT -> HistoryEventKind.PROP_CORRESPONDENT
-            DocProperty.DOC_TYPE -> HistoryEventKind.PROP_DOC_TYPE
-            DocProperty.DOC_DATE -> HistoryEventKind.PROP_DOC_DATE
-            DocProperty.REVIEWED -> HistoryEventKind.PROP_REVIEWED
-            DocProperty.OCR_ENGINE -> HistoryEventKind.PROP_OCR_ENGINE
-        }
-        is JournalOp.FieldSet -> if (op.value == null) HistoryEventKind.FIELD_REMOVE else HistoryEventKind.FIELD_SET
-        is JournalOp.DocTrash -> HistoryEventKind.TRASH
-        JournalOp.DocRestore -> HistoryEventKind.RESTORE
-        JournalOp.DocDelete -> HistoryEventKind.DELETE
-        is JournalOp.Relink -> HistoryEventKind.RELINK
-        else -> HistoryEventKind.UNKNOWN
-    }
+    private fun opKind(op: JournalOp): HistoryEventKind =
+        when (op) {
+            is JournalOp.TagAdd -> {
+                HistoryEventKind.TAG_ADD
+            }
 
-    private fun propDescription(key: DocProperty, value: String?): String = when (key) {
-        DocProperty.TITLE -> if (value == null) "Cleared title" else "Changed title to '$value'"
-        DocProperty.NOTES -> if (value == null) "Cleared note" else "Updated note"
-        DocProperty.CORRESPONDENT -> if (value == null) {
-            "Cleared correspondent"
-        } else {
-            "Changed correspondent to '$value'"
-        }
-        DocProperty.DOC_TYPE -> if (value == null) {
-            "Cleared document type"
-        } else {
-            "Changed document type to '$value'"
-        }
-        DocProperty.DOC_DATE -> if (value == null) "Cleared document date" else "Changed document date to $value"
-        DocProperty.REVIEWED -> when (value) {
-            "true" -> "Marked reviewed"
-            "false" -> "Marked needs review"
-            else -> "Set review state to '${value ?: "cleared"}'"
-        }
-        DocProperty.OCR_ENGINE -> if (value == null) {
-            "Cleared OCR engine pin"
-        } else {
-            "Pinned OCR engine to $value"
-        }
-    }
+            is JournalOp.TagRemove -> {
+                HistoryEventKind.TAG_REMOVE
+            }
 
-    private fun fieldDescription(key: String, value: String?): String =
+            is JournalOp.PropSet -> {
+                when (op.key) {
+                    DocProperty.TITLE -> HistoryEventKind.PROP_TITLE
+                    DocProperty.NOTES -> HistoryEventKind.PROP_NOTES
+                    DocProperty.CORRESPONDENT -> HistoryEventKind.PROP_CORRESPONDENT
+                    DocProperty.DOC_TYPE -> HistoryEventKind.PROP_DOC_TYPE
+                    DocProperty.DOC_DATE -> HistoryEventKind.PROP_DOC_DATE
+                    DocProperty.REVIEWED -> HistoryEventKind.PROP_REVIEWED
+                    DocProperty.OCR_ENGINE -> HistoryEventKind.PROP_OCR_ENGINE
+                }
+            }
+
+            is JournalOp.FieldSet -> {
+                if (op.value == null) HistoryEventKind.FIELD_REMOVE else HistoryEventKind.FIELD_SET
+            }
+
+            is JournalOp.DocTrash -> {
+                HistoryEventKind.TRASH
+            }
+
+            JournalOp.DocRestore -> {
+                HistoryEventKind.RESTORE
+            }
+
+            JournalOp.DocDelete -> {
+                HistoryEventKind.DELETE
+            }
+
+            is JournalOp.Relink -> {
+                HistoryEventKind.RELINK
+            }
+
+            else -> {
+                HistoryEventKind.UNKNOWN
+            }
+        }
+
+    private fun propDescription(
+        key: DocProperty,
+        value: String?,
+    ): HistoryDescription =
+        when (key) {
+            DocProperty.TITLE -> {
+                if (value == null) {
+                    historyText(HistoryTextKey.TITLE_CLEARED)
+                } else {
+                    historyText(HistoryTextKey.TITLE_CHANGED, value)
+                }
+            }
+
+            DocProperty.NOTES -> {
+                if (value == null) {
+                    historyText(HistoryTextKey.NOTE_CLEARED)
+                } else {
+                    historyText(HistoryTextKey.NOTE_UPDATED)
+                }
+            }
+
+            DocProperty.CORRESPONDENT -> {
+                if (value == null) {
+                    historyText(HistoryTextKey.CORRESPONDENT_CLEARED)
+                } else {
+                    historyText(HistoryTextKey.CORRESPONDENT_CHANGED, value)
+                }
+            }
+
+            DocProperty.DOC_TYPE -> {
+                if (value == null) {
+                    historyText(HistoryTextKey.DOCUMENT_TYPE_CLEARED)
+                } else {
+                    historyText(HistoryTextKey.DOCUMENT_TYPE_CHANGED, value)
+                }
+            }
+
+            DocProperty.DOC_DATE -> {
+                if (value == null) {
+                    historyText(HistoryTextKey.DOCUMENT_DATE_CLEARED)
+                } else {
+                    historyText(HistoryTextKey.DOCUMENT_DATE_CHANGED, value)
+                }
+            }
+
+            DocProperty.REVIEWED -> {
+                when (value) {
+                    "true" -> historyText(HistoryTextKey.MARKED_REVIEWED)
+                    "false" -> historyText(HistoryTextKey.MARKED_NEEDS_REVIEW)
+                    null -> historyText(HistoryTextKey.REVIEW_STATE_CLEARED)
+                    else -> historyText(HistoryTextKey.REVIEW_STATE_CHANGED, value)
+                }
+            }
+
+            DocProperty.OCR_ENGINE -> {
+                if (value == null) {
+                    historyText(HistoryTextKey.OCR_ENGINE_CLEARED)
+                } else {
+                    historyText(HistoryTextKey.OCR_ENGINE_PINNED, value)
+                }
+            }
+        }
+
+    private fun fieldDescription(
+        key: String,
+        value: String?,
+    ): HistoryDescription =
         if (value == null) {
-            "Removed field '$key'"
+            historyText(HistoryTextKey.FIELD_REMOVED, key)
         } else {
-            "Set field '$key' to '$value'"
+            historyText(HistoryTextKey.FIELD_SET, key, value)
         }
 
     private fun shortId(id: String): String = if (id.length > 8) "${id.take(8)}..." else id
 }
+
+private fun historyText(
+    key: HistoryTextKey,
+    vararg arguments: String,
+) = HistoryDescription(key, arguments.toList())

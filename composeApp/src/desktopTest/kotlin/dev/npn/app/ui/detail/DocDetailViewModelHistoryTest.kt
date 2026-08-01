@@ -18,64 +18,68 @@ import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailViewModelHistoryTest : MainDispatcherTest() {
-
     @Test
-    fun loadHistoryPopulatesStateFromSession() = runTest(dispatcher) {
-        val session = FakeLibrarySession().apply {
-            documents.singleDoc.value = listItem("doc-1")
-            documents.historyList = listOf(
-                JournalEvent(
-                    1,
-                    1,
-                    Hlc(100, 0, "dev-a"),
-                    "dev-a",
-                    "doc-1",
-                    JournalOp.TagAdd("invoice"),
-                ).asRecord(),
-                JournalEvent(
-                    1,
-                    2,
-                    Hlc(50, 0, "dev-a"),
-                    "dev-a",
-                    "doc-1",
-                    JournalOp.PropSet(DocProperty.TITLE, "X"),
-                ).asRecord(),
-            )
+    fun loadHistoryPopulatesStateFromSession() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.singleDoc.value = listItem("doc-1")
+                    documents.historyList =
+                        listOf(
+                            JournalEvent(
+                                1,
+                                1,
+                                Hlc(100, 0, "dev-a"),
+                                "dev-a",
+                                "doc-1",
+                                JournalOp.TagAdd("invoice"),
+                            ).asRecord(),
+                            JournalEvent(
+                                1,
+                                2,
+                                Hlc(50, 0, "dev-a"),
+                                "dev-a",
+                                "doc-1",
+                                JournalOp.PropSet(DocProperty.TITLE, "X"),
+                            ).asRecord(),
+                        )
+                }
+            val model = DocDetailViewModel("doc-1", session)
+            val job = launch { model.history.collect {} }
+            advanceUntilIdle()
+
+            model.history.value shouldBe HistoryUiState.NotLoaded
+
+            model.loadHistory()
+            advanceUntilIdle()
+
+            (model.history.value as HistoryUiState.Loaded).items.map { it.description } shouldContainExactly
+                listOf(
+                    HistoryDescription(HistoryTextKey.TAG_ADDED, listOf("invoice")),
+                    HistoryDescription(HistoryTextKey.TITLE_CHANGED, listOf("X")),
+                )
+            job.cancel()
         }
-        val model = DocDetailViewModel("doc-1", session)
-        val job = launch { model.history.collect {} }
-        advanceUntilIdle()
-
-        model.history.value shouldBe HistoryUiState.NotLoaded
-
-        model.loadHistory()
-        advanceUntilIdle()
-
-        (model.history.value as HistoryUiState.Loaded).items.map { it.description } shouldContainExactly listOf(
-            "Added tag 'invoice'",
-            "Changed title to 'X'",
-        )
-        job.cancel()
-    }
 
     @Test
-    fun loadHistoryDoesNotReloadWithoutRefreshAndExposesFailure() = runTest(dispatcher) {
-        val session = FakeLibrarySession()
-        val model = DocDetailViewModel("doc-1", session)
+    fun loadHistoryDoesNotReloadWithoutRefreshAndExposesFailure() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = DocDetailViewModel("doc-1", session)
 
-        model.loadHistory()
-        advanceUntilIdle()
-        model.history.value shouldBe HistoryUiState.Empty
-        model.loadHistory()
-        advanceUntilIdle()
-        session.documents.historyCalls shouldBe 1
+            model.loadHistory()
+            advanceUntilIdle()
+            model.history.value shouldBe HistoryUiState.Empty
+            model.loadHistory()
+            advanceUntilIdle()
+            session.documents.historyCalls shouldBe 1
 
-        session.documents.historyError = IllegalStateException("index unavailable")
-        model.loadHistory(refresh = true)
-        advanceUntilIdle()
-        model.history.value shouldBe HistoryUiState.Error("index unavailable")
-        session.documents.historyCalls shouldBe 2
-    }
+            session.documents.historyError = IllegalStateException("index unavailable")
+            model.loadHistory(refresh = true)
+            advanceUntilIdle()
+            model.history.value shouldBe HistoryUiState.Error("index unavailable")
+            session.documents.historyCalls shouldBe 2
+        }
 
     private fun JournalEvent.asRecord() = DocumentHistoryRecord(hlc, dev, op.wire, this)
 }

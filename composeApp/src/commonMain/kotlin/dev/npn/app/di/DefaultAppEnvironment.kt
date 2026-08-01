@@ -1,5 +1,8 @@
 package dev.npn.app.di
 
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.UiTextKey
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepository
@@ -16,6 +19,7 @@ import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -33,7 +37,10 @@ class OpenedLibrary(
 
 /** Platform hook: build the per-library pieces (fs, db, engines, dirs) for [location]. */
 fun interface PlatformLibraryFactory {
-    suspend fun build(location: String, scope: CoroutineScope): OpenedLibrary
+    suspend fun build(
+        location: String,
+        scope: CoroutineScope,
+    ): OpenedLibrary
 }
 
 /**
@@ -54,10 +61,10 @@ class DefaultAppEnvironment(
     private val watchedFolderFactory: WatchedFolderFactory = WatchedFolderFactory { null },
     private val factory: PlatformLibraryFactory,
 ) : AppEnvironment {
-
     override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
     private val _session = MutableStateFlow<LibrarySessionImpl?>(null)
+
     @Suppress("UNCHECKED_CAST")
     override val session: StateFlow<dev.npn.core.app.LibrarySession?> =
         _session.asStateFlow() as StateFlow<dev.npn.core.app.LibrarySession?>
@@ -70,8 +77,8 @@ class DefaultAppEnvironment(
     private val _opening = MutableStateFlow(false)
     override val opening: StateFlow<Boolean> = _opening.asStateFlow()
 
-    private val _openError = MutableStateFlow<String?>(null)
-    override val openError: StateFlow<String?> = _openError.asStateFlow()
+    private val _openError = MutableStateFlow<UiText?>(null)
+    override val openError: StateFlow<UiText?> = _openError.asStateFlow()
 
     // Closes the resources (db) backing the current session, kept so we can free them on swap.
     private var currentClose: (() -> Unit)? = null
@@ -80,7 +87,8 @@ class DefaultAppEnvironment(
         // Watched-folder auto-import: (re)start an importer whenever the open session or the
         // configured folder changes; collectLatest cancels the previous importer's loops.
         appScope.launch {
-            combine(_session, settings.watchedFolder.distinctUntilChanged()) { s, loc -> s to loc }
+            val watchedFolder = settings.settings.map { it.watchedFolder }.distinctUntilChanged()
+            combine(_session, watchedFolder) { s, loc -> s to loc }
                 .collectLatest { (session, location) ->
                     if (session == null || location == null) return@collectLatest
                     val folder = watchedFolderFactory.open(location) ?: return@collectLatest
@@ -89,15 +97,17 @@ class DefaultAppEnvironment(
         }
     }
 
-    private fun buildImporter(session: dev.npn.core.app.LibrarySession, folder: WatchedFolder) =
-        WatchedFolderImporter(
-            session = session,
-            folder = folder,
-            deleteAfterImport = { settings.watchedFolderDeleteAfterImport.first() },
-        )
+    private fun buildImporter(
+        session: dev.npn.core.app.LibrarySession,
+        folder: WatchedFolder,
+    ) = WatchedFolderImporter(
+        session = session,
+        folder = folder,
+        deleteAfterImport = { settings.settings.first().watchedFolderDeleteAfterImport },
+    )
 
     override suspend fun scanWatchedFolder(): Int {
-        val location = settings.watchedFolder.first() ?: return 0
+        val location = settings.settings.first().watchedFolder ?: return 0
         val session = _session.value ?: return 0
         val folder = watchedFolderFactory.open(location) ?: return 0
         return buildImporter(session, folder).scanOnce().imported
@@ -108,40 +118,44 @@ class DefaultAppEnvironment(
         // cancelled by recomposition while a picker dismisses.
         appScope.launch {
             runCatching { openLibrary(location) }
-                .onFailure { _openError.value = it.message ?: "Could not open the library." }
+                .onFailure {
+                    _openError.value = it.message?.let(UiText::Dynamic)
+                        ?: uiText(UiTextKey.COULD_NOT_OPEN_LIBRARY)
+                }
         }
     }
 
-    override suspend fun openLibrary(location: String) = sessionMutex.withLock {
-        _opening.value = true
-        _openError.value = null
-        try {
-            // Close any existing session/db first.
+    override suspend fun openLibrary(location: String) =
+        sessionMutex.withLock {
+            _opening.value = true
+            _openError.value = null
+            try {
+                closeCurrentInternal()
+
+                val opened = factory.build(location, appScope)
+                val session = LibrarySessionImpl.openSession(opened.deps)
+                session.start(appScope)
+                currentClose = opened.close
+                _session.value = session
+                settings.setLibraryLocation(location)
+            } finally {
+                _opening.value = false
+            }
+        }
+
+    override suspend fun closeLibrary() =
+        sessionMutex.withLock {
             closeCurrentInternal()
-
-            val opened = factory.build(location, appScope)
-            val session = LibrarySessionImpl.openSession(opened.deps)
-            session.start(appScope)
-            currentClose = opened.close
-            _session.value = session
-            settings.setLibraryLocation(location)
-        } finally {
-            _opening.value = false
         }
-    }
-
-    override suspend fun closeLibrary() = sessionMutex.withLock {
-        closeCurrentInternal()
-    }
 
     override suspend fun openPersistedLibrary() {
-        val location = settings.libraryLocation.first() ?: return
-        // Keep the persisted location even on failure (task note): surface failure by leaving the
+        val location = settings.settings.first().libraryLocation ?: return
+        // Keep the persisted location on failure; surface the error by leaving the
         // session null and rethrowing so the UI can handle it.
         openLibrary(location)
     }
 
-    private fun closeCurrentInternal() {
+    private suspend fun closeCurrentInternal() {
         _session.value?.close()
         _session.value = null
         currentClose?.invoke()

@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -8,6 +9,7 @@ import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.DocProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
+
 /**
  * Journal-backed write side. Every metadata change is one or more [PendingOp]s committed through
  * the [JournalCoordinator], which serializes access to the live [dev.npn.core.journal.FoldedState]
@@ -17,8 +19,7 @@ import dev.npn.core.pathrules.StoragePathRuleApplicator
  * File-level operations (trash/restore/permanent delete/rename/move) touch the filesystem directly
  * and keep the DB row in sync immediately (flags/paths) so the UI reacts without waiting for a
  * rescan. Trash/restore/delete also emit journal events so the state syncs across devices; rename
- * and move do NOT (path is file-level state that the indexer re-derives from disk on rescan; there
- * is no path journal op by design, see PLAN.md sec. 2).
+ * and move do not: paths are file-level state that the indexer re-derives from disk on rescan.
  */
 class MetadataWriterImpl(
     private val coordinator: JournalCoordinator,
@@ -28,83 +29,121 @@ class MetadataWriterImpl(
     private val pathRuleApplicator: StoragePathRuleApplicator,
     private val applyAutoMatch: suspend (String) -> Unit = {},
 ) : MetadataWriter {
-
     private val documentDao get() = db.documentDao()
 
-    override suspend fun addTag(docIds: List<String>, tag: String) {
+    override suspend fun addTag(
+        docIds: List<String>,
+        tag: String,
+    ) {
         val t = tag.trim()
         if (t.isEmpty() || docIds.isEmpty()) return
         coordinator.commitAndApply(docIds.map { PendingOp.tagAdd(it, t) })
         docIds.forEach { pathRuleApplicator.applyFor(it) }
     }
 
-    override suspend fun removeTag(docIds: List<String>, tag: String) {
+    override suspend fun removeTag(
+        docIds: List<String>,
+        tag: String,
+    ) {
         val t = tag.trim()
         if (t.isEmpty() || docIds.isEmpty()) return
         coordinator.commitBuilt { state -> orSetTagRemovals(state, docIds, t) }
         docIds.forEach { pathRuleApplicator.applyFor(it) }
     }
 
-    override suspend fun setReviewed(docIds: List<String>, reviewed: Boolean) {
+    override suspend fun setReviewed(
+        docIds: List<String>,
+        reviewed: Boolean,
+    ) {
         if (docIds.isEmpty()) return
         val v = if (reviewed) "true" else "false"
         coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.REVIEWED, v) })
     }
 
-    override suspend fun setCorrespondent(docIds: List<String>, value: String?) {
+    override suspend fun setCorrespondent(
+        docIds: List<String>,
+        value: String?,
+    ) {
         if (docIds.isEmpty()) return
-        val v = value?.trim()?.ifEmpty { null }
+        val v = value.normalized()
         coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.CORRESPONDENT, v) })
         docIds.forEach { pathRuleApplicator.applyFor(it) }
     }
 
-    override suspend fun setDocType(docIds: List<String>, value: String?) {
+    override suspend fun setDocType(
+        docIds: List<String>,
+        value: String?,
+    ) {
         if (docIds.isEmpty()) return
-        val v = value?.trim()?.ifEmpty { null }
+        val v = value.normalized()
         coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.DOC_TYPE, v) })
         docIds.forEach { pathRuleApplicator.applyFor(it) }
     }
 
-    override suspend fun setDocDate(docId: String, isoDate: String?) {
-        val v = isoDate?.trim()?.ifEmpty { null }
+    override suspend fun setDocDate(
+        docId: String,
+        isoDate: String?,
+    ) {
+        val v = isoDate.normalized()
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.DOC_DATE, v)))
         pathRuleApplicator.applyFor(docId)
     }
 
-    override suspend fun setTitle(docId: String, title: String?) {
-        val v = title?.trim()?.ifEmpty { null }
+    override suspend fun setTitle(
+        docId: String,
+        title: String?,
+    ) {
+        val v = title.normalized()
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.TITLE, v)))
         applyAutoMatch(docId)
         pathRuleApplicator.applyFor(docId)
     }
 
-    override suspend fun setNotes(docId: String, notes: String?) {
+    override suspend fun setNotes(
+        docId: String,
+        notes: String?,
+    ) {
         val value = notes?.takeUnless { it.isBlank() }
         if (documentDao.getByDocId(docId)?.notes == value) return
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.NOTES, value)))
     }
 
-    override suspend fun setOcrEngine(docId: String, engine: String?) {
-        val v = engine?.trim()?.ifEmpty { null }
+    override suspend fun setOcrEngine(
+        docId: String,
+        engine: String?,
+    ) {
+        val v = engine.normalized()
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.OCR_ENGINE, v)))
     }
 
-    override suspend fun setField(docId: String, key: String, value: String?) {
+    override suspend fun setField(
+        docId: String,
+        key: String,
+        value: String?,
+    ) {
         val k = key.trim()
         if (k.isEmpty()) return
-        val v = value?.trim()?.ifEmpty { null }
+        val v = value.normalized()
         coordinator.commitAndApply(listOf(PendingOp.fieldSet(docId, k, v)))
     }
 
-    override suspend fun renameTag(from: String, to: String) {
-        val f = from.trim(); val t = to.trim()
+    override suspend fun renameTag(
+        from: String,
+        to: String,
+    ) {
+        val f = from.trim()
+        val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
         coordinator.commitAndApply(listOf(PendingOp.tagRename(f, t)))
         documentDao.getDocIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
     }
 
-    override suspend fun mergeTag(from: String, to: String) {
-        val f = from.trim(); val t = to.trim()
+    override suspend fun mergeTag(
+        from: String,
+        to: String,
+    ) {
+        val f = from.trim()
+        val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
         coordinator.commitAndApply(listOf(PendingOp.tagMerge(f, t)))
         documentDao.getDocIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
@@ -120,7 +159,11 @@ class MetadataWriterImpl(
         affected.forEach { pathRuleApplicator.applyFor(it) }
     }
 
-    override suspend fun setTagStyle(tag: String, color: String?, icon: String?) {
+    override suspend fun setTagStyle(
+        tag: String,
+        color: String?,
+        icon: String?,
+    ) {
         val t = tag.trim()
         if (t.isEmpty()) return
         coordinator.commitAndApply(listOf(PendingOp.tagStyle(t, color, icon)))
@@ -170,7 +213,6 @@ class MetadataWriterImpl(
 
     override suspend fun deleteDocPermanently(docId: String) {
         val doc = documentDao.getByDocId(docId) ?: return
-        // Delete the file wherever it currently sits (canonical path or trash).
         val trashEntry = findTrashEntry(docId)
         when {
             trashEntry != null -> runCatching { fs.delete(trashEntry) }
@@ -186,26 +228,38 @@ class MetadataWriterImpl(
         }
     }
 
-    override suspend fun renameFile(docId: String, newFileName: String) {
-        val doc = documentDao.getByDocId(docId) ?: return
-        val clean = newFileName.trim().ifEmpty { return }
-        val dir = doc.relPath.substringBeforeLast('/', "")
-        val target = if (dir.isEmpty()) clean else "$dir/$clean"
-        if (NpnPaths.normalize(target) == NpnPaths.normalize(doc.relPath)) return
-        fs.move(doc.relPath, target)
-        documentDao.upsert(doc.copy(relPath = target, fileName = clean))
-        applyAutoMatch(docId)
-        pathRuleApplicator.applyFor(docId)
-        // No journal event: path is file-level state, re-derived on rescan.
+    override suspend fun renameFile(
+        docId: String,
+        newFileName: String,
+    ) {
+        relocate(docId) { doc ->
+            val clean = newFileName.trim().ifEmpty { return@relocate null }
+            val dir = doc.relPath.substringBeforeLast('/', "")
+            val target = if (dir.isEmpty()) clean else "$dir/$clean"
+            target to clean
+        }
     }
 
-    override suspend fun moveFile(docId: String, newDirRelPath: String) {
+    override suspend fun moveFile(
+        docId: String,
+        newDirRelPath: String,
+    ) {
+        relocate(docId) { doc ->
+            val dir = NpnPaths.normalize(newDirRelPath)
+            val target = if (dir.isEmpty()) doc.fileName else "$dir/${doc.fileName}"
+            target to target.substringAfterLast('/')
+        }
+    }
+
+    private suspend fun relocate(
+        docId: String,
+        destination: (DocumentEntity) -> Pair<String, String>?,
+    ) {
         val doc = documentDao.getByDocId(docId) ?: return
-        val dir = NpnPaths.normalize(newDirRelPath)
-        val target = if (dir.isEmpty()) doc.fileName else "$dir/${doc.fileName}"
+        val (target, fileName) = destination(doc) ?: return
         if (NpnPaths.normalize(target) == NpnPaths.normalize(doc.relPath)) return
         fs.move(doc.relPath, target)
-        documentDao.upsert(doc.copy(relPath = target, fileName = target.substringAfterLast('/')))
+        documentDao.upsert(doc.copy(relPath = target, fileName = fileName))
         applyAutoMatch(docId)
         pathRuleApplicator.applyFor(docId)
         // No journal event: path is file-level state, re-derived on rescan.
@@ -217,21 +271,31 @@ class MetadataWriterImpl(
      * that do not hold the tag (empty dots). Shared by [removeTag] (a doc subset) and [deleteTag]
      * (every tagged doc) so the "delete-everywhere by observed dots" rule lives in one place.
      */
-    private fun orSetTagRemovals(state: FoldedState, docIds: Collection<String>, tag: String): List<PendingOp> =
+    private fun orSetTagRemovals(
+        state: FoldedState,
+        docIds: Collection<String>,
+        tag: String,
+    ): List<PendingOp> =
         docIds.mapNotNull { docId ->
             val dots = state.liveTagDots(docId, tag)
             if (dots.isEmpty()) null else PendingOp.tagRemove(docId, tag, dots)
         }
 
+    /** Trim a single-value metadata input, coercing null/blank to null (clears the property). */
+    private fun String?.normalized(): String? = this?.trim()?.ifEmpty { null }
+
     // --- trash helpers ---
 
     /** Locate the file currently in `.npn/trash/` that belongs to [docId] (hash-suffixed name). */
     private suspend fun findTrashEntry(docId: String): String? {
-        val marker = "__${docId.take(8)}"
+        val marker = "__${docId.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}"
         return trashOps.listTrash().firstOrNull { it.name.contains(marker) }?.relPath
     }
 
-    private suspend fun restoreFromTrash(docId: String, toRelPath: String): String? {
+    private suspend fun restoreFromTrash(
+        docId: String,
+        toRelPath: String,
+    ): String? {
         val entry = findTrashEntry(docId) ?: return null
         return trashOps.restore(entry, toRelPath)
     }

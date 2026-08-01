@@ -18,14 +18,15 @@ README covers the design, user-facing build/packaging details, and the library f
 mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Key ones:
 
 - Tests: `./gradlew :core:desktopTest` and `./gradlew :composeApp:desktopTest`
-  (viewmodel tests). There is no `:composeApp:desktopTest` mise alias; `mise test` only runs core.
+  (viewmodel tests). `mise test-fast` runs both; `mise test` runs only core.
 - Single test class: `./gradlew :core:desktopTest --tests 'dev.npn.core.journal.FoldTest'`.
-- Lint: `./gradlew detekt` (root task, all modules).
+- Formatting and lint: `./gradlew spotlessCheck detekt`.
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
-- CI (`.github/workflows/ci.yml`) runs: detekt → core tests → composeApp tests →
-  compile android+desktop → assembleDebug → desktopApp build → packageAppImage.
-  Match that order when verifying larger changes.
+- CI (`.github/workflows/ci.yml`) runs: spotlessCheck → shellcheck → checkLocalization →
+  detekt → tests+coverage (kover drives both desktop test suites) → compile android+desktop →
+  assembleDebug → desktopApp build → packageAppImage. Match that order when verifying larger
+  changes.
 
 ## Detekt
 

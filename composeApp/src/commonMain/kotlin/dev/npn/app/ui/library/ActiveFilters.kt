@@ -15,6 +15,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.core.app.LibraryFilter
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_needs_review
+import no_papers_needed.composeapp.generated.resources.common_reviewed
+import no_papers_needed.composeapp.generated.resources.library_remove_filter
+import no_papers_needed.composeapp.generated.resources.library_review_queue
+import no_papers_needed.composeapp.generated.resources.library_tag_filter_all
+import no_papers_needed.composeapp.generated.resources.library_tag_filter_any
+import no_papers_needed.composeapp.generated.resources.library_tag_filter_none
+import no_papers_needed.composeapp.generated.resources.library_untagged
+import org.jetbrains.compose.resources.stringResource
 
 /** Removable chips for each active filter facet under the search bar. */
 @Composable
@@ -23,20 +33,53 @@ fun ActiveFilters(
     onFilterChange: (LibraryFilter) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val chips = buildList {
-        filter.tagsAll.forEach { t -> add("AND $t" to { onFilterChange(filter.copy(tagsAll = filter.tagsAll - t)) }) }
-        filter.tagsAny.forEach { t -> add("OR $t" to { onFilterChange(filter.copy(tagsAny = filter.tagsAny - t)) }) }
-        filter.tagsNone.forEach { t -> add("NOT $t" to { onFilterChange(filter.copy(tagsNone = filter.tagsNone - t)) }) }
-        filter.reviewed?.let { r ->
-            add((if (r) "Reviewed" else "Needs review") to { onFilterChange(filter.copy(reviewed = null)) })
+    val chips =
+        buildList {
+            filter.tagsAll.forEach { t ->
+                add(
+                    stringResource(Res.string.library_tag_filter_all, t) to {
+                        onFilterChange(filter.copy(tagsAll = filter.tagsAll - t))
+                    },
+                )
+            }
+            filter.tagsAny.forEach { t ->
+                add(
+                    stringResource(Res.string.library_tag_filter_any, t) to {
+                        onFilterChange(filter.copy(tagsAny = filter.tagsAny - t))
+                    },
+                )
+            }
+            filter.tagsNone.forEach { t ->
+                add(
+                    stringResource(Res.string.library_tag_filter_none, t) to {
+                        onFilterChange(filter.copy(tagsNone = filter.tagsNone - t))
+                    },
+                )
+            }
+            filter.reviewed?.let { r ->
+                add(
+                    stringResource(if (r) Res.string.common_reviewed else Res.string.common_needs_review) to {
+                        onFilterChange(filter.copy(reviewed = null))
+                    },
+                )
+            }
+            filter.correspondent?.let { c -> add(c to { onFilterChange(filter.copy(correspondent = null)) }) }
+            filter.docType?.let { d -> add(d to { onFilterChange(filter.copy(docType = null)) }) }
+            if (filter.untaggedOnly) {
+                add(
+                    stringResource(Res.string.library_untagged) to {
+                        onFilterChange(filter.copy(untaggedOnly = false))
+                    },
+                )
+            }
+            if (filter.unreviewedOrUntagged) {
+                add(
+                    stringResource(Res.string.library_review_queue) to {
+                        onFilterChange(filter.copy(unreviewedOrUntagged = false))
+                    },
+                )
+            }
         }
-        filter.correspondent?.let { c -> add(c to { onFilterChange(filter.copy(correspondent = null)) }) }
-        filter.docType?.let { d -> add(d to { onFilterChange(filter.copy(docType = null)) }) }
-        if (filter.untaggedOnly) add("Untagged" to { onFilterChange(filter.copy(untaggedOnly = false)) })
-        if (filter.unreviewedOrUntagged) {
-            add("Review queue" to { onFilterChange(filter.copy(unreviewedOrUntagged = false)) })
-        }
-    }
 
     if (chips.isEmpty()) return
 
@@ -50,10 +93,12 @@ fun ActiveFilters(
                 onClick = remove,
                 label = { Text(label) },
                 trailingIcon = {
-                    Icon(Icons.Filled.Clear, contentDescription = "Remove filter")
+                    Icon(
+                        Icons.Filled.Clear,
+                        contentDescription = stringResource(Res.string.library_remove_filter),
+                    )
                 },
             )
         }
     }
 }
-

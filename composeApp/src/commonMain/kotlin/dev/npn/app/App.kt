@@ -35,6 +35,7 @@ import androidx.navigation.toRoute
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.ai.AiTaggingScreen
+import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.Route
@@ -46,12 +47,21 @@ import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.trash.TrashScreen
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_open_library_title
+import no_papers_needed.composeapp.generated.resources.common_open_saved_library_failed
+import no_papers_needed.composeapp.generated.resources.common_opening_library
+import no_papers_needed.composeapp.generated.resources.common_pick_folder_again
+import no_papers_needed.composeapp.generated.resources.common_retry
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun App(env: AppEnvironment) {
-    NpnTheme {
-        Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-            AppRoot(env)
+    LocaleProvider(env.settings) {
+        NpnTheme {
+            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+                AppRoot(env)
+            }
         }
     }
 }
@@ -64,11 +74,12 @@ private fun AppRoot(env: AppEnvironment) {
 
     var restoreError by remember { mutableStateOf<String?>(null) }
     var restoreAttempted by remember { mutableStateOf(false) }
+    val defaultRestoreError = stringResource(Res.string.common_open_saved_library_failed)
 
     LaunchedEffect(Unit) {
         restoreError = null
         runCatching { env.openPersistedLibrary() }
-            .onFailure { restoreError = it.message ?: "Could not open the saved library." }
+            .onFailure { restoreError = it.message ?: defaultRestoreError }
         restoreAttempted = true
     }
 
@@ -81,7 +92,7 @@ private fun AppRoot(env: AppEnvironment) {
                     scope.launch {
                         restoreError = null
                         runCatching { env.openPersistedLibrary() }
-                            .onFailure { restoreError = it.message ?: "Could not open the saved library." }
+                            .onFailure { restoreError = it.message ?: defaultRestoreError }
                     }
                 },
                 onRepickReturned = { location ->
@@ -91,19 +102,32 @@ private fun AppRoot(env: AppEnvironment) {
             )
         }
 
-        opening || !restoreAttempted -> LoadingScreen()
+        opening || !restoreAttempted -> {
+            LoadingScreen()
+        }
 
-        current == null -> OnboardingScreen(env)
+        current == null -> {
+            OnboardingScreen(env)
+        }
 
-        else -> MainNav(env = env, session = current)
+        else -> {
+            MainNav(env = env, session = current)
+        }
     }
 }
 
 @Composable
-private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySession) {
+private fun MainNav(
+    env: AppEnvironment,
+    session: dev.npn.core.app.LibrarySession,
+) {
     val nav = rememberNavController()
     // Ordered doc list for prev/next-document paging in the detail screen; populated on open.
-    val browse = remember { dev.npn.app.ui.detail.BrowseContext() }
+    val browse =
+        remember {
+            dev.npn.app.ui.detail
+                .BrowseContext()
+        }
 
     NavHost(navController = nav, startDestination = Route.Library) {
         composable<Route.Library> {
@@ -150,11 +174,15 @@ private fun MainNav(env: AppEnvironment, session: dev.npn.core.app.LibrarySessio
             )
         }
         composable<Route.Settings> {
-            val changePicker = rememberDirectoryPickerLauncher { dir ->
-                if (dir != null) {
-                    env.requestOpenLibrary(dev.npn.app.ui.common.persistDirectoryAccess(dir))
+            val changePicker =
+                rememberDirectoryPickerLauncher { dir ->
+                    if (dir != null) {
+                        env.requestOpenLibrary(
+                            dev.npn.app.ui.common
+                                .persistDirectoryAccess(dir),
+                        )
+                    }
                 }
-            }
             SettingsScreen(
                 env = env,
                 session = session,
@@ -200,7 +228,7 @@ private fun LoadingScreen() {
     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
-            Text("Opening library...", Modifier.padding(top = 16.dp))
+            Text(stringResource(Res.string.common_opening_library), Modifier.padding(top = 16.dp))
         }
     }
 }
@@ -211,25 +239,31 @@ private fun RestoreErrorScreen(
     onRetry: () -> Unit,
     onRepickReturned: (String) -> Unit,
 ) {
-    val picker = rememberDirectoryPickerLauncher { dir ->
-        if (dir != null) {
-            onRepickReturned(dev.npn.app.ui.common.persistDirectoryAccess(dir))
+    val picker =
+        rememberDirectoryPickerLauncher { dir ->
+            if (dir != null) {
+                onRepickReturned(
+                    dev.npn.app.ui.common
+                        .persistDirectoryAccess(dir),
+                )
+            }
         }
-    }
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             Icon(Icons.Filled.Warning, contentDescription = null)
-            Text("Could not open your library", style = MaterialTheme.typography.titleMedium)
+            Text(stringResource(Res.string.common_open_library_title), style = MaterialTheme.typography.titleMedium)
             Text(
                 message,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-            Button(onClick = onRetry) { Text("Retry") }
-            OutlinedButton(onClick = { picker.launch() }) { Text("Pick folder again") }
+            Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
+            OutlinedButton(onClick = { picker.launch() }) {
+                Text(stringResource(Res.string.common_pick_folder_again))
+            }
         }
     }
 }

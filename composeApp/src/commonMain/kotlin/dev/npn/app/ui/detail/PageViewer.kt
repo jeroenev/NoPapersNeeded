@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
@@ -46,12 +47,25 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.foundation.text.KeyboardOptions
 import dev.npn.app.ui.common.detectDragWhenZoomed
 import dev.npn.app.ui.common.detectPinchTransform
 import dev.npn.app.ui.common.viewerScroll
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.detail_go
+import no_papers_needed.composeapp.generated.resources.detail_go_to_page
+import no_papers_needed.composeapp.generated.resources.detail_next_page
+import no_papers_needed.composeapp.generated.resources.detail_page_number
+import no_papers_needed.composeapp.generated.resources.detail_page_position
+import no_papers_needed.composeapp.generated.resources.detail_page_range
+import no_papers_needed.composeapp.generated.resources.detail_previous_page
+import no_papers_needed.composeapp.generated.resources.detail_render_page_failed
+import no_papers_needed.composeapp.generated.resources.detail_zoom_in
+import no_papers_needed.composeapp.generated.resources.detail_zoom_out
+import no_papers_needed.composeapp.generated.resources.detail_zoom_percent
 import org.jetbrains.compose.resources.decodeToImageBitmap
+import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
 
 /**
@@ -99,8 +113,15 @@ fun PageViewer(
     // so zooming one page and swiping away resets cleanly.
     val current = pagerState.currentPage
     val transforms = remember { mutableStateMapOf<Int, ViewerTransform>() }
+
     fun transformOf(page: Int) = transforms[page] ?: ViewerTransform()
-    fun setTransform(page: Int, t: ViewerTransform) { transforms[page] = t }
+
+    fun setTransform(
+        page: Int,
+        t: ViewerTransform,
+    ) {
+        transforms[page] = t
+    }
 
     // The scroll/zoom gesture lambdas below are captured once by pointerInput and never refreshed,
     // so they must read the current page through State, not the composition-time `current` local
@@ -116,74 +137,76 @@ fun PageViewer(
     val pageScrollAccum = remember { mutableStateOf(0f) }
 
     Box(
-        modifier = modifier
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .onSizeChanged { containerSize = Size(it.width.toFloat(), it.height.toFloat()) }
-            .viewerKeys(
-                pagerState = pagerState,
-                pageCount = pageCount,
-                transform = { transformOf(currentPage.value) },
-                onTransform = { setTransform(currentPage.value, it) },
-                containerSize = { containerSize },
-                fittedSize = { cache.fittedSizeFor(currentPage.value, containerSize) },
-                onPage = { goToPage(it) },
-            )
-            .viewerScroll(
-                // Ctrl+scroll: cursor-anchored zoom.
-                onZoom = { delta, position ->
-                    val page = currentPage.value
-                    val fitted = cache.fittedSizeFor(page, containerSize)
-                    setTransform(
-                        page,
-                        transformOf(page).applyGesture(
-                            zoomChange = 1f - delta * CTRL_SCROLL_ZOOM_STEP,
-                            pan = Offset.Zero,
-                            centroid = position,
-                            fittedSize = fitted,
-                            container = containerSize,
-                        ),
-                    )
-                },
-                // Plain wheel: pan vertically when zoomed, otherwise page up/down (PDF-reader style).
-                onScroll = { delta, _ ->
-                    val page = currentPage.value
-                    val t = transformOf(page)
-                    if (t.isZoomed) {
+        modifier =
+            modifier
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .onSizeChanged { containerSize = Size(it.width.toFloat(), it.height.toFloat()) }
+                .viewerKeys(
+                    pagerState = pagerState,
+                    pageCount = pageCount,
+                    transform = { transformOf(currentPage.value) },
+                    onTransform = { setTransform(currentPage.value, it) },
+                    containerSize = { containerSize },
+                    fittedSize = { cache.fittedSizeFor(currentPage.value, containerSize) },
+                    onPage = { goToPage(it) },
+                ).viewerScroll(
+                    // Ctrl+scroll: cursor-anchored zoom.
+                    onZoom = { delta, position ->
+                        val page = currentPage.value
                         val fitted = cache.fittedSizeFor(page, containerSize)
                         setTransform(
                             page,
-                            t.copy(
-                                offset = clampPan(
-                                    t.offset - Offset(0f, delta * WHEEL_PAN_STEP),
-                                    fitted,
-                                    containerSize,
-                                    t.zoom,
-                                ),
+                            transformOf(page).applyGesture(
+                                zoomChange = 1f - delta * CTRL_SCROLL_ZOOM_STEP,
+                                pan = Offset.Zero,
+                                centroid = position,
+                                fittedSize = fitted,
+                                container = containerSize,
                             ),
                         )
-                        true
-                    } else {
-                        val acc = pageScrollAccum.value
-                        val sameDir = acc == 0f || (acc > 0f) == (delta > 0f)
-                        val next = if (sameDir) acc + delta else delta
-                        if (kotlin.math.abs(next) >= 1f) {
-                            goToPage(page + if (next > 0f) 1 else -1)
-                            pageScrollAccum.value = 0f
+                    },
+                    // Plain wheel: pan vertically when zoomed, otherwise page up/down (PDF-reader style).
+                    onScroll = { delta, _ ->
+                        val page = currentPage.value
+                        val t = transformOf(page)
+                        if (t.isZoomed) {
+                            val fitted = cache.fittedSizeFor(page, containerSize)
+                            setTransform(
+                                page,
+                                t.copy(
+                                    offset =
+                                        clampPan(
+                                            t.offset - Offset(0f, delta * WHEEL_PAN_STEP),
+                                            fitted,
+                                            containerSize,
+                                            t.zoom,
+                                        ),
+                                ),
+                            )
+                            true
                         } else {
-                            pageScrollAccum.value = next
+                            val acc = pageScrollAccum.value
+                            val sameDir = acc == 0f || (acc > 0f) == (delta > 0f)
+                            val next = if (sameDir) acc + delta else delta
+                            if (kotlin.math.abs(next) >= 1f) {
+                                goToPage(page + if (next > 0f) 1 else -1)
+                                pageScrollAccum.value = 0f
+                            } else {
+                                pageScrollAccum.value = next
+                            }
+                            true
                         }
-                        true
-                    }
-                },
-            ),
+                    },
+                ),
         contentAlignment = Alignment.Center,
     ) {
         HorizontalPager(
             state = pagerState,
             modifier = Modifier.fillMaxSize(),
             // While zoomed, drag belongs to pan until the page hits its horizontal edge.
-            userScrollEnabled = transformOf(current)
-                .canPagerConsumeHorizontal(cache.fittedSizeFor(current, containerSize), containerSize),
+            userScrollEnabled =
+                transformOf(current)
+                    .canPagerConsumeHorizontal(cache.fittedSizeFor(current, containerSize), containerSize),
             beyondViewportPageCount = 1,
         ) { page ->
             PageSlide(
@@ -200,12 +223,12 @@ fun PageViewer(
 
         fun zoomButton(delta: Float) {
             val fitted = cache.fittedSizeFor(current, containerSize)
-            setTransform(current, stepZoom(transformOf(current), delta, containerSize, fitted))
+            setTransform(current, zoomAtCenter(transformOf(current), delta, containerSize, fitted))
         }
         ZoomControls(
             transform = transformOf(current),
-            onZoomOut = { zoomButton(-ZOOM_BUTTON_STEP) },
-            onZoomIn = { zoomButton(ZOOM_BUTTON_STEP) },
+            onZoomOut = { zoomButton(-ZOOM_STEP) },
+            onZoomIn = { zoomButton(ZOOM_STEP) },
             onReset = { setTransform(current, ViewerTransform()) },
             modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
         )
@@ -226,28 +249,16 @@ fun PageViewer(
         GoToPageDialog(
             pageCount = pageCount,
             current = current,
-            onGo = { showGoToPage = false; scope.launch { pagerState.animateScrollToPage(it) } },
+            onGo = {
+                showGoToPage = false
+                scope.launch { pagerState.animateScrollToPage(it) }
+            },
             onDismiss = { showGoToPage = false },
         )
     }
 }
 
-/** Zoom-around-center step for the +/- buttons (no cursor position available). */
-private fun stepZoom(t: ViewerTransform, delta: Float, container: Size, fitted: Size): ViewerTransform {
-    if (container == Size.Zero) return t
-    val center = Offset(container.width / 2f, container.height / 2f)
-    val target = (t.zoom + delta).coerceIn(MIN_ZOOM, MAX_ZOOM)
-    return t.applyGesture(
-        zoomChange = target / t.zoom,
-        pan = Offset.Zero,
-        centroid = center,
-        fittedSize = fitted,
-        container = container,
-    )
-}
-
 private const val CTRL_SCROLL_ZOOM_STEP = 0.1f
-private const val ZOOM_BUTTON_STEP = 0.5f
 
 // Pixels of pan per unit of plain-wheel scroll delta when zoomed in.
 private const val WHEEL_PAN_STEP = 60f
@@ -294,37 +305,47 @@ private fun PageSlide(
         }
     }
 
-    val gestures = if (isCurrent) {
-        Modifier.pageGestures(page, container, cache, liveTransform, onTransformChange)
-    } else {
-        Modifier
-    }
+    val gestures =
+        if (isCurrent) {
+            Modifier.pageGestures(page, container, cache, liveTransform, onTransformChange)
+        } else {
+            Modifier
+        }
 
     Box(
         Modifier.fillMaxSize().then(gestures),
         contentAlignment = Alignment.Center,
     ) {
         when (val s = state) {
-            is PageState.Ready -> Image(
-                bitmap = s.bitmap,
-                contentDescription = "Page ${page + 1}",
-                modifier = Modifier
-                    .fillMaxSize()
-                    .onSizeChanged { cache.recordContentSize(page, s.bitmap) }
-                    .graphicsLayer {
-                        transformOrigin = TransformOrigin(0.5f, 0.5f)
-                        scaleX = transform.zoom
-                        scaleY = transform.zoom
-                        translationX = transform.offset.x
-                        translationY = transform.offset.y
-                    },
-                contentScale = ContentScale.Fit,
-            )
-            PageState.Loading -> CircularProgressIndicator()
-            PageState.Failed -> Text(
-                "Could not render this page.",
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            is PageState.Ready -> {
+                Image(
+                    bitmap = s.bitmap,
+                    contentDescription = stringResource(Res.string.detail_page_number, page + 1),
+                    modifier =
+                        Modifier
+                            .fillMaxSize()
+                            .onSizeChanged { cache.recordContentSize(page, s.bitmap) }
+                            .graphicsLayer {
+                                transformOrigin = TransformOrigin(0.5f, 0.5f)
+                                scaleX = transform.zoom
+                                scaleY = transform.zoom
+                                translationX = transform.offset.x
+                                translationY = transform.offset.y
+                            },
+                    contentScale = ContentScale.Fit,
+                )
+            }
+
+            PageState.Loading -> {
+                CircularProgressIndicator()
+            }
+
+            PageState.Failed -> {
+                Text(
+                    stringResource(Res.string.detail_render_page_failed),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }
@@ -340,39 +361,38 @@ private fun Modifier.pageGestures(
     cache: PageBitmapCache,
     liveTransform: State<ViewerTransform>,
     onTransformChange: (ViewerTransform) -> Unit,
-): Modifier = this
-    .pointerInput(page) {
-        detectTapGestures(
-            onDoubleTap = { tap ->
+): Modifier =
+    this
+        .pointerInput(page) {
+            detectTapGestures(
+                onDoubleTap = { tap ->
+                    onTransformChange(
+                        liveTransform.value.toggleZoom(tap, cache.fittedSizeFor(page, container), container),
+                    )
+                },
+            )
+        }.pointerInput(page) {
+            detectPinchTransform { centroid, gestureZoom ->
                 onTransformChange(
-                    liveTransform.value.toggleZoom(tap, cache.fittedSizeFor(page, container), container),
+                    liveTransform.value.applyGesture(
+                        zoomChange = gestureZoom,
+                        pan = Offset.Zero,
+                        centroid = centroid,
+                        fittedSize = cache.fittedSizeFor(page, container),
+                        container = container,
+                    ),
                 )
-            },
-        )
-    }
-    .pointerInput(page) {
-        detectPinchTransform { centroid, gestureZoom ->
-            onTransformChange(
-                liveTransform.value.applyGesture(
-                    zoomChange = gestureZoom,
-                    pan = Offset.Zero,
-                    centroid = centroid,
-                    fittedSize = cache.fittedSizeFor(page, container),
-                    container = container,
-                ),
-            )
+            }
+        }.pointerInput(page) {
+            detectDragWhenZoomed(isZoomed = { liveTransform.value.isZoomed }) { pan ->
+                val t = liveTransform.value
+                onTransformChange(
+                    t.copy(
+                        offset = clampPan(t.offset + pan, cache.fittedSizeFor(page, container), container, t.zoom),
+                    ),
+                )
+            }
         }
-    }
-    .pointerInput(page) {
-        detectDragWhenZoomed(isZoomed = { liveTransform.value.isZoomed }) { pan ->
-            val t = liveTransform.value
-            onTransformChange(
-                t.copy(
-                    offset = clampPan(t.offset + pan, cache.fittedSizeFor(page, container), container, t.zoom),
-                ),
-            )
-        }
-    }
 
 @Composable
 private fun ZoomControls(
@@ -389,13 +409,13 @@ private fun ZoomControls(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onZoomOut, enabled = transform.zoom > MIN_ZOOM) {
-                Icon(Icons.Filled.ZoomOut, contentDescription = "Zoom out")
+                Icon(Icons.Filled.ZoomOut, contentDescription = stringResource(Res.string.detail_zoom_out))
             }
             TextButton(onClick = onReset, enabled = transform.isZoomed) {
-                Text("${(transform.zoom * 100).roundToInt()}%")
+                Text(stringResource(Res.string.detail_zoom_percent, (transform.zoom * 100).roundToInt()))
             }
             IconButton(onClick = onZoomIn, enabled = transform.zoom < MAX_ZOOM) {
-                Icon(Icons.Filled.ZoomIn, contentDescription = "Zoom in")
+                Icon(Icons.Filled.ZoomIn, contentDescription = stringResource(Res.string.detail_zoom_in))
             }
         }
     }
@@ -417,13 +437,22 @@ private fun PageIndicator(
     ) {
         Row(verticalAlignment = Alignment.CenterVertically) {
             IconButton(onClick = onPrev, enabled = pageIndex > 0) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous page")
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    contentDescription = stringResource(Res.string.detail_previous_page),
+                )
             }
             TextButton(onClick = onClick) {
-                Text("${pageIndex + 1} / $pageCount", style = MaterialTheme.typography.labelLarge)
+                Text(
+                    stringResource(Res.string.detail_page_position, pageIndex + 1, pageCount),
+                    style = MaterialTheme.typography.labelLarge,
+                )
             }
             IconButton(onClick = onNext, enabled = pageIndex < pageCount - 1) {
-                Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next page")
+                Icon(
+                    Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    contentDescription = stringResource(Res.string.detail_next_page),
+                )
             }
         }
     }
@@ -441,12 +470,12 @@ private fun GoToPageDialog(
     val valid = parsed != null && parsed in 1..pageCount
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Go to page") },
+        title = { Text(stringResource(Res.string.detail_go_to_page)) },
         text = {
             OutlinedTextField(
                 value = text,
                 onValueChange = { text = it.filter(Char::isDigit) },
-                label = { Text("Page (1-$pageCount)") },
+                label = { Text(stringResource(Res.string.detail_page_range, pageCount)) },
                 singleLine = true,
                 isError = text.isNotEmpty() && !valid,
                 keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
@@ -454,8 +483,12 @@ private fun GoToPageDialog(
             )
         },
         confirmButton = {
-            TextButton(enabled = valid, onClick = { onGo(parsed!! - 1) }) { Text("Go") }
+            TextButton(enabled = valid, onClick = { onGo(parsed!! - 1) }) {
+                Text(stringResource(Res.string.detail_go))
+            }
         },
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Cancel") } },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }
+        },
     )
 }

@@ -6,10 +6,24 @@ import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
 
 /** Display label for a library [ViewType]. */
-fun viewTypeLabel(v: ViewType): String = when (v) {
-    ViewType.LIST -> "List"
-    ViewType.GRID -> "Grid"
-}
+fun viewTypeLabel(v: ViewType): String =
+    when (v) {
+        ViewType.LIST -> "List"
+        ViewType.GRID -> "Grid"
+    }
+
+/** Pick [singular] or [plural] (default: [singular] + "s") based on [count]. */
+fun plural(
+    count: Int,
+    singular: String,
+    plural: String = singular + "s",
+): String = if (count == 1) singular else plural
+
+/**
+ * Maximum entries shown in an inline autocomplete list (tag / correspondent / doc-type / field-key
+ * suggestions). Shared so the various editor fields cap their dropdowns identically.
+ */
+const val MAX_INLINE_SUGGESTIONS = 8
 
 /** Human-readable file size. */
 fun formatSize(bytes: Long): String {
@@ -32,8 +46,10 @@ private fun Double.roundTo(decimals: Int): String {
 
 /** Epoch millis -> yyyy-MM-dd local date. */
 fun formatEpochDate(epochMillis: Long): String {
-    val dt = Instant.fromEpochMilliseconds(epochMillis)
-        .toLocalDateTime(TimeZone.currentSystemDefault())
+    val dt =
+        Instant
+            .fromEpochMilliseconds(epochMillis)
+            .toLocalDateTime(TimeZone.currentSystemDefault())
     val m = (dt.month.ordinal + 1).toString().padStart(2, '0')
     val d = dt.day.toString().padStart(2, '0')
     return "${dt.year}-$m-$d"
@@ -41,8 +57,10 @@ fun formatEpochDate(epochMillis: Long): String {
 
 /** Epoch millis -> yyyy-MM-dd HH:mm:ss in the current local time zone. */
 fun formatEpochDateTime(epochMillis: Long): String {
-    val dt = Instant.fromEpochMilliseconds(epochMillis)
-        .toLocalDateTime(TimeZone.currentSystemDefault())
+    val dt =
+        Instant
+            .fromEpochMilliseconds(epochMillis)
+            .toLocalDateTime(TimeZone.currentSystemDefault())
     val month = (dt.month.ordinal + 1).toString().padStart(2, '0')
     val day = dt.day.toString().padStart(2, '0')
     val hour = dt.hour.toString().padStart(2, '0')

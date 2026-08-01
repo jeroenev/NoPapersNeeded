@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ai_assistant_title">AI assistant</string>
+    <string name="ai_clear_conversation">Clear conversation</string>
+    <string name="ai_open_document">Open %1$s</string>
+    <string name="ai_collapse">Collapse</string>
+    <string name="ai_expand">Expand</string>
+    <string name="ai_no_output">(no output)</string>
+    <string name="ai_ask_documents">Ask about your documents</string>
+    <string name="ai_stop">Stop</string>
+    <string name="ai_send">Send</string>
+    <string name="ai_configure_in_settings">Configure the AI assistant in Settings</string>
+    <string name="ai_tool_searched_documents">Searched documents: %1$s</string>
+    <string name="ai_tool_searched_file_names">Searched file names: %1$s</string>
+    <string name="ai_tool_listed_tagged_documents">Listed documents tagged %1$s</string>
+    <string name="ai_tool_listed_tags">Listed tags</string>
+    <string name="ai_tool_read_document">Read document %1$s</string>
+    <string name="ai_tool_read_document_text">Read text of %1$s</string>
+    <string name="ai_unknown_value">(unknown)</string>
+    <string name="ai_unspecified_document">a document</string>
+
+    <string name="ai_tagging_title">AI tagging</string>
+    <string name="ai_tagging_applying">Applying tags...</string>
+    <string name="ai_tagging_intro">Suggest tags for a set of documents</string>
+    <string name="ai_tagging_untagged_documents">Untagged documents</string>
+    <string name="ai_tagging_review_queue">Review queue</string>
+    <string name="ai_tagging_all_documents">All documents</string>
+    <string name="ai_tagging_options">Options</string>
+    <string name="ai_tagging_tags_per_document">Tags per document</string>
+    <string name="ai_tagging_new_tags_per_document">New tags per document</string>
+    <string name="ai_tagging_documents_per_batch">Documents per batch</string>
+    <string name="ai_tagging_range">%1$d-%2$d</string>
+    <string name="ai_tagging_new_tags_range">%1$d-%2$d (%3$d = existing only)</string>
+    <string name="ai_tagging_start">Start</string>
+    <string name="ai_tagging_suggesting_progress">Suggesting tags - %1$d of %2$d</string>
+    <string name="ai_tagging_select_all">Select all</string>
+    <string name="ai_tagging_clear_selection">Clear</string>
+    <string name="ai_tagging_skip">Skip</string>
+    <string name="ai_tagging_next_batch">Next batch</string>
+    <string name="ai_tagging_done">Done</string>
+
+    <plurals name="ai_tagging_tags_selected">
+        <item quantity="one">%1$d of %2$d tag selected</item>
+        <item quantity="other">%1$d of %2$d tags selected</item>
+    </plurals>
+    <plurals name="ai_tagging_no_suggestions">
+        <item quantity="one">No suggestions (%1$d document)</item>
+        <item quantity="other">No suggestions (%1$d documents)</item>
+    </plurals>
+</resources>

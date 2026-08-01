@@ -56,6 +56,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.BoxWithConstraintsLayout
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.library.effectiveReviewed
@@ -67,8 +68,45 @@ import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
 import io.github.vinceglb.filekit.write
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_back
+import no_papers_needed.composeapp.generated.resources.common_unknown_error
+import no_papers_needed.composeapp.generated.resources.detail_bake_failed
+import no_papers_needed.composeapp.generated.resources.detail_bake_in_place
+import no_papers_needed.composeapp.generated.resources.detail_bake_metadata_in_place
+import no_papers_needed.composeapp.generated.resources.detail_bake_prompt
+import no_papers_needed.composeapp.generated.resources.detail_baked_in_place
+import no_papers_needed.composeapp.generated.resources.detail_baking
+import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_copy
+import no_papers_needed.composeapp.generated.resources.detail_details_metadata
+import no_papers_needed.composeapp.generated.resources.detail_document
+import no_papers_needed.composeapp.generated.resources.detail_document_position
+import no_papers_needed.composeapp.generated.resources.detail_document_unavailable
+import no_papers_needed.composeapp.generated.resources.detail_document_unavailable_hint
+import no_papers_needed.composeapp.generated.resources.detail_export_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_export_failed
+import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_mark_reviewed
+import no_papers_needed.composeapp.generated.resources.detail_mark_unreviewed
+import no_papers_needed.composeapp.generated.resources.detail_more_actions
+import no_papers_needed.composeapp.generated.resources.detail_new_file_name
+import no_papers_needed.composeapp.generated.resources.detail_next_document
+import no_papers_needed.composeapp.generated.resources.detail_previous_document
+import no_papers_needed.composeapp.generated.resources.detail_rename
+import no_papers_needed.composeapp.generated.resources.detail_rename_file
+import no_papers_needed.composeapp.generated.resources.detail_rerun_ocr
+import no_papers_needed.composeapp.generated.resources.detail_rerunning_ocr
+import no_papers_needed.composeapp.generated.resources.detail_split_document
+import no_papers_needed.composeapp.generated.resources.detail_split_failed
+import no_papers_needed.composeapp.generated.resources.detail_splitting
+import no_papers_needed.composeapp.generated.resources.detail_trash
+import no_papers_needed.composeapp.generated.resources.detail_trash_document
+import no_papers_needed.composeapp.generated.resources.detail_trash_prompt
+import org.jetbrains.compose.resources.getString
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
+@Suppress("CyclomaticComplexMethod", "LongMethod")
 fun DocDetailScreen(
     docId: String,
     session: LibrarySession,
@@ -77,9 +115,10 @@ fun DocDetailScreen(
     onNavigateToDoc: (String) -> Unit,
 ) {
     val searchQuery = browse.searchQuery
-    val vm: DocDetailViewModel = viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") {
-        DocDetailViewModel(docId, session, searchQuery)
-    }
+    val vm: DocDetailViewModel =
+        viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") {
+            DocDetailViewModel(docId, session, searchQuery)
+        }
     val doc by vm.doc.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
     val correspondents by vm.correspondents.collectAsStateWithLifecycle()
@@ -96,14 +135,10 @@ fun DocDetailScreen(
 
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
+    SnackbarMessages(vm.messages, snackbar)
     // Tag autocomplete: tagColors already carries every tag name reactively (from observeTags,
     // ordered by name), so derive the suggestion list from it instead of a separate one-shot load.
     val allTagNames = remember(tagColors) { tagColors.keys.toList() }
-
-    // Surface one-shot VM messages (failed metadata writes etc.) as snackbars.
-    LaunchedEffect(vm, snackbar) {
-        vm.messages.collect { snackbar.showSnackbar(it) }
-    }
 
     var showRename by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
@@ -123,32 +158,45 @@ fun DocDetailScreen(
     val goNextDoc: (() -> Unit)? = nextDocId?.let { { onNavigateToDoc(it) } }
 
     // Export: bake a copy to a user-chosen destination.
-    val saver = rememberFileSaverLauncher(
-        dialogSettings = io.github.vinceglb.filekit.dialogs.FileKitDialogSettings.createDefault(),
-    ) { file: PlatformFile? ->
-        if (file != null) {
-            scope.launch {
-                val bytes = vm.bakedCopyBytes()
-                if (bytes != null) {
-                    runCatching { file.write(bytes) }
-                        .onSuccess { snackbar.showSnackbar("Exported baked copy") }
-                        .onFailure { snackbar.showSnackbar("Export failed: ${it.message}") }
-                } else {
-                    snackbar.showSnackbar("Could not bake a copy")
+    val exportedBakedCopy = stringResource(Res.string.detail_exported_baked_copy)
+    val couldNotBakeCopy = stringResource(Res.string.detail_could_not_bake_copy)
+    val unknownError = stringResource(Res.string.common_unknown_error)
+    val saver =
+        rememberFileSaverLauncher(
+            dialogSettings =
+                io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
+                    .createDefault(),
+        ) { file: PlatformFile? ->
+            if (file != null) {
+                scope.launch {
+                    val bytes = vm.bakedCopyBytes()
+                    if (bytes != null) {
+                        runCatching { file.write(bytes) }
+                            .onSuccess { snackbar.showSnackbar(exportedBakedCopy) }
+                            .onFailure {
+                                snackbar.showSnackbar(
+                                    getString(Res.string.detail_export_failed, it.message ?: unknownError),
+                                )
+                            }
+                    } else {
+                        snackbar.showSnackbar(couldNotBakeCopy)
+                    }
                 }
             }
         }
-    }
 
     val current = doc
     if (current == null) {
         Scaffold(
             topBar = {
                 TopAppBar(
-                    title = { Text("Document") },
+                    title = { Text(stringResource(Res.string.detail_document)) },
                     navigationIcon = {
                         IconButton(onClick = onBack) {
-                            Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                            Icon(
+                                Icons.AutoMirrored.Filled.ArrowBack,
+                                contentDescription = stringResource(Res.string.common_back),
+                            )
                         }
                     },
                 )
@@ -157,8 +205,8 @@ fun DocDetailScreen(
             Box(Modifier.fillMaxSize().padding(padding)) {
                 EmptyState(
                     icon = Icons.Filled.Delete,
-                    title = "Document unavailable",
-                    subtitle = "It may have been trashed or moved.",
+                    title = stringResource(Res.string.detail_document_unavailable),
+                    subtitle = stringResource(Res.string.detail_document_unavailable_hint),
                 )
             }
         }
@@ -170,15 +218,30 @@ fun DocDetailScreen(
     val canToggleReviewed = reviewMode == ReviewMode.INBOX_WORKFLOW
 
     Scaffold(
-        modifier = Modifier.onKeyEvent { event ->
-            // Ctrl+Left/Right walks to the prev/next document (desktop).
-            if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) return@onKeyEvent false
-            when (event.key) {
-                Key.DirectionLeft -> goPrevDoc?.let { it(); true } ?: false
-                Key.DirectionRight -> goNextDoc?.let { it(); true } ?: false
-                else -> false
-            }
-        },
+        modifier =
+            Modifier.onKeyEvent { event ->
+                // Ctrl+Left/Right walks to the prev/next document (desktop).
+                if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) return@onKeyEvent false
+                when (event.key) {
+                    Key.DirectionLeft -> {
+                        goPrevDoc?.let {
+                            it()
+                            true
+                        } ?: false
+                    }
+
+                    Key.DirectionRight -> {
+                        goNextDoc?.let {
+                            it()
+                            true
+                        } ?: false
+                    }
+
+                    else -> {
+                        false
+                    }
+                }
+            },
         topBar = {
             DetailTopBar(
                 title = documentDisplayTitle(current.doc.title, current.doc.fileName),
@@ -252,9 +315,10 @@ fun DocDetailScreen(
                 pageCount = ui.pageCount,
                 render = { p, maxDim -> vm.renderPage(p, maxDim) },
                 onPageChange = vm::goToPage,
-                modifier = m
-                    .focusRequester(viewerFocus)
-                    .focusable(),
+                modifier =
+                    m
+                        .focusRequester(viewerFocus)
+                        .focusable(),
             )
         }
 
@@ -273,7 +337,7 @@ fun DocDetailScreen(
                         horizontalArrangement = Arrangement.Center,
                     ) {
                         androidx.compose.material3.OutlinedButton(onClick = { showMetaSheet = true }) {
-                            Text("Details & metadata")
+                            Text(stringResource(Res.string.detail_details_metadata))
                         }
                     }
                 }
@@ -292,9 +356,9 @@ fun DocDetailScreen(
 
     if (showRename) {
         TextInputDialog(
-            title = "Rename file",
-            label = "New file name",
-            confirmLabel = "Rename",
+            title = stringResource(Res.string.detail_rename_file),
+            label = stringResource(Res.string.detail_new_file_name),
+            confirmLabel = stringResource(Res.string.detail_rename),
             onConfirm = {
                 vm.rename(it)
                 showRename = false
@@ -305,9 +369,9 @@ fun DocDetailScreen(
 
     if (confirmTrash) {
         ConfirmDialog(
-            title = "Trash document",
-            message = "Move this document to trash? You can restore it later.",
-            confirmLabel = "Trash",
+            title = stringResource(Res.string.detail_trash_document),
+            message = stringResource(Res.string.detail_trash_prompt),
+            confirmLabel = stringResource(Res.string.detail_trash),
             onConfirm = {
                 confirmTrash = false
                 vm.trash(onBack)
@@ -323,9 +387,20 @@ fun DocDetailScreen(
                 showSplit = false
                 vm.split(segments) { outcome ->
                     when (outcome) {
-                        is SplitOutcome.Done -> onBack() // original is trashed; leave the screen
-                        is SplitOutcome.Failed -> scope.launch {
-                            snackbar.showSnackbar("Split failed: ${outcome.message}")
+                        is SplitOutcome.Done -> {
+                            onBack()
+                        }
+
+                        // original is trashed; leave the screen
+                        is SplitOutcome.Failed -> {
+                            scope.launch {
+                                snackbar.showSnackbar(
+                                    getString(
+                                        Res.string.detail_split_failed,
+                                        outcome.message.ifBlank { unknownError },
+                                    ),
+                                )
+                            }
                         }
                     }
                 }
@@ -336,16 +411,20 @@ fun DocDetailScreen(
 
     if (confirmBake) {
         ConfirmDialog(
-            title = "Bake metadata in place",
-            message = "This rewrites the library file itself to embed tags and properties as XMP. " +
-                "The file's content hash changes and the rewrite syncs to other devices. " +
-                "Prefer Export for a portable copy that leaves the library untouched. Continue?",
-            confirmLabel = "Bake in place",
+            title = stringResource(Res.string.detail_bake_metadata_in_place),
+            message = stringResource(Res.string.detail_bake_prompt),
+            confirmLabel = stringResource(Res.string.detail_bake_in_place),
             onConfirm = {
                 confirmBake = false
                 vm.bakeInPlace { ok ->
                     scope.launch {
-                        snackbar.showSnackbar(if (ok) "Baked in place" else "Bake failed")
+                        snackbar.showSnackbar(
+                            if (ok) {
+                                getString(Res.string.detail_baked_in_place)
+                            } else {
+                                getString(Res.string.detail_bake_failed)
+                            },
+                        )
                     }
                 }
             },
@@ -355,6 +434,7 @@ fun DocDetailScreen(
 }
 
 @Composable
+@Suppress("LongMethod")
 private fun DetailTopBar(
     title: String,
     browsePosition: Pair<Int, Int>?,
@@ -382,7 +462,11 @@ private fun DetailTopBar(
                 Text(title, maxLines = 1)
                 if (browsePosition != null && browsePosition.second > 1) {
                     Text(
-                        "${browsePosition.first} of ${browsePosition.second}",
+                        stringResource(
+                            Res.string.detail_document_position,
+                            browsePosition.first,
+                            browsePosition.second,
+                        ),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -391,61 +475,125 @@ private fun DetailTopBar(
         },
         navigationIcon = {
             IconButton(onClick = onBack) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, contentDescription = "Back")
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(Res.string.common_back),
+                )
             }
         },
         actions = {
             // Prev/next document within the browse order.
             if (browsePosition != null && browsePosition.second > 1) {
                 IconButton(onClick = { onPrevDoc?.invoke() }, enabled = onPrevDoc != null) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowLeft, contentDescription = "Previous document")
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                        contentDescription = stringResource(Res.string.detail_previous_document),
+                    )
                 }
                 IconButton(onClick = { onNextDoc?.invoke() }, enabled = onNextDoc != null) {
-                    Icon(Icons.AutoMirrored.Filled.KeyboardArrowRight, contentDescription = "Next document")
+                    Icon(
+                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                        contentDescription = stringResource(Res.string.detail_next_document),
+                    )
                 }
             }
             if (canToggleReviewed) {
                 IconButton(onClick = onToggleReviewed) {
                     Icon(
                         Icons.Filled.CheckCircle,
-                        contentDescription = if (reviewed) "Mark unreviewed" else "Mark reviewed",
-                        tint = if (reviewed) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant,
+                        contentDescription =
+                            stringResource(
+                                if (reviewed) {
+                                    Res.string.detail_mark_unreviewed
+                                } else {
+                                    Res.string.detail_mark_reviewed
+                                },
+                            ),
+                        tint =
+                            if (reviewed) {
+                                MaterialTheme.colorScheme.primary
+                            } else {
+                                MaterialTheme.colorScheme.onSurfaceVariant
+                            },
                     )
                 }
             }
             IconButton(onClick = onExport) {
-                Icon(Icons.Filled.Share, contentDescription = "Export baked copy")
+                Icon(
+                    Icons.Filled.Share,
+                    contentDescription = stringResource(Res.string.detail_export_baked_copy),
+                )
             }
             Box {
                 IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "More actions")
+                    Icon(
+                        Icons.Filled.MoreVert,
+                        contentDescription = stringResource(Res.string.detail_more_actions),
+                    )
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
-                        text = { Text("Rename file") },
-                        onClick = { menu = false; onRename() },
+                        text = { Text(stringResource(Res.string.detail_rename_file)) },
+                        onClick = {
+                            menu = false
+                            onRename()
+                        },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (reindexing) "Re-running OCR..." else "Re-run OCR") },
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (reindexing) Res.string.detail_rerunning_ocr else Res.string.detail_rerun_ocr,
+                                ),
+                            )
+                        },
                         leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
                         enabled = !reindexing,
-                        onClick = { menu = false; onReOcr() },
+                        onClick = {
+                            menu = false
+                            onReOcr()
+                        },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (splitting) "Splitting..." else "Split document") },
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (splitting) Res.string.detail_splitting else Res.string.detail_split_document,
+                                ),
+                            )
+                        },
                         leadingIcon = { Icon(Icons.Filled.ContentCut, contentDescription = null) },
                         enabled = canSplit && !splitting,
-                        onClick = { menu = false; onSplit() },
+                        onClick = {
+                            menu = false
+                            onSplit()
+                        },
                     )
                     DropdownMenuItem(
-                        text = { Text(if (baking) "Baking..." else "Bake metadata in place") },
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (baking) {
+                                        Res.string.detail_baking
+                                    } else {
+                                        Res.string.detail_bake_metadata_in_place
+                                    },
+                                ),
+                            )
+                        },
                         enabled = !baking,
-                        onClick = { menu = false; onBakeInPlace() },
+                        onClick = {
+                            menu = false
+                            onBakeInPlace()
+                        },
                     )
                     DropdownMenuItem(
-                        text = { Text("Trash") },
+                        text = { Text(stringResource(Res.string.detail_trash)) },
                         leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                        onClick = { menu = false; onTrash() },
+                        onClick = {
+                            menu = false
+                            onTrash()
+                        },
                     )
                 }
             }
@@ -454,8 +602,9 @@ private fun DetailTopBar(
 }
 
 private fun exportName(item: DocListItem): String {
-    val base = documentDisplayTitle(item.doc.title, item.doc.fileName)
-        .substringBeforeLast('.')
-        .ifBlank { "document" }
+    val base =
+        documentDisplayTitle(item.doc.title, item.doc.fileName)
+            .substringBeforeLast('.')
+            .ifBlank { "document" }
     return base
 }

@@ -34,6 +34,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.core.app.SavedView
 import dev.npn.core.model.ReviewMode
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_app_name
+import no_papers_needed.composeapp.generated.resources.common_delete
+import no_papers_needed.composeapp.generated.resources.library_ai_assistant
+import no_papers_needed.composeapp.generated.resources.library_ai_tagging
+import no_papers_needed.composeapp.generated.resources.library_all_documents
+import no_papers_needed.composeapp.generated.resources.library_pin
+import no_papers_needed.composeapp.generated.resources.library_pinned
+import no_papers_needed.composeapp.generated.resources.library_rename
+import no_papers_needed.composeapp.generated.resources.library_review_queue
+import no_papers_needed.composeapp.generated.resources.library_save_current_view_ellipsis
+import no_papers_needed.composeapp.generated.resources.library_saved_views
+import no_papers_needed.composeapp.generated.resources.library_settings
+import no_papers_needed.composeapp.generated.resources.library_tags
+import no_papers_needed.composeapp.generated.resources.library_trash
+import no_papers_needed.composeapp.generated.resources.library_unpin
+import no_papers_needed.composeapp.generated.resources.library_untagged_documents
+import no_papers_needed.composeapp.generated.resources.library_view_actions
+import org.jetbrains.compose.resources.stringResource
 
 @Composable
 fun LibraryDrawerContent(
@@ -60,20 +79,26 @@ fun LibraryDrawerContent(
             .padding(12.dp),
     ) {
         Text(
-            "No papers needed",
+            stringResource(Res.string.common_app_name),
             style = MaterialTheme.typography.titleLarge,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
         )
 
         NavigationDrawerItem(
-            label = { Text("All documents") },
+            label = { Text(stringResource(Res.string.library_all_documents)) },
             selected = false,
             icon = { Icon(Icons.Filled.Home, contentDescription = null) },
             onClick = onAllDocuments,
         )
         val inbox = reviewMode == ReviewMode.INBOX_WORKFLOW
         NavigationDrawerItem(
-            label = { Text(if (inbox) "Review queue" else "Untagged documents") },
+            label = {
+                Text(
+                    stringResource(
+                        if (inbox) Res.string.library_review_queue else Res.string.library_untagged_documents,
+                    ),
+                )
+            },
             selected = false,
             icon = { Icon(Icons.Filled.Inbox, contentDescription = null) },
             // A backlog of untagged documents is normal, so no attention badge outside the inbox
@@ -82,13 +107,13 @@ fun LibraryDrawerContent(
             onClick = onReviewQueue,
         )
         NavigationDrawerItem(
-            label = { Text("Trash") },
+            label = { Text(stringResource(Res.string.library_trash)) },
             selected = false,
             icon = { Icon(Icons.Filled.Delete, contentDescription = null) },
             onClick = onTrash,
         )
         NavigationDrawerItem(
-            label = { Text("Tags") },
+            label = { Text(stringResource(Res.string.library_tags)) },
             selected = false,
             icon = { Icon(Icons.AutoMirrored.Filled.Label, contentDescription = null) },
             onClick = onTags,
@@ -98,7 +123,7 @@ fun LibraryDrawerContent(
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         Text(
-            "Saved views",
+            stringResource(Res.string.library_saved_views),
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
             modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
@@ -114,7 +139,7 @@ fun LibraryDrawerContent(
             )
         }
         NavigationDrawerItem(
-            label = { Text("Save current view...") },
+            label = { Text(stringResource(Res.string.library_save_current_view_ellipsis)) },
             selected = false,
             icon = { Icon(Icons.Filled.Add, contentDescription = null) },
             onClick = onSaveCurrentView,
@@ -122,7 +147,7 @@ fun LibraryDrawerContent(
 
         HorizontalDivider(Modifier.padding(vertical = 8.dp))
         NavigationDrawerItem(
-            label = { Text("Settings") },
+            label = { Text(stringResource(Res.string.library_settings)) },
             selected = false,
             icon = { Icon(Icons.Filled.Settings, contentDescription = null) },
             onClick = onSettings,
@@ -136,13 +161,13 @@ private fun AiDrawerItems(
     onAiTagging: () -> Unit,
 ) {
     NavigationDrawerItem(
-        label = { Text("AI assistant") },
+        label = { Text(stringResource(Res.string.library_ai_assistant)) },
         selected = false,
         icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
         onClick = onAiChat,
     )
     NavigationDrawerItem(
-        label = { Text("AI tagging") },
+        label = { Text(stringResource(Res.string.library_ai_tagging)) },
         selected = false,
         icon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
         onClick = onAiTagging,
@@ -161,21 +186,45 @@ private fun SavedViewRow(
     NavigationDrawerItem(
         label = { Text(view.name) },
         selected = false,
-        icon = if (view.pinned) {
-            { Icon(Icons.Filled.PushPin, contentDescription = "Pinned") }
-        } else null,
+        icon =
+            if (view.pinned) {
+                { Icon(Icons.Filled.PushPin, contentDescription = stringResource(Res.string.library_pinned)) }
+            } else {
+                null
+            },
         badge = {
             Box {
                 IconButton(onClick = { menu = true }) {
-                    Icon(Icons.Filled.MoreVert, contentDescription = "View actions")
+                    Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.library_view_actions))
                 }
                 DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                     DropdownMenuItem(
-                        text = { Text(if (view.pinned) "Unpin" else "Pin") },
-                        onClick = { menu = false; onTogglePin() },
+                        text = {
+                            Text(
+                                stringResource(
+                                    if (view.pinned) Res.string.library_unpin else Res.string.library_pin,
+                                ),
+                            )
+                        },
+                        onClick = {
+                            menu = false
+                            onTogglePin()
+                        },
                     )
-                    DropdownMenuItem(text = { Text("Rename") }, onClick = { menu = false; onRename() })
-                    DropdownMenuItem(text = { Text("Delete") }, onClick = { menu = false; onDelete() })
+                    DropdownMenuItem(
+                        text = { Text(stringResource(Res.string.library_rename)) },
+                        onClick = {
+                            menu = false
+                            onRename()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(Res.string.common_delete)) },
+                        onClick = {
+                            menu = false
+                            onDelete()
+                        },
+                    )
                 }
             }
         },

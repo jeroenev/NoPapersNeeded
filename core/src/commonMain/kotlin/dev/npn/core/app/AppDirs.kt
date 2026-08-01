@@ -2,8 +2,7 @@ package dev.npn.core.app
 
 /**
  * App-local storage locations for one opened library. All three are absolute paths to plain
- * directories outside the synced library folder (PLAN.md sec. 1: the cache is device-private and
- * never lives inside the library).
+ * directories outside the synced library folder so the device-private cache is never synced.
  *
  * - [dbDir]     holds the Room index database file for this library.
  * - [thumbsDir] holds cached first-page thumbnail PNGs.
