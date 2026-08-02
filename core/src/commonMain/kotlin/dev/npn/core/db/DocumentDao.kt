@@ -9,7 +9,6 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface DocumentDao {
-
     @Upsert
     suspend fun upsert(doc: DocumentEntity)
 
@@ -32,7 +31,10 @@ interface DocumentDao {
             "WHERE t.tag = :tag AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
             "ORDER BY d.addedAt DESC LIMIT :limit",
     )
-    suspend fun getLiveWithTag(tag: String, limit: Int): List<DocumentEntity>
+    suspend fun getLiveWithTag(
+        tag: String,
+        limit: Int,
+    ): List<DocumentEntity>
 
     /**
      * Targeted update of the OCR bookkeeping columns. A partial UPDATE (not a row upsert) so a
@@ -46,7 +48,12 @@ interface DocumentDao {
             "ocrEngine = COALESCE(:engine, ocrEngine) " +
             "WHERE docId = :docId",
     )
-    suspend fun updateOcrState(docId: String, state: String, pageCount: Int?, engine: String?)
+    suspend fun updateOcrState(
+        docId: String,
+        state: String,
+        pageCount: Int?,
+        engine: String?,
+    )
 
     @Query("SELECT * FROM documents WHERE docId = :docId")
     fun observeByDocId(docId: String): Flow<DocumentEntity?>
@@ -137,7 +144,10 @@ interface DocumentDao {
             "AND trashed = 0 AND deleted = 0 AND missing = 0 " +
             "ORDER BY correspondent COLLATE NOCASE LIMIT :limit",
     )
-    suspend fun correspondentsForPrefix(prefix: String, limit: Int): List<String>
+    suspend fun correspondentsForPrefix(
+        prefix: String,
+        limit: Int,
+    ): List<String>
 
     /** Distinct non-null document types starting with [prefix], for search autocomplete. */
     @Query(
@@ -147,12 +157,43 @@ interface DocumentDao {
             "AND trashed = 0 AND deleted = 0 AND missing = 0 " +
             "ORDER BY docType COLLATE NOCASE LIMIT :limit",
     )
-    suspend fun docTypesForPrefix(prefix: String, limit: Int): List<String>
+    suspend fun docTypesForPrefix(
+        prefix: String,
+        limit: Int,
+    ): List<String>
 
     /** All document tags for a set of docIds, for grouping list items. */
     @Query("SELECT docId, tag FROM document_tags WHERE docId IN (:docIds)")
-    suspend fun tagsForDocs(docIds: List<String>): List<DocumentTagEntity>
+    suspend fun tagsForDocsChunk(docIds: List<String>): List<DocumentTagEntity>
+
+    /** Chunked [tagsForDocsChunk] so large id sets stay under SQLite's bind-variable limit. */
+    suspend fun tagsForDocs(docIds: List<String>): List<DocumentTagEntity> =
+        chunkedQuery(docIds) { tagsForDocsChunk(it) }
+
+    /** All documents for a set of docIds, for the bulk fold and FTS-first list fetch. */
+    @Query("SELECT * FROM documents WHERE docId IN (:docIds)")
+    suspend fun getByDocIdsChunk(docIds: List<String>): List<DocumentEntity>
+
+    /** Chunked [getByDocIdsChunk] so large id sets stay under SQLite's bind-variable limit. */
+    suspend fun getByDocIds(docIds: List<String>): List<DocumentEntity> = chunkedQuery(docIds) { getByDocIdsChunk(it) }
 
     @Query("DELETE FROM documents")
     suspend fun clearAll()
+
+    companion object {
+        const val BIND_CHUNK = 500
+
+        private suspend fun <T> chunkedQuery(
+            ids: List<String>,
+            block: suspend (List<String>) -> List<T>,
+        ): List<T> {
+            if (ids.isEmpty()) return emptyList()
+            if (ids.size <= BIND_CHUNK) return block(ids)
+            val out = ArrayList<T>(ids.size)
+            for (i in ids.indices step BIND_CHUNK) {
+                out += block(ids.subList(i, minOf(i + BIND_CHUNK, ids.size)))
+            }
+            return out
+        }
+    }
 }

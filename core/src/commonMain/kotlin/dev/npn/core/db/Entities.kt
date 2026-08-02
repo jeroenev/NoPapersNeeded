@@ -20,6 +20,7 @@ import androidx.room3.PrimaryKey
         Index(value = ["correspondent"]),
         Index(value = ["docType"]),
         Index(value = ["docDate"]),
+        Index(value = ["addedAt"]),
         Index(value = ["trashed"]),
         Index(value = ["deleted"]),
         Index(value = ["missing"]),

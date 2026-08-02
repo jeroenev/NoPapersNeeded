@@ -41,6 +41,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -154,8 +155,15 @@ fun DocDetailScreen(
     var showMetaSheet by remember { mutableStateOf(false) }
 
     // Focus the viewer on entry (and when switching docs) so its keyboard shortcuts work on desktop.
+    // Re-run when the document finishes loading so the request happens after the viewer node is
+    // attached; wait one frame so it is registered with the focus owner before asking.
     val viewerFocus = remember { FocusRequester() }
-    LaunchedEffect(docId) { runCatching { viewerFocus.requestFocus() } }
+    LaunchedEffect(docId, doc != null) {
+        if (doc != null) {
+            withFrameNanos { }
+            runCatching { viewerFocus.requestFocus() }
+        }
+    }
 
     // Doc-to-doc paging within the browse order the library handed us.
     val prevDocId = browse.neighbour(docId, -1)
