@@ -11,7 +11,6 @@ import kotlinx.coroutines.flow.Flow
 
 @Dao
 interface TagDao {
-
     @Upsert
     suspend fun upsert(tag: TagEntity)
 
@@ -23,7 +22,10 @@ interface TagDao {
 
     /** Tag names starting with [prefix], for search autocomplete. */
     @Query("SELECT name FROM tags WHERE name LIKE :prefix ESCAPE '\\' ORDER BY name COLLATE NOCASE LIMIT :limit")
-    suspend fun tagsForPrefix(prefix: String, limit: Int): List<String>
+    suspend fun tagsForPrefix(
+        prefix: String,
+        limit: Int,
+    ): List<String>
 
     @Query(
         "SELECT t.name AS name, t.color AS color, t.icon AS icon, " +
@@ -38,16 +40,51 @@ interface TagDao {
 
     /** Replace the full tag set of a document atomically. */
     @Transaction
-    suspend fun setForDocument(docId: String, tags: List<String>) {
+    suspend fun setForDocument(
+        docId: String,
+        tags: List<String>,
+    ) {
         clearDocumentTags(docId)
         if (tags.isNotEmpty()) {
             insertDocumentTags(tags.map { DocumentTagEntity(docId, it) })
         }
     }
 
+    /** Replace the full tag sets of several documents atomically, keyed by docId. */
+    @Transaction
+    suspend fun setForDocuments(updates: Map<String, List<String>>) {
+        if (updates.isEmpty()) return
+        chunkedDelete(updates.keys.toList()) { clearDocumentTagsFor(it) }
+        insertDocumentTags(
+            updates.flatMap { (docId, tags) ->
+                tags.map { tag -> DocumentTagEntity(docId, tag) }
+            },
+        )
+    }
+
     @Query("DELETE FROM document_tags WHERE docId = :docId")
     suspend fun clearDocumentTags(docId: String)
 
+    @Query("DELETE FROM document_tags WHERE docId IN (:docIds)")
+    suspend fun clearDocumentTagsFor(docIds: List<String>)
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertDocumentTags(rows: List<DocumentTagEntity>)
+
+    companion object {
+        /** Chunked [clearDocumentTagsFor] so large doc sets stay under SQLite's bind-variable limit. */
+        private suspend fun chunkedDelete(
+            docIds: List<String>,
+            block: suspend (List<String>) -> Unit,
+        ) {
+            if (docIds.isEmpty()) return
+            if (docIds.size <= DocumentDao.BIND_CHUNK) {
+                block(docIds)
+                return
+            }
+            for (i in docIds.indices step DocumentDao.BIND_CHUNK) {
+                block(docIds.subList(i, minOf(i + DocumentDao.BIND_CHUNK, docIds.size)))
+            }
+        }
+    }
 }

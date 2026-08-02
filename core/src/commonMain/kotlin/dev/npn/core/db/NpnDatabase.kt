@@ -21,7 +21,8 @@ import androidx.room3.migration.AutoMigrationSpec
     // v6: adds metadata_superseded to track compaction snapshot supersession.
     // v7: adds documents.ocrEngine (indexed OCR version) + documents.ocrEngineOverride.
     // v8: adds auto_match_rules. v9 adds journal-projected notes and their FTS column.
-    version = 9,
+    // v10: indexes documents.addedAt for the default library sort.
+    version = 10,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -30,6 +31,7 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 6, to = 7),
         AutoMigration(from = 7, to = 8),
         AutoMigration(from = 8, to = 9),
+        AutoMigration(from = 9, to = 10),
     ],
     entities = [
         DocumentEntity::class,

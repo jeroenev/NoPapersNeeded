@@ -68,6 +68,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -420,7 +421,12 @@ private fun LibraryContent(
     var searchFocused by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
     // Give the shortcut host focus on entry; key events only reach it once something is focused.
-    LaunchedEffect(Unit) { runCatching { contentFocus.requestFocus() } }
+    // Wait for the first frame so the requester node is attached to the focus owner before asking
+    // (requesting during the first composition otherwise warns "FocusRequester is not initialized").
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        runCatching { contentFocus.requestFocus() }
+    }
     Scaffold(
         topBar = {
             if (ui.selectionMode) {

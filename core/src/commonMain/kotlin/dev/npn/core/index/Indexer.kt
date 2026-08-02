@@ -1,8 +1,8 @@
 package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
-import dev.npn.core.db.DocumentFieldEntity
 import dev.npn.core.db.DuplicateEntity
+import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
 import dev.npn.core.db.TagEntity
@@ -15,9 +15,12 @@ import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.DocProperty
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -37,6 +40,7 @@ import kotlinx.coroutines.sync.withLock
  *
  * Only one rescan runs at a time (guarded by a [Mutex]); calling [rescan] repeatedly is safe.
  */
+@Suppress("TooManyFunctions")
 class Indexer(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
@@ -84,11 +88,27 @@ class Indexer(
 
                 report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
                 val hashes = HashMap<String, String>() // relPath -> sha256
+                val progressMutex = Mutex()
                 var hashedCount = 0
-                for (meta in toHash) {
-                    hashes[meta.relPath] = fs.sha256(meta.relPath)
-                    hashedCount++
-                    report(IndexProgress(IndexProgress.Phase.HASHING, hashed = hashedCount, total = toHash.size))
+                coroutineScope {
+                    for (slice in toHash.chunked(HASH_CONCURRENCY)) {
+                        launch(Dispatchers.Default) {
+                            for (meta in slice) {
+                                val hash = fs.sha256(meta.relPath)
+                                progressMutex.withLock {
+                                    hashes[meta.relPath] = hash
+                                    hashedCount++
+                                    report(
+                                        IndexProgress(
+                                            IndexProgress.Phase.HASHING,
+                                            hashed = hashedCount,
+                                            total = toHash.size,
+                                        ),
+                                    )
+                                }
+                            }
+                        }
+                    }
                 }
 
                 report(IndexProgress(IndexProgress.Phase.RECONCILING))
@@ -479,12 +499,17 @@ class Indexer(
         if (request.documentScope == null) {
             for (pm in documentDao.allPathsAndMeta()) journalDocs.add(pm.docId)
         }
+
+        // Bulk preload the current projection (rows, tags, fields, FTS content) so the per-doc
+        // pass below issues no serial reads; diffed writes are collected and flushed once.
+        val preloaded = preloadRows(journalDocs)
         upsertReferencedTags(state, journalDocs, request.styledTags)
-        val supersession = resolveSupersessions(state, journalDocs)
+        val changes = ProjectionChanges()
+        val supersession = resolveSupersessions(state, journalDocs, preloaded.rows, changes)
 
         val resurrected = ArrayList<Resurrected>()
         for (doc in journalDocs) {
-            val row = documentDao.getByDocId(doc) ?: continue
+            val row = preloaded.rows[doc] ?: continue
             projectDocument(
                 doc = doc,
                 row = row,
@@ -492,9 +517,84 @@ class Indexer(
                 supersession = supersession,
                 request = request,
                 resurrected = resurrected,
+                preloaded = preloaded,
+                changes = changes,
             )
         }
+        flushChanges(changes, request)
         return resurrected
+    }
+
+    /**
+     * The current DB projection for one [applyFold] pass, read in a handful of bulk queries so
+     * the per-doc projection performs no serial reads. [rows] is kept mutable: supersession
+     * flips the deleted flag in place so the projection and the final flush both see it.
+     */
+    private class PreloadedRows(
+        val rows: HashMap<String, DocumentEntity>,
+        val tags: Map<String, List<String>>,
+        val fields: Map<String, Map<String, String>>,
+        val ftsContent: Map<String, String?>,
+    )
+
+    /**
+     * Diffed writes accumulated by one [applyFold] projection pass and flushed once at the end.
+     * Each table is written with one bulk call; unchanged tables are left untouched so Room
+     * observers only fire on real changes.
+     */
+    private class ProjectionChanges {
+        val docRows = ArrayList<DocumentEntity>()
+        val tags = LinkedHashMap<String, List<String>>()
+        val fields = LinkedHashMap<String, Map<String, String>>()
+        val ftsRows = ArrayList<FtsDocumentEntity>()
+    }
+
+    private suspend fun preloadRows(journalDocs: Set<String>): PreloadedRows {
+        val docIds = journalDocs.toList()
+        val rows = HashMap<String, DocumentEntity>(docIds.size)
+        for (row in documentDao.getByDocIds(docIds)) rows[row.docId] = row
+
+        val tags = HashMap<String, List<String>>(docIds.size)
+        for ((docId, tagRows) in documentDao.tagsForDocs(docIds).groupBy { it.docId }) {
+            tags[docId] = tagRows.map { it.tag }.sorted()
+        }
+
+        val fields = HashMap<String, Map<String, String>>(docIds.size)
+        for ((docId, fieldRows) in fieldDao.fieldsForDocs(docIds).groupBy { it.docId }) {
+            fields[docId] = fieldRows.associate { it.fieldKey to it.fieldValue }
+        }
+
+        val ftsContent = ftsDao.contentsForDocs(docIds).associate { it.docId to it.content }
+        return PreloadedRows(rows, tags, fields, ftsContent)
+    }
+
+    /**
+     * Flush one fold's diffed changes, one bulk call per table. FTS writes keep the fold's
+     * gating: under the shared [ftsWriteGate] unless [FoldRequest.ftsGateHeld] was already held.
+     */
+    private suspend fun flushChanges(
+        changes: ProjectionChanges,
+        request: FoldRequest,
+    ) {
+        if (changes.docRows.isNotEmpty()) documentDao.upsertAll(changes.docRows)
+        if (changes.tags.isNotEmpty()) tagDao.setForDocuments(changes.tags)
+        if (changes.fields.isNotEmpty()) fieldDao.replaceForDocs(changes.fields)
+        if (changes.ftsRows.isNotEmpty()) {
+            // Read the content to carry forward *under the gate*, so this read-then-replace cannot
+            // clobber a concurrent OCR content write for the same doc (the gate is the same one the
+            // OCR pipeline uses). The metadata-derived columns come from the projection; only the
+            // extracted-text content is refreshed here.
+            val flush: suspend () -> Unit = {
+                val freshContent =
+                    ftsDao
+                        .contentsForDocs(changes.ftsRows.map { it.docId })
+                        .associate { it.docId to it.content }
+                ftsDao.replaceDocuments(
+                    changes.ftsRows.map { row -> row.copy(content = freshContent[row.docId] ?: "") },
+                )
+            }
+            if (request.ftsGateHeld) flush() else ftsWriteGate.withGate { flush() }
+        }
     }
 
     /**
@@ -529,11 +629,14 @@ class Indexer(
 
     /**
      * Mark old docs deleted where a winning relink resolves to a different, known id, and record
-     * predecessors so metadata carries onto the resolved target.
+     * predecessors so metadata carries onto the resolved target. Superseded rows are updated in
+     * [rowsByDocId] and recorded in [changes] so the deletion flushes with the rest of the fold.
      */
-    private suspend fun resolveSupersessions(
+    private fun resolveSupersessions(
         state: FoldedState,
         journalDocs: Set<String>,
+        rowsByDocId: HashMap<String, DocumentEntity>,
+        changes: ProjectionChanges,
     ): Supersession {
         val superseded = HashSet<String>()
         val predecessors = HashMap<String, MutableList<String>>() // target -> old docs resolving here
@@ -541,9 +644,11 @@ class Indexer(
             val resolved = state.resolveDocId(doc)
             if (resolved != doc) {
                 predecessors.getOrPut(resolved) { ArrayList() }.add(doc)
-                val oldRow = documentDao.getByDocId(doc)
+                val oldRow = rowsByDocId[doc]
                 if (oldRow != null && !oldRow.deleted) {
-                    documentDao.upsert(oldRow.copy(deleted = true))
+                    val deletedRow = oldRow.copy(deleted = true)
+                    rowsByDocId[doc] = deletedRow
+                    changes.docRows.add(deletedRow)
                     superseded.add(doc)
                 }
             }
@@ -584,22 +689,24 @@ class Indexer(
     }
 
     /**
-     * Effective tags for a doc plus every predecessor's effective tags. Diffed: only rewrite the
-     * doc's tag rows when the set actually changed, so an unrelated edit does not invalidate
-     * `document_tags` observers for every doc. Returns the effective (sorted) tags and whether the
-     * stored rows changed.
+     * Effective tags for a doc plus every predecessor's effective tags. Diffed against the
+     * preloaded rows: only record a rewrite when the set actually changed, so an unrelated edit
+     * does not invalidate `document_tags` observers for every doc. Returns the effective (sorted)
+     * tags and whether the stored rows changed.
      */
-    private suspend fun projectTags(
+    private fun projectTags(
         state: FoldedState,
         doc: String,
         preds: List<String>,
+        existingTags: Map<String, List<String>>,
+        changes: ProjectionChanges,
     ): Pair<List<String>, Boolean> {
         val tagSet = LinkedHashSet<String>()
         tagSet.addAll(state.effectiveTags(doc))
         for (p in preds) tagSet.addAll(state.effectiveTags(p))
         val effTags = tagSet.toList().sorted()
-        val tagsChanged = tagDao.tagsForDocument(doc) != effTags
-        if (tagsChanged) tagDao.setForDocument(doc, effTags)
+        val tagsChanged = existingTags[doc].orEmpty() != effTags
+        if (tagsChanged) changes.tags[doc] = effTags
         return effTags to tagsChanged
     }
 
@@ -607,20 +714,18 @@ class Indexer(
      * Custom fields: own value wins; inherit predecessor keys this doc doesn't set. Diffed like
      * tags so an unrelated edit does not rewrite this doc's field rows.
      */
-    private suspend fun projectFields(
+    private fun projectFields(
         state: FoldedState,
         doc: String,
         preds: List<String>,
+        existingFields: Map<String, Map<String, String>>,
+        changes: ProjectionChanges,
     ) {
         val effFields = LinkedHashMap<String, String>()
         for (p in preds) effFields.putAll(state.effectiveFields(p))
         effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
-        val curFields = fieldDao.fieldsForDocs(listOf(doc)).associate { it.fieldKey to it.fieldValue }
-        if (curFields != effFields) {
-            fieldDao.deleteForDoc(doc)
-            if (effFields.isNotEmpty()) {
-                fieldDao.upsertAll(effFields.map { (k, v) -> DocumentFieldEntity(doc, k, v) })
-            }
+        if (existingFields[doc].orEmpty() != effFields) {
+            changes.fields[doc] = effFields
         }
     }
 
@@ -680,19 +785,21 @@ class Indexer(
     }
 
     /** Project one doc's tags, fields, props, lifecycle, row and FTS from the folded state. */
-    private suspend fun projectDocument(
+    private fun projectDocument(
         doc: String,
         row: DocumentEntity,
         state: FoldedState,
         supersession: Supersession,
         request: FoldRequest,
         resurrected: MutableList<Resurrected>,
+        preloaded: PreloadedRows,
+        changes: ProjectionChanges,
     ) {
         // Predecessors (older ids that relinked onto this doc): their metadata carries over.
         val preds = supersession.predecessors[doc].orEmpty()
 
-        val (effTags, tagsChanged) = projectTags(state, doc, preds)
-        projectFields(state, doc, preds)
+        val (effTags, tagsChanged) = projectTags(state, doc, preds, preloaded.tags, changes)
+        projectFields(state, doc, preds, preloaded.fields, changes)
         val meta = projectMeta(state, doc, preds)
         val lifecycle =
             projectLifecycle(
@@ -725,20 +832,19 @@ class Indexer(
                 missing = lifecycle.missing,
             )
         val rowChanged = newRow != row
-        if (rowChanged) documentDao.upsert(newRow)
+        if (rowChanged) changes.docRows.add(newRow)
 
         // FTS: preserve the existing extracted-text content (OCR/embedded text written by the
-        // OCR pipeline). The fold only owns the metadata-derived columns; carry content
-        // forward so a metadata change (tag add, prop set) never wipes full-text search.
-        // A brand-new doc has no fts row yet -> null -> empty content until OCR fills it.
-        // Under the shared gate so this read-then-replace cannot interleave with an OCR
-        // content write for the same doc (see FtsWriteGate). All fts metadata columns derive
-        // from the doc row + tags, so when neither changed and a row already exists there is
-        // nothing to write.
-        suspend fun updateFts() {
-            val existingContent = ftsDao.contentForDoc(doc)
-            if (rowChanged || tagsChanged || existingContent == null) {
-                ftsDao.replaceDocument(
+        // OCR pipeline), preloaded before the pass. The fold only owns the metadata-derived
+        // columns; carry content forward so a metadata change (tag add, prop set) never wipes
+        // full-text search. A brand-new doc has no fts row yet -> null -> empty content until
+        // OCR fills it. All fts metadata columns derive from the doc row + tags, so when
+        // neither changed and a row already exists there is nothing to write. The row is
+        // flushed in bulk under the shared FtsWriteGate (see [flushChanges]).
+        val existingContent = preloaded.ftsContent[doc]
+        if (rowChanged || tagsChanged || existingContent == null) {
+            changes.ftsRows.add(
+                FtsDocumentEntity(
                     docId = doc,
                     fileName = lifecycle.fileName,
                     title = meta.title,
@@ -747,10 +853,9 @@ class Indexer(
                     tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
                     correspondent = meta.correspondent,
                     docType = meta.docType,
-                )
-            }
+                ),
+            )
         }
-        if (request.ftsGateHeld) updateFts() else ftsWriteGate.withGate { updateFts() }
     }
 
     private companion object {
@@ -763,5 +868,7 @@ class Indexer(
         const val RELINK_SCORE_FUZZY = 15
 
         const val RELINK_SCORE_PATH_MATCH = 100
+
+        const val HASH_CONCURRENCY = 4
     }
 }
