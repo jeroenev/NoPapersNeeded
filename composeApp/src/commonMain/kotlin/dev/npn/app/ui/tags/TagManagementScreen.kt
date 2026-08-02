@@ -365,7 +365,9 @@ private fun TagRow(
 /** Build the namespace tree from the flat tag list. */
 internal fun buildTree(flat: List<TagInfo>): List<TagNode> {
     val byPath = flat.associateBy { it.name }
-    // Collect all path prefixes so intermediate namespaces appear even without their own tag.
+    // Collect every distinct path (real tags plus the intermediate namespace prefixes they imply),
+    // already sorted. Grouping by immediate parent prefix below makes the tree build linear instead
+    // of repeatedly filtering the whole path set per node (the old implementation was O(N^2)).
     val allPaths = sortedSetOf<String>()
     for (t in flat) {
         val parts = t.name.split('.')
@@ -376,20 +378,17 @@ internal fun buildTree(flat: List<TagInfo>): List<TagNode> {
             allPaths.add(acc.toString())
         }
     }
+    val childrenByParent = HashMap<String, MutableList<String>>()
+    for (path in allPaths) {
+        val parent = path.substringBeforeLast('.', "")
+        childrenByParent.getOrPut(parent) { mutableListOf() }.add(path)
+    }
 
     fun childrenOf(
         prefix: String,
         depth: Int,
     ): List<TagNode> {
-        val prefixDot = if (prefix.isEmpty()) "" else "$prefix."
-        val direct =
-            allPaths
-                .filter { path ->
-                    path != prefix &&
-                        path.startsWith(prefixDot) &&
-                        !path.removePrefix(prefixDot).contains('.')
-                }.sorted()
-
+        val direct = childrenByParent[prefix].orEmpty()
         return direct.map { path ->
             val kids = childrenOf(path, depth + 1)
             val info = byPath[path]

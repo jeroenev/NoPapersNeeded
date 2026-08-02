@@ -155,7 +155,7 @@ class AiTaggingViewModel(
     /** Live document count for the currently selected scope (drives the Idle "N documents" line). */
     val scopeCount: StateFlow<Int> =
         scope
-            .flatMapLatest { session.documents.observeDocuments(scopeFilter(it), SORT).map { d -> d.size } }
+            .flatMapLatest { session.documents.observeCount(scopeFilter(it)) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, 0)
 
     private val processedIds = mutableSetOf<String>()

@@ -12,6 +12,12 @@ import io.github.vinceglb.filekit.PlatformFile
 expect suspend fun loadImageBitmap(path: String): ImageBitmap?
 
 /**
+ * Max entries in the process-wide in-memory decoded-thumbnail LRU. Android has a smaller memory
+ * budget, so it keeps far fewer ~480px ARGB bitmaps (~900 KB each) cached than desktop.
+ */
+expect fun thumbCacheMaxEntries(): Int
+
+/**
  * Convert a FileKit [PlatformFile] into a core [ExternalSource] the session can import.
  * Desktop wraps the nio path; Android wraps the content uri.
  */

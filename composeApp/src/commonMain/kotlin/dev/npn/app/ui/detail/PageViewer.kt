@@ -50,7 +50,9 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.detectDragWhenZoomed
 import dev.npn.app.ui.common.detectPinchTransform
 import dev.npn.app.ui.common.viewerScroll
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.detail_go
@@ -295,7 +297,11 @@ private fun PageSlide(
             state = PageState.Ready(existing)
         } else {
             val bytes = runCatching { render(page, BASE_MAX_DIM * bucket) }.getOrNull()
-            val bmp = bytes?.let { runCatching { it.decodeToImageBitmap() }.getOrNull() }
+            // Decode the possibly-large PNG off the composition/main thread.
+            val bmp =
+                bytes?.let {
+                    runCatching { withContext(Dispatchers.Default) { it.decodeToImageBitmap() } }.getOrNull()
+                }
             if (bmp != null) {
                 cache.put(page, bucket, bmp)
                 state = PageState.Ready(bmp)

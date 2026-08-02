@@ -158,6 +158,8 @@ class DefaultAppEnvironment(
     private suspend fun closeCurrentInternal() {
         _session.value?.close()
         _session.value = null
+        dev.npn.app.ui.common
+            .clearThumbCache()
         currentClose?.invoke()
         currentClose = null
     }

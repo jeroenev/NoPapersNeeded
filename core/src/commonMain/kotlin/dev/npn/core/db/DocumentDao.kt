@@ -77,6 +77,13 @@ interface DocumentDao {
     )
     fun observeLibraryRaw(query: RoomRawQuery): Flow<List<DocumentEntity>>
 
+    /**
+     * Live count of documents matching a WHERE clause assembled by the upper layer. Shares the
+     * [observeLibraryRaw] invalidation set so tag/field edits re-emit the count.
+     */
+    @RawQuery(observedEntities = [DocumentEntity::class, DocumentTagEntity::class])
+    fun observeCount(query: RoomRawQuery): Flow<Int>
+
     // --- Canned queries ---
 
     @Query(

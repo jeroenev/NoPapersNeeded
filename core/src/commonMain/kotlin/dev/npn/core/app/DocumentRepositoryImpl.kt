@@ -10,6 +10,7 @@ import dev.npn.core.journal.JournalCodec
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
@@ -41,6 +42,7 @@ class DocumentRepositoryImpl(
         val queryText = filter.query?.takeIf { it.isNotBlank() }
         val rawFlow = documentDao.observeLibraryRaw(buildQuery(filter, sort))
         return rawFlow
+            .conflate()
             .mapLatest { docs ->
                 if (queryText == null) {
                     // Attach tags and custom fields for all docs in one pass.
@@ -75,6 +77,21 @@ class DocumentRepositoryImpl(
                         }
                 }
             }.flowOn(Dispatchers.Default)
+    }
+
+    override fun observeCount(filter: LibraryFilter): Flow<Int> {
+        // FTS matches can't be expressed as a COUNT predicate, so the query-text path reuses the
+        // (FTS-bounded, already cheap) list flow instead of scanning the library.
+        if (!filter.query.isNullOrBlank()) {
+            return observeDocuments(filter, LibrarySort()).map { it.size }
+        }
+        val parts = buildWhere(filter)
+        val sql = "SELECT COUNT(*) FROM documents d WHERE ${parts.where.joinToString(" AND ")}"
+        return documentDao.observeCount(
+            RoomRawQuery(sql = sql, onBindStatement = { st ->
+                parts.binds.forEachIndexed { idx, bind -> bind(st, idx + 1) }
+            }),
+        )
     }
 
     override fun observeDoc(docId: String): Flow<DocListItem?> =
@@ -144,6 +161,7 @@ class DocumentRepositoryImpl(
     override fun observeTrashed(): Flow<List<DocListItem>> =
         documentDao
             .observeTrashed()
+            .conflate()
             .mapLatest { docs ->
                 val tags = tagsFor(docs.map { it.docId })
                 docs.map { DocListItem(it, tags[it.docId].orEmpty()) }
@@ -181,7 +199,7 @@ class DocumentRepositoryImpl(
     }
 
     /**
-     * Build the filtered/sorted library query. Base predicate excludes trashed/deleted/missing.
+     * Build the filtered library query. Base predicate excludes trashed/deleted/missing.
      * Tag AND/ANY/NONE are done with EXISTS subqueries; folder is a relPath LIKE prefix;
      * untaggedOnly uses NOT EXISTS. Query text (FTS) is handled by the two-step above, so it is not
      * part of this SQL beyond the id constraint being applied in memory.
@@ -190,6 +208,22 @@ class DocumentRepositoryImpl(
         filter: LibraryFilter,
         sort: LibrarySort,
     ): RoomRawQuery {
+        val parts = buildWhere(filter)
+        val sql =
+            buildString {
+                append("SELECT d.* FROM documents d WHERE ")
+                append(parts.where.joinToString(" AND "))
+                append(" ORDER BY ")
+                append(orderBySql(sort))
+            }
+
+        return RoomRawQuery(sql = sql, onBindStatement = { st ->
+            parts.binds.forEachIndexed { idx, bind -> bind(st, idx + 1) }
+        })
+    }
+
+    /** WHERE clause + bind lambdas shared by the list query and [observeCount]. */
+    private fun buildWhere(filter: LibraryFilter): QueryParts {
         val where = ArrayList<String>()
         val binds = ArrayList<(androidx.sqlite.SQLiteStatement, Int) -> Unit>()
 
@@ -262,17 +296,7 @@ class DocumentRepositoryImpl(
             bindText(escapeLike(prefix) + "%")
         }
 
-        val sql =
-            buildString {
-                append("SELECT d.* FROM documents d WHERE ")
-                append(where.joinToString(" AND "))
-                append(" ORDER BY ")
-                append(orderBySql(sort))
-            }
-
-        return RoomRawQuery(sql = sql, onBindStatement = { st ->
-            binds.forEachIndexed { idx, bind -> bind(st, idx + 1) }
-        })
+        return QueryParts(where, binds)
     }
 
     private fun orderBySql(sort: LibrarySort): String {
@@ -290,6 +314,12 @@ class DocumentRepositoryImpl(
     }
 
     private fun escapeLike(s: String): String = s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
+
+    /** WHERE clause list plus ordered bind lambdas, built once and shared by list + count queries. */
+    private data class QueryParts(
+        val where: List<String>,
+        val binds: List<(androidx.sqlite.SQLiteStatement, Int) -> Unit>,
+    )
 
     private companion object {
         const val MIN_SUGGESTION_LENGTH = 2

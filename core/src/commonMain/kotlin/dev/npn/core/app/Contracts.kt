@@ -89,6 +89,13 @@ interface DocumentRepository {
         sort: LibrarySort,
     ): Flow<List<DocListItem>>
 
+    /**
+     * Live count of documents matching [filter] (same WHERE semantics as [observeDocuments]).
+     * Unlike observing the list, this never materializes rows or attaches tags/fields, so it is
+     * cheap even for large libraries.
+     */
+    fun observeCount(filter: LibraryFilter): Flow<Int>
+
     fun observeDoc(docId: String): Flow<DocListItem?>
 
     fun observeUntaggedCount(): Flow<Int> // UNTAGGED_ONLY review count

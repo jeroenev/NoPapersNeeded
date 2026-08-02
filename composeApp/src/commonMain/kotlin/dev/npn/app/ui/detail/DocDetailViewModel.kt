@@ -175,17 +175,21 @@ class DocDetailViewModel(
             val configured = session.ai.isConfiguredOrFalse()
             _aiTags.value = _aiTags.value.copy(available = configured)
         }
+        // Sync the note editor's persisted value from the already-shared [doc] StateFlow instead of
+        // subscribing to observeDoc a second time (that would double the Room invalidation wiring).
         viewModelScope.launch {
-            session.documents.observeDoc(docId).collect { item ->
-                val persisted = item?.doc?.notes.orEmpty()
-                val current = _noteEditor.value
-                _noteEditor.value =
-                    if (current.dirty) {
-                        current.copy(persisted = persisted)
-                    } else {
-                        current.copy(draft = persisted, persisted = persisted)
-                    }
-            }
+            doc
+                .map { it?.doc?.notes.orEmpty() }
+                .distinctUntilChanged()
+                .collect { persisted ->
+                    val current = _noteEditor.value
+                    _noteEditor.value =
+                        if (current.dirty) {
+                            current.copy(persisted = persisted)
+                        } else {
+                            current.copy(draft = persisted, persisted = persisted)
+                        }
+                }
         }
     }
 

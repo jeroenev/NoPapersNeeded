@@ -74,7 +74,9 @@ class Indexer(
 
             report(IndexProgress(IndexProgress.Phase.LISTING))
             try {
-                val all = fs.listAll()
+                // Indexable walk: `.npn/` (journal, OCR sidecars, trash) is never indexed, so skip
+                // it instead of traversing the whole metadata tree on every rescan.
+                val all = fs.listAllIndexable()
 
                 val (indexable, conflictFiles) = partition(all)
 

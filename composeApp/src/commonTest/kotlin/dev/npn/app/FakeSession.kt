@@ -38,6 +38,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.map
 
 /**
  * Test doubles for [LibrarySession] and its sub-interfaces. Everything is backed by
@@ -101,6 +102,16 @@ class FakeDocumentRepository : DocumentRepository {
         observedFilters += filter to sort
         return documents
     }
+
+    val count = MutableStateFlow(0)
+
+    /** Mirrors the real implementation for the common case: count = documents.size. */
+    override fun observeCount(filter: LibraryFilter): Flow<Int> =
+        if (filter.query.isNullOrBlank()) {
+            documents.map { it.size }
+        } else {
+            count
+        }
 
     override fun observeDoc(docId: String): Flow<DocListItem?> = singleDoc
 
