@@ -22,6 +22,8 @@ actual suspend fun loadImageBitmap(path: String): ImageBitmap? =
         }.getOrNull()
     }
 
+actual fun thumbCacheMaxEntries(): Int = 256
+
 actual fun platformFileToExternalSource(file: PlatformFile): ExternalSource =
     ExternalSource(Paths.get(file.absolutePath()))
 

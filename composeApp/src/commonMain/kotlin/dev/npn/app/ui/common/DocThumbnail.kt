@@ -26,29 +26,39 @@ import kotlinx.coroutines.sync.withLock
 
 private sealed interface ThumbState {
     data object Loading : ThumbState
-    data class Loaded(val bitmap: ImageBitmap) : ThumbState
+
+    data class Loaded(
+        val bitmap: ImageBitmap,
+    ) : ThumbState
+
     data object Failed : ThumbState
 }
 
 /**
  * Process-wide LRU cache of decoded thumbnail [ImageBitmap]s keyed by docId. Avoids re-reading
  * and re-decoding the cached PNG from disk every time an item scrolls back into view, which
- * otherwise adds needless IO/decoding load during fast scrolling over a large library.
+ * otherwise adds needless IO/decoding load during fast scrolling over a large library. The cap is
+ * platform-dependent (see [thumbCacheMaxEntries]); the cache is cleared on library close.
  */
-private const val THUMB_CACHE_MAX = 256
-
-private val thumbBitmapCache = object : LinkedHashMap<String, ImageBitmap>(16, 0.75f, true) {
-    override fun removeEldestEntry(eldest: Map.Entry<String, ImageBitmap>): Boolean =
-        size > THUMB_CACHE_MAX
-}
+private val thumbBitmapCache =
+    object : LinkedHashMap<String, ImageBitmap>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, ImageBitmap>): Boolean = size > thumbCacheMaxEntries()
+    }
 
 private val thumbCacheMutex = Mutex()
 
-private suspend fun cachedThumb(docId: String): ImageBitmap? =
-    thumbCacheMutex.withLock { thumbBitmapCache[docId] }
+private suspend fun cachedThumb(docId: String): ImageBitmap? = thumbCacheMutex.withLock { thumbBitmapCache[docId] }
 
-private suspend fun putThumb(docId: String, bitmap: ImageBitmap) {
+private suspend fun putThumb(
+    docId: String,
+    bitmap: ImageBitmap,
+) {
     thumbCacheMutex.withLock { thumbBitmapCache[docId] = bitmap }
+}
+
+/** Drop every decoded thumbnail. Called when a library is closed so the next library starts fresh. */
+suspend fun clearThumbCache() {
+    thumbCacheMutex.withLock { thumbBitmapCache.clear() }
 }
 
 /**
@@ -71,39 +81,46 @@ fun DocThumbnail(
         }
         value = ThumbState.Loading
         val path = runCatching { content.thumbnailPath(docId) }.getOrNull()
-        value = if (path == null) {
-            ThumbState.Failed
-        } else {
-            val bmp = loadImageBitmap(path)
-            if (bmp != null) {
-                putThumb(docId, bmp)
-                ThumbState.Loaded(bmp)
-            } else {
+        value =
+            if (path == null) {
                 ThumbState.Failed
+            } else {
+                val bmp = loadImageBitmap(path)
+                if (bmp != null) {
+                    putThumb(docId, bmp)
+                    ThumbState.Loaded(bmp)
+                } else {
+                    ThumbState.Failed
+                }
             }
-        }
     }
 
     Box(
-        modifier = modifier
-            .size(size)
-            .clip(shape)
-            .background(MaterialTheme.colorScheme.surfaceVariant),
+        modifier =
+            modifier
+                .size(size)
+                .clip(shape)
+                .background(MaterialTheme.colorScheme.surfaceVariant),
         contentAlignment = Alignment.Center,
     ) {
         when (val s = state) {
-            is ThumbState.Loaded -> Image(
-                bitmap = s.bitmap,
-                contentDescription = null,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop,
-            )
-            else -> Icon(
-                imageVector = Icons.Filled.Description,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(size / 2),
-            )
+            is ThumbState.Loaded -> {
+                Image(
+                    bitmap = s.bitmap,
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop,
+                )
+            }
+
+            else -> {
+                Icon(
+                    imageVector = Icons.Filled.Description,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(size / 2),
+                )
+            }
         }
     }
 }

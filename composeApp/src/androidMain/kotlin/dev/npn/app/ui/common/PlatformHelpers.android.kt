@@ -24,6 +24,8 @@ actual suspend fun loadImageBitmap(path: String): ImageBitmap? =
         }.getOrNull()
     }
 
+actual fun thumbCacheMaxEntries(): Int = 32
+
 /** Resolve a FileKit [PlatformFile] to a content/file Uri, whichever wrapper it carries. */
 private fun PlatformFile.toAndroidUri(): Uri =
     when (val af = androidFile) {

@@ -44,9 +44,15 @@ class JvmLibraryFileSystem(
 
     override suspend fun listAll(): List<FileMeta> = listAllFrom(root)
 
+    /** [listAll] without the `.npn/` metadata subtree, for indexing/rescan walks. */
+    override suspend fun listAllIndexable(): List<FileMeta> = listAllFrom(root, skipNpn = true)
+
     override suspend fun listAllUnder(relPath: String): List<FileMeta> = listAllFrom(resolve(relPath))
 
-    private suspend fun listAllFrom(start: Path): List<FileMeta> =
+    private suspend fun listAllFrom(
+        start: Path,
+        skipNpn: Boolean = false,
+    ): List<FileMeta> =
         withContext(Dispatchers.IO) {
             val out = ArrayList<FileMeta>()
             if (!Files.exists(start)) return@withContext out
@@ -57,9 +63,18 @@ class JvmLibraryFileSystem(
                         dir: Path,
                         attrs: BasicFileAttributes,
                     ): FileVisitResult {
+                        // The app's `.npn/` metadata tree (journal, OCR sidecars, trash) is never
+                        // indexable; skip it in the full-library walk so a rescan does not traverse
+                        // it twice (journal reconcile also walks `.npn/journal` separately).
+                        if (skipNpn && isRootLevelNpn(dir)) {
+                            return FileVisitResult.SKIP_SUBTREE
+                        }
                         if (dir != start) out.add(metaOf(dir, attrs))
                         return FileVisitResult.CONTINUE
                     }
+
+                    private fun isRootLevelNpn(dir: Path): Boolean =
+                        start == root && dir != start && dir.name == NpnPaths.NPN_DIR
 
                     override fun visitFile(
                         file: Path,

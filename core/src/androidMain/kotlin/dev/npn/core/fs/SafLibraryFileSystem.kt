@@ -29,7 +29,6 @@ class SafLibraryFileSystem(
     private val context: Context,
     private val treeUri: Uri,
 ) : LibraryFileSystem {
-
     // SAF rename is not POSIX-atomic, but v2 objects are content-addressed: the staging file is
     // written and hash-verified in full before the rename, so the published object can never be
     // torn, and readers verify the content hash against the filename anyway (see
@@ -44,8 +43,7 @@ class SafLibraryFileSystem(
     private fun childrenUri(parentDocId: String): Uri =
         DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
 
-    private fun docUri(docId: String): Uri =
-        DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
+    private fun docUri(docId: String): Uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, docId)
 
     private fun splitSegments(relPath: String): List<String> =
         NpnPaths.normalize(relPath).split('/').filter { it.isNotEmpty() }
@@ -61,18 +59,20 @@ class SafLibraryFileSystem(
         val isDir: Boolean get() = mime == DocumentsContract.Document.MIME_TYPE_DIR
     }
 
-    private val projection = arrayOf(
-        DocumentsContract.Document.COLUMN_DOCUMENT_ID,
-        DocumentsContract.Document.COLUMN_DISPLAY_NAME,
-        DocumentsContract.Document.COLUMN_MIME_TYPE,
-        DocumentsContract.Document.COLUMN_SIZE,
-        DocumentsContract.Document.COLUMN_LAST_MODIFIED,
-    )
+    private val projection =
+        arrayOf(
+            DocumentsContract.Document.COLUMN_DOCUMENT_ID,
+            DocumentsContract.Document.COLUMN_DISPLAY_NAME,
+            DocumentsContract.Document.COLUMN_MIME_TYPE,
+            DocumentsContract.Document.COLUMN_SIZE,
+            DocumentsContract.Document.COLUMN_LAST_MODIFIED,
+        )
 
     private fun queryChildren(parentDocId: String): List<Entry> {
         val out = ArrayList<Entry>()
-        val cursor = resolver.query(childrenUri(parentDocId), projection, null, null, null)
-            ?: throw IOException("Cannot query children of $parentDocId")
+        val cursor =
+            resolver.query(childrenUri(parentDocId), projection, null, null, null)
+                ?: throw IOException("Cannot query children of $parentDocId")
         cursor.use { c ->
             while (c.moveToNext()) {
                 out.add(
@@ -112,7 +112,10 @@ class SafLibraryFileSystem(
     }
 
     /** Resolve the parent directory docId of [relPath], creating dirs if [create]. */
-    private fun resolveParentDir(relPath: String, create: Boolean): String {
+    private fun resolveParentDir(
+        relPath: String,
+        create: Boolean,
+    ): String {
         val segments = splitSegments(relPath)
         if (segments.size <= 1) return treeDocId
         var parentId = treeDocId
@@ -120,20 +123,31 @@ class SafLibraryFileSystem(
             val seg = segments[i]
             val children = queryChildren(parentId)
             val existing = children.firstOrNull { it.name == seg }
-            parentId = when {
-                existing != null && existing.isDir -> existing.docId
-                existing != null -> throw IOException("Path segment '$seg' is a file, not a directory: $relPath")
-                create -> {
-                    val created = DocumentsContract.createDocument(
-                        resolver,
-                        docUri(parentId),
-                        DocumentsContract.Document.MIME_TYPE_DIR,
-                        seg,
-                    ) ?: throw IOException("Failed to create directory '$seg' in: $relPath")
-                    DocumentsContract.getDocumentId(created)
+            parentId =
+                when {
+                    existing != null && existing.isDir -> {
+                        existing.docId
+                    }
+
+                    existing != null -> {
+                        throw IOException("Path segment '$seg' is a file, not a directory: $relPath")
+                    }
+
+                    create -> {
+                        val created =
+                            DocumentsContract.createDocument(
+                                resolver,
+                                docUri(parentId),
+                                DocumentsContract.Document.MIME_TYPE_DIR,
+                                seg,
+                            ) ?: throw IOException("Failed to create directory '$seg' in: $relPath")
+                        DocumentsContract.getDocumentId(created)
+                    }
+
+                    else -> {
+                        throw IOException("Parent directory missing for: $relPath")
+                    }
                 }
-                else -> throw IOException("Parent directory missing for: $relPath")
-            }
         }
         return parentId
     }
@@ -141,17 +155,28 @@ class SafLibraryFileSystem(
     private fun mimeForName(name: String): String =
         if (NpnPaths.isPdf(name)) "application/pdf" else "application/octet-stream"
 
-    override suspend fun listAll(): List<FileMeta> = withContext(Dispatchers.IO) {
-        listAllFrom(treeDocId, "")
-    }
+    override suspend fun listAll(): List<FileMeta> =
+        withContext(Dispatchers.IO) {
+            listAllFrom(treeDocId, "")
+        }
 
-    override suspend fun listAllUnder(relPath: String): List<FileMeta> = withContext(Dispatchers.IO) {
-        val norm = NpnPaths.normalize(relPath)
-        val root = resolveEntry(norm)
-        if (root == null || !root.isDir) emptyList() else listAllFrom(root.docId, norm)
-    }
+    override suspend fun listAllIndexable(): List<FileMeta> =
+        withContext(Dispatchers.IO) {
+            listAllFrom(treeDocId, "", skipNpn = true)
+        }
 
-    private fun listAllFrom(rootId: String, rootRel: String): List<FileMeta> {
+    override suspend fun listAllUnder(relPath: String): List<FileMeta> =
+        withContext(Dispatchers.IO) {
+            val norm = NpnPaths.normalize(relPath)
+            val root = resolveEntry(norm)
+            if (root == null || !root.isDir) emptyList() else listAllFrom(root.docId, norm)
+        }
+
+    private fun listAllFrom(
+        rootId: String,
+        rootRel: String,
+        skipNpn: Boolean = false,
+    ): List<FileMeta> {
         val out = ArrayList<FileMeta>()
         // Iterative DFS over (docId, relPath) directory frontier.
         val stack = ArrayDeque<Pair<String, String>>()
@@ -159,6 +184,8 @@ class SafLibraryFileSystem(
         while (stack.isNotEmpty()) {
             val (dirId, dirRel) = stack.removeLast()
             for (entry in queryChildren(dirId)) {
+                // The top-level `.npn/` metadata tree is never indexable.
+                if (skipNpn && dirRel.isEmpty() && entry.name == NpnPaths.NPN_DIR) continue
                 val rel = if (dirRel.isEmpty()) entry.name else "$dirRel/${entry.name}"
                 out.add(
                     FileMeta(
@@ -175,29 +202,35 @@ class SafLibraryFileSystem(
         return out
     }
 
-    override suspend fun exists(relPath: String): Boolean = withContext(Dispatchers.IO) {
-        resolveEntry(relPath) != null
-    }
+    override suspend fun exists(relPath: String): Boolean =
+        withContext(Dispatchers.IO) {
+            resolveEntry(relPath) != null
+        }
 
-    override suspend fun stat(relPath: String): FileMeta? = withContext(Dispatchers.IO) {
-        val entry = resolveEntry(relPath) ?: return@withContext null
-        val norm = NpnPaths.normalize(relPath)
-        FileMeta(
-            relPath = norm,
-            name = entry.name.ifEmpty { norm.substringAfterLast('/') },
-            size = if (entry.isDir) 0L else entry.size,
-            mtimeMillis = entry.mtime,
-            isDirectory = entry.isDir,
-        )
-    }
+    override suspend fun stat(relPath: String): FileMeta? =
+        withContext(Dispatchers.IO) {
+            val entry = resolveEntry(relPath) ?: return@withContext null
+            val norm = NpnPaths.normalize(relPath)
+            FileMeta(
+                relPath = norm,
+                name = entry.name.ifEmpty { norm.substringAfterLast('/') },
+                size = if (entry.isDir) 0L else entry.size,
+                mtimeMillis = entry.mtime,
+                isDirectory = entry.isDir,
+            )
+        }
 
-    override suspend fun readBytes(relPath: String): ByteArray = withContext(Dispatchers.IO) {
-        val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
-        resolver.openInputStream(docUri(entry.docId))?.use { it.readBytes() }
-            ?: throw IOException("Cannot open for read: $relPath")
-    }
+    override suspend fun readBytes(relPath: String): ByteArray =
+        withContext(Dispatchers.IO) {
+            val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
+            resolver.openInputStream(docUri(entry.docId))?.use { it.readBytes() }
+                ?: throw IOException("Cannot open for read: $relPath")
+        }
 
-    override suspend fun writeBytesOnce(relPath: String, bytes: ByteArray) = withContext(Dispatchers.IO) {
+    override suspend fun writeBytesOnce(
+        relPath: String,
+        bytes: ByteArray,
+    ) = withContext(Dispatchers.IO) {
         if (resolveEntry(relPath) != null) {
             error("Target already exists: $relPath")
         }
@@ -228,61 +261,68 @@ class SafLibraryFileSystem(
         stagingPath: String,
         canonicalPath: String,
         expectedHash: String,
-    ): VerifiedPublicationResult = withContext(Dispatchers.IO) {
-        val stagingSegments = splitSegments(stagingPath)
-        val canonicalSegments = splitSegments(canonicalPath)
-        require(stagingSegments.dropLast(1) == canonicalSegments.dropLast(1)) {
-            "Object staging must be in the canonical bucket"
-        }
-        val canonicalName = canonicalSegments.last()
-
-        // A canonical object already present means the content was published earlier (content
-        // addressed: same hash ⇒ same bytes). Verify its bytes and drop our staging copy.
-        resolveEntry(canonicalPath)?.let { existing ->
-            check(!existing.isDir) { "Canonical object path is a directory: $canonicalPath" }
-            check(sha256OfEntry(existing) == expectedHash) {
-                "Canonical object exists with invalid bytes: $canonicalPath"
+    ): VerifiedPublicationResult =
+        withContext(Dispatchers.IO) {
+            val stagingSegments = splitSegments(stagingPath)
+            val canonicalSegments = splitSegments(canonicalPath)
+            require(stagingSegments.dropLast(1) == canonicalSegments.dropLast(1)) {
+                "Object staging must be in the canonical bucket"
             }
-            runCatching { delete(stagingPath) }
-            return@withContext VerifiedPublicationResult.ALREADY_PRESENT
+            val canonicalName = canonicalSegments.last()
+
+            // A canonical object already present means the content was published earlier (content
+            // addressed: same hash ⇒ same bytes). Verify its bytes and drop our staging copy.
+            resolveEntry(canonicalPath)?.let { existing ->
+                check(!existing.isDir) { "Canonical object path is a directory: $canonicalPath" }
+                check(sha256OfEntry(existing) == expectedHash) {
+                    "Canonical object exists with invalid bytes: $canonicalPath"
+                }
+                runCatching { delete(stagingPath) }
+                return@withContext VerifiedPublicationResult.ALREADY_PRESENT
+            }
+
+            val staging =
+                resolveEntry(stagingPath)
+                    ?: throw VerifiedPublicationUnavailableException("Staging object is missing: $stagingPath")
+            check(!staging.isDir) { "Staging object path is a directory: $stagingPath" }
+            check(sha256OfEntry(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
+
+            // Rename the complete staging file to its canonical name within the same bucket. SAF
+            // rename can throw or return null on some providers; treat that as retryable and leave the
+            // staging file for a later attempt / GC.
+            val renamedUri =
+                try {
+                    DocumentsContract.renameDocument(resolver, docUri(staging.docId), canonicalName)
+                } catch (e: Exception) {
+                    throw retryablePublish(canonicalPath, e)
+                } ?: throw retryablePublish(canonicalPath, null)
+
+            // Some providers ignore the requested name and dedup (e.g. "<hash> (1).jsonl"), which would
+            // leave a wrongly-named file in the published directory. Detect that, remove the stray, and
+            // fail retryably. The original staging file is gone (renamed), so re-staging happens above.
+            val actualName = DocumentFile.fromSingleUri(context, renamedUri)?.name
+            if (actualName != null && actualName != canonicalName) {
+                deleteQuietly(renamedUri)
+                throw retryablePublish(
+                    canonicalPath,
+                    IOException("Provider renamed publish target to '$actualName'"),
+                )
+            }
+
+            // Confirm the published object is intact and correctly named before reporting success.
+            val published =
+                resolveEntry(canonicalPath)
+                    ?: throw retryablePublish(canonicalPath, IOException("Published object not found after rename"))
+            check(sha256OfEntry(published) == expectedHash) {
+                "Published object hash mismatch: $canonicalPath"
+            }
+            VerifiedPublicationResult.PUBLISHED
         }
 
-        val staging = resolveEntry(stagingPath)
-            ?: throw VerifiedPublicationUnavailableException("Staging object is missing: $stagingPath")
-        check(!staging.isDir) { "Staging object path is a directory: $stagingPath" }
-        check(sha256OfEntry(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
-
-        // Rename the complete staging file to its canonical name within the same bucket. SAF
-        // rename can throw or return null on some providers; treat that as retryable and leave the
-        // staging file for a later attempt / GC.
-        val renamedUri = try {
-            DocumentsContract.renameDocument(resolver, docUri(staging.docId), canonicalName)
-        } catch (e: Exception) {
-            throw retryablePublish(canonicalPath, e)
-        } ?: throw retryablePublish(canonicalPath, null)
-
-        // Some providers ignore the requested name and dedup (e.g. "<hash> (1).jsonl"), which would
-        // leave a wrongly-named file in the published directory. Detect that, remove the stray, and
-        // fail retryably. The original staging file is gone (renamed), so re-staging happens above.
-        val actualName = DocumentFile.fromSingleUri(context, renamedUri)?.name
-        if (actualName != null && actualName != canonicalName) {
-            deleteQuietly(renamedUri)
-            throw retryablePublish(
-                canonicalPath,
-                IOException("Provider renamed publish target to '$actualName'"),
-            )
-        }
-
-        // Confirm the published object is intact and correctly named before reporting success.
-        val published = resolveEntry(canonicalPath)
-            ?: throw retryablePublish(canonicalPath, IOException("Published object not found after rename"))
-        check(sha256OfEntry(published) == expectedHash) {
-            "Published object hash mismatch: $canonicalPath"
-        }
-        VerifiedPublicationResult.PUBLISHED
-    }
-
-    private fun retryablePublish(canonicalPath: String, cause: Throwable?): VerifiedPublicationUnavailableException =
+    private fun retryablePublish(
+        canonicalPath: String,
+        cause: Throwable?,
+    ): VerifiedPublicationUnavailableException =
         VerifiedPublicationUnavailableException("Verified publication failed: $canonicalPath", cause)
 
     private fun sha256OfEntry(entry: Entry): String = digestSha256(docUri(entry.docId), entry.docId)
@@ -291,7 +331,10 @@ class SafLibraryFileSystem(
      * Stream the content at [uri] through a SHA-256 [DigestInputStream] (64 KiB buffer) and return
      * the lowercase hex digest. [relForError] is only used to build the not-found message.
      */
-    private fun digestSha256(uri: Uri, relForError: String): String {
+    private fun digestSha256(
+        uri: Uri,
+        relForError: String,
+    ): String {
         val digest = MessageDigest.getInstance("SHA-256")
         resolver.openInputStream(uri)?.use { input ->
             DigestInputStream(input, digest).use { dis ->
@@ -304,7 +347,10 @@ class SafLibraryFileSystem(
         return digest.digest().toHexLower()
     }
 
-    override suspend fun move(fromRelPath: String, toRelPath: String) = withContext(Dispatchers.IO) {
+    override suspend fun move(
+        fromRelPath: String,
+        toRelPath: String,
+    ) = withContext(Dispatchers.IO) {
         if (resolveEntry(toRelPath) != null) {
             error("Target already exists: $toRelPath")
         }
@@ -318,8 +364,9 @@ class SafLibraryFileSystem(
         if (sameDir) {
             // Pure rename within the same directory.
             if (fromName != toName) {
-                val renamed = DocumentsContract.renameDocument(resolver, docUri(source.docId), toName)
-                    ?: throw IOException("Rename failed: $fromRelPath -> $toRelPath")
+                val renamed =
+                    DocumentsContract.renameDocument(resolver, docUri(source.docId), toName)
+                        ?: throw IOException("Rename failed: $fromRelPath -> $toRelPath")
                 val actual = DocumentFile.fromSingleUri(context, renamed)?.name
                 if (actual != null && actual != toName) {
                     throw IOException("Rename collided (got '$actual'): $toRelPath")
@@ -335,12 +382,13 @@ class SafLibraryFileSystem(
         var moved = false
         if (fromName == toName) {
             try {
-                val result = DocumentsContract.moveDocument(
-                    resolver,
-                    docUri(source.docId),
-                    docUri(fromParentId),
-                    docUri(toParentId),
-                )
+                val result =
+                    DocumentsContract.moveDocument(
+                        resolver,
+                        docUri(source.docId),
+                        docUri(fromParentId),
+                        docUri(toParentId),
+                    )
                 moved = result != null
             } catch (_: Exception) {
                 moved = false
@@ -349,8 +397,9 @@ class SafLibraryFileSystem(
 
         if (!moved) {
             // Fallback: copy the bytes into the new location write-once, then delete the source.
-            val data = resolver.openInputStream(docUri(source.docId))?.use { it.readBytes() }
-                ?: throw IOException("Cannot read source for move: $fromRelPath")
+            val data =
+                resolver.openInputStream(docUri(source.docId))?.use { it.readBytes() }
+                    ?: throw IOException("Cannot read source for move: $fromRelPath")
             writeBytesInDir(toParentId, toName, data, toRelPath)
             DocumentsContract.deleteDocument(resolver, docUri(source.docId))
             return@withContext
@@ -358,11 +407,13 @@ class SafLibraryFileSystem(
 
         // Native move landed the file under its original name in the target dir; rename if needed.
         if (fromName != toName) {
-            val movedEntry = resolveEntry(
-                (toSegments.dropLast(1) + fromName).joinToString("/"),
-            ) ?: throw IOException("Post-move lookup failed: $toRelPath")
-            val renamed = DocumentsContract.renameDocument(resolver, docUri(movedEntry.docId), toName)
-                ?: throw IOException("Post-move rename failed: $toRelPath")
+            val movedEntry =
+                resolveEntry(
+                    (toSegments.dropLast(1) + fromName).joinToString("/"),
+                ) ?: throw IOException("Post-move lookup failed: $toRelPath")
+            val renamed =
+                DocumentsContract.renameDocument(resolver, docUri(movedEntry.docId), toName)
+                    ?: throw IOException("Post-move rename failed: $toRelPath")
             val actual = DocumentFile.fromSingleUri(context, renamed)?.name
             if (actual != null && actual != toName) {
                 throw IOException("Post-move rename collided (got '$actual'): $toRelPath")
@@ -377,13 +428,19 @@ class SafLibraryFileSystem(
      * mismatch the stray file is deleted and the call fails. If the write itself throws, the
      * just-created file is removed so no partial object is left behind.
      */
-    private fun writeBytesInDir(parentId: String, name: String, bytes: ByteArray, relForError: String) {
-        val createdUri = DocumentsContract.createDocument(
-            resolver,
-            docUri(parentId),
-            mimeForName(name),
-            name,
-        ) ?: throw IOException("Failed to create file: $relForError")
+    private fun writeBytesInDir(
+        parentId: String,
+        name: String,
+        bytes: ByteArray,
+        relForError: String,
+    ) {
+        val createdUri =
+            DocumentsContract.createDocument(
+                resolver,
+                docUri(parentId),
+                mimeForName(name),
+                name,
+            ) ?: throw IOException("Failed to create file: $relForError")
         assertExactCreatedName(createdUri, name, relForError)
         try {
             writeCreatedFile(createdUri, bytes, relForError)
@@ -393,7 +450,11 @@ class SafLibraryFileSystem(
         }
     }
 
-    private fun writeCreatedFile(uri: Uri, bytes: ByteArray, relForError: String) {
+    private fun writeCreatedFile(
+        uri: Uri,
+        bytes: ByteArray,
+        relForError: String,
+    ) {
         resolver.openOutputStream(uri, "w")?.use { it.write(bytes) }
             ?: throw IOException("Cannot open for write: $relForError")
     }
@@ -403,7 +464,11 @@ class SafLibraryFileSystem(
      * [expected] (e.g. "name (1).ext"), delete the stray file and fail write-once. A null actual
      * name is treated as "unknown, assume ok" to match prior behaviour.
      */
-    private fun assertExactCreatedName(createdUri: Uri, expected: String, relForError: String) {
+    private fun assertExactCreatedName(
+        createdUri: Uri,
+        expected: String,
+        relForError: String,
+    ) {
         val actualName = DocumentFile.fromSingleUri(context, createdUri)?.name
         if (actualName != null && actualName != expected) {
             deleteQuietly(createdUri)
@@ -419,58 +484,77 @@ class SafLibraryFileSystem(
         }
     }
 
-    override suspend fun delete(relPath: String) = withContext(Dispatchers.IO) {
-        val entry = resolveEntry(relPath) ?: return@withContext
-        // DocumentsContract.deleteDocument removes directories recursively.
-        DocumentsContract.deleteDocument(resolver, docUri(entry.docId))
-        Unit
-    }
-
-    override suspend fun mkdirs(relPath: String) = withContext(Dispatchers.IO) {
-        val segments = splitSegments(relPath)
-        if (segments.isEmpty()) return@withContext
-        var parentId = treeDocId
-        for (seg in segments) {
-            val children = queryChildren(parentId)
-            val existing = children.firstOrNull { it.name == seg }
-            parentId = when {
-                existing != null && existing.isDir -> existing.docId
-                existing != null -> throw IOException("Path segment '$seg' is a file: $relPath")
-                else -> {
-                    val created = DocumentsContract.createDocument(
-                        resolver,
-                        docUri(parentId),
-                        DocumentsContract.Document.MIME_TYPE_DIR,
-                        seg,
-                    ) ?: throw IOException("Failed to create directory '$seg': $relPath")
-                    DocumentsContract.getDocumentId(created)
-                }
-            }
+    override suspend fun delete(relPath: String) =
+        withContext(Dispatchers.IO) {
+            val entry = resolveEntry(relPath) ?: return@withContext
+            // DocumentsContract.deleteDocument removes directories recursively.
+            DocumentsContract.deleteDocument(resolver, docUri(entry.docId))
+            Unit
         }
-        Unit
-    }
 
-    override suspend fun sha256(relPath: String): String = withContext(Dispatchers.IO) {
-        val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
-        digestSha256(docUri(entry.docId), relPath)
-    }
+    override suspend fun mkdirs(relPath: String) =
+        withContext(Dispatchers.IO) {
+            val segments = splitSegments(relPath)
+            if (segments.isEmpty()) return@withContext
+            var parentId = treeDocId
+            for (seg in segments) {
+                val children = queryChildren(parentId)
+                val existing = children.firstOrNull { it.name == seg }
+                parentId =
+                    when {
+                        existing != null && existing.isDir -> {
+                            existing.docId
+                        }
 
-    override suspend fun importExternal(source: ExternalSource, toRelPath: String) = withContext(Dispatchers.IO) {
+                        existing != null -> {
+                            throw IOException("Path segment '$seg' is a file: $relPath")
+                        }
+
+                        else -> {
+                            val created =
+                                DocumentsContract.createDocument(
+                                    resolver,
+                                    docUri(parentId),
+                                    DocumentsContract.Document.MIME_TYPE_DIR,
+                                    seg,
+                                ) ?: throw IOException("Failed to create directory '$seg': $relPath")
+                            DocumentsContract.getDocumentId(created)
+                        }
+                    }
+            }
+            Unit
+        }
+
+    override suspend fun sha256(relPath: String): String =
+        withContext(Dispatchers.IO) {
+            val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
+            digestSha256(docUri(entry.docId), relPath)
+        }
+
+    override suspend fun importExternal(
+        source: ExternalSource,
+        toRelPath: String,
+    ) = withContext(Dispatchers.IO) {
         if (resolveEntry(toRelPath) != null) {
             error("Target already exists: $toRelPath")
         }
         val name = splitSegments(toRelPath).last()
         val parentId = resolveParentDir(toRelPath, create = true)
-        val data = resolver.openInputStream(source.uri)?.use { it.readBytes() }
-            ?: throw IOException("Cannot open external source: ${source.uri}")
+        val data =
+            resolver.openInputStream(source.uri)?.use { it.readBytes() }
+                ?: throw IOException("Cannot open external source: ${source.uri}")
         writeBytesInDir(parentId, name, data, toRelPath)
         Unit
     }
 
-    override suspend fun copyOut(relPath: String, target: ExternalSource) = withContext(Dispatchers.IO) {
+    override suspend fun copyOut(
+        relPath: String,
+        target: ExternalSource,
+    ) = withContext(Dispatchers.IO) {
         val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
-        val data = resolver.openInputStream(docUri(entry.docId))?.use { it.readBytes() }
-            ?: throw IOException("Cannot read: $relPath")
+        val data =
+            resolver.openInputStream(docUri(entry.docId))?.use { it.readBytes() }
+                ?: throw IOException("Cannot read: $relPath")
         resolver.openOutputStream(target.uri, "w")?.use { it.write(data) }
             ?: throw IOException("Cannot open external target: ${target.uri}")
         Unit

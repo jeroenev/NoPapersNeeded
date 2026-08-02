@@ -87,6 +87,14 @@ interface LibraryFileSystem {
     /** Recursive walk of the whole library, including `.npn/` contents. Directories are included. */
     suspend fun listAll(): List<FileMeta>
 
+    /**
+     * Recursive walk of the whole library excluding the `.npn/` metadata subtree (journal, OCR
+     * sidecars, trash), for indexing/rescan walks. Platforms override this to prune the subtree in
+     * the walk itself; the default filters the full listing (correct, but still traverses `.npn/`).
+     */
+    suspend fun listAllIndexable(): List<FileMeta> =
+        listAll().filter { it.relPath != NpnPaths.NPN_DIR && !it.relPath.startsWith("${NpnPaths.NPN_DIR}/") }
+
     /** Recursive walk below [relPath], excluding [relPath] itself. */
     suspend fun listAllUnder(relPath: String): List<FileMeta>
 
