@@ -38,7 +38,18 @@ android {
             excludes += "/META-INF/{AL2.0,LGPL2.1}"
         }
     }
+    signingConfigs {
+        getByName("debug") {
+            storeFile = rootProject.file("androidApp/npn-debug.keystore")
+            storePassword = "android"
+            keyAlias = "npn-debug"
+            keyPassword = "android"
+        }
+    }
     buildTypes {
+        getByName("debug") {
+            signingConfig = signingConfigs.getByName("debug")
+        }
         getByName("release") {
             isMinifyEnabled = false
         }
