@@ -27,11 +27,12 @@
     <string name="ai_edit_review_queue">Review queue</string>
     <string name="ai_edit_all_documents">All documents</string>
     <string name="ai_edit_fields">Autofill fields</string>
-    <string name="ai_edit_overwrite">Overwrite existing value</string>
-    <string name="ai_edit_overwrite_help">Off: only fill the field when it is empty</string>
+    <string name="ai_edit_fields_help">Overwrite also replaces values that are already filled in.</string>
+    <string name="ai_edit_overwrite">Overwrite</string>
     <string name="ai_edit_tags">Tags</string>
-    <string name="ai_edit_tags_always">Tag suggestions are always part of the run.</string>
-    <string name="ai_edit_allow_new_tags">Suggest new tags</string>
+    <string name="ai_edit_suggest_tags">Suggest tags</string>
+    <string name="ai_edit_suggest_tags_help">Propose tags for each document</string>
+    <string name="ai_edit_allow_new_tags">Allow new tags</string>
     <string name="ai_edit_allow_new_tags_help">Off: only tags that already exist in your library</string>
     <string name="ai_edit_suggest_tag_removals">Suggest removing tags</string>
     <string name="ai_edit_suggest_tag_removals_help">Propose dropping tags that do not fit the document</string>

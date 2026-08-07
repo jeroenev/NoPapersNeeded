@@ -27,11 +27,12 @@
     <string name="ai_edit_review_queue">Beoordelingswachtrij</string>
     <string name="ai_edit_all_documents">Alle documenten</string>
     <string name="ai_edit_fields">Velden automatisch invullen</string>
-    <string name="ai_edit_overwrite">Bestaande waarde overschrijven</string>
-    <string name="ai_edit_overwrite_help">Uit: het veld alleen invullen als het leeg is</string>
+    <string name="ai_edit_fields_help">Overschrijven vervangt ook waarden die al ingevuld zijn.</string>
+    <string name="ai_edit_overwrite">Overschrijven</string>
     <string name="ai_edit_tags">Tags</string>
-    <string name="ai_edit_tags_always">Tagsuggesties horen altijd bij de run.</string>
-    <string name="ai_edit_allow_new_tags">Nieuwe tags voorstellen</string>
+    <string name="ai_edit_suggest_tags">Tags voorstellen</string>
+    <string name="ai_edit_suggest_tags_help">Stel tags voor per document</string>
+    <string name="ai_edit_allow_new_tags">Nieuwe tags toestaan</string>
     <string name="ai_edit_allow_new_tags_help">Uit: alleen tags die al in je bibliotheek bestaan</string>
     <string name="ai_edit_suggest_tag_removals">Verwijderen van tags voorstellen</string>
     <string name="ai_edit_suggest_tag_removals_help">Stel voor tags te laten vallen die niet bij het document passen</string>

@@ -137,12 +137,13 @@ sealed interface EditPhase {
  * step. Selection toggles live inside [EditPhase.Review.docs].
  *
  * [maxTags], [maxNewTags] and [batchSize] are per-run overrides, seeded from the Settings defaults
- * and editable in the Idle phase. Tag additions from the existing vocabulary are always requested;
+ * and editable in the Idle phase. [includeTags] turns tag suggestions on or off entirely and
  * [allowNewTags] decides whether brand-new tags may be invented (when off the request caps new tags
- * at zero, and the [maxNewTags] control is irrelevant), and [includeTagRemovals] adds removal
- * suggestions. [fieldOptions] picks which single-value fields to autofill and in which
- * [AiFieldMode]; the free text [customPrompt] is passed through to the model as extra instructions.
- * All of these parametrize the single per-document [AiEditRequest].
+ * at zero, so the [maxNewTags] control is irrelevant); [includeTagRemovals] adds removal
+ * suggestions, which stay available even with [includeTags] off. [fieldOptions] picks which
+ * single-value fields to autofill and in which [AiFieldMode]; the free text [customPrompt] is
+ * passed through to the model as extra instructions. All of these parametrize the single
+ * per-document [AiEditRequest].
  */
 data class AiEditUiState(
     val scope: EditScope = EditScope.UNTAGGED,
@@ -152,17 +153,26 @@ data class AiEditUiState(
     val maxNewTags: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
     val batchSize: Int = AiTagging.DEFAULT_BATCH_DOCS,
     val fieldOptions: Map<AiField, AiFieldOption> = AiField.entries.associateWith { AiFieldOption() },
+    val includeTags: Boolean = true,
     val allowNewTags: Boolean = true,
     val includeTagRemovals: Boolean = false,
     val customPrompt: String = "",
 )
+
+/** Whether the configured run asks the model for anything at all (drives the Start affordance). */
+fun AiEditUiState.hasEdits(): Boolean =
+    includeTags ||
+        includeTagRemovals ||
+        fieldOptions.values.any { it.enabled } ||
+        customPrompt.isNotBlank()
 
 /**
  * Drives the bulk AI-edit screen for one opened library. State machine:
  * `Idle → Suggesting → Review → Applying → Done`.
  *
  * - Idle: pick an [EditScope], choose which fields to autofill (with a per-field overwrite
- *   [AiFieldMode]), whether brand-new tags may be invented and whether removals are proposed,
+ *   [AiFieldMode]), whether tags are suggested at all, whether brand-new tags may be invented and
+ *   whether removals are proposed,
  *   optionally type a free-text [customPrompt] (e.g. "merge tags that differ only in case"), and
  *   tweak the per-run overrides ([AiEditUiState.maxTags],
  *   [AiEditUiState.maxNewTags], [AiEditUiState.batchSize]). The document count for the current
@@ -265,10 +275,13 @@ class AiEditViewModel(
         mode: AiFieldMode,
     ) = updateFieldOption(field) { it.copy(mode = mode) }
 
-    /**
-     * Toggle whether the model may invent tags outside the current vocabulary (Idle only). Tag
-     * suggestions from the existing vocabulary are always requested.
-     */
+    /** Toggle whether tag additions are suggested at all (Idle only). */
+    fun setIncludeTags(value: Boolean) {
+        if (_ui.value.phase != EditPhase.Idle) return
+        _ui.update { it.copy(includeTags = value) }
+    }
+
+    /** Toggle whether the model may invent tags outside the current vocabulary (Idle only). */
     fun setAllowNewTags(value: Boolean) {
         if (_ui.value.phase != EditPhase.Idle) return
         _ui.update { it.copy(allowNewTags = value) }
@@ -300,6 +313,7 @@ class AiEditViewModel(
     /** Kick off the concurrent suggestion run over the next batch of the current scope. */
     fun start() {
         if (run?.isActive == true) return
+        if (!_ui.value.hasEdits()) return
         run = viewModelScope.launch { suggestBatch() }
     }
 
@@ -466,10 +480,10 @@ class AiEditViewModel(
                 AiField.entries.mapNotNull { field ->
                     state.fieldOptions[field]?.takeIf { it.enabled }?.let { AiFieldConfig(field, it.mode) }
                 },
-            tags = true,
+            tags = state.includeTags,
             tagRemovals = state.includeTagRemovals,
             maxTags = state.maxTags,
-            // "Suggest new tags" off means existing vocabulary only, which the cap already encodes.
+            // "Allow new tags" off means existing vocabulary only, which the cap already encodes.
             maxNewTags = if (state.allowNewTags) state.maxNewTags else 0,
             customPrompt = state.customPrompt.ifBlank { null },
         )
