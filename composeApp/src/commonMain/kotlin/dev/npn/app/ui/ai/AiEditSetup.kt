@@ -1,12 +1,15 @@
 package dev.npn.app.ui.ai
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
@@ -27,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
+import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiField
@@ -40,29 +44,36 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_custom_prompt
 import no_papers_needed.composeapp.generated.resources.ai_edit_custom_prompt_hint
 import no_papers_needed.composeapp.generated.resources.ai_edit_documents_per_batch
 import no_papers_needed.composeapp.generated.resources.ai_edit_fields
+import no_papers_needed.composeapp.generated.resources.ai_edit_fields_help
 import no_papers_needed.composeapp.generated.resources.ai_edit_intro
 import no_papers_needed.composeapp.generated.resources.ai_edit_new_tags_per_document
 import no_papers_needed.composeapp.generated.resources.ai_edit_new_tags_range
 import no_papers_needed.composeapp.generated.resources.ai_edit_options
 import no_papers_needed.composeapp.generated.resources.ai_edit_overwrite
-import no_papers_needed.composeapp.generated.resources.ai_edit_overwrite_help
 import no_papers_needed.composeapp.generated.resources.ai_edit_range
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_queue
 import no_papers_needed.composeapp.generated.resources.ai_edit_scope
 import no_papers_needed.composeapp.generated.resources.ai_edit_start
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tag_removals
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tag_removals_help
+import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tags
+import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tags_help
 import no_papers_needed.composeapp.generated.resources.ai_edit_tags
-import no_papers_needed.composeapp.generated.resources.ai_edit_tags_always
 import no_papers_needed.composeapp.generated.resources.ai_edit_tags_per_document
 import no_papers_needed.composeapp.generated.resources.ai_edit_untagged_documents
 import org.jetbrains.compose.resources.stringResource
 
+/** Widest the setup form grows to; beyond this the two columns are centred instead of stretched. */
+private val SetupMaxWidth = 1_100.dp
+
 /**
  * The Idle phase of the AI-edit page: pick the document scope, the tag behaviour, which fields to
  * autofill (and whether each may overwrite a filled value), free-text instructions and the per-run
- * numeric overrides. Every control is stacked full width; dependent controls (the new-tag cap, a
- * field's overwrite switch) only appear once the option they belong to is on.
+ * numeric overrides.
+ *
+ * Wide windows split the sections over two columns so the form fills the desktop width instead of
+ * one narrow ribbon; narrow windows stack them. Dependent controls (the tag caps, a field's
+ * overwrite switch) only render once the option they belong to is on.
  */
 @Composable
 internal fun AiEditSetup(
@@ -70,25 +81,51 @@ internal fun AiEditSetup(
     count: Int,
     vm: AiEditViewModel,
 ) {
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp),
-    ) {
-        Text(stringResource(Res.string.ai_edit_intro), style = MaterialTheme.typography.titleMedium)
-        ScopeSection(ui, count, vm)
-        TagSection(ui, vm)
-        FieldSection(ui, vm)
-        OutlinedTextField(
-            value = ui.customPrompt,
-            onValueChange = vm::setCustomPrompt,
-            modifier = Modifier.fillMaxWidth(),
-            label = { Text(stringResource(Res.string.ai_edit_custom_prompt)) },
-            supportingText = { Text(stringResource(Res.string.ai_edit_custom_prompt_hint)) },
-            minLines = 2,
-        )
-        RunSection(ui, count, vm)
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth > WideLayoutBreakpoint
+        Column(
+            Modifier
+                .fillMaxSize()
+                .verticalScroll(rememberScrollState())
+                .padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+        ) {
+            Column(
+                Modifier.widthIn(max = SetupMaxWidth),
+                verticalArrangement = Arrangement.spacedBy(16.dp),
+            ) {
+                Text(stringResource(Res.string.ai_edit_intro), style = MaterialTheme.typography.titleMedium)
+                if (wide) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
+                        SetupColumn(Modifier.weight(1f)) {
+                            ScopeSection(ui, count, vm)
+                            FieldSection(ui, vm)
+                        }
+                        SetupColumn(Modifier.weight(1f)) {
+                            TagSection(ui, vm)
+                            PromptField(ui, vm)
+                            RunSection(ui, vm)
+                        }
+                    }
+                } else {
+                    ScopeSection(ui, count, vm)
+                    TagSection(ui, vm)
+                    FieldSection(ui, vm)
+                    PromptField(ui, vm)
+                    RunSection(ui, vm)
+                }
+                StartButton(ui, count, vm)
+            }
+        }
     }
 }
+
+@Composable
+private fun SetupColumn(
+    modifier: Modifier,
+    content: @Composable ColumnScope.() -> Unit,
+) = Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
 
 @Composable
 private fun ScopeSection(
@@ -125,39 +162,42 @@ private fun ScopeSection(
     }
 }
 
-/** Tags are always suggested; only the new-tag and removal behaviour is configurable. */
+/** Tag additions (with their caps) and tag removals; each cap follows the switch it belongs to. */
 @Composable
 private fun TagSection(
     ui: AiEditUiState,
     vm: AiEditViewModel,
 ) {
     SetupSection(stringResource(Res.string.ai_edit_tags)) {
-        Text(
-            stringResource(Res.string.ai_edit_tags_always),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        NumericField(
-            value = ui.maxTags,
-            onValueChange = vm::setMaxTags,
-            range = AiTagging.RANGE,
-            label = stringResource(Res.string.ai_edit_tags_per_document),
-            supportingText =
-                stringResource(
-                    Res.string.ai_edit_range,
-                    AiTagging.MIN_TAGS_PER_DOC,
-                    AiTagging.MAX_TAGS_PER_DOC,
-                ),
-            maxDigits = 3,
-        )
         SwitchRow(
-            label = stringResource(Res.string.ai_edit_allow_new_tags),
-            help = stringResource(Res.string.ai_edit_allow_new_tags_help),
-            checked = ui.allowNewTags,
-            onCheckedChange = vm::setAllowNewTags,
+            label = stringResource(Res.string.ai_edit_suggest_tags),
+            help = stringResource(Res.string.ai_edit_suggest_tags_help),
+            checked = ui.includeTags,
+            onCheckedChange = vm::setIncludeTags,
         )
+        if (ui.includeTags) {
+            NumericField(
+                value = ui.maxTags,
+                onValueChange = vm::setMaxTags,
+                range = AiTagging.RANGE,
+                label = stringResource(Res.string.ai_edit_tags_per_document),
+                supportingText =
+                    stringResource(
+                        Res.string.ai_edit_range,
+                        AiTagging.MIN_TAGS_PER_DOC,
+                        AiTagging.MAX_TAGS_PER_DOC,
+                    ),
+                maxDigits = 3,
+            )
+            SwitchRow(
+                label = stringResource(Res.string.ai_edit_allow_new_tags),
+                help = stringResource(Res.string.ai_edit_allow_new_tags_help),
+                checked = ui.allowNewTags,
+                onCheckedChange = vm::setAllowNewTags,
+            )
+        }
         // The cap only means anything while brand-new tags are allowed at all.
-        if (ui.allowNewTags) {
+        if (ui.includeTags && ui.allowNewTags) {
             NumericField(
                 value = ui.maxNewTags,
                 onValueChange = vm::setMaxNewTags,
@@ -188,6 +228,11 @@ private fun FieldSection(
     vm: AiEditViewModel,
 ) {
     SetupSection(stringResource(Res.string.ai_edit_fields)) {
+        Text(
+            stringResource(Res.string.ai_edit_fields_help),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
         AiField.entries.forEach { field ->
             FieldOption(
                 label = fieldLabel(field),
@@ -199,11 +244,25 @@ private fun FieldSection(
     }
 }
 
-/** The per-run batch override plus Start. */
+@Composable
+private fun PromptField(
+    ui: AiEditUiState,
+    vm: AiEditViewModel,
+) {
+    OutlinedTextField(
+        value = ui.customPrompt,
+        onValueChange = vm::setCustomPrompt,
+        modifier = Modifier.fillMaxWidth(),
+        label = { Text(stringResource(Res.string.ai_edit_custom_prompt)) },
+        supportingText = { Text(stringResource(Res.string.ai_edit_custom_prompt_hint)) },
+        minLines = 2,
+    )
+}
+
+/** The per-run batch override. */
 @Composable
 private fun RunSection(
     ui: AiEditUiState,
-    count: Int,
     vm: AiEditViewModel,
 ) {
     SetupSection(stringResource(Res.string.ai_edit_options)) {
@@ -220,10 +279,19 @@ private fun RunSection(
                 ),
             maxDigits = 3,
         )
-        Button(onClick = vm::start, enabled = count > 0) {
-            Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-            Text(stringResource(Res.string.ai_edit_start), Modifier.padding(start = 8.dp))
-        }
+    }
+}
+
+@Composable
+private fun StartButton(
+    ui: AiEditUiState,
+    count: Int,
+    vm: AiEditViewModel,
+) {
+    // Nothing requested means there is nothing to ask the model for, so Start stays inert.
+    Button(onClick = vm::start, enabled = count > 0 && ui.hasEdits()) {
+        Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
+        Text(stringResource(Res.string.ai_edit_start), Modifier.padding(start = 8.dp))
     }
 }
 
@@ -231,7 +299,7 @@ private fun RunSection(
 @Composable
 private fun SetupSection(
     title: String,
-    content: @Composable () -> Unit,
+    content: @Composable ColumnScope.() -> Unit,
 ) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
         Text(title, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary)
@@ -240,8 +308,9 @@ private fun SetupSection(
 }
 
 /**
- * One autofill field: an enable checkbox with, once enabled, an indented overwrite switch. A switch
- * (rather than a segmented All/Only-if-empty control) keeps the row readable in every language.
+ * One autofill field on a single row: enable checkbox, field name, and — once enabled — a compact
+ * overwrite switch. A switch (rather than a segmented All/Only-if-empty control) keeps the row on
+ * one line in every language.
  */
 @Composable
 private fun FieldOption(
@@ -250,22 +319,20 @@ private fun FieldOption(
     onEnabledChange: (Boolean) -> Unit,
     onOverwriteChange: (Boolean) -> Unit,
 ) {
-    Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier.fillMaxWidth().selectable(selected = option.enabled) { onEnabledChange(!option.enabled) },
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            Checkbox(checked = option.enabled, onCheckedChange = onEnabledChange)
-            Text(label, Modifier.padding(start = 4.dp), style = MaterialTheme.typography.bodyLarge)
-        }
+    Row(
+        Modifier.fillMaxWidth().selectable(selected = option.enabled) { onEnabledChange(!option.enabled) },
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        Checkbox(checked = option.enabled, onCheckedChange = onEnabledChange)
+        Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         if (option.enabled) {
-            SwitchRow(
-                label = stringResource(Res.string.ai_edit_overwrite),
-                help = stringResource(Res.string.ai_edit_overwrite_help),
-                checked = option.mode == AiFieldMode.ALL,
-                onCheckedChange = onOverwriteChange,
-                modifier = Modifier.padding(start = 48.dp),
+            Text(
+                stringResource(Res.string.ai_edit_overwrite),
+                style = MaterialTheme.typography.labelMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
+            Switch(checked = option.mode == AiFieldMode.ALL, onCheckedChange = onOverwriteChange)
         }
     }
 }
@@ -277,10 +344,9 @@ private fun SwitchRow(
     help: String?,
     checked: Boolean,
     onCheckedChange: (Boolean) -> Unit,
-    modifier: Modifier = Modifier,
 ) {
     Row(
-        modifier.fillMaxWidth(),
+        Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {

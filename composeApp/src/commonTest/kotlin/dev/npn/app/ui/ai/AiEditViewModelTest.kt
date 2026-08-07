@@ -909,7 +909,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
         }
 
     @Test
-    fun tagsAreRequestedEvenWithEveryFieldDisabled() =
+    fun taggingCanBeDisabledLeavingFieldsOnly() =
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
@@ -920,15 +920,40 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val job = launch { model.ui.collect {} }
             advanceUntilIdle()
 
-            AiField.entries.forEach { model.setFieldEnabled(it, false) }
-            model.setIncludeTagRemovals(false)
+            model.setIncludeTags(false)
             model.start()
             advanceUntilIdle()
 
             session.ai.suggestEditsCalls shouldContainExactly listOf("a")
             val request = session.ai.suggestEditsRequests.single()
-            request.fields shouldBe emptyList()
-            request.tags shouldBe true
+            request.tags shouldBe false
+            request.fields.map { it.field } shouldContainExactly AiField.entries
+            job.cancel()
+        }
+
+    @Test
+    fun startBlockedWhenNothingRequested() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"))
+                    ai.edit = AiEditSuggestion.EMPTY
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            model.setIncludeTags(false)
+            model.setIncludeTagRemovals(false)
+            AiField.entries.forEach { model.setFieldEnabled(it, false) }
+            model.ui.value.hasEdits() shouldBe false
+
+            model.start()
+            advanceUntilIdle()
+
+            session.ai.suggestEditsCalls shouldBe emptyList()
+            model.ui.value.phase
+                .shouldBeInstanceOf<EditPhase.Idle>()
             job.cancel()
         }
 
@@ -953,11 +978,13 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.setMaxTags(4)
             model.setMaxNewTags(9)
             model.setBatchSize(2)
+            model.setIncludeTags(false)
             model.setAllowNewTags(false)
             model.setFieldEnabled(AiField.TITLE, false)
             model.setCustomPrompt("ignored")
             model.ui.value.maxTags shouldBe 11
             model.ui.value.batchSize shouldBe AiTagging.DEFAULT_BATCH_DOCS
+            model.ui.value.includeTags shouldBe true
             model.ui.value.allowNewTags shouldBe true
             model.ui.value.fieldOptions
                 .getValue(AiField.TITLE)
