@@ -73,6 +73,9 @@
     <string name="library_pin">Pin</string>
     <string name="library_unpin">Unpin</string>
     <string name="library_rename">Rename</string>
+    <string name="library_views">Views</string>
+    <string name="library_more_actions">More actions</string>
+    <string name="library_preview_close">Close preview</string>
 
     <string name="library_clear_all">Clear all</string>
     <string name="library_filter_tags_help">Tags (tap to cycle: all -> any -> none)</string>

@@ -6,13 +6,15 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -22,10 +24,10 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -39,6 +41,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -185,16 +188,24 @@ private fun TagListScaffold(
             }
         } else {
             val flatTree = remember(tree) { flatten(tree) }
-            LazyColumn(Modifier.fillMaxSize().padding(padding)) {
+            // Compact cards in an adaptive grid: several tags per row on wide layouts instead of
+            // one full-width row each. The namespace hierarchy shows as a muted parent-path line
+            // on each card (grid cells cannot carry the old indentation).
+            LazyVerticalGrid(
+                columns = GridCells.Adaptive(minSize = TagCardMinWidth),
+                modifier = Modifier.fillMaxSize().padding(padding),
+                contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 8.dp, bottom = 88.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
                 items(flatTree, key = { it.path }) { node ->
-                    TagRow(
+                    TagCard(
                         node = node,
                         onRename = { onRename(node.path) },
                         onMerge = { onMerge(node.path) },
                         onDelete = { onDelete(node.path) },
                         onStyle = { onStyle(node.path, node.info?.color) },
                     )
-                    HorizontalDivider()
                 }
             }
         }
@@ -285,8 +296,11 @@ private fun TagMergeDeleteDialogs(
     }
 }
 
+/** Minimum card width driving the adaptive column count of the tag grid. */
+private val TagCardMinWidth = 240.dp
+
 @Composable
-private fun TagRow(
+private fun TagCard(
     node: TagNode,
     onRename: () -> Unit,
     onMerge: () -> Unit,
@@ -294,70 +308,108 @@ private fun TagRow(
     onStyle: () -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .padding(start = (16 + node.depth * 20).dp, end = 8.dp)
-            .padding(vertical = 12.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        val dot = parseHexColor(node.info?.color) ?: MaterialTheme.colorScheme.outline
-        Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
-        Column(Modifier.weight(1f)) {
-            Text(node.segment, style = MaterialTheme.typography.bodyLarge)
-            val documentCount =
-                pluralStringResource(
-                    Res.plurals.common_document_count,
-                    node.descendantCount,
-                    node.descendantCount,
-                )
-            val subtitle =
-                if (node.info == null) {
-                    stringResource(Res.string.common_tags_namespace_only, documentCount)
-                } else {
-                    documentCount
+    OutlinedCard(Modifier.fillMaxWidth()) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .padding(start = 12.dp, end = 4.dp)
+                .padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(10.dp),
+        ) {
+            val dot = parseHexColor(node.info?.color) ?: MaterialTheme.colorScheme.outline
+            Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
+            Column(Modifier.weight(1f)) {
+                val parentPath = node.path.substringBeforeLast('.', "")
+                if (parentPath.isNotEmpty()) {
+                    Text(
+                        parentPath,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
-            Text(
-                subtitle,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                Text(
+                    node.segment,
+                    style = MaterialTheme.typography.bodyLarge,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                val documentCount =
+                    pluralStringResource(
+                        Res.plurals.common_document_count,
+                        node.descendantCount,
+                        node.descendantCount,
+                    )
+                val subtitle =
+                    if (node.info == null) {
+                        stringResource(Res.string.common_tags_namespace_only, documentCount)
+                    } else {
+                        documentCount
+                    }
+                Text(
+                    subtitle,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            TagCardMenu(
+                expanded = menu,
+                onExpand = { menu = true },
+                onDismiss = { menu = false },
+                onRename = onRename,
+                onMerge = onMerge,
+                onDelete = onDelete,
+                onStyle = onStyle,
             )
         }
-        Box {
-            IconButton(onClick = { menu = true }) {
-                Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.common_tags_actions))
-            }
-            DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.common_rename)) },
-                    onClick = {
-                        menu = false
-                        onRename()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.common_tags_merge_into)) },
-                    onClick = {
-                        menu = false
-                        onMerge()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.common_tags_color_style)) },
-                    onClick = {
-                        menu = false
-                        onStyle()
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.common_delete)) },
-                    onClick = {
-                        menu = false
-                        onDelete()
-                    },
-                )
-            }
+    }
+}
+
+@Composable
+private fun TagCardMenu(
+    expanded: Boolean,
+    onExpand: () -> Unit,
+    onDismiss: () -> Unit,
+    onRename: () -> Unit,
+    onMerge: () -> Unit,
+    onDelete: () -> Unit,
+    onStyle: () -> Unit,
+) {
+    Box {
+        IconButton(onClick = onExpand) {
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.common_tags_actions))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.common_rename)) },
+                onClick = {
+                    onDismiss()
+                    onRename()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.common_tags_merge_into)) },
+                onClick = {
+                    onDismiss()
+                    onMerge()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.common_tags_color_style)) },
+                onClick = {
+                    onDismiss()
+                    onStyle()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.common_delete)) },
+                onClick = {
+                    onDismiss()
+                    onDelete()
+                },
+            )
         }
     }
 }

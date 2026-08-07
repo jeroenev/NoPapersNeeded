@@ -5,12 +5,20 @@ import androidx.compose.foundation.layout.BoxWithConstraintsScope
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+
+/**
+ * Width above which layouts switch to their expanded (side-by-side) form. Shared by every
+ * adaptive layout in the app so the navigation shell, library panes, and detail panes all
+ * flip at the same window width.
+ */
+val WideLayoutBreakpoint: Dp = 840.dp
 
 /**
  * Picks between [wideContent] and [narrowContent] based on available width. We deliberately
  * avoid the material3-window-size-class artifact (not on the classpath) and derive the
- * breakpoint from BoxWithConstraints instead: >840dp is treated as expanded.
+ * breakpoint from BoxWithConstraints instead: >[WideLayoutBreakpoint] is treated as expanded.
  */
 @Composable
 fun BoxWithConstraintsLayout(
@@ -18,7 +26,7 @@ fun BoxWithConstraintsLayout(
     narrowContent: @Composable () -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth > 840.dp) wideContent() else narrowContent()
+        if (maxWidth > WideLayoutBreakpoint) wideContent() else narrowContent()
     }
 }
 

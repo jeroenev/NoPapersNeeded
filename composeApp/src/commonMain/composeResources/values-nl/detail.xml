@@ -3,7 +3,6 @@
     <string name="detail_document">Document</string>
     <string name="detail_document_unavailable">Document niet beschikbaar</string>
     <string name="detail_document_unavailable_hint">Het is mogelijk verwijderd of verplaatst.</string>
-    <string name="detail_details_metadata">Details en metadata</string>
     <string name="detail_exported_baked_copy">Kopie met ingesloten metadata geëxporteerd</string>
     <string name="detail_export_failed">Exporteren mislukt: %1$s</string>
     <string name="detail_could_not_bake_copy">Kon geen kopie met ingesloten metadata maken</string>
@@ -35,6 +34,7 @@
     <string name="detail_split_document">Document splitsen</string>
     <string name="detail_baking">Insluiten...</string>
 
+    <string name="detail_tab_preview">Voorbeeld</string>
     <string name="detail_tab_details">Details</string>
     <string name="detail_tab_text">Tekst</string>
     <string name="detail_tab_history">Geschiedenis</string>
