@@ -57,6 +57,10 @@
     <string name="detail_pages">Pages</string>
     <string name="detail_ocr">OCR</string>
     <string name="detail_suggest_tags">Suggest tags</string>
+    <string name="detail_suggest_metadata">Suggest details</string>
+    <string name="detail_document_date_plain">Document date</string>
+    <string name="detail_use_suggestion">Use suggested %1$s</string>
+    <string name="detail_dismiss_suggestion">Dismiss suggested %1$s</string>
     <string name="detail_dismiss_all">Dismiss all</string>
     <string name="detail_add_tag">Add %1$s</string>
     <string name="detail_dismiss_tag">Dismiss %1$s</string>

@@ -24,6 +24,7 @@ import no_papers_needed.composeapp.generated.resources.common_action_save_docume
 import no_papers_needed.composeapp.generated.resources.common_action_save_field
 import no_papers_needed.composeapp.generated.resources.common_action_save_rule
 import no_papers_needed.composeapp.generated.resources.common_action_save_title
+import no_papers_needed.composeapp.generated.resources.common_action_suggest_metadata
 import no_papers_needed.composeapp.generated.resources.common_action_suggest_tags
 import no_papers_needed.composeapp.generated.resources.common_action_tag
 import no_papers_needed.composeapp.generated.resources.common_action_trash
@@ -43,11 +44,12 @@ import no_papers_needed.composeapp.generated.resources.common_duplicate_count
 import no_papers_needed.composeapp.generated.resources.common_failed_count
 import no_papers_needed.composeapp.generated.resources.common_imported_count
 import no_papers_needed.composeapp.generated.resources.common_join_items
+import no_papers_needed.composeapp.generated.resources.common_no_ai_metadata_suggestions
 import no_papers_needed.composeapp.generated.resources.common_no_ai_tag_suggestions
 import no_papers_needed.composeapp.generated.resources.common_scan_already_in_library
 import no_papers_needed.composeapp.generated.resources.common_scan_import_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_imported
-import no_papers_needed.composeapp.generated.resources.common_tag_count
+import no_papers_needed.composeapp.generated.resources.common_suggestion_count
 import no_papers_needed.composeapp.generated.resources.common_tagging_apply_summary
 import no_papers_needed.composeapp.generated.resources.common_tagging_done_empty
 import no_papers_needed.composeapp.generated.resources.common_tagging_done_summary
@@ -83,6 +85,7 @@ enum class UiTextKey {
     COULD_NOT_PARTIAL_DOCUMENTS,
     COULD_NOT_SUGGEST_TAGS_PARTIAL,
     NO_AI_TAG_SUGGESTIONS,
+    NO_AI_METADATA_SUGGESTIONS,
     AI_ASSISTANT_UNREACHABLE,
     AI_ASSISTANT_EMPTY_ANSWER,
     IMPORT_SUMMARY,
@@ -126,6 +129,7 @@ enum class UiAction {
     UPDATE,
     TRASH,
     SUGGEST_TAGS,
+    SUGGEST_METADATA,
     TAG,
 }
 
@@ -176,6 +180,10 @@ private fun UiTextKey.resolve(args: List<Any?>): String =
             stringResource(Res.string.common_no_ai_tag_suggestions)
         }
 
+        UiTextKey.NO_AI_METADATA_SUGGESTIONS -> {
+            stringResource(Res.string.common_no_ai_metadata_suggestions)
+        }
+
         UiTextKey.AI_ASSISTANT_UNREACHABLE -> {
             stringResource(Res.string.common_ai_assistant_unreachable, args[0].displayArgument())
         }
@@ -216,7 +224,7 @@ private fun UiTextKey.resolve(args: List<Any?>): String =
         UiTextKey.TAGGING_APPLY_SUMMARY -> {
             stringResource(
                 Res.string.common_tagging_apply_summary,
-                tagCount(args.intAt(0)),
+                suggestionCount(args.intAt(0)),
                 documentCount(args.intAt(1)),
             )
         }
@@ -224,7 +232,7 @@ private fun UiTextKey.resolve(args: List<Any?>): String =
         UiTextKey.TAGGING_DONE_SUMMARY -> {
             stringResource(
                 Res.string.common_tagging_done_summary,
-                tagCount(args.intAt(0)),
+                suggestionCount(args.intAt(0)),
                 documentCount(args.intAt(1)),
             )
         }
@@ -285,7 +293,8 @@ private fun importSummary(args: List<Any?>): String {
 private fun documentCount(count: Int): String = pluralStringResource(Res.plurals.common_document_count, count, count)
 
 @Composable
-private fun tagCount(count: Int): String = pluralStringResource(Res.plurals.common_tag_count, count, count)
+private fun suggestionCount(count: Int): String =
+    pluralStringResource(Res.plurals.common_suggestion_count, count, count)
 
 @Composable
 private fun actionTextResource(action: UiAction): String = stringResource(action.stringResource)
@@ -321,6 +330,7 @@ private val UiAction.stringResource: StringResource
             UiAction.UPDATE -> Res.string.common_action_update
             UiAction.TRASH -> Res.string.common_action_trash
             UiAction.SUGGEST_TAGS -> Res.string.common_action_suggest_tags
+            UiAction.SUGGEST_METADATA -> Res.string.common_action_suggest_metadata
             UiAction.TAG -> Res.string.common_action_tag
         }
 
@@ -373,10 +383,14 @@ private fun UiTextKey.resolveEnglish(args: List<Any?>): String =
         }
 
         UiTextKey.COULD_NOT_SUGGEST_TAGS_PARTIAL -> {
-            "Could not suggest tags for ${args[0]} of ${args[1]} document(s)"
+            "Could not get suggestions for ${args[0]} of ${args[1]} document(s)"
         }
 
         UiTextKey.NO_AI_TAG_SUGGESTIONS -> {
+            "No suggestions - document may not be OCRed yet"
+        }
+
+        UiTextKey.NO_AI_METADATA_SUGGESTIONS -> {
             "No suggestions - document may not be OCRed yet"
         }
 
@@ -413,11 +427,13 @@ private fun UiTextKey.resolveEnglish(args: List<Any?>): String =
         }
 
         UiTextKey.TAGGING_APPLY_SUMMARY -> {
-            "Add ${args[0]} ${plural(args[0] as Int, "tag")} across ${args[1]} ${plural(args[1] as Int, "document")}"
+            "Apply ${args[0]} ${plural(args[0] as Int, "suggestion")} across " +
+                "${args[1]} ${plural(args[1] as Int, "document")}"
         }
 
         UiTextKey.TAGGING_DONE_SUMMARY -> {
-            "Added ${args[0]} ${plural(args[0] as Int, "tag")} across ${args[1]} ${plural(args[1] as Int, "document")}"
+            "Applied ${args[0]} ${plural(args[0] as Int, "suggestion")} across " +
+                "${args[1]} ${plural(args[1] as Int, "document")}"
         }
 
         UiTextKey.TAGGING_DONE_EMPTY -> {
@@ -469,5 +485,6 @@ private fun actionText(value: Any?): String =
         UiAction.UPDATE -> "update"
         UiAction.TRASH -> "trash"
         UiAction.SUGGEST_TAGS -> "suggest tags"
+        UiAction.SUGGEST_METADATA -> "suggest details"
         UiAction.TAG -> "tag"
     }

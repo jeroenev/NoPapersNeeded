@@ -1,7 +1,9 @@
 package dev.npn.app
 
+import dev.npn.app.ui.common.AiMetadataField
 import dev.npn.app.ui.common.resolveEnglish
 import dev.npn.app.ui.detail.DocDetailViewModel
+import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
@@ -417,6 +419,90 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val disabledVm = vm(session = disabled)
             advanceUntilIdle()
             disabledVm.aiTags.value.available shouldBe false
+        }
+
+    // ---- AI metadata suggestions ----
+
+    @Test
+    fun suggestAiMetadataStoresSuggestion() =
+        runTest(dispatcher) {
+            val suggestion = MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
+            val session = FakeLibrarySession().apply { ai.metadataSuggestion = suggestion }
+            val model = vm(session = session)
+            advanceUntilIdle()
+            model.suggestAiMetadata()
+            advanceUntilIdle()
+            session.ai.suggestMetadataCalls shouldContainExactly listOf("doc-1")
+            model.aiMetadata.value.suggestion shouldBe suggestion
+            model.aiMetadata.value.suggesting shouldBe false
+        }
+
+    @Test
+    fun acceptAiMetadataWritesFieldAndRemovesSuggestion() =
+        runTest(dispatcher) {
+            val suggestion = MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
+            val session = FakeLibrarySession().apply { ai.metadataSuggestion = suggestion }
+            val model = vm(session = session)
+            advanceUntilIdle()
+            model.suggestAiMetadata()
+            advanceUntilIdle()
+
+            model.acceptAiMetadata(AiMetadataField.TITLE)
+            model.acceptAiMetadata(AiMetadataField.CORRESPONDENT)
+            model.acceptAiMetadata(AiMetadataField.DOC_DATE)
+            advanceUntilIdle()
+
+            session.meta.titleSets shouldContainExactly listOf("doc-1" to "Invoice Jan")
+            session.meta.correspondentSets shouldContainExactly listOf(listOf("doc-1") to "Acme")
+            session.meta.docDateSets shouldContainExactly listOf("doc-1" to "2024-01-15")
+            model.aiMetadata.value.suggestion shouldBe MetadataSuggestion.EMPTY
+        }
+
+    @Test
+    fun dismissAiMetadataDropsOnlyThatField() =
+        runTest(dispatcher) {
+            val suggestion = MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
+            val session = FakeLibrarySession().apply { ai.metadataSuggestion = suggestion }
+            val model = vm(session = session)
+            advanceUntilIdle()
+            model.suggestAiMetadata()
+            advanceUntilIdle()
+
+            model.dismissAiMetadata(AiMetadataField.CORRESPONDENT)
+
+            model.aiMetadata.value.suggestion shouldBe suggestion.copy(correspondent = null)
+            session.meta.correspondentSets shouldBe emptyList()
+        }
+
+    @Test
+    fun suggestAiMetadataEmptySurfacesMessage() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession() // fake defaults to MetadataSuggestion.EMPTY
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            advanceUntilIdle()
+            model.suggestAiMetadata()
+            advanceUntilIdle()
+            messages shouldContainExactly listOf("No suggestions - document may not be OCRed yet")
+            model.aiMetadata.value.suggesting shouldBe false
+            job.cancel()
+        }
+
+    @Test
+    fun suggestAiMetadataFailureSurfacesErrorAndClearsBusy() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { ai.failSuggestMetadata = { error("network down") } }
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            advanceUntilIdle()
+            model.suggestAiMetadata()
+            advanceUntilIdle()
+            messages shouldContainExactly listOf("Could not suggest details: network down")
+            model.aiMetadata.value.suggestion shouldBe MetadataSuggestion.EMPTY
+            model.aiMetadata.value.suggesting shouldBe false
+            job.cancel()
         }
 
     // ---- tag colors transformation ----

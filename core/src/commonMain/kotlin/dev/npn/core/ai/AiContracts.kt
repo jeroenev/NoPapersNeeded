@@ -34,12 +34,37 @@ data class AiConfig(
  * spelling when it matches an existing vocabulary entry case-insensitively; [isNew] is true when
  * no existing tag matches (the suggestion would introduce a brand-new tag).
  */
-data class TagSuggestion(val tag: String, val isNew: Boolean)
+data class TagSuggestion(
+    val tag: String,
+    val isNew: Boolean,
+)
+
+/**
+ * AI proposals for a document's single-value properties. Each field is null when the model had no
+ * (validated) suggestion or the suggestion matched the document's current value. [correspondent]
+ * is canonicalized to the library's exact spelling when it matches an existing correspondent
+ * case-insensitively; [docDate] is always a valid `yyyy-MM-dd` ISO date.
+ */
+data class MetadataSuggestion(
+    val title: String? = null,
+    val correspondent: String? = null,
+    val docDate: String? = null,
+) {
+    val isEmpty: Boolean
+        get() = title == null && correspondent == null && docDate == null
+
+    companion object {
+        val EMPTY = MetadataSuggestion()
+    }
+}
 
 enum class AiRole { USER, ASSISTANT }
 
 /** One turn of an assistant conversation, oldest first. */
-data class AiChatTurn(val role: AiRole, val text: String)
+data class AiChatTurn(
+    val role: AiRole,
+    val text: String,
+)
 
 /**
  * Streaming event from [AiFacade.ask]. The cold flow emits any number of [TextDelta] and
@@ -48,10 +73,15 @@ data class AiChatTurn(val role: AiRole, val text: String)
  */
 sealed interface AiChatEvent {
     /** A chunk of assistant answer text to append to the current answer. */
-    data class TextDelta(val text: String) : AiChatEvent
+    data class TextDelta(
+        val text: String,
+    ) : AiChatEvent
 
     /** The agent decided to call [name] with the raw arguments JSON [argsJson]. */
-    data class ToolCallStarted(val name: String, val argsJson: String) : AiChatEvent
+    data class ToolCallStarted(
+        val name: String,
+        val argsJson: String,
+    ) : AiChatEvent
 
     /** The tool [name] finished; [result] is its (already bounded) text output. */
     data class ToolCallFinished(
@@ -61,16 +91,18 @@ sealed interface AiChatEvent {
     ) : AiChatEvent
 
     /** Terminal event carrying the full accumulated answer text. */
-    data class Done(val fullText: String) : AiChatEvent
+    data class Done(
+        val fullText: String,
+    ) : AiChatEvent
 }
 
 /**
  * AI features scoped to one opened library. All model calls go to the user-configured
  * OpenAI-compatible endpoint; nothing here writes to the journal. Callers surface
- * failures as UI messages ([ask]/[suggestTags] throw on network/endpoint errors).
+ * failures as UI messages ([ask]/[suggestTags]/[suggestMetadata] throw on network/endpoint
+ * errors).
  */
 interface AiFacade {
-
     /** Current endpoint configuration (live settings values). */
     suspend fun config(): AiConfig
 
@@ -83,7 +115,10 @@ interface AiFacade {
      * text may reference documents as `[doc:<docId>]`. Collection starts the request; cancelling
      * the collection stops it. Network/endpoint errors are thrown from the flow.
      */
-    fun ask(history: List<AiChatTurn>, question: String): Flow<AiChatEvent>
+    fun ask(
+        history: List<AiChatTurn>,
+        question: String,
+    ): Flow<AiChatEvent>
 
     /**
      * Suggest new tags for [docId] from its indexed text, preferring the library's existing
@@ -101,4 +136,14 @@ interface AiFacade {
         maxTags: Int? = null,
         maxNewTags: Int? = null,
     ): List<TagSuggestion>
+
+    /**
+     * Suggest single-value properties (title, correspondent, document date) for [docId] from its
+     * indexed text. Correspondent suggestions prefer the library's existing correspondents and are
+     * canonicalized to their exact spelling; dates are validated ISO `yyyy-MM-dd`; suggestions
+     * matching the document's current values are dropped. Returns suggestions only (never
+     * writes); accepting one goes through the normal MetadataWriter/journal path. Empty when the
+     * doc has no indexed text yet.
+     */
+    suspend fun suggestMetadata(docId: String): MetadataSuggestion
 }

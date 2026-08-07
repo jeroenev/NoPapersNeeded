@@ -2,19 +2,32 @@ package dev.npn.core.ai
 
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
  * Result of budget-trimming a conversation: the [turns] to send (oldest-first) and whether any
  * older turns were [omittedEarlier] so the prompt can add a "earlier conversation omitted" note.
  */
-data class TrimmedHistory(val turns: List<AiChatTurn>, val omittedEarlier: Boolean)
+data class TrimmedHistory(
+    val turns: List<AiChatTurn>,
+    val omittedEarlier: Boolean,
+)
 
 /** Pure text helpers for the AI layer, split out so they are unit-testable without a model. */
 object AiText {
-
-    private val json = Json { ignoreUnknownKeys = true; isLenient = true }
+    private val json =
+        Json {
+            ignoreUnknownKeys = true
+            isLenient = true
+        }
     private val docRefRegex = Regex("\\[doc:([0-9a-fA-F]{64})]")
+    private val isoDateRegex = Regex("(\\d{4})-(\\d{2})-(\\d{2})")
+
+    /** Cap on accepted title suggestions; anything longer is model rambling, not a title. */
+    const val MAX_TITLE_SUGGESTION_CHARS = 200
 
     const val MAX_TAG_SUGGESTIONS = 8
 
@@ -35,7 +48,11 @@ object AiText {
 
     /** Full docIds cited as `[doc:<hash>]` in an assistant answer, first occurrence order. */
     fun extractDocRefs(text: String): List<String> =
-        docRefRegex.findAll(text).map { it.groupValues[1].lowercase() }.distinct().toList()
+        docRefRegex
+            .findAll(text)
+            .map { it.groupValues[1].lowercase() }
+            .distinct()
+            .toList()
 
     /**
      * Newest-first whole turns kept under [budgetChars] cumulative characters, then restored to
@@ -63,7 +80,10 @@ object AiText {
      * (models often wrap it in prose or code fences). Suggestions already on the document and
      * case-insensitive duplicates are dropped. No cap is applied here — see [rankTagSuggestions].
      */
-    fun parseTagSuggestions(response: String, currentTags: List<String>): List<String> {
+    fun parseTagSuggestions(
+        response: String,
+        currentTags: List<String>,
+    ): List<String> {
         val current = currentTags.map { it.lowercase() }.toHashSet()
         return firstStringArray(response)
             .map { it.trim() }
@@ -89,13 +109,83 @@ object AiText {
     ): List<TagSuggestion> {
         val canonical = vocabulary.associateBy { it.lowercase() }
         val newCap = maxNew.coerceAtMost(perDocMax)
-        val classified = parseTagSuggestions(response, currentTags).map { raw ->
-            val existing = canonical[raw.lowercase()]
-            if (existing != null) TagSuggestion(existing, isNew = false) else TagSuggestion(raw, isNew = true)
-        }
+        val classified =
+            parseTagSuggestions(response, currentTags).map { raw ->
+                val existing = canonical[raw.lowercase()]
+                if (existing != null) TagSuggestion(existing, isNew = false) else TagSuggestion(raw, isNew = true)
+            }
         val existing = classified.filter { !it.isNew }
         val fresh = classified.filter { it.isNew }.take(newCap)
         return (existing + fresh).take(perDocMax)
+    }
+
+    /**
+     * Parse a metadata-suggestion object out of a model [response]: the first JSON object found
+     * wins (models often wrap it in prose or code fences). Each field is validated independently:
+     *  - **title**: trimmed; dropped when blank, absurdly long (> [MAX_TITLE_SUGGESTION_CHARS])
+     *    or equal to [currentTitle];
+     *  - **correspondent**: trimmed, **canonicalized** to the existing [correspondents] entry's
+     *    exact spelling when it matches case-insensitively; dropped when blank or equal to
+     *    [currentCorrespondent] (case-insensitively);
+     *  - **date**: dropped unless a plausible ISO `yyyy-MM-dd` date differing from
+     *    [currentDocDate].
+     */
+    fun parseMetadataSuggestion(
+        response: String,
+        currentTitle: String?,
+        currentCorrespondent: String?,
+        currentDocDate: String?,
+        correspondents: List<String>,
+    ): MetadataSuggestion {
+        val obj = firstJsonObject(response) ?: return MetadataSuggestion.EMPTY
+        val title =
+            obj
+                .stringAt("title")
+                ?.takeIf { it.length <= MAX_TITLE_SUGGESTION_CHARS && it != currentTitle?.trim() }
+        val correspondent =
+            obj
+                .stringAt("correspondent")
+                ?.let { raw -> correspondents.firstOrNull { it.equals(raw, ignoreCase = true) } ?: raw }
+                ?.takeIf { !it.equals(currentCorrespondent?.trim(), ignoreCase = true) }
+        val docDate =
+            obj
+                .stringAt("date")
+                ?.takeIf { isPlausibleIsoDate(it) && it != currentDocDate?.trim() }
+        return MetadataSuggestion(title = title, correspondent = correspondent, docDate = docDate)
+    }
+
+    /** Structurally valid `yyyy-MM-dd` with a sane month/day range (no calendar-exact check). */
+    fun isPlausibleIsoDate(value: String): Boolean {
+        val match = isoDateRegex.matchEntire(value) ?: return false
+        val month = match.groupValues[2].toInt()
+        val day = match.groupValues[3].toInt()
+        return month in 1..12 && day in 1..31
+    }
+
+    private fun JsonObject.stringAt(key: String): String? =
+        (this[key] as? JsonPrimitive)
+            ?.takeIf { it.isString }
+            ?.contentOrNull
+            ?.trim()
+            ?.takeIf { it.isNotEmpty() }
+
+    private fun firstJsonObject(text: String): JsonObject? {
+        var start = text.indexOf('{')
+        while (start >= 0) {
+            // Try every candidate close brace: the first parseable substring wins. Suggestion
+            // objects are small and flat, so this stays cheap even on prose-wrapped output.
+            var end = text.indexOf('}', startIndex = start)
+            while (end >= 0) {
+                val parsed =
+                    runCatching {
+                        json.decodeFromString<JsonObject>(text.substring(start, end + 1))
+                    }.getOrNull()
+                if (parsed != null) return parsed
+                end = text.indexOf('}', startIndex = end + 1)
+            }
+            start = text.indexOf('{', startIndex = start + 1)
+        }
+        return null
     }
 
     private fun firstStringArray(text: String): List<String> {
@@ -104,9 +194,10 @@ object AiText {
             val end = text.indexOf(']', startIndex = start)
             if (end < 0) return emptyList()
             val candidate = text.substring(start, end + 1)
-            val parsed = runCatching {
-                json.decodeFromString<JsonArray>(candidate).map { it.jsonPrimitive.content }
-            }.getOrNull()
+            val parsed =
+                runCatching {
+                    json.decodeFromString<JsonArray>(candidate).map { it.jsonPrimitive.content }
+                }.getOrNull()
             if (parsed != null) return parsed
             start = text.indexOf('[', startIndex = start + 1)
         }

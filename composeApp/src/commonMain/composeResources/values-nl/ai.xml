@@ -20,8 +20,8 @@
     <string name="ai_unspecified_document">een document</string>
 
     <string name="ai_tagging_title">AI-tagging</string>
-    <string name="ai_tagging_applying">Tags toepassen...</string>
-    <string name="ai_tagging_intro">Tags voorstellen voor een reeks documenten</string>
+    <string name="ai_tagging_applying">Suggesties toepassen...</string>
+    <string name="ai_tagging_intro">Tags, titel, correspondent en datum voorstellen voor een reeks documenten</string>
     <string name="ai_tagging_untagged_documents">Documenten zonder tags</string>
     <string name="ai_tagging_review_queue">Beoordelingswachtrij</string>
     <string name="ai_tagging_all_documents">Alle documenten</string>
@@ -32,16 +32,17 @@
     <string name="ai_tagging_range">%1$d-%2$d</string>
     <string name="ai_tagging_new_tags_range">%1$d-%2$d (%3$d = alleen bestaande)</string>
     <string name="ai_tagging_start">Start</string>
-    <string name="ai_tagging_suggesting_progress">Tags voorstellen - %1$d van %2$d</string>
+    <string name="ai_tagging_suggesting_progress">Voorstellen - %1$d van %2$d</string>
     <string name="ai_tagging_select_all">Alles selecteren</string>
     <string name="ai_tagging_clear_selection">Wissen</string>
     <string name="ai_tagging_skip">Overslaan</string>
     <string name="ai_tagging_next_batch">Volgende batch</string>
     <string name="ai_tagging_done">Gereed</string>
+    <string name="ai_tagging_replaces">Vervangt: %1$s</string>
 
-    <plurals name="ai_tagging_tags_selected">
-        <item quantity="one">%1$d van %2$d tag geselecteerd</item>
-        <item quantity="other">%1$d van %2$d tags geselecteerd</item>
+    <plurals name="ai_tagging_suggestions_selected">
+        <item quantity="one">%1$d van %2$d suggestie geselecteerd</item>
+        <item quantity="other">%1$d van %2$d suggesties geselecteerd</item>
     </plurals>
     <plurals name="ai_tagging_no_suggestions">
         <item quantity="one">Geen suggesties (%1$d document)</item>

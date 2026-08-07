@@ -107,6 +107,7 @@ private fun PreviewBody(
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
     val noteEditor by vm.noteEditor.collectAsStateWithLifecycle()
     val aiTags by vm.aiTags.collectAsStateWithLifecycle()
+    val aiMetadata by vm.aiMetadata.collectAsStateWithLifecycle()
     val history by vm.history.collectAsStateWithLifecycle()
     val allTagNames = remember(tagColors) { tagColors.keys.toList() }
 
@@ -149,6 +150,10 @@ private fun PreviewBody(
             onAcceptAiTag = vm::acceptAiTag,
             onDismissAiTag = vm::dismissAiTag,
             onClearAiTagSuggestions = vm::clearAiTagSuggestions,
+            aiMetadata = aiMetadata,
+            onSuggestAiMetadata = vm::suggestAiMetadata,
+            onAcceptAiMetadata = vm::acceptAiMetadata,
+            onDismissAiMetadata = vm::dismissAiMetadata,
             history = history,
             onLoadHistory = { vm.loadHistory() },
             onRefreshHistory = { vm.loadHistory(refresh = true) },

@@ -20,8 +20,8 @@
     <string name="ai_unspecified_document">a document</string>
 
     <string name="ai_tagging_title">AI tagging</string>
-    <string name="ai_tagging_applying">Applying tags...</string>
-    <string name="ai_tagging_intro">Suggest tags for a set of documents</string>
+    <string name="ai_tagging_applying">Applying suggestions...</string>
+    <string name="ai_tagging_intro">Suggest tags, title, correspondent and date for a set of documents</string>
     <string name="ai_tagging_untagged_documents">Untagged documents</string>
     <string name="ai_tagging_review_queue">Review queue</string>
     <string name="ai_tagging_all_documents">All documents</string>
@@ -32,16 +32,17 @@
     <string name="ai_tagging_range">%1$d-%2$d</string>
     <string name="ai_tagging_new_tags_range">%1$d-%2$d (%3$d = existing only)</string>
     <string name="ai_tagging_start">Start</string>
-    <string name="ai_tagging_suggesting_progress">Suggesting tags - %1$d of %2$d</string>
+    <string name="ai_tagging_suggesting_progress">Suggesting - %1$d of %2$d</string>
     <string name="ai_tagging_select_all">Select all</string>
     <string name="ai_tagging_clear_selection">Clear</string>
     <string name="ai_tagging_skip">Skip</string>
     <string name="ai_tagging_next_batch">Next batch</string>
     <string name="ai_tagging_done">Done</string>
+    <string name="ai_tagging_replaces">Replaces: %1$s</string>
 
-    <plurals name="ai_tagging_tags_selected">
-        <item quantity="one">%1$d of %2$d tag selected</item>
-        <item quantity="other">%1$d of %2$d tags selected</item>
+    <plurals name="ai_tagging_suggestions_selected">
+        <item quantity="one">%1$d of %2$d suggestion selected</item>
+        <item quantity="other">%1$d of %2$d suggestions selected</item>
     </plurals>
     <plurals name="ai_tagging_no_suggestions">
         <item quantity="one">No suggestions (%1$d document)</item>

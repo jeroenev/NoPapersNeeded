@@ -6,7 +6,9 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.doc
+import dev.npn.app.ui.common.AiMetadataField
 import dev.npn.app.ui.common.resolveEnglish
+import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocListItem
@@ -28,7 +30,13 @@ private fun item(
     id: String,
     tags: List<String> = emptyList(),
     title: String? = null,
-): DocListItem = DocListItem(doc = doc(id, title = title), tags = tags)
+    correspondent: String? = null,
+    docDate: String? = null,
+): DocListItem =
+    DocListItem(
+        doc = doc(id, title = title, correspondent = correspondent, docDate = docDate),
+        tags = tags,
+    )
 
 private fun vm(
     session: FakeLibrarySession = FakeLibrarySession(),
@@ -196,8 +204,8 @@ class AiTaggingApplicationTest : MainDispatcherTest() {
             val done =
                 model.ui.value.phase
                     .shouldBeInstanceOf<TaggingPhase.Done>()
-            done.result.tagsAdded shouldBe 3
-            done.result.docsTagged shouldBe 2
+            done.result.applied shouldBe 3
+            done.result.docsChanged shouldBe 2
             job.cancel()
         }
 
@@ -234,8 +242,8 @@ class AiTaggingApplicationTest : MainDispatcherTest() {
             val done =
                 model.ui.value.phase
                     .shouldBeInstanceOf<TaggingPhase.Done>()
-            done.result.tagsAdded shouldBe 3
-            done.result.docsTagged shouldBe 2
+            done.result.applied shouldBe 3
+            done.result.docsChanged shouldBe 2
             job.cancel()
         }
 
@@ -407,7 +415,7 @@ class AiTaggingFailureHandlingTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            messages shouldContainExactly listOf("Could not suggest tags for 1 of 2 document(s)")
+            messages shouldContainExactly listOf("Could not get suggestions for 1 of 2 document(s)")
             val review =
                 model.ui.value.phase
                     .shouldBeInstanceOf<TaggingPhase.Review>()
@@ -657,8 +665,8 @@ class AiTaggingBatchWorkflowTest : MainDispatcherTest() {
             val done =
                 model.ui.value.phase
                     .shouldBeInstanceOf<TaggingPhase.Done>()
-            done.result.tagsAdded shouldBe 0
-            done.result.docsTagged shouldBe 0
+            done.result.applied shouldBe 0
+            done.result.docsChanged shouldBe 0
             done.result.moreRemain shouldBe false
             job.cancel()
         }
@@ -706,7 +714,249 @@ class AiTaggingBatchWorkflowTest : MainDispatcherTest() {
             val done =
                 model.ui.value.phase
                     .shouldBeInstanceOf<TaggingPhase.Done>()
-            done.result.tagsAdded shouldBe 2
+            done.result.applied shouldBe 2
+            jobs.forEach { it.cancel() }
+        }
+
+    @Test
+    fun fieldSuggestionsPreSelectFillInsAndDeselectOverwrites() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a", title = "Old title"))
+                    ai.metadataByDoc =
+                        mapOf(
+                            "a" to
+                                MetadataSuggestion(
+                                    title = "New title",
+                                    correspondent = "Acme",
+                                    docDate = "2024-01-15",
+                                ),
+                        )
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setScope(TaggingScope.ALL)
+            model.start()
+            advanceUntilIdle()
+
+            session.ai.suggestMetadataCalls shouldContainExactly listOf("a")
+            val fields =
+                model.ui.value.phase
+                    .shouldBeInstanceOf<TaggingPhase.Review>()
+                    .docs
+                    .single()
+                    .fields
+            fields.map { it.field } shouldContainExactly
+                listOf(AiMetadataField.TITLE, AiMetadataField.CORRESPONDENT, AiMetadataField.DOC_DATE)
+            // Title overwrites an existing value -> pre-deselected, current value retained for display.
+            val title = fields.single { it.field == AiMetadataField.TITLE }
+            title.selected shouldBe false
+            title.current shouldBe "Old title"
+            // Correspondent and date fill empty fields -> pre-selected, no replaced value.
+            fields.single { it.field == AiMetadataField.CORRESPONDENT }.selected shouldBe true
+            fields.single { it.field == AiMetadataField.CORRESPONDENT }.current shouldBe null
+            fields.single { it.field == AiMetadataField.DOC_DATE }.selected shouldBe true
+            job.cancel()
+        }
+
+    @Test
+    fun toggleFieldFlipsSelection() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"))
+                    ai.metadataSuggestion = MetadataSuggestion(title = "New title")
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setScope(TaggingScope.ALL)
+            model.start()
+            advanceUntilIdle()
+
+            model.toggleField("a", AiMetadataField.TITLE)
+            model.ui.value.phase
+                .shouldBeInstanceOf<TaggingPhase.Review>()
+                .docs
+                .single()
+                .fields
+                .single()
+                .selected shouldBe false
+            job.cancel()
+        }
+
+    @Test
+    fun applyWritesSelectedFieldsThroughMatchingSetters() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a", title = "Old title"))
+                    ai.suggestions = listOf(TagSuggestion("t1", isNew = false))
+                    ai.metadataByDoc =
+                        mapOf(
+                            "a" to
+                                MetadataSuggestion(
+                                    title = "New title",
+                                    correspondent = "Acme",
+                                    docDate = "2024-01-15",
+                                ),
+                        )
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setScope(TaggingScope.ALL)
+            model.start()
+            advanceUntilIdle()
+
+            // Title stays deselected (overwrite); correspondent + date + tag are written.
+            model.apply()
+            advanceUntilIdle()
+
+            session.meta.titleSets shouldBe emptyList()
+            session.meta.correspondentSets shouldContainExactly listOf(listOf("a") to "Acme")
+            session.meta.docDateSets shouldContainExactly listOf("a" to "2024-01-15")
+            session.meta.addedTags shouldContainExactly listOf(listOf("a") to "t1")
+            val done =
+                model.ui.value.phase
+                    .shouldBeInstanceOf<TaggingPhase.Done>()
+            done.result.applied shouldBe 3
+            done.result.docsChanged shouldBe 1
+            job.cancel()
+        }
+
+    @Test
+    fun docWithOnlyFieldSuggestionsAppearsInReviewNotEmptyGroup() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"), item("b"))
+                    ai.metadataByDoc = mapOf("a" to MetadataSuggestion(docDate = "2024-01-15"))
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setScope(TaggingScope.ALL)
+            model.start()
+            advanceUntilIdle()
+
+            val review =
+                model.ui.value.phase
+                    .shouldBeInstanceOf<TaggingPhase.Review>()
+            review.docs.map { it.docId } shouldContainExactly listOf("a")
+            review.emptyDocs.map { it.docId } shouldContainExactly listOf("b")
+            job.cancel()
+        }
+
+    @Test
+    fun metadataFailurePerDocDropsDocAndSurfacesMessage() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"), item("b"))
+                    ai.suggestions = listOf(TagSuggestion("t", isNew = false))
+                    ai.failSuggestMetadataForDocs = setOf("a")
+                }
+            val model = vm(session)
+            val messages = mutableListOf<String>()
+            val jobs =
+                listOf(
+                    launch { model.ui.collect {} },
+                    launch { model.messages.collect { messages += it.resolveEnglish() } },
+                )
+            advanceUntilIdle()
+            model.start()
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf("Could not get suggestions for 1 of 2 document(s)")
+            model.ui.value.phase
+                .shouldBeInstanceOf<TaggingPhase.Review>()
+                .docs
+                .map { it.docId } shouldContainExactly listOf("b")
+            jobs.forEach { it.cancel() }
+        }
+
+    @Test
+    fun docAndBatchSelectionCoverFields() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a", title = "Old title"))
+                    ai.suggestions = listOf(TagSuggestion("t", isNew = false))
+                    ai.metadataSuggestion = MetadataSuggestion(title = "New title")
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setScope(TaggingScope.ALL)
+            model.start()
+            advanceUntilIdle()
+
+            // Overwrite title starts deselected; select-all must pick it up too.
+            model.setAllSelection(true)
+            var doc =
+                model.ui.value.phase
+                    .shouldBeInstanceOf<TaggingPhase.Review>()
+                    .docs
+                    .single()
+            doc.fields.single().selected shouldBe true
+
+            model.setDocSelection("a", false)
+            doc =
+                model.ui.value.phase
+                    .shouldBeInstanceOf<TaggingPhase.Review>()
+                    .docs
+                    .single()
+            doc.chips.single().selected shouldBe false
+            doc.fields.single().selected shouldBe false
+            job.cancel()
+        }
+
+    @Test
+    fun fieldPartialFailureRetainsUnappliedSelectionAndCarriesCount() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"), item("b"))
+                    ai.metadataByDoc =
+                        mapOf(
+                            "a" to MetadataSuggestion(title = "Title A"),
+                            "b" to MetadataSuggestion(correspondent = "Acme"),
+                        )
+                }
+            val model = vm(session)
+            val jobs = listOf(launch { model.ui.collect {} }, launch { model.messages.collect {} })
+            advanceUntilIdle()
+            model.setScope(TaggingScope.ALL)
+            model.start()
+            advanceUntilIdle()
+
+            // First apply: a's title write fails, b's correspondent succeeds -> Review retains a.
+            session.meta.failSetTitle = { error("boom") }
+            model.apply()
+            advanceUntilIdle()
+            val review =
+                model.ui.value.phase
+                    .shouldBeInstanceOf<TaggingPhase.Review>()
+            review.docs.map { it.docId } shouldContainExactly listOf("a")
+            review.docs
+                .single()
+                .fields
+                .single()
+                .selected shouldBe true
+
+            // Retry succeeding: only a's title is written; Done counts include b's earlier write.
+            session.meta.failSetTitle = null
+            model.apply()
+            advanceUntilIdle()
+
+            session.meta.titleSets shouldContainExactly listOf("a" to "Title A")
+            val done =
+                model.ui.value.phase
+                    .shouldBeInstanceOf<TaggingPhase.Done>()
+            done.result.applied shouldBe 2
             jobs.forEach { it.cancel() }
         }
 
