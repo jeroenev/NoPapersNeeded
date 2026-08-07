@@ -322,3 +322,150 @@ class RankTagSuggestionsTest {
         result shouldContainExactly listOf(TagSuggestion("n1", isNew = true))
     }
 }
+
+/** Parsing/validation behavior for [AiText.parseEditSuggestion]. */
+class ParseEditSuggestionTest {
+    private fun parse(
+        response: String,
+        currentTitle: String? = null,
+        currentCorrespondent: String? = null,
+        currentDocDate: String? = null,
+        correspondents: List<String> = emptyList(),
+        currentTags: List<String> = emptyList(),
+        vocabulary: List<String> = emptyList(),
+        fields: List<AiFieldConfig> = emptyList(),
+        maxTags: Int = 8,
+        maxNewTags: Int = 5,
+    ) = AiText.parseEditSuggestion(
+        response,
+        currentTitle,
+        currentCorrespondent,
+        currentDocDate,
+        correspondents,
+        currentTags,
+        vocabulary,
+        fields,
+        maxTags,
+        maxNewTags,
+    )
+
+    @Test
+    fun parsesCombinedObject() {
+        val result =
+            parse(
+                """{"add_tags": ["tax", "invoice"], "remove_tags": ["utility"], """ +
+                    """"title": "Invoice Jan", "correspondent": "Acme", "date": "2024-01-15"}""",
+                currentTags = listOf("Utility"),
+                vocabulary = listOf("tax", "invoice"),
+                fields =
+                    listOf(
+                        AiFieldConfig(AiField.TITLE),
+                        AiFieldConfig(AiField.CORRESPONDENT),
+                        AiFieldConfig(AiField.DOC_DATE),
+                    ),
+            )
+        result.addTags shouldContainExactly
+            listOf(
+                TagSuggestion("tax", isNew = false),
+                TagSuggestion("invoice", isNew = false),
+            )
+        result.removeTags shouldContainExactly listOf("Utility")
+        result.metadata shouldBe
+            MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
+    }
+
+    @Test
+    fun nonJsonReturnsEmpty() {
+        parse("no object here") shouldBe AiEditSuggestion.EMPTY
+    }
+
+    @Test
+    fun removalsRestrictedToCurrentTagsAndCanonicalized() {
+        val result =
+            parse(
+                """{"remove_tags": ["UTILITY", "not-there"]}""",
+                currentTags = listOf("Utility", "Invoice"),
+            )
+        result.removeTags shouldContainExactly listOf("Utility")
+    }
+
+    @Test
+    fun removalsDedupeCaseInsensitively() {
+        val result =
+            parse(
+                """{"remove_tags": ["utility", "Utility"]}""",
+                currentTags = listOf("Utility"),
+            )
+        result.removeTags shouldContainExactly listOf("Utility")
+    }
+
+    @Test
+    fun addTagsAcceptTagsAliasAndCapsNew() {
+        val result =
+            parse(
+                """{"tags": ["n1", "n2", "n3"]}""",
+                vocabulary = emptyList(),
+                maxNewTags = 2,
+            )
+        result.addTags shouldContainExactly listOf(TagSuggestion("n1", true), TagSuggestion("n2", true))
+    }
+
+    @Test
+    fun unfilledModeDropsValueWhenCurrentPresent() {
+        val result =
+            parse(
+                """{"title": "New title"}""",
+                currentTitle = "Old title",
+                fields = listOf(AiFieldConfig(AiField.TITLE, AiFieldMode.UNFILLED)),
+            )
+        result.metadata shouldBe MetadataSuggestion.EMPTY
+    }
+
+    @Test
+    fun unfilledModeKeepsValueWhenCurrentBlank() {
+        val result =
+            parse(
+                """{"title": "New title"}""",
+                fields = listOf(AiFieldConfig(AiField.TITLE, AiFieldMode.UNFILLED)),
+            )
+        result.metadata.title shouldBe "New title"
+    }
+
+    @Test
+    fun allModeAllowsOverwriteSuggestion() {
+        val result =
+            parse(
+                """{"title": "New title"}""",
+                currentTitle = "Old title",
+                fields = listOf(AiFieldConfig(AiField.TITLE, AiFieldMode.ALL)),
+            )
+        result.metadata.title shouldBe "New title"
+    }
+
+    @Test
+    fun unrequestedFieldsAreDroppedEvenWhenModelReturnsThem() {
+        val result =
+            parse(
+                """{"title": "New title", "correspondent": "Acme", "date": "2024-01-15"}""",
+                fields = listOf(AiFieldConfig(AiField.CORRESPONDENT)),
+            )
+        result.metadata shouldBe MetadataSuggestion(correspondent = "Acme")
+    }
+
+    @Test
+    fun addTagsStillRankExistingBeforeNew() {
+        val result =
+            parse(
+                """{"add_tags": ["newA", "invoice", "newB"]}""",
+                vocabulary = listOf("invoice"),
+                maxTags = 8,
+                maxNewTags = 5,
+            )
+        result.addTags shouldContainExactly
+            listOf(
+                TagSuggestion("invoice", isNew = false),
+                TagSuggestion("newA", isNew = true),
+                TagSuggestion("newB", isNew = true),
+            )
+    }
+}

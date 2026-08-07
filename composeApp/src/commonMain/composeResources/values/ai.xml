@@ -19,32 +19,45 @@
     <string name="ai_unknown_value">(unknown)</string>
     <string name="ai_unspecified_document">a document</string>
 
-    <string name="ai_tagging_title">AI tagging</string>
-    <string name="ai_tagging_applying">Applying suggestions...</string>
-    <string name="ai_tagging_intro">Suggest tags, title, correspondent and date for a set of documents</string>
-    <string name="ai_tagging_untagged_documents">Untagged documents</string>
-    <string name="ai_tagging_review_queue">Review queue</string>
-    <string name="ai_tagging_all_documents">All documents</string>
-    <string name="ai_tagging_options">Options</string>
-    <string name="ai_tagging_tags_per_document">Tags per document</string>
-    <string name="ai_tagging_new_tags_per_document">New tags per document</string>
-    <string name="ai_tagging_documents_per_batch">Documents per batch</string>
-    <string name="ai_tagging_range">%1$d-%2$d</string>
-    <string name="ai_tagging_new_tags_range">%1$d-%2$d (%3$d = existing only)</string>
-    <string name="ai_tagging_start">Start</string>
-    <string name="ai_tagging_suggesting_progress">Suggesting - %1$d of %2$d</string>
-    <string name="ai_tagging_select_all">Select all</string>
-    <string name="ai_tagging_clear_selection">Clear</string>
-    <string name="ai_tagging_skip">Skip</string>
-    <string name="ai_tagging_next_batch">Next batch</string>
-    <string name="ai_tagging_done">Done</string>
-    <string name="ai_tagging_replaces">Replaces: %1$s</string>
+    <string name="ai_edit_title">AI edit</string>
+    <string name="ai_edit_applying">Applying suggestions...</string>
+    <string name="ai_edit_intro">Automate edits across a set of documents</string>
+    <string name="ai_edit_scope">Documents</string>
+    <string name="ai_edit_untagged_documents">Untagged documents</string>
+    <string name="ai_edit_review_queue">Review queue</string>
+    <string name="ai_edit_all_documents">All documents</string>
+    <string name="ai_edit_fields">Autofill fields</string>
+    <string name="ai_edit_overwrite">Overwrite existing value</string>
+    <string name="ai_edit_overwrite_help">Off: only fill the field when it is empty</string>
+    <string name="ai_edit_tags">Tags</string>
+    <string name="ai_edit_tags_always">Tag suggestions are always part of the run.</string>
+    <string name="ai_edit_allow_new_tags">Suggest new tags</string>
+    <string name="ai_edit_allow_new_tags_help">Off: only tags that already exist in your library</string>
+    <string name="ai_edit_suggest_tag_removals">Suggest removing tags</string>
+    <string name="ai_edit_suggest_tag_removals_help">Propose dropping tags that do not fit the document</string>
+    <string name="ai_edit_custom_prompt">Extra instructions (optional)</string>
+    <string name="ai_edit_custom_prompt_hint">e.g. merge tags that differ only in case, or standardize a correspondent name</string>
+    <string name="ai_edit_remove_tags_label">Remove</string>
+    <string name="ai_edit_options">Options</string>
+    <string name="ai_edit_tags_per_document">Tags per document</string>
+    <string name="ai_edit_new_tags_per_document">New tags per document</string>
+    <string name="ai_edit_documents_per_batch">Documents per batch</string>
+    <string name="ai_edit_range">%1$d-%2$d</string>
+    <string name="ai_edit_new_tags_range">%1$d-%2$d (%3$d = existing only)</string>
+    <string name="ai_edit_start">Start</string>
+    <string name="ai_edit_suggesting_progress">Suggesting - %1$d of %2$d</string>
+    <string name="ai_edit_select_all">Select all</string>
+    <string name="ai_edit_clear_selection">Clear</string>
+    <string name="ai_edit_skip">Skip</string>
+    <string name="ai_edit_next_batch">Next batch</string>
+    <string name="ai_edit_done">Done</string>
+    <string name="ai_edit_replaces">Replaces: %1$s</string>
 
-    <plurals name="ai_tagging_suggestions_selected">
+    <plurals name="ai_edit_suggestions_selected">
         <item quantity="one">%1$d of %2$d suggestion selected</item>
         <item quantity="other">%1$d of %2$d suggestions selected</item>
     </plurals>
-    <plurals name="ai_tagging_no_suggestions">
+    <plurals name="ai_edit_no_suggestions">
         <item quantity="one">No suggestions (%1$d document)</item>
         <item quantity="other">No suggestions (%1$d documents)</item>
     </plurals>

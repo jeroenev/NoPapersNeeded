@@ -74,7 +74,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.common.AiMetadataField
 import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.IsoDatePickerDialog
 import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
@@ -85,6 +84,7 @@ import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.app.ui.common.parseFtsSnippet
 import dev.npn.app.ui.common.parseQueryHighlight
+import dev.npn.core.ai.AiField
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
@@ -202,8 +202,8 @@ fun MetadataPanel(
     onClearAiTagSuggestions: () -> Unit = {},
     aiMetadata: AiMetadataState = AiMetadataState(),
     onSuggestAiMetadata: () -> Unit = {},
-    onAcceptAiMetadata: (AiMetadataField) -> Unit = {},
-    onDismissAiMetadata: (AiMetadataField) -> Unit = {},
+    onAcceptAiMetadata: (AiField) -> Unit = {},
+    onDismissAiMetadata: (AiField) -> Unit = {},
     history: HistoryUiState = HistoryUiState.NotLoaded,
     onLoadHistory: () -> Unit = {},
     onRefreshHistory: () -> Unit = {},
@@ -351,8 +351,8 @@ private fun DetailsTab(
     onClearAiTagSuggestions: () -> Unit,
     aiMetadata: AiMetadataState,
     onSuggestAiMetadata: () -> Unit,
-    onAcceptAiMetadata: (AiMetadataField) -> Unit,
-    onDismissAiMetadata: (AiMetadataField) -> Unit,
+    onAcceptAiMetadata: (AiField) -> Unit,
+    onDismissAiMetadata: (AiField) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val doc = item.doc
@@ -708,8 +708,8 @@ private fun AiMetadataSuggestions(
     available: Boolean,
     state: AiMetadataState,
     onSuggest: () -> Unit,
-    onAccept: (AiMetadataField) -> Unit,
-    onDismiss: (AiMetadataField) -> Unit,
+    onAccept: (AiField) -> Unit,
+    onDismiss: (AiField) -> Unit,
 ) {
     if (!available) return
     val suggestion = state.suggestion
@@ -735,7 +735,7 @@ private fun AiMetadataSuggestions(
             AiMetadataSuggestionRow(
                 stringResource(Res.string.detail_title),
                 it,
-                AiMetadataField.TITLE,
+                AiField.TITLE,
                 onAccept,
                 onDismiss,
             )
@@ -744,7 +744,7 @@ private fun AiMetadataSuggestions(
             AiMetadataSuggestionRow(
                 stringResource(Res.string.detail_correspondent),
                 it,
-                AiMetadataField.CORRESPONDENT,
+                AiField.CORRESPONDENT,
                 onAccept,
                 onDismiss,
             )
@@ -753,7 +753,7 @@ private fun AiMetadataSuggestions(
             AiMetadataSuggestionRow(
                 stringResource(Res.string.detail_document_date_plain),
                 it,
-                AiMetadataField.DOC_DATE,
+                AiField.DOC_DATE,
                 onAccept,
                 onDismiss,
             )
@@ -766,9 +766,9 @@ private fun AiMetadataSuggestions(
 private fun AiMetadataSuggestionRow(
     label: String,
     value: String,
-    field: AiMetadataField,
-    onAccept: (AiMetadataField) -> Unit,
-    onDismiss: (AiMetadataField) -> Unit,
+    field: AiField,
+    onAccept: (AiField) -> Unit,
+    onDismiss: (AiField) -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth(),

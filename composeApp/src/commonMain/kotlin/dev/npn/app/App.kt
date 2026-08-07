@@ -37,7 +37,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.ai.AiChatScreen
-import dev.npn.app.ui.ai.AiTaggingScreen
+import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.isConfiguredOrFalse
@@ -152,7 +152,7 @@ private fun MainNav(
         aiConfigured = aiConfigured,
         onNavigate = { dest -> nav.navigateTopLevel(dest) },
         onAiChat = { nav.navigateAi(Route.AiChat) },
-        onAiTagging = { nav.navigateAi(Route.AiTagging) },
+        onAiEdit = { nav.navigateAi(Route.AiEdit) },
     ) {
         MainNavHost(nav = nav, env = env, session = session, browse = browse, aiConfigured = aiConfigured)
     }
@@ -178,7 +178,7 @@ private fun MainNavHost(
                 },
                 onTrash = { nav.navigate(Route.Trash) },
                 onAiChat = { nav.navigateAi(Route.AiChat) },
-                onAiTagging = { nav.navigateAi(Route.AiTagging) },
+                onAiEdit = { nav.navigateAi(Route.AiEdit) },
             )
         }
         composable<Route.DocDetail> { entry ->
@@ -258,7 +258,7 @@ private fun NavHostController.currentAiDestination(): AiDestination? {
     val destination = entry?.destination ?: return null
     return when {
         destination.hasRoute<Route.AiChat>() -> AiDestination.CHAT
-        destination.hasRoute<Route.AiTagging>() -> AiDestination.TAGGING
+        destination.hasRoute<Route.AiEdit>() -> AiDestination.EDIT
         else -> null
     }
 }
@@ -336,8 +336,8 @@ private fun NavGraphBuilder.aiRoutes(
             onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
         )
     }
-    composable<Route.AiTagging> {
-        AiTaggingScreen(
+    composable<Route.AiEdit> {
+        AiEditScreen(
             session = session,
             settings = settings,
             onBack = { nav.popBackStack() },

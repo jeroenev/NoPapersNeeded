@@ -19,32 +19,45 @@
     <string name="ai_unknown_value">(onbekend)</string>
     <string name="ai_unspecified_document">een document</string>
 
-    <string name="ai_tagging_title">AI-tagging</string>
-    <string name="ai_tagging_applying">Suggesties toepassen...</string>
-    <string name="ai_tagging_intro">Tags, titel, correspondent en datum voorstellen voor een reeks documenten</string>
-    <string name="ai_tagging_untagged_documents">Documenten zonder tags</string>
-    <string name="ai_tagging_review_queue">Beoordelingswachtrij</string>
-    <string name="ai_tagging_all_documents">Alle documenten</string>
-    <string name="ai_tagging_options">Opties</string>
-    <string name="ai_tagging_tags_per_document">Tags per document</string>
-    <string name="ai_tagging_new_tags_per_document">Nieuwe tags per document</string>
-    <string name="ai_tagging_documents_per_batch">Documenten per batch</string>
-    <string name="ai_tagging_range">%1$d-%2$d</string>
-    <string name="ai_tagging_new_tags_range">%1$d-%2$d (%3$d = alleen bestaande)</string>
-    <string name="ai_tagging_start">Start</string>
-    <string name="ai_tagging_suggesting_progress">Voorstellen - %1$d van %2$d</string>
-    <string name="ai_tagging_select_all">Alles selecteren</string>
-    <string name="ai_tagging_clear_selection">Wissen</string>
-    <string name="ai_tagging_skip">Overslaan</string>
-    <string name="ai_tagging_next_batch">Volgende batch</string>
-    <string name="ai_tagging_done">Gereed</string>
-    <string name="ai_tagging_replaces">Vervangt: %1$s</string>
+    <string name="ai_edit_title">AI-bewerken</string>
+    <string name="ai_edit_applying">Suggesties toepassen...</string>
+    <string name="ai_edit_intro">Automatiseer bewerkingen over een reeks documenten</string>
+    <string name="ai_edit_scope">Documenten</string>
+    <string name="ai_edit_untagged_documents">Documenten zonder tags</string>
+    <string name="ai_edit_review_queue">Beoordelingswachtrij</string>
+    <string name="ai_edit_all_documents">Alle documenten</string>
+    <string name="ai_edit_fields">Velden automatisch invullen</string>
+    <string name="ai_edit_overwrite">Bestaande waarde overschrijven</string>
+    <string name="ai_edit_overwrite_help">Uit: het veld alleen invullen als het leeg is</string>
+    <string name="ai_edit_tags">Tags</string>
+    <string name="ai_edit_tags_always">Tagsuggesties horen altijd bij de run.</string>
+    <string name="ai_edit_allow_new_tags">Nieuwe tags voorstellen</string>
+    <string name="ai_edit_allow_new_tags_help">Uit: alleen tags die al in je bibliotheek bestaan</string>
+    <string name="ai_edit_suggest_tag_removals">Verwijderen van tags voorstellen</string>
+    <string name="ai_edit_suggest_tag_removals_help">Stel voor tags te laten vallen die niet bij het document passen</string>
+    <string name="ai_edit_custom_prompt">Extra instructies (optioneel)</string>
+    <string name="ai_edit_custom_prompt_hint">bijv. tags samenvoegen die alleen in hoofdletters verschillen, of een correspondentnaam standaardiseren</string>
+    <string name="ai_edit_remove_tags_label">Verwijderen</string>
+    <string name="ai_edit_options">Opties</string>
+    <string name="ai_edit_tags_per_document">Tags per document</string>
+    <string name="ai_edit_new_tags_per_document">Nieuwe tags per document</string>
+    <string name="ai_edit_documents_per_batch">Documenten per batch</string>
+    <string name="ai_edit_range">%1$d-%2$d</string>
+    <string name="ai_edit_new_tags_range">%1$d-%2$d (%3$d = alleen bestaande)</string>
+    <string name="ai_edit_start">Start</string>
+    <string name="ai_edit_suggesting_progress">Voorstellen - %1$d van %2$d</string>
+    <string name="ai_edit_select_all">Alles selecteren</string>
+    <string name="ai_edit_clear_selection">Wissen</string>
+    <string name="ai_edit_skip">Overslaan</string>
+    <string name="ai_edit_next_batch">Volgende batch</string>
+    <string name="ai_edit_done">Gereed</string>
+    <string name="ai_edit_replaces">Vervangt: %1$s</string>
 
-    <plurals name="ai_tagging_suggestions_selected">
+    <plurals name="ai_edit_suggestions_selected">
         <item quantity="one">%1$d van %2$d suggestie geselecteerd</item>
         <item quantity="other">%1$d van %2$d suggesties geselecteerd</item>
     </plurals>
-    <plurals name="ai_tagging_no_suggestions">
+    <plurals name="ai_edit_no_suggestions">
         <item quantity="one">Geen suggesties (%1$d document)</item>
         <item quantity="other">Geen suggesties (%1$d documenten)</item>
     </plurals>

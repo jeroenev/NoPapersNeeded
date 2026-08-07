@@ -1,7 +1,6 @@
 package dev.npn.app.ui.detail
 
 import androidx.lifecycle.viewModelScope
-import dev.npn.app.ui.common.AiMetadataField
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiTextKey
@@ -9,6 +8,7 @@ import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.ai.AiField
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
@@ -360,23 +360,23 @@ class DocDetailViewModel(
     }
 
     /** Accept one field's suggestion: write it via the normal journal path and drop it. */
-    fun acceptAiMetadata(field: AiMetadataField) {
+    fun acceptAiMetadata(field: AiField) {
         val suggestion = _aiMetadata.value.suggestion
         when (field) {
-            AiMetadataField.TITLE -> suggestion.title?.let(::setTitle)
-            AiMetadataField.CORRESPONDENT -> suggestion.correspondent?.let(::setCorrespondent)
-            AiMetadataField.DOC_DATE -> suggestion.docDate?.let(::setDocDate)
+            AiField.TITLE -> suggestion.title?.let(::setTitle)
+            AiField.CORRESPONDENT -> suggestion.correspondent?.let(::setCorrespondent)
+            AiField.DOC_DATE -> suggestion.docDate?.let(::setDocDate)
         }
         dismissAiMetadata(field)
     }
 
-    fun dismissAiMetadata(field: AiMetadataField) {
+    fun dismissAiMetadata(field: AiField) {
         val current = _aiMetadata.value
         val suggestion =
             when (field) {
-                AiMetadataField.TITLE -> current.suggestion.copy(title = null)
-                AiMetadataField.CORRESPONDENT -> current.suggestion.copy(correspondent = null)
-                AiMetadataField.DOC_DATE -> current.suggestion.copy(docDate = null)
+                AiField.TITLE -> current.suggestion.copy(title = null)
+                AiField.CORRESPONDENT -> current.suggestion.copy(correspondent = null)
+                AiField.DOC_DATE -> current.suggestion.copy(docDate = null)
             }
         _aiMetadata.value = current.copy(suggestion = suggestion)
     }

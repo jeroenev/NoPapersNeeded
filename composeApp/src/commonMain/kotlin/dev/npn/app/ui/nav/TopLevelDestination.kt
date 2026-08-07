@@ -34,4 +34,4 @@ enum class TopLevelDestination(
  * [TopLevelDestination] because the compact bottom bar does not carry them, but the rail keeps
  * itself visible (with the matching item selected) while one of them is open.
  */
-enum class AiDestination { CHAT, TAGGING }
+enum class AiDestination { CHAT, EDIT }

@@ -1,8 +1,8 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.AiMetadataField
 import dev.npn.app.ui.common.resolveEnglish
 import dev.npn.app.ui.detail.DocDetailViewModel
+import dev.npn.core.ai.AiField
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
@@ -447,9 +447,9 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.suggestAiMetadata()
             advanceUntilIdle()
 
-            model.acceptAiMetadata(AiMetadataField.TITLE)
-            model.acceptAiMetadata(AiMetadataField.CORRESPONDENT)
-            model.acceptAiMetadata(AiMetadataField.DOC_DATE)
+            model.acceptAiMetadata(AiField.TITLE)
+            model.acceptAiMetadata(AiField.CORRESPONDENT)
+            model.acceptAiMetadata(AiField.DOC_DATE)
             advanceUntilIdle()
 
             session.meta.titleSets shouldContainExactly listOf("doc-1" to "Invoice Jan")
@@ -468,7 +468,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.suggestAiMetadata()
             advanceUntilIdle()
 
-            model.dismissAiMetadata(AiMetadataField.CORRESPONDENT)
+            model.dismissAiMetadata(AiField.CORRESPONDENT)
 
             model.aiMetadata.value.suggestion shouldBe suggestion.copy(correspondent = null)
             session.meta.correspondentSets shouldBe emptyList()

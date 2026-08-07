@@ -32,7 +32,7 @@ import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.library_ai_assistant
-import no_papers_needed.composeapp.generated.resources.library_ai_tagging
+import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import no_papers_needed.composeapp.generated.resources.library_all_documents
 import no_papers_needed.composeapp.generated.resources.library_more_actions
 import no_papers_needed.composeapp.generated.resources.library_pin
@@ -185,7 +185,7 @@ private fun SavedViewMenuItem(
 @Composable
 internal fun LibraryAiOverflowMenu(
     onAiChat: () -> Unit,
-    onAiTagging: () -> Unit,
+    onAiEdit: () -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
     Box {
@@ -202,11 +202,11 @@ internal fun LibraryAiOverflowMenu(
                 },
             )
             DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_ai_tagging)) },
+                text = { Text(stringResource(Res.string.library_ai_edit)) },
                 leadingIcon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
                 onClick = {
                     open = false
-                    onAiTagging()
+                    onAiEdit()
                 },
             )
         }
