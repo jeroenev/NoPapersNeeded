@@ -56,6 +56,10 @@
     <string name="detail_pages">Pagina's</string>
     <string name="detail_ocr">OCR</string>
     <string name="detail_suggest_tags">Tags voorstellen</string>
+    <string name="detail_suggest_metadata">Details voorstellen</string>
+    <string name="detail_document_date_plain">Documentdatum</string>
+    <string name="detail_use_suggestion">Voorgestelde %1$s gebruiken</string>
+    <string name="detail_dismiss_suggestion">Voorgestelde %1$s negeren</string>
     <string name="detail_dismiss_all">Alles negeren</string>
     <string name="detail_add_tag">%1$s toevoegen</string>
     <string name="detail_dismiss_tag">%1$s negeren</string>

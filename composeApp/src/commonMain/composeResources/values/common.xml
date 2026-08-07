@@ -34,6 +34,7 @@
 
     <string name="common_could_not_action">Could not %1$s: %2$s</string>
     <string name="common_no_ai_tag_suggestions">No suggestions - document may not be OCRed yet</string>
+    <string name="common_no_ai_metadata_suggestions">No suggestions - document may not be OCRed yet</string>
     <string name="common_ai_assistant_unreachable">Could not reach the AI assistant: %1$s</string>
     <string name="common_ai_assistant_empty_answer">The assistant returned an empty answer.</string>
     <string name="common_scan_imported">Scan imported</string>
@@ -41,8 +42,8 @@
     <string name="common_scan_import_failed">Scan import failed: %1$s</string>
     <string name="common_tagging_done_empty">No documents to tag</string>
     <string name="common_join_items">%1$s, %2$s</string>
-    <string name="common_tagging_apply_summary">Add %1$s across %2$s</string>
-    <string name="common_tagging_done_summary">Added %1$s across %2$s</string>
+    <string name="common_tagging_apply_summary">Apply %1$s across %2$s</string>
+    <string name="common_tagging_done_summary">Applied %1$s across %2$s</string>
 
     <string name="common_action_save_title">save title</string>
     <string name="common_action_save_correspondent">save correspondent</string>
@@ -72,6 +73,7 @@
     <string name="common_action_update">update</string>
     <string name="common_action_trash">trash</string>
     <string name="common_action_suggest_tags">suggest tags</string>
+    <string name="common_action_suggest_metadata">suggest details</string>
     <string name="common_action_tag">tag</string>
 
     <plurals name="common_could_not_documents">
@@ -83,8 +85,8 @@
         <item quantity="other">Could not %1$s %2$d of %3$d documents</item>
     </plurals>
     <plurals name="common_could_not_suggest_tags_partial">
-        <item quantity="one">Could not suggest tags for %1$d of %2$d document</item>
-        <item quantity="other">Could not suggest tags for %1$d of %2$d documents</item>
+        <item quantity="one">Could not get suggestions for %1$d of %2$d document</item>
+        <item quantity="other">Could not get suggestions for %1$d of %2$d documents</item>
     </plurals>
     <plurals name="common_imported_count">
         <item quantity="one">%1$d imported</item>
@@ -102,9 +104,9 @@
         <item quantity="one">%1$d document</item>
         <item quantity="other">%1$d documents</item>
     </plurals>
-    <plurals name="common_tag_count">
-        <item quantity="one">%1$d tag</item>
-        <item quantity="other">%1$d tags</item>
+    <plurals name="common_suggestion_count">
+        <item quantity="one">%1$d suggestion</item>
+        <item quantity="other">%1$d suggestions</item>
     </plurals>
     <plurals name="common_tagging_scope_count_batch">
         <item quantity="one">%1$d document - the first %2$d run in this batch</item>

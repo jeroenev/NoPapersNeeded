@@ -1,11 +1,13 @@
 package dev.npn.app.ui.ai
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.AiMetadataField
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocListItem
@@ -48,6 +50,18 @@ data class ReviewChip(
 )
 
 /**
+ * One suggested data-field [value] (title/correspondent/date) in the review phase. [selected]
+ * drives whether Apply writes it; pre-selected when it fills an empty field, pre-deselected when
+ * it would overwrite the [current] value.
+ */
+data class ReviewField(
+    val field: AiMetadataField,
+    val value: String,
+    val current: String?,
+    val selected: Boolean,
+)
+
+/**
  * One document's row in the review phase. Title and file name stay separate so display fallback
  * and future localization remain UI concerns.
  */
@@ -57,6 +71,7 @@ data class ReviewDoc(
     val fileName: String,
     val snippet: String?,
     val chips: List<ReviewChip>,
+    val fields: List<ReviewField>,
 )
 
 /**
@@ -70,12 +85,12 @@ data class SuggestProgress(
 )
 
 /**
- * Terminal counts after Apply: [tagsAdded] tags written across [docsTagged] documents, plus whether
- * more documents remain in the scope for a follow-up batch.
+ * Terminal counts after Apply: [applied] suggestions (tags + data fields) written across
+ * [docsChanged] documents, plus whether more documents remain in the scope for a follow-up batch.
  */
 data class ApplyResult(
-    val tagsAdded: Int,
-    val docsTagged: Int,
+    val applied: Int,
+    val docsChanged: Int,
     val moreRemain: Boolean,
 )
 
@@ -84,18 +99,18 @@ sealed interface TaggingPhase {
     /** Scope selection + Start. */
     data object Idle : TaggingPhase
 
-    /** Concurrent `suggestTags` calls in progress. */
+    /** Concurrent `suggestTags` + `suggestMetadata` calls in progress. */
     data class Suggesting(
         val progress: SuggestProgress,
     ) : TaggingPhase
 
-    /** Per-doc suggestion chips awaiting the user's confirmation; nothing written yet. */
+    /** Per-doc suggestion chips + field rows awaiting the user's confirmation; nothing written yet. */
     data class Review(
         val docs: List<ReviewDoc>,
         val emptyDocs: List<ReviewDoc>,
     ) : TaggingPhase
 
-    /** Writing selected tags through the journal. */
+    /** Writing selected tags and data fields through the journal. */
     data object Applying : TaggingPhase
 
     /** Terminal state carrying counts + whether a next batch is available. */
@@ -127,16 +142,19 @@ data class AiTaggingUiState(
  * - Idle: pick a [TaggingScope] and optionally tweak the per-run overrides ([AiTaggingUiState.maxTags],
  *   [AiTaggingUiState.maxNewTags], [AiTaggingUiState.batchSize]), which are seeded from the Settings
  *   defaults. The document count for the current scope is observed via [scopeCount]. Start runs
- *   [dev.npn.core.ai.AiFacade.suggestTags] calls over the first [AiTaggingUiState.batchSize] docs with
- *   bounded concurrency ([SUGGEST_CONCURRENCY]), passing the tag overrides, reporting progress as
- *   each doc completes; cancellable via the shared [run] job and by leaving the screen
- *   (viewModelScope). Results are re-ordered to match the original batch order.
- * - Review: per-doc suggestion chips, existing tags pre-selected and new tags pre-deselected; tap
- *   toggles. Docs that produced no suggestions land in a collapsed group. Nothing is written here.
+ *   [dev.npn.core.ai.AiFacade.suggestTags] + [dev.npn.core.ai.AiFacade.suggestMetadata] calls over
+ *   the first [AiTaggingUiState.batchSize] docs with bounded concurrency ([SUGGEST_CONCURRENCY]),
+ *   passing the tag overrides, reporting progress as each doc completes; cancellable via the shared
+ *   [run] job and by leaving the screen (viewModelScope). Results are re-ordered to match the
+ *   original batch order.
+ * - Review: per-doc suggestion chips (existing tags pre-selected, new tags pre-deselected) plus
+ *   data-field rows (fill-ins pre-selected, overwrites pre-deselected); tap toggles. Docs that
+ *   produced no suggestions land in a collapsed group. Nothing is written here.
  * - Apply: selected (doc, tag) pairs are grouped by tag and written with one `addTag` journal call
- *   per distinct tag (a multi-doc op list committed in a single transaction); per-tag failures are
- *   collected and surfaced, successes are not rolled back (mirrors the bulk-op convention). Failed
- *   docs keep their unapplied selections so the user can retry.
+ *   per distinct tag (a multi-doc op list committed in a single transaction); selected field values
+ *   are written per (doc, field) through the matching MetadataWriter setter. Failures are collected
+ *   and surfaced, successes are not rolled back (mirrors the bulk-op convention). Failed docs keep
+ *   their unapplied selections so the user can retry.
  *
  * [processedIds] remembers already-tagged docs for the session so the "next batch" continuation
  * excludes them (needed for ALL / review-queue scopes; UNTAGGED docs drop out of the scope query on
@@ -243,7 +261,29 @@ class AiTaggingViewModel(
         state.copy(phase = review.copy(docs = docs))
     }
 
-    /** Select or deselect every chip of one document (Review phase only; no-op otherwise). */
+    /** Toggle whether a doc's suggested field value is selected for Apply (Review phase only). */
+    fun toggleField(
+        docId: String,
+        field: AiMetadataField,
+    ) = _ui.update { state ->
+        val review = state.phase as? TaggingPhase.Review ?: return@update state
+        val docs =
+            review.docs.map { doc ->
+                if (doc.docId != docId) {
+                    doc
+                } else {
+                    doc.copy(
+                        fields =
+                            doc.fields.map { f ->
+                                if (f.field == field) f.copy(selected = !f.selected) else f
+                            },
+                    )
+                }
+            }
+        state.copy(phase = review.copy(docs = docs))
+    }
+
+    /** Select or deselect every suggestion of one document (Review phase only; no-op otherwise). */
     fun setDocSelection(
         docId: String,
         selected: Boolean,
@@ -251,21 +291,24 @@ class AiTaggingViewModel(
         val review = state.phase as? TaggingPhase.Review ?: return@update state
         val docs =
             review.docs.map { doc ->
-                if (doc.docId != docId) doc else doc.copy(chips = doc.chips.map { it.copy(selected = selected) })
+                if (doc.docId != docId) doc else doc.withAllSelected(selected)
             }
         state.copy(phase = review.copy(docs = docs))
     }
 
-    /** Select or deselect every chip of every document (Review phase only; no-op otherwise). */
+    /** Select or deselect every suggestion of every document (Review phase only; no-op otherwise). */
     fun setAllSelection(selected: Boolean) =
         _ui.update { state ->
             val review = state.phase as? TaggingPhase.Review ?: return@update state
-            val docs =
-                review.docs.map { doc ->
-                    doc.copy(chips = doc.chips.map { it.copy(selected = selected) })
-                }
+            val docs = review.docs.map { doc -> doc.withAllSelected(selected) }
             state.copy(phase = review.copy(docs = docs))
         }
+
+    private fun ReviewDoc.withAllSelected(selected: Boolean): ReviewDoc =
+        copy(
+            chips = chips.map { it.copy(selected = selected) },
+            fields = fields.map { it.copy(selected = selected) },
+        )
 
     /** Write the selected (doc, tag) pairs; see class docs for partial-failure semantics. */
     fun apply() {
@@ -313,7 +356,8 @@ class AiTaggingViewModel(
                             val outcome =
                                 runCatching {
                                     val suggestions = session.ai.suggestTags(item.doc.docId, maxTags, maxNewTags)
-                                    reviewDoc(item, suggestions, snippetFor(item.doc.docId))
+                                    val metadata = session.ai.suggestMetadata(item.doc.docId)
+                                    reviewDoc(item, suggestions, metadata, snippetFor(item.doc.docId))
                                 }
                             // CancellationException must propagate so the whole scope tears down.
                             outcome.exceptionOrNull()?.let { if (it is CancellationException) throw it }
@@ -356,8 +400,8 @@ class AiTaggingViewModel(
         // must not send it back through the model on "Next batch".
         results.forEach { processedIds += it.docId }
         appliedSoFar = 0
-        val (withChips, empty) = results.partition { it.chips.isNotEmpty() }
-        _ui.update { it.copy(phase = TaggingPhase.Review(withChips, empty)) }
+        val (withSuggestions, empty) = results.partition { it.chips.isNotEmpty() || it.fields.isNotEmpty() }
+        _ui.update { it.copy(phase = TaggingPhase.Review(withSuggestions, empty)) }
     }
 
     /**
@@ -375,42 +419,67 @@ class AiTaggingViewModel(
 
     private suspend fun applySelections(review: TaggingPhase.Review) {
         _ui.update { it.copy(phase = TaggingPhase.Applying) }
-        val pending =
+        val pendingTags =
             review.docs.flatMap { doc ->
                 doc.chips.filter { it.selected }.map { doc.docId to it.tag }
             }
-        if (pending.isEmpty()) {
+        val pendingFields =
+            review.docs.flatMap { doc ->
+                doc.fields.filter { it.selected }.map { doc.docId to it }
+            }
+        if (pendingTags.isEmpty() && pendingFields.isEmpty()) {
             _ui.update { it.copy(phase = TaggingPhase.Review(review.docs, review.emptyDocs)) }
             return
         }
         val failedDocs = mutableSetOf<String>()
-        val succeeded = mutableSetOf<Pair<String, String>>()
+        val succeededTags = mutableSetOf<Pair<String, String>>()
+        val succeededFields = mutableSetOf<Pair<String, AiMetadataField>>()
         // Group by tag so each distinct tag is written once for all its docs in a single journal
         // transaction (MetadataWriter.addTag commits a multi-doc op list atomically). A tag's call
         // is all-or-nothing: on failure every (doc, tag) pair for that tag is retained for retry.
-        val byTag = pending.groupBy({ it.second }, { it.first })
+        val byTag = pendingTags.groupBy({ it.second }, { it.first })
         for ((tag, docIds) in byTag) {
             runCatching { session.meta.addTag(docIds, tag) }
                 .onSuccess {
                     docIds.forEach { docId ->
-                        succeeded += docId to tag
+                        succeededTags += docId to tag
                         processedIds += docId
                     }
                 }.onFailure { failedDocs += docIds }
         }
-        finishApply(review, succeeded, failedDocs)
+        // Field values are inherently per document, so each selected (doc, field) is one setter
+        // call; failures retain only that pair for retry.
+        for ((docId, field) in pendingFields) {
+            runCatching { writeField(docId, field) }
+                .onSuccess {
+                    succeededFields += docId to field.field
+                    processedIds += docId
+                }.onFailure { failedDocs += docId }
+        }
+        finishApply(review, succeededTags, succeededFields, failedDocs)
+    }
+
+    private suspend fun writeField(
+        docId: String,
+        field: ReviewField,
+    ) = when (field.field) {
+        AiMetadataField.TITLE -> session.meta.setTitle(docId, field.value)
+        AiMetadataField.CORRESPONDENT -> session.meta.setCorrespondent(listOf(docId), field.value)
+        AiMetadataField.DOC_DATE -> session.meta.setDocDate(docId, field.value)
     }
 
     private suspend fun finishApply(
         review: TaggingPhase.Review,
-        succeeded: Set<Pair<String, String>>,
+        succeededTags: Set<Pair<String, String>>,
+        succeededFields: Set<Pair<String, AiMetadataField>>,
         failedDocs: Set<String>,
     ) {
+        val succeededCount = succeededTags.size + succeededFields.size
         if (failedDocs.isEmpty()) {
-            // Include tags written in earlier partial-failure attempts of this same batch.
-            val totalWritten = succeeded.size + appliedSoFar
-            val taggedDocs = succeeded.map { it.first }.toSet().size
-            val result = ApplyResult(totalWritten, taggedDocs, moreRemain())
+            // Include suggestions written in earlier partial-failure attempts of this same batch.
+            val totalWritten = succeededCount + appliedSoFar
+            val changedDocs = (succeededTags.map { it.first } + succeededFields.map { it.first }).toSet().size
+            val result = ApplyResult(totalWritten, changedDocs, moreRemain())
             _ui.update { it.copy(phase = TaggingPhase.Done(result)) }
             return
         }
@@ -422,9 +491,9 @@ class AiTaggingViewModel(
                 review.docs.size,
             ),
         )
-        // Keep only the actually-unapplied (doc, tag) selections on the retained failed rows, so a
-        // retry never re-writes a pair that already succeeded. Carry the succeeded count forward so
-        // it is not lost when the eventual Done result is produced.
+        // Keep only the actually-unapplied selections on the retained failed rows, so a retry never
+        // re-writes a (doc, tag) or (doc, field) that already succeeded. Carry the succeeded count
+        // forward so it is not lost when the eventual Done result is produced.
         val remaining =
             review.docs
                 .filter { it.docId in failedDocs }
@@ -432,15 +501,23 @@ class AiTaggingViewModel(
                     doc.copy(
                         chips =
                             doc.chips.map { chip ->
-                                if (chip.selected && (doc.docId to chip.tag) in succeeded) {
+                                if (chip.selected && (doc.docId to chip.tag) in succeededTags) {
                                     chip.copy(selected = false)
                                 } else {
                                     chip
                                 }
                             },
+                        fields =
+                            doc.fields.map { field ->
+                                if (field.selected && (doc.docId to field.field) in succeededFields) {
+                                    field.copy(selected = false)
+                                } else {
+                                    field
+                                }
+                            },
                     )
                 }
-        appliedSoFar += succeeded.size
+        appliedSoFar += succeededCount
         _ui.update { it.copy(phase = TaggingPhase.Review(remaining, review.emptyDocs)) }
     }
 
@@ -456,6 +533,7 @@ class AiTaggingViewModel(
     private fun reviewDoc(
         item: DocListItem,
         suggestions: List<TagSuggestion>,
+        metadata: MetadataSuggestion,
         snippet: String?,
     ): ReviewDoc =
         ReviewDoc(
@@ -464,6 +542,27 @@ class AiTaggingViewModel(
             fileName = item.doc.fileName,
             snippet = snippet,
             chips = suggestions.map { ReviewChip(it.tag, it.isNew, selected = !it.isNew) },
+            fields =
+                buildList {
+                    metadata.title?.let { add(reviewField(AiMetadataField.TITLE, it, item.doc.title)) }
+                    metadata.correspondent?.let {
+                        add(reviewField(AiMetadataField.CORRESPONDENT, it, item.doc.correspondent))
+                    }
+                    metadata.docDate?.let { add(reviewField(AiMetadataField.DOC_DATE, it, item.doc.docDate)) }
+                },
+        )
+
+    /** Fill-ins (no current value) are pre-selected; overwrites require an explicit opt-in. */
+    private fun reviewField(
+        field: AiMetadataField,
+        value: String,
+        current: String?,
+    ): ReviewField =
+        ReviewField(
+            field = field,
+            value = value,
+            current = current?.takeIf { it.isNotBlank() },
+            selected = current.isNullOrBlank(),
         )
 
     private fun scopeFilter(scope: TaggingScope): LibraryFilter =
@@ -477,8 +576,9 @@ class AiTaggingViewModel(
         val SORT = LibrarySort()
 
         /**
-         * Max in-flight `suggestTags` (LLM) calls. Bounds load on the model/backend while still
-         * overlapping the mostly-IO-bound calls for a large speedup over serial execution.
+         * Max concurrently processed documents (each runs its `suggestTags` + `suggestMetadata`
+         * LLM calls back to back). Bounds load on the model/backend while still overlapping the
+         * mostly-IO-bound calls for a large speedup over serial execution.
          */
         const val SUGGEST_CONCURRENCY = 4
 

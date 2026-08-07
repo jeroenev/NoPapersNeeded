@@ -1,6 +1,7 @@
 package dev.npn.app.ui.detail
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.AiMetadataField
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiTextKey
@@ -8,6 +9,7 @@ import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
@@ -82,6 +84,16 @@ data class AiTagState(
     val available: Boolean? = null,
     val suggesting: Boolean = false,
     val suggestions: List<TagSuggestion> = emptyList(),
+)
+
+/**
+ * AI metadata-suggestion state (title/correspondent/date) for the detail screen. Availability is
+ * shared with [AiTagState.available] (one endpoint probe covers both); [suggesting] is the
+ * in-flight busy flag, and [suggestion] holds the not-yet-accepted per-field proposals.
+ */
+data class AiMetadataState(
+    val suggesting: Boolean = false,
+    val suggestion: MetadataSuggestion = MetadataSuggestion.EMPTY,
 )
 
 /**
@@ -165,6 +177,9 @@ class DocDetailViewModel(
 
     private val _aiTags = MutableStateFlow(AiTagState())
     val aiTags: StateFlow<AiTagState> = _aiTags.asStateFlow()
+
+    private val _aiMetadata = MutableStateFlow(AiMetadataState())
+    val aiMetadata: StateFlow<AiMetadataState> = _aiMetadata.asStateFlow()
 
     init {
         viewModelScope.launch {
@@ -316,6 +331,54 @@ class DocDetailViewModel(
 
     fun clearAiTagSuggestions() {
         _aiTags.value = _aiTags.value.copy(suggestions = emptyList())
+    }
+
+    // ---- AI metadata suggestions ----
+
+    /**
+     * Ask the AI endpoint for title/correspondent/date suggestions from this doc's indexed text.
+     * No-op while a request is already in flight. Empty results surface an informational message
+     * (no OCR text yet, or nothing beyond the current values); failures surface via [messages].
+     */
+    fun suggestAiMetadata() {
+        if (_aiMetadata.value.suggesting) return
+        _aiMetadata.value = _aiMetadata.value.copy(suggesting = true)
+        viewModelScope.launch {
+            runCatching { session.ai.suggestMetadata(docId) }.fold(
+                onSuccess = { suggestion ->
+                    if (suggestion.isEmpty) {
+                        message(uiText(UiTextKey.NO_AI_METADATA_SUGGESTIONS))
+                    }
+                    _aiMetadata.value = AiMetadataState(suggesting = false, suggestion = suggestion)
+                },
+                onFailure = { error ->
+                    message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_METADATA, reasonOf(error)))
+                    _aiMetadata.value = AiMetadataState()
+                },
+            )
+        }
+    }
+
+    /** Accept one field's suggestion: write it via the normal journal path and drop it. */
+    fun acceptAiMetadata(field: AiMetadataField) {
+        val suggestion = _aiMetadata.value.suggestion
+        when (field) {
+            AiMetadataField.TITLE -> suggestion.title?.let(::setTitle)
+            AiMetadataField.CORRESPONDENT -> suggestion.correspondent?.let(::setCorrespondent)
+            AiMetadataField.DOC_DATE -> suggestion.docDate?.let(::setDocDate)
+        }
+        dismissAiMetadata(field)
+    }
+
+    fun dismissAiMetadata(field: AiMetadataField) {
+        val current = _aiMetadata.value
+        val suggestion =
+            when (field) {
+                AiMetadataField.TITLE -> current.suggestion.copy(title = null)
+                AiMetadataField.CORRESPONDENT -> current.suggestion.copy(correspondent = null)
+                AiMetadataField.DOC_DATE -> current.suggestion.copy(docDate = null)
+            }
+        _aiMetadata.value = current.copy(suggestion = suggestion)
     }
 
     fun setField(

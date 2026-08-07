@@ -89,6 +89,7 @@ fun DocDetailScreen(
     val history by vm.history.collectAsStateWithLifecycle()
     val noteEditor by vm.noteEditor.collectAsStateWithLifecycle()
     val aiTags by vm.aiTags.collectAsStateWithLifecycle()
+    val aiMetadata by vm.aiMetadata.collectAsStateWithLifecycle()
     val highlightTerms = vm.highlightTerms
 
     val snackbar = remember { SnackbarHostState() }
@@ -201,6 +202,10 @@ fun DocDetailScreen(
             onAcceptAiTag = vm::acceptAiTag,
             onDismissAiTag = vm::dismissAiTag,
             onClearAiTagSuggestions = vm::clearAiTagSuggestions,
+            aiMetadata = aiMetadata,
+            onSuggestAiMetadata = vm::suggestAiMetadata,
+            onAcceptAiMetadata = vm::acceptAiMetadata,
+            onDismissAiMetadata = vm::dismissAiMetadata,
             history = history,
             onLoadHistory = { vm.loadHistory() },
             onRefreshHistory = { vm.loadHistory(refresh = true) },

@@ -19,6 +19,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Cancel
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
@@ -73,6 +74,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.AiMetadataField
 import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.IsoDatePickerDialog
 import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
@@ -100,8 +102,10 @@ import no_papers_needed.composeapp.generated.resources.detail_automatic_engine
 import no_papers_needed.composeapp.generated.resources.detail_choose_ocr_engine
 import no_papers_needed.composeapp.generated.resources.detail_correspondent
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_all
+import no_papers_needed.composeapp.generated.resources.detail_dismiss_suggestion
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_tag
 import no_papers_needed.composeapp.generated.resources.detail_document_date
+import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
 import no_papers_needed.composeapp.generated.resources.detail_document_type
 import no_papers_needed.composeapp.generated.resources.detail_engine
 import no_papers_needed.composeapp.generated.resources.detail_engine_ai
@@ -135,6 +139,7 @@ import no_papers_needed.composeapp.generated.resources.detail_save_note
 import no_papers_needed.composeapp.generated.resources.detail_saved
 import no_papers_needed.composeapp.generated.resources.detail_saving
 import no_papers_needed.composeapp.generated.resources.detail_search_text_engine
+import no_papers_needed.composeapp.generated.resources.detail_suggest_metadata
 import no_papers_needed.composeapp.generated.resources.detail_suggest_tags
 import no_papers_needed.composeapp.generated.resources.detail_tab_details
 import no_papers_needed.composeapp.generated.resources.detail_tab_history
@@ -148,6 +153,7 @@ import no_papers_needed.composeapp.generated.resources.detail_text_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_title
 import no_papers_needed.composeapp.generated.resources.detail_title_hint
 import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
+import no_papers_needed.composeapp.generated.resources.detail_use_suggestion
 import no_papers_needed.composeapp.generated.resources.detail_value
 import org.jetbrains.compose.resources.stringResource
 
@@ -194,6 +200,10 @@ fun MetadataPanel(
     onAcceptAiTag: (String) -> Unit = {},
     onDismissAiTag: (String) -> Unit = {},
     onClearAiTagSuggestions: () -> Unit = {},
+    aiMetadata: AiMetadataState = AiMetadataState(),
+    onSuggestAiMetadata: () -> Unit = {},
+    onAcceptAiMetadata: (AiMetadataField) -> Unit = {},
+    onDismissAiMetadata: (AiMetadataField) -> Unit = {},
     history: HistoryUiState = HistoryUiState.NotLoaded,
     onLoadHistory: () -> Unit = {},
     onRefreshHistory: () -> Unit = {},
@@ -278,6 +288,10 @@ fun MetadataPanel(
                     onAcceptAiTag = onAcceptAiTag,
                     onDismissAiTag = onDismissAiTag,
                     onClearAiTagSuggestions = onClearAiTagSuggestions,
+                    aiMetadata = aiMetadata,
+                    onSuggestAiMetadata = onSuggestAiMetadata,
+                    onAcceptAiMetadata = onAcceptAiMetadata,
+                    onDismissAiMetadata = onDismissAiMetadata,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
@@ -335,6 +349,10 @@ private fun DetailsTab(
     onAcceptAiTag: (String) -> Unit,
     onDismissAiTag: (String) -> Unit,
     onClearAiTagSuggestions: () -> Unit,
+    aiMetadata: AiMetadataState,
+    onSuggestAiMetadata: () -> Unit,
+    onAcceptAiMetadata: (AiMetadataField) -> Unit,
+    onDismissAiMetadata: (AiMetadataField) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val doc = item.doc
@@ -360,6 +378,14 @@ private fun DetailsTab(
             onCommitCorrespondent = onCommitCorrespondent,
             onCommitDocType = onCommitDocType,
             onCommitDocDate = onCommitDocDate,
+        )
+
+        AiMetadataSuggestions(
+            available = aiTags.available == true,
+            state = aiMetadata,
+            onSuggest = onSuggestAiMetadata,
+            onAccept = onAcceptAiMetadata,
+            onDismiss = onDismissAiMetadata,
         )
 
         HorizontalDivider()
@@ -669,6 +695,107 @@ private fun AiTagChip(
             )
         },
     )
+}
+
+/**
+ * AI suggestions for the single-value properties (title/correspondent/date). Hidden entirely
+ * unless the AI endpoint is configured ([available], shared with the tag probe). Offers a
+ * "Suggest details" button (spinner while running) and renders each suggested field as a row:
+ * the check accepts it through the normal commit path, the × dismisses it.
+ */
+@Composable
+private fun AiMetadataSuggestions(
+    available: Boolean,
+    state: AiMetadataState,
+    onSuggest: () -> Unit,
+    onAccept: (AiMetadataField) -> Unit,
+    onDismiss: (AiMetadataField) -> Unit,
+) {
+    if (!available) return
+    val suggestion = state.suggestion
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            TextButton(onClick = onSuggest, enabled = !state.suggesting) {
+                Icon(
+                    Icons.Outlined.AutoAwesome,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp),
+                )
+                Text(stringResource(Res.string.detail_suggest_metadata), modifier = Modifier.padding(start = 8.dp))
+            }
+            if (state.suggesting) {
+                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+            }
+        }
+        suggestion.title?.let {
+            AiMetadataSuggestionRow(
+                stringResource(Res.string.detail_title),
+                it,
+                AiMetadataField.TITLE,
+                onAccept,
+                onDismiss,
+            )
+        }
+        suggestion.correspondent?.let {
+            AiMetadataSuggestionRow(
+                stringResource(Res.string.detail_correspondent),
+                it,
+                AiMetadataField.CORRESPONDENT,
+                onAccept,
+                onDismiss,
+            )
+        }
+        suggestion.docDate?.let {
+            AiMetadataSuggestionRow(
+                stringResource(Res.string.detail_document_date_plain),
+                it,
+                AiMetadataField.DOC_DATE,
+                onAccept,
+                onDismiss,
+            )
+        }
+    }
+}
+
+/** One suggested property value with accept (check) and dismiss (×) actions. */
+@Composable
+private fun AiMetadataSuggestionRow(
+    label: String,
+    value: String,
+    field: AiMetadataField,
+    onAccept: (AiMetadataField) -> Unit,
+    onDismiss: (AiMetadataField) -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                label,
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(value, style = MaterialTheme.typography.bodyMedium)
+        }
+        IconButton(onClick = { onAccept(field) }) {
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = stringResource(Res.string.detail_use_suggestion, label),
+            )
+        }
+        IconButton(onClick = { onDismiss(field) }) {
+            Icon(
+                Icons.Filled.Close,
+                contentDescription = stringResource(Res.string.detail_dismiss_suggestion, label),
+            )
+        }
+    }
 }
 
 /** Text field that commits its value when the user leaves the field (focus lost) or edits stop. */

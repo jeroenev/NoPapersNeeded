@@ -134,6 +134,15 @@ interface DocumentDao {
     )
     fun observeCorrespondents(): Flow<List<String>>
 
+    /** One-shot variant of [observeCorrespondents], for AI suggestion canonicalization. */
+    @Query(
+        "SELECT DISTINCT correspondent FROM documents " +
+            "WHERE correspondent IS NOT NULL AND correspondent != '' " +
+            "AND trashed = 0 AND deleted = 0 AND missing = 0 " +
+            "ORDER BY correspondent COLLATE NOCASE",
+    )
+    suspend fun correspondents(): List<String>
+
     /** Distinct non-null document types on live documents, for filter autocomplete. */
     @Query(
         "SELECT DISTINCT docType FROM documents " +

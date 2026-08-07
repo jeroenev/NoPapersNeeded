@@ -33,6 +33,7 @@
 
     <string name="common_could_not_action">%1$s mislukt: %2$s</string>
     <string name="common_no_ai_tag_suggestions">Geen suggesties - het document is mogelijk nog niet met OCR verwerkt.</string>
+    <string name="common_no_ai_metadata_suggestions">Geen suggesties - het document is mogelijk nog niet met OCR verwerkt.</string>
     <string name="common_ai_assistant_unreachable">De AI-assistent kon niet worden bereikt: %1$s</string>
     <string name="common_ai_assistant_empty_answer">De assistent gaf een leeg antwoord.</string>
     <string name="common_scan_imported">Scan geïmporteerd</string>
@@ -40,8 +41,8 @@
     <string name="common_scan_import_failed">Importeren van scan mislukt: %1$s</string>
     <string name="common_tagging_done_empty">Geen documenten om te taggen</string>
     <string name="common_join_items">%1$s, %2$s</string>
-    <string name="common_tagging_apply_summary">%1$s toevoegen aan %2$s</string>
-    <string name="common_tagging_done_summary">%1$s toegevoegd aan %2$s</string>
+    <string name="common_tagging_apply_summary">%1$s toepassen op %2$s</string>
+    <string name="common_tagging_done_summary">%1$s toegepast op %2$s</string>
 
     <string name="common_action_save_title">titel opslaan</string>
     <string name="common_action_save_correspondent">correspondent opslaan</string>
@@ -71,6 +72,7 @@
     <string name="common_action_update">bijwerken</string>
     <string name="common_action_trash">naar de prullenbak verplaatsen</string>
     <string name="common_action_suggest_tags">tags voorstellen</string>
+    <string name="common_action_suggest_metadata">details voorstellen</string>
     <string name="common_action_tag">taggen</string>
 
     <plurals name="common_could_not_documents">
@@ -82,8 +84,8 @@
         <item quantity="other">Kon %1$s voor %2$d van de %3$d documenten niet uitvoeren</item>
     </plurals>
     <plurals name="common_could_not_suggest_tags_partial">
-        <item quantity="one">Kon geen tags voorstellen voor %1$d van de %2$d documenten</item>
-        <item quantity="other">Kon geen tags voorstellen voor %1$d van de %2$d documenten</item>
+        <item quantity="one">Kon geen suggesties ophalen voor %1$d van de %2$d documenten</item>
+        <item quantity="other">Kon geen suggesties ophalen voor %1$d van de %2$d documenten</item>
     </plurals>
     <plurals name="common_imported_count">
         <item quantity="one">%1$d geïmporteerd</item>
@@ -101,9 +103,9 @@
         <item quantity="one">%1$d document</item>
         <item quantity="other">%1$d documenten</item>
     </plurals>
-    <plurals name="common_tag_count">
-        <item quantity="one">%1$d tag</item>
-        <item quantity="other">%1$d tags</item>
+    <plurals name="common_suggestion_count">
+        <item quantity="one">%1$d suggestie</item>
+        <item quantity="other">%1$d suggesties</item>
     </plurals>
     <plurals name="common_tagging_scope_count_batch">
         <item quantity="one">%1$d document - de eerste %2$d worden in deze batch uitgevoerd</item>

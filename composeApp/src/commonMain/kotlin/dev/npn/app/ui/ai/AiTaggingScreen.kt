@@ -23,6 +23,7 @@ import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Button
+import androidx.compose.material3.Checkbox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
@@ -55,6 +56,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.AiMetadataField
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SnackbarMessages
@@ -83,18 +85,22 @@ import no_papers_needed.composeapp.generated.resources.ai_tagging_next_batch
 import no_papers_needed.composeapp.generated.resources.ai_tagging_no_suggestions
 import no_papers_needed.composeapp.generated.resources.ai_tagging_options
 import no_papers_needed.composeapp.generated.resources.ai_tagging_range
+import no_papers_needed.composeapp.generated.resources.ai_tagging_replaces
 import no_papers_needed.composeapp.generated.resources.ai_tagging_review_queue
 import no_papers_needed.composeapp.generated.resources.ai_tagging_select_all
 import no_papers_needed.composeapp.generated.resources.ai_tagging_skip
 import no_papers_needed.composeapp.generated.resources.ai_tagging_start
 import no_papers_needed.composeapp.generated.resources.ai_tagging_suggesting_progress
+import no_papers_needed.composeapp.generated.resources.ai_tagging_suggestions_selected
 import no_papers_needed.composeapp.generated.resources.ai_tagging_tags_per_document
-import no_papers_needed.composeapp.generated.resources.ai_tagging_tags_selected
 import no_papers_needed.composeapp.generated.resources.ai_tagging_title
 import no_papers_needed.composeapp.generated.resources.ai_tagging_untagged_documents
 import no_papers_needed.composeapp.generated.resources.common_apply
 import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.detail_correspondent
+import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
+import no_papers_needed.composeapp.generated.resources.detail_title
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -287,9 +293,9 @@ private fun ReviewPhase(
     content: DocContentFacade,
     onSkip: () -> Unit,
 ) {
-    val selected = phase.docs.sumOf { doc -> doc.chips.count { it.selected } }
-    val total = phase.docs.sumOf { doc -> doc.chips.size }
-    val docsWithSelection = phase.docs.count { doc -> doc.chips.any { it.selected } }
+    val selected = phase.docs.sumOf { doc -> doc.chips.count { it.selected } + doc.fields.count { it.selected } }
+    val total = phase.docs.sumOf { doc -> doc.chips.size + doc.fields.size }
+    val docsWithSelection = phase.docs.count { doc -> doc.chips.any { it.selected } || doc.fields.any { it.selected } }
     Column(Modifier.fillMaxSize()) {
         LazyColumn(
             modifier = Modifier.weight(1f).fillMaxWidth(),
@@ -300,7 +306,7 @@ private fun ReviewPhase(
         ) {
             item { BatchSelectionHeader(selected, total, vm::setAllSelection) }
             items(phase.docs, key = { it.docId }) { doc ->
-                ReviewRow(doc, content, vm::toggleChip, vm::setDocSelection)
+                ReviewRow(doc, content, vm::toggleChip, vm::toggleField, vm::setDocSelection)
             }
             if (phase.emptyDocs.isNotEmpty()) {
                 item { NoSuggestionsSection(phase.emptyDocs) }
@@ -322,7 +328,7 @@ private fun BatchSelectionHeader(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(
-            pluralStringResource(Res.plurals.ai_tagging_tags_selected, total, selected, total),
+            pluralStringResource(Res.plurals.ai_tagging_suggestions_selected, total, selected, total),
             Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -341,10 +347,11 @@ private fun ReviewRow(
     doc: ReviewDoc,
     content: DocContentFacade,
     onToggle: (String, String) -> Unit,
+    onToggleField: (String, AiMetadataField) -> Unit,
     onSetDoc: (String, Boolean) -> Unit,
 ) {
-    val allSelected = doc.chips.all { it.selected }
-    val noneSelected = doc.chips.none { it.selected }
+    val allSelected = doc.chips.all { it.selected } && doc.fields.all { it.selected }
+    val noneSelected = doc.chips.none { it.selected } && doc.fields.none { it.selected }
     val toggleState =
         when {
             allSelected -> ToggleableState.On
@@ -385,6 +392,9 @@ private fun ReviewRow(
                     )
                 }
             }
+            doc.fields.forEach { field ->
+                ReviewFieldRow(field, onToggle = { onToggleField(doc.docId, field.field) })
+            }
         }
         TriStateCheckbox(
             state = toggleState,
@@ -393,6 +403,50 @@ private fun ReviewRow(
         )
     }
 }
+
+/** One suggested data-field value: checkbox + label/value, with the replaced value when present. */
+@Composable
+private fun ReviewFieldRow(
+    field: ReviewField,
+    onToggle: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().selectable(selected = field.selected) { onToggle() },
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Checkbox(checked = field.selected, onCheckedChange = { onToggle() })
+        Column(Modifier.weight(1f).padding(start = 4.dp)) {
+            Text(
+                fieldLabel(field.field),
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Text(
+                field.value,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+            )
+            field.current?.let {
+                Text(
+                    stringResource(Res.string.ai_tagging_replaces, it),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun fieldLabel(field: AiMetadataField): String =
+    when (field) {
+        AiMetadataField.TITLE -> stringResource(Res.string.detail_title)
+        AiMetadataField.CORRESPONDENT -> stringResource(Res.string.detail_correspondent)
+        AiMetadataField.DOC_DATE -> stringResource(Res.string.detail_document_date_plain)
+    }
 
 @Composable
 private fun NoSuggestionsSection(docs: List<ReviewDoc>) {
@@ -439,7 +493,7 @@ private fun NoSuggestionsSection(docs: List<ReviewDoc>) {
 
 @Composable
 private fun ApplyBar(
-    selectedTags: Int,
+    selectedSuggestions: Int,
     docCount: Int,
     onApply: () -> Unit,
     onSkip: () -> Unit,
@@ -450,11 +504,11 @@ private fun ApplyBar(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            Text(applySummary(selectedTags, docCount), Modifier.weight(1f))
+            Text(applySummary(selectedSuggestions, docCount), Modifier.weight(1f))
             // Escape hatch: leave Review without writing (also the only way forward when nothing
             // is selected — all suggestions new/deselected or every doc had no suggestions).
             OutlinedButton(onClick = onSkip) { Text(stringResource(Res.string.ai_tagging_skip)) }
-            Button(onClick = onApply, enabled = selectedTags > 0) {
+            Button(onClick = onApply, enabled = selectedSuggestions > 0) {
                 Text(stringResource(Res.string.common_apply))
             }
         }
@@ -463,9 +517,9 @@ private fun ApplyBar(
 
 @Composable
 private fun applySummary(
-    tags: Int,
+    suggestions: Int,
     docs: Int,
-): String = uiText(UiTextKey.TAGGING_APPLY_SUMMARY, tags, docs).resolve()
+): String = uiText(UiTextKey.TAGGING_APPLY_SUMMARY, suggestions, docs).resolve()
 
 // ---- Done + shared ----
 
@@ -490,10 +544,10 @@ private fun DonePhase(
 
 @Composable
 private fun doneSummary(result: ApplyResult): String =
-    if (result.docsTagged == 0) {
+    if (result.docsChanged == 0) {
         uiText(UiTextKey.TAGGING_DONE_EMPTY).resolve()
     } else {
-        uiText(UiTextKey.TAGGING_DONE_SUMMARY, result.tagsAdded, result.docsTagged).resolve()
+        uiText(UiTextKey.TAGGING_DONE_SUMMARY, result.applied, result.docsChanged).resolve()
     }
 
 @Composable

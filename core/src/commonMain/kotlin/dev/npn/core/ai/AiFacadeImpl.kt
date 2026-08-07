@@ -1,7 +1,10 @@
 package dev.npn.core.ai
 
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
+import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import dev.npn.core.app.AiTagging
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -18,7 +21,6 @@ class AiFacadeImpl(
     private val db: NpnDatabase,
     private val configProvider: suspend () -> AiConfig,
 ) : AiFacade {
-
     private val runtimeMutex = Mutex()
     private var cachedRuntime: Pair<RuntimeKey, AiRuntime>? = null
 
@@ -39,19 +41,24 @@ class AiFacadeImpl(
 
     override suspend fun config(): AiConfig = configProvider()
 
-    override fun ask(history: List<AiChatTurn>, question: String): Flow<AiChatEvent> = flow {
-        // Resolve the runtime lazily inside the cold flow so config errors surface on collection
-        // (as flow exceptions), matching the "throws on endpoint errors" contract.
-        val runtime = runtime()
-        val loop = AiChatLoop(
-            executor = runtime.executor,
-            model = runtime.model,
-            tools = LibraryAiTools.chatToolsFor(db),
-            systemPrompt = CHAT_SYSTEM_PROMPT,
-            maxIterations = MAX_AGENT_ITERATIONS,
-        )
-        emitAll(loop.run(history, question))
-    }
+    override fun ask(
+        history: List<AiChatTurn>,
+        question: String,
+    ): Flow<AiChatEvent> =
+        flow {
+            // Resolve the runtime lazily inside the cold flow so config errors surface on collection
+            // (as flow exceptions), matching the "throws on endpoint errors" contract.
+            val runtime = runtime()
+            val loop =
+                AiChatLoop(
+                    executor = runtime.executor,
+                    model = runtime.model,
+                    tools = LibraryAiTools.chatToolsFor(db),
+                    systemPrompt = CHAT_SYSTEM_PROMPT,
+                    maxIterations = MAX_AGENT_ITERATIONS,
+                )
+            emitAll(loop.run(history, question))
+        }
 
     override suspend fun suggestTags(
         docId: String,
@@ -66,10 +73,11 @@ class AiFacadeImpl(
         val text = db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } ?: return emptyList()
         val currentTags = db.tagDao().tagsForDocument(docId)
         val vocabulary = db.tagDao().all().map { it.name }
-        val request = prompt("npn-tag-suggest") {
-            system(tagSystemPrompt(maxTags, maxNew))
-            user(renderTagRequest(doc.fileName, doc.title, vocabulary, currentTags, text))
-        }
+        val request =
+            prompt("npn-tag-suggest", SUGGESTION_PARAMS) {
+                system(tagSystemPrompt(maxTags, maxNew))
+                user(renderTagRequest(doc.fileName, doc.title, vocabulary, currentTags, text))
+            }
         val response = runtime.executor.execute(request, runtime.model)
         return AiText.rankTagSuggestions(
             response.textContent(),
@@ -77,6 +85,28 @@ class AiFacadeImpl(
             vocabulary,
             perDocMax = maxTags,
             maxNew = maxNew,
+        )
+    }
+
+    override suspend fun suggestMetadata(docId: String): MetadataSuggestion {
+        val runtime = runtime()
+        val doc = db.documentDao().getByDocId(docId) ?: return MetadataSuggestion.EMPTY
+        val text =
+            db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() }
+                ?: return MetadataSuggestion.EMPTY
+        val correspondents = db.documentDao().correspondents()
+        val request =
+            prompt("npn-metadata-suggest", SUGGESTION_PARAMS) {
+                system(METADATA_SYSTEM_PROMPT)
+                user(renderMetadataRequest(doc, correspondents, text))
+            }
+        val response = runtime.executor.execute(request, runtime.model)
+        return AiText.parseMetadataSuggestion(
+            response.textContent(),
+            currentTitle = doc.title,
+            currentCorrespondent = doc.correspondent,
+            currentDocDate = doc.docDate,
+            correspondents = correspondents,
         )
     }
 
@@ -102,21 +132,49 @@ class AiFacadeImpl(
         vocabulary: List<String>,
         currentTags: List<String>,
         text: String,
-    ): String = buildString {
-        appendLine("File name: $fileName")
-        title?.takeIf { it.isNotBlank() }?.let { appendLine("Title: $it") }
-        appendLine("Tags already on this document: ${currentTags.ifEmpty { listOf("(none)") }.joinToString(", ")}")
-        appendLine("Existing tags in this library: ${vocabulary.ifEmpty { listOf("(none)") }.joinToString(", ")}")
-        appendLine()
-        appendLine("Document text:")
-        appendLine(text.take(MAX_TAG_TEXT_CHARS))
-    }
+    ): String =
+        buildString {
+            appendLine("File name: $fileName")
+            title?.takeIf { it.isNotBlank() }?.let { appendLine("Title: $it") }
+            appendLine("Tags already on this document: ${currentTags.ifEmpty { listOf("(none)") }.joinToString(", ")}")
+            appendLine("Existing tags in this library: ${vocabulary.ifEmpty { listOf("(none)") }.joinToString(", ")}")
+            appendLine()
+            appendLine("Document text:")
+            appendLine(text.take(MAX_DOC_TEXT_CHARS))
+        }
+
+    private fun renderMetadataRequest(
+        doc: DocumentEntity,
+        correspondents: List<String>,
+        text: String,
+    ): String =
+        buildString {
+            appendLine("File name: ${doc.fileName}")
+            doc.title?.takeIf { it.isNotBlank() }?.let { appendLine("Current title: $it") }
+            doc.correspondent?.takeIf { it.isNotBlank() }?.let { appendLine("Current correspondent: $it") }
+            doc.docDate?.takeIf { it.isNotBlank() }?.let { appendLine("Current document date: $it") }
+            appendLine(
+                "Existing correspondents in this library: " +
+                    correspondents.ifEmpty { listOf("(none)") }.joinToString(", "),
+            )
+            appendLine()
+            appendLine("Document text:")
+            appendLine(text.take(MAX_DOC_TEXT_CHARS))
+        }
 
     private companion object {
         const val MAX_AGENT_ITERATIONS = 15
-        const val MAX_TAG_TEXT_CHARS = 12_000
+        const val MAX_DOC_TEXT_CHARS = 12_000
 
-        val CHAT_SYSTEM_PROMPT = """
+        /**
+         * Params for the one-shot suggestion prompts (tags + metadata): these are cheap
+         * extraction tasks, so ask reasoning-capable models for low reasoning effort instead of
+         * burning thinking tokens. Chat keeps the endpoint's default effort.
+         */
+        val SUGGESTION_PARAMS = OpenAIChatParams(reasoningEffort = ReasoningEffort.LOW)
+
+        val CHAT_SYSTEM_PROMPT =
+            """
             You are the assistant inside "no-papers-needed", a personal paperless document
             manager. The user's scanned documents (PDFs) are indexed locally: OCR text, tags,
             filenames, titles, correspondents, document types, dates and notes.
@@ -129,14 +187,18 @@ class AiFacadeImpl(
             When you mention a specific document, cite it inline exactly as [doc:<docId>] using
             the full docId from the tool results, so the app can link it. Answer in the language
             the user writes in. Be concise. If nothing matches, say so plainly.
-        """.trimIndent()
+            """.trimIndent()
 
-        fun tagSystemPrompt(max: Int, maxNew: Int): String {
-            val newTagRule = if (maxNew <= 0) {
-                "Do NOT invent any brand-new tags: use ONLY tags from the provided vocabulary."
-            } else {
-                "Strongly prefer existing vocabulary tags and propose at most $maxNew brand-new tags."
-            }
+        fun tagSystemPrompt(
+            max: Int,
+            maxNew: Int,
+        ): String {
+            val newTagRule =
+                if (maxNew <= 0) {
+                    "Do NOT invent any brand-new tags: use ONLY tags from the provided vocabulary."
+                } else {
+                    "Strongly prefer existing vocabulary tags and propose at most $maxNew brand-new tags."
+                }
             return """
                 You suggest tags for a document in a personal paperless archive. Strongly prefer
                 reusing the library's existing tags: when an existing tag fits, copy it VERBATIM
@@ -148,7 +210,25 @@ class AiFacadeImpl(
 
                 Reply with ONLY a JSON array of tag strings, at most $max, best first. No prose,
                 no code fences.
-            """.trimIndent()
+                """.trimIndent()
         }
+
+        val METADATA_SYSTEM_PROMPT =
+            """
+            You extract catalog metadata for one document in a personal paperless archive.
+            Suggest:
+            - "title": a short, human-readable title in the document's own language (what the
+              document IS, e.g. "Electricity invoice January 2024"), not a file name.
+            - "correspondent": the other party — the company, institution or person that sent or
+              issued the document, never the archive owner. When an existing correspondent from
+              the provided list matches, copy it VERBATIM (exact spelling and case); only
+              introduce a new name when none fits.
+            - "date": the document's own date (invoice date, letter date, issue date) as
+              YYYY-MM-DD, never the scan or import date.
+
+            Reply with ONLY a JSON object, no prose, no code fences:
+            {"title": string|null, "correspondent": string|null, "date": "YYYY-MM-DD"|null}
+            Use null for anything the document text does not clearly support.
+            """.trimIndent()
     }
 }

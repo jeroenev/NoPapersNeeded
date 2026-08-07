@@ -4,6 +4,7 @@ import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiFacade
+import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.AutoMatchRuleRepository
@@ -521,6 +522,27 @@ class FakeAiFacade : AiFacade {
         failSuggestTags?.invoke()
         if (docId in failSuggestTagsForDocs) error("suggest failed for $docId")
         return suggestionsByDoc[docId] ?: suggestions
+    }
+
+    /** Backs [suggestMetadata] for docs without a [metadataByDoc] entry. */
+    var metadataSuggestion: MetadataSuggestion = MetadataSuggestion.EMPTY
+
+    /** Per-doc [suggestMetadata] results (wins over [metadataSuggestion]). */
+    var metadataByDoc: Map<String, MetadataSuggestion> = emptyMap()
+
+    /** docIds passed to [suggestMetadata], in dispatch order. */
+    val suggestMetadataCalls = mutableListOf<String>()
+    var failSuggestMetadata: (() -> Nothing)? = null
+
+    /** suggestMetadata throws for these docIds only (per-doc partial-failure testing). */
+    var failSuggestMetadataForDocs: Set<String> = emptySet()
+
+    override suspend fun suggestMetadata(docId: String): MetadataSuggestion {
+        suggestMetadataCalls += docId
+        if (suggestDelayMillis > 0) kotlinx.coroutines.delay(suggestDelayMillis)
+        failSuggestMetadata?.invoke()
+        if (docId in failSuggestMetadataForDocs) error("suggest metadata failed for $docId")
+        return metadataByDoc[docId] ?: metadataSuggestion
     }
 }
 
