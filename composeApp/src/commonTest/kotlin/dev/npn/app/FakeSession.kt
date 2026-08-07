@@ -3,6 +3,8 @@ package dev.npn.app
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiConfig
+import dev.npn.core.ai.AiEditRequest
+import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
@@ -242,6 +244,9 @@ class FakeMetadataWriter : MetadataWriter {
     /** addTag throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
     var failAddTagForDocs: Set<String> = emptySet()
 
+    /** removeTag throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
+    var failRemoveTagForDocs: Set<String> = emptySet()
+
     /** trashDoc throws for these ids only. */
     var failTrashDocIds: Set<String> = emptySet()
 
@@ -271,6 +276,7 @@ class FakeMetadataWriter : MetadataWriter {
         tag: String,
     ) {
         failBatchOps?.invoke()
+        if (docIds.any { it in failRemoveTagForDocs }) error("removeTag failed for $docIds")
         removedTags += docIds to tag
     }
 
@@ -543,6 +549,37 @@ class FakeAiFacade : AiFacade {
         failSuggestMetadata?.invoke()
         if (docId in failSuggestMetadataForDocs) error("suggest metadata failed for $docId")
         return metadataByDoc[docId] ?: metadataSuggestion
+    }
+
+    /** Backs [suggestEdits] for docs without an [editByDoc] entry. */
+    var edit: AiEditSuggestion = AiEditSuggestion.EMPTY
+
+    /** Per-doc [suggestEdits] results (wins over [edit]). */
+    var editByDoc: Map<String, AiEditSuggestion> = emptyMap()
+
+    /** docIds passed to [suggestEdits], in dispatch order. */
+    val suggestEditsCalls = mutableListOf<String>()
+
+    /** Every request passed to [suggestEdits], in dispatch order. */
+    val suggestEditsRequests = mutableListOf<AiEditRequest>()
+    var failSuggestEdits: (() -> Nothing)? = null
+
+    /** suggestEdits throws for these docIds only (per-doc partial-failure testing). */
+    var failSuggestEditsForDocs: Set<String> = emptySet()
+
+    override suspend fun suggestEdits(
+        docId: String,
+        request: AiEditRequest,
+    ): AiEditSuggestion {
+        // Record at entry (before the delay) so the call list reflects dispatch order
+        // deterministically even when calls run concurrently.
+        suggestEditsCalls += docId
+        suggestEditsRequests += request
+        val delay = suggestDelayByDoc[docId] ?: suggestDelayMillis
+        if (delay > 0) kotlinx.coroutines.delay(delay)
+        failSuggestEdits?.invoke()
+        if (docId in failSuggestEditsForDocs) error("suggest edits failed for $docId")
+        return editByDoc[docId] ?: edit
     }
 }
 

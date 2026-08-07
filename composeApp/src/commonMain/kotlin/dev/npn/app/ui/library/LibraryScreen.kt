@@ -155,7 +155,7 @@ fun LibraryScreen(
     onOpenDoc: (docId: String, order: List<String>, searchQuery: String?) -> Unit,
     onTrash: () -> Unit,
     onAiChat: () -> Unit,
-    onAiTagging: () -> Unit,
+    onAiEdit: () -> Unit,
 ) {
     val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -229,7 +229,7 @@ fun LibraryScreen(
             )
             // The navigation rail already carries the AI entries on wide layouts.
             if (aiConfigured && !wide) {
-                LibraryAiOverflowMenu(onAiChat = onAiChat, onAiTagging = onAiTagging)
+                LibraryAiOverflowMenu(onAiChat = onAiChat, onAiEdit = onAiEdit)
             }
         }
 

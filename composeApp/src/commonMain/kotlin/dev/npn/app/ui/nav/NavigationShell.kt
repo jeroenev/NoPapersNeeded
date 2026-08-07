@@ -22,7 +22,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_ai_assistant
-import no_papers_needed.composeapp.generated.resources.library_ai_tagging
+import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -39,7 +39,7 @@ fun NavigationShell(
     aiConfigured: Boolean,
     onNavigate: (TopLevelDestination) -> Unit,
     onAiChat: () -> Unit,
-    onAiTagging: () -> Unit,
+    onAiEdit: () -> Unit,
     content: @Composable () -> Unit,
 ) {
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -52,7 +52,7 @@ fun NavigationShell(
                         aiConfigured = aiConfigured,
                         onNavigate = onNavigate,
                         onAiChat = onAiChat,
-                        onAiTagging = onAiTagging,
+                        onAiEdit = onAiEdit,
                     )
                 }
                 Box(Modifier.weight(1f)) { content() }
@@ -73,7 +73,7 @@ private fun ShellRail(
     aiConfigured: Boolean,
     onNavigate: (TopLevelDestination) -> Unit,
     onAiChat: () -> Unit,
-    onAiTagging: () -> Unit,
+    onAiEdit: () -> Unit,
 ) {
     NavigationRail {
         Spacer(Modifier.height(8.dp))
@@ -92,10 +92,10 @@ private fun ShellRail(
                 label = { Text(stringResource(Res.string.library_ai_assistant)) },
             )
             NavigationRailItem(
-                selected = aiCurrent == AiDestination.TAGGING,
-                onClick = onAiTagging,
+                selected = aiCurrent == AiDestination.EDIT,
+                onClick = onAiEdit,
                 icon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
-                label = { Text(stringResource(Res.string.library_ai_tagging)) },
+                label = { Text(stringResource(Res.string.library_ai_edit)) },
             )
         }
         Spacer(Modifier.weight(1f))

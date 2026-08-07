@@ -58,6 +58,61 @@ data class MetadataSuggestion(
     }
 }
 
+/** A single-value document property the AI can suggest a value for. */
+enum class AiField { TITLE, CORRESPONDENT, DOC_DATE }
+
+/**
+ * Whether a field suggestion should be produced for every document or only documents that are
+ * currently missing that field's value.
+ */
+enum class AiFieldMode {
+    /** Suggest a value even when the document already has one (the user may accept a replacement). */
+    ALL,
+
+    /** Only suggest when the field is currently empty; existing values are never touched. */
+    UNFILLED,
+}
+
+/** One field to ask about in an edit run, with the user's [mode]. */
+data class AiFieldConfig(
+    val field: AiField,
+    val mode: AiFieldMode = AiFieldMode.UNFILLED,
+)
+
+/**
+ * One AI-edit run's per-document configuration: which fields to autofill ([fields]), whether to
+ * also propose tag additions ([tags]) and/or tag removals ([tagRemovals]), the optional per-call
+ * tag caps ([maxTags]/[maxNewTags]; null means the configured defaults), and an optional free-text
+ * [customPrompt] the user typed (e.g. "merge tags that differ only in case").
+ */
+data class AiEditRequest(
+    val fields: List<AiFieldConfig> = emptyList(),
+    val tags: Boolean = false,
+    val tagRemovals: Boolean = false,
+    val maxTags: Int? = null,
+    val maxNewTags: Int? = null,
+    val customPrompt: String? = null,
+)
+
+/**
+ * AI-proposed edits for one document. [addTags] carries canonicalized additions (see
+ * [TagSuggestion]), [removeTags] are tags already on the document that the model proposes
+ * removing (verbatim current spelling), and [metadata] carries the validated single-value field
+ * suggestions (subject to the run's [AiFieldMode]).
+ */
+data class AiEditSuggestion(
+    val addTags: List<TagSuggestion> = emptyList(),
+    val removeTags: List<String> = emptyList(),
+    val metadata: MetadataSuggestion = MetadataSuggestion.EMPTY,
+) {
+    val isEmpty: Boolean
+        get() = addTags.isEmpty() && removeTags.isEmpty() && metadata.isEmpty
+
+    companion object {
+        val EMPTY = AiEditSuggestion()
+    }
+}
+
 enum class AiRole { USER, ASSISTANT }
 
 /** One turn of an assistant conversation, oldest first. */
@@ -146,4 +201,19 @@ interface AiFacade {
      * doc has no indexed text yet.
      */
     suspend fun suggestMetadata(docId: String): MetadataSuggestion
+
+    /**
+     * Propose edits for [docId] from its indexed text and current metadata, honouring [request]'s
+     * field selection/modes, tag-add/removal flags and optional [AiEditRequest.customPrompt]. All
+     * requested pieces come back from ONE model request — never a separate call per section.
+     * Tag additions are canonicalized to the library vocabulary, tag removals are filtered to tags
+     * actually on the document, and field values are validated as in [suggestMetadata] (plus the
+     * per-field [AiFieldMode]). Returns suggestions only (never writes); accepting one goes
+     * through the normal MetadataWriter/journal path. Empty when the doc has no indexed text yet
+     * and field suggestions were requested (tag-only runs can still work off the tag list).
+     */
+    suspend fun suggestEdits(
+        docId: String,
+        request: AiEditRequest,
+    ): AiEditSuggestion
 }

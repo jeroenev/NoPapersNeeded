@@ -67,7 +67,7 @@
     <string name="library_save_current_view_ellipsis">Save current view...</string>
     <string name="library_settings">Settings</string>
     <string name="library_ai_assistant">AI assistant</string>
-    <string name="library_ai_tagging">AI tagging</string>
+    <string name="library_ai_edit">AI edit</string>
     <string name="library_pinned">Pinned</string>
     <string name="library_view_actions">View actions</string>
     <string name="library_pin">Pin</string>

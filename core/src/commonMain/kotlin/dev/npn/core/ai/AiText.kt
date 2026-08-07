@@ -106,14 +106,113 @@ object AiText {
         vocabulary: List<String>,
         perDocMax: Int = MAX_TAG_SUGGESTIONS,
         maxNew: Int = MAX_NEW_TAGS_PER_DOC,
+    ): List<TagSuggestion> =
+        classifyTags(
+            parseTagSuggestions(response, currentTags),
+            currentTags,
+            vocabulary,
+            perDocMax,
+            maxNew,
+        )
+
+    /**
+     * Parse a combined edit suggestion object out of a model [response] (first JSON object wins):
+     *  - **add_tags** (alias "tags"): classified/capped via [classifyTags];
+     *  - **remove_tags**: filtered to tags actually on the document, canonicalized to their current
+     *    spelling;
+     *  - **title/correspondent/date**: validated like [parseMetadataSuggestion], then restricted to
+     *    the [fields] actually requested — UNFILLED-mode fields drop any value when the document
+     *    already has one (the model is told to return null, this is the defensive backstop).
+     */
+    fun parseEditSuggestion(
+        response: String,
+        currentTitle: String?,
+        currentCorrespondent: String?,
+        currentDocDate: String?,
+        correspondents: List<String>,
+        currentTags: List<String>,
+        vocabulary: List<String>,
+        fields: List<AiFieldConfig>,
+        maxTags: Int,
+        maxNewTags: Int,
+    ): AiEditSuggestion {
+        val obj = firstJsonObject(response) ?: return AiEditSuggestion.EMPTY
+        val addTags =
+            classifyTags(
+                obj.stringArrayAt("add_tags").ifEmpty { obj.stringArrayAt("tags") },
+                currentTags,
+                vocabulary,
+                perDocMax = maxTags,
+                maxNew = maxNewTags,
+            )
+        val removeTags =
+            obj
+                .stringArrayAt("remove_tags")
+                .mapNotNull { raw -> currentTags.firstOrNull { it.equals(raw, ignoreCase = true) } }
+                .distinct()
+        val parsed =
+            parseMetadataSuggestion(response, currentTitle, currentCorrespondent, currentDocDate, correspondents)
+        val modes = fields.associate { it.field to it.mode }
+        val metadata =
+            MetadataSuggestion(
+                title = parsed.title.takeIf { allows(modes, AiField.TITLE, currentTitle) },
+                correspondent =
+                    parsed.correspondent.takeIf {
+                        allows(
+                            modes,
+                            AiField.CORRESPONDENT,
+                            currentCorrespondent,
+                        )
+                    },
+                docDate = parsed.docDate.takeIf { allows(modes, AiField.DOC_DATE, currentDocDate) },
+            )
+        return AiEditSuggestion(addTags = addTags, removeTags = removeTags, metadata = metadata)
+    }
+
+    private fun allows(
+        modes: Map<AiField, AiFieldMode>,
+        field: AiField,
+        current: String?,
+    ): Boolean =
+        when (val mode = modes[field]) {
+            // Not requested: never accepted, even though the model may have returned it.
+            null -> false
+
+            AiFieldMode.ALL -> true
+
+            AiFieldMode.UNFILLED -> current.isNullOrBlank()
+        }
+
+    /**
+     * The shared tag-classification tail of [rankTagSuggestions] / [parseEditSuggestion]:
+     * drop blanks + current tags + case-insensitive dups, canonicalize to [vocabulary] spelling,
+     * rank existing-vocabulary before new, cap new at [maxNew] and the total at [perDocMax].
+     */
+    private fun classifyTags(
+        raw: List<String>,
+        currentTags: List<String>,
+        vocabulary: List<String>,
+        perDocMax: Int,
+        maxNew: Int,
     ): List<TagSuggestion> {
         val canonical = vocabulary.associateBy { it.lowercase() }
+        val current = currentTags.map { it.lowercase() }.toHashSet()
         val newCap = maxNew.coerceAtMost(perDocMax)
         val classified =
-            parseTagSuggestions(response, currentTags).map { raw ->
-                val existing = canonical[raw.lowercase()]
-                if (existing != null) TagSuggestion(existing, isNew = false) else TagSuggestion(raw, isNew = true)
-            }
+            raw
+                .map { it.trim() }
+                .filter { it.isNotEmpty() && it.lowercase() !in current }
+                .distinctBy { it.lowercase() }
+                .map { rawTag ->
+                    val existing = canonical[rawTag.lowercase()]
+                    if (existing !=
+                        null
+                    ) {
+                        TagSuggestion(existing, isNew = false)
+                    } else {
+                        TagSuggestion(rawTag, isNew = true)
+                    }
+                }
         val existing = classified.filter { !it.isNew }
         val fresh = classified.filter { it.isNew }.take(newCap)
         return (existing + fresh).take(perDocMax)
@@ -161,6 +260,13 @@ object AiText {
         val day = match.groupValues[3].toInt()
         return month in 1..12 && day in 1..31
     }
+
+    private fun JsonObject.stringArrayAt(key: String): List<String> =
+        (this[key] as? JsonArray)
+            ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -> p.isString }?.contentOrNull }
+            ?.map { it.trim() }
+            ?.filter { it.isNotEmpty() }
+            ?: emptyList()
 
     private fun JsonObject.stringAt(key: String): String? =
         (this[key] as? JsonPrimitive)
