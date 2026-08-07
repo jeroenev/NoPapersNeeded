@@ -138,6 +138,7 @@ import no_papers_needed.composeapp.generated.resources.detail_search_text_engine
 import no_papers_needed.composeapp.generated.resources.detail_suggest_tags
 import no_papers_needed.composeapp.generated.resources.detail_tab_details
 import no_papers_needed.composeapp.generated.resources.detail_tab_history
+import no_papers_needed.composeapp.generated.resources.detail_tab_preview
 import no_papers_needed.composeapp.generated.resources.detail_tab_text
 import no_papers_needed.composeapp.generated.resources.detail_tags
 import no_papers_needed.composeapp.generated.resources.detail_text_failed
@@ -156,6 +157,10 @@ import org.jetbrains.compose.resources.stringResource
  * extracted OCR/embedded full text), and **History** (immutable journal timeline). Text fields
  * commit on focus loss via the [onCommit*] callbacks; correspondent/docType/field-keys offer
  * existing values as suggestions.
+ *
+ * When [previewTab] is provided (the library's side-panel preview), it is prepended as an extra
+ * **Preview** tab and selected initially; the detail screen omits it since the page viewer sits
+ * next to the panel there.
  */
 @Composable
 @Suppress("LongMethod")
@@ -192,9 +197,14 @@ fun MetadataPanel(
     history: HistoryUiState = HistoryUiState.NotLoaded,
     onLoadHistory: () -> Unit = {},
     onRefreshHistory: () -> Unit = {},
+    previewTab: (@Composable (Modifier) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    var tab by remember { mutableStateOf(PanelTab.DETAILS) }
+    val tabs =
+        remember(previewTab != null) {
+            if (previewTab != null) PanelTab.entries.toList() else PanelTab.entries.filter { it != PanelTab.PREVIEW }
+        }
+    var tab by remember { mutableStateOf(tabs.first()) }
     LaunchedEffect(tab) {
         if (tab == PanelTab.HISTORY) {
             onLoadHistory()
@@ -216,14 +226,15 @@ fun MetadataPanel(
             }
         },
     ) {
-        PrimaryTabRow(selectedTabIndex = tab.ordinal) {
-            PanelTab.entries.forEach { t ->
+        PrimaryTabRow(selectedTabIndex = tabs.indexOf(tab)) {
+            tabs.forEach { t ->
                 Tab(
                     selected = tab == t,
                     onClick = { tab = t },
                     text = {
                         Text(
                             when (t) {
+                                PanelTab.PREVIEW -> stringResource(Res.string.detail_tab_preview)
                                 PanelTab.DETAILS -> stringResource(Res.string.detail_tab_details)
                                 PanelTab.TEXT -> stringResource(Res.string.detail_tab_text)
                                 PanelTab.HISTORY -> stringResource(Res.string.detail_tab_history)
@@ -234,6 +245,10 @@ fun MetadataPanel(
             }
         }
         when (tab) {
+            PanelTab.PREVIEW -> {
+                previewTab?.invoke(Modifier.fillMaxWidth().weight(1f))
+            }
+
             PanelTab.DETAILS -> {
                 DetailsTab(
                     item = item,
@@ -289,7 +304,7 @@ fun MetadataPanel(
     }
 }
 
-private enum class PanelTab { DETAILS, TEXT, HISTORY }
+private enum class PanelTab { PREVIEW, DETAILS, TEXT, HISTORY }
 
 @Composable
 private fun DetailsTab(

@@ -3,7 +3,6 @@
     <string name="detail_document">Document</string>
     <string name="detail_document_unavailable">Document unavailable</string>
     <string name="detail_document_unavailable_hint">It may have been trashed or moved.</string>
-    <string name="detail_details_metadata">Details &amp; metadata</string>
     <string name="detail_exported_baked_copy">Exported baked copy</string>
     <string name="detail_export_failed">Export failed: %1$s</string>
     <string name="detail_could_not_bake_copy">Could not bake a copy</string>
@@ -35,6 +34,7 @@
     <string name="detail_split_document">Split document</string>
     <string name="detail_baking">Baking...</string>
 
+    <string name="detail_tab_preview">Preview</string>
     <string name="detail_tab_details">Details</string>
     <string name="detail_tab_text">Text</string>
     <string name="detail_tab_history">History</string>

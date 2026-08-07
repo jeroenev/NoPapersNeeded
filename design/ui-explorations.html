@@ -1,0 +1,861 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>no-papers-needed — UI overhaul explorations</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Newsreader:opsz,wght@6..72,400;6..72,500&family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  /* ============ page chrome ============ */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #101014;
+    color: #E8E8EC;
+    font-family: 'Inter', system-ui, sans-serif;
+    line-height: 1.55;
+    padding: 48px 24px 120px;
+  }
+  main { max-width: 1280px; margin: 0 auto; }
+  h1 { font-size: 30px; font-weight: 700; letter-spacing: -0.02em; }
+  .sub { color: #9A9AA6; margin-top: 8px; max-width: 70ch; }
+  .toc { margin: 24px 0 8px; display: flex; flex-wrap: wrap; gap: 8px; }
+  .toc a {
+    color: #C9C9D6; text-decoration: none; font-size: 13px;
+    border: 1px solid #2A2A33; border-radius: 999px; padding: 6px 14px;
+  }
+  .toc a:hover { border-color: #55556A; color: #fff; }
+
+  section.direction { margin-top: 72px; }
+  .dir-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; }
+  .dir-num {
+    font-family: 'JetBrains Mono', monospace; font-size: 13px; color: #101014;
+    background: #E8E8EC; border-radius: 6px; padding: 3px 8px; font-weight: 500;
+  }
+  .dir-head h2 { font-size: 24px; font-weight: 700; letter-spacing: -0.01em; }
+  .tagline { color: #9A9AA6; font-size: 15px; }
+  .dir-desc { color: #B9B9C6; margin-top: 10px; max-width: 78ch; font-size: 14.5px; }
+
+  .palette { display: flex; gap: 8px; margin: 18px 0 22px; flex-wrap: wrap; }
+  .swatch { width: 92px; border-radius: 10px; overflow: hidden; border: 1px solid #2A2A33; }
+  .swatch .col { height: 48px; }
+  .swatch .lbl {
+    font-family: 'JetBrains Mono', monospace; font-size: 10px; padding: 5px 7px;
+    background: #1A1A20; color: #A9A9B6; line-height: 1.35;
+  }
+
+  .mocks { display: flex; gap: 28px; align-items: flex-start; flex-wrap: wrap; }
+
+  /* ============ desktop window frame ============ */
+  .win {
+    width: 880px; max-width: 100%;
+    border-radius: 12px; overflow: hidden;
+    background: var(--bg); color: var(--text);
+    font-family: var(--font), sans-serif;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55), 0 0 0 1px rgba(255,255,255,.07);
+    flex: none;
+  }
+  .titlebar {
+    height: 36px; display: flex; align-items: center; gap: 7px; padding: 0 14px;
+    background: var(--chrome); border-bottom: 1px solid var(--line);
+  }
+  .dot { width: 11px; height: 11px; border-radius: 50%; background: #C9C4BB; opacity: .8; }
+  .titlebar .wt { margin-left: 10px; font-size: 12px; color: var(--muted); }
+  .win-body { display: flex; height: 540px; overflow: hidden; }
+
+  /* ============ phone frame ============ */
+  .phone {
+    width: 305px; height: 622px; flex: none;
+    border-radius: 40px; border: 9px solid #1B1B20;
+    background: var(--bg); color: var(--text);
+    font-family: var(--font), sans-serif;
+    overflow: hidden; display: flex; flex-direction: column;
+    box-shadow: 0 24px 60px rgba(0,0,0,.55);
+    position: relative;
+  }
+  .statusbar {
+    height: 30px; flex: none; display: flex; align-items: center;
+    justify-content: space-between; padding: 0 20px;
+    font-size: 11px; color: var(--muted); font-weight: 600;
+  }
+  .phone-body { flex: 1; display: flex; flex-direction: column; overflow: hidden; position: relative; }
+
+  /* ============ shared mock atoms (all themed via vars) ============ */
+  .searchbar {
+    display: flex; align-items: center; gap: 9px;
+    background: var(--field); border: 1px solid var(--line);
+    border-radius: var(--r-pill, 999px); padding: 8px 14px;
+    color: var(--muted); font-size: 12.5px; flex: 1; min-width: 0;
+  }
+  .ic { width: 16px; height: 16px; flex: none; opacity: .75; }
+  .ic svg { width: 100%; height: 100%; display: block; }
+
+  .chiprow { display: flex; gap: 7px; flex-wrap: nowrap; overflow: hidden; }
+  .chip {
+    font-size: 11px; font-weight: 600; padding: 5px 11px; border-radius: var(--r-chip, 999px);
+    border: 1px solid var(--line); color: var(--muted); white-space: nowrap; flex: none;
+  }
+  .chip.on { background: var(--accent-soft); color: var(--accent-strong, var(--accent)); border-color: transparent; }
+
+  .navitem {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border-radius: var(--r-nav, 10px); font-size: 12.5px; font-weight: 500;
+    color: var(--muted);
+  }
+  .navitem.on { background: var(--accent-soft); color: var(--accent-strong, var(--accent)); font-weight: 600; }
+  .navlab {
+    font-size: 10px; letter-spacing: .09em; text-transform: uppercase;
+    color: var(--muted); opacity: .7; padding: 14px 12px 4px; font-weight: 600;
+  }
+
+  .fab {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: var(--accent); color: var(--on-accent);
+    border-radius: var(--r-fab, 16px); padding: 12px 18px;
+    font-size: 12.5px; font-weight: 600;
+    box-shadow: 0 8px 20px color-mix(in srgb, var(--accent) 40%, transparent);
+  }
+  .fab.mini { padding: 12px; }
+
+  /* document card + thumbnail */
+  .card { background: var(--surface); border-radius: var(--radius); border: 1px solid var(--line); overflow: hidden; }
+  .thumb {
+    aspect-ratio: 85/110; background: var(--page); margin: var(--card-pad, 8px);
+    border-radius: calc(var(--radius) - 6px); border: 1px solid var(--line);
+    padding: 12% 11%; display: flex; flex-direction: column; gap: 7%;
+  }
+  .tl { height: 4.5%; min-height: 3px; border-radius: 99px; background: var(--pageink); }
+  .tl.h { height: 7%; background: var(--pageink-h, var(--pageink)); width: 62%; }
+  .w90{width:90%} .w75{width:75%} .w80{width:80%} .w60{width:60%} .w45{width:45%}
+  .card-meta { padding: 4px 12px 12px; }
+  .card-title { font-size: 12px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card-sub { font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+  .tagdots { display: flex; gap: 4px; margin-top: 7px; align-items: center; }
+  .tagdot { width: 7px; height: 7px; border-radius: 99px; }
+  .minitag {
+    font-size: 9px; font-weight: 600; padding: 2px 7px; border-radius: 99px;
+    background: var(--accent-soft); color: var(--accent-strong, var(--accent));
+  }
+  .t-grn{background:#4CAF7D} .t-amb{background:#E0A93E} .t-red{background:#D96B6B} .t-blu{background:#5B8DEF} .t-pur{background:#9B6BD9}
+
+  .divider { height: 1px; background: var(--line); }
+  .grow { flex: 1; }
+
+  /* ============ notes / analysis blocks ============ */
+  .notes {
+    margin-top: 26px; display: grid; gap: 14px;
+    grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  }
+  .note { background: #17171D; border: 1px solid #26262E; border-radius: 12px; padding: 16px 18px; }
+  .note h4 {
+    font-size: 11px; letter-spacing: .1em; text-transform: uppercase;
+    color: #8A8A98; margin-bottom: 9px; font-weight: 600;
+  }
+  .note ul { list-style: none; }
+  .note li { font-size: 13px; color: #C6C6D2; padding: 3px 0 3px 16px; position: relative; }
+  .note li::before { content: '–'; position: absolute; left: 0; color: #5A5A6A; }
+  .note code {
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+    background: #22222B; border-radius: 4px; padding: 1px 5px; color: #B9C7F0;
+  }
+
+  table.cmp { width: 100%; border-collapse: collapse; margin-top: 20px; font-size: 13px; }
+  .cmp th, .cmp td { text-align: left; padding: 10px 14px; border-bottom: 1px solid #26262E; }
+  .cmp th { color: #8A8A98; font-size: 11px; text-transform: uppercase; letter-spacing: .08em; }
+  .cmp td:first-child { font-weight: 600; }
+  .approach { margin-top: 72px; }
+  .approach h2 { font-size: 24px; margin-bottom: 6px; }
+  .steps { counter-reset: step; margin-top: 18px; display: grid; gap: 12px; }
+  .step {
+    background: #17171D; border: 1px solid #26262E; border-radius: 12px;
+    padding: 16px 18px 16px 58px; position: relative;
+  }
+  .step::before {
+    counter-increment: step; content: counter(step);
+    position: absolute; left: 16px; top: 15px;
+    width: 26px; height: 26px; border-radius: 8px; background: #E8E8EC; color: #101014;
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; font-size: 13px;
+  }
+  .step b { display: block; margin-bottom: 4px; font-size: 14.5px; }
+  .step p { font-size: 13px; color: #B9B9C6; }
+  .step code {
+    font-family: 'JetBrains Mono', monospace; font-size: 11.5px;
+    background: #22222B; border-radius: 4px; padding: 1px 5px; color: #B9C7F0;
+  }
+
+  /* =====================================================================
+     DIRECTION A — QUIET PAPER
+     ===================================================================== */
+  .d-quiet {
+    --bg: #FAF9F6; --surface: #FFFFFF; --chrome: #F2F0EB;
+    --text: #201E1B; --muted: #7B766C; --line: #ECE8E0;
+    --accent: #4C5CC7; --on-accent: #fff; --accent-soft: #E9EBFA;
+    --field: #F2F0EB; --page: #FFFFFF; --pageink: #E5E1D8; --pageink-h: #C9C4B8;
+    --radius: 14px; --font: 'Inter';
+  }
+  .d-quiet .rail {
+    width: 76px; flex: none; border-right: 1px solid var(--line);
+    display: flex; flex-direction: column; align-items: center; gap: 6px; padding: 16px 0;
+    background: var(--chrome);
+  }
+  .d-quiet .rail .ritem {
+    width: 52px; padding: 7px 0 5px; border-radius: 12px; text-align: center;
+    font-size: 8.5px; font-weight: 600; color: var(--muted);
+  }
+  .d-quiet .rail .ritem .ic { margin: 0 auto 3px; width: 18px; height: 18px; }
+  .d-quiet .rail .ritem.on { background: var(--accent-soft); color: var(--accent); }
+  .d-quiet .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; }
+  .d-quiet .bottombar {
+    flex: none; display: flex; border-top: 1px solid var(--line); background: var(--surface);
+    padding: 8px 4px 14px;
+  }
+  .d-quiet .bitem { flex: 1; text-align: center; font-size: 9px; font-weight: 600; color: var(--muted); }
+  .d-quiet .bitem .ic { margin: 0 auto 3px; width: 19px; height: 19px; }
+  .d-quiet .bitem.on { color: var(--accent); }
+  .d-quiet .bitem.on .pill { background: var(--accent-soft); border-radius: 99px; width: 46px; margin: 0 auto 3px; padding: 3px 0; }
+  .d-quiet .bitem.on .pill .ic { margin: 0 auto; }
+
+  /* =====================================================================
+     DIRECTION B — ARCHIVE INK
+     ===================================================================== */
+  .d-ink {
+    --bg: #F3EDE1; --surface: #FBF7EC; --chrome: #EBE3D2;
+    --text: #262016; --muted: #8C8271; --line: #E1D8C4;
+    --accent: #3E5C46; --on-accent: #F5F1E4; --accent-soft: #DFE5D8; --accent-strong: #33503B;
+    --field: #EDE6D6; --page: #FFFEF8; --pageink: #DFD8C6; --pageink-h: #BBB29B;
+    --radius: 8px; --r-pill: 8px; --r-chip: 6px; --r-nav: 6px; --r-fab: 8px;
+    --font: 'Newsreader'; --font-display: 'Fraunces';
+  }
+  .d-ink .display { font-family: var(--font-display), serif; font-weight: 600; letter-spacing: -0.01em; }
+  .d-ink .sidebar {
+    width: 208px; flex: none; border-right: 1px solid var(--line);
+    padding: 18px 12px; background: var(--chrome);
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .d-ink .brand { font-family: var(--font-display), serif; font-size: 16px; font-weight: 600; padding: 0 12px 12px; }
+  .d-ink .grid3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 18px; }
+  .d-ink .card { box-shadow: 0 1px 0 var(--line); }
+  .d-ink .card-title { font-family: var(--font-display), serif; font-size: 13px; font-weight: 600; }
+  .d-ink .smallcaps { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: var(--muted); font-weight: 500; font-family: 'Inter', sans-serif; }
+  .d-ink .rule-title { display: flex; align-items: baseline; gap: 12px; }
+  .d-ink .rule-title::after { content: ''; flex: 1; height: 1px; background: var(--line); }
+
+  /* =====================================================================
+     DIRECTION C — DENSE WORKBENCH (dark-first)
+     ===================================================================== */
+  .d-bench {
+    --bg: #0F1217; --surface: #151A21; --chrome: #0B0E12;
+    --text: #E6EAF2; --muted: #8B94A7; --line: #232B37;
+    --accent: #4D8DFF; --on-accent: #fff; --accent-soft: #1A2A47; --accent-strong: #7FAEFF;
+    --field: #10151C; --page: #1C232D; --pageink: #39424F; --pageink-h: #55617200;
+    --radius: 8px; --r-pill: 8px; --r-chip: 6px; --r-nav: 7px; --r-fab: 8px;
+    --font: 'Inter'; --mono: 'JetBrains Mono';
+  }
+  .d-bench .dot { background: #3A4250; }
+  .d-bench .sidebar {
+    width: 176px; flex: none; border-right: 1px solid var(--line);
+    padding: 12px 8px; background: var(--chrome); font-size: 12px;
+    display: flex; flex-direction: column; gap: 1px;
+  }
+  .d-bench .navitem { padding: 6px 10px; font-size: 12px; }
+  .d-bench .listpane { width: 340px; flex: none; border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+  .d-bench .row {
+    display: flex; align-items: center; gap: 10px; padding: 8px 12px;
+    border-bottom: 1px solid var(--line); font-size: 12px;
+  }
+  .d-bench .row.on { background: var(--accent-soft); box-shadow: inset 2px 0 0 var(--accent); }
+  .d-bench .microthumb {
+    width: 30px; height: 38px; flex: none; background: var(--page);
+    border: 1px solid var(--line); border-radius: 3px;
+    padding: 5px 4px; display: flex; flex-direction: column; gap: 3px;
+  }
+  .d-bench .microthumb .tl { min-height: 2px; height: 2px; }
+  .d-bench .rmain { flex: 1; min-width: 0; }
+  .d-bench .rtitle { font-weight: 600; font-size: 12px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .d-bench .rsub { font-size: 10.5px; color: var(--muted); font-family: var(--mono), monospace; margin-top: 1px; }
+  .d-bench .kbd {
+    font-family: var(--mono), monospace; font-size: 9.5px; color: var(--muted);
+    border: 1px solid var(--line); border-radius: 4px; padding: 1px 5px; background: var(--field);
+  }
+  .d-bench .preview { flex: 1; display: flex; flex-direction: column; background: var(--bg); }
+  .d-bench .meta-kv { display: grid; grid-template-columns: 86px 1fr; gap: 4px 10px; font-size: 11px; }
+  .d-bench .meta-kv .k { color: var(--muted); font-family: var(--mono), monospace; font-size: 10.5px; }
+  .d-bench .tabs { display: flex; border-bottom: 1px solid var(--line); }
+  .d-bench .tab { flex: 1; text-align: center; padding: 9px 0; font-size: 12px; font-weight: 600; color: var(--muted); }
+  .d-bench .tab.on { color: var(--accent-strong); box-shadow: inset 0 -2px 0 var(--accent); }
+
+  /* =====================================================================
+     DIRECTION D — SOFT EXPRESSIVE
+     ===================================================================== */
+  .d-bold {
+    --bg: #F5F2FB; --surface: #FFFFFF; --chrome: #EDE8F8;
+    --text: #241A38; --muted: #7D7493; --line: #E7E1F3;
+    --accent: #6D28D9; --on-accent: #fff; --accent-soft: #EDE3FF; --accent-strong: #5B21B8;
+    --field: #FFFFFF; --page: #FBFAFE; --pageink: #E6E0F2; --pageink-h: #CBC2E2;
+    --radius: 22px; --r-pill: 999px; --r-chip: 999px; --r-nav: 999px; --r-fab: 20px;
+    --card-pad: 10px; --font: 'Manrope';
+  }
+  .d-bold .rail {
+    width: 96px; flex: none; padding: 18px 10px; background: var(--chrome);
+    display: flex; flex-direction: column; align-items: stretch; gap: 8px;
+  }
+  .d-bold .rail .ritem {
+    padding: 9px 0 7px; border-radius: 18px; text-align: center;
+    font-size: 9px; font-weight: 700; color: var(--muted);
+  }
+  .d-bold .rail .ritem .ic { margin: 0 auto 3px; width: 19px; height: 19px; }
+  .d-bold .rail .ritem.on { background: var(--surface); color: var(--accent-strong); box-shadow: 0 4px 14px rgba(60,20,140,.10); }
+  .d-bold .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; }
+  .d-bold .card { border: none; box-shadow: 0 6px 22px rgba(60,20,140,.08); }
+  .d-bold .searchbar { border: none; box-shadow: 0 4px 16px rgba(60,20,140,.09); padding: 11px 16px; }
+  .d-bold .bottombar {
+    flex: none; margin: 0 14px 14px; background: var(--surface);
+    border-radius: 999px; box-shadow: 0 8px 26px rgba(60,20,140,.16);
+    display: flex; padding: 7px;
+  }
+  .d-bold .bitem { flex: 1; text-align: center; font-size: 8.5px; font-weight: 700; color: var(--muted); padding: 5px 0 3px; border-radius: 999px; }
+  .d-bold .bitem .ic { margin: 0 auto 2px; width: 18px; height: 18px; }
+  .d-bold .bitem.on { background: var(--accent-soft); color: var(--accent-strong); }
+  .d-bold .hero-count { font-size: 26px; font-weight: 800; letter-spacing: -0.03em; }
+</style>
+</head>
+<body>
+<main>
+
+<h1>no-papers-needed — UI overhaul explorations</h1>
+<p class="sub">
+  Four design directions for the same core surfaces: the <b>Library</b> (home) on desktop and mobile.
+  All directions replace the current drawer-only navigation with adaptive navigation
+  (bottom bar / nav rail / permanent sidebar) and a real design-token system.
+  Mockups are stylized wireframes — layout, hierarchy, and mood, not pixel-final art.
+</p>
+<div class="toc">
+  <a href="#a">A · Quiet Paper</a>
+  <a href="#b">B · Archive Ink</a>
+  <a href="#c">C · Dense Workbench</a>
+  <a href="#d">D · Soft Expressive</a>
+  <a href="#compare">Comparison</a>
+  <a href="#approach">Recommended approach</a>
+</div>
+
+<!-- =================================================================== -->
+<!-- DIRECTION A                                                          -->
+<!-- =================================================================== -->
+<section class="direction d-quiet" id="a">
+  <div class="dir-head">
+    <span class="dir-num">A</span>
+    <h2>Quiet Paper</h2>
+    <span class="tagline">Evolution, not revolution — the current identity, refined.</span>
+  </div>
+  <p class="dir-desc">
+    Keeps the existing indigo accent and paper-white neutrals but adds warmth, a proper type scale,
+    tonal surfaces, and adaptive navigation: icon rail on desktop, bottom bar on mobile.
+    Lowest-risk direction; mostly a theming + nav-shell change.
+  </p>
+
+  <div class="palette">
+    <div class="swatch"><div class="col" style="background:#FAF9F6"></div><div class="lbl">bg<br>#FAF9F6</div></div>
+    <div class="swatch"><div class="col" style="background:#FFFFFF"></div><div class="lbl">surface<br>#FFFFFF</div></div>
+    <div class="swatch"><div class="col" style="background:#4C5CC7"></div><div class="lbl">accent<br>#4C5CC7</div></div>
+    <div class="swatch"><div class="col" style="background:#E9EBFA"></div><div class="lbl">accent soft<br>#E9EBFA</div></div>
+    <div class="swatch"><div class="col" style="background:#201E1B"></div><div class="lbl">text<br>#201E1B</div></div>
+    <div class="swatch"><div class="col" style="background:#7B766C"></div><div class="lbl">muted<br>#7B766C</div></div>
+  </div>
+
+  <div class="mocks">
+    <!-- desktop -->
+    <div class="win">
+      <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="wt">no-papers-needed — Library</span></div>
+      <div class="win-body">
+        <div class="rail">
+          <div class="ritem on"><div class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></div>Library</div>
+          <div class="ritem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></div>Search</div>
+          <div class="ritem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12l-8 8-9-9V4h7l10 8z"/></svg></div>Tags</div>
+          <div class="ritem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2 4 4.5.6-3.3 3.2.8 4.5L12 13l-4 2.3.8-4.5L5.5 7.6 10 7z"/></svg></div>Views</div>
+          <div class="ritem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></div>Trash</div>
+          <div class="grow"></div>
+          <div class="ritem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></div>Settings</div>
+        </div>
+        <div class="grow" style="display:flex;flex-direction:column;min-width:0;">
+          <div style="display:flex;align-items:center;gap:12px;padding:16px 22px 0;">
+            <div style="font-size:19px;font-weight:700;letter-spacing:-0.02em;">All documents</div>
+            <div class="grow"></div>
+            <div class="searchbar" style="max-width:300px;"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>Search title, OCR text, tags…</div>
+            <div class="fab"><span class="ic" style="opacity:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg></span>Import</div>
+          </div>
+          <div style="padding:14px 22px 10px;">
+            <div class="chiprow">
+              <span class="chip on">Tag: Insurance ✕</span>
+              <span class="chip on">2025 ✕</span>
+              <span class="chip">Correspondent</span>
+              <span class="chip">Type</span>
+              <span class="chip">Untagged</span>
+              <span class="chip">Needs review</span>
+            </div>
+          </div>
+          <div style="padding:6px 22px 22px;overflow:hidden;">
+            <div class="grid4">
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w90"></div><div class="tl w75"></div><div class="tl w80"></div><div class="tl w60"></div></div><div class="card-meta"><div class="card-title">Home insurance policy 2025</div><div class="card-sub">AXA · 12 Mar 2025</div><div class="tagdots"><span class="minitag">insurance</span><span class="tagdot t-blu"></span></div></div></div>
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w75"></div><div class="tl w90"></div><div class="tl w60"></div><div class="tl w80"></div></div><div class="card-meta"><div class="card-title">Energy invoice February</div><div class="card-sub">Engie · 28 Feb 2025</div><div class="tagdots"><span class="minitag">utilities</span><span class="tagdot t-amb"></span></div></div></div>
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl w90"></div><div class="tl w45"></div></div><div class="card-meta"><div class="card-title">Payslip January</div><div class="card-sub">Acme BV · 31 Jan 2025</div><div class="tagdots"><span class="minitag">payroll</span><span class="tagdot t-grn"></span></div></div></div>
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w60"></div><div class="tl w80"></div><div class="tl w75"></div><div class="tl w90"></div></div><div class="card-meta"><div class="card-title">Dentist receipt</div><div class="card-sub">Dr. Peeters · 14 Jan 2025</div><div class="tagdots"><span class="minitag">medical</span><span class="tagdot t-red"></span></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- phone -->
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>▲ ▮ ■</span></div>
+      <div class="phone-body">
+        <div style="padding:8px 16px 0;display:flex;gap:10px;align-items:center;">
+          <div class="searchbar"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>Search documents…</div>
+        </div>
+        <div style="padding:12px 16px 8px;">
+          <div class="chiprow"><span class="chip on">Insurance ✕</span><span class="chip">Untagged</span><span class="chip">Review</span><span class="chip">2025</span></div>
+        </div>
+        <div style="padding:4px 16px;display:grid;grid-template-columns:1fr 1fr;gap:12px;overflow:hidden;flex:1;">
+          <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w90"></div><div class="tl w75"></div><div class="tl w60"></div></div><div class="card-meta"><div class="card-title">Home insurance…</div><div class="card-sub">12 Mar 2025</div></div></div>
+          <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w75"></div><div class="tl w90"></div><div class="tl w80"></div></div><div class="card-meta"><div class="card-title">Energy invoice</div><div class="card-sub">28 Feb 2025</div></div></div>
+          <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl w90"></div></div><div class="card-meta"><div class="card-title">Payslip January</div><div class="card-sub">31 Jan 2025</div></div></div>
+          <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w60"></div><div class="tl w80"></div><div class="tl w75"></div></div><div class="card-meta"><div class="card-title">Dentist receipt</div><div class="card-sub">14 Jan 2025</div></div></div>
+        </div>
+        <div style="position:absolute;right:16px;bottom:78px;"><div class="fab"><span class="ic" style="opacity:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 7h4l2-2h4l2 2h4v12H4zM12 10v6M9 13h6"/></svg></span>Scan</div></div>
+        <div class="bottombar">
+          <div class="bitem on"><div class="pill"><div class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></div></div>Library</div>
+          <div class="bitem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></div>Search</div>
+          <div class="bitem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12l-8 8-9-9V4h7l10 8z"/></svg></div>Tags</div>
+          <div class="bitem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3M5 5l2 2M17 17l2 2M19 5l-2 2M7 17l-2 2"/></svg></div>Settings</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h4>System</h4><ul>
+      <li>Type: Inter (or system), 5-step scale, tighter display tracking</li>
+      <li>Nav: bottom bar (phone) / icon rail (desktop) / rail+labels (wide)</li>
+      <li>Density: comfortable; 14px radius; hairline borders instead of elevation</li>
+    </ul></div>
+    <div class="note"><h4>Pros</h4><ul>
+      <li>Smallest delta from today — keeps M3 components and indigo accent</li>
+      <li>Nav shell + theme tokens are ~90% of the work; screens mostly survive</li>
+      <li>Feels native on both platforms without divergent code paths</li>
+    </ul></div>
+    <div class="note"><h4>Cons / risks</h4><ul>
+      <li>Least distinctive; still reads as "default Material app, but tidy"</li>
+      <li>Doesn't rethink density for desktop power users</li>
+    </ul></div>
+    <div class="note"><h4>Compose mapping</h4><ul>
+      <li><code>NavigationSuiteScaffold</code> from <code>material3-adaptive-navigation-suite</code></li>
+      <li>Extend <code>Theme.kt</code> with <code>Typography</code> + <code>Shapes</code> tokens</li>
+      <li>Replace 840dp helper with <code>currentWindowAdaptiveInfo()</code> size classes</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- =================================================================== -->
+<!-- DIRECTION B                                                          -->
+<!-- =================================================================== -->
+<section class="direction d-ink" id="b">
+  <div class="dir-head">
+    <span class="dir-num">B</span>
+    <h2>Archive Ink</h2>
+    <span class="tagline">An editorial, physical-archive feel: ivory, ink, and serifs.</span>
+  </div>
+  <p class="dir-desc">
+    Leans into the "personal paper archive" metaphor. Warm ivory surfaces, deep-green ink accent,
+    Fraunces display serif for titles, small-caps section labels, ruled dividers.
+    Documents are presented like catalog cards. Distinctive and calm; needs bundled fonts and more
+    bespoke component styling.
+  </p>
+
+  <div class="palette">
+    <div class="swatch"><div class="col" style="background:#F3EDE1"></div><div class="lbl">bg<br>#F3EDE1</div></div>
+    <div class="swatch"><div class="col" style="background:#FBF7EC"></div><div class="lbl">surface<br>#FBF7EC</div></div>
+    <div class="swatch"><div class="col" style="background:#3E5C46"></div><div class="lbl">accent<br>#3E5C46</div></div>
+    <div class="swatch"><div class="col" style="background:#DFE5D8"></div><div class="lbl">accent soft<br>#DFE5D8</div></div>
+    <div class="swatch"><div class="col" style="background:#262016"></div><div class="lbl">ink<br>#262016</div></div>
+    <div class="swatch"><div class="col" style="background:#8C8271"></div><div class="lbl">muted<br>#8C8271</div></div>
+  </div>
+
+  <div class="mocks">
+    <!-- desktop -->
+    <div class="win">
+      <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="wt">no-papers-needed — Library</span></div>
+      <div class="win-body">
+        <div class="sidebar">
+          <div class="brand">No Papers Needed</div>
+          <div class="navitem on"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></span>All documents</div>
+          <div class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg></span>Review queue</div>
+          <div class="navlab">Saved views</div>
+          <div class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2 4 4.5.6-3.3 3.2.8 4.5L12 13l-4 2.3.8-4.5L5.5 7.6 10 7z"/></svg></span>Taxes 2025</div>
+          <div class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3l2 4 4.5.6-3.3 3.2.8 4.5L12 13l-4 2.3.8-4.5L5.5 7.6 10 7z"/></svg></span>Warranties</div>
+          <div class="navlab">Organise</div>
+          <div class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12l-8 8-9-9V4h7l10 8z"/></svg></span>Tags</div>
+          <div class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 7h16M6 7l1 13h10l1-13M9 7V4h6v3"/></svg></span>Trash</div>
+          <div class="grow"></div>
+          <div class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></span>Settings</div>
+        </div>
+        <div class="grow" style="display:flex;flex-direction:column;min-width:0;">
+          <div style="padding:20px 26px 0;">
+            <div class="rule-title"><span class="display" style="font-size:22px;">All documents</span><span class="smallcaps">248 items</span></div>
+          </div>
+          <div style="display:flex;gap:10px;align-items:center;padding:14px 26px 4px;">
+            <div class="searchbar" style="max-width:320px;"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>Search the archive…</div>
+            <span class="chip on">Insurance ✕</span><span class="chip">Year</span><span class="chip">Correspondent</span>
+            <div class="grow"></div>
+            <div class="fab"><span class="ic" style="opacity:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg></span>Add to archive</div>
+          </div>
+          <div style="padding:16px 26px 24px;overflow:hidden;">
+            <div class="grid3">
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w90"></div><div class="tl w75"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl w90"></div></div><div class="card-meta"><div class="card-title">Home insurance policy</div><div class="card-sub smallcaps" style="margin-top:4px;">AXA · March 2025</div><div class="tagdots"><span class="minitag">insurance</span><span class="minitag">home</span></div></div></div>
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w75"></div><div class="tl w90"></div><div class="tl w60"></div><div class="tl w80"></div><div class="tl w75"></div></div><div class="card-meta"><div class="card-title">Notary deed — apartment</div><div class="card-sub smallcaps" style="margin-top:4px;">Notaris Claes · 2024</div><div class="tagdots"><span class="minitag">property</span></div></div></div>
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl w90"></div><div class="tl w45"></div><div class="tl w80"></div></div><div class="card-meta"><div class="card-title">Warranty — washing machine</div><div class="card-sub smallcaps" style="margin-top:4px;">Miele · January 2025</div><div class="tagdots"><span class="minitag">warranty</span></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- phone -->
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>▲ ▮ ■</span></div>
+      <div class="phone-body">
+        <div style="padding:10px 18px 0;">
+          <div class="display" style="font-size:22px;">Archive</div>
+          <div class="smallcaps" style="margin-top:2px;">248 documents · 12 tags</div>
+        </div>
+        <div style="padding:12px 18px 6px;"><div class="searchbar"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>Search the archive…</div></div>
+        <div style="padding:8px 18px 6px;"><div class="chiprow"><span class="chip on">Insurance</span><span class="chip">Warranty</span><span class="chip">Medical</span><span class="chip">Tax</span></div></div>
+        <div style="flex:1;overflow:hidden;padding:6px 18px;display:flex;flex-direction:column;gap:10px;">
+          <div class="card" style="display:flex;gap:4px;">
+            <div class="thumb" style="width:64px;flex:none;"><div class="tl h"></div><div class="tl w90"></div><div class="tl w75"></div><div class="tl w60"></div></div>
+            <div style="padding:12px 12px 12px 6px;min-width:0;"><div class="card-title">Home insurance policy 2025</div><div class="card-sub smallcaps" style="margin-top:3px;">AXA · 12 Mar 2025</div><div class="tagdots"><span class="minitag">insurance</span><span class="minitag">home</span></div></div>
+          </div>
+          <div class="card" style="display:flex;gap:4px;">
+            <div class="thumb" style="width:64px;flex:none;"><div class="tl h"></div><div class="tl w75"></div><div class="tl w90"></div><div class="tl w80"></div></div>
+            <div style="padding:12px 12px 12px 6px;min-width:0;"><div class="card-title">Notary deed — apartment</div><div class="card-sub smallcaps" style="margin-top:3px;">Notaris Claes · 3 Nov 2024</div><div class="tagdots"><span class="minitag">property</span></div></div>
+          </div>
+          <div class="card" style="display:flex;gap:4px;">
+            <div class="thumb" style="width:64px;flex:none;"><div class="tl h"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl w90"></div></div>
+            <div style="padding:12px 12px 12px 6px;min-width:0;"><div class="card-title">Warranty — washing machine</div><div class="card-sub smallcaps" style="margin-top:3px;">Miele · 14 Jan 2025</div><div class="tagdots"><span class="minitag">warranty</span></div></div>
+          </div>
+        </div>
+        <div style="position:absolute;right:16px;bottom:20px;"><div class="fab"><span class="ic" style="opacity:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 7h4l2-2h4l2 2h4v12H4zM12 10v6M9 13h6"/></svg></span>Scan</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h4>System</h4><ul>
+      <li>Type: Fraunces (display) + Newsreader/Inter (body), small-caps labels</li>
+      <li>Nav: labeled sidebar on desktop; mobile keeps drawer or a minimal top-level list</li>
+      <li>Texture: ruled dividers, flat cards with 1px ink borders, 6–8px radius</li>
+    </ul></div>
+    <div class="note"><h4>Pros</h4><ul>
+      <li>Strong, memorable identity that matches the product's story</li>
+      <li>Warm palette is easy on the eyes for long reading sessions</li>
+      <li>List/catalog-card layout works well for scan-heavy libraries</li>
+    </ul></div>
+    <div class="note"><h4>Cons / risks</h4><ul>
+      <li>Serif at small sizes needs care (dates, metadata) — mixed families add complexity</li>
+      <li>Farthest from stock M3; more custom components to maintain</li>
+      <li>Dark mode needs its own "ink on slate" palette, not just inversion</li>
+    </ul></div>
+    <div class="note"><h4>Compose mapping</h4><ul>
+      <li>Bundle fonts via <code>Font()</code> resources in <code>composeApp</code></li>
+      <li>Custom <code>Typography</code> with two families; <code>CardDefaults.outlinedCardBorder</code></li>
+      <li>Keep M3 behavior, restyle via tokens — avoid forking components</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- =================================================================== -->
+<!-- DIRECTION C                                                          -->
+<!-- =================================================================== -->
+<section class="direction d-bench" id="c">
+  <div class="dir-head">
+    <span class="dir-num">C</span>
+    <h2>Dense Workbench</h2>
+    <span class="tagline">Desktop-first, keyboard-first, information-dense. Dark by default.</span>
+  </div>
+  <p class="dir-desc">
+    Treats the app like a professional tool (think mail client / IDE): three-pane desktop layout
+    with nav, document list, and always-visible preview + metadata. Monospace metadata, visible
+    keyboard shortcuts, compact rows. On mobile it collapses to a dense list with tabs; the
+    preview pane becomes the existing detail screen.
+  </p>
+
+  <div class="palette">
+    <div class="swatch"><div class="col" style="background:#0F1217"></div><div class="lbl">bg<br>#0F1217</div></div>
+    <div class="swatch"><div class="col" style="background:#151A21"></div><div class="lbl">surface<br>#151A21</div></div>
+    <div class="swatch"><div class="col" style="background:#4D8DFF"></div><div class="lbl">accent<br>#4D8DFF</div></div>
+    <div class="swatch"><div class="col" style="background:#1A2A47"></div><div class="lbl">accent soft<br>#1A2A47</div></div>
+    <div class="swatch"><div class="col" style="background:#E6EAF2"></div><div class="lbl">text<br>#E6EAF2</div></div>
+    <div class="swatch"><div class="col" style="background:#8B94A7"></div><div class="lbl">muted<br>#8B94A7</div></div>
+  </div>
+
+  <div class="mocks">
+    <!-- desktop: 3 panes -->
+    <div class="win">
+      <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="wt">no-papers-needed — Library</span></div>
+      <div class="win-body">
+        <div class="sidebar">
+          <div class="navitem on"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></span>All<span class="grow"></span><span class="kbd">248</span></div>
+          <div class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 6v6l4 2"/><circle cx="12" cy="12" r="9"/></svg></span>Review<span class="grow"></span><span class="kbd">7</span></div>
+          <div class="navitem"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12l-8 8-9-9V4h7l10 8z"/></svg></span>Untagged<span class="grow"></span><span class="kbd">12</span></div>
+          <div class="navlab">Views</div>
+          <div class="navitem">Taxes 2025</div>
+          <div class="navitem">Warranties</div>
+          <div class="navitem">Medical</div>
+          <div class="navlab">System</div>
+          <div class="navitem">Tags</div>
+          <div class="navitem">Trash</div>
+          <div class="navitem">Settings</div>
+          <div class="grow"></div>
+          <div style="padding:8px 10px;font-size:10px;color:var(--muted);font-family:var(--mono),monospace;">⌘K command · ⌘F search<br>J/K navigate · E edit</div>
+        </div>
+        <div class="listpane">
+          <div style="padding:10px 12px;display:flex;gap:8px;align-items:center;border-bottom:1px solid var(--line);">
+            <div class="searchbar" style="padding:6px 10px;"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>Search…<span class="grow"></span><span class="kbd">⌘F</span></div>
+          </div>
+          <div style="padding:8px 12px;border-bottom:1px solid var(--line);"><div class="chiprow"><span class="chip on">insurance</span><span class="chip">2025</span><span class="chip">+ filter</span></div></div>
+          <div class="row on"><div class="microthumb"><div class="tl"></div><div class="tl w75"></div><div class="tl w90"></div><div class="tl w60"></div></div><div class="rmain"><div class="rtitle">Home insurance policy 2025</div><div class="rsub">AXA · 2025-03-12 · 2p</div></div><span class="tagdot t-blu"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w90"></div><div class="tl w60"></div><div class="tl w80"></div></div><div class="rmain"><div class="rtitle">Energy invoice February</div><div class="rsub">Engie · 2025-02-28 · 1p</div></div><span class="tagdot t-amb"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w60"></div><div class="tl w80"></div><div class="tl w75"></div></div><div class="rmain"><div class="rtitle">Payslip January</div><div class="rsub">Acme BV · 2025-01-31 · 1p</div></div><span class="tagdot t-grn"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w80"></div><div class="tl w90"></div><div class="tl w45"></div></div><div class="rmain"><div class="rtitle">Dentist receipt</div><div class="rsub">Dr. Peeters · 2025-01-14 · 1p</div></div><span class="tagdot t-red"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w75"></div><div class="tl w60"></div><div class="tl w90"></div></div><div class="rmain"><div class="rtitle">Car registration</div><div class="rsub">DIV · 2024-12-02 · 1p</div></div><span class="tagdot t-pur"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w90"></div><div class="tl w80"></div><div class="tl w60"></div></div><div class="rmain"><div class="rtitle">Notary deed — apartment</div><div class="rsub">Claes · 2024-11-03 · 14p</div></div><span class="tagdot t-blu"></span></div>
+        </div>
+        <div class="preview">
+          <div style="padding:10px 16px;display:flex;align-items:center;gap:10px;border-bottom:1px solid var(--line);">
+            <div style="font-weight:600;font-size:13px;">Home insurance policy 2025</div>
+            <div class="grow"></div>
+            <span class="kbd">←</span><span class="kbd">→</span><span class="chip">Share</span><span class="chip">Split</span><span class="chip on">Reviewed</span>
+          </div>
+          <div style="flex:1;display:flex;min-height:0;">
+            <div style="flex:1.4;display:flex;align-items:center;justify-content:center;padding:18px;">
+              <div class="thumb" style="width:64%;margin:0;"><div class="tl h"></div><div class="tl w90"></div><div class="tl w75"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl w90"></div><div class="tl w75"></div></div>
+            </div>
+            <div style="width:230px;flex:none;border-left:1px solid var(--line);padding:14px;display:flex;flex-direction:column;gap:12px;">
+              <div class="meta-kv">
+                <span class="k">title</span><span>Home insurance…</span>
+                <span class="k">date</span><span>2025-03-12</span>
+                <span class="k">from</span><span>AXA</span>
+                <span class="k">type</span><span>Policy</span>
+                <span class="k">sha256</span><span style="font-family:var(--mono),monospace;font-size:10px;color:var(--muted);">9f2a…c41d</span>
+              </div>
+              <div class="divider"></div>
+              <div><div class="navlab" style="padding:0 0 6px;">Tags</div><div class="chiprow" style="flex-wrap:wrap;"><span class="chip on">insurance</span><span class="chip on">home</span><span class="chip">+</span></div></div>
+              <div class="divider"></div>
+              <div><div class="navlab" style="padding:0 0 6px;">OCR</div><div class="tl w90" style="height:4px;"></div><div class="tl w75" style="height:4px;margin-top:5px;"></div><div class="tl w80" style="height:4px;margin-top:5px;"></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- phone -->
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>▲ ▮ ■</span></div>
+      <div class="phone-body">
+        <div style="padding:8px 14px 8px;display:flex;gap:8px;">
+          <div class="searchbar" style="padding:7px 12px;"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>Search…</div>
+        </div>
+        <div class="tabs">
+          <div class="tab on">All</div><div class="tab">Review</div><div class="tab">Untagged</div><div class="tab">Views</div>
+        </div>
+        <div style="flex:1;overflow:hidden;">
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w75"></div><div class="tl w90"></div></div><div class="rmain"><div class="rtitle">Home insurance policy 2025</div><div class="rsub">AXA · 2025-03-12</div></div><span class="tagdot t-blu"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w90"></div><div class="tl w60"></div></div><div class="rmain"><div class="rtitle">Energy invoice February</div><div class="rsub">Engie · 2025-02-28</div></div><span class="tagdot t-amb"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w60"></div><div class="tl w80"></div></div><div class="rmain"><div class="rtitle">Payslip January</div><div class="rsub">Acme BV · 2025-01-31</div></div><span class="tagdot t-grn"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w80"></div><div class="tl w90"></div></div><div class="rmain"><div class="rtitle">Dentist receipt</div><div class="rsub">Dr. Peeters · 2025-01-14</div></div><span class="tagdot t-red"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w75"></div><div class="tl w60"></div></div><div class="rmain"><div class="rtitle">Car registration</div><div class="rsub">DIV · 2024-12-02</div></div><span class="tagdot t-pur"></span></div>
+          <div class="row"><div class="microthumb"><div class="tl"></div><div class="tl w90"></div><div class="tl w80"></div></div><div class="rmain"><div class="rtitle">Notary deed — apartment</div><div class="rsub">Claes · 2024-11-03</div></div><span class="tagdot t-blu"></span></div>
+        </div>
+        <div style="position:absolute;right:14px;bottom:18px;"><div class="fab mini"><span class="ic" style="opacity:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg></span></div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h4>System</h4><ul>
+      <li>Type: Inter 13px base + JetBrains Mono for dates/hashes/counts</li>
+      <li>Nav: labeled sidebar with counts; mobile uses top tabs, no drawer</li>
+      <li>Three-pane desktop: list + preview merge Library and DocDetail</li>
+    </ul></div>
+    <div class="note"><h4>Pros</h4><ul>
+      <li>Best desktop experience by far — no navigation round-trips to view a doc</li>
+      <li>Formalizes the keyboard shortcuts you already have (plus ⌘K palette)</li>
+      <li>Dense rows scale to thousands of documents</li>
+    </ul></div>
+    <div class="note"><h4>Cons / risks</h4><ul>
+      <li>Biggest structural change: list-detail must be refactored (shared selection state)</li>
+      <li>Dark-first can feel heavy for a "paper" product; needs a first-class light theme too</li>
+      <li>Density is a liability on mobile — the two form factors diverge most here</li>
+    </ul></div>
+    <div class="note"><h4>Compose mapping</h4><ul>
+      <li><code>ListDetailPaneScaffold</code> (material3-adaptive) for list+preview</li>
+      <li><code>BrowseContext</code> already models ordered browsing — reuse for pane selection</li>
+      <li>Command palette as a shared dialog fed by existing search index</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- =================================================================== -->
+<!-- DIRECTION D                                                          -->
+<!-- =================================================================== -->
+<section class="direction d-bold" id="d">
+  <div class="dir-head">
+    <span class="dir-num">D</span>
+    <h2>Soft Expressive</h2>
+    <span class="tagline">Friendly, rounded, consumer-grade polish. Mobile-first.</span>
+  </div>
+  <p class="dir-desc">
+    A warmer consumer feel in the spirit of M3 Expressive: large radii, floating pill navigation,
+    soft shadows instead of borders, a violet accent, playful stat header. Optimized for the
+    phone-scanning use case; desktop gets a padded rail and the same soft cards.
+  </p>
+
+  <div class="palette">
+    <div class="swatch"><div class="col" style="background:#F5F2FB"></div><div class="lbl">bg<br>#F5F2FB</div></div>
+    <div class="swatch"><div class="col" style="background:#FFFFFF"></div><div class="lbl">surface<br>#FFFFFF</div></div>
+    <div class="swatch"><div class="col" style="background:#6D28D9"></div><div class="lbl">accent<br>#6D28D9</div></div>
+    <div class="swatch"><div class="col" style="background:#EDE3FF"></div><div class="lbl">accent soft<br>#EDE3FF</div></div>
+    <div class="swatch"><div class="col" style="background:#241A38"></div><div class="lbl">text<br>#241A38</div></div>
+    <div class="swatch"><div class="col" style="background:#7D7493"></div><div class="lbl">muted<br>#7D7493</div></div>
+  </div>
+
+  <div class="mocks">
+    <!-- desktop -->
+    <div class="win">
+      <div class="titlebar"><span class="dot"></span><span class="dot"></span><span class="dot"></span><span class="wt">no-papers-needed — Library</span></div>
+      <div class="win-body">
+        <div class="rail">
+          <div class="ritem on"><div class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></div>Library</div>
+          <div class="ritem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></div>Search</div>
+          <div class="ritem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12l-8 8-9-9V4h7l10 8z"/></svg></div>Tags</div>
+          <div class="ritem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c-4 6-7 8-7 12a7 7 0 0014 0c0-4-3-6-7-12z"/></svg></div>AI</div>
+          <div class="grow"></div>
+          <div class="ritem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg></div>Settings</div>
+        </div>
+        <div class="grow" style="display:flex;flex-direction:column;min-width:0;">
+          <div style="display:flex;align-items:center;gap:16px;padding:20px 26px 0;">
+            <div>
+              <div class="hero-count">248 documents</div>
+              <div style="font-size:12px;color:var(--muted);font-weight:600;">7 to review · 12 untagged · all backed up ✓</div>
+            </div>
+            <div class="grow"></div>
+            <div class="searchbar" style="max-width:300px;"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>Search anything…</div>
+            <div class="fab"><span class="ic" style="opacity:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M12 5v14M5 12h14"/></svg></span>Add document</div>
+          </div>
+          <div style="padding:16px 26px 8px;"><div class="chiprow"><span class="chip on">All</span><span class="chip">Needs review</span><span class="chip">Insurance</span><span class="chip">Medical</span><span class="chip">Taxes</span><span class="chip">Warranty</span></div></div>
+          <div style="padding:8px 26px 24px;overflow:hidden;">
+            <div class="grid4">
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w90"></div><div class="tl w75"></div><div class="tl w80"></div><div class="tl w60"></div></div><div class="card-meta"><div class="card-title">Home insurance 2025</div><div class="card-sub">AXA · 12 Mar</div><div class="tagdots"><span class="minitag">insurance</span></div></div></div>
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w75"></div><div class="tl w90"></div><div class="tl w60"></div><div class="tl w80"></div></div><div class="card-meta"><div class="card-title">Energy invoice</div><div class="card-sub">Engie · 28 Feb</div><div class="tagdots"><span class="minitag">utilities</span></div></div></div>
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl w90"></div><div class="tl w45"></div></div><div class="card-meta"><div class="card-title">Payslip January</div><div class="card-sub">Acme BV · 31 Jan</div><div class="tagdots"><span class="minitag">payroll</span></div></div></div>
+              <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w60"></div><div class="tl w80"></div><div class="tl w75"></div><div class="tl w90"></div></div><div class="card-meta"><div class="card-title">Dentist receipt</div><div class="card-sub">Dr. Peeters · 14 Jan</div><div class="tagdots"><span class="minitag">medical</span></div></div></div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- phone -->
+    <div class="phone">
+      <div class="statusbar"><span>9:41</span><span>▲ ▮ ■</span></div>
+      <div class="phone-body">
+        <div style="padding:10px 18px 0;">
+          <div style="font-size:12px;color:var(--muted);font-weight:700;">Good morning</div>
+          <div class="hero-count" style="font-size:22px;">Your papers, sorted.</div>
+        </div>
+        <div style="padding:12px 16px 4px;"><div class="searchbar"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></span>Search anything…</div></div>
+        <div style="padding:10px 16px 4px;"><div class="chiprow"><span class="chip on">All</span><span class="chip">Review · 7</span><span class="chip">Insurance</span><span class="chip">Medical</span></div></div>
+        <div style="padding:8px 16px;display:grid;grid-template-columns:1fr 1fr;gap:14px;overflow:hidden;flex:1;">
+          <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w90"></div><div class="tl w75"></div><div class="tl w60"></div></div><div class="card-meta"><div class="card-title">Home insurance…</div><div class="card-sub">12 Mar</div></div></div>
+          <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w75"></div><div class="tl w90"></div><div class="tl w80"></div></div><div class="card-meta"><div class="card-title">Energy invoice</div><div class="card-sub">28 Feb</div></div></div>
+          <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w80"></div><div class="tl w60"></div><div class="tl w90"></div></div><div class="card-meta"><div class="card-title">Payslip January</div><div class="card-sub">31 Jan</div></div></div>
+          <div class="card"><div class="thumb"><div class="tl h"></div><div class="tl w60"></div><div class="tl w80"></div><div class="tl w75"></div></div><div class="card-meta"><div class="card-title">Dentist receipt</div><div class="card-sub">14 Jan</div></div></div>
+        </div>
+        <div style="position:absolute;right:20px;bottom:86px;"><div class="fab" style="padding:15px 20px;border-radius:24px;"><span class="ic" style="opacity:1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><path d="M4 7h4l2-2h4l2 2h4v12H4zM12 10v6M9 13h6"/></svg></span>Scan</div></div>
+        <div class="bottombar">
+          <div class="bitem on"><div class="ic"><svg viewBox="0 0 24 24" fill="currentColor"><path d="M4 4h7v7H4zM13 4h7v7h-7zM4 13h7v7H4zM13 13h7v7h-7z"/></svg></div>Library</div>
+          <div class="bitem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg></div>Search</div>
+          <div class="bitem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 12l-8 8-9-9V4h7l10 8z"/></svg></div>Tags</div>
+          <div class="bitem"><div class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 3c-4 6-7 8-7 12a7 7 0 0014 0c0-4-3-6-7-12z"/></svg></div>AI</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="notes">
+    <div class="note"><h4>System</h4><ul>
+      <li>Type: Manrope, heavy weights for headers, generous letter-spacing control</li>
+      <li>Nav: floating pill bottom bar (phone), padded rail (desktop)</li>
+      <li>Depth: soft tinted shadows, no borders; 20–24px radii; XL touch targets</li>
+    </ul></div>
+    <div class="note"><h4>Pros</h4><ul>
+      <li>Most approachable for non-technical household users</li>
+      <li>Great fit for the scan-first mobile flow (big FAB, greeting header, review nudges)</li>
+      <li>Chips-as-primary-filter matches how people actually browse tags</li>
+    </ul></div>
+    <div class="note"><h4>Cons / risks</h4><ul>
+      <li>Can feel toy-like on a 27" monitor; desktop needs restraint (smaller radii, denser grid)</li>
+      <li>Soft shadows are more expensive to render and tricky in dark mode</li>
+      <li>Playfulness may clash with "serious archive of legal documents"</li>
+    </ul></div>
+    <div class="note"><h4>Compose mapping</h4><ul>
+      <li>Standard M3 with custom <code>Shapes</code> (extraLarge everywhere) + shadow ambient color</li>
+      <li>Docked pill bar = <code>NavigationBar</code> in a padded, clipped <code>Surface</code></li>
+      <li>Greeting/stat header composable reused across both form factors</li>
+    </ul></div>
+  </div>
+</section>
+
+<!-- =================================================================== -->
+<!-- COMPARISON                                                           -->
+<!-- =================================================================== -->
+<section class="approach" id="compare">
+  <h2>Comparison</h2>
+  <table class="cmp">
+    <tr><th>Direction</th><th>Identity</th><th>Effort</th><th>Desktop fit</th><th>Mobile fit</th><th>Structural change</th></tr>
+    <tr><td>A · Quiet Paper</td><td>Subtle</td><td>Low</td><td>Good</td><td>Good</td><td>Nav shell only</td></tr>
+    <tr><td>B · Archive Ink</td><td>Strong</td><td>Medium</td><td>Good</td><td>Good</td><td>Nav shell + fonts + card styling</td></tr>
+    <tr><td>C · Dense Workbench</td><td>Strong</td><td>High</td><td>Excellent</td><td>Fair</td><td>List-detail refactor (largest)</td></tr>
+    <tr><td>D · Soft Expressive</td><td>Strong</td><td>Medium</td><td>Fair</td><td>Excellent</td><td>Nav shell + shape/shadow system</td></tr>
+  </table>
+  <p class="dir-desc" style="margin-top:16px;">
+    These mix well: <b>A or B as the visual language</b> combined with <b>C's three-pane layout on
+    expanded window sizes only</b> is likely the strongest overall — a calm paper identity that
+    becomes a power tool when the window is wide, and a clean bottom-bar app on the phone.
+  </p>
+</section>
+
+<!-- =================================================================== -->
+<!-- APPROACH                                                             -->
+<!-- =================================================================== -->
+<section class="approach" id="approach">
+  <h2>Recommended implementation approach</h2>
+  <p class="sub">The current theme is a single 64-line file and adaptivity is one 840dp helper used in three places — both are cheap, central seams to rebuild on. Phase the overhaul so every step ships independently:</p>
+  <div class="steps">
+    <div class="step"><b>Design tokens first</b><p>Expand <code>ui/theme/Theme.kt</code> into color + <code>Typography</code> + <code>Shapes</code> + spacing tokens for the chosen direction. Add an in-app light/dark/system toggle. Zero layout changes — instant visual win, trivially revertable.</p></div>
+    <div class="step"><b>Adaptive foundation</b><p>Add <code>material3-adaptive</code> + <code>material3-adaptive-navigation-suite</code>. Replace <code>Responsive.kt</code>'s 840dp breakpoint with window size classes (compact/medium/expanded) at its three call sites.</p></div>
+    <div class="step"><b>Navigation shell</b><p>Replace the drawer with <code>NavigationSuiteScaffold</code>: bottom bar on compact, rail on medium, permanent sidebar on expanded. Saved views and secondary destinations move into the Library screen or an overflow sheet.</p></div>
+    <div class="step"><b>Library screen</b><p>Restyle cards/chips/search per the chosen direction. If going toward Workbench: introduce <code>ListDetailPaneScaffold</code> on expanded widths so selecting a doc previews in-pane (reuse <code>BrowseContext</code>).</p></div>
+    <div class="step"><b>Detail, Settings, and the rest</b><p>DocDetail metadata panel, then Settings (851 lines — split into per-section composables while restyling), then Tags/Trash/AI screens which are small.</p></div>
+    <div class="step"><b>Polish pass</b><p>Motion (shared-element thumbnail transition list→detail), empty states, snackbar/banner styling, desktop keyboard-shortcut discoverability (⌘K palette if Workbench).</p></div>
+  </div>
+  <p class="sub" style="margin-top:18px;">
+    Verify each phase with the CI order: <code style="font-family:'JetBrains Mono',monospace;background:#22222B;border-radius:4px;padding:1px 5px;">spotlessCheck → detekt → mise test-fast → compile android+desktop</code>.
+    ViewModels are untouched throughout — this is a pure UI-layer overhaul.
+  </p>
+</section>
+
+</main>
+</body>
+</html>

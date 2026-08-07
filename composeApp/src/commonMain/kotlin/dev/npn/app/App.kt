@@ -18,6 +18,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -39,9 +40,13 @@ import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.ai.AiTaggingScreen
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.LocaleProvider
+import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.library.LibraryScreen
+import dev.npn.app.ui.nav.AiDestination
+import dev.npn.app.ui.nav.NavigationShell
 import dev.npn.app.ui.nav.Route
+import dev.npn.app.ui.nav.TopLevelDestination
 import dev.npn.app.ui.onboarding.OnboardingScreen
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
 import dev.npn.app.ui.settings.SettingsScreen
@@ -135,22 +140,45 @@ private fun MainNav(
             dev.npn.app.ui.detail
                 .BrowseContext()
         }
+    // Probe once whether the AI assistant is configured; gates the AI entries in rail and menus.
+    val aiConfigured by produceState(initialValue = false, session) {
+        value = session.ai.isConfiguredOrFalse()
+    }
 
     DriveWindowTitle(nav)
+    NavigationShell(
+        current = nav.currentTopLevelDestination(),
+        aiCurrent = nav.currentAiDestination(),
+        aiConfigured = aiConfigured,
+        onNavigate = { dest -> nav.navigateTopLevel(dest) },
+        onAiChat = { nav.navigateAi(Route.AiChat) },
+        onAiTagging = { nav.navigateAi(Route.AiTagging) },
+    ) {
+        MainNavHost(nav = nav, env = env, session = session, browse = browse, aiConfigured = aiConfigured)
+    }
+}
+
+@Composable
+private fun MainNavHost(
+    nav: NavHostController,
+    env: AppEnvironment,
+    session: dev.npn.core.app.LibrarySession,
+    browse: dev.npn.app.ui.detail.BrowseContext,
+    aiConfigured: Boolean,
+) {
     NavHost(navController = nav, startDestination = Route.Library) {
         composable<Route.Library> {
             LibraryScreen(
                 session = session,
                 env = env,
+                aiConfigured = aiConfigured,
                 onOpenDoc = { docId, order, query ->
                     browse.setOrder(order, query)
                     nav.navigate(Route.DocDetail(docId))
                 },
                 onTrash = { nav.navigate(Route.Trash) },
-                onTags = { nav.navigate(Route.TagManagement) },
-                onSettings = { nav.navigate(Route.Settings) },
-                onAiChat = { nav.navigate(Route.AiChat) },
-                onAiTagging = { nav.navigate(Route.AiTagging) },
+                onAiChat = { nav.navigateAi(Route.AiChat) },
+                onAiTagging = { nav.navigateAi(Route.AiTagging) },
             )
         }
         composable<Route.DocDetail> { entry ->
@@ -206,6 +234,57 @@ private fun MainNav(
             )
         }
         aiRoutes(nav, session, env.settings)
+    }
+}
+
+/** Maps the current back stack entry to a shell destination; null hides the rail/bottom bar. */
+@Composable
+private fun NavHostController.currentTopLevelDestination(): TopLevelDestination? {
+    val entry by currentBackStackEntryAsState()
+    val destination = entry?.destination ?: return TopLevelDestination.LIBRARY
+    return when {
+        destination.hasRoute<Route.Library>() -> TopLevelDestination.LIBRARY
+        destination.hasRoute<Route.TagManagement>() -> TopLevelDestination.TAGS
+        destination.hasRoute<Route.Trash>() -> TopLevelDestination.TRASH
+        destination.hasRoute<Route.Settings>() -> TopLevelDestination.SETTINGS
+        else -> null
+    }
+}
+
+/** The open AI screen, if any; keeps the rail visible and its AI item selected on wide layouts. */
+@Composable
+private fun NavHostController.currentAiDestination(): AiDestination? {
+    val entry by currentBackStackEntryAsState()
+    val destination = entry?.destination ?: return null
+    return when {
+        destination.hasRoute<Route.AiChat>() -> AiDestination.CHAT
+        destination.hasRoute<Route.AiTagging>() -> AiDestination.TAGGING
+        else -> null
+    }
+}
+
+private fun NavHostController.navigateTopLevel(dest: TopLevelDestination) {
+    val route: Route =
+        when (dest) {
+            TopLevelDestination.LIBRARY -> Route.Library
+            TopLevelDestination.TAGS -> Route.TagManagement
+            TopLevelDestination.TRASH -> Route.Trash
+            TopLevelDestination.SETTINGS -> Route.Settings
+        }
+    navigate(route) {
+        // Keep a single branch: switching destinations never stacks top-level screens on
+        // each other, and each destination's state survives the round trip.
+        popUpTo(Route.Library) { saveState = true }
+        launchSingleTop = true
+        restoreState = true
+    }
+}
+
+/** AI screens sit one level above Library, never stacked on other pushed screens or each other. */
+private fun NavHostController.navigateAi(route: Route) {
+    navigate(route) {
+        popUpTo(Route.Library) { saveState = true }
+        launchSingleTop = true
     }
 }
 

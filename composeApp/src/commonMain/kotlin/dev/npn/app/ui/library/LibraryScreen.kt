@@ -30,7 +30,6 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Menu
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ZoomIn
@@ -46,14 +45,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalDrawerSheet
-import androidx.compose.material3.ModalNavigationDrawer
-import androidx.compose.material3.PermanentDrawerSheet
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -62,7 +57,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
@@ -87,7 +81,7 @@ import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.SnackbarMessages
-import dev.npn.app.ui.common.isConfiguredOrFalse
+import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.platformFileToExternalSource
 import dev.npn.core.app.LibrarySession
@@ -102,7 +96,6 @@ import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_add_tag
 import no_papers_needed.composeapp.generated.resources.common_cancel
-import no_papers_needed.composeapp.generated.resources.common_menu
 import no_papers_needed.composeapp.generated.resources.common_select_all
 import no_papers_needed.composeapp.generated.resources.common_view_grid
 import no_papers_needed.composeapp.generated.resources.common_view_list
@@ -144,21 +137,26 @@ import no_papers_needed.composeapp.generated.resources.library_trash_documents
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
+/**
+ * Width of the right-hand side panel (filter editor / document preview) on wide layouts: half the
+ * window, clamped so it neither collapses just past the breakpoint nor eats a huge desktop window.
+ * The panel is the full document view on wide layouts (viewer + metadata), so it gets equal
+ * footing with the list.
+ */
+private const val SIDE_PANEL_FRACTION = 0.5f
+private val SidePanelMinWidth = 420.dp
+private val SidePanelMaxWidth = 800.dp
+
 @Composable
 fun LibraryScreen(
     session: LibrarySession,
     env: AppEnvironment,
+    aiConfigured: Boolean,
     onOpenDoc: (docId: String, order: List<String>, searchQuery: String?) -> Unit,
     onTrash: () -> Unit,
-    onTags: () -> Unit,
-    onSettings: () -> Unit,
     onAiChat: () -> Unit,
     onAiTagging: () -> Unit,
 ) {
-    // Probe once whether the AI assistant is configured so the entry point stays hidden otherwise.
-    val aiConfigured by produceState(initialValue = false, session) {
-        value = session.ai.isConfiguredOrFalse()
-    }
     val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val docs by vm.documents.collectAsStateWithLifecycle()
@@ -182,10 +180,6 @@ fun LibraryScreen(
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
-    val drawerState =
-        androidx.compose.material3.rememberDrawerState(
-            androidx.compose.material3.DrawerValue.Closed,
-        )
 
     val dialogs = rememberLibraryDialogState()
 
@@ -211,83 +205,74 @@ fun LibraryScreen(
         }
     }
 
-    val content: @Composable () -> Unit = {
-        LibraryContent(
-            vm = vm,
-            ui = ui,
-            session = session,
-            docs = docs,
-            tagColors = tagColors,
-            reviewMode = reviewMode,
-            scanProgress = scanProgress,
-            lastScan = lastScan,
-            ocr = ocr,
-            snackbar = snackbar,
-            onMenu = { scope.launch { drawerState.open() } },
-            onOpenDoc = openDoc,
-            onTrashBanner = onTrash,
-            onImport = { importPicker.launch() },
-            onScan = onScan,
-            scanAvailable = scanner.available,
-            onOpenFilter = dialogs::openFilter,
-            onAddTag = {
-                scope.launch { dialogs.allTagNames = session.tags.allTagNames() }
-                dialogs.openAddTag()
-            },
-            onRemoveTag = {
-                scope.launch { dialogs.allTagNames = session.tags.allTagNames() }
-                dialogs.openRemoveTag()
-            },
-        )
-    }
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth > WideLayoutBreakpoint
+        // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
+        var previewDocId by remember { mutableStateOf<String?>(null) }
+        val onDocClick: (String) -> Unit = { docId -> if (wide) previewDocId = docId else openDoc(docId) }
 
-    fun closeDrawerThen(action: () -> Unit): () -> Unit =
-        {
-            scope.launch { drawerState.close() }
-            action()
+        val topBarExtras: @Composable () -> Unit = {
+            LibraryViewsMenuButton(
+                reviewMode = reviewMode,
+                reviewBadge = needsReview,
+                savedViews = savedViews,
+                onAllDocuments = vm::clearFilter,
+                onReviewQueue = vm::applyReviewPreset,
+                onSaveCurrentView = dialogs::openSaveView,
+                onSavedView = vm::applySavedView,
+                onRenameSavedView = dialogs::openRename,
+                // Thin pass-throughs to the session; run on the screen scope (quick fire-and-forget).
+                onDeleteSavedView = { view -> scope.launch { session.savedViews.delete(view.id) } },
+                onTogglePinSavedView = { view ->
+                    scope.launch { session.savedViews.save(view.copy(pinned = !view.pinned)) }
+                },
+            )
+            // The navigation rail already carries the AI entries on wide layouts.
+            if (aiConfigured && !wide) {
+                LibraryAiOverflowMenu(onAiChat = onAiChat, onAiTagging = onAiTagging)
+            }
         }
 
-    val drawer: @Composable () -> Unit = {
-        LibraryDrawerContent(
-            reviewMode = reviewMode,
-            reviewBadge = needsReview,
-            savedViews = savedViews,
-            onAllDocuments = {
-                vm.clearFilter()
-                scope.launch { drawerState.close() }
-            },
-            onReviewQueue = {
-                vm.applyReviewPreset()
-                scope.launch { drawerState.close() }
-            },
-            onTrash = closeDrawerThen(onTrash),
-            onTags = closeDrawerThen(onTags),
-            aiConfigured = aiConfigured,
-            onAiChat = closeDrawerThen(onAiChat),
-            onAiTagging = closeDrawerThen(onAiTagging),
-            onSettings = closeDrawerThen(onSettings),
-            onSavedView = { view ->
-                vm.applySavedView(view)
-                scope.launch { drawerState.close() }
-            },
-            onSaveCurrentView = closeDrawerThen { dialogs.openSaveView() },
-            onRenameSavedView = dialogs::openRename,
-            // Thin pass-throughs to the session; run on the screen scope (quick fire-and-forget).
-            onDeleteSavedView = { view -> scope.launch { session.savedViews.delete(view.id) } },
-            onTogglePinSavedView = { view ->
-                scope.launch { session.savedViews.save(view.copy(pinned = !view.pinned)) }
-            },
-        )
-    }
+        val content: @Composable () -> Unit = {
+            LibraryContent(
+                vm = vm,
+                ui = ui,
+                session = session,
+                docs = docs,
+                tagColors = tagColors,
+                reviewMode = reviewMode,
+                scanProgress = scanProgress,
+                lastScan = lastScan,
+                ocr = ocr,
+                snackbar = snackbar,
+                topBarExtras = topBarExtras,
+                onOpenDoc = onDocClick,
+                onTrashBanner = onTrash,
+                onImport = { importPicker.launch() },
+                onScan = onScan,
+                scanAvailable = scanner.available,
+                onOpenFilter = dialogs::openFilter,
+                onAddTag = {
+                    scope.launch { dialogs.allTagNames = session.tags.allTagNames() }
+                    dialogs.openAddTag()
+                },
+                onRemoveTag = {
+                    scope.launch { dialogs.allTagNames = session.tags.allTagNames() }
+                    dialogs.openRemoveTag()
+                },
+            )
+        }
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth > 840.dp
         if (wide) {
+            val sidePanelWidth = (maxWidth * SIDE_PANEL_FRACTION).coerceIn(SidePanelMinWidth, SidePanelMaxWidth)
             Row(Modifier.fillMaxSize()) {
-                PermanentDrawerSheet(Modifier.padding(end = 0.dp)) { drawer() }
-                Row(Modifier.weight(1f)) {
-                    Box(Modifier.weight(1f)) { content() }
-                    if (dialogs.showFilter) {
+                Box(Modifier.weight(1f)) { content() }
+                // The side panel shows the filter editor when it is open, else the tapped
+                // document's preview. The preview vanishes automatically when its document
+                // leaves the current result set (trashed, filtered out, library rescan).
+                val previewItem = docs?.firstOrNull { it.doc.docId == previewDocId }
+                when {
+                    dialogs.showFilter -> {
                         FilterPanel(
                             filter = ui.filter,
                             tags = tags,
@@ -300,16 +285,23 @@ fun LibraryScreen(
                             onClearAll = vm::clearFilter,
                             onDismiss = dialogs::dismissFilter,
                             fillHeight = true,
-                            modifier = Modifier.width(380.dp).fillMaxHeight(),
+                            modifier = Modifier.width(sidePanelWidth).fillMaxHeight(),
+                        )
+                    }
+
+                    previewItem != null -> {
+                        DocPreviewPanel(
+                            item = previewItem,
+                            session = session,
+                            snackbar = snackbar,
+                            onClose = { previewDocId = null },
+                            modifier = Modifier.width(sidePanelWidth).fillMaxHeight(),
                         )
                     }
                 }
             }
         } else {
-            ModalNavigationDrawer(
-                drawerState = drawerState,
-                drawerContent = { ModalDrawerSheet { drawer() } },
-            ) { content() }
+            content()
         }
 
         LibraryDialogHost(
@@ -401,7 +393,7 @@ private fun LibraryContent(
     lastScan: dev.npn.core.index.ScanReport?,
     ocr: dev.npn.core.app.OcrStatus,
     snackbar: SnackbarHostState,
-    onMenu: () -> Unit,
+    topBarExtras: @Composable () -> Unit,
     onOpenDoc: (String) -> Unit,
     onTrashBanner: () -> Unit,
     onImport: () -> Unit,
@@ -445,7 +437,7 @@ private fun LibraryContent(
                 LibraryTopBar(
                     viewType = ui.viewType,
                     sort = ui.sort,
-                    onMenu = onMenu,
+                    extras = topBarExtras,
                     onOpenFilter = onOpenFilter,
                     onSetSort = vm::setSort,
                     onSetView = vm::setViewType,
@@ -652,7 +644,7 @@ private fun DocList(
 private fun LibraryTopBar(
     viewType: ViewType,
     sort: dev.npn.core.app.LibrarySort,
-    onMenu: () -> Unit,
+    extras: @Composable () -> Unit,
     onOpenFilter: () -> Unit,
     onSetSort: (SortField, Boolean) -> Unit,
     onSetView: (ViewType) -> Unit,
@@ -661,12 +653,8 @@ private fun LibraryTopBar(
     var sortMenu by remember { mutableStateOf(false) }
     TopAppBar(
         title = { Text(stringResource(Res.string.library_documents)) },
-        navigationIcon = {
-            IconButton(onClick = onMenu) {
-                Icon(Icons.Filled.Menu, contentDescription = stringResource(Res.string.common_menu))
-            }
-        },
         actions = {
+            extras()
             IconButton(onClick = onRefresh) {
                 Icon(Icons.Filled.Refresh, contentDescription = stringResource(Res.string.library_refresh))
             }
