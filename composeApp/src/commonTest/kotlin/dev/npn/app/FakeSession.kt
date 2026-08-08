@@ -6,6 +6,8 @@ import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFacade
+import dev.npn.core.ai.AiProvider
+import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiTagging
@@ -34,6 +36,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.StandardField
 import dev.npn.core.rules.AutoMatchRule
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -452,7 +455,13 @@ class FakeDocContentFacade : DocContentFacade {
  * intermediate streaming state and cancellation.
  */
 class FakeAiFacade : AiFacade {
-    var configValue = AiConfig(enabled = true, baseUrl = "http://localhost:1", model = "test-model")
+    var configValue =
+        AiConfig(
+            enabled = true,
+            provider = AiProvider.CUSTOM,
+            baseUrl = "http://localhost:1",
+            model = "test-model",
+        )
     var askScripts: List<List<AiChatEvent>> = emptyList()
     var askResponses: List<String> = emptyList()
     var askDelayMillis: Long = 0
@@ -602,6 +611,16 @@ class FakeLibrarySession : LibrarySession {
     override val lastScanReport: Flow<ScanReport?> get() = lastScanReportFlow
     override val ocrStatus: Flow<OcrStatus> get() = ocrStatusFlow
     override val reviewMode: Flow<ReviewMode> get() = reviewModeFlow
+
+    val standardFieldsFlow = MutableStateFlow(StandardField.DEFAULT)
+    override val standardFields: Flow<Set<StandardField>> get() = standardFieldsFlow
+
+    val standardFieldsSets = mutableListOf<Set<StandardField>>()
+
+    override suspend fun setStandardFields(fields: Set<StandardField>) {
+        standardFieldsSets += fields
+        standardFieldsFlow.value = fields
+    }
 
     val reviewModeSets = mutableListOf<ReviewMode>()
     val migrations = mutableListOf<Boolean>()
@@ -797,11 +816,19 @@ class FakeSettingsRepository(
 
     override suspend fun setAiEnabled(enabled: Boolean) = updateSettings { it.copy(aiEnabled = enabled) }
 
+    override suspend fun setAiProvider(provider: AiProvider) = updateSettings { it.copy(aiProvider = provider) }
+
     override suspend fun setAiBaseUrl(url: String) = updateSettings { it.copy(aiBaseUrl = url) }
 
     override suspend fun setAiApiKey(key: String) = updateSettings { it.copy(aiApiKey = key) }
 
     override suspend fun setAiModel(model: String) = updateSettings { it.copy(aiModel = model) }
+
+    override suspend fun setAiReasoningAssistant(level: AiReasoningLevel) =
+        updateSettings { it.copy(aiReasoningAssistant = level) }
+
+    override suspend fun setAiReasoningEdit(level: AiReasoningLevel) =
+        updateSettings { it.copy(aiReasoningEdit = level) }
 
     override suspend fun setAiMaxTagsPerDoc(value: Int) {
         setAiMaxTagsPerDocValues += value

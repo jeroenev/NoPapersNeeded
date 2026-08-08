@@ -18,6 +18,7 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.outlined.AddCircleOutline
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
@@ -282,18 +283,14 @@ private fun AddChipsRow(
                 selected = chip.selected,
                 onClick = { onToggle(doc.docId, chip.tag) },
                 label = { TagSuggestionLabel(tag = chip.tag, isNew = chip.isNew) },
-                leadingIcon =
-                    if (chip.selected) {
-                        {
-                            Icon(
-                                Icons.Filled.Check,
-                                contentDescription = null,
-                                modifier = Modifier.size(FilterChipDefaults.IconSize),
-                            )
-                        }
-                    } else {
-                        null
-                    },
+                leadingIcon = {
+                    Icon(
+                        Icons.Outlined.AddCircleOutline,
+                        contentDescription = null,
+                        modifier = Modifier.size(FilterChipDefaults.IconSize),
+                    )
+                },
+                trailingIcon = selectedCheckmark(chip.selected),
             )
         }
     }
@@ -318,19 +315,30 @@ private fun RemovalChipsRow(
                 label = { Text(chip.tag) },
                 leadingIcon = {
                     Icon(
-                        if (chip.selected) {
-                            Icons.Filled.Check
-                        } else {
-                            Icons.Outlined.RemoveCircleOutline
-                        },
+                        Icons.Outlined.RemoveCircleOutline,
                         contentDescription = null,
                         modifier = Modifier.size(FilterChipDefaults.IconSize),
                     )
                 },
+                trailingIcon = selectedCheckmark(chip.selected),
             )
         }
     }
 }
+
+/** Trailing checkmark shown on a suggestion chip while it is selected, keeping the add/remove icon visible. */
+private fun selectedCheckmark(selected: Boolean): (@Composable () -> Unit)? =
+    if (selected) {
+        {
+            Icon(
+                Icons.Filled.Check,
+                contentDescription = null,
+                modifier = Modifier.size(FilterChipDefaults.IconSize),
+            )
+        }
+    } else {
+        null
+    }
 
 /** One suggested data-field value: checkbox + label/value, with the replaced value when present. */
 @Composable

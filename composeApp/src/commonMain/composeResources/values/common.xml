@@ -15,6 +15,7 @@
     <string name="common_add_tag">Add tag</string>
     <string name="common_remove_tag">Remove %1$s</string>
     <string name="common_create_tag_hint">Press + to create &quot;%1$s&quot;</string>
+    <string name="common_create_tag_with_color">Create &quot;%1$s&quot; with color...</string>
     <string name="common_new">new</string>
     <string name="common_reviewed">Reviewed</string>
     <string name="common_needs_review">Needs review</string>

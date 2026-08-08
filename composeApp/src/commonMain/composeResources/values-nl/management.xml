@@ -39,13 +39,30 @@
     <string name="common_tags_title">Tags</string>
     <string name="common_tags_new">Nieuwe tag</string>
     <string name="common_tags_empty_title">Nog geen tags</string>
-    <string name="common_tags_empty_subtitle">Maak een tag of voeg tags toe aan documenten.</string>
+    <string name="common_tags_empty_subtitle">Voeg tags toe aan documenten om ze hier te zien. Tags verdwijnen automatisch wanneer geen enkel document ze gebruikt.</string>
     <string name="common_tags_rename_title">Tag hernoemen</string>
     <string name="common_tags_new_name">Nieuwe naam</string>
     <string name="common_tags_merge_title">&quot;%1$s&quot; samenvoegen met</string>
     <string name="common_tags_merge">Samenvoegen</string>
+    <plurals name="common_tags_merge_many_title">
+        <item quantity="one">%1$d tag samenvoegen</item>
+        <item quantity="other">%1$d tags samenvoegen</item>
+    </plurals>
+    <string name="common_tags_merge_keep_message">Kies de tag die behouden blijft. Documenten met de andere tags krijgen deze tag in de plaats.</string>
+    <plurals name="common_tags_color_many_title">
+        <item quantity="one">Kleur instellen voor %1$d tag</item>
+        <item quantity="other">Kleur instellen voor %1$d tags</item>
+    </plurals>
     <string name="common_tags_delete_title">Tag verwijderen</string>
     <string name="common_tags_delete_message">&quot;%1$s&quot; uit alle documenten verwijderen? Dit kan niet ongedaan worden gemaakt.</string>
+    <plurals name="common_tags_delete_many_title">
+        <item quantity="one">%1$d tag verwijderen</item>
+        <item quantity="other">%1$d tags verwijderen</item>
+    </plurals>
+    <plurals name="common_tags_delete_many_message">
+        <item quantity="one">%1$d tag uit alle documenten verwijderen? Dit kan niet ongedaan worden gemaakt.</item>
+        <item quantity="other">%1$d tags uit alle documenten verwijderen? Dit kan niet ongedaan worden gemaakt.</item>
+    </plurals>
     <string name="common_tags_style_title">Tagstijl</string>
     <string name="common_tags_namespace_only">%1$s - alleen naamruimte</string>
     <string name="common_tags_actions">Tagacties</string>

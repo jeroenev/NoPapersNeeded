@@ -3,26 +3,86 @@ package dev.npn.core.ai
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Device-local configuration for the bring-your-own AI endpoint. Values live in the app
- * settings (never in the journal: the key must not leak to synced replicas). Any
- * OpenAI-compatible chat-completions server works: OpenAI, OpenRouter, Ollama, llama.cpp,
- * LiteLLM gateways, etc.
+ * The AI provider a configuration talks to. Every entry maps onto a dedicated Koog `LLMClient`
+ * except [CUSTOM], which reuses the OpenAI-compatible chat-completions client against a
+ * user-supplied server root (Ollama-compatible gateways, llama.cpp, LiteLLM, ...). Enum order is
+ * the presentation order in settings; [CUSTOM] (fully manual) stays last by design.
+ */
+enum class AiProvider(
+    /** Brand name shown in the provider picker (not localized: these are product names). */
+    val displayName: String,
+    /** Server root used when [AiConfig.baseUrl] is blank; null when the user must supply one. */
+    val defaultBaseUrl: String?,
+    /** Whether requests to this provider are unauthenticated without an API key. */
+    val requiresApiKey: Boolean,
+    /** Whether the settings UI offers the base-URL field (local/self-hosted endpoints). */
+    val editableBaseUrl: Boolean,
+) {
+    OPENAI("OpenAI", "https://api.openai.com", requiresApiKey = true, editableBaseUrl = false),
+    ANTHROPIC("Anthropic", "https://api.anthropic.com", requiresApiKey = true, editableBaseUrl = false),
+    GOOGLE("Google", "https://generativelanguage.googleapis.com", requiresApiKey = true, editableBaseUrl = false),
+    MISTRAL("Mistral", "https://api.mistral.ai", requiresApiKey = true, editableBaseUrl = false),
+    DEEPSEEK("DeepSeek", "https://api.deepseek.com", requiresApiKey = true, editableBaseUrl = false),
+    OPENROUTER("OpenRouter", "https://openrouter.ai", requiresApiKey = true, editableBaseUrl = false),
+    OLLAMA("Ollama", "http://localhost:11434", requiresApiKey = false, editableBaseUrl = true),
+    CUSTOM("Custom (OpenAI-compatible)", null, requiresApiKey = false, editableBaseUrl = true),
+}
+
+/**
+ * How much reasoning/thinking effort a model call may spend, chosen separately for the chat
+ * assistant and for AI-edit suggestion calls. [DEFAULT] keeps the endpoint's own behaviour.
+ * Mapping is provider-specific (OpenAI `reasoning_effort`, Anthropic/Google thinking budgets,
+ * Ollama `think`); providers without a supported knob in Koog 1.1.1 (OpenRouter, DeepSeek,
+ * Mistral) always behave like [DEFAULT] — see `AiRuntime.reasoningParams`.
+ */
+enum class AiReasoningLevel {
+    /** No override: whatever the provider does out of the box for the model. */
+    DEFAULT,
+
+    /** Reasoning explicitly disabled (where the provider supports turning it off). */
+    NONE,
+    LOW,
+    MEDIUM,
+    HIGH,
+}
+
+/**
+ * Device-local configuration for the AI endpoint. Values live in the app settings (never in
+ * the journal: the key must not leak to synced replicas). [provider] selects a Koog client;
+ * [AiProvider.CUSTOM] works with any OpenAI-compatible chat-completions server.
  */
 data class AiConfig(
     val enabled: Boolean = false,
-    /** Server root, e.g. `https://api.openai.com` or `http://localhost:11434`. */
+    /** Which provider requests go to; [AiProvider.CUSTOM] is the fully manual escape hatch. */
+    val provider: AiProvider = AiProvider.OPENAI,
+    /**
+     * Server root override, e.g. `https://api.openai.com` or `http://localhost:11434`. Blank
+     * means the provider's [AiProvider.defaultBaseUrl]; required only for [AiProvider.CUSTOM].
+     */
     val baseUrl: String = "",
     /** Bearer token; may stay blank for local endpoints that skip auth. */
     val apiKey: String = "",
     /** Model id as the endpoint knows it, e.g. `gpt-4.1-mini` or `qwen3:8b`. */
     val model: String = "",
+    /** Reasoning effort for the chat assistant. Default: endpoint behaviour. */
+    val reasoningAssistant: AiReasoningLevel = AiReasoningLevel.DEFAULT,
+    /** Reasoning effort for AI-edit suggestion calls. Default: LOW (cheap extraction tasks). */
+    val reasoningEdit: AiReasoningLevel = AiReasoningLevel.LOW,
     /** User-configured cap on tag suggestions produced per document (device-local, 1..15). */
     val maxTagsPerDoc: Int = 8,
     /** User-configured cap on genuinely-new (non-vocabulary) tags per document (device-local, 0..10). */
     val maxNewTagsPerDoc: Int = 5,
 ) {
+    /** The effective server root: the explicit override, or the provider default. */
+    val effectiveBaseUrl: String
+        get() = baseUrl.ifBlank { provider.defaultBaseUrl.orEmpty() }
+
     val configured: Boolean
-        get() = enabled && baseUrl.isNotBlank() && model.isNotBlank()
+        get() =
+            enabled &&
+                model.isNotBlank() &&
+                effectiveBaseUrl.isNotBlank() &&
+                (!provider.requiresApiKey || apiKey.isNotBlank())
 
     companion object {
         val DISABLED = AiConfig()

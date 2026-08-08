@@ -1,8 +1,6 @@
 package dev.npn.core.ai
 
 import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
-import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import dev.npn.core.app.AiTagging
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
@@ -27,17 +25,18 @@ class AiFacadeImpl(
     /**
      * The subset of [AiConfig] that actually shapes the built [AiRuntime] (endpoint client + model
      * — see [AiRuntime.build]). Cache identity is keyed on this so tuning a runtime-irrelevant
-     * setting like [AiConfig.maxTagsPerDoc] or [AiConfig.maxNewTagsPerDoc] does NOT rebuild the
-     * client and abort in-flight requests.
+     * setting like [AiConfig.maxTagsPerDoc], [AiConfig.maxNewTagsPerDoc] or the reasoning levels
+     * (applied per call, not per client) does NOT rebuild the client and abort in-flight requests.
      */
     private data class RuntimeKey(
         val enabled: Boolean,
+        val provider: AiProvider,
         val baseUrl: String,
         val apiKey: String,
         val model: String,
     )
 
-    private fun AiConfig.runtimeKey() = RuntimeKey(enabled, baseUrl, apiKey, model)
+    private fun AiConfig.runtimeKey() = RuntimeKey(enabled, provider, baseUrl, apiKey, model)
 
     override suspend fun config(): AiConfig = configProvider()
 
@@ -56,6 +55,7 @@ class AiFacadeImpl(
                     tools = LibraryAiTools.chatToolsFor(db),
                     systemPrompt = CHAT_SYSTEM_PROMPT,
                     maxIterations = MAX_AGENT_ITERATIONS,
+                    params = AiRuntime.chatParams(configProvider()),
                 )
             emitAll(loop.run(history, question))
         }
@@ -74,7 +74,7 @@ class AiFacadeImpl(
         val currentTags = db.tagDao().tagsForDocument(docId)
         val vocabulary = db.tagDao().all().map { it.name }
         val request =
-            prompt("npn-tag-suggest", SUGGESTION_PARAMS) {
+            prompt("npn-tag-suggest", AiRuntime.suggestionParams(config)) {
                 system(tagSystemPrompt(maxTags, maxNew))
                 user(renderTagRequest(doc.fileName, doc.title, vocabulary, currentTags, text))
             }
@@ -90,13 +90,14 @@ class AiFacadeImpl(
 
     override suspend fun suggestMetadata(docId: String): MetadataSuggestion {
         val runtime = runtime()
+        val config = configProvider()
         val doc = db.documentDao().getByDocId(docId) ?: return MetadataSuggestion.EMPTY
         val text =
             db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() }
                 ?: return MetadataSuggestion.EMPTY
         val correspondents = db.documentDao().correspondents()
         val request =
-            prompt("npn-metadata-suggest", SUGGESTION_PARAMS) {
+            prompt("npn-metadata-suggest", AiRuntime.suggestionParams(config)) {
                 system(METADATA_SYSTEM_PROMPT)
                 user(renderMetadataRequest(doc, correspondents, text))
             }
@@ -125,7 +126,7 @@ class AiFacadeImpl(
         val maxTags = (request.maxTags ?: config.maxTagsPerDoc).coerceIn(AiTagging.RANGE)
         val maxNew = (request.maxNewTags ?: config.maxNewTagsPerDoc).coerceIn(AiTagging.NEW_TAGS_RANGE)
         val thePrompt =
-            prompt("npn-edit-suggest", SUGGESTION_PARAMS) {
+            prompt("npn-edit-suggest", AiRuntime.suggestionParams(config)) {
                 system(editSystemPrompt(request, maxTags, maxNew, vocabulary, correspondents))
                 user(renderEditRequest(doc, request, currentTags, text))
             }
@@ -230,23 +231,23 @@ class AiFacadeImpl(
         const val MAX_AGENT_ITERATIONS = 15
         const val MAX_DOC_TEXT_CHARS = 12_000
 
-        /**
-         * Params for the one-shot suggestion prompts (tags, metadata, edits): these are cheap
-         * extraction tasks, so ask reasoning-capable models for low reasoning effort instead of
-         * burning thinking tokens. Chat keeps the endpoint's default effort.
-         */
-        val SUGGESTION_PARAMS = OpenAIChatParams(reasoningEffort = ReasoningEffort.LOW)
-
         val CHAT_SYSTEM_PROMPT =
             """
             You are the assistant inside "no-papers-needed", a personal paperless document
             manager. The user's scanned documents (PDFs) are indexed locally: OCR text, tags,
-            filenames, titles, correspondents, document types, dates and notes.
+            filenames, and metadata fields. Documents carry built-in default fields (title,
+            correspondent, docType, docDate, notes, fileName) plus user-defined flexible (custom)
+            fields such as "amount" or "invoice number".
 
             Use the provided tools to find documents before answering; never invent documents
             or their contents. Prefer search_documents for content questions, list_tags /
             documents_with_tag for organisation questions, search_filenames when the user
-            remembers a file name, and get_document_text to read a specific document.
+            remembers a file name, search_fields to look documents up by a specific default or
+            flexible field value — including "has a field" queries like "documents with a test2
+            field" (call list_fields first to discover flexible field keys; leave search_fields'
+            value empty to match any document that has the field), and get_document_text to read
+            a specific document. Remember that custom (flexible) field keys and values are not
+            part of the full-text search_documents index.
 
             When you mention a specific document, cite it inline exactly as [doc:<docId>] using
             the full docId from the tool results, so the app can link it. Answer in the language

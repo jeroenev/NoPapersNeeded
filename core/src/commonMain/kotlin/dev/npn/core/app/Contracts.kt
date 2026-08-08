@@ -1,12 +1,16 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiFacade
+import dev.npn.core.ai.AiProvider
+import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.SavedViewEntity
 import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.StandardField
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.serialization.Serializable
@@ -309,6 +313,15 @@ interface LibrarySession {
     suspend fun setReviewMode(mode: ReviewMode)
 
     /**
+     * Library-wide set of visible standard document fields (correspondent, type, date, notes),
+     * synced across devices via the journal. Hiding a field only hides its editor; stored values
+     * survive and reappear when re-enabled.
+     */
+    val standardFields: Flow<Set<StandardField>>
+
+    suspend fun setStandardFields(fields: Set<StandardField>)
+
+    /**
      * One-shot migration used when switching to INBOX_WORKFLOW. Marks documents reviewed:
      * [onlyTagged] true -> only documents that currently have at least one tag; false -> all live
      * documents. Writes reviewed=true prop-set events only where needed (unaffected docs keep the
@@ -432,13 +445,33 @@ data class SettingsSnapshot(
     val storagePathEnabled: Boolean = false,
     val autoMatchRulesJson: String = "[]",
     val aiEnabled: Boolean = false,
+    val aiProvider: AiProvider = AiProvider.OPENAI,
     val aiBaseUrl: String = "",
     val aiApiKey: String = "",
     val aiModel: String = "",
+    val aiReasoningAssistant: AiReasoningLevel = AiReasoningLevel.DEFAULT,
+    val aiReasoningEdit: AiReasoningLevel = AiReasoningLevel.LOW,
     val aiMaxTagsPerDoc: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val aiMaxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
 )
 
+/** Project the AI-related settings into the domain [AiConfig] the facade consumes. */
+fun SettingsSnapshot.toAiConfig(): AiConfig =
+    AiConfig(
+        enabled = aiEnabled,
+        provider = aiProvider,
+        baseUrl = aiBaseUrl,
+        apiKey = aiApiKey,
+        model = aiModel,
+        reasoningAssistant = aiReasoningAssistant,
+        reasoningEdit = aiReasoningEdit,
+        maxTagsPerDoc = aiMaxTagsPerDoc,
+        maxNewTagsPerDoc = aiMaxNewTagsPerDoc,
+    )
+
+// A flat contract of one-line per-setting setters; splitting it up would only scatter the
+// device-local settings surface across artificial sub-interfaces.
+@Suppress("TooManyFunctions")
 interface SettingsRepository {
     val settings: Flow<SettingsSnapshot>
 
@@ -487,7 +520,13 @@ interface SettingsRepository {
     /** Master switch for all AI features. Default false. */
     suspend fun setAiEnabled(enabled: Boolean)
 
-    /** OpenAI-compatible server root, e.g. `https://api.openai.com` or `http://localhost:11434`. */
+    /** Provider AI requests go to; [AiProvider.CUSTOM] is the fully manual escape hatch. */
+    suspend fun setAiProvider(provider: AiProvider)
+
+    /**
+     * Server root override, e.g. `https://api.openai.com` or `http://localhost:11434`. Blank
+     * means the provider's default; required only for [AiProvider.CUSTOM].
+     */
     suspend fun setAiBaseUrl(url: String)
 
     /** Bearer token for the endpoint; blank for local servers without auth. */
@@ -495,6 +534,12 @@ interface SettingsRepository {
 
     /** Model id as the endpoint knows it, e.g. `gpt-4.1-mini` or `qwen3:8b`. */
     suspend fun setAiModel(model: String)
+
+    /** Reasoning effort for the chat assistant. Default: endpoint behaviour. */
+    suspend fun setAiReasoningAssistant(level: AiReasoningLevel)
+
+    /** Reasoning effort for AI-edit suggestion calls. Default: LOW (cheap extraction tasks). */
+    suspend fun setAiReasoningEdit(level: AiReasoningLevel)
 
     /** Max tag suggestions produced per document. Default 8, coerced into [AiTagging.RANGE]. */
     suspend fun setAiMaxTagsPerDoc(value: Int)
@@ -523,12 +568,36 @@ internal object SettingsKeys {
     const val STORAGE_PATH_ENABLED = "storagePathEnabled"
     const val AUTO_MATCH_RULES_JSON = "autoMatchRulesJson"
     const val AI_ENABLED = "aiEnabled"
+    const val AI_PROVIDER = "aiProvider"
     const val AI_BASE_URL = "aiBaseUrl"
     const val AI_API_KEY = "aiApiKey"
     const val AI_MODEL = "aiModel"
+    const val AI_REASONING_ASSISTANT = "aiReasoningAssistant"
+    const val AI_REASONING_EDIT = "aiReasoningEdit"
     const val AI_MAX_TAGS_PER_DOC = "aiMaxTagsPerDoc"
     const val AI_MAX_NEW_TAGS_PER_DOC = "aiMaxNewTagsPerDoc"
 }
+
+/**
+ * Parse a stored [AiProvider] name. When absent (settings written before provider selection
+ * existed), a non-blank stored base URL means the user had configured the old free-form
+ * OpenAI-compatible endpoint, which maps exactly onto [AiProvider.CUSTOM]; fresh setups start
+ * on the first provider in the picker.
+ */
+internal fun aiProviderProp(
+    stored: String?,
+    storedBaseUrl: String?,
+): AiProvider =
+    stored?.takeIf { it.isNotBlank() }?.let { name -> runCatching { AiProvider.valueOf(name) }.getOrNull() }
+        ?: if (storedBaseUrl.isNullOrBlank()) AiProvider.OPENAI else AiProvider.CUSTOM
+
+/** Parse a stored [AiReasoningLevel] name, falling back to [default] when absent/unknown. */
+internal fun aiReasoningProp(
+    stored: String?,
+    default: AiReasoningLevel,
+): AiReasoningLevel =
+    stored?.takeIf { it.isNotBlank() }?.let { name -> runCatching { AiReasoningLevel.valueOf(name) }.getOrNull() }
+        ?: default
 
 /** Bounds for the user-adjustable "max suggested tags per document" setting. */
 object AiTagging {

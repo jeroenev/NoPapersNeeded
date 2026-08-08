@@ -4,6 +4,8 @@ import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.app.ui.settings.StoragePathErrorKind
 import dev.npn.app.ui.settings.evaluateStoragePath
+import dev.npn.core.ai.AiProvider
+import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
@@ -40,9 +42,12 @@ class SettingsViewModelTest : MainDispatcherTest() {
                             storagePathTemplate = "{doc_date:yyyy}/{title}.pdf",
                             storagePathEnabled = true,
                             aiEnabled = true,
+                            aiProvider = AiProvider.OLLAMA,
                             aiBaseUrl = "http://localhost:11434",
                             aiApiKey = "secret",
                             aiModel = "qwen3:8b",
+                            aiReasoningAssistant = AiReasoningLevel.MEDIUM,
+                            aiReasoningEdit = AiReasoningLevel.NONE,
                             aiMaxTagsPerDoc = 12,
                             aiMaxNewTagsPerDoc = 7,
                         )
@@ -60,9 +65,12 @@ class SettingsViewModelTest : MainDispatcherTest() {
             s.landscapeListColumns shouldBe true
             s.storagePathEnabled shouldBe true
             s.aiEnabled shouldBe true
+            s.aiProvider shouldBe AiProvider.OLLAMA
             s.aiBaseUrl shouldBe "http://localhost:11434"
             s.aiApiKey shouldBe "secret"
             s.aiModel shouldBe "qwen3:8b"
+            s.aiReasoningAssistant shouldBe AiReasoningLevel.MEDIUM
+            s.aiReasoningEdit shouldBe AiReasoningLevel.NONE
             s.aiMaxTagsPerDoc shouldBe 12
             s.aiMaxNewTagsPerDoc shouldBe 7
             job.cancel()
@@ -143,18 +151,36 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
             model.setAiEnabled(true)
+            model.setAiProvider(AiProvider.ANTHROPIC)
             model.setAiBaseUrl("http://localhost:11434")
             model.setAiApiKey("secret")
             model.setAiModel("qwen3:8b")
+            model.setAiReasoningAssistant(AiReasoningLevel.HIGH)
+            model.setAiReasoningEdit(AiReasoningLevel.MEDIUM)
             model.setAiMaxTagsPerDoc(5)
             model.setAiMaxNewTagsPerDoc(3)
             advanceUntilIdle()
             settings.settingsFlow.value?.aiEnabled shouldBe true
+            settings.settingsFlow.value?.aiProvider shouldBe AiProvider.ANTHROPIC
             settings.settingsFlow.value?.aiBaseUrl shouldBe "http://localhost:11434"
             settings.settingsFlow.value?.aiApiKey shouldBe "secret"
             settings.settingsFlow.value?.aiModel shouldBe "qwen3:8b"
+            settings.settingsFlow.value?.aiReasoningAssistant shouldBe AiReasoningLevel.HIGH
+            settings.settingsFlow.value?.aiReasoningEdit shouldBe AiReasoningLevel.MEDIUM
             settings.settingsFlow.value?.aiMaxTagsPerDoc shouldBe 5
             settings.settingsFlow.value?.aiMaxNewTagsPerDoc shouldBe 3
+        }
+
+    @Test
+    fun switchingProviderClearsFetchedModelList() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            val model = vm(settings = settings)
+            model.setAiProvider(AiProvider.OLLAMA)
+            advanceUntilIdle()
+            model.aiModels.value.models shouldBe emptyList()
+            model.aiModels.value.error shouldBe null
+            model.aiModels.value.loading shouldBe false
         }
 
     // ---- review mode switching ----

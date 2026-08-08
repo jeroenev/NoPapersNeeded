@@ -78,13 +78,38 @@ class TagManagementViewModelTest : MainDispatcherTest() {
     // ---- write ops trim and delegate ----
 
     @Test
-    fun createDelegatesTrimmedName() =
+    fun mergeAllMergesEverythingIntoPrimaryExceptItself() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session)
-            model.create("  finance  ", "#fff", "icon")
+            model.mergeAll(listOf("finance", "invoices", "bills"), into = "finance")
             advanceUntilIdle()
-            session.meta.tagStyles shouldContainExactly listOf(Triple("finance", "#fff", "icon"))
+            session.meta.mergedTags shouldContainExactly
+                listOf("invoices" to "finance", "bills" to "finance")
+        }
+
+    @Test
+    fun setStyleAllAppliesOneColorToEverySelectedTag() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session)
+            model.setStyleAll(listOf("finance", "travel"), "#abc")
+            advanceUntilIdle()
+            session.meta.tagStyles shouldContainExactly
+                listOf(
+                    Triple("finance", "#abc", null),
+                    Triple("travel", "#abc", null),
+                )
+        }
+
+    @Test
+    fun deleteAllDeletesEverySelectedTag() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session)
+            model.deleteAll(listOf("finance", "travel"))
+            advanceUntilIdle()
+            session.meta.deletedTags shouldContainExactly listOf("finance", "travel")
         }
 
     @Test

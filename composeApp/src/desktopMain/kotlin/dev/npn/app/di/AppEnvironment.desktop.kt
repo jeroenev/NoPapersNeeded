@@ -1,11 +1,11 @@
 package dev.npn.app.di
 
-import dev.npn.core.ai.AiConfig
 import dev.npn.core.app.AppDirs
 import dev.npn.core.app.DirThumbnailStore
 import dev.npn.core.app.PlatformDirs
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepositoryImpl
+import dev.npn.core.app.toAiConfig
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.ocr.TesseractCliEngine
@@ -55,17 +55,7 @@ fun createAppEnvironment(): AppEnvironment {
                 },
                 autoMatchRulesJson = { settings.settings.first().autoMatchRulesJson },
                 persistAutoMatchRulesJson = settings::setAutoMatchRulesJson,
-                aiConfig = {
-                    val snapshot = settings.settings.first()
-                    AiConfig(
-                        enabled = snapshot.aiEnabled,
-                        baseUrl = snapshot.aiBaseUrl,
-                        apiKey = snapshot.aiApiKey,
-                        model = snapshot.aiModel,
-                        maxTagsPerDoc = snapshot.aiMaxTagsPerDoc,
-                        maxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc,
-                    )
-                },
+                aiConfig = { settings.settings.first().toAiConfig() },
             )
         OpenedLibrary(deps) { deps.closeDb() }
     }

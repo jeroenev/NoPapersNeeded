@@ -105,6 +105,7 @@ private fun PreviewBody(
     val ocrText by vm.ocrText.collectAsStateWithLifecycle()
     val ocrVersions by vm.ocrVersions.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
+    val standardFields by vm.standardFields.collectAsStateWithLifecycle()
     val noteEditor by vm.noteEditor.collectAsStateWithLifecycle()
     val aiTags by vm.aiTags.collectAsStateWithLifecycle()
     val aiMetadata by vm.aiMetadata.collectAsStateWithLifecycle()
@@ -144,6 +145,8 @@ private fun PreviewBody(
             reviewed = item.effectiveReviewed(reviewMode),
             onSetReviewed = vm::setReviewed,
             onAddTag = vm::addTag,
+            onAddTagWithStyle = vm::addTagWithStyle,
+            visibleFields = standardFields,
             onRemoveTag = vm::removeTag,
             aiTags = aiTags,
             onSuggestAiTags = vm::suggestAiTags,

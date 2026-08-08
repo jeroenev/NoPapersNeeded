@@ -83,6 +83,7 @@ fun DocDetailScreen(
     val docTypes by vm.docTypes.collectAsStateWithLifecycle()
     val tagColors by vm.tagColors.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
+    val standardFields by vm.standardFields.collectAsStateWithLifecycle()
     val fieldKeys by vm.fieldKeys.collectAsStateWithLifecycle()
     val ocrText by vm.ocrText.collectAsStateWithLifecycle()
     val ocrVersions by vm.ocrVersions.collectAsStateWithLifecycle()
@@ -196,6 +197,8 @@ fun DocDetailScreen(
             reviewed = reviewed,
             onSetReviewed = vm::setReviewed,
             onAddTag = vm::addTag,
+            onAddTagWithStyle = vm::addTagWithStyle,
+            visibleFields = standardFields,
             onRemoveTag = vm::removeTag,
             aiTags = aiTags,
             onSuggestAiTags = vm::suggestAiTags,

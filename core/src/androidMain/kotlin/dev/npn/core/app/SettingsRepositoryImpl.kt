@@ -2,6 +2,8 @@ package dev.npn.core.app
 
 import android.content.Context
 import android.content.SharedPreferences
+import dev.npn.core.ai.AiProvider
+import dev.npn.core.ai.AiReasoningLevel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.util.UUID
@@ -68,9 +70,24 @@ class SettingsRepositoryImpl(
             storagePathEnabled = prefs.getBoolean(SettingsKeys.STORAGE_PATH_ENABLED, false),
             autoMatchRulesJson = prefs.getString(SettingsKeys.AUTO_MATCH_RULES_JSON, null) ?: "[]",
             aiEnabled = prefs.getBoolean(SettingsKeys.AI_ENABLED, false),
+            aiProvider =
+                aiProviderProp(
+                    prefs.getString(SettingsKeys.AI_PROVIDER, null),
+                    prefs.getString(SettingsKeys.AI_BASE_URL, null),
+                ),
             aiBaseUrl = prefs.getString(SettingsKeys.AI_BASE_URL, null) ?: "",
             aiApiKey = prefs.getString(SettingsKeys.AI_API_KEY, null) ?: "",
             aiModel = prefs.getString(SettingsKeys.AI_MODEL, null) ?: "",
+            aiReasoningAssistant =
+                aiReasoningProp(
+                    prefs.getString(SettingsKeys.AI_REASONING_ASSISTANT, null),
+                    AiReasoningLevel.DEFAULT,
+                ),
+            aiReasoningEdit =
+                aiReasoningProp(
+                    prefs.getString(SettingsKeys.AI_REASONING_EDIT, null),
+                    AiReasoningLevel.LOW,
+                ),
             aiMaxTagsPerDoc =
                 prefs
                     .getInt(SettingsKeys.AI_MAX_TAGS_PER_DOC, AiTagging.DEFAULT_TAGS_PER_DOC)
@@ -190,8 +207,23 @@ class SettingsRepositoryImpl(
         state.value = load()
     }
 
+    override suspend fun setAiProvider(provider: AiProvider) {
+        prefs.edit().putString(SettingsKeys.AI_PROVIDER, provider.name).apply()
+        state.value = load()
+    }
+
     override suspend fun setAiBaseUrl(url: String) {
         prefs.edit().putString(SettingsKeys.AI_BASE_URL, url).apply()
+        state.value = load()
+    }
+
+    override suspend fun setAiReasoningAssistant(level: AiReasoningLevel) {
+        prefs.edit().putString(SettingsKeys.AI_REASONING_ASSISTANT, level.name).apply()
+        state.value = load()
+    }
+
+    override suspend fun setAiReasoningEdit(level: AiReasoningLevel) {
+        prefs.edit().putString(SettingsKeys.AI_REASONING_EDIT, level.name).apply()
         state.value = load()
     }
 

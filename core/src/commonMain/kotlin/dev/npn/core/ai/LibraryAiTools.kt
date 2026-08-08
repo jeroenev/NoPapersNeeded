@@ -7,6 +7,7 @@ import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.serialization.typeToken
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.DocumentFieldDao
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
@@ -22,19 +23,21 @@ import kotlinx.serialization.json.Json
  * the full docId so the model can cite documents as `[doc:<docId>]`.
  */
 object LibraryAiTools {
-
     const val MAX_SEARCH_RESULTS = 15
     const val MAX_LISTED_DOCS = 50
     const val TEXT_CHUNK_CHARS = 4_000
 
-    fun forDatabase(db: NpnDatabase): List<ToolBase<*, *>> = listOf(
-        SearchDocumentsTool(db.ftsDao(), db.documentDao()),
-        ListTagsTool(db.tagDao()),
-        DocumentsWithTagTool(db.documentDao()),
-        SearchFileNamesTool(db.documentDao()),
-        GetDocumentTool(db.documentDao(), db.tagDao()),
-        GetDocumentTextTool(db.ftsDao()),
-    )
+    fun forDatabase(db: NpnDatabase): List<ToolBase<*, *>> =
+        listOf(
+            SearchDocumentsTool(db.ftsDao(), db.documentDao()),
+            ListTagsTool(db.tagDao()),
+            DocumentsWithTagTool(db.documentDao()),
+            SearchFileNamesTool(db.documentDao()),
+            ListFieldsTool(db.documentFieldDao()),
+            SearchFieldsTool(db.documentDao(), db.documentFieldDao()),
+            GetDocumentTool(db.documentDao(), db.tagDao(), db.documentFieldDao()),
+            GetDocumentTextTool(db.ftsDao()),
+        )
 
     /**
      * The same tools wrapped as [AiChatTool]s the streaming loop can drive: each exposes its
@@ -45,7 +48,11 @@ object LibraryAiTools {
      * type-safe path.
      */
     fun chatToolsFor(db: NpnDatabase): List<AiChatTool> {
-        val json = Json { ignoreUnknownKeys = true; isLenient = true }
+        val json =
+            Json {
+                ignoreUnknownKeys = true
+                isLenient = true
+            }
         return listOf(
             SearchDocumentsTool(db.ftsDao(), db.documentDao())
                 .asChatTool(SearchDocumentsTool.Args.serializer(), json),
@@ -54,13 +61,20 @@ object LibraryAiTools {
                 .asChatTool(DocumentsWithTagTool.Args.serializer(), json),
             SearchFileNamesTool(db.documentDao())
                 .asChatTool(SearchFileNamesTool.Args.serializer(), json),
-            GetDocumentTool(db.documentDao(), db.tagDao())
+            ListFieldsTool(db.documentFieldDao())
+                .asChatTool(ListFieldsTool.Args.serializer(), json),
+            SearchFieldsTool(db.documentDao(), db.documentFieldDao())
+                .asChatTool(SearchFieldsTool.Args.serializer(), json),
+            GetDocumentTool(db.documentDao(), db.tagDao(), db.documentFieldDao())
                 .asChatTool(GetDocumentTool.Args.serializer(), json),
             GetDocumentTextTool(db.ftsDao()).asChatTool(GetDocumentTextTool.Args.serializer(), json),
         )
     }
 
-    private fun <A> SimpleTool<A>.asChatTool(serializer: KSerializer<A>, json: Json): AiChatTool =
+    private fun <A> SimpleTool<A>.asChatTool(
+        serializer: KSerializer<A>,
+        json: Json,
+    ): AiChatTool =
         object : AiChatTool {
             override val name: String = this@asChatTool.name
             override val descriptor: ToolDescriptor = this@asChatTool.descriptor
@@ -71,32 +85,77 @@ object LibraryAiTools {
             }
         }
 
-    internal fun docLine(doc: DocumentEntity, snippet: String? = null): String = buildString {
-        append("- [doc:").append(doc.docId).append("] file=\"").append(doc.fileName).append('"')
-        doc.title?.takeIf { it.isNotBlank() }?.let { append(" title=\"").append(it).append('"') }
-        doc.docDate?.let { append(" date=").append(it) }
-        doc.correspondent?.takeIf { it.isNotBlank() }?.let { append(" correspondent=\"").append(it).append('"') }
-        snippet?.takeIf { it.isNotBlank() }?.let {
-            append(" snippet=\"").append(stripSnippetMarkers(it)).append('"')
+    internal fun docLine(
+        doc: DocumentEntity,
+        snippet: String? = null,
+        field: Pair<String, String>? = null,
+    ): String =
+        buildString {
+            append("- [doc:")
+                .append(doc.docId)
+                .append("] file=\"")
+                .append(doc.fileName)
+                .append('"')
+            doc.title?.takeIf { it.isNotBlank() }?.let { append(" title=\"").append(it).append('"') }
+            doc.docDate?.let { append(" date=").append(it) }
+            doc.correspondent?.takeIf { it.isNotBlank() }?.let { append(" correspondent=\"").append(it).append('"') }
+            field?.let {
+                append(" field=\"")
+                    .append(it.first)
+                    .append("=")
+                    .append(it.second)
+                    .append('"')
+            }
+            snippet?.takeIf { it.isNotBlank() }?.let {
+                append(" snippet=\"").append(stripSnippetMarkers(it)).append('"')
+            }
         }
-    }
 
     /** FTS snippets mark matches with control chars \u0001/\u0002; the model needs plain text. */
-    internal fun stripSnippetMarkers(snippet: String): String =
-        snippet.replace("\u0001", "").replace("\u0002", "")
+    internal fun stripSnippetMarkers(snippet: String): String = snippet.replace("\u0001", "").replace("\u0002", "")
 
     private fun DocumentEntity.isLive(): Boolean = !trashed && !deleted && !missing
+
+    /**
+     * Canonical names of the built-in single-value document fields the model can search with
+     * [SearchFieldsTool], as advertised to the model (list_fields / tool descriptions).
+     */
+    internal val DEFAULT_FIELD_NAMES: Set<String> =
+        setOf("title", "correspondent", "docType", "docDate", "notes", "fileName")
+
+    private val FIELD_ALIASES: Map<String, String> =
+        mapOf(
+            "file" to "fileName",
+            "filename" to "fileName",
+            "path" to "fileName",
+            "name" to "fileName",
+            "type" to "docType",
+            "documenttype" to "docType",
+            "date" to "docDate",
+            "documentdate" to "docDate",
+            "note" to "notes",
+        )
+
+    /** Map a model-supplied field name (any casing) to its canonical default-field name. */
+    private fun normalizeField(field: String): String {
+        val f = field.trim()
+        if (f.isEmpty()) return SearchFieldsTool.ANY_FIELD
+        val lc = f.lowercase()
+        if (lc == SearchFieldsTool.ANY_FIELD) return SearchFieldsTool.ANY_FIELD
+        return DEFAULT_FIELD_NAMES.firstOrNull { it.lowercase() == lc } ?: FIELD_ALIASES[lc] ?: lc
+    }
 
     class SearchDocumentsTool(
         private val ftsDao: FtsDao,
         private val documentDao: DocumentDao,
     ) : SimpleTool<SearchDocumentsTool.Args>(
-        argsType = typeToken<Args>(),
-        name = "search_documents",
-        description = "Full-text search over all documents (OCR text, embedded text, titles, " +
-            "filenames, tags, notes). Terms are AND-combined. Returns matching documents " +
-            "ranked by relevance, each with a docId and a snippet.",
-    ) {
+            argsType = typeToken<Args>(),
+            name = "search_documents",
+            description =
+                "Full-text search over all documents (OCR text, embedded text, titles, " +
+                    "filenames, tags, notes). Terms are AND-combined. Returns matching documents " +
+                    "ranked by relevance, each with a docId and a snippet.",
+        ) {
         @Serializable
         data class Args(
             @property:LLMDescription("Search terms, e.g. \"invoice 2024 electricity\"")
@@ -106,11 +165,13 @@ object LibraryAiTools {
         override suspend fun execute(args: Args): String {
             if (args.query.isBlank()) return "Error: query must not be blank."
             val hits = ftsDao.search(FtsQuery.sanitize(args.query)).take(MAX_SEARCH_RESULTS)
-            val lines = hits.mapNotNull { hit ->
-                documentDao.getByDocId(hit.docId)
-                    ?.takeIf { it.isLive() }
-                    ?.let { docLine(it, hit.snippet) }
-            }
+            val lines =
+                hits.mapNotNull { hit ->
+                    documentDao
+                        .getByDocId(hit.docId)
+                        ?.takeIf { it.isLive() }
+                        ?.let { docLine(it, hit.snippet) }
+                }
             return if (lines.isEmpty()) {
                 "No documents match \"${args.query}\". Try fewer or different terms."
             } else {
@@ -122,10 +183,10 @@ object LibraryAiTools {
     class ListTagsTool(
         private val tagDao: TagDao,
     ) : SimpleTool<ListTagsTool.Args>(
-        argsType = typeToken<Args>(),
-        name = "list_tags",
-        description = "List every tag in the library with its document count.",
-    ) {
+            argsType = typeToken<Args>(),
+            name = "list_tags",
+            description = "List every tag in the library with its document count.",
+        ) {
         @Serializable
         class Args
 
@@ -142,10 +203,10 @@ object LibraryAiTools {
     class DocumentsWithTagTool(
         private val documentDao: DocumentDao,
     ) : SimpleTool<DocumentsWithTagTool.Args>(
-        argsType = typeToken<Args>(),
-        name = "documents_with_tag",
-        description = "List documents carrying an exact tag name (use list_tags to discover names).",
-    ) {
+            argsType = typeToken<Args>(),
+            name = "documents_with_tag",
+            description = "List documents carrying an exact tag name (use list_tags to discover names).",
+        ) {
         @Serializable
         data class Args(
             @property:LLMDescription("Exact tag name")
@@ -165,11 +226,12 @@ object LibraryAiTools {
     class SearchFileNamesTool(
         private val documentDao: DocumentDao,
     ) : SimpleTool<SearchFileNamesTool.Args>(
-        argsType = typeToken<Args>(),
-        name = "search_filenames",
-        description = "Find documents whose file name or folder path contains a substring " +
-            "(case-insensitive). Useful when the user remembers part of a file name.",
-    ) {
+            argsType = typeToken<Args>(),
+            name = "search_filenames",
+            description =
+                "Find documents whose file name or folder path contains a substring " +
+                    "(case-insensitive). Useful when the user remembers part of a file name.",
+        ) {
         @Serializable
         data class Args(
             @property:LLMDescription("Substring to look for in file names and paths")
@@ -178,14 +240,16 @@ object LibraryAiTools {
 
         override suspend fun execute(args: Args): String {
             if (args.pattern.isBlank()) return "Error: pattern must not be blank."
-            val lines = documentDao.getAllLive().asSequence()
-                .filter {
-                    it.fileName.contains(args.pattern, ignoreCase = true) ||
-                        it.relPath.contains(args.pattern, ignoreCase = true)
-                }
-                .take(MAX_LISTED_DOCS)
-                .map { docLine(it) }
-                .toList()
+            val lines =
+                documentDao
+                    .getAllLive()
+                    .asSequence()
+                    .filter {
+                        it.fileName.contains(args.pattern, ignoreCase = true) ||
+                            it.relPath.contains(args.pattern, ignoreCase = true)
+                    }.take(MAX_LISTED_DOCS)
+                    .map { docLine(it) }
+                    .toList()
             return if (lines.isEmpty()) {
                 "No file names or paths contain \"${args.pattern}\"."
             } else {
@@ -194,15 +258,177 @@ object LibraryAiTools {
         }
     }
 
+    class ListFieldsTool(
+        private val fieldDao: DocumentFieldDao,
+    ) : SimpleTool<ListFieldsTool.Args>(
+            argsType = typeToken<Args>(),
+            name = "list_fields",
+            description =
+                "List the metadata fields available for field search: the built-in default " +
+                    "fields (title, correspondent, docType, docDate, notes, fileName) plus every custom " +
+                    "(flexible) field key in use across the library, with document counts. Call this to " +
+                    "discover flexible field keys before using search_fields.",
+        ) {
+        @Serializable
+        class Args
+
+        override suspend fun execute(args: Args): String {
+            val keys = fieldDao.keysWithCounts()
+            return buildString {
+                appendLine(
+                    "Default fields: title, correspondent, docType, docDate, notes, fileName",
+                )
+                if (keys.isEmpty()) {
+                    append("No custom (flexible) fields are in use yet.")
+                } else {
+                    append(
+                        "Custom (flexible) fields: " +
+                            keys.joinToString(", ") { "${it.fieldKey} (${it.count} docs)" },
+                    )
+                }
+            }
+        }
+    }
+
+    class SearchFieldsTool(
+        private val documentDao: DocumentDao,
+        private val fieldDao: DocumentFieldDao,
+    ) : SimpleTool<SearchFieldsTool.Args>(
+            argsType = typeToken<Args>(),
+            name = "search_fields",
+            description =
+                "Find documents by one metadata field. The field may be a " +
+                    "default field (title, correspondent, docType, docDate, notes, fileName) or a custom " +
+                    "(flexible) field key discovered via list_fields. Omit field or pass \"any\" to search " +
+                    "every field at once. Leave value empty to find documents that simply have the field; " +
+                    "otherwise the value is matched as a case-insensitive substring.",
+        ) {
+        @Serializable
+        data class Args(
+            @property:LLMDescription(
+                "Field to search: title | correspondent | docType | docDate | notes | fileName, " +
+                    "a custom field key from list_fields, or \"any\" for every field.",
+            )
+            val field: String = "any",
+            @property:LLMDescription(
+                "Case-insensitive substring to look for in the field's value; partial " +
+                    "dates work (e.g. \"2026\"). Leave empty to find documents that have the field set.",
+            )
+            val value: String = "",
+        )
+
+        override suspend fun execute(args: Args): String {
+            val normalized = normalizeField(args.field)
+            val value = args.value.trim()
+            if (normalized == ANY_FIELD && value.isEmpty()) {
+                return "Error: specify a field, or a value to search for."
+            }
+            val matches =
+                when {
+                    normalized == ANY_FIELD -> searchAnyField(value)
+                    normalized in DEFAULT_FIELD_NAMES -> searchDefaultField(normalized, value)
+                    else -> searchCustomField(normalized, value)
+                }
+            val lines = linesForMatches(matches)
+            if (lines.isEmpty()) {
+                return if (normalized == ANY_FIELD || normalized in DEFAULT_FIELD_NAMES) {
+                    if (value.isEmpty()) {
+                        "No documents have a \"${args.field}\" field."
+                    } else {
+                        "No documents have a \"${args.field}\" value containing \"$value\"."
+                    }
+                } else if (value.isEmpty()) {
+                    "No documents have a custom field \"${args.field}\"." +
+                        " Default fields: ${DEFAULT_FIELD_NAMES.joinToString(", ")}." +
+                        " Call list_fields to see the custom field keys in use."
+                } else {
+                    "No documents have a custom field \"${args.field}\" containing \"$value\"." +
+                        " Default fields: ${DEFAULT_FIELD_NAMES.joinToString(", ")}." +
+                        " Call list_fields to see the custom field keys in use."
+                }
+            }
+            return lines.joinToString("\n")
+        }
+
+        /** Resolve docId -> matched (key, value) lines, deduped per document. */
+        private suspend fun linesForMatches(matches: Map<String, Pair<String, String>>): List<String> {
+            if (matches.isEmpty()) return emptyList()
+            val docs = documentDao.getByDocIds(matches.keys.toList()).associateBy { it.docId }
+            return matches
+                .asSequence()
+                .mapNotNull { (docId, kv) -> docs[docId]?.takeIf { it.isLive() }?.let { docLine(it, field = kv) } }
+                .take(MAX_LISTED_DOCS)
+                .toList()
+        }
+
+        private suspend fun searchAnyField(value: String): Map<String, Pair<String, String>> {
+            val matches = LinkedHashMap<String, Pair<String, String>>()
+            for (doc in documentDao.getAllLive()) {
+                defaultFieldValues(doc)
+                    .firstOrNull { it.second.contains(value, ignoreCase = true) }
+                    ?.let { matches.putIfAbsent(doc.docId, it) }
+            }
+            for (f in fieldDao.all()) {
+                if (f.fieldValue.contains(value, ignoreCase = true)) {
+                    matches.putIfAbsent(f.docId, f.fieldKey to f.fieldValue)
+                }
+            }
+            return matches
+        }
+
+        private suspend fun searchDefaultField(
+            key: String,
+            value: String,
+        ): Map<String, Pair<String, String>> =
+            documentDao
+                .getAllLive()
+                .asSequence()
+                .mapNotNull { doc ->
+                    val matched =
+                        defaultFieldValues(doc).firstOrNull {
+                            it.first == key && it.second.contains(value, ignoreCase = true)
+                        }
+                    matched?.let { doc.docId to it }
+                }.toMap(LinkedHashMap())
+
+        private suspend fun searchCustomField(
+            key: String,
+            value: String,
+        ): Map<String, Pair<String, String>> {
+            val fields = fieldDao.all().filter { it.fieldKey.lowercase() == key }
+            return fields
+                .asSequence()
+                .filter { it.fieldValue.contains(value, ignoreCase = true) }
+                .map { it.docId to (it.fieldKey to it.fieldValue) }
+                .toMap(LinkedHashMap())
+        }
+
+        private fun defaultFieldValues(doc: DocumentEntity): List<Pair<String, String>> =
+            buildList {
+                doc.title?.takeIf { it.isNotBlank() }?.let { add("title" to it) }
+                doc.correspondent?.takeIf { it.isNotBlank() }?.let { add("correspondent" to it) }
+                doc.docType?.takeIf { it.isNotBlank() }?.let { add("docType" to it) }
+                doc.docDate?.takeIf { it.isNotBlank() }?.let { add("docDate" to it) }
+                doc.notes?.takeIf { it.isNotBlank() }?.let { add("notes" to it) }
+                add("fileName" to doc.fileName)
+            }
+
+        companion object {
+            const val ANY_FIELD = "any"
+        }
+    }
+
     class GetDocumentTool(
         private val documentDao: DocumentDao,
         private val tagDao: TagDao,
+        private val fieldDao: DocumentFieldDao,
     ) : SimpleTool<GetDocumentTool.Args>(
-        argsType = typeToken<Args>(),
-        name = "get_document",
-        description = "Full metadata of one document by docId: file name, path, title, tags, " +
-            "correspondent, document type, date, notes, page count.",
-    ) {
+            argsType = typeToken<Args>(),
+            name = "get_document",
+            description =
+                "Full metadata of one document by docId: file name, path, title, tags, " +
+                    "correspondent, document type, date, notes, custom (flexible) fields, page count.",
+        ) {
         @Serializable
         data class Args(
             @property:LLMDescription("The docId (64-char hash) from a previous search result")
@@ -210,9 +436,11 @@ object LibraryAiTools {
         )
 
         override suspend fun execute(args: Args): String {
-            val doc = documentDao.getByDocId(args.docId)
-                ?: return "No document with docId ${args.docId}."
+            val doc =
+                documentDao.getByDocId(args.docId)
+                    ?: return "No document with docId ${args.docId}."
             val tags = tagDao.tagsForDocument(args.docId)
+            val fields = fieldDao.fieldsForDocs(listOf(args.docId)).sortedBy { it.fieldKey.lowercase() }
             return buildString {
                 appendLine("docId: ${doc.docId}")
                 appendLine("file: ${doc.fileName}")
@@ -224,6 +452,10 @@ object LibraryAiTools {
                 doc.docDate?.let { appendLine("docDate: $it") }
                 doc.pageCount?.let { appendLine("pages: $it") }
                 doc.notes?.takeIf { it.isNotBlank() }?.let { appendLine("notes: $it") }
+                if (fields.isNotEmpty()) {
+                    appendLine("customFields:")
+                    for (f in fields) appendLine("  ${f.fieldKey}: ${f.fieldValue}")
+                }
                 if (doc.trashed) appendLine("status: in trash")
                 if (doc.missing) appendLine("status: file missing")
             }.trimEnd()
@@ -233,11 +465,12 @@ object LibraryAiTools {
     class GetDocumentTextTool(
         private val ftsDao: FtsDao,
     ) : SimpleTool<GetDocumentTextTool.Args>(
-        argsType = typeToken<Args>(),
-        name = "get_document_text",
-        description = "Read the extracted text (OCR or embedded) of one document, in chunks of " +
-            "$TEXT_CHUNK_CHARS characters. Use chunk 0 first; the output says how many chunks exist.",
-    ) {
+            argsType = typeToken<Args>(),
+            name = "get_document_text",
+            description =
+                "Read the extracted text (OCR or embedded) of one document, in chunks of " +
+                    "$TEXT_CHUNK_CHARS characters. Use chunk 0 first; the output says how many chunks exist.",
+        ) {
         @Serializable
         data class Args(
             @property:LLMDescription("The docId (64-char hash) from a previous search result")
@@ -247,8 +480,9 @@ object LibraryAiTools {
         )
 
         override suspend fun execute(args: Args): String {
-            val text = ftsDao.contentForDoc(args.docId)?.takeIf { it.isNotBlank() }
-                ?: return "Document ${args.docId} has no extracted text (not OCRed yet?)."
+            val text =
+                ftsDao.contentForDoc(args.docId)?.takeIf { it.isNotBlank() }
+                    ?: return "Document ${args.docId} has no extracted text (not OCRed yet?)."
             val chunks = (text.length + TEXT_CHUNK_CHARS - 1) / TEXT_CHUNK_CHARS
             val index = args.chunk.coerceIn(0, chunks - 1)
             val start = index * TEXT_CHUNK_CHARS

@@ -48,6 +48,17 @@ interface DocumentFieldDao {
     @Query("SELECT DISTINCT fieldKey FROM document_fields ORDER BY fieldKey COLLATE NOCASE")
     fun observeDistinctKeys(): Flow<List<String>>
 
+    /** All custom-field rows, for the AI's field search tools. */
+    @Query("SELECT * FROM document_fields")
+    suspend fun all(): List<DocumentFieldEntity>
+
+    /** Distinct field keys with their document counts, for the AI's list_fields tool. */
+    @Query(
+        "SELECT fieldKey, COUNT(*) AS count FROM document_fields " +
+            "GROUP BY fieldKey ORDER BY fieldKey COLLATE NOCASE",
+    )
+    suspend fun keysWithCounts(): List<FieldKeyCount>
+
     @Upsert
     suspend fun upsertAll(fields: List<DocumentFieldEntity>)
 
@@ -171,3 +182,9 @@ interface KeyValueDao {
     @Query("DELETE FROM kv WHERE key = :key")
     suspend fun delete(key: String)
 }
+
+/** Custom-field key usage count, for the AI's list_fields tool. */
+data class FieldKeyCount(
+    val fieldKey: String,
+    val count: Int,
+)

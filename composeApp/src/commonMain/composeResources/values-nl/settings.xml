@@ -22,6 +22,8 @@
     </plurals>
     <string name="common_settings_thumbnail_cache_help">Maak bibliotheekminiaturen opnieuw aan met de huidige kwaliteit. Gebruik dit als voorvertoningen onscherp zijn.</string>
     <string name="common_settings_review_workflow">Beoordelingsworkflow</string>
+    <string name="common_settings_document_fields">Documentvelden</string>
+    <string name="common_settings_document_fields_help">Kies welke ingebouwde velden op elk document worden getoond (gesynchroniseerd tussen apparaten). Verborgen velden behouden hun opgeslagen waarden en verschijnen weer zodra ze zijn ingeschakeld. Gebruik aangepaste velden op een document voor al het overige.</string>
     <string name="common_settings_auto_matching">Automatisch taggen</string>
     <string name="common_settings_auto_matching_rules">Tagregels beheren</string>
     <string name="common_settings_auto_matching_help">Tag documenten en vul metadata in op basis van geïmporteerde tekst.</string>
@@ -61,13 +63,29 @@
     <string name="common_settings_remove_after_import_help">Aan: verwijder bronbestanden na veilige import. Uit: laat ze staan en sla ze bij volgende scans over.</string>
 
     <string name="common_settings_enable_ai">AI-assistent inschakelen</string>
-    <string name="common_settings_ai_help">Gebruikt een OpenAI-compatibele server om tags voor te stellen en vragen over je documenten te beantwoorden.</string>
+    <string name="common_settings_ai_help">Gebruikt een AI-provider naar keuze om tags voor te stellen en vragen over je documenten te beantwoorden.</string>
+    <string name="common_settings_ai_provider">Provider: %1$s</string>
+    <string name="common_settings_ai_provider_help">Aanvragen gaan rechtstreeks naar deze provider met je eigen API-sleutel. Kies Custom voor elke andere OpenAI-compatibele server.</string>
     <string name="common_settings_server_url">Server-URL</string>
     <string name="common_settings_server_url_help">OpenAI-compatibele server, bijvoorbeeld %1$s of %2$s. Een geplakte %3$s-URL werkt ook.</string>
+    <string name="common_settings_server_url_ollama_help">Adres van de Ollama-server; laat leeg voor de standaard %1$s.</string>
     <string name="common_settings_api_key">API-sleutel</string>
     <string name="common_settings_api_key_help">Wordt alleen op dit apparaat opgeslagen; laat leeg voor lokale servers</string>
+    <string name="common_settings_api_key_help_provider">Wordt alleen op dit apparaat opgeslagen; alleen verzonden naar de gekozen provider.</string>
     <string name="common_settings_model">Model</string>
     <string name="common_settings_model_help">Model-ID exact zoals de server het vermeldt (zie %1$s), bijvoorbeeld %2$s of %3$s. Voorvoegsels van clientproviders zijn niet van toepassing.</string>
+    <string name="common_settings_model_pick_help">Laad de modellen van de provider met het pijltje, of typ zelf een model-ID.</string>
+    <string name="common_settings_load_models">Modellen laden</string>
+    <string name="common_settings_models_loading">Modellen laden…</string>
+    <string name="common_settings_models_error">Kon modellen niet laden: %1$s</string>
+    <string name="common_settings_reasoning_assistant">Redeneren assistent: %1$s</string>
+    <string name="common_settings_reasoning_edit">Redeneren AI-bewerken: %1$s</string>
+    <string name="common_settings_reasoning_help">Hoeveel het model mag nadenken voor het antwoordt. Standaard volgt het gedrag van de server; niet elke provider of elk model ondersteunt elk niveau.</string>
+    <string name="common_settings_reasoning_default">Standaard</string>
+    <string name="common_settings_reasoning_none">Uit</string>
+    <string name="common_settings_reasoning_low">Laag</string>
+    <string name="common_settings_reasoning_medium">Gemiddeld</string>
+    <string name="common_settings_reasoning_high">Hoog</string>
     <string name="common_settings_ai_request_help">Bij aanvragen wordt documenttekst naar de ingestelde server verzonden.</string>
     <string name="common_settings_max_suggested_tags">Standaardmaximum voorgestelde tags per document</string>
     <string name="common_settings_max_suggested_tags_help">Aantal tags dat de assistent per document voorstelt (%1$d-%2$d). Per uitvoering aanpasbaar.</string>

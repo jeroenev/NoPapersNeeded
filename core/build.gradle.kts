@@ -39,7 +39,13 @@ kotlin {
             implementation(libs.koog.agents.core)
             implementation(libs.koog.agents.tools)
             implementation(libs.koog.prompt.executor.model)
+            implementation(libs.koog.prompt.executor.anthropic)
+            implementation(libs.koog.prompt.executor.deepseek)
+            implementation(libs.koog.prompt.executor.google)
+            implementation(libs.koog.prompt.executor.mistralai)
+            implementation(libs.koog.prompt.executor.ollama)
             implementation(libs.koog.prompt.executor.openai)
+            implementation(libs.koog.prompt.executor.openrouter)
             implementation(libs.koog.http.client.ktor)
         }
         commonTest.dependencies {

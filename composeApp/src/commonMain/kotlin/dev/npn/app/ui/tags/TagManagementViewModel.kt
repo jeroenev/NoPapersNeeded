@@ -32,14 +32,6 @@ class TagManagementViewModel(
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    fun create(
-        name: String,
-        color: String?,
-        icon: String?,
-    ) = launchReporting(UiAction.CREATE_TAG) {
-        session.meta.setTagStyle(name.trim(), color, icon)
-    }
-
     fun rename(
         from: String,
         to: String,
@@ -50,7 +42,24 @@ class TagManagementViewModel(
         into: String,
     ) = launchReporting(UiAction.MERGE_TAGS) { session.meta.mergeTag(from, into.trim()) }
 
+    /**
+     * Merge every selected tag into [into] (the primary the user picked). Documents holding any
+     * of the other tags end up with [into] instead; the emptied tags are then auto-pruned.
+     */
+    fun mergeAll(
+        names: List<String>,
+        into: String,
+    ) = launchReporting(UiAction.MERGE_TAGS) {
+        names.filter { it != into }.forEach { session.meta.mergeTag(it, into) }
+    }
+
     fun delete(name: String) = launchReporting(UiAction.DELETE_TAG) { session.meta.deleteTag(name) }
+
+    /** Bulk delete for the selection mode; one report covers the whole batch. */
+    fun deleteAll(names: List<String>) =
+        launchReporting(UiAction.DELETE_TAG) {
+            names.forEach { session.meta.deleteTag(it) }
+        }
 
     fun setStyle(
         name: String,
@@ -58,5 +67,13 @@ class TagManagementViewModel(
         icon: String?,
     ) = launchReporting(UiAction.UPDATE_TAG_STYLE) {
         session.meta.setTagStyle(name, color, icon)
+    }
+
+    /** Apply one color to every selected tag; one report covers the whole batch. */
+    fun setStyleAll(
+        names: List<String>,
+        color: String?,
+    ) = launchReporting(UiAction.UPDATE_TAG_STYLE) {
+        names.forEach { session.meta.setTagStyle(it, color, null) }
     }
 }
