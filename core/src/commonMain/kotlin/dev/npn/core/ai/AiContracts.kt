@@ -4,9 +4,10 @@ import kotlinx.coroutines.flow.Flow
 
 /**
  * The AI provider a configuration talks to. Every entry maps onto a dedicated Koog `LLMClient`
- * except [CUSTOM], which reuses the OpenAI-compatible chat-completions client against a
- * user-supplied server root (Ollama-compatible gateways, llama.cpp, LiteLLM, ...). Enum order is
- * the presentation order in settings; [CUSTOM] (fully manual) stays last by design.
+ * except [OPENCODE_GO] and [CUSTOM], which reuse the OpenAI-compatible chat-completions client
+ * (the fixed OpenCode Go gateway, resp. a user-supplied server root: Ollama-compatible gateways,
+ * llama.cpp, LiteLLM, ...). Enum order is the presentation order in settings; [CUSTOM] (fully
+ * manual) stays last by design.
  */
 enum class AiProvider(
     /** Brand name shown in the provider picker (not localized: these are product names). */
@@ -24,6 +25,7 @@ enum class AiProvider(
     MISTRAL("Mistral", "https://api.mistral.ai", requiresApiKey = true, editableBaseUrl = false),
     DEEPSEEK("DeepSeek", "https://api.deepseek.com", requiresApiKey = true, editableBaseUrl = false),
     OPENROUTER("OpenRouter", "https://openrouter.ai", requiresApiKey = true, editableBaseUrl = false),
+    OPENCODE_GO("OpenCode Go", "https://opencode.ai/zen/go", requiresApiKey = true, editableBaseUrl = false),
     OLLAMA("Ollama", "http://localhost:11434", requiresApiKey = false, editableBaseUrl = true),
     CUSTOM("Custom (OpenAI-compatible)", null, requiresApiKey = false, editableBaseUrl = true),
 }
