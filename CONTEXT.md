@@ -28,6 +28,21 @@ and discussion; sharpen them here when they drift.
 The UI's `EditPhase` (Idle/Suggesting/Review/Applying/Done) is presentation
 state in `composeApp` and is not part of the domain vocabulary.
 
+## Transcript
+
+- **Transcript** — the running chat conversation as an ordered list of rendered
+  items (user turn, tool use, assistant turn). `ChatTranscript` (composeApp,
+  `ui.ai`) is an immutable value type and the single definition of the fold
+  rules that turn a stream of `AiChatEvent`s into items; `AiChatViewModel` only
+  drives it and owns the coroutine/effect plumbing.
+- Load-bearing fold rules: a tool call ends the current narration turn (pre-tool
+  text is finalised into its own bubble, never merged with post-tool text or the
+  run's full answer); each finalised assistant bubble carries only its own
+  docRefs; finalising keeps whatever partial text streamed; history for the next
+  ask is user/assistant text turns only (tool items excluded).
+- `EditPhase`-style presentation state stays out of `ChatTranscript` — the
+  reducer is pure, with no snackbar/message/effect logic.
+
 ## Library session facets
 
 `LibrarySession` (core.app) is a pure aggregate of narrow facades plus

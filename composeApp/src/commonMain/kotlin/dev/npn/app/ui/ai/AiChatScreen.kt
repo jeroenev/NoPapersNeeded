@@ -113,22 +113,23 @@ fun AiChatScreen(
 
     var input by remember { mutableStateOf("") }
     val listState = rememberLazyListState()
-    val lastLen = (ui.turns.lastOrNull() as? TranscriptItem.AssistantTurn)?.text?.length ?: 0
+    val items = ui.transcript.items
+    val lastLen = (items.lastOrNull() as? TranscriptItem.AssistantTurn)?.text?.length ?: 0
     val docTitles = remember { mutableStateMapOf<String, String>() }
 
     // Keep the newest turn visible as the transcript grows or the streaming answer lengthens.
-    LaunchedEffect(ui.turns.size, lastLen) {
-        if (ui.turns.isNotEmpty()) listState.animateScrollToItem(ui.turns.size - 1)
+    LaunchedEffect(items.size, lastLen) {
+        if (items.isNotEmpty()) listState.animateScrollToItem(items.size - 1)
     }
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
-        topBar = { AiChatTopBar(ui.turns.isNotEmpty() && !ui.busy, onBack, vm::clear) },
+        topBar = { AiChatTopBar(items.isNotEmpty() && !ui.busy, onBack, vm::clear) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // The progress bar only covers the pre-first-token phase; once text streams the
             // growing answer is the progress indicator.
-            if (ui.busy && !hasStreamingText(ui.turns)) {
+            if (ui.busy && !hasStreamingText(items)) {
                 LinearProgressIndicator(Modifier.fillMaxWidth())
             }
             LazyColumn(
@@ -137,7 +138,7 @@ fun AiChatScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(ui.turns) { item ->
+                items(items) { item ->
                     when (item) {
                         is TranscriptItem.UserTurn -> {
                             UserBubble(item)

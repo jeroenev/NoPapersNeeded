@@ -17,12 +17,31 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
+/**
+ * Coroutine-plumbing tests only: send gating, busy transitions, stop/clear, failure handling, the
+ * config probe, history capture, and the blank-answer message. The fold rules themselves live in
+ * [ChatTranscriptTest] — do not re-assert them here.
+ */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AiChatViewModelTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = AiChatViewModel(session)
 
     @Test
-    fun sendAppendsUserAndAssistantTurns() =
+    fun configProbePopulatesConfiguredFlag() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { ai.configValue = ai.configValue.copy(enabled = true) }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+
+            model.ui.value.configured shouldBe null
+            advanceUntilIdle()
+
+            model.ui.value.configured shouldBe true
+            job.cancel()
+        }
+
+    @Test
+    fun sendAppendsUserTurnAndClearsBusy() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { ai.askResponses = listOf("hello back") }
             val model = vm(session)
@@ -32,29 +51,22 @@ class AiChatViewModelTest : MainDispatcherTest() {
             model.send("hi")
             advanceUntilIdle()
 
-            val turns = model.ui.value.turns
-            turns shouldHaveSize 2
-            val user = turns[0].shouldBeInstanceOf<TranscriptItem.UserTurn>()
-            user.text shouldBe "hi"
-            val assistant = turns[1].shouldBeInstanceOf<TranscriptItem.AssistantTurn>()
-            assistant.text shouldBe "hello back"
-            assistant.streaming shouldBe false
+            val items = model.ui.value.transcript.items
+            items shouldHaveSize 2
+            items[0].shouldBeInstanceOf<TranscriptItem.UserTurn>().text shouldBe "hi"
             model.ui.value.busy shouldBe false
             job.cancel()
         }
 
     @Test
-    fun deltasGrowTrailingAssistantTurn() =
+    fun busyIsTrueWhileStreamingAndFalseWhenDone() =
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
+                    ai.askDelayMillis = 1_000
                     ai.askScripts =
                         listOf(
-                            listOf(
-                                AiChatEvent.TextDelta("Hel"),
-                                AiChatEvent.TextDelta("lo"),
-                                AiChatEvent.Done("Hello"),
-                            ),
+                            listOf(AiChatEvent.TextDelta("partial"), AiChatEvent.Done("partial")),
                         )
                 }
             val model = vm(session)
@@ -62,136 +74,23 @@ class AiChatViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.send("hi")
-            advanceUntilIdle()
+            advanceTimeBy(1_500)
+            runCurrent()
+            model.ui.value.busy shouldBe true
 
-            val turns = model.ui.value.turns
-            turns shouldHaveSize 2
-            val assistant = turns[1].shouldBeInstanceOf<TranscriptItem.AssistantTurn>()
-            assistant.text shouldBe "Hello"
-            assistant.streaming shouldBe false
+            advanceUntilIdle()
+            model.ui.value.busy shouldBe false
             job.cancel()
         }
 
     @Test
-    fun toolEventsCreateAndCompleteToolItems() =
+    fun sendCapturesHistoryBeforeAppendingTheUserTurn() =
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
                     ai.askScripts =
                         listOf(
-                            listOf(
-                                AiChatEvent.ToolCallStarted("search_documents", "{\"query\":\"tax\"}"),
-                                AiChatEvent.ToolCallFinished("search_documents", "{\"query\":\"tax\"}", "hit1"),
-                                AiChatEvent.TextDelta("Found it."),
-                                AiChatEvent.Done("Found it."),
-                            ),
-                        )
-                }
-            val model = vm(session)
-            val job = launch { model.ui.collect {} }
-            advanceUntilIdle()
-
-            model.send("find tax")
-            advanceUntilIdle()
-
-            val turns = model.ui.value.turns
-            turns shouldHaveSize 3
-            turns[0].shouldBeInstanceOf<TranscriptItem.UserTurn>()
-            val tool = turns[1].shouldBeInstanceOf<TranscriptItem.ToolUse>()
-            tool.name shouldBe "search_documents"
-            tool.result shouldBe "hit1"
-            tool.running shouldBe false
-            val assistant = turns[2].shouldBeInstanceOf<TranscriptItem.AssistantTurn>()
-            assistant.text shouldBe "Found it."
-            job.cancel()
-        }
-
-    @Test
-    fun preToolAndPostToolTextBecomeTwoDistinctFinalisedTurns() =
-        runTest(dispatcher) {
-            val session =
-                FakeLibrarySession().apply {
-                    ai.askScripts =
-                        listOf(
-                            listOf(
-                                AiChatEvent.TextDelta("Let me search"),
-                                AiChatEvent.ToolCallStarted("search_documents", "{\"query\":\"tax\"}"),
-                                AiChatEvent.ToolCallFinished("search_documents", "{\"query\":\"tax\"}", "hit"),
-                                AiChatEvent.TextDelta("Found it."),
-                                AiChatEvent.Done("Let me searchFound it."),
-                            ),
-                        )
-                }
-            val model = vm(session)
-            val job = launch { model.ui.collect {} }
-            advanceUntilIdle()
-
-            model.send("find tax")
-            advanceUntilIdle()
-
-            val turns = model.ui.value.turns
-            // user, assistant("Let me search"), tool, assistant("Found it.") — no duplicated text.
-            turns shouldHaveSize 4
-            val first = turns[1].shouldBeInstanceOf<TranscriptItem.AssistantTurn>()
-            first.text shouldBe "Let me search"
-            first.streaming shouldBe false
-            turns[2].shouldBeInstanceOf<TranscriptItem.ToolUse>()
-            val second = turns[3].shouldBeInstanceOf<TranscriptItem.AssistantTurn>()
-            second.text shouldBe "Found it."
-            second.streaming shouldBe false
-            job.cancel()
-        }
-
-    @Test
-    fun historyAfterTextToolTextHasNoDuplication() =
-        runTest(dispatcher) {
-            val session =
-                FakeLibrarySession().apply {
-                    ai.askScripts =
-                        listOf(
-                            listOf(
-                                AiChatEvent.TextDelta("Let me search"),
-                                AiChatEvent.ToolCallStarted("search_documents", "{}"),
-                                AiChatEvent.ToolCallFinished("search_documents", "{}", "hit"),
-                                AiChatEvent.TextDelta("Found it."),
-                                AiChatEvent.Done("Let me searchFound it."),
-                            ),
-                            listOf(AiChatEvent.TextDelta("ok"), AiChatEvent.Done("ok")),
-                        )
-                }
-            val model = vm(session)
-            val job = launch { model.ui.collect {} }
-            advanceUntilIdle()
-
-            model.send("q1")
-            advanceUntilIdle()
-            model.send("q2")
-            advanceUntilIdle()
-
-            val secondHistory = session.ai.asked[1].first
-            // user q1 + the two distinct assistant turns; no text repeated, no concatenated fullText.
-            secondHistory.map { it.role to it.text } shouldContainExactly
-                listOf(
-                    AiRole.USER to "q1",
-                    AiRole.ASSISTANT to "Let me search",
-                    AiRole.ASSISTANT to "Found it.",
-                )
-            job.cancel()
-        }
-
-    @Test
-    fun secondSendPassesPriorTextTurnsAsHistoryExcludingTools() =
-        runTest(dispatcher) {
-            val session =
-                FakeLibrarySession().apply {
-                    ai.askScripts =
-                        listOf(
-                            listOf(
-                                AiChatEvent.ToolCallStarted("list_tags", "{}"),
-                                AiChatEvent.ToolCallFinished("list_tags", "{}", "tags"),
-                                AiChatEvent.TextDelta("a1"),
-                                AiChatEvent.Done("a1"),
-                            ),
+                            listOf(AiChatEvent.TextDelta("a1"), AiChatEvent.Done("a1")),
                             listOf(AiChatEvent.TextDelta("a2"), AiChatEvent.Done("a2")),
                         )
                 }
@@ -204,15 +103,14 @@ class AiChatViewModelTest : MainDispatcherTest() {
             model.send("q2")
             advanceUntilIdle()
 
+            // First ask sees no history and the current question is never part of the history.
             session.ai.asked[0].first shouldBe emptyList()
             session.ai.asked[0].second shouldBe "q1"
-            // Tool items are excluded from history: only user q1 + assistant a1.
-            val secondHistory = session.ai.asked[1].first
-            secondHistory shouldHaveSize 2
-            secondHistory[0].role shouldBe AiRole.USER
-            secondHistory[0].text shouldBe "q1"
-            secondHistory[1].role shouldBe AiRole.ASSISTANT
-            secondHistory[1].text shouldBe "a1"
+            // Second ask sees prior user+assistant turns but NOT the just-sent q2.
+            session.ai.asked[1]
+                .first
+                .map { it.role to it.text } shouldContainExactly
+                listOf(AiRole.USER to "q1", AiRole.ASSISTANT to "a1")
             session.ai.asked[1].second shouldBe "q2"
             job.cancel()
         }
@@ -233,9 +131,9 @@ class AiChatViewModelTest : MainDispatcherTest() {
             model.send("hi")
             advanceUntilIdle()
 
-            val turns = model.ui.value.turns
-            turns shouldHaveSize 1
-            turns[0].shouldBeInstanceOf<TranscriptItem.UserTurn>()
+            val items = model.ui.value.transcript.items
+            items shouldHaveSize 1
+            items[0].shouldBeInstanceOf<TranscriptItem.UserTurn>()
             model.ui.value.busy shouldBe false
             messages shouldContainExactly listOf("Could not reach the AI assistant: connection refused")
             jobs.forEach { it.cancel() }
@@ -269,7 +167,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             val assistant =
-                model.ui.value.turns
+                model.ui.value.transcript.items
                     .last()
                     .shouldBeInstanceOf<TranscriptItem.AssistantTurn>()
             assistant.text shouldBe "partial"
@@ -306,29 +204,6 @@ class AiChatViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun assistantTurnExtractsDocRefsOnDone() =
-        runTest(dispatcher) {
-            val hex = "a".repeat(HEX_DOC_ID_LEN)
-            val session =
-                FakeLibrarySession().apply {
-                    ai.askResponses = listOf("See [doc:$hex] for details.")
-                }
-            val model = vm(session)
-            val job = launch { model.ui.collect {} }
-            advanceUntilIdle()
-
-            model.send("where?")
-            advanceUntilIdle()
-
-            val assistant =
-                model.ui.value.turns
-                    .last()
-                    .shouldBeInstanceOf<TranscriptItem.AssistantTurn>()
-            assistant.docRefs shouldContainExactly listOf(hex)
-            job.cancel()
-        }
-
-    @Test
     fun stopCancelsAndFinalisesPartialTurn() =
         runTest(dispatcher) {
             val session =
@@ -355,7 +230,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
             runCurrent()
 
             val assistant =
-                model.ui.value.turns
+                model.ui.value.transcript.items
                     .last()
                     .shouldBeInstanceOf<TranscriptItem.AssistantTurn>()
             assistant.text shouldBe "partial"
@@ -375,7 +250,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
             model.send("   ")
             advanceUntilIdle()
 
-            model.ui.value.turns shouldBe emptyList()
+            model.ui.value.transcript.items shouldBe emptyList()
             session.ai.asked shouldBe emptyList()
             job.cancel()
         }
@@ -390,14 +265,10 @@ class AiChatViewModelTest : MainDispatcherTest() {
 
             model.send("hello")
             advanceUntilIdle()
-            model.ui.value.turns shouldHaveSize 2
+            model.ui.value.transcript.items shouldHaveSize 2
 
             model.clear()
-            model.ui.value.turns shouldBe emptyList()
+            model.ui.value.transcript.items shouldBe emptyList()
             job.cancel()
         }
-
-    private companion object {
-        const val HEX_DOC_ID_LEN = 64
-    }
 }
