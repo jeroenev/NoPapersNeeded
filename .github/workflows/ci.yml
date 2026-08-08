@@ -17,18 +17,20 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
       - name: Formatting (Spotless)
         run: ./gradlew spotlessCheck
@@ -67,27 +69,27 @@ jobs:
         run: ./gradlew :desktopApp:packageAppImage
 
       - name: Upload debug APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: androidApp-debug
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
 
       - name: Upload AppImage
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: no-papers-needed-appimage
           path: desktopApp/build/appimage/*.AppImage
 
       - name: Upload core test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: core-test-reports
           path: core/build/reports/tests/desktopTest
 
       - name: Upload coverage reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kover-coverage-reports
           path: composeApp/build/reports/kover
@@ -98,18 +100,20 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: "17"
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v6
+        with:
+          cache-provider: basic
 
       - name: Formatting (Spotless)
         run: ./gradlew.bat spotlessCheck
@@ -136,7 +140,7 @@ jobs:
         run: ./gradlew.bat :desktopApp:packageDistributionForCurrentOS
 
       - name: Upload Windows installer artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: no-papers-needed-windows-installers
           path: |
@@ -145,7 +149,7 @@ jobs:
 
       - name: Upload core test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: windows-core-test-reports
           path: core/build/reports/tests/desktopTest

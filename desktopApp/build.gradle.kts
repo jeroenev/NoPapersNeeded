@@ -108,10 +108,11 @@ abstract class DownloadAppImageToolTask : DefaultTask() {
     }
 }
 
-val downloadAppImageTool by tasks.registering(DownloadAppImageToolTask::class) {
-    url.set(appImageToolUrl)
-    outFile.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
-}
+val downloadAppImageTool =
+    tasks.register<DownloadAppImageToolTask>("downloadAppImageTool") {
+        url.set(appImageToolUrl)
+        outFile.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
+    }
 
 abstract class PackageAppImageTask
     @Inject
@@ -225,15 +226,16 @@ abstract class PackageAppImageTask
         }
     }
 
-val packageAppImage by tasks.registering(PackageAppImageTask::class) {
-    group = "compose desktop"
-    description = "Builds a Linux AppImage from the jpackage app-image output."
-    dependsOn("createDistributable", downloadAppImageTool)
+val packageAppImage =
+    tasks.register<PackageAppImageTask>("packageAppImage") {
+        group = "compose desktop"
+        description = "Builds a Linux AppImage from the jpackage app-image output."
+        dependsOn("createDistributable", downloadAppImageTool)
 
-    appName.set(npnAppName)
-    arch.set(appImageArch)
-    appImageSrc.set(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName"))
-    appImageTool.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
-    appDir.set(layout.buildDirectory.dir("appimage/AppDir"))
-    outFile.set(layout.buildDirectory.file("appimage/$npnAppName-$npnAppVersion-$appImageArch.AppImage"))
-}
+        appName.set(npnAppName)
+        arch.set(appImageArch)
+        appImageSrc.set(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName"))
+        appImageTool.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
+        appDir.set(layout.buildDirectory.dir("appimage/AppDir"))
+        outFile.set(layout.buildDirectory.file("appimage/$npnAppName-$npnAppVersion-$appImageArch.AppImage"))
+    }
