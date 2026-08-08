@@ -7,7 +7,9 @@ import dev.npn.core.ai.AiModelCatalog
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.app.AiTagging
+import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.ViewType
@@ -89,8 +91,12 @@ enum class ReviewMigration { MARK_ALL, MARK_TAGGED, MARK_NONE }
 @Suppress("TooManyFunctions")
 class SettingsViewModel(
     private val settings: SettingsRepository,
-    private val session: LibrarySession,
+    private val content: DocContentFacade,
+    private val reviewConfig: ReviewConfigFacade,
 ) : ViewModel() {
+    constructor(settings: SettingsRepository, session: LibrarySession) :
+        this(settings, session.content, session.reviewConfig)
+
     val state: StateFlow<SettingsUiState> =
         settings.settings
             .map { snapshot ->
@@ -119,7 +125,7 @@ class SettingsViewModel(
             }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
     val reviewMode: StateFlow<ReviewMode> =
-        session.reviewMode.stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
+        reviewConfig.reviewMode.stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     private val _aiModels = MutableStateFlow(AiModelListState())
 
@@ -130,14 +136,14 @@ class SettingsViewModel(
 
     /** Library-wide visible standard fields (synced via the journal, like [reviewMode]). */
     val standardFields: StateFlow<Set<StandardField>> =
-        session.standardFields.stateIn(viewModelScope, WhileSubscribedTimeout, StandardField.DEFAULT)
+        reviewConfig.standardFields.stateIn(viewModelScope, WhileSubscribedTimeout, StandardField.DEFAULT)
 
     fun setStandardFieldEnabled(
         field: StandardField,
         enabled: Boolean,
     ) = viewModelScope.launch {
-        val current = session.standardFields.first()
-        session.setStandardFields(if (enabled) current + field else current - field)
+        val current = reviewConfig.standardFields.first()
+        reviewConfig.setStandardFields(if (enabled) current + field else current - field)
     }
 
     fun setOcrLanguage(lang: String) = viewModelScope.launch { settings.setOcrLanguage(lang) }
@@ -223,11 +229,11 @@ class SettingsViewModel(
      */
     fun clearThumbnailCache(onDone: (Int) -> Unit) =
         viewModelScope.launch {
-            onDone(session.content.clearThumbnailCache())
+            onDone(content.clearThumbnailCache())
         }
 
     /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */
-    fun setUntaggedOnlyMode() = viewModelScope.launch { session.setReviewMode(ReviewMode.UNTAGGED_ONLY) }
+    fun setUntaggedOnlyMode() = viewModelScope.launch { reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY) }
 
     /**
      * Switch to INBOX_WORKFLOW, running the chosen one-shot migration of the reviewed marker.
@@ -237,11 +243,11 @@ class SettingsViewModel(
     fun setInboxWorkflowMode(migration: ReviewMigration) =
         viewModelScope.launch {
             when (migration) {
-                ReviewMigration.MARK_ALL -> session.markReviewedForMigration(onlyTagged = false)
-                ReviewMigration.MARK_TAGGED -> session.markReviewedForMigration(onlyTagged = true)
+                ReviewMigration.MARK_ALL -> reviewConfig.markReviewedForMigration(onlyTagged = false)
+                ReviewMigration.MARK_TAGGED -> reviewConfig.markReviewedForMigration(onlyTagged = true)
                 ReviewMigration.MARK_NONE -> Unit
             }
-            session.setReviewMode(ReviewMode.INBOX_WORKFLOW)
+            reviewConfig.setReviewMode(ReviewMode.INBOX_WORKFLOW)
         }
 
     private companion object {

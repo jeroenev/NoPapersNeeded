@@ -180,14 +180,14 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             var done = false
             model.trash { done = true }
             advanceUntilIdle()
-            session.meta.trashedDocs shouldContainExactly listOf("doc-1")
+            session.docLifecycle.trashedDocs shouldContainExactly listOf("doc-1")
             done shouldBe true
         }
 
     @Test
     fun trashFailureSkipsCallbackAndEmitsMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { meta.failTrashDocIds = setOf("doc-1") }
+            val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("doc-1") }
             val model = vm(session = session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
@@ -209,14 +209,14 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val model = vm(session = session)
             model.reOcr()
             advanceUntilIdle()
-            session.reOcrIds shouldContainExactly listOf("doc-1")
+            session.ocr.reOcrIds shouldContainExactly listOf("doc-1")
             model.ui.value.reindexing shouldBe false
         }
 
     @Test
     fun reOcrFailureClearsFlagAndEmitsMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { failReOcr = { error("ocr engine missing") } }
+            val session = FakeLibrarySession().apply { ocr.failReOcr = { error("ocr engine missing") } }
             val model = vm(session = session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
@@ -238,7 +238,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.setOcrEngine("tesseract")
             model.setOcrEngine(null)
             advanceUntilIdle()
-            session.ocrEngineSets shouldContainExactly
+            session.ocr.ocrEngineSets shouldContainExactly
                 listOf(
                     "doc-1" to "tesseract",
                     "doc-1" to null,
@@ -248,14 +248,14 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun setOcrEngineFailureEmitsMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { failSetOcrEngine = { error("reindex failed") } }
+            val session = FakeLibrarySession().apply { ocr.failSetOcrEngine = { error("reindex failed") } }
             val model = vm(session = session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
             advanceUntilIdle()
             model.setOcrEngine("mlkit")
             advanceUntilIdle()
-            session.ocrEngineSets shouldBe emptyList()
+            session.ocr.ocrEngineSets shouldBe emptyList()
             messages shouldContainExactly listOf("Could not change OCR engine: reindex failed")
             job.cancel()
         }
@@ -267,13 +267,13 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    ocrVersionsList = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
+                    ocr.ocrVersionsList = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
                     documents.singleDoc.value = listItem("doc-1")
                 }
             val model = vm(session = session)
             val job = launch { model.ocrVersions.collect {} }
             advanceUntilIdle()
-            model.ocrVersions.value shouldContainExactly session.ocrVersionsList
+            model.ocrVersions.value shouldContainExactly session.ocr.ocrVersionsList
             job.cancel()
         }
 
@@ -291,7 +291,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
 
             // A newly-completed OCR run (state -> done) should trigger a reload with the fresh version.
             val fresh = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
-            session.ocrVersionsList = fresh
+            session.ocr.ocrVersionsList = fresh
             session.documents.singleDoc.value = DocListItem(doc("doc-1").copy(ocrState = "done"), emptyList())
             advanceUntilIdle()
             model.ocrVersions.value shouldContainExactly fresh

@@ -114,12 +114,12 @@ object IntentImport {
                 tally.failed++
                 continue
             }
-            tally.record(session.importPdfBytes(bytes, displayName(resolver, uri) ?: FALLBACK_SHARED_PDF))
+            tally.record(session.ingest.importPdfBytes(bytes, displayName(resolver, uri) ?: FALLBACK_SHARED_PDF))
         }
 
         if (imageBytes.isNotEmpty()) {
             total++
-            tally.record(session.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF))
+            tally.record(session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF))
         }
 
         return Result(tally.imported, tally.duplicates, tally.failed, total)

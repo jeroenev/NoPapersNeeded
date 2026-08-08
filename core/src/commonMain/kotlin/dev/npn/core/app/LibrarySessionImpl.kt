@@ -68,12 +68,12 @@ import kotlinx.serialization.json.Json
  * that runs the device-identity + fork check and initial fold), then [start]ed with a scope.
  */
 class LibrarySessionImpl private constructor(
-    override val deviceId: String,
+    val deviceId: String,
     private val deps: SessionDeps,
     private val coordinator: JournalCoordinator,
     private val indexer: Indexer,
     private val importService: ImportService,
-    private val maintenance: MaintenanceService,
+    private val maintenanceService: MaintenanceService,
     private val relinkService: RelinkService,
     private val splitService: SplitService,
     private val ocrPipeline: OcrPipeline,
@@ -82,12 +82,26 @@ class LibrarySessionImpl private constructor(
     override val tags: TagRepository,
     override val savedViews: SavedViewRepository,
     override val rules: AutoMatchRuleRepository,
-    override val meta: MetadataWriter,
+    private val writer: MetadataWriterImpl,
     override val content: DocContentFacade,
     override val ai: AiFacade,
-) : LibrarySession {
+) : LibrarySession,
+    IngestFacade,
+    OcrFacade,
+    ReviewConfigFacade,
+    MaintenanceFacade {
     private val fs get() = deps.fs
     private val db get() = deps.db
+
+    // The session implements every facet itself; the facet properties only narrow the type a
+    // consumer sees. [MetadataWriterImpl] likewise backs all three write facets.
+    override val ingest: IngestFacade get() = this
+    override val ocr: OcrFacade get() = this
+    override val reviewConfig: ReviewConfigFacade get() = this
+    override val maintenance: MaintenanceFacade get() = this
+    override val meta: MetadataWriter get() = writer
+    override val tagAdmin: TagAdmin get() = writer
+    override val docLifecycle: DocLifecycle get() = writer
 
     private val _lastScanReport = MutableStateFlow<ScanReport?>(null)
     override val lastScanReport: Flow<ScanReport?> = _lastScanReport.asStateFlow()
@@ -175,7 +189,7 @@ class LibrarySessionImpl private constructor(
         extraRelPath: String,
         keepCanonical: Boolean,
     ) {
-        maintenance.resolveDuplicate(docId, extraRelPath, keepCanonical)
+        maintenanceService.resolveDuplicate(docId, extraRelPath, keepCanonical)
     }
 
     override suspend fun applyRelink(
@@ -186,7 +200,8 @@ class LibrarySessionImpl private constructor(
         _lastScanReport.value = relinkService.applyRelink(oldDocId, newDocId)
     }
 
-    override suspend fun purgeTrash(olderThanDays: Int) {
+    /** Internal auto-purge, run after watch-triggered rescans; not part of any public facet. */
+    private suspend fun purgeTrash(olderThanDays: Int) {
         val cutoff = deps.clock.nowMillis() - olderThanDays.toLong() * MILLIS_PER_DAY
         trashOps().purgeOlderThan(cutoff)
     }
@@ -214,7 +229,7 @@ class LibrarySessionImpl private constructor(
         docId: String,
         engine: String?,
     ) {
-        meta.setOcrEngine(docId, engine)
+        writer.setOcrEngine(docId, engine)
         // The commit above already folded the override into the doc row; re-select now so this
         // device's index reflects the choice immediately.
         ocrPipeline.reselect(docId)
@@ -239,7 +254,7 @@ class LibrarySessionImpl private constructor(
             }
         copyMetadataToParts(docId, partIds)
         // Trash last: if anything above fails the original stays untouched next to the parts.
-        meta.trashDoc(docId)
+        writer.trashDoc(docId)
         ocrWorker.kick()
         return SplitOutcome.Done(partIds)
     }
@@ -255,11 +270,11 @@ class LibrarySessionImpl private constructor(
             .tagsForDocs(listOf(docId))
             .map { it.tag }
             .distinct()) {
-            meta.addTag(partIds, tag)
+            writer.addTag(partIds, tag)
         }
-        doc.correspondent?.let { meta.setCorrespondent(partIds, it) }
-        doc.docType?.let { meta.setDocType(partIds, it) }
-        doc.docDate?.let { date -> partIds.forEach { meta.setDocDate(it, date) } }
+        doc.correspondent?.let { writer.setCorrespondent(partIds, it) }
+        doc.docType?.let { writer.setDocType(partIds, it) }
+        doc.docDate?.let { date -> partIds.forEach { writer.setDocDate(it, date) } }
     }
 
     override fun start(scope: CoroutineScope) {
@@ -578,7 +593,7 @@ class LibrarySessionImpl private constructor(
                 coordinator = coordinator,
                 indexer = indexer,
                 importService = importService,
-                maintenance = maintenance,
+                maintenanceService = maintenance,
                 relinkService = relinkService,
                 splitService = splitService,
                 ocrPipeline = ocrPipeline,
@@ -587,7 +602,7 @@ class LibrarySessionImpl private constructor(
                 tags = tags,
                 savedViews = savedViews,
                 rules = rules,
-                meta = meta,
+                writer = meta,
                 content = content,
                 ai = ai,
             )

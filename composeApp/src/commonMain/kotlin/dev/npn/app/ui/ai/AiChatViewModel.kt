@@ -7,6 +7,7 @@ import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatTurn
+import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiRole
 import dev.npn.core.ai.AiText
 import dev.npn.core.app.LibrarySession
@@ -65,8 +66,10 @@ data class AiChatUiState(
  * partial assistant turn so it stays in history.
  */
 class AiChatViewModel(
-    val session: LibrarySession,
+    private val ai: AiFacade,
 ) : MessagesViewModel() {
+    constructor(session: LibrarySession) : this(session.ai)
+
     private val _ui = MutableStateFlow(AiChatUiState())
     val ui: StateFlow<AiChatUiState> = _ui.asStateFlow()
 
@@ -74,7 +77,7 @@ class AiChatViewModel(
 
     init {
         viewModelScope.launch {
-            val configured = session.ai.isConfiguredOrFalse()
+            val configured = ai.isConfiguredOrFalse()
             _ui.update { it.copy(configured = configured) }
         }
     }
@@ -123,7 +126,7 @@ class AiChatViewModel(
         history: List<AiChatTurn>,
         question: String,
     ) {
-        session.ai.ask(history, question).collect { event -> fold(event) }
+        ai.ask(history, question).collect { event -> fold(event) }
         _ui.update { it.copy(busy = false) }
     }
 

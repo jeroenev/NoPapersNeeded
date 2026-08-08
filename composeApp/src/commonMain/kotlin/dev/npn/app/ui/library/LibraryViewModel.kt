@@ -9,17 +9,25 @@ import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.completeActiveSearchToken
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.ImportOutcome
+import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.MetadataWriter
+import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.OcrStatus
+import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SavedView
+import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
+import dev.npn.core.app.TagRepository
 import dev.npn.core.app.ViewType
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
@@ -64,9 +72,28 @@ data class LibraryUiState(
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @Suppress("TooManyFunctions")
 class LibraryViewModel(
-    val session: LibrarySession,
+    private val documentRepository: DocumentRepository,
+    tagRepository: TagRepository,
+    savedViewRepository: SavedViewRepository,
+    private val meta: MetadataWriter,
+    private val docLifecycle: DocLifecycle,
+    private val ingest: IngestFacade,
+    ocr: OcrFacade,
+    private val reviewConfig: ReviewConfigFacade,
     private val settings: SettingsRepository,
 ) : MessagesViewModel() {
+    constructor(session: LibrarySession, settings: SettingsRepository) : this(
+        documentRepository = session.documents,
+        tagRepository = session.tags,
+        savedViewRepository = session.savedViews,
+        meta = session.meta,
+        docLifecycle = session.docLifecycle,
+        ingest = session.ingest,
+        ocr = session.ocr,
+        reviewConfig = session.reviewConfig,
+        settings = settings,
+    )
+
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
 
@@ -140,7 +167,7 @@ class LibraryViewModel(
             _ui.map { it.filter }.distinctUntilChanged(),
             _ui.map { it.sort }.distinctUntilChanged(),
         ) { f, s -> f to s }
-            .flatMapLatest { (f, s) -> session.documents.observeDocuments(f, s) }
+            .flatMapLatest { (f, s) -> documentRepository.observeDocuments(f, s) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /**
@@ -156,53 +183,53 @@ class LibraryViewModel(
                 if (prefix.length < MIN_SUGGESTION_LENGTH) {
                     flowOf(emptyList())
                 } else {
-                    flow { emit(session.documents.searchSuggestions(prefix, SUGGESTION_LIMIT)) }
+                    flow { emit(documentRepository.searchSuggestions(prefix, SUGGESTION_LIMIT)) }
                 }
             }.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val tags: StateFlow<List<TagInfo>> =
-        session.tags
+        tagRepository
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val correspondents: StateFlow<List<String>> =
-        session.documents
+        documentRepository
             .observeCorrespondents()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val docTypes: StateFlow<List<String>> =
-        session.documents
+        documentRepository
             .observeDocTypes()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val reviewMode: StateFlow<ReviewMode> =
-        session.reviewMode
+        reviewConfig.reviewMode
             .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     val needsReviewCount: StateFlow<Int> =
-        session.reviewMode
+        reviewConfig.reviewMode
             .flatMapLatest { mode ->
                 when (mode) {
-                    ReviewMode.UNTAGGED_ONLY -> session.documents.observeUntaggedCount()
-                    ReviewMode.INBOX_WORKFLOW -> session.documents.observeUnreviewedOrUntaggedCount()
+                    ReviewMode.UNTAGGED_ONLY -> documentRepository.observeUntaggedCount()
+                    ReviewMode.INBOX_WORKFLOW -> documentRepository.observeUnreviewedOrUntaggedCount()
                 }
             }.stateIn(viewModelScope, WhileSubscribedTimeout, 0)
 
     val savedViews: StateFlow<List<SavedView>> =
-        session.savedViews
+        savedViewRepository
             .observeSavedViews()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val scanProgress: StateFlow<ScanProgressUi?> =
-        session.scanProgress
+        ingest.scanProgress
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     val lastScanReport: StateFlow<ScanReport?> =
-        session.lastScanReport
+        ingest.lastScanReport
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     val ocrStatus: StateFlow<OcrStatus> =
-        session.ocrStatus
+        ocr.ocrStatus
             .stateIn(viewModelScope, WhileSubscribedTimeout, OcrStatus(0, false))
 
     // ---- filter/sort/view controls ----
@@ -317,22 +344,22 @@ class LibraryViewModel(
     fun refresh() {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(refreshing = true)
-            runCatching { session.rescan() }
+            runCatching { ingest.rescan() }
             _ui.value = _ui.value.copy(refreshing = false)
         }
     }
 
     // ---- bulk metadata ops ----
 
-    // Tag/reviewed writes are a single batched session call (perDoc = false); trash is per-doc so
+    // Tag/reviewed writes are a single batched write call (perDoc = false); trash is per-doc so
     // one failure does not abort the rest (perDoc = true). See [runOnSelection].
-    fun bulkAddTag(tag: String) = runOnSelection(UiAction.ADD_TAG) { session.meta.addTag(it, tag) }
+    fun bulkAddTag(tag: String) = runOnSelection(UiAction.ADD_TAG) { meta.addTag(it, tag) }
 
-    fun bulkRemoveTag(tag: String) = runOnSelection(UiAction.REMOVE_TAG) { session.meta.removeTag(it, tag) }
+    fun bulkRemoveTag(tag: String) = runOnSelection(UiAction.REMOVE_TAG) { meta.removeTag(it, tag) }
 
-    fun bulkSetReviewed(reviewed: Boolean) = runOnSelection(UiAction.UPDATE) { session.meta.setReviewed(it, reviewed) }
+    fun bulkSetReviewed(reviewed: Boolean) = runOnSelection(UiAction.UPDATE) { meta.setReviewed(it, reviewed) }
 
-    fun bulkTrash() = runOnSelection(UiAction.TRASH, perDoc = true) { session.meta.trashDoc(it.single()) }
+    fun bulkTrash() = runOnSelection(UiAction.TRASH, perDoc = true) { docLifecycle.trashDoc(it.single()) }
 
     /**
      * Run a bulk op over the current selection.
@@ -377,7 +404,7 @@ class LibraryViewModel(
             var duplicate = 0
             var failed = 0
             sources.forEach { (src, name) ->
-                val outcome = runCatching { session.importPdf(src, name) }.getOrNull()
+                val outcome = runCatching { ingest.importPdf(src, name) }.getOrNull()
                 when (outcome) {
                     is ImportOutcome.Imported -> imported++
                     is ImportOutcome.Duplicate -> duplicate++
@@ -393,7 +420,7 @@ class LibraryViewModel(
         viewModelScope.launch {
             val name = "scan-${randomId()}.pdf"
             val msg =
-                runCatching { session.importPdfBytes(bytes, name) }.fold(
+                runCatching { ingest.importPdfBytes(bytes, name) }.fold(
                     onSuccess = { outcome ->
                         when (outcome) {
                             is ImportOutcome.Imported -> uiText(UiTextKey.SCAN_IMPORTED)

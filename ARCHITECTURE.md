@@ -36,7 +36,7 @@ source sets hold implementations. Key packages:
 
 | Package | Contents |
 |---|---|
-| `core.app` | Public session API and orchestrators. `Contracts.kt` defines the interfaces the UI talks to (`LibrarySession`, `DocumentRepository`, `TagRepository`, `MetadataWriter`, `DocContentFacade`, `SettingsRepository`, `SavedViewRepository`). `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events. |
+| `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `Ingest.kt`, `Ocr.kt`, `ReviewConfigFacade.kt`, `Maintenance.kt`, `DocContentFacade.kt`, `Filters.kt`, `Settings.kt`. Consumers depend on the facets they use, not on `LibrarySession`. `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events. |
 | `core.journal` | The metadata journal: content-addressed JSONL transactions (`JournalEvent`, `JournalOp`), segments (`Segment`, `SegmentWriter`), codec (`JournalCodec`), HLC (`Hlc`), snapshot compaction (`SnapshotCompactor`, `SnapshotFormat`), and the HLC/OR-set fold (`FoldedState`, `FoldTest`). |
 | `core.fs` | Filesystem abstraction over the library folder: `LibraryFileSystem` (platform impl), `NpnPaths` (`.npn/` layout), `ContentIdentity`/`HexEncoding` (hash handling), `OcrSidecarFiles`, `TrashOps`. |
 | `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsWriteGate`, `DbLocalJournalState`, `DeviceIdentity`, `ScanReport`. |
@@ -89,8 +89,8 @@ via `mise hot`.
    the Room database (`FoldedState`, `MetadataAccumulator`). The db lives
    device-local, outside the library folder, and is rebuildable from the folder.
 4. **UI reads the cache**: viewmodels subscribe to Room DAO Flows (with the named
-   `WhileSubscribed(5_000)` constant) and map rows into UI models via
-   `Contracts.kt` interfaces; the Compose layer is a pure renderer of those.
+   `WhileSubscribed(5_000)` constant) and map rows into UI models via the
+   `core.app` facet interfaces; the Compose layer is a pure renderer of those.
 5. **Platform boundaries**: every engine (`PdfEngine`, `OcrEngine`,
    `LibraryFileSystem`, Room db, `WatchedFolder`) has a common interface with
    per-target implementations wired in `AppEnvironment.android/desktop.kt`.
@@ -98,7 +98,8 @@ via `mise hot`.
 ## Where to look for common tasks
 
 - Add a new property to a document → journal event + `FoldedState` + `Projections`
-  + `Contracts.kt` + UI model.
+  + the matching `core.app` contract file (`Metadata.kt` for a write, `Documents.kt`
+  for a read) + UI model.
 - New screen → package under `app/ui/`, viewmodel + screen in `commonMain`,
   route in `app/ui/nav/Route.kt`.
 - New platform behavior → interface in `core` commonMain, impl in each platform

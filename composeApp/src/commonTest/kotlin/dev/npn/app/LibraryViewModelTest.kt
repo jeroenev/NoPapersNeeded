@@ -151,7 +151,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
     @Test
     fun reviewPresetUntaggedOnly() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY }
+            val session = FakeLibrarySession().apply { reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY }
             val model = vm(session = session)
             // reviewMode is a WhileSubscribed StateFlow; keep a live collector so .value tracks upstream.
             val job = launch { model.reviewMode.collect {} }
@@ -164,7 +164,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
     @Test
     fun reviewPresetInboxWorkflow() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW }
+            val session = FakeLibrarySession().apply { reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW }
             val model = vm(session = session)
             val job = launch { model.reviewMode.collect {} }
             advanceUntilIdle()
@@ -190,7 +190,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    importOutcomes = listOf(ImportOutcome.Imported("a", "a.pdf"))
+                    ingest.importOutcomes = listOf(ImportOutcome.Imported("a", "a.pdf"))
                 }
             val model = vm(session = session)
             val messages = collectMessages(model)
@@ -204,7 +204,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    importOutcomes = listOf(ImportOutcome.Duplicate("a", "a.pdf"))
+                    ingest.importOutcomes = listOf(ImportOutcome.Duplicate("a", "a.pdf"))
                 }
             val model = vm(session = session)
             val messages = collectMessages(model)
@@ -216,7 +216,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
     @Test
     fun importScannedPdfFailureSurfacesMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { failImport = { error("disk full") } }
+            val session = FakeLibrarySession().apply { ingest.failImport = { error("disk full") } }
             val model = vm(session = session)
             val messages = collectMessages(model)
             model.importScannedPdf(byteArrayOf(1))
@@ -229,7 +229,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    failImport = { throw object : Throwable() {} }
+                    ingest.failImport = { throw object : Throwable() {} }
                 }
             val model = vm(session = session)
             val messages = collectMessages(model)
@@ -303,7 +303,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.toggleSelection("d3")
             model.bulkTrash()
             advanceUntilIdle()
-            session.meta.trashedDocs shouldContainExactlyInAnyOrder listOf("d1", "d2", "d3")
+            session.docLifecycle.trashedDocs shouldContainExactlyInAnyOrder listOf("d1", "d2", "d3")
             model.ui.value.selected shouldBe emptySet()
             model.ui.value.selectionMode shouldBe false
         }
@@ -311,7 +311,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
     @Test
     fun bulkTrashPartialFailureKeepsOnlyFailedIdsSelected() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { meta.failTrashDocIds = setOf("d2") }
+            val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("d2") }
             val model = vm(session = session)
             model.startSelection("d1")
             model.toggleSelection("d2")
@@ -325,7 +325,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             collector.cancel()
             messages shouldContainExactly listOf("Could not trash 1 of 3 document(s)")
             // d1 and d3 succeeded; only d2 kept selected for retry.
-            session.meta.trashedDocs shouldContainExactlyInAnyOrder listOf("d1", "d3")
+            session.docLifecycle.trashedDocs shouldContainExactlyInAnyOrder listOf("d1", "d3")
             model.ui.value.selected shouldBe setOf("d2")
             model.ui.value.selectionMode shouldBe true
         }
@@ -483,13 +483,13 @@ class LibraryViewModelTest : MainDispatcherTest() {
                 FakeLibrarySession().apply {
                     documents.untaggedCount.value = 5
                     documents.unreviewedOrUntaggedCount.value = 9
-                    reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
+                    reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
                 }
             val model = vm(session = session)
             val job = launch { model.needsReviewCount.collect {} }
             advanceUntilIdle()
             model.needsReviewCount.value shouldBe 5
-            session.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
+            session.reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
             advanceUntilIdle()
             model.needsReviewCount.value shouldBe 9
             job.cancel()

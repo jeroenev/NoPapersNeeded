@@ -27,3 +27,30 @@ and discussion; sharpen them here when they drift.
 
 The UI's `EditPhase` (Idle/Suggesting/Review/Applying/Done) is presentation
 state in `composeApp` and is not part of the domain vocabulary.
+
+## Library session facets
+
+`LibrarySession` (core.app) is a pure aggregate of narrow facades plus
+lifecycle (`start`/`close`). Consumers depend on the facets they use, never on
+the aggregate; only the composable tree and platform entry points hold the
+whole session. Each operation has exactly one public home:
+
+- **Ingest** (`IngestFacade`) — getting documents into the library: `importPdf`,
+  `importPdfBytes`, `importImagesAsPdf`, `rescan`, plus the `scanProgress` and
+  `lastScanReport` flows.
+- **OCR ops** (`OcrFacade`) — text-recognition management per document: `reOcr`,
+  `ocrVersions`, `setOcrEngine` (the single public home for the engine pin),
+  plus the `ocrStatus` flow.
+- **Review Config** (`ReviewConfigFacade`) — library-wide review settings:
+  `reviewMode`/`setReviewMode`, `standardFields`/`setStandardFields`,
+  `markReviewedForMigration`.
+- **Maintenance** (`MaintenanceFacade`) — repair and surgery on existing
+  documents: `resolveDuplicate`, `applyRelink`, `splitPdf`.
+- **Metadata writing** (`MetadataWriter`, session property `meta`) — per-doc and
+  bulk edits only: tags on docs, reviewed flag, correspondent, doc type, doc
+  date, title, notes, custom fields.
+- **Tag Admin** (`TagAdmin`, session property `tagAdmin`) — vocabulary-level tag
+  operations: `renameTag`, `mergeTag`, `deleteTag`, `setTagStyle`.
+- **Doc Lifecycle** (`DocLifecycle`, session property `docLifecycle`) — a
+  document's existence and location: `trashDoc`, `restoreDoc`,
+  `deleteDocPermanently`, `renameFile`, `moveFile`.

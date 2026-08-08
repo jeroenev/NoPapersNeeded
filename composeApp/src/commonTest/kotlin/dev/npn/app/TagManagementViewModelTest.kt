@@ -84,7 +84,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             val model = vm(session)
             model.mergeAll(listOf("finance", "invoices", "bills"), into = "finance")
             advanceUntilIdle()
-            session.meta.mergedTags shouldContainExactly
+            session.tagAdmin.mergedTags shouldContainExactly
                 listOf("invoices" to "finance", "bills" to "finance")
         }
 
@@ -95,7 +95,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             val model = vm(session)
             model.setStyleAll(listOf("finance", "travel"), "#abc")
             advanceUntilIdle()
-            session.meta.tagStyles shouldContainExactly
+            session.tagAdmin.tagStyles shouldContainExactly
                 listOf(
                     Triple("finance", "#abc", null),
                     Triple("travel", "#abc", null),
@@ -109,7 +109,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             val model = vm(session)
             model.deleteAll(listOf("finance", "travel"))
             advanceUntilIdle()
-            session.meta.deletedTags shouldContainExactly listOf("finance", "travel")
+            session.tagAdmin.deletedTags shouldContainExactly listOf("finance", "travel")
         }
 
     @Test
@@ -121,9 +121,9 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             model.merge("src", " dest ")
             model.delete("gone")
             advanceUntilIdle()
-            session.meta.renamedTags shouldContainExactly listOf("old" to "new")
-            session.meta.mergedTags shouldContainExactly listOf("src" to "dest")
-            session.meta.deletedTags shouldContainExactly listOf("gone")
+            session.tagAdmin.renamedTags shouldContainExactly listOf("old" to "new")
+            session.tagAdmin.mergedTags shouldContainExactly listOf("src" to "dest")
+            session.tagAdmin.deletedTags shouldContainExactly listOf("gone")
         }
 
     @Test
@@ -133,7 +133,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             val model = vm(session)
             model.setStyle("finance", "#abc", "star")
             advanceUntilIdle()
-            session.meta.tagStyles shouldContainExactly listOf(Triple("finance", "#abc", "star"))
+            session.tagAdmin.tagStyles shouldContainExactly listOf(Triple("finance", "#abc", "star"))
         }
 
     // ---- failed writes surface a user-facing message ----
@@ -141,7 +141,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
     @Test
     fun failedTagWritesEmitMessages() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { meta.failTagAdmin = { error("segment write failed") } }
+            val session = FakeLibrarySession().apply { tagAdmin.failTagAdmin = { error("segment write failed") } }
             val model = vm(session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
@@ -149,8 +149,8 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             model.delete("gone")
             model.rename("old", "new")
             advanceUntilIdle()
-            session.meta.deletedTags shouldBe emptyList()
-            session.meta.renamedTags shouldBe emptyList()
+            session.tagAdmin.deletedTags shouldBe emptyList()
+            session.tagAdmin.renamedTags shouldBe emptyList()
             messages shouldContainExactly
                 listOf(
                     "Could not delete tag: segment write failed",

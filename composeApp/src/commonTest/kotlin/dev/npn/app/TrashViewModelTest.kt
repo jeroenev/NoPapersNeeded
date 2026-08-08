@@ -32,7 +32,7 @@ class TrashViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val candidate = RelinkCandidate("old", "new", "name+size", 10)
-            session.lastScanReportFlow.value = emptyScanReport().copy(relinkCandidates = listOf(candidate))
+            session.ingest.lastScanReportFlow.value = emptyScanReport().copy(relinkCandidates = listOf(candidate))
             val model = vm(session)
             val job = launch { model.relinkCandidates.collect {} }
             advanceUntilIdle()
@@ -73,8 +73,8 @@ class TrashViewModelTest : MainDispatcherTest() {
             model.restore("d1")
             model.deleteForever("d2")
             advanceUntilIdle()
-            session.meta.restoredDocs shouldContainExactly listOf("d1")
-            session.meta.deletedDocs shouldContainExactly listOf("d2")
+            session.docLifecycle.restoredDocs shouldContainExactly listOf("d1")
+            session.docLifecycle.deletedDocs shouldContainExactly listOf("d2")
         }
 
     // ---- failed writes surface a user-facing message ----
@@ -82,14 +82,18 @@ class TrashViewModelTest : MainDispatcherTest() {
     @Test
     fun restoreFailureEmitsMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { meta.failRestore = { error("file exists at original path") } }
+            val session =
+                FakeLibrarySession().apply {
+                    docLifecycle.failRestore =
+                        { error("file exists at original path") }
+                }
             val model = vm(session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
             advanceUntilIdle()
             model.restore("d1")
             advanceUntilIdle()
-            session.meta.restoredDocs shouldBe emptyList()
+            session.docLifecycle.restoredDocs shouldBe emptyList()
             messages shouldContainExactly listOf("Could not restore document: file exists at original path")
             job.cancel()
         }

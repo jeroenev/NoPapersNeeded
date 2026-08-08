@@ -5,7 +5,9 @@ import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.TagAdmin
 import dev.npn.core.app.TagInfo
+import dev.npn.core.app.TagRepository
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 
@@ -25,22 +27,25 @@ data class TagNode(
 )
 
 class TagManagementViewModel(
-    val session: LibrarySession,
+    tagRepository: TagRepository,
+    private val tagAdmin: TagAdmin,
 ) : MessagesViewModel() {
+    constructor(session: LibrarySession) : this(session.tags, session.tagAdmin)
+
     val tags: StateFlow<List<TagInfo>> =
-        session.tags
+        tagRepository
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     fun rename(
         from: String,
         to: String,
-    ) = launchReporting(UiAction.RENAME_TAG) { session.meta.renameTag(from, to.trim()) }
+    ) = launchReporting(UiAction.RENAME_TAG) { tagAdmin.renameTag(from, to.trim()) }
 
     fun merge(
         from: String,
         into: String,
-    ) = launchReporting(UiAction.MERGE_TAGS) { session.meta.mergeTag(from, into.trim()) }
+    ) = launchReporting(UiAction.MERGE_TAGS) { tagAdmin.mergeTag(from, into.trim()) }
 
     /**
      * Merge every selected tag into [into] (the primary the user picked). Documents holding any
@@ -50,15 +55,15 @@ class TagManagementViewModel(
         names: List<String>,
         into: String,
     ) = launchReporting(UiAction.MERGE_TAGS) {
-        names.filter { it != into }.forEach { session.meta.mergeTag(it, into) }
+        names.filter { it != into }.forEach { tagAdmin.mergeTag(it, into) }
     }
 
-    fun delete(name: String) = launchReporting(UiAction.DELETE_TAG) { session.meta.deleteTag(name) }
+    fun delete(name: String) = launchReporting(UiAction.DELETE_TAG) { tagAdmin.deleteTag(name) }
 
     /** Bulk delete for the selection mode; one report covers the whole batch. */
     fun deleteAll(names: List<String>) =
         launchReporting(UiAction.DELETE_TAG) {
-            names.forEach { session.meta.deleteTag(it) }
+            names.forEach { tagAdmin.deleteTag(it) }
         }
 
     fun setStyle(
@@ -66,7 +71,7 @@ class TagManagementViewModel(
         color: String?,
         icon: String?,
     ) = launchReporting(UiAction.UPDATE_TAG_STYLE) {
-        session.meta.setTagStyle(name, color, icon)
+        tagAdmin.setTagStyle(name, color, icon)
     }
 
     /** Apply one color to every selected tag; one report covers the whole batch. */
@@ -74,6 +79,6 @@ class TagManagementViewModel(
         names: List<String>,
         color: String?,
     ) = launchReporting(UiAction.UPDATE_TAG_STYLE) {
-        names.forEach { session.meta.setTagStyle(it, color, null) }
+        names.forEach { tagAdmin.setTagStyle(it, color, null) }
     }
 }

@@ -501,7 +501,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
+                    reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -895,7 +895,7 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
+                    reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -913,7 +913,7 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
+                    reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }

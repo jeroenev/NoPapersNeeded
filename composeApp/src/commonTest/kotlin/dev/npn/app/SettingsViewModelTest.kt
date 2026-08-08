@@ -192,8 +192,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val model = vm(session = session)
             model.setUntaggedOnlyMode()
             advanceUntilIdle()
-            session.reviewModeSets shouldContainExactly listOf(ReviewMode.UNTAGGED_ONLY)
-            session.migrations shouldBe emptyList()
+            session.reviewConfig.reviewModeSets shouldContainExactly listOf(ReviewMode.UNTAGGED_ONLY)
+            session.reviewConfig.migrations shouldBe emptyList()
         }
 
     @Test
@@ -204,8 +204,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.setInboxWorkflowMode(ReviewMigration.MARK_ALL)
             advanceUntilIdle()
             // Migration (onlyTagged=false) runs before the mode flip.
-            session.migrations shouldContainExactly listOf(false)
-            session.reviewModeSets shouldContainExactly listOf(ReviewMode.INBOX_WORKFLOW)
+            session.reviewConfig.migrations shouldContainExactly listOf(false)
+            session.reviewConfig.reviewModeSets shouldContainExactly listOf(ReviewMode.INBOX_WORKFLOW)
         }
 
     @Test
@@ -215,8 +215,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val model = vm(session = session)
             model.setInboxWorkflowMode(ReviewMigration.MARK_TAGGED)
             advanceUntilIdle()
-            session.migrations shouldContainExactly listOf(true)
-            session.reviewModeSets shouldContainExactly listOf(ReviewMode.INBOX_WORKFLOW)
+            session.reviewConfig.migrations shouldContainExactly listOf(true)
+            session.reviewConfig.reviewModeSets shouldContainExactly listOf(ReviewMode.INBOX_WORKFLOW)
         }
 
     @Test
@@ -226,8 +226,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val model = vm(session = session)
             model.setInboxWorkflowMode(ReviewMigration.MARK_NONE)
             advanceUntilIdle()
-            session.migrations shouldBe emptyList()
-            session.reviewModeSets shouldContainExactly listOf(ReviewMode.INBOX_WORKFLOW)
+            session.reviewConfig.migrations shouldBe emptyList()
+            session.reviewConfig.reviewModeSets shouldContainExactly listOf(ReviewMode.INBOX_WORKFLOW)
         }
 
     private companion object {
