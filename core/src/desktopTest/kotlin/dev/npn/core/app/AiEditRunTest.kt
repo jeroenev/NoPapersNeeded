@@ -446,6 +446,23 @@ class AiEditRunSuggestTest {
         }
 
     @Test
+    fun fieldOnlySuggestionsCountAsSuggestions() =
+        runTest {
+            val h = Harness()
+            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.ai.editByDoc =
+                mapOf(
+                    "a" to edit(metadata = MetadataSuggestion(docDate = "2024-01-15")),
+                    "b" to AiEditSuggestion.EMPTY,
+                )
+
+            val review = h.run.suggest(key()).shouldBeInstanceOf<BatchResult.Review>()
+
+            review.docs.map { it.docId } shouldContainExactly listOf("a")
+            review.emptyDocs.map { it.docId } shouldContainExactly listOf("b")
+        }
+
+    @Test
     fun failedDocsAreCountedNotProcessedAndRetriedNextBatch() =
         runTest {
             val h = Harness()
@@ -588,6 +605,58 @@ class AiEditRunApplyTest {
             h.meta.addedTags shouldContainExactly listOf(listOf("a") to "kept")
             h.meta.removedTags shouldBe emptyList()
         }
+
+    @Test
+    fun applyWritesSelectedRemovalsGroupedByTag() =
+        runTest {
+            // "utility" is on both docs -> one grouped removeTag call for both.
+            val h = Harness()
+            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.ai.edit = edit(removeTags = listOf("utility"))
+
+            val review = reviewOf(h)
+            val selected = review.docs.map { it.withRemovalsSelected() }
+            val done = h.run.apply(key(), selected).shouldBeInstanceOf<ApplyOutcome.Done>()
+
+            h.meta.removedTags shouldContainExactly listOf(listOf("a", "b") to "utility")
+            done.result.applied shouldBe 2
+            done.result.docsChanged shouldBe 2
+        }
+
+    @Test
+    fun removalPartialFailureRetainsUnappliedAndCarriesCount() =
+        runTest {
+            // Distinct removal tags keep the calls separate, so only a's fails.
+            val h = Harness()
+            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.ai.editByDoc =
+                mapOf(
+                    "a" to edit(removeTags = listOf("utility")),
+                    "b" to edit(removeTags = listOf("old")),
+                )
+
+            val review = reviewOf(h)
+            val selected = review.docs.map { it.withRemovalsSelected() }
+            h.meta.failRemoveTagForDocs = setOf("a")
+            val retry = h.run.apply(key(), selected).shouldBeInstanceOf<ApplyOutcome.Retry>()
+
+            retry.remaining.map { it.docId } shouldContainExactly listOf("a")
+            retry.remaining
+                .single()
+                .removals
+                .single()
+                .selected shouldBe true
+
+            // Retry succeeding: only a's removal is written; Done counts include b's earlier write.
+            h.meta.failRemoveTagForDocs = emptySet()
+            h.meta.removedTags.clear()
+            val done = h.run.apply(key(), retry.remaining).shouldBeInstanceOf<ApplyOutcome.Done>()
+
+            h.meta.removedTags shouldContainExactly listOf(listOf("a") to "utility")
+            done.result.applied shouldBe 2
+        }
+
+    private fun ReviewDoc.withRemovalsSelected(): ReviewDoc = copy(removals = removals.map { it.copy(selected = true) })
 
     @Test
     fun applyRoutesFieldsThroughMatchingSetters() =
