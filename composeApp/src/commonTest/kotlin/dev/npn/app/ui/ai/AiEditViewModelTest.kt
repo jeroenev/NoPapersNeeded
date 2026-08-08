@@ -13,7 +13,12 @@ import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiTagging
+import dev.npn.core.app.DocField
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.LibraryFilter
+import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.SavedView
+import dev.npn.core.app.SortField
 import dev.npn.core.model.ReviewMode
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -77,7 +82,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
                             (s.phase as? EditPhase.Suggesting)?.let { progress += it.progress.done }
                         }
                     },
-                    launch { model.scopeCount.collect {} },
+                    launch { model.preview.collect {} },
                 )
             advanceUntilIdle()
 
@@ -123,8 +128,8 @@ class AiEditSuggestionTest : MainDispatcherTest() {
     @Test
     fun suggestionConcurrencyIsBounded() =
         runTest(dispatcher) {
-            // 6 docs, concurrency 4: only 4 calls should be dispatched before any completes.
-            val docs = (1..6).map { item("d$it") }
+            // 14 docs, concurrency 12: only 12 calls should be dispatched before any completes.
+            val docs = (1..14).map { item("d$it") }
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = docs
@@ -139,9 +144,9 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             advanceTimeBy(50) // permits granted, none completed yet
             runCurrent()
 
-            session.ai.suggestEditsCalls shouldHaveSize 4
+            session.ai.suggestEditsCalls shouldHaveSize 12
             advanceUntilIdle()
-            session.ai.suggestEditsCalls shouldHaveSize 6
+            session.ai.suggestEditsCalls shouldHaveSize 14
             job.cancel()
         }
 
@@ -723,17 +728,142 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
 
 class AiEditConfigurationTest : MainDispatcherTest() {
     @Test
-    fun scopeCountReflectsSelectedScope() =
+    fun previewReportsScopeTotalAndTheDocumentsOfTheNextBatch() =
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"), item("c"))
                 }
             val model = vm(session)
-            val job = launch { model.scopeCount.collect {} }
+            val job = launch { model.preview.collect {} }
             advanceUntilIdle()
 
-            model.scopeCount.value shouldBe 3
+            model.setBatchSize(2)
+            advanceUntilIdle()
+            model.preview.value.total shouldBe 3
+            model.preview.value.batch
+                .map { it.doc.docId } shouldContainExactly listOf("a", "b")
+            job.cancel()
+        }
+
+    @Test
+    fun previewDropsDocumentsAlreadyReviewedInThisSession() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"), item("b"), item("c"))
+                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                }
+            val model = vm(session)
+            val jobs = listOf(launch { model.ui.collect {} }, launch { model.preview.collect {} })
+            advanceUntilIdle()
+
+            model.setScope(EditScope.ALL)
+            model.setBatchSize(2)
+            advanceUntilIdle()
+            model.start()
+            advanceUntilIdle()
+
+            // a and b were reviewed, so only c is left for the next batch.
+            model.preview.value.total shouldBe 1
+            model.preview.value.batch
+                .map { it.doc.docId } shouldContainExactly listOf("c")
+            jobs.forEach { it.cancel() }
+        }
+
+    @Test
+    fun selectionHandOffScopesTheRunToThoseDocuments() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"), item("b"), item("c"))
+                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                }
+            val model = AiEditViewModel(session, FakeSettingsRepository(), listOf("a", "c"))
+            val jobs = listOf(launch { model.ui.collect {} }, launch { model.preview.collect {} })
+            advanceUntilIdle()
+
+            model.ui.value.scope shouldBe EditScope.SELECTION
+            model.ui.value.selectionSize shouldBe 2
+            model.preview.value.batch
+                .map { it.doc.docId } shouldContainExactly listOf("a", "c")
+
+            model.start()
+            advanceUntilIdle()
+            session.ai.suggestEditsCalls shouldContainExactly listOf("a", "c")
+            jobs.forEach { it.cancel() }
+        }
+
+    @Test
+    fun missingFieldsScopeTargetsTheEnabledAutofillFields() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { documents.documents.value = listOf(item("a")) }
+            val model = vm(session)
+            val jobs = listOf(launch { model.ui.collect {} }, launch { model.preview.collect {} })
+            advanceUntilIdle()
+
+            model.setFieldEnabled(AiField.TITLE, false)
+            model.setScope(EditScope.MISSING_FIELDS)
+            advanceUntilIdle()
+
+            model.ui.value.scope shouldBe EditScope.MISSING_FIELDS
+            session.documents.observedFilters
+                .last()
+                .first.missingAny shouldContainExactly listOf(DocField.CORRESPONDENT, DocField.DOC_DATE)
+
+            // Disabling every field leaves nothing to look for, so the scope selects nothing.
+            AiField.entries.forEach { model.setFieldEnabled(it, false) }
+            advanceUntilIdle()
+            model.preview.value.total shouldBe 0
+            jobs.forEach { it.cancel() }
+        }
+
+    @Test
+    fun savedViewScopeUsesTheViewFilterAndSort() =
+        runTest(dispatcher) {
+            val view =
+                SavedView(
+                    id = "v1",
+                    name = "Invoices",
+                    filter = LibraryFilter(tagsAll = listOf("invoice")),
+                    sort = LibrarySort(SortField.NAME, ascending = true),
+                )
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"))
+                    savedViews.views.value = listOf(view)
+                }
+            val model = vm(session)
+            val jobs = listOf(launch { model.ui.collect {} }, launch { model.preview.collect {} })
+            advanceUntilIdle()
+
+            model.ui.value.savedViewId shouldBe "v1"
+            model.setScope(EditScope.SAVED_VIEW)
+            advanceUntilIdle()
+
+            session.documents.observedFilters.last() shouldBe (view.filter to view.sort)
+            jobs.forEach { it.cancel() }
+        }
+
+    @Test
+    fun unavailableScopesAreRejected() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"))
+                    reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            // No hand-off, no saved views, no inbox workflow.
+            model.setScope(EditScope.SELECTION)
+            model.ui.value.scope shouldBe EditScope.UNTAGGED
+            model.setScope(EditScope.SAVED_VIEW)
+            model.ui.value.scope shouldBe EditScope.UNTAGGED
+            model.setScope(EditScope.REVIEW_QUEUE)
+            model.ui.value.scope shouldBe EditScope.UNTAGGED
             job.cancel()
         }
 

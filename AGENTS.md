@@ -49,6 +49,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 
 ## Conventions
 
+- Read ARCHITECTURE.md for the module/package map, data flow, and where to look
+  for common tasks before navigating the codebase.
 - Commit messages: `[main] Imperative summary` (branch name in brackets).
 - Shared Flow subscriptions use the named `WhileSubscribed(5_000)` constant instead of
   inline timeouts.

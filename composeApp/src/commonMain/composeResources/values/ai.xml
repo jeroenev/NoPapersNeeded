@@ -23,8 +23,12 @@
     <string name="ai_edit_applying">Applying suggestions...</string>
     <string name="ai_edit_intro">Automate edits across a set of documents</string>
     <string name="ai_edit_scope">Documents</string>
+    <string name="ai_edit_scope_selection">Selected documents (%1$d)</string>
     <string name="ai_edit_untagged_documents">Untagged documents</string>
     <string name="ai_edit_review_queue">Review queue</string>
+    <string name="ai_edit_scope_missing_fields">Missing one of the chosen fields</string>
+    <string name="ai_edit_scope_saved_view">Saved view</string>
+    <string name="ai_edit_saved_view_choose">Choose a view</string>
     <string name="ai_edit_all_documents">All documents</string>
     <string name="ai_edit_fields">Autofill fields</string>
     <string name="ai_edit_fields_help">Overwrite also replaces values that are already filled in.</string>

@@ -93,10 +93,10 @@ fun AiEditScreen(
     session: LibrarySession,
     settings: SettingsRepository,
     onBack: () -> Unit,
+    selection: List<String> = emptyList(),
 ) {
-    val vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings) }
+    val vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) }
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val count by vm.scopeCount.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
@@ -118,7 +118,7 @@ fun AiEditScreen(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             when (val phase = ui.phase) {
-                is EditPhase.Idle -> AiEditSetup(ui, count, vm)
+                is EditPhase.Idle -> AiEditSetup(ui, vm, session.content)
                 is EditPhase.Suggesting -> SuggestingPhase(phase.progress, vm::cancel)
                 is EditPhase.Review -> ReviewPhase(phase, vm, session.content, vm::skipReview)
                 is EditPhase.Applying -> CenteredProgress(stringResource(Res.string.ai_edit_applying))

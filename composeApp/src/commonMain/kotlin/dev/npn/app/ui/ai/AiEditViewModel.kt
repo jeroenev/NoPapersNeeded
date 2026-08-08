@@ -12,10 +12,12 @@ import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.AiTagging
+import dev.npn.core.app.DocField
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.SavedView
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.CancellationException
@@ -24,11 +26,15 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
@@ -38,8 +44,24 @@ import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 
-/** Document scope for a bulk AI-edit run. */
-enum class EditScope { UNTAGGED, REVIEW_QUEUE, ALL }
+/**
+ * Document scope for a bulk AI-edit run.
+ *
+ * [SELECTION] is only offered when the page was opened from the library's selection mode;
+ * [MISSING_FIELDS] targets documents lacking at least one of the fields the run autofills;
+ * [SAVED_VIEW] reuses a stored library view (its filter *and* its sort).
+ */
+enum class EditScope { SELECTION, UNTAGGED, REVIEW_QUEUE, MISSING_FIELDS, SAVED_VIEW, ALL }
+
+/** The documents the next batch would process ([batch]) out of [total] still in scope. */
+data class ScopePreview(
+    val total: Int,
+    val batch: List<DocListItem>,
+) {
+    companion object {
+        val EMPTY = ScopePreview(0, emptyList())
+    }
+}
 
 /**
  * One suggested (doc, tag) pairing in the review phase. [selected] drives whether Apply writes it;
@@ -148,6 +170,10 @@ sealed interface EditPhase {
 data class AiEditUiState(
     val scope: EditScope = EditScope.UNTAGGED,
     val reviewQueueAvailable: Boolean = false,
+    /** Documents handed over from the library selection; 0 when the page was opened standalone. */
+    val selectionSize: Int = 0,
+    val savedViews: List<SavedView> = emptyList(),
+    val savedViewId: String? = null,
     val phase: EditPhase = EditPhase.Idle,
     val maxTags: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val maxNewTags: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
@@ -166,6 +192,43 @@ fun AiEditUiState.hasEdits(): Boolean =
         fieldOptions.values.any { it.enabled } ||
         customPrompt.isNotBlank()
 
+/** Whether [scope] can be picked: the hand-off, review mode and saved views gate three of them. */
+fun AiEditUiState.scopeAvailable(scope: EditScope): Boolean =
+    when (scope) {
+        EditScope.SELECTION -> selectionSize > 0
+        EditScope.REVIEW_QUEUE -> reviewQueueAvailable
+        EditScope.MISSING_FIELDS -> fieldOptions.values.any { it.enabled }
+        EditScope.SAVED_VIEW -> savedViews.isNotEmpty()
+        EditScope.UNTAGGED, EditScope.ALL -> true
+    }
+
+/** The autofilled fields as library-filter fields; these define [EditScope.MISSING_FIELDS]. */
+fun AiEditUiState.missingFields(): List<DocField> =
+    AiField.entries.filter { fieldOptions[it]?.enabled == true }.map { it.docField() }
+
+private fun AiField.docField(): DocField =
+    when (this) {
+        AiField.TITLE -> DocField.TITLE
+        AiField.CORRESPONDENT -> DocField.CORRESPONDENT
+        AiField.DOC_DATE -> DocField.DOC_DATE
+    }
+
+/** Everything in the UI state that changes *which* documents a run would touch. */
+private data class ScopeKey(
+    val scope: EditScope,
+    val savedView: SavedView?,
+    val missing: List<DocField>,
+    val batchSize: Int,
+)
+
+private fun AiEditUiState.scopeKey(): ScopeKey =
+    ScopeKey(
+        scope = scope,
+        savedView = savedViews.firstOrNull { it.id == savedViewId },
+        missing = missingFields(),
+        batchSize = batchSize,
+    )
+
 /**
  * Drives the bulk AI-edit screen for one opened library. State machine:
  * `Idle → Suggesting → Review → Applying → Done`.
@@ -175,8 +238,8 @@ fun AiEditUiState.hasEdits(): Boolean =
  *   whether removals are proposed,
  *   optionally type a free-text [customPrompt] (e.g. "merge tags that differ only in case"), and
  *   tweak the per-run overrides ([AiEditUiState.maxTags],
- *   [AiEditUiState.maxNewTags], [AiEditUiState.batchSize]). The document count for the current
- *   scope is observed via [scopeCount]. Start runs
+ *   [AiEditUiState.maxNewTags], [AiEditUiState.batchSize]). [preview] shows exactly the documents
+ *   the next batch would touch (already-processed ones excluded) plus how many remain. Start runs
  *   [dev.npn.core.ai.AiFacade.suggestEdits] over the first [AiEditUiState.batchSize] docs with
  *   bounded concurrency ([SUGGEST_CONCURRENCY]); each document is ONE model request covering every
  *   requested section (tags + removals + fields + custom prompt). Progress is reported as each doc
@@ -193,27 +256,43 @@ fun AiEditUiState.hasEdits(): Boolean =
  *   (mirrors the bulk-op convention). Failed docs keep their unapplied selections so the user can
  *   retry.
  *
- * [processedIds] remembers already-processed docs for the session so the "next batch" continuation
+ * [processed] remembers already-processed docs for the session so the "next batch" continuation
  * excludes them (needed for ALL / review-queue scopes; UNTAGGED docs drop out of the scope query on
- * their own once tagged).
+ * their own once tagged) and so [preview] reports what is actually left.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("TooManyFunctions")
 class AiEditViewModel(
     val session: LibrarySession,
     private val settings: SettingsRepository,
+    /** Documents handed over from the library's selection mode; empty when opened from the rail. */
+    private val selection: List<String> = emptyList(),
 ) : MessagesViewModel() {
-    private val scope = MutableStateFlow(EditScope.UNTAGGED)
-    private val _ui = MutableStateFlow(AiEditUiState())
+    private val _ui =
+        MutableStateFlow(
+            AiEditUiState(
+                scope = if (selection.isEmpty()) EditScope.UNTAGGED else EditScope.SELECTION,
+                selectionSize = selection.size,
+            ),
+        )
     val ui: StateFlow<AiEditUiState> = _ui.asStateFlow()
 
-    /** Live document count for the currently selected scope (drives the Idle "N documents" line). */
-    val scopeCount: StateFlow<Int> =
-        scope
-            .flatMapLatest { session.documents.observeCount(scopeFilter(it)) }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, 0)
+    /** Documents already reviewed in this session; excluded from every later batch and [preview]. */
+    private val processed = MutableStateFlow(emptySet<String>())
 
-    private val processedIds = mutableSetOf<String>()
+    /**
+     * The documents the next batch would process, refreshed as the scope, batch size, autofill
+     * fields or the library itself change. Only collected while the Idle phase is on screen, so
+     * the underlying (possibly library-wide) query is not kept alive during a run.
+     */
+    val preview: StateFlow<ScopePreview> =
+        combine(_ui.map { it.scopeKey() }.distinctUntilChanged(), processed, ::Pair)
+            .flatMapLatest { (key, done) ->
+                scopeDocs(key).map { docs ->
+                    val remaining = docs.filterNot { it.doc.docId in done }
+                    ScopePreview(remaining.size, remaining.take(key.batchSize))
+                }
+            }.stateIn(viewModelScope, WhileSubscribedTimeout, ScopePreview.EMPTY)
 
     /** Suggestions written across earlier partial-failure apply attempts of the current Review batch. */
     private var appliedSoFar = 0
@@ -223,6 +302,14 @@ class AiEditViewModel(
         viewModelScope.launch {
             val mode = runCatching { session.reviewMode.first() }.getOrDefault(ReviewMode.DEFAULT)
             _ui.update { it.copy(reviewQueueAvailable = mode == ReviewMode.INBOX_WORKFLOW) }
+        }
+        // Saved views double as AI-edit scopes, so keep the list live and preselect the first one.
+        viewModelScope.launch {
+            runCatching {
+                session.savedViews.observeSavedViews().collect { views ->
+                    _ui.update { it.copy(savedViews = views, savedViewId = it.savedViewId ?: views.firstOrNull()?.id) }
+                }
+            }
         }
         // Seed the per-run overrides from the persisted Settings defaults (once); keep the
         // AiTagging defaults on failure.
@@ -237,12 +324,19 @@ class AiEditViewModel(
         }
     }
 
-    /** Change the scope (Idle only); the review-queue option is ignored when unavailable. */
+    /** Change the scope (Idle only); unavailable scopes are ignored. */
     fun setScope(scope: EditScope) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        if (scope == EditScope.REVIEW_QUEUE && !_ui.value.reviewQueueAvailable) return
-        this.scope.value = scope
+        val state = _ui.value
+        if (state.phase != EditPhase.Idle) return
+        if (!state.scopeAvailable(scope)) return
         _ui.update { it.copy(scope = scope) }
+    }
+
+    /** Pick which saved view backs the [EditScope.SAVED_VIEW] scope (Idle only). */
+    fun setSavedView(id: String) {
+        if (_ui.value.phase != EditPhase.Idle) return
+        if (_ui.value.savedViews.none { it.id == id }) return
+        _ui.update { it.copy(savedViewId = id) }
     }
 
     /** Set the per-run max suggested tags per document (Idle only); clamped to [AiTagging.RANGE]. */
@@ -502,7 +596,7 @@ class AiEditViewModel(
         // Mark EVERY reviewed doc (incl. no-suggestion ones) processed now, not on apply, so the
         // next batch never re-suggests docs the user already saw — deselecting or skipping a doc
         // must not send it back through the model on "Next batch".
-        results.forEach { processedIds += it.docId }
+        processed.update { done -> done + results.map { it.docId } }
         appliedSoFar = 0
         val (withSuggestions, empty) =
             results.partition {
@@ -514,7 +608,7 @@ class AiEditViewModel(
 
     /**
      * Leave Review without writing anything: jump straight to Done with zero counts and the
-     * correct moreRemain (reviewed docs are already in [processedIds], so they are excluded).
+     * correct moreRemain (reviewed docs are already in [processed], so they are excluded).
      */
     fun skipReview() {
         if (_ui.value.phase !is EditPhase.Review) return
@@ -555,20 +649,16 @@ class AiEditViewModel(
         for ((tag, docIds) in addsByTag) {
             runCatching { session.meta.addTag(docIds, tag) }
                 .onSuccess {
-                    docIds.forEach { docId ->
-                        succeededAdds += docId to tag
-                        processedIds += docId
-                    }
+                    docIds.forEach { docId -> succeededAdds += docId to tag }
+                    processed.update { it + docIds }
                 }.onFailure { failedDocs += docIds }
         }
         val removalsByTag = pendingRemovals.groupBy({ it.second }, { it.first })
         for ((tag, docIds) in removalsByTag) {
             runCatching { session.meta.removeTag(docIds, tag) }
                 .onSuccess {
-                    docIds.forEach { docId ->
-                        succeededRemovals += docId to tag
-                        processedIds += docId
-                    }
+                    docIds.forEach { docId -> succeededRemovals += docId to tag }
+                    processed.update { it + docIds }
                 }.onFailure { failedDocs += docIds }
         }
         // Field values are inherently per document, so each selected (doc, field) is one setter
@@ -577,7 +667,7 @@ class AiEditViewModel(
             runCatching { writeField(docId, field) }
                 .onSuccess {
                     succeededFields += docId to field.field
-                    processedIds += docId
+                    processed.update { it + docId }
                 }.onFailure { failedDocs += docId }
         }
         finishApply(review, succeededAdds, succeededRemovals, succeededFields, failedDocs)
@@ -658,13 +748,14 @@ class AiEditViewModel(
     }
 
     private suspend fun nextBatchDocs(): List<DocListItem> =
-        currentScopeDocs().filter { it.doc.docId !in processedIds }.take(_ui.value.batchSize)
+        currentScopeDocs().filterNot { it.doc.docId in processed.value }.take(_ui.value.batchSize)
 
     /** Whether the scope still has unprocessed docs (drives the "Next batch" affordance). */
     private suspend fun moreRemain(): Boolean = nextBatchDocs().isNotEmpty()
 
-    private suspend fun currentScopeDocs(): List<DocListItem> =
-        session.documents.observeDocuments(scopeFilter(scope.value), SORT).first()
+    // Taken as a one-shot snapshot rather than off [preview]: a run continues (and finishes with a
+    // correct moreRemain) while the Idle phase — and therefore the preview subscription — is gone.
+    private suspend fun currentScopeDocs(): List<DocListItem> = scopeDocs(_ui.value.scopeKey()).first()
 
     private fun reviewDoc(
         item: DocListItem,
@@ -701,11 +792,46 @@ class AiEditViewModel(
             selected = current.isNullOrBlank(),
         )
 
-    private fun scopeFilter(scope: EditScope): LibraryFilter =
-        when (scope) {
-            EditScope.UNTAGGED -> LibraryFilter(untaggedOnly = true)
-            EditScope.REVIEW_QUEUE -> LibraryFilter(unreviewedOrUntagged = true)
-            EditScope.ALL -> LibraryFilter()
+    /**
+     * Documents in scope, live. The library selection is intersected in memory (ids do not travel
+     * through the filter, and the list is already materialized for the library screen anyway); a
+     * saved view contributes its own sort, everything else uses the default [SORT].
+     */
+    private fun scopeDocs(key: ScopeKey): Flow<List<DocListItem>> =
+        when (key.scope) {
+            EditScope.SELECTION -> {
+                val ids = selection.toSet()
+                session.documents
+                    .observeDocuments(LibraryFilter(), SORT)
+                    .map { docs -> docs.filter { it.doc.docId in ids } }
+            }
+
+            EditScope.SAVED_VIEW -> {
+                key.savedView?.let { session.documents.observeDocuments(it.filter, it.sort) }
+                    ?: flowOf(emptyList())
+            }
+
+            // No autofill field enabled means the "missing a chosen field" scope selects nothing,
+            // rather than silently degrading into "all documents".
+            EditScope.MISSING_FIELDS -> {
+                if (key.missing.isEmpty()) {
+                    flowOf(emptyList())
+                } else {
+                    session.documents.observeDocuments(LibraryFilter(missingAny = key.missing), SORT)
+                }
+            }
+
+            EditScope.UNTAGGED -> {
+                session.documents.observeDocuments(LibraryFilter(untaggedOnly = true), SORT)
+            }
+
+            EditScope.REVIEW_QUEUE -> {
+                session.documents.observeDocuments(LibraryFilter(unreviewedOrUntagged = true), SORT)
+            }
+
+            EditScope.ALL -> {
+                session.documents.observeDocuments(LibraryFilter(), SORT)
+            }
         }
 
     private companion object {
@@ -716,7 +842,7 @@ class AiEditViewModel(
          * Bounds load on the model/backend while still overlapping the mostly-IO-bound calls for a
          * large speedup over serial execution.
          */
-        const val SUGGEST_CONCURRENCY = 4
+        const val SUGGEST_CONCURRENCY = 12
 
         /** Max characters of extracted text kept for a Review row's preview snippet. */
         const val SNIPPET_LENGTH = 200

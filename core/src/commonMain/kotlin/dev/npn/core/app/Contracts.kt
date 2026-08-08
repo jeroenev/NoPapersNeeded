@@ -13,10 +13,11 @@ import kotlinx.serialization.Serializable
 
 // ---------- filtering / sorting ----------
 
-/**
- * Contract between the service layer (implemented in dev.npn.core.app) and the UI layer
- * (composeApp). UI code must depend only on these types plus the db entities they carry.
- */
+// Contract between the service layer (implemented in dev.npn.core.app) and the UI layer
+// (composeApp). UI code must depend only on these types plus the db entities they carry.
+
+/** Single-value document fields whose absence can be filtered on; see [LibraryFilter.missingAny]. */
+enum class DocField { TITLE, CORRESPONDENT, DOC_DATE }
 
 @Serializable
 data class LibraryFilter(
@@ -34,6 +35,9 @@ data class LibraryFilter(
     val folder: String? = null, // relPath prefix
     val untaggedOnly: Boolean = false,
     val unreviewedOrUntagged: Boolean = false, // INBOX_WORKFLOW review preset: !reviewed OR no tags
+    // Documents where at least ONE of these fields is null/blank; empty = no such constraint.
+    // OR-ed (unlike the AND-ed rest of the filter) so "still needs data" is expressible in one pass.
+    val missingAny: List<DocField> = emptyList(),
 ) {
     val isEmpty: Boolean
         get() = this == LibraryFilter()

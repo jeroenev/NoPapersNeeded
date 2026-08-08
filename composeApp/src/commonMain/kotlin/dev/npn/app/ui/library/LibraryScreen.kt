@@ -100,6 +100,7 @@ import no_papers_needed.composeapp.generated.resources.common_select_all
 import no_papers_needed.composeapp.generated.resources.common_view_grid
 import no_papers_needed.composeapp.generated.resources.common_view_list
 import no_papers_needed.composeapp.generated.resources.library_add
+import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import no_papers_needed.composeapp.generated.resources.library_clear_filters
 import no_papers_needed.composeapp.generated.resources.library_conflict_file_count
 import no_papers_needed.composeapp.generated.resources.library_dismiss
@@ -155,7 +156,8 @@ fun LibraryScreen(
     onOpenDoc: (docId: String, order: List<String>, searchQuery: String?) -> Unit,
     onTrash: () -> Unit,
     onAiChat: () -> Unit,
-    onAiEdit: () -> Unit,
+    /** Opens the AI-edit page, optionally scoped to the given documents (empty = no preselection). */
+    onAiEdit: (List<String>) -> Unit,
 ) {
     val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -229,7 +231,7 @@ fun LibraryScreen(
             )
             // The navigation rail already carries the AI entries on wide layouts.
             if (aiConfigured && !wide) {
-                LibraryAiOverflowMenu(onAiChat = onAiChat, onAiEdit = onAiEdit)
+                LibraryAiOverflowMenu(onAiChat = onAiChat, onAiEdit = { onAiEdit(emptyList()) })
             }
         }
 
@@ -252,6 +254,17 @@ fun LibraryScreen(
                 onScan = onScan,
                 scanAvailable = scanner.available,
                 onOpenFilter = dialogs::openFilter,
+                // Hand the selection to the AI-edit page and leave selection mode behind.
+                onAiEdit =
+                    if (!aiConfigured) {
+                        null
+                    } else {
+                        {
+                            val selected = ui.selected.toList()
+                            vm.clearSelection()
+                            onAiEdit(selected)
+                        }
+                    },
                 onAddTag = {
                     scope.launch { dialogs.allTagNames = session.tags.allTagNames() }
                     dialogs.openAddTag()
@@ -400,6 +413,7 @@ private fun LibraryContent(
     onScan: () -> Unit,
     scanAvailable: Boolean,
     onOpenFilter: () -> Unit,
+    onAiEdit: (() -> Unit)?,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
 ) {
@@ -430,6 +444,7 @@ private fun LibraryContent(
                     onSelectAll = { vm.selectAll(allDocIds) },
                     onAddTag = onAddTag,
                     onRemoveTag = onRemoveTag,
+                    onAiEdit = onAiEdit,
                     onSetReviewed = vm::bulkSetReviewed,
                     onRequestTrash = { confirmTrash = true },
                 )
@@ -739,6 +754,8 @@ private fun SelectionTopBar(
     onSelectAll: () -> Unit,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
+    /** Null when the AI assistant is not configured; hides the AI-edit hand-off. */
+    onAiEdit: (() -> Unit)?,
     onSetReviewed: (Boolean) -> Unit,
     onRequestTrash: () -> Unit,
 ) {
@@ -756,6 +773,7 @@ private fun SelectionTopBar(
             }
             TextButton(onClick = onAddTag) { Text(stringResource(Res.string.common_add_tag)) }
             TextButton(onClick = onRemoveTag) { Text(stringResource(Res.string.library_remove_tag)) }
+            onAiEdit?.let { TextButton(onClick = it) { Text(stringResource(Res.string.library_ai_edit)) } }
             // Manual reviewed marker only applies in the inbox-workflow mode.
             if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
                 Box {

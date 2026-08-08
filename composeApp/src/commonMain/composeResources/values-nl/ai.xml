@@ -23,8 +23,12 @@
     <string name="ai_edit_applying">Suggesties toepassen...</string>
     <string name="ai_edit_intro">Automatiseer bewerkingen over een reeks documenten</string>
     <string name="ai_edit_scope">Documenten</string>
+    <string name="ai_edit_scope_selection">Geselecteerde documenten (%1$d)</string>
     <string name="ai_edit_untagged_documents">Documenten zonder tags</string>
     <string name="ai_edit_review_queue">Beoordelingswachtrij</string>
+    <string name="ai_edit_scope_missing_fields">Mist een van de gekozen velden</string>
+    <string name="ai_edit_scope_saved_view">Opgeslagen weergave</string>
+    <string name="ai_edit_saved_view_choose">Kies een weergave</string>
     <string name="ai_edit_all_documents">Alle documenten</string>
     <string name="ai_edit_fields">Velden automatisch invullen</string>
     <string name="ai_edit_fields_help">Overschrijven vervangt ook waarden die al ingevuld zijn.</string>
