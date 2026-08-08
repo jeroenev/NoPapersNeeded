@@ -8,8 +8,11 @@ import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiField
+import dev.npn.core.ai.AiFieldConfig
+import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocContentFacade
@@ -349,7 +352,7 @@ class DocDetailViewModel(
         if (_aiTags.value.suggesting) return
         _aiTags.value = _aiTags.value.copy(suggesting = true)
         viewModelScope.launch {
-            runCatching { ai.suggestTags(docId) }.fold(
+            runCatching { ai.suggestEdits(docId, AiEditRequest(tags = true)).addTags }.fold(
                 onSuccess = { suggestions ->
                     if (suggestions.isEmpty()) {
                         message(uiText(UiTextKey.NO_AI_TAG_SUGGESTIONS))
@@ -393,7 +396,11 @@ class DocDetailViewModel(
         if (_aiMetadata.value.suggesting) return
         _aiMetadata.value = _aiMetadata.value.copy(suggesting = true)
         viewModelScope.launch {
-            runCatching { ai.suggestMetadata(docId) }.fold(
+            val request =
+                AiEditRequest(
+                    fields = AiField.entries.map { AiFieldConfig(it, AiFieldMode.ALL) },
+                )
+            runCatching { ai.suggestEdits(docId, request).metadata }.fold(
                 onSuccess = { suggestion ->
                     if (suggestion.isEmpty) {
                         message(uiText(UiTextKey.NO_AI_METADATA_SUGGESTIONS))

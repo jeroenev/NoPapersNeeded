@@ -216,8 +216,7 @@ sealed interface AiChatEvent {
 /**
  * AI features scoped to one opened library. All model calls go to the user-configured
  * OpenAI-compatible endpoint; nothing here writes to the journal. Callers surface
- * failures as UI messages ([ask]/[suggestTags]/[suggestMetadata] throw on network/endpoint
- * errors).
+ * failures as UI messages ([ask]/[suggestEdits] throw on network/endpoint errors).
  */
 interface AiFacade {
     /** Current endpoint configuration (live settings values). */
@@ -238,41 +237,24 @@ interface AiFacade {
     ): Flow<AiChatEvent>
 
     /**
-     * Suggest new tags for [docId] from its indexed text, preferring the library's existing
-     * tag vocabulary. Suggestions matching an existing tag are canonicalized to its exact
-     * spelling; [TagSuggestion.isNew] marks genuinely new tags (capped per doc, ranked last).
-     * Returns suggestions only (never writes); accepting one goes through the normal
-     * MetadataWriter/journal path. Empty when the doc has no indexed text yet.
+     * The single suggestion primitive: propose edits for [docId] from its indexed text and
+     * current metadata, honouring [request]'s field selection/modes, tag-add/removal flags and
+     * optional [AiEditRequest.customPrompt]. All requested pieces come back from ONE model
+     * request — never a separate call per section — so tag-only, metadata-only and combined runs
+     * all flow through here.
      *
-     * [maxTags] and [maxNewTags] are optional per-call overrides of the configured defaults
-     * (from settings): null means use the configured default. Both are clamped to
-     * `AiTagging.RANGE` / `AiTagging.NEW_TAGS_RANGE` respectively.
-     */
-    suspend fun suggestTags(
-        docId: String,
-        maxTags: Int? = null,
-        maxNewTags: Int? = null,
-    ): List<TagSuggestion>
-
-    /**
-     * Suggest single-value properties (title, correspondent, document date) for [docId] from its
-     * indexed text. Correspondent suggestions prefer the library's existing correspondents and are
-     * canonicalized to their exact spelling; dates are validated ISO `yyyy-MM-dd`; suggestions
-     * matching the document's current values are dropped. Returns suggestions only (never
-     * writes); accepting one goes through the normal MetadataWriter/journal path. Empty when the
-     * doc has no indexed text yet.
-     */
-    suspend fun suggestMetadata(docId: String): MetadataSuggestion
-
-    /**
-     * Propose edits for [docId] from its indexed text and current metadata, honouring [request]'s
-     * field selection/modes, tag-add/removal flags and optional [AiEditRequest.customPrompt]. All
-     * requested pieces come back from ONE model request — never a separate call per section.
-     * Tag additions are canonicalized to the library vocabulary, tag removals are filtered to tags
-     * actually on the document, and field values are validated as in [suggestMetadata] (plus the
-     * per-field [AiFieldMode]). Returns suggestions only (never writes); accepting one goes
-     * through the normal MetadataWriter/journal path. Empty when the doc has no indexed text yet
-     * and field suggestions were requested (tag-only runs can still work off the tag list).
+     * Tag additions ([AiEditSuggestion.addTags]) are canonicalized to the library vocabulary with
+     * [TagSuggestion.isNew] marking genuinely-new tags (capped per doc via [AiEditRequest.maxTags]
+     * / [AiEditRequest.maxNewTags], which override the configured defaults when non-null and are
+     * clamped to `AiTagging.RANGE` / `AiTagging.NEW_TAGS_RANGE`). Tag removals are filtered to tags
+     * actually on the document. Field values ([AiEditSuggestion.metadata]) canonicalize
+     * correspondents to the library's existing spelling, validate dates as ISO `yyyy-MM-dd`, drop
+     * values matching the document's current ones, and honour each field's [AiFieldMode].
+     *
+     * Returns suggestions only (never writes); accepting one goes through the normal
+     * MetadataWriter/journal path. When the doc has no indexed text yet the result is empty for
+     * runs that requested any field ([AiEditRequest.fields] non-empty); tag-only runs can still
+     * work off the tag list even without OCR text.
      */
     suspend fun suggestEdits(
         docId: String,

@@ -29,15 +29,6 @@ object AiText {
     /** Cap on accepted title suggestions; anything longer is model rambling, not a title. */
     const val MAX_TITLE_SUGGESTION_CHARS = 200
 
-    const val MAX_TAG_SUGGESTIONS = 8
-
-    /**
-     * Default cap on genuinely-new (non-vocabulary) tags proposed per document, ranked last.
-     * User-configurable via settings ([dev.npn.core.app.AiTagging.NEW_TAGS_RANGE]); this constant
-     * is only the fallback when no explicit cap is supplied.
-     */
-    const val MAX_NEW_TAGS_PER_DOC = 5
-
     /**
      * Character budget for conversation history sent as real user/assistant messages. Derived
      * from the default `contextLength = 128_000` tokens at ~3 chars/token, reserving room for the
@@ -78,7 +69,7 @@ object AiText {
     /**
      * Parse raw tag strings out of a model response: the first JSON string array found wins
      * (models often wrap it in prose or code fences). Suggestions already on the document and
-     * case-insensitive duplicates are dropped. No cap is applied here — see [rankTagSuggestions].
+     * case-insensitive duplicates are dropped. No cap is applied here — see [parseEditSuggestion].
      */
     fun parseTagSuggestions(
         response: String,
@@ -90,30 +81,6 @@ object AiText {
             .filter { it.isNotEmpty() && it.lowercase() !in current }
             .distinctBy { it.lowercase() }
     }
-
-    /**
-     * Full tag-suggestion pipeline from a model [response]:
-     *  1. parse + drop blanks / current-tags / case-insensitive dups ([parseTagSuggestions]);
-     *  2. **canonicalize** each suggestion to the existing [vocabulary] tag's exact spelling when
-     *     it matches case-insensitively;
-     *  3. classify [TagSuggestion.isNew] = not in the vocabulary (after canonicalization);
-     *  4. **rank** existing-vocabulary suggestions before new ones (stable within each group);
-     *  5. **cap** new tags at [maxNew] (never above [perDocMax]) and the whole list at [perDocMax].
-     */
-    fun rankTagSuggestions(
-        response: String,
-        currentTags: List<String>,
-        vocabulary: List<String>,
-        perDocMax: Int = MAX_TAG_SUGGESTIONS,
-        maxNew: Int = MAX_NEW_TAGS_PER_DOC,
-    ): List<TagSuggestion> =
-        classifyTags(
-            parseTagSuggestions(response, currentTags),
-            currentTags,
-            vocabulary,
-            perDocMax,
-            maxNew,
-        )
 
     /**
      * Parse a combined edit suggestion object out of a model [response] (first JSON object wins):
@@ -184,7 +151,7 @@ object AiText {
         }
 
     /**
-     * The shared tag-classification tail of [rankTagSuggestions] / [parseEditSuggestion]:
+     * The shared tag-classification tail of [parseEditSuggestion]:
      * drop blanks + current tags + case-insensitive dups, canonicalize to [vocabulary] spelling,
      * rank existing-vocabulary before new, cap new at [maxNew] and the total at [perDocMax].
      */

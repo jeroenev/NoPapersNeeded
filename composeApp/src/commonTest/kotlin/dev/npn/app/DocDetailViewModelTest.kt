@@ -2,6 +2,7 @@ package dev.npn.app
 
 import dev.npn.app.ui.common.resolveEnglish
 import dev.npn.app.ui.detail.DocDetailViewModel
+import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
@@ -329,12 +330,15 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun suggestAiTagsStoresSuggestions() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ai.suggestions = tagSuggestions("finance", "invoice") }
+            val session =
+                FakeLibrarySession().apply {
+                    ai.edit = AiEditSuggestion(addTags = tagSuggestions("finance", "invoice"))
+                }
             val model = vm(session = session)
             advanceUntilIdle()
             model.suggestAiTags()
             advanceUntilIdle()
-            session.ai.suggestTagsCalls shouldContainExactly listOf("doc-1")
+            session.ai.suggestEditsCalls shouldContainExactly listOf("doc-1")
             model.aiTags.value.suggestions shouldContainExactly tagSuggestions("finance", "invoice")
             model.aiTags.value.suggesting shouldBe false
         }
@@ -342,7 +346,10 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun acceptAiTagAddsTagAndRemovesSuggestion() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ai.suggestions = tagSuggestions("finance", "invoice") }
+            val session =
+                FakeLibrarySession().apply {
+                    ai.edit = AiEditSuggestion(addTags = tagSuggestions("finance", "invoice"))
+                }
             val model = vm(session = session)
             advanceUntilIdle()
             model.suggestAiTags()
@@ -358,7 +365,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    ai.suggestions = tagSuggestions("finance", "invoice")
+                    ai.edit = AiEditSuggestion(addTags = tagSuggestions("finance", "invoice"))
                     meta.failBatchOps = { error("disk full") }
                 }
             val model = vm(session = session)
@@ -375,7 +382,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun suggestAiTagsEmptySurfacesMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ai.suggestions = emptyList() }
+            val session = FakeLibrarySession().apply { ai.edit = AiEditSuggestion.EMPTY }
             val model = vm(session = session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
@@ -391,7 +398,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun suggestAiTagsFailureSurfacesErrorAndClearsBusy() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ai.failSuggestTags = { error("network down") } }
+            val session = FakeLibrarySession().apply { ai.failSuggestEdits = { error("network down") } }
             val model = vm(session = session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
@@ -427,12 +434,12 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun suggestAiMetadataStoresSuggestion() =
         runTest(dispatcher) {
             val suggestion = MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
-            val session = FakeLibrarySession().apply { ai.metadataSuggestion = suggestion }
+            val session = FakeLibrarySession().apply { ai.edit = AiEditSuggestion(metadata = suggestion) }
             val model = vm(session = session)
             advanceUntilIdle()
             model.suggestAiMetadata()
             advanceUntilIdle()
-            session.ai.suggestMetadataCalls shouldContainExactly listOf("doc-1")
+            session.ai.suggestEditsCalls shouldContainExactly listOf("doc-1")
             model.aiMetadata.value.suggestion shouldBe suggestion
             model.aiMetadata.value.suggesting shouldBe false
         }
@@ -441,7 +448,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun acceptAiMetadataWritesFieldAndRemovesSuggestion() =
         runTest(dispatcher) {
             val suggestion = MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
-            val session = FakeLibrarySession().apply { ai.metadataSuggestion = suggestion }
+            val session = FakeLibrarySession().apply { ai.edit = AiEditSuggestion(metadata = suggestion) }
             val model = vm(session = session)
             advanceUntilIdle()
             model.suggestAiMetadata()
@@ -462,7 +469,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     fun dismissAiMetadataDropsOnlyThatField() =
         runTest(dispatcher) {
             val suggestion = MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
-            val session = FakeLibrarySession().apply { ai.metadataSuggestion = suggestion }
+            val session = FakeLibrarySession().apply { ai.edit = AiEditSuggestion(metadata = suggestion) }
             val model = vm(session = session)
             advanceUntilIdle()
             model.suggestAiMetadata()
@@ -477,7 +484,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun suggestAiMetadataEmptySurfacesMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession() // fake defaults to MetadataSuggestion.EMPTY
+            val session = FakeLibrarySession() // fake defaults to AiEditSuggestion.EMPTY
             val model = vm(session = session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
@@ -492,7 +499,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun suggestAiMetadataFailureSurfacesErrorAndClearsBusy() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ai.failSuggestMetadata = { error("network down") } }
+            val session = FakeLibrarySession().apply { ai.failSuggestEdits = { error("network down") } }
             val model = vm(session = session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }

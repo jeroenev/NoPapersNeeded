@@ -120,9 +120,6 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             session.ai.suggestEditsCalls shouldContainExactly listOf("a")
-            // The dedicated per-section calls are never used by the batch flow.
-            session.ai.suggestTagsCalls shouldBe emptyList()
-            session.ai.suggestMetadataCalls shouldBe emptyList()
             job.cancel()
         }
 

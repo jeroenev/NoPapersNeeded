@@ -60,57 +60,6 @@ class AiFacadeImpl(
             emitAll(loop.run(history, question))
         }
 
-    override suspend fun suggestTags(
-        docId: String,
-        maxTags: Int?,
-        maxNewTags: Int?,
-    ): List<TagSuggestion> {
-        val runtime = runtime()
-        val config = configProvider()
-        val maxTags = (maxTags ?: config.maxTagsPerDoc).coerceIn(AiTagging.RANGE)
-        val maxNew = (maxNewTags ?: config.maxNewTagsPerDoc).coerceIn(AiTagging.NEW_TAGS_RANGE)
-        val doc = db.documentDao().getByDocId(docId) ?: return emptyList()
-        val text = db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } ?: return emptyList()
-        val currentTags = db.tagDao().tagsForDocument(docId)
-        val vocabulary = db.tagDao().all().map { it.name }
-        val request =
-            prompt("npn-tag-suggest", AiRuntime.suggestionParams(config)) {
-                system(tagSystemPrompt(maxTags, maxNew))
-                user(renderTagRequest(doc.fileName, doc.title, vocabulary, currentTags, text))
-            }
-        val response = runtime.executor.execute(request, runtime.model)
-        return AiText.rankTagSuggestions(
-            response.textContent(),
-            currentTags,
-            vocabulary,
-            perDocMax = maxTags,
-            maxNew = maxNew,
-        )
-    }
-
-    override suspend fun suggestMetadata(docId: String): MetadataSuggestion {
-        val runtime = runtime()
-        val config = configProvider()
-        val doc = db.documentDao().getByDocId(docId) ?: return MetadataSuggestion.EMPTY
-        val text =
-            db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() }
-                ?: return MetadataSuggestion.EMPTY
-        val correspondents = db.documentDao().correspondents()
-        val request =
-            prompt("npn-metadata-suggest", AiRuntime.suggestionParams(config)) {
-                system(METADATA_SYSTEM_PROMPT)
-                user(renderMetadataRequest(doc, correspondents, text))
-            }
-        val response = runtime.executor.execute(request, runtime.model)
-        return AiText.parseMetadataSuggestion(
-            response.textContent(),
-            currentTitle = doc.title,
-            currentCorrespondent = doc.correspondent,
-            currentDocDate = doc.docDate,
-            correspondents = correspondents,
-        )
-    }
-
     override suspend fun suggestEdits(
         docId: String,
         request: AiEditRequest,
@@ -119,6 +68,8 @@ class AiFacadeImpl(
         val config = configProvider()
         val doc = db.documentDao().getByDocId(docId) ?: return AiEditSuggestion.EMPTY
         val text = db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() }
+        // No OCR text yet: field extraction is impossible, but a tag-only run can still work off
+        // the current tag list and vocabulary. This is the single decided rule for every flow.
         if (text == null && request.fields.isNotEmpty()) return AiEditSuggestion.EMPTY
         val currentTags = db.tagDao().tagsForDocument(docId)
         val vocabulary = db.tagDao().all().map { it.name }
@@ -160,42 +111,6 @@ class AiFacadeImpl(
             }
         }
     }
-
-    private fun renderTagRequest(
-        fileName: String,
-        title: String?,
-        vocabulary: List<String>,
-        currentTags: List<String>,
-        text: String,
-    ): String =
-        buildString {
-            appendLine("File name: $fileName")
-            title?.takeIf { it.isNotBlank() }?.let { appendLine("Title: $it") }
-            appendLine("Tags already on this document: ${currentTags.ifEmpty { listOf("(none)") }.joinToString(", ")}")
-            appendLine("Existing tags in this library: ${vocabulary.ifEmpty { listOf("(none)") }.joinToString(", ")}")
-            appendLine()
-            appendLine("Document text:")
-            appendLine(text.take(MAX_DOC_TEXT_CHARS))
-        }
-
-    private fun renderMetadataRequest(
-        doc: DocumentEntity,
-        correspondents: List<String>,
-        text: String,
-    ): String =
-        buildString {
-            appendLine("File name: ${doc.fileName}")
-            doc.title?.takeIf { it.isNotBlank() }?.let { appendLine("Current title: $it") }
-            doc.correspondent?.takeIf { it.isNotBlank() }?.let { appendLine("Current correspondent: $it") }
-            doc.docDate?.takeIf { it.isNotBlank() }?.let { appendLine("Current document date: $it") }
-            appendLine(
-                "Existing correspondents in this library: " +
-                    correspondents.ifEmpty { listOf("(none)") }.joinToString(", "),
-            )
-            appendLine()
-            appendLine("Document text:")
-            appendLine(text.take(MAX_DOC_TEXT_CHARS))
-        }
 
     private fun renderEditRequest(
         doc: DocumentEntity,
@@ -378,47 +293,5 @@ class AiFacadeImpl(
                 ${libraryContext.joinToString("\n")}
                 """.trimIndent()
         }
-
-        fun tagSystemPrompt(
-            max: Int,
-            maxNew: Int,
-        ): String {
-            val newTagRule =
-                if (maxNew <= 0) {
-                    "Do NOT invent any brand-new tags: use ONLY tags from the provided vocabulary."
-                } else {
-                    "Strongly prefer existing vocabulary tags and propose at most $maxNew brand-new tags."
-                }
-            return """
-                You suggest tags for a document in a personal paperless archive. Strongly prefer
-                reusing the library's existing tags: when an existing tag fits, copy it VERBATIM
-                (exact spelling and case) from the provided vocabulary. Only invent a new tag when
-                no existing one fits the document. Tags are short lowercase labels (topic, document
-                kind, organisation, year). Never suggest tags already on the document.
-
-                $newTagRule
-
-                Reply with ONLY a JSON array of tag strings, at most $max, best first. No prose,
-                no code fences.
-                """.trimIndent()
-        }
-
-        val METADATA_SYSTEM_PROMPT =
-            """
-            You extract catalog metadata for one document in a personal paperless archive.
-            Suggest:
-            - "title": a short, human-readable title in the document's own language (what the
-              document IS, e.g. "Electricity invoice January 2024"), not a file name.
-            - "correspondent": the other party — the company, institution or person that sent or
-              issued the document, never the archive owner. When an existing correspondent from
-              the provided list matches, copy it VERBATIM (exact spelling and case); only
-              introduce a new name when none fits.
-            - "date": the document's own date (invoice date, letter date, issue date) as
-              YYYY-MM-DD, never the scan or import date.
-
-            Reply with ONLY a JSON object, no prose, no code fences:
-            {"title": string|null, "correspondent": string|null, "date": "YYYY-MM-DD"|null}
-            Use null for anything the document text does not clearly support.
-            """.trimIndent()
     }
 }

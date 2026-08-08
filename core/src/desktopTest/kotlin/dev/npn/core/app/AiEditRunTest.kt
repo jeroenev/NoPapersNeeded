@@ -244,14 +244,6 @@ private class FakeAi : AiFacade {
         history: List<AiChatTurn>,
         question: String,
     ): Flow<AiChatEvent> = error("unused")
-
-    override suspend fun suggestTags(
-        docId: String,
-        maxTags: Int?,
-        maxNewTags: Int?,
-    ): List<TagSuggestion> = error("unused")
-
-    override suspend fun suggestMetadata(docId: String): MetadataSuggestion = error("unused")
 }
 
 // ---------- harness ----------
