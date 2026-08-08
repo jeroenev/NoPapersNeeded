@@ -23,6 +23,7 @@ import dev.npn.app.ui.common.WideLayoutBreakpoint
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_ai_assistant
 import no_papers_needed.composeapp.generated.resources.library_ai_edit
+import no_papers_needed.composeapp.generated.resources.library_ai_short
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -60,7 +61,15 @@ fun NavigationShell(
         } else {
             Column(Modifier.fillMaxSize()) {
                 Box(Modifier.weight(1f)) { content() }
-                if (current != null) ShellBottomBar(current = current, onNavigate = onNavigate)
+                if (current != null || aiCurrent != null) {
+                    ShellBottomBar(
+                        current = current,
+                        aiCurrent = aiCurrent,
+                        aiConfigured = aiConfigured,
+                        onNavigate = onNavigate,
+                        onAiChat = onAiChat,
+                    )
+                }
             }
         }
     }
@@ -129,23 +138,52 @@ private fun RailItem(
 
 @Composable
 private fun ShellBottomBar(
-    current: TopLevelDestination,
+    current: TopLevelDestination?,
+    aiCurrent: AiDestination?,
+    aiConfigured: Boolean,
     onNavigate: (TopLevelDestination) -> Unit,
+    onAiChat: () -> Unit,
 ) {
     NavigationBar {
-        TopLevelDestination.entries.forEach { dest ->
-            val selected = dest == current
+        // Same order as the rail: the top-level destinations, then the single AI hub, settings
+        // last. The bar merges assistant and edit into one "AI" item to stay at Material's
+        // five-item maximum; edit is reached from inside the assistant and from selection mode.
+        listOf(TopLevelDestination.LIBRARY, TopLevelDestination.TAGS, TopLevelDestination.TRASH)
+            .forEach { dest ->
+                val selected = dest == current
+                NavigationBarItem(
+                    selected = selected,
+                    onClick = { onNavigate(dest) },
+                    icon = {
+                        Icon(
+                            imageVector = if (selected) dest.selectedIcon else dest.icon,
+                            contentDescription = null,
+                        )
+                    },
+                    label = { Text(stringResource(dest.label)) },
+                )
+            }
+        // Mirror the rail: keep the AI item present (and selected) while one of the AI screens is
+        // open, so it is where it was launched from.
+        if (aiConfigured || aiCurrent != null) {
             NavigationBarItem(
-                selected = selected,
-                onClick = { onNavigate(dest) },
-                icon = {
-                    Icon(
-                        imageVector = if (selected) dest.selectedIcon else dest.icon,
-                        contentDescription = null,
-                    )
-                },
-                label = { Text(stringResource(dest.label)) },
+                selected = aiCurrent != null,
+                onClick = onAiChat,
+                icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
+                label = { Text(stringResource(Res.string.library_ai_short)) },
             )
         }
+        val settings = TopLevelDestination.SETTINGS
+        NavigationBarItem(
+            selected = settings == current,
+            onClick = { onNavigate(settings) },
+            icon = {
+                Icon(
+                    imageVector = if (settings == current) settings.selectedIcon else settings.icon,
+                    contentDescription = null,
+                )
+            },
+            label = { Text(stringResource(settings.label)) },
+        )
     }
 }

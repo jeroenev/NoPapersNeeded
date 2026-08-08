@@ -27,6 +27,7 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
@@ -95,6 +96,7 @@ import no_papers_needed.composeapp.generated.resources.ai_tool_searched_file_nam
 import no_papers_needed.composeapp.generated.resources.ai_unknown_value
 import no_papers_needed.composeapp.generated.resources.ai_unspecified_document
 import no_papers_needed.composeapp.generated.resources.common_back
+import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import org.jetbrains.compose.resources.stringResource
 
 private const val DOC_REF_LABEL_HEX = 8
@@ -105,6 +107,8 @@ fun AiChatScreen(
     session: LibrarySession,
     onBack: () -> Unit,
     onOpenDoc: (String) -> Unit,
+    /** Hands off to the AI-edit page without preselection. */
+    onAiEdit: () -> Unit,
 ) {
     val vm: AiChatViewModel = viewModel { AiChatViewModel(session) }
     val ui by vm.ui.collectAsStateWithLifecycle()
@@ -124,7 +128,14 @@ fun AiChatScreen(
 
     Scaffold(
         snackbarHost = { SnackbarHost(snackbar) },
-        topBar = { AiChatTopBar(items.isNotEmpty() && !ui.busy, onBack, vm::clear) },
+        topBar = {
+            AiChatTopBar(
+                clearEnabled = items.isNotEmpty() && !ui.busy,
+                onBack = onBack,
+                onClear = vm::clear,
+                onAiEdit = onAiEdit,
+            )
+        },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             // The progress bar only covers the pre-first-token phase; once text streams the
@@ -188,6 +199,7 @@ private fun AiChatTopBar(
     clearEnabled: Boolean,
     onBack: () -> Unit,
     onClear: () -> Unit,
+    onAiEdit: () -> Unit,
 ) {
     TopAppBar(
         title = { Text(stringResource(Res.string.ai_assistant_title)) },
@@ -200,6 +212,12 @@ private fun AiChatTopBar(
             }
         },
         actions = {
+            IconButton(onClick = onAiEdit) {
+                Icon(
+                    Icons.Outlined.AutoFixHigh,
+                    contentDescription = stringResource(Res.string.library_ai_edit),
+                )
+            }
             IconButton(onClick = onClear, enabled = clearEnabled) {
                 Icon(
                     Icons.Filled.DeleteSweep,

@@ -8,8 +8,6 @@ import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -31,10 +29,7 @@ import dev.npn.core.app.SavedView
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
-import no_papers_needed.composeapp.generated.resources.library_ai_assistant
-import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import no_papers_needed.composeapp.generated.resources.library_all_documents
-import no_papers_needed.composeapp.generated.resources.library_more_actions
 import no_papers_needed.composeapp.generated.resources.library_pin
 import no_papers_needed.composeapp.generated.resources.library_pinned
 import no_papers_needed.composeapp.generated.resources.library_rename
@@ -179,36 +174,4 @@ private fun SavedViewMenuItem(
         },
         onClick = onOpen,
     )
-}
-
-/** Overflow menu hosting the AI entry points on compact layouts (the rail carries them when wide). */
-@Composable
-internal fun LibraryAiOverflowMenu(
-    onAiChat: () -> Unit,
-    onAiEdit: () -> Unit,
-) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.library_more_actions))
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_ai_assistant)) },
-                leadingIcon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
-                onClick = {
-                    open = false
-                    onAiChat()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_ai_edit)) },
-                leadingIcon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
-                onClick = {
-                    open = false
-                    onAiEdit()
-                },
-            )
-        }
-    }
 }

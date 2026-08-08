@@ -23,7 +23,7 @@
     <string name="library_review">Beoordelen</string>
     <string name="library_mark_reviewed">Markeren als beoordeeld</string>
     <string name="library_mark_needs_review">Markeren als te beoordelen</string>
-    <string name="library_trash">Naar prullenbak</string>
+    <string name="library_trash">Prullenbak</string>
     <string name="library_trash_documents">Documenten naar prullenbak verplaatsen</string>
     <string name="library_open">Openen</string>
     <string name="library_select">Selecteren</string>
@@ -69,6 +69,7 @@
     <string name="library_saved_views">Opgeslagen weergaven</string>
     <string name="library_save_current_view_ellipsis">Huidige weergave opslaan...</string>
     <string name="library_settings">Instellingen</string>
+    <string name="library_ai_short">AI</string>
     <string name="library_ai_assistant">AI-assistent</string>
     <string name="library_ai_edit">AI bewerken</string>
     <string name="library_pinned">Vastgezet</string>

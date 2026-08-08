@@ -195,7 +195,6 @@ private fun MainNavHost(
                     nav.navigate(Route.DocDetail(docId))
                 },
                 onTrash = { nav.navigate(Route.Trash) },
-                onAiChat = { nav.navigateAi(Route.AiChat) },
                 onAiEdit = { docIds ->
                     aiSelection.set(docIds)
                     nav.navigateAi(Route.AiEdit)
@@ -356,6 +355,10 @@ private fun NavGraphBuilder.aiRoutes(
             session = session,
             onBack = { nav.popBackStack() },
             onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
+            onAiEdit = {
+                aiSelection.set(emptyList())
+                nav.navigateAi(Route.AiEdit)
+            },
         )
     }
     composable<Route.AiEdit> {

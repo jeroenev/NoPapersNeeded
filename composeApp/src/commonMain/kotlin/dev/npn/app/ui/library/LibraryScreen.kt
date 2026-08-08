@@ -85,6 +85,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.ui.common.CompactTopBarBreakpoint
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.SnackbarMessages
@@ -164,7 +165,6 @@ fun LibraryScreen(
     aiConfigured: Boolean,
     onOpenDoc: (docId: String, order: List<String>, searchQuery: String?) -> Unit,
     onTrash: () -> Unit,
-    onAiChat: () -> Unit,
     /** Opens the AI-edit page, optionally scoped to the given documents (empty = no preselection). */
     onAiEdit: (List<String>) -> Unit,
 ) {
@@ -218,6 +218,10 @@ fun LibraryScreen(
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > WideLayoutBreakpoint
+        // The navigation rail already carries the AI entries on wide layouts, so the top bar only
+        // needs them below the wide breakpoint; they stay as direct icons until the window is too
+        // tight for them, collapsing into the overflow menu only then.
+        val compactActions = !wide && maxWidth < CompactTopBarBreakpoint
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
         var previewDocId by remember { mutableStateOf<String?>(null) }
         val onDocClick: (String) -> Unit = { docId -> if (wide) previewDocId = docId else openDoc(docId) }
@@ -235,10 +239,6 @@ fun LibraryScreen(
                 onDeleteSavedView = vm::deleteSavedView,
                 onTogglePinSavedView = vm::toggleSavedViewPin,
             )
-            // The navigation rail already carries the AI entries on wide layouts.
-            if (aiConfigured && !wide) {
-                LibraryAiOverflowMenu(onAiChat = onAiChat, onAiEdit = { onAiEdit(emptyList()) })
-            }
         }
 
         val content: @Composable () -> Unit = {
@@ -249,7 +249,7 @@ fun LibraryScreen(
                 docs = docs,
                 tagColors = tagColors,
                 reviewMode = reviewMode,
-                compactSelectionBar = !wide,
+                compactActions = compactActions,
                 scanProgress = scanProgress,
                 lastScan = lastScan,
                 ocr = ocr,
@@ -421,8 +421,8 @@ private fun LibraryContent(
     onAiEdit: (() -> Unit)?,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
-    /** Collapse the less frequent selection actions into the overflow menu (narrow windows). */
-    compactSelectionBar: Boolean = true,
+    /** Collapse the less frequent actions into the overflow menu (very narrow windows). */
+    compactActions: Boolean = false,
 ) {
     val queryText by vm.queryText.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
@@ -469,7 +469,7 @@ private fun LibraryContent(
                     count = ui.selected.size,
                     total = allDocIds.size,
                     reviewMode = reviewMode,
-                    compact = compactSelectionBar,
+                    compact = compactActions,
                     onClose = vm::clearSelection,
                     onSelectAll = { vm.selectAll(allDocIds) },
                     onAddTag = onAddTag,
@@ -699,7 +699,6 @@ private fun LibraryTopBar(
     onSetView: (ViewType) -> Unit,
     onRefresh: () -> Unit,
 ) {
-    var sortMenu by remember { mutableStateOf(false) }
     TopAppBar(
         title = { Text(stringResource(Res.string.library_documents)) },
         actions = {
@@ -726,57 +725,66 @@ private fun LibraryTopBar(
                         ),
                 )
             }
-            Box {
-                IconButton(onClick = { sortMenu = true }) {
-                    Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = stringResource(Res.string.library_sort))
-                }
-                DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-                    Text(
-                        stringResource(Res.string.library_sort_by),
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-                    )
-                    SortField.entries.forEach { field ->
-                        val active = sort.field == field
-                        DropdownMenuItem(
-                            text = { Text(sortLabel(field)) },
-                            leadingIcon = { RadioButton(selected = active, onClick = null) },
-                            trailingIcon = {
-                                if (active) {
-                                    Icon(
-                                        imageVector =
-                                            if (sort.ascending) {
-                                                Icons.Filled.ArrowUpward
-                                            } else {
-                                                Icons.Filled.ArrowDownward
-                                            },
-                                        contentDescription =
-                                            if (sort.ascending) {
-                                                stringResource(Res.string.library_sort_ascending)
-                                            } else {
-                                                stringResource(Res.string.library_sort_descending)
-                                            },
-                                    )
-                                }
-                            },
-                            onClick = {
-                                if (active) {
-                                    // Tapping the active field flips the direction; keep the menu
-                                    // open so the arrow flip is visible.
-                                    onSetSort(field, !sort.ascending)
-                                } else {
-                                    // Switching field keeps the current direction.
-                                    onSetSort(field, sort.ascending)
-                                    sortMenu = false
-                                }
-                            },
-                        )
-                    }
-                }
-            }
+            SortMenuButton(sort = sort, onSetSort = onSetSort)
         },
     )
+}
+
+@Composable
+private fun SortMenuButton(
+    sort: dev.npn.core.app.LibrarySort,
+    onSetSort: (SortField, Boolean) -> Unit,
+) {
+    var sortMenu by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { sortMenu = true }) {
+            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = stringResource(Res.string.library_sort))
+        }
+        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
+            Text(
+                stringResource(Res.string.library_sort_by),
+                style = MaterialTheme.typography.labelLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+            SortField.entries.forEach { field ->
+                val active = sort.field == field
+                DropdownMenuItem(
+                    text = { Text(sortLabel(field)) },
+                    leadingIcon = { RadioButton(selected = active, onClick = null) },
+                    trailingIcon = {
+                        if (active) {
+                            Icon(
+                                imageVector =
+                                    if (sort.ascending) {
+                                        Icons.Filled.ArrowUpward
+                                    } else {
+                                        Icons.Filled.ArrowDownward
+                                    },
+                                contentDescription =
+                                    if (sort.ascending) {
+                                        stringResource(Res.string.library_sort_ascending)
+                                    } else {
+                                        stringResource(Res.string.library_sort_descending)
+                                    },
+                            )
+                        }
+                    },
+                    onClick = {
+                        if (active) {
+                            // Tapping the active field flips the direction; keep the menu
+                            // open so the arrow flip is visible.
+                            onSetSort(field, !sort.ascending)
+                        } else {
+                            // Switching field keeps the current direction.
+                            onSetSort(field, sort.ascending)
+                            sortMenu = false
+                        }
+                    },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -784,7 +792,7 @@ private fun SelectionTopBar(
     count: Int,
     total: Int,
     reviewMode: ReviewMode,
-    /** True on narrow windows: collapse remove-tag and AI edit into the overflow menu. */
+    /** True on narrow windows: collapse the review marks into the overflow menu. */
     compact: Boolean,
     onClose: () -> Unit,
     onSelectAll: () -> Unit,
@@ -803,8 +811,8 @@ private fun SelectionTopBar(
             }
         },
         actions = {
-            // All actions are visible as compact icons when the window has room; on narrow
-            // screens the less frequent ones collapse into the overflow menu.
+            // The tag and trash actions stay as direct icons at every width; only the review
+            // marks collapse into the overflow menu when the window is too tight for them all.
             TooltipIconButton(
                 icon = Icons.Filled.SelectAll,
                 label = stringResource(Res.string.common_select_all),
@@ -816,92 +824,68 @@ private fun SelectionTopBar(
                 label = stringResource(Res.string.common_add_tag),
                 onClick = onAddTag,
             )
-            if (!compact) {
+            TooltipIconButton(
+                icon = Icons.AutoMirrored.Filled.LabelOff,
+                label = stringResource(Res.string.library_remove_tag),
+                onClick = onRemoveTag,
+            )
+            onAiEdit?.let { aiEdit ->
                 TooltipIconButton(
-                    icon = Icons.AutoMirrored.Filled.LabelOff,
-                    label = stringResource(Res.string.library_remove_tag),
-                    onClick = onRemoveTag,
+                    icon = Icons.Filled.AutoAwesome,
+                    label = stringResource(Res.string.library_ai_edit),
+                    onClick = aiEdit,
                 )
-                onAiEdit?.let { aiEdit ->
-                    TooltipIconButton(
-                        icon = Icons.Filled.AutoAwesome,
-                        label = stringResource(Res.string.library_ai_edit),
-                        onClick = aiEdit,
-                    )
-                }
+            }
+            // Manual reviewed marker only applies in the inbox-workflow mode.
+            if (!compact && reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                TooltipIconButton(
+                    icon = Icons.Filled.CheckCircle,
+                    label = stringResource(Res.string.library_mark_reviewed),
+                    onClick = { onSetReviewed(true) },
+                )
+                TooltipIconButton(
+                    icon = Icons.Filled.Unpublished,
+                    label = stringResource(Res.string.library_mark_needs_review),
+                    onClick = { onSetReviewed(false) },
+                )
             }
             TooltipIconButton(
                 icon = Icons.Filled.Delete,
                 label = stringResource(Res.string.library_trash),
                 onClick = onRequestTrash,
             )
-            SelectionOverflowMenu(
-                compact = compact,
-                reviewMode = reviewMode,
-                onRemoveTag = onRemoveTag,
-                onAiEdit = onAiEdit,
-                onSetReviewed = onSetReviewed,
-            )
+            if (compact && reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                SelectionOverflowMenu(onSetReviewed = onSetReviewed)
+            }
         },
     )
 }
 
+/** Overflow menu for narrow windows: holds the review marks when they did not fit as icons. */
 @Composable
-private fun SelectionOverflowMenu(
-    compact: Boolean,
-    reviewMode: ReviewMode,
-    onRemoveTag: () -> Unit,
-    onAiEdit: (() -> Unit)?,
-    onSetReviewed: (Boolean) -> Unit,
-) {
-    // Remove-tag and AI edit only overflow on narrow windows; review marks always live here.
-    // Skip the menu button entirely when it would be empty.
-    if (!compact && reviewMode != ReviewMode.INBOX_WORKFLOW) return
+private fun SelectionOverflowMenu(onSetReviewed: (Boolean) -> Unit) {
     var open by remember { mutableStateOf(false) }
     Box {
         IconButton(onClick = { open = true }) {
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.library_more_actions))
         }
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            if (compact) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.library_remove_tag)) },
-                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.LabelOff, contentDescription = null) },
-                    onClick = {
-                        open = false
-                        onRemoveTag()
-                    },
-                )
-                onAiEdit?.let { aiEdit ->
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.library_ai_edit)) },
-                        leadingIcon = { Icon(Icons.Filled.AutoAwesome, contentDescription = null) },
-                        onClick = {
-                            open = false
-                            aiEdit()
-                        },
-                    )
-                }
-            }
-            // Manual reviewed marker only applies in the inbox-workflow mode.
-            if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.library_mark_reviewed)) },
-                    leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
-                    onClick = {
-                        open = false
-                        onSetReviewed(true)
-                    },
-                )
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.library_mark_needs_review)) },
-                    leadingIcon = { Icon(Icons.Filled.Unpublished, contentDescription = null) },
-                    onClick = {
-                        open = false
-                        onSetReviewed(false)
-                    },
-                )
-            }
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.library_mark_reviewed)) },
+                leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onSetReviewed(true)
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.library_mark_needs_review)) },
+                leadingIcon = { Icon(Icons.Filled.Unpublished, contentDescription = null) },
+                onClick = {
+                    open = false
+                    onSetReviewed(false)
+                },
+            )
         }
     }
 }

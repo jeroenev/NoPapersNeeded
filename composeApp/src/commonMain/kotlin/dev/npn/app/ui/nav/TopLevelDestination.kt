@@ -30,8 +30,9 @@ enum class TopLevelDestination(
 }
 
 /**
- * AI destinations that live in the navigation rail on wide layouts. They are not part of
- * [TopLevelDestination] because the compact bottom bar does not carry them, but the rail keeps
- * itself visible (with the matching item selected) while one of them is open.
+ * AI destinations that live alongside the top-level ones in the navigation shell (rail on wide,
+ * bottom bar on compact). They are not part of [TopLevelDestination] because they are screens
+ * pushed above Library, but the shell keeps itself visible (with the matching item selected) while
+ * one of them is open, mirroring the rail on compact layouts.
  */
 enum class AiDestination { CHAT, EDIT }
