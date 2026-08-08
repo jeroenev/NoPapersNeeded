@@ -59,14 +59,14 @@ kotlin {
             implementation(libs.mlkit.text.recognition)
             implementation(libs.ktor.client.okhttp)
         }
-        val desktopMain by getting {
+        getByName("desktopMain") {
             dependencies {
                 implementation(libs.pdfbox)
                 implementation(libs.pdfbox.xmpbox)
                 implementation(libs.ktor.client.cio)
             }
         }
-        val desktopTest by getting {
+        getByName("desktopTest") {
             dependencies {
                 implementation(libs.kotest.property)
                 implementation(libs.kotest.assertions)

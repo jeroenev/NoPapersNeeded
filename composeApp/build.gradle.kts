@@ -69,7 +69,7 @@ kotlin {
             implementation(libs.androidx.activity.compose)
             implementation(libs.androidx.core.ktx)
         }
-        val desktopMain by getting {
+        getByName("desktopMain") {
             dependencies {
                 implementation(compose.desktop.common)
                 implementation(libs.kotlinx.coroutines.swing)
