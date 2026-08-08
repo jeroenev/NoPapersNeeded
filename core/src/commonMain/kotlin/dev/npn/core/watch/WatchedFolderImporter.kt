@@ -1,7 +1,7 @@
 package dev.npn.core.watch
 
 import dev.npn.core.app.ImportOutcome
-import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.IngestFacade
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import kotlinx.coroutines.CoroutineScope
@@ -11,11 +11,15 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 
 /** What one watched-folder sweep did. */
-data class WatchedFolderScan(val imported: Int, val duplicates: Int, val failed: Int)
+data class WatchedFolderScan(
+    val imported: Int,
+    val duplicates: Int,
+    val failed: Int,
+)
 
 /**
- * Auto-imports PDFs from a [WatchedFolder] into a [LibrarySession]. Import goes through the
- * normal session import path, so parts are hash-deduped and OCR is queued/kicked automatically.
+ * Auto-imports PDFs from a [WatchedFolder] through the library's [IngestFacade]. Import goes
+ * through the normal ingest path, so parts are hash-deduped and OCR is queued/kicked automatically.
  *
  * Handled files are remembered in memory by (id, size, mtime) so repeated polls do not re-stage
  * and re-hash the same bytes; a fresh importer (e.g. a background worker run) simply relies on
@@ -24,7 +28,7 @@ data class WatchedFolderScan(val imported: Int, val duplicates: Int, val failed:
  * to [maxAttempts] times.
  */
 class WatchedFolderImporter(
-    private val session: LibrarySession,
+    private val ingest: IngestFacade,
     private val folder: WatchedFolder,
     private val deleteAfterImport: suspend () -> Boolean,
     private val clock: EpochClock = SystemEpochClock,
@@ -44,16 +48,20 @@ class WatchedFolderImporter(
             val key = "${file.id}|${file.size}|${file.mtimeMillis}"
             if (shouldSkip(key, file, now)) continue
 
-            when (runCatching { session.importPdf(file.source, file.name) }
-                .getOrElse { ImportOutcome.Failed(it.message ?: "import failed") }) {
+            when (
+                runCatching { ingest.importPdf(file.source, file.name) }
+                    .getOrElse { ImportOutcome.Failed(it.message ?: "import failed") }
+            ) {
                 is ImportOutcome.Imported -> {
                     imported++
                     consume(file, key)
                 }
+
                 is ImportOutcome.Duplicate -> {
                     duplicates++
                     consume(file, key)
                 }
+
                 is ImportOutcome.Failed -> {
                     failed++
                     attempts[key] = (attempts[key] ?: 0) + 1
@@ -64,13 +72,20 @@ class WatchedFolderImporter(
     }
 
     /** Already handled, retried out, or possibly still being written (empty / freshly modified). */
-    private fun shouldSkip(key: String, file: WatchedFolderFile, now: Long): Boolean =
+    private fun shouldSkip(
+        key: String,
+        file: WatchedFolderFile,
+        now: Long,
+    ): Boolean =
         key in completed ||
             (attempts[key] ?: 0) >= maxAttempts ||
             file.size <= 0L ||
             now - file.mtimeMillis < minQuietMillis
 
-    private suspend fun consume(file: WatchedFolderFile, key: String) {
+    private suspend fun consume(
+        file: WatchedFolderFile,
+        key: String,
+    ) {
         completed.add(key)
         if (deleteAfterImport()) {
             runCatching { folder.delete(file) }
@@ -81,7 +96,10 @@ class WatchedFolderImporter(
      * Continuous mode: an initial sweep, change-triggered sweeps (where the platform emits
      * events) and a periodic poll fallback for platforms/syncs without events.
      */
-    fun start(scope: CoroutineScope, pollIntervalMillis: Long = DEFAULT_POLL_INTERVAL_MS): Job =
+    fun start(
+        scope: CoroutineScope,
+        pollIntervalMillis: Long = DEFAULT_POLL_INTERVAL_MS,
+    ): Job =
         scope.launch {
             launch {
                 folder.changes().collect {

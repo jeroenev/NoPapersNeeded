@@ -7,6 +7,7 @@ import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
+import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
@@ -15,14 +16,19 @@ import dev.npn.core.app.AiTagging
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.BatchResult
+import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocField
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.EditProgress
 import dev.npn.core.app.EditScope
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.ReviewChip
+import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.ReviewDoc
 import dev.npn.core.app.SavedView
+import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.ScopeKey
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.model.ReviewMode
@@ -163,11 +169,31 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("TooManyFunctions")
 class AiEditViewModel(
-    val session: LibrarySession,
+    documents: DocumentRepository,
+    meta: MetadataWriter,
+    content: DocContentFacade,
+    ai: AiFacade,
+    savedViewRepository: SavedViewRepository,
+    reviewConfig: ReviewConfigFacade,
     private val settings: SettingsRepository,
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
     selection: List<String> = emptyList(),
 ) : MessagesViewModel() {
+    constructor(
+        session: LibrarySession,
+        settings: SettingsRepository,
+        selection: List<String> = emptyList(),
+    ) : this(
+        documents = session.documents,
+        meta = session.meta,
+        content = session.content,
+        ai = session.ai,
+        savedViewRepository = session.savedViews,
+        reviewConfig = session.reviewConfig,
+        settings = settings,
+        selection = selection,
+    )
+
     private val _ui =
         MutableStateFlow(
             AiEditUiState(
@@ -177,8 +203,7 @@ class AiEditViewModel(
         )
     val ui: StateFlow<AiEditUiState> = _ui.asStateFlow()
 
-    private val edit =
-        AiEditRun(session.documents, session.meta, session.content, session.ai, selection)
+    private val edit = AiEditRun(documents, meta, content, ai, selection)
 
     /**
      * The documents the next batch would process, refreshed as the scope, batch size, autofill
@@ -198,13 +223,13 @@ class AiEditViewModel(
 
     init {
         viewModelScope.launch {
-            val mode = runCatching { session.reviewMode.first() }.getOrDefault(ReviewMode.DEFAULT)
+            val mode = runCatching { reviewConfig.reviewMode.first() }.getOrDefault(ReviewMode.DEFAULT)
             _ui.update { it.copy(reviewQueueAvailable = mode == ReviewMode.INBOX_WORKFLOW) }
         }
         // Saved views double as AI-edit scopes, so keep the list live and preselect the first one.
         viewModelScope.launch {
             runCatching {
-                session.savedViews.observeSavedViews().collect { views ->
+                savedViewRepository.observeSavedViews().collect { views ->
                     _ui.update { it.copy(savedViews = views, savedViewId = it.savedViewId ?: views.firstOrNull()?.id) }
                 }
             }

@@ -79,8 +79,6 @@ private class FakeDocuments : DocumentRepository {
         return documents
     }
 
-    override fun observeCount(filter: LibraryFilter): Flow<Int> = error("unused")
-
     override fun observeDoc(docId: String): Flow<DocListItem?> = error("unused")
 
     override fun observeUntaggedCount(): Flow<Int> = error("unused")
@@ -107,7 +105,6 @@ private class FakeDocuments : DocumentRepository {
     override suspend fun history(docId: String): List<DocumentHistoryRecord> = error("unused")
 }
 
-@Suppress("TooManyFunctions")
 private class FakeMeta : MetadataWriter {
     val addedTags = mutableListOf<Pair<List<String>, String>>()
     val removedTags = mutableListOf<Pair<List<String>, String>>()
@@ -181,45 +178,6 @@ private class FakeMeta : MetadataWriter {
         docId: String,
         key: String,
         value: String?,
-    ) = error("unused")
-
-    override suspend fun setOcrEngine(
-        docId: String,
-        engine: String?,
-    ) = error("unused")
-
-    override suspend fun renameTag(
-        from: String,
-        to: String,
-    ) = error("unused")
-
-    override suspend fun mergeTag(
-        from: String,
-        to: String,
-    ) = error("unused")
-
-    override suspend fun deleteTag(name: String) = error("unused")
-
-    override suspend fun setTagStyle(
-        tag: String,
-        color: String?,
-        icon: String?,
-    ) = error("unused")
-
-    override suspend fun trashDoc(docId: String) = error("unused")
-
-    override suspend fun restoreDoc(docId: String) = error("unused")
-
-    override suspend fun deleteDocPermanently(docId: String) = error("unused")
-
-    override suspend fun renameFile(
-        docId: String,
-        newFileName: String,
-    ) = error("unused")
-
-    override suspend fun moveFile(
-        docId: String,
-        newDirRelPath: String,
     ) = error("unused")
 }
 

@@ -28,7 +28,9 @@ class MetadataWriterImpl(
     private val trashOps: TrashOps,
     private val pathRuleApplicator: StoragePathRuleApplicator,
     private val applyAutoMatch: suspend (String) -> Unit = {},
-) : MetadataWriter {
+) : MetadataWriter,
+    TagAdmin,
+    DocLifecycle {
     private val documentDao get() = db.documentDao()
 
     override suspend fun addTag(
@@ -108,7 +110,12 @@ class MetadataWriterImpl(
         coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.NOTES, value)))
     }
 
-    override suspend fun setOcrEngine(
+    /**
+     * Journal-only write of the OCR-engine pin (an LWW property). Not part of any public facet:
+     * the single public home is [OcrFacade.setOcrEngine], which commits through here and then
+     * re-selects the indexed version on this device.
+     */
+    suspend fun setOcrEngine(
         docId: String,
         engine: String?,
     ) {

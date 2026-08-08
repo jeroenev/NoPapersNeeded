@@ -28,7 +28,7 @@ class DocumentFilterTest {
                 rig.session.meta.addTag(listOf(a, b), "x")
                 rig.session.meta.addTag(listOf(b, c), "y")
 
-                val repo = rig.session.documents
+                val repo = DocumentRepositoryImpl(rig.db)
                 // tagsAll [x] -> a, b
                 ids(repo.observeDocuments(LibraryFilter(tagsAll = listOf("x")), LibrarySort()).first())
                     .shouldContainExactlyInAnyOrder(listOf(a, b))
@@ -60,7 +60,7 @@ class DocumentFilterTest {
                 rig.session.meta.setReviewed(listOf(b), true)
                 rig.session.meta.addTag(listOf(b), "t")
 
-                val repo = rig.session.documents
+                val repo = DocumentRepositoryImpl(rig.db)
                 ids(repo.observeDocuments(LibraryFilter(reviewed = true), LibrarySort()).first())
                     .shouldContainExactly(listOf(b))
                 ids(repo.observeDocuments(LibraryFilter(reviewed = false), LibrarySort()).first())
@@ -95,7 +95,7 @@ class DocumentFilterTest {
                 rig.session.meta.setReviewed(listOf(a, c), true)
                 rig.session.meta.addTag(listOf(b, c), "t")
 
-                val repo = rig.session.documents
+                val repo = DocumentRepositoryImpl(rig.db)
                 ids(repo.observeDocuments(LibraryFilter(unreviewedOrUntagged = true), LibrarySort()).first())
                     .shouldContainExactlyInAnyOrder(listOf(a, b))
                 repo.observeUnreviewedOrUntaggedCount().first() shouldBe 2
@@ -118,7 +118,7 @@ class DocumentFilterTest {
                 rig.session.meta.setDocDate(a, "2026-01-15")
                 rig.session.meta.setDocDate(b, "2026-06-20")
 
-                val repo = rig.session.documents
+                val repo = DocumentRepositoryImpl(rig.db)
                 ids(
                     repo
                         .observeDocuments(
@@ -149,7 +149,7 @@ class DocumentFilterTest {
                 rig.session.meta.setDocDate(a, "2026-01-15")
                 rig.session.meta.setDocDate(b, "2026-02-20")
 
-                val repo = rig.session.documents
+                val repo = DocumentRepositoryImpl(rig.db)
                 ids(
                     repo
                         .observeDocuments(
@@ -194,7 +194,7 @@ class DocumentFilterTest {
                 rig.writePdf("bravo.pdf", PdfFixtures.embeddedTextPdf("b"))
                 rig.session.rescan()
 
-                val repo = rig.session.documents
+                val repo = DocumentRepositoryImpl(rig.db)
                 val byName =
                     repo
                         .observeDocuments(

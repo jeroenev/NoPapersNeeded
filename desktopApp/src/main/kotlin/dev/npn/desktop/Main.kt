@@ -113,7 +113,7 @@ private suspend fun importDroppedFiles(
         for (path in paths) {
             if (!Files.isRegularFile(path)) continue
             val name = path.fileName?.toString() ?: FALLBACK_DROPPED_PDF
-            log(importLogLine(name, session.importPdf(ExternalSource(path), name)))
+            log(importLogLine(name, session.ingest.importPdf(ExternalSource(path), name)))
         }
     }
 }

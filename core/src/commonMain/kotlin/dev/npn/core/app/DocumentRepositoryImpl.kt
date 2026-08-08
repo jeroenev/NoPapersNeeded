@@ -79,7 +79,13 @@ class DocumentRepositoryImpl(
             }.flowOn(Dispatchers.Default)
     }
 
-    override fun observeCount(filter: LibraryFilter): Flow<Int> {
+    /**
+     * Live count of documents matching [filter] (same WHERE semantics as [observeDocuments]).
+     * Unlike observing the list, this never materializes rows or attaches tags/fields, so it is
+     * cheap even for large libraries. Impl-only: no UI consumer yet, so it is deliberately not
+     * part of [DocumentRepository].
+     */
+    fun observeCount(filter: LibraryFilter): Flow<Int> {
         // FTS matches can't be expressed as a COUNT predicate, so the query-text path reuses the
         // (FTS-bounded, already cheap) list flow instead of scanning the library.
         if (!filter.query.isNullOrBlank()) {

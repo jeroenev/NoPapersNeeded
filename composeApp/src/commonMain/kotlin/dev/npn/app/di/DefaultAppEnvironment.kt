@@ -101,7 +101,7 @@ class DefaultAppEnvironment(
         session: dev.npn.core.app.LibrarySession,
         folder: WatchedFolder,
     ) = WatchedFolderImporter(
-        session = session,
+        ingest = session.ingest,
         folder = folder,
         deleteAfterImport = { settings.settings.first().watchedFolderDeleteAfterImport },
     )

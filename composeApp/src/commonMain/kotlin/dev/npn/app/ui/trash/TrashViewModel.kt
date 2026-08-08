@@ -6,8 +6,12 @@ import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.DocumentRepository
+import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.MaintenanceFacade
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.index.RelinkCandidate
 import kotlinx.coroutines.flow.StateFlow
@@ -20,45 +24,51 @@ import kotlinx.coroutines.launch
  * hash) and missing files (relink candidates) come from the repository / last scan report.
  */
 class TrashViewModel(
-    val session: LibrarySession,
+    documents: DocumentRepository,
+    private val docLifecycle: DocLifecycle,
+    private val maintenance: MaintenanceFacade,
+    ingest: IngestFacade,
 ) : MessagesViewModel() {
+    constructor(session: LibrarySession) :
+        this(session.documents, session.docLifecycle, session.maintenance, session.ingest)
+
     val trashed: StateFlow<List<DocListItem>> =
-        session.documents
+        documents
             .observeTrashed()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val duplicates: StateFlow<List<Pair<String, String>>> =
-        session.documents
+        documents
             .observeDuplicates()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val missing: StateFlow<List<DocumentEntity>> =
-        session.documents
+        documents
             .observeMissing()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val relinkCandidates: StateFlow<List<RelinkCandidate>> =
-        session.lastScanReport
+        ingest.lastScanReport
             .map { report -> report?.relinkCandidates.orEmpty() }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    fun restore(docId: String) = launchReporting(UiAction.RESTORE_DOCUMENT) { session.meta.restoreDoc(docId) }
+    fun restore(docId: String) = launchReporting(UiAction.RESTORE_DOCUMENT) { docLifecycle.restoreDoc(docId) }
 
     fun deleteForever(docId: String) =
-        launchReporting(UiAction.DELETE_DOCUMENT) { session.meta.deleteDocPermanently(docId) }
+        launchReporting(UiAction.DELETE_DOCUMENT) { docLifecycle.deleteDocPermanently(docId) }
 
     /**
      * Restore every currently trashed document. Runs each doc independently so one failure does
      * not abort the rest; a partial failure is reported with the count that could not be restored.
      */
-    fun restoreAll() = runBulk(UiAction.RESTORE_DOCUMENT, session.meta::restoreDoc)
+    fun restoreAll() = runBulk(UiAction.RESTORE_DOCUMENT, docLifecycle::restoreDoc)
 
     /**
      * Permanently delete every currently trashed document. Runs each doc independently so one
      * failure does not abort the rest; a partial failure is reported with the count that could
      * not be deleted.
      */
-    fun emptyTrash() = runBulk(UiAction.DELETE_DOCUMENT, session.meta::deleteDocPermanently)
+    fun emptyTrash() = runBulk(UiAction.DELETE_DOCUMENT, docLifecycle::deleteDocPermanently)
 
     private fun runBulk(
         action: UiAction,
@@ -78,11 +88,11 @@ class TrashViewModel(
         docId: String,
         extraRelPath: String,
     ) = launchReporting(UiAction.REMOVE_DUPLICATE) {
-        session.resolveDuplicate(docId, extraRelPath, keepCanonical = true)
+        maintenance.resolveDuplicate(docId, extraRelPath, keepCanonical = true)
     }
 
     fun applyRelink(
         oldDocId: String,
         newDocId: String,
-    ) = launchReporting(UiAction.RELINK_DOCUMENT) { session.applyRelink(oldDocId, newDocId) }
+    ) = launchReporting(UiAction.RELINK_DOCUMENT) { maintenance.applyRelink(oldDocId, newDocId) }
 }

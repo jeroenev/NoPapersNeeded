@@ -99,7 +99,7 @@ class MetadataWriterTest {
                 tagsOf(docs, a) shouldContain "shared"
                 tagsOf(docs, b) shouldContain "shared"
 
-                rig.session.meta.deleteTag("shared")
+                rig.session.tagAdmin.deleteTag("shared")
                 docs =
                     rig.session.documents
                         .observeDocuments(LibraryFilter(), LibrarySort())
@@ -135,7 +135,7 @@ class MetadataWriterTest {
 
                 // A style alone does not keep an unused tag alive, but it survives in the journal and
                 // comes back when the tag is used again.
-                rig.session.meta.setTagStyle("styled", "#ff0000", null)
+                rig.session.tagAdmin.setTagStyle("styled", "#ff0000", null)
                 rig.session.tags
                     .observeTags()
                     .first()
@@ -149,7 +149,7 @@ class MetadataWriterTest {
                 styled.color shouldBe "#ff0000"
 
                 // deleteTag prunes as well.
-                rig.session.meta.deleteTag("styled")
+                rig.session.tagAdmin.deleteTag("styled")
                 rig.session.tags
                     .observeTags()
                     .first()
@@ -235,7 +235,7 @@ class MetadataWriterTest {
                 rig.session.rescan()
                 val id = rig.docId("a.pdf")
 
-                rig.session.meta.setOcrEngine(id, "tesseract")
+                rig.session.ocr.setOcrEngine(id, "tesseract")
 
                 // Committed as a prop-set event carrying the "ocrEngine" property key.
                 val events = rig.db.metadataProjectionDao().allEvents()
@@ -250,7 +250,7 @@ class MetadataWriterTest {
                     .ocrEngineOverride shouldBe "tesseract"
 
                 // Clearing removes the override.
-                rig.session.meta.setOcrEngine(id, null)
+                rig.session.ocr.setOcrEngine(id, null)
                 rig.db
                     .documentDao()
                     .getByDocId(id)!!
@@ -402,7 +402,7 @@ class MetadataWriterTest {
                 secondDb = db2
                 bridgeSession.rescan()
 
-                rig.session.meta.trashDoc(id)
+                rig.session.docLifecycle.trashDoc(id)
                 bridgeSession.rescan()
                 db2.metadataProjectionDao().allEvents().map { it.operation } shouldContain "doc-trash"
                 db2.documentDao().getByDocId(id)!!.trashed shouldBe true

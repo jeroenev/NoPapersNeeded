@@ -26,7 +26,6 @@ class RescanOcrWorker(
     context: Context,
     params: WorkerParameters,
 ) : CoroutineWorker(context, params) {
-
     override suspend fun doWork(): Result {
         val env = NpnApplication.environment(applicationContext)
 
@@ -42,11 +41,11 @@ class RescanOcrWorker(
             // rescan + OCR drain (no-op when no watched folder is configured).
             runCatching { env.scanWatchedFolder() }
 
-            session.rescan()
+            session.ingest.rescan()
 
             // Wait for the OCR queue to drain, bounded so we never exceed WorkManager's window.
             withTimeoutOrNull(OCR_DRAIN_TIMEOUT_MS) {
-                session.ocrStatus.first { it.pending == 0 && !it.running }
+                session.ocr.ocrStatus.first { it.pending == 0 && !it.running }
             }
             Result.success()
         } catch (t: Throwable) {
@@ -70,14 +69,17 @@ object NpnWork {
      * period forever; WorkManager preserves the existing enqueued state and next-run timing.
      */
     fun schedulePeriodic(context: Context) {
-        val constraints = Constraints.Builder()
-            .setRequiresBatteryNotLow(true)
-            .setRequiresStorageNotLow(true)
-            .build()
+        val constraints =
+            Constraints
+                .Builder()
+                .setRequiresBatteryNotLow(true)
+                .setRequiresStorageNotLow(true)
+                .build()
 
-        val request = PeriodicWorkRequestBuilder<RescanOcrWorker>(1, TimeUnit.HOURS)
-            .setConstraints(constraints)
-            .build()
+        val request =
+            PeriodicWorkRequestBuilder<RescanOcrWorker>(1, TimeUnit.HOURS)
+                .setConstraints(constraints)
+                .build()
 
         WorkManager.getInstance(context).enqueueUniquePeriodicWork(
             PERIODIC_NAME,
