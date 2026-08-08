@@ -7,18 +7,17 @@ import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiProvider
-import dev.npn.core.ai.MetadataSuggestion
-import dev.npn.core.ai.TagSuggestion
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.flow
 
 /**
  * AI fake: [askScripts] are event lists consumed in order (last one repeats); each backs one
  * [ask] flow. [askResponses] is a convenience: a plain answer string is turned into a
- * `TextDelta` + `Done` script. [suggestions] backs [suggestTags]. Failure injection via the
- * `fail*` hooks ([failAsk] throws when the returned flow is collected), call recording via
- * `asked`/[suggestTagsCalls]. [askDelayMillis] delays each emitted event so tests can observe
- * intermediate streaming state and cancellation.
+ * `TextDelta` + `Done` script. [edit]/[editByDoc] back the single [suggestEdits] primitive.
+ * Failure injection via the `fail*` hooks ([failAsk] throws when the returned flow is collected,
+ * [failSuggestEdits]/[failSuggestEditsForDocs] for the suggestion path), call recording via
+ * `asked`/[suggestEditsCalls]/[suggestEditsRequests]. [askDelayMillis] delays each emitted event
+ * so tests can observe intermediate streaming state and cancellation.
  */
 class FakeAiFacade : AiFacade {
     var configValue =
@@ -37,24 +36,6 @@ class FakeAiFacade : AiFacade {
 
     /** When set, the ask flow throws after emitting this many events (mid-stream failure). */
     var failAskAfter: Int? = null
-    var suggestions: List<TagSuggestion> = emptyList()
-
-    /**
-     * Per-doc suggestion scripts for the bulk tagging flow. When a docId has an entry here it wins
-     * over [suggestions]; docs absent from the map fall back to [suggestions]. Lets tests drive
-     * distinct results (including empty lists for the "no suggestions" grouping) per document.
-     */
-    var suggestionsByDoc: Map<String, List<TagSuggestion>> = emptyMap()
-
-    /** docId-only view of [suggestTagsTriples] for assertions that only care about which docs. */
-    val suggestTagsCalls = mutableListOf<String>()
-
-    /** Every (docId, maxTags, maxNewTags) triple passed to [suggestTags], in dispatch order. */
-    val suggestTagsTriples = mutableListOf<Triple<String, Int?, Int?>>()
-    var failSuggestTags: (() -> Nothing)? = null
-
-    /** suggestTags throws for these ids only (per-doc partial-failure testing). */
-    var failSuggestTagsForDocs: Set<String> = emptySet()
 
     /** Optional per-call delay so tests can observe progress and cancel mid-run. */
     var suggestDelayMillis: Long = 0
@@ -87,43 +68,6 @@ class FakeAiFacade : AiFacade {
         if (askScripts.isNotEmpty()) return askScripts.getOrElse(index) { askScripts.last() }
         val text = askResponses.getOrElse(index) { askResponses.lastOrNull() ?: "answer" }
         return listOf(AiChatEvent.TextDelta(text), AiChatEvent.Done(text))
-    }
-
-    override suspend fun suggestTags(
-        docId: String,
-        maxTags: Int?,
-        maxNewTags: Int?,
-    ): List<TagSuggestion> {
-        // Record at entry (before the delay) so the call list reflects dispatch order
-        // deterministically even when calls run concurrently.
-        suggestTagsCalls += docId
-        suggestTagsTriples += Triple(docId, maxTags, maxNewTags)
-        val delay = suggestDelayByDoc[docId] ?: suggestDelayMillis
-        if (delay > 0) kotlinx.coroutines.delay(delay)
-        failSuggestTags?.invoke()
-        if (docId in failSuggestTagsForDocs) error("suggest failed for $docId")
-        return suggestionsByDoc[docId] ?: suggestions
-    }
-
-    /** Backs [suggestMetadata] for docs without a [metadataByDoc] entry. */
-    var metadataSuggestion: MetadataSuggestion = MetadataSuggestion.EMPTY
-
-    /** Per-doc [suggestMetadata] results (wins over [metadataSuggestion]). */
-    var metadataByDoc: Map<String, MetadataSuggestion> = emptyMap()
-
-    /** docIds passed to [suggestMetadata], in dispatch order. */
-    val suggestMetadataCalls = mutableListOf<String>()
-    var failSuggestMetadata: (() -> Nothing)? = null
-
-    /** suggestMetadata throws for these docIds only (per-doc partial-failure testing). */
-    var failSuggestMetadataForDocs: Set<String> = emptySet()
-
-    override suspend fun suggestMetadata(docId: String): MetadataSuggestion {
-        suggestMetadataCalls += docId
-        if (suggestDelayMillis > 0) kotlinx.coroutines.delay(suggestDelayMillis)
-        failSuggestMetadata?.invoke()
-        if (docId in failSuggestMetadataForDocs) error("suggest metadata failed for $docId")
-        return metadataByDoc[docId] ?: metadataSuggestion
     }
 
     /** Backs [suggestEdits] for docs without an [editByDoc] entry. */
