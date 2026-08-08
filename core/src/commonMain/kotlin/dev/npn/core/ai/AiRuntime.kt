@@ -74,7 +74,7 @@ internal class AiRuntime(
         fun build(config: AiConfig): AiRuntime {
             val httpFactory = KtorKoogHttpClient.Factory()
             return when (config.provider) {
-                AiProvider.OPENAI, AiProvider.CUSTOM -> openAiRuntime(config, httpFactory)
+                AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> openAiRuntime(config, httpFactory)
                 AiProvider.ANTHROPIC -> anthropicRuntime(config, httpFactory)
                 AiProvider.GOOGLE -> googleRuntime(config, httpFactory)
                 AiProvider.MISTRAL -> mistralRuntime(config, httpFactory)
@@ -104,9 +104,9 @@ internal class AiRuntime(
          * "no override" (either [AiReasoningLevel.DEFAULT] or an unsupported combination).
          *
          * Provider notes:
-         * - OpenAI/custom: `reasoning_effort` label. Ignored by non-reasoning models; unsupported
-         *   labels (e.g. `none` on older models) surface as an endpoint error the user can fix by
-         *   picking Default.
+         * - OpenAI/custom/OpenCode Go: `reasoning_effort` label. Ignored by non-reasoning models;
+         *   unsupported labels (e.g. `none` on older models) surface as an endpoint error the user
+         *   can fix by picking Default.
          * - Anthropic: a thinking budget, plus a raised `max_tokens` (the API requires
          *   `max_tokens > budget_tokens`). ENABLING thinking is skipped in the tool loop
          *   ([toolLoop]): Anthropic requires the emitted thinking blocks to be replayed verbatim
@@ -124,7 +124,7 @@ internal class AiRuntime(
         ): LLMParams? {
             if (level == AiReasoningLevel.DEFAULT) return null
             return when (provider) {
-                AiProvider.OPENAI, AiProvider.CUSTOM -> {
+                AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> {
                     OpenAIChatParams(reasoningEffort = level.toReasoningEffort())
                 }
 

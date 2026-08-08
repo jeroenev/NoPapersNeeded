@@ -70,7 +70,7 @@ class AiRuntimeTest {
 
     @Test
     fun openAiFamilyMapsToReasoningEffort() {
-        listOf(AiProvider.OPENAI, AiProvider.CUSTOM).forEach { provider ->
+        listOf(AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO).forEach { provider ->
             val params = AiRuntime.reasoningParams(provider, AiReasoningLevel.LOW, toolLoop = true)
             params.shouldBeInstanceOf<OpenAIChatParams>().reasoningEffort shouldBe ReasoningEffort.LOW
             val none = AiRuntime.reasoningParams(provider, AiReasoningLevel.NONE, toolLoop = false)
@@ -141,7 +141,7 @@ class AiRuntimeTest {
                 runtime.model.id shouldBe "some-model"
                 runtime.model.provider.id shouldBe
                     when (provider) {
-                        AiProvider.OPENAI, AiProvider.CUSTOM -> "openai"
+                        AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> "openai"
                         AiProvider.ANTHROPIC -> "anthropic"
                         AiProvider.GOOGLE -> "google"
                         AiProvider.MISTRAL -> "mistralai"
