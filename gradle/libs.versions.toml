@@ -21,7 +21,7 @@ kotlinx-serialization = "1.11.0"
 koog = "1.1.1"
 # Koog clients not yet promoted to stable; they depend on the stable 1.1.1 base modules.
 koog-beta = "1.1.1-beta"
-kotest = "6.2.2"
+kotest = "6.2.3"
 kover = "0.9.9"
 ksp = "2.3.10"
 ktlint = "1.8.0"
