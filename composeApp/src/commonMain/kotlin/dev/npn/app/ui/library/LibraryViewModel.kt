@@ -74,7 +74,7 @@ data class LibraryUiState(
 class LibraryViewModel(
     private val documentRepository: DocumentRepository,
     tagRepository: TagRepository,
-    savedViewRepository: SavedViewRepository,
+    private val savedViewRepository: SavedViewRepository,
     private val meta: MetadataWriter,
     private val docLifecycle: DocLifecycle,
     private val ingest: IngestFacade,
@@ -434,24 +434,39 @@ class LibraryViewModel(
         }
     }
 
-    // Saved-view create/rename/pin/delete are thin, single-line pass-throughs to
-    // [LibrarySession.savedViews] with no view-model state of their own, so they run from the
-    // drawer's own coroutine scope (see LibraryScreen) rather than adding a wrapper method each
-    // here. Building a new view from the live UI state is a pure helper: see [newSavedView].
+    // ---- saved views ----
+    // Names are trimmed here so the trimming rule lives in one place rather than in each dialog.
+
+    /** Capture the live filter/sort/view UI state as a new [SavedView] named [name] and persist it. */
+    fun saveCurrentView(name: String) =
+        launchReporting(UiAction.UPDATE) { savedViewRepository.save(newSavedView(_ui.value, name.trim())) }
+
+    /** Persist [view] under a new, whitespace-trimmed [name]. */
+    fun renameSavedView(
+        view: SavedView,
+        name: String,
+    ) = launchReporting(UiAction.UPDATE) { savedViewRepository.save(view.copy(name = name.trim())) }
+
+    /** Flip the pinned state of [view] and persist it. */
+    fun toggleSavedViewPin(view: SavedView) =
+        launchReporting(UiAction.UPDATE) { savedViewRepository.save(view.copy(pinned = !view.pinned)) }
+
+    /** Delete [view] by id. */
+    fun deleteSavedView(view: SavedView) = launchReporting(UiAction.UPDATE) { savedViewRepository.delete(view.id) }
+
+    /** Capture the given [ui] (filter/sort/view) as a new [SavedView] named [name]. */
+    private fun newSavedView(
+        ui: LibraryUiState,
+        name: String,
+    ): SavedView =
+        SavedView(
+            id = randomId(),
+            name = name,
+            filter = ui.filter,
+            sort = ui.sort,
+            viewType = ui.viewType,
+        )
 }
 
 @OptIn(ExperimentalUuidApi::class)
 private fun randomId(): String = Uuid.random().toString()
-
-/** Capture [ui] (filter/sort/view) as a new [SavedView] named [name]. */
-internal fun newSavedView(
-    ui: LibraryUiState,
-    name: String,
-): SavedView =
-    SavedView(
-        id = randomId(),
-        name = name,
-        filter = ui.filter,
-        sort = ui.sort,
-        viewType = ui.viewType,
-    )

@@ -232,11 +232,8 @@ fun LibraryScreen(
                 onSaveCurrentView = dialogs::openSaveView,
                 onSavedView = vm::applySavedView,
                 onRenameSavedView = dialogs::openRename,
-                // Thin pass-throughs to the session; run on the screen scope (quick fire-and-forget).
-                onDeleteSavedView = { view -> scope.launch { session.savedViews.delete(view.id) } },
-                onTogglePinSavedView = { view ->
-                    scope.launch { session.savedViews.save(view.copy(pinned = !view.pinned)) }
-                },
+                onDeleteSavedView = vm::deleteSavedView,
+                onTogglePinSavedView = vm::toggleSavedViewPin,
             )
             // The navigation rail already carries the AI entries on wide layouts.
             if (aiConfigured && !wide) {
@@ -339,10 +336,8 @@ fun LibraryScreen(
                 dialogs.dismissFilter()
             },
             onClearFilter = vm::clearFilter,
-            onSaveView = { name -> scope.launch { session.savedViews.save(newSavedView(ui, name)) } },
-            onRenameView = { view, name ->
-                scope.launch { session.savedViews.save(view.copy(name = name.trim())) }
-            },
+            onSaveView = vm::saveCurrentView,
+            onRenameView = vm::renameSavedView,
             onAddTag = vm::bulkAddTag,
             onRemoveTag = vm::bulkRemoveTag,
             renderFilter = !wide,

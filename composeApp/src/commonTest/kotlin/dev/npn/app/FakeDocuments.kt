@@ -156,13 +156,21 @@ class FakeSavedViewRepository : SavedViewRepository {
     val saved = mutableListOf<SavedView>()
     val deleted = mutableListOf<String>()
 
+    /** If set, save throws this. */
+    var failSave: (() -> Nothing)? = null
+
+    /** If set, delete throws this. */
+    var failDelete: (() -> Nothing)? = null
+
     override fun observeSavedViews(): Flow<List<SavedView>> = views
 
     override suspend fun save(view: SavedView) {
+        failSave?.invoke()
         saved += view
     }
 
     override suspend fun delete(id: String) {
+        failDelete?.invoke()
         deleted += id
     }
 

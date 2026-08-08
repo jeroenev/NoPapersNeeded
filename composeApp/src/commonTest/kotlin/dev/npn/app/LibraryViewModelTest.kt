@@ -474,6 +474,66 @@ class LibraryViewModelTest : MainDispatcherTest() {
             settings.setGridWidths shouldContainExactly listOf(220)
         }
 
+    // ---- saved views ----
+
+    @Test
+    fun saveCurrentViewCapturesLiveFilterAndSort() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            model.setFilter(LibraryFilter(query = "tax", docType = "form"))
+            model.setSort(SortField.NAME, ascending = true)
+            model.saveCurrentView("Taxes")
+            advanceUntilIdle()
+            val saved = session.savedViews.saved.single()
+            saved.name shouldBe "Taxes"
+            saved.filter shouldBe LibraryFilter(query = "tax", docType = "form")
+            saved.sort shouldBe LibrarySort(SortField.NAME, ascending = true)
+        }
+
+    @Test
+    fun renameSavedViewTrimsWhitespace() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val view = SavedView(id = "v1", name = "Old")
+            model.renameSavedView(view, "  New name  ")
+            advanceUntilIdle()
+            session.savedViews.saved.single() shouldBe view.copy(name = "New name")
+        }
+
+    @Test
+    fun toggleSavedViewPinFlipsPinnedState() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val view = SavedView(id = "v1", name = "Pinned?", pinned = false)
+            model.toggleSavedViewPin(view)
+            advanceUntilIdle()
+            session.savedViews.saved.single() shouldBe view.copy(pinned = true)
+        }
+
+    @Test
+    fun deleteSavedViewPassesViewId() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            model.deleteSavedView(SavedView(id = "v1", name = "Doomed"))
+            advanceUntilIdle()
+            session.savedViews.deleted shouldContainExactly listOf("v1")
+        }
+
+    @Test
+    fun saveCurrentViewFailureSurfacesMessage() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { savedViews.failSave = { error("disk full") } }
+            val model = vm(session = session)
+            val messages = collectMessages(model)
+            model.saveCurrentView("Taxes")
+            advanceUntilIdle()
+            messages shouldContainExactly listOf("Could not update: disk full")
+        }
+
     // ---- needsReviewCount switches source by review mode ----
 
     @Test
