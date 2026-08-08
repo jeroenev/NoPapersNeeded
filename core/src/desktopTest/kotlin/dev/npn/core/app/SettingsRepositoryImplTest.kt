@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiProvider
+import dev.npn.core.ai.AiReasoningLevel
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -53,6 +55,57 @@ class SettingsRepositoryImplTest {
                 snapshot.aiBaseUrl shouldBe "https://example.test"
                 snapshot.aiApiKey shouldBe "secret"
                 snapshot.aiModel shouldBe "model"
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
+    fun aiProviderAndReasoningPersist() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                val file = directory.resolve("settings.properties").toFile()
+                val repository = SettingsRepositoryImpl(file)
+                repository.setAiProvider(AiProvider.ANTHROPIC)
+                repository.setAiReasoningAssistant(AiReasoningLevel.MEDIUM)
+                repository.setAiReasoningEdit(AiReasoningLevel.NONE)
+
+                val snapshot = SettingsRepositoryImpl(file).settings.first()
+                snapshot.aiProvider shouldBe AiProvider.ANTHROPIC
+                snapshot.aiReasoningAssistant shouldBe AiReasoningLevel.MEDIUM
+                snapshot.aiReasoningEdit shouldBe AiReasoningLevel.NONE
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
+    fun preProviderSettingsWithBaseUrlMigrateToCustom() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                // A settings file written before provider selection existed: base URL set, no
+                // provider key. That was the free-form OpenAI-compatible endpoint = CUSTOM.
+                val file = directory.resolve("settings.properties").toFile()
+                file.writeText("aiEnabled=true\naiBaseUrl=http\\://localhost\\:11434\naiModel=qwen3\\:8b\n")
+
+                val snapshot = SettingsRepositoryImpl(file).settings.first()
+                snapshot.aiProvider shouldBe AiProvider.CUSTOM
+                snapshot.aiReasoningAssistant shouldBe AiReasoningLevel.DEFAULT
+                snapshot.aiReasoningEdit shouldBe AiReasoningLevel.LOW
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
+    fun freshSettingsDefaultToFirstProvider() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                val file = directory.resolve("settings.properties").toFile()
+                SettingsRepositoryImpl(file).settings.first().aiProvider shouldBe AiProvider.OPENAI
             } finally {
                 directory.toFile().deleteRecursively()
             }

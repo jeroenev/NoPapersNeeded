@@ -34,6 +34,7 @@ import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.StandardField
 import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrPipeline
@@ -104,6 +105,15 @@ class LibrarySessionImpl private constructor(
 
     override suspend fun setReviewMode(mode: ReviewMode) {
         coordinator.commitAndApply(listOf(PendingOp.settingSet(ReviewMode.WIRE_KEY, mode.wire)))
+    }
+
+    override val standardFields: Flow<Set<StandardField>> =
+        coordinator.settingFlow(StandardField.WIRE_KEY).map(StandardField::fromWire)
+
+    override suspend fun setStandardFields(fields: Set<StandardField>) {
+        coordinator.commitAndApply(
+            listOf(PendingOp.settingSet(StandardField.WIRE_KEY, StandardField.toWire(fields))),
+        )
     }
 
     override suspend fun markReviewedForMigration(onlyTagged: Boolean) {

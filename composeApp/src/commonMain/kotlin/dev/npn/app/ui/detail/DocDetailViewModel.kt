@@ -16,6 +16,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.StandardField
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -127,6 +128,11 @@ class DocDetailViewModel(
     val reviewMode: StateFlow<ReviewMode> =
         session.reviewMode
             .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
+
+    /** Library-wide visible standard fields (synced setting); title is always shown. */
+    val standardFields: StateFlow<Set<StandardField>> =
+        session.standardFields
+            .stateIn(viewModelScope, WhileSubscribedTimeout, StandardField.DEFAULT)
 
     val correspondents: StateFlow<List<String>> =
         session.documents
@@ -286,6 +292,15 @@ class DocDetailViewModel(
         launchMetadata(UiAction.SAVE_DATE) { session.meta.setDocDate(docId, isoDate?.takeIf { it.isNotBlank() }) }
 
     fun addTag(tag: String) = launchMetadata(UiAction.ADD_TAG) { session.meta.addTag(listOf(docId), tag) }
+
+    /** Create a brand-new tag on this doc, optionally with a color chosen inline in the editor. */
+    fun addTagWithStyle(
+        tag: String,
+        color: String?,
+    ) = launchMetadata(UiAction.CREATE_TAG) {
+        session.meta.addTag(listOf(docId), tag)
+        if (color != null) session.meta.setTagStyle(tag, color, null)
+    }
 
     fun removeTag(tag: String) = launchMetadata(UiAction.REMOVE_TAG) { session.meta.removeTag(listOf(docId), tag) }
 

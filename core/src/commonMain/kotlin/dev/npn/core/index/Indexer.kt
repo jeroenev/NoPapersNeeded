@@ -524,6 +524,9 @@ class Indexer(
             )
         }
         flushChanges(changes, request)
+        // Tags live only through use: once no live document references a name, drop its row so
+        // stale tags never linger in tag lists (see TagDao.pruneUnreferenced).
+        tagDao.pruneUnreferenced()
         return resurrected
     }
 

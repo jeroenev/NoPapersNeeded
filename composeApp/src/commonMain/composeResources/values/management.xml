@@ -39,13 +39,30 @@
     <string name="common_tags_title">Tags</string>
     <string name="common_tags_new">New tag</string>
     <string name="common_tags_empty_title">No tags yet</string>
-    <string name="common_tags_empty_subtitle">Create a tag or add tags to documents.</string>
+    <string name="common_tags_empty_subtitle">Add tags to documents to see them here. Tags disappear automatically when no document uses them.</string>
     <string name="common_tags_rename_title">Rename tag</string>
     <string name="common_tags_new_name">New name</string>
     <string name="common_tags_merge_title">Merge &quot;%1$s&quot; into</string>
     <string name="common_tags_merge">Merge</string>
+    <plurals name="common_tags_merge_many_title">
+        <item quantity="one">Merge %1$d tag</item>
+        <item quantity="other">Merge %1$d tags</item>
+    </plurals>
+    <string name="common_tags_merge_keep_message">Choose the tag to keep. Documents with the other tags get this tag instead.</string>
+    <plurals name="common_tags_color_many_title">
+        <item quantity="one">Set color for %1$d tag</item>
+        <item quantity="other">Set color for %1$d tags</item>
+    </plurals>
     <string name="common_tags_delete_title">Delete tag</string>
     <string name="common_tags_delete_message">Remove &quot;%1$s&quot; from all documents? This cannot be undone.</string>
+    <plurals name="common_tags_delete_many_title">
+        <item quantity="one">Delete %1$d tag</item>
+        <item quantity="other">Delete %1$d tags</item>
+    </plurals>
+    <plurals name="common_tags_delete_many_message">
+        <item quantity="one">Remove %1$d tag from all documents? This cannot be undone.</item>
+        <item quantity="other">Remove %1$d tags from all documents? This cannot be undone.</item>
+    </plurals>
     <string name="common_tags_style_title">Tag style</string>
     <string name="common_tags_namespace_only">%1$s - namespace only</string>
     <string name="common_tags_actions">Tag actions</string>

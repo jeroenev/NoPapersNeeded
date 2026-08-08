@@ -19,6 +19,8 @@ kotlin = "2.3.21"
 kotlinx-datetime = "0.8.0"
 kotlinx-serialization = "1.11.0"
 koog = "1.1.1"
+# Koog clients not yet promoted to stable; they depend on the stable 1.1.1 base modules.
+koog-beta = "1.1.1-beta"
 kotest = "6.2.2"
 kover = "0.9.9"
 ksp = "2.3.10"
@@ -53,8 +55,14 @@ filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose
 koog-agents-core = { module = "ai.koog:agents-core", version.ref = "koog" }
 koog-agents-tools = { module = "ai.koog:agents-tools", version.ref = "koog" }
 koog-http-client-ktor = { module = "ai.koog:http-client-ktor", version.ref = "koog" }
+koog-prompt-executor-anthropic = { module = "ai.koog:prompt-executor-anthropic-client", version.ref = "koog" }
+koog-prompt-executor-deepseek = { module = "ai.koog:prompt-executor-deepseek-client", version.ref = "koog-beta" }
+koog-prompt-executor-google = { module = "ai.koog:prompt-executor-google-client", version.ref = "koog-beta" }
+koog-prompt-executor-mistralai = { module = "ai.koog:prompt-executor-mistralai-client", version.ref = "koog-beta" }
 koog-prompt-executor-model = { module = "ai.koog:prompt-executor-model", version.ref = "koog" }
+koog-prompt-executor-ollama = { module = "ai.koog:prompt-executor-ollama-client", version.ref = "koog" }
 koog-prompt-executor-openai = { module = "ai.koog:prompt-executor-openai-client", version.ref = "koog" }
+koog-prompt-executor-openrouter = { module = "ai.koog:prompt-executor-openrouter-client", version.ref = "koog" }
 kotest-assertions = { module = "io.kotest:kotest-assertions-core", version.ref = "kotest" }
 kotest-property = { module = "io.kotest:kotest-property", version.ref = "kotest" }
 kotlinx-coroutines-core = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-core", version.ref = "coroutines" }

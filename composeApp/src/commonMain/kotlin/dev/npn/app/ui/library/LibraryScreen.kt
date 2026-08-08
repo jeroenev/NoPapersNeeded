@@ -20,17 +20,24 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.LabelOff
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDownward
 import androidx.compose.material.icons.filled.ArrowUpward
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FilterList
 import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NewLabel
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.Unpublished
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
@@ -81,6 +88,7 @@ import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.platformFileToExternalSource
@@ -111,6 +119,7 @@ import no_papers_needed.composeapp.generated.resources.library_import
 import no_papers_needed.composeapp.generated.resources.library_import_pdf
 import no_papers_needed.composeapp.generated.resources.library_mark_needs_review
 import no_papers_needed.composeapp.generated.resources.library_mark_reviewed
+import no_papers_needed.composeapp.generated.resources.library_more_actions
 import no_papers_needed.composeapp.generated.resources.library_move_to_trash_question
 import no_papers_needed.composeapp.generated.resources.library_no_documents_subtitle
 import no_papers_needed.composeapp.generated.resources.library_no_documents_title
@@ -243,6 +252,7 @@ fun LibraryScreen(
                 docs = docs,
                 tagColors = tagColors,
                 reviewMode = reviewMode,
+                compactSelectionBar = !wide,
                 scanProgress = scanProgress,
                 lastScan = lastScan,
                 ocr = ocr,
@@ -416,6 +426,8 @@ private fun LibraryContent(
     onAiEdit: (() -> Unit)?,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
+    /** Collapse the less frequent selection actions into the overflow menu (narrow windows). */
+    compactSelectionBar: Boolean = true,
 ) {
     val queryText by vm.queryText.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
@@ -426,6 +438,28 @@ private fun LibraryContent(
     val contentFocus = remember { FocusRequester() }
     var searchFocused by remember { mutableStateOf(false) }
     var confirmTrash by remember { mutableStateOf(false) }
+    // Right-click context menu actions. Tag/trash actions operate on the current selection, so the
+    // clicked document is pulled into it first (replacing the selection when it was not part of it).
+    val ensureInSelection: (String) -> Unit = { docId ->
+        if (docId !in ui.selected) vm.startSelection(docId)
+    }
+    val contextActionsFor: (String) -> DocContextMenuActions = { docId ->
+        DocContextMenuActions(
+            onOpen = { onOpenDoc(docId) },
+            onAddTag = {
+                ensureInSelection(docId)
+                onAddTag()
+            },
+            onRemoveTag = {
+                ensureInSelection(docId)
+                onRemoveTag()
+            },
+            onTrash = {
+                ensureInSelection(docId)
+                confirmTrash = true
+            },
+        )
+    }
     // Give the shortcut host focus on entry; key events only reach it once something is focused.
     // Wait for the first frame so the requester node is attached to the focus owner before asking
     // (requesting during the first composition otherwise warns "FocusRequester is not initialized").
@@ -440,6 +474,7 @@ private fun LibraryContent(
                     count = ui.selected.size,
                     total = allDocIds.size,
                     reviewMode = reviewMode,
+                    compact = compactSelectionBar,
                     onClose = vm::clearSelection,
                     onSelectAll = { vm.selectAll(allDocIds) },
                     onAddTag = onAddTag,
@@ -557,6 +592,7 @@ private fun LibraryContent(
                                 onOpen = onOpenDoc,
                                 onToggleSelect = vm::toggleSelection,
                                 onStartSelection = vm::startSelection,
+                                contextActionsFor = contextActionsFor,
                             )
                         }
 
@@ -571,6 +607,7 @@ private fun LibraryContent(
                                 onOpen = onOpenDoc,
                                 onToggleSelect = vm::toggleSelection,
                                 onStartSelection = vm::startSelection,
+                                contextActionsFor = contextActionsFor,
                             )
                         }
                     }
@@ -608,6 +645,7 @@ private fun DocList(
     onOpen: (String) -> Unit,
     onToggleSelect: (String) -> Unit,
     onStartSelection: (String) -> Unit,
+    contextActionsFor: ((String) -> DocContextMenuActions)? = null,
 ) {
     val row: @Composable (dev.npn.core.app.DocListItem) -> Unit = { item ->
         DocListRow(
@@ -626,6 +664,7 @@ private fun DocList(
             },
             onLongClick = { onStartSelection(item.doc.docId) },
             onToggleSelect = { onToggleSelect(item.doc.docId) },
+            contextActions = contextActionsFor?.invoke(item.doc.docId),
         )
     }
 
@@ -750,6 +789,8 @@ private fun SelectionTopBar(
     count: Int,
     total: Int,
     reviewMode: ReviewMode,
+    /** True on narrow windows: collapse remove-tag and AI edit into the overflow menu. */
+    compact: Boolean,
     onClose: () -> Unit,
     onSelectAll: () -> Unit,
     onAddTag: () -> Unit,
@@ -759,7 +800,6 @@ private fun SelectionTopBar(
     onSetReviewed: (Boolean) -> Unit,
     onRequestTrash: () -> Unit,
 ) {
-    var reviewMenu by remember { mutableStateOf(false) }
     TopAppBar(
         title = { Text(pluralStringResource(Res.plurals.library_selected_count, count, count)) },
         navigationIcon = {
@@ -768,39 +808,107 @@ private fun SelectionTopBar(
             }
         },
         actions = {
-            TextButton(onClick = onSelectAll, enabled = total > 0) {
-                Text(stringResource(Res.string.common_select_all))
-            }
-            TextButton(onClick = onAddTag) { Text(stringResource(Res.string.common_add_tag)) }
-            TextButton(onClick = onRemoveTag) { Text(stringResource(Res.string.library_remove_tag)) }
-            onAiEdit?.let { TextButton(onClick = it) { Text(stringResource(Res.string.library_ai_edit)) } }
-            // Manual reviewed marker only applies in the inbox-workflow mode.
-            if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
-                Box {
-                    TextButton(onClick = { reviewMenu = true }) { Text(stringResource(Res.string.library_review)) }
-                    DropdownMenu(expanded = reviewMenu, onDismissRequest = { reviewMenu = false }) {
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.library_mark_reviewed)) },
-                            onClick = {
-                                onSetReviewed(true)
-                                reviewMenu = false
-                            },
-                        )
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.library_mark_needs_review)) },
-                            onClick = {
-                                onSetReviewed(false)
-                                reviewMenu = false
-                            },
-                        )
-                    }
+            // All actions are visible as compact icons when the window has room; on narrow
+            // screens the less frequent ones collapse into the overflow menu.
+            TooltipIconButton(
+                icon = Icons.Filled.SelectAll,
+                label = stringResource(Res.string.common_select_all),
+                onClick = onSelectAll,
+                enabled = total > 0,
+            )
+            TooltipIconButton(
+                icon = Icons.Filled.NewLabel,
+                label = stringResource(Res.string.common_add_tag),
+                onClick = onAddTag,
+            )
+            if (!compact) {
+                TooltipIconButton(
+                    icon = Icons.AutoMirrored.Filled.LabelOff,
+                    label = stringResource(Res.string.library_remove_tag),
+                    onClick = onRemoveTag,
+                )
+                onAiEdit?.let { aiEdit ->
+                    TooltipIconButton(
+                        icon = Icons.Filled.AutoAwesome,
+                        label = stringResource(Res.string.library_ai_edit),
+                        onClick = aiEdit,
+                    )
                 }
             }
-            IconButton(onClick = onRequestTrash) {
-                Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.library_trash))
-            }
+            TooltipIconButton(
+                icon = Icons.Filled.Delete,
+                label = stringResource(Res.string.library_trash),
+                onClick = onRequestTrash,
+            )
+            SelectionOverflowMenu(
+                compact = compact,
+                reviewMode = reviewMode,
+                onRemoveTag = onRemoveTag,
+                onAiEdit = onAiEdit,
+                onSetReviewed = onSetReviewed,
+            )
         },
     )
+}
+
+@Composable
+private fun SelectionOverflowMenu(
+    compact: Boolean,
+    reviewMode: ReviewMode,
+    onRemoveTag: () -> Unit,
+    onAiEdit: (() -> Unit)?,
+    onSetReviewed: (Boolean) -> Unit,
+) {
+    // Remove-tag and AI edit only overflow on narrow windows; review marks always live here.
+    // Skip the menu button entirely when it would be empty.
+    if (!compact && reviewMode != ReviewMode.INBOX_WORKFLOW) return
+    var open by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { open = true }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.library_more_actions))
+        }
+        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
+            if (compact) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.library_remove_tag)) },
+                    leadingIcon = { Icon(Icons.AutoMirrored.Filled.LabelOff, contentDescription = null) },
+                    onClick = {
+                        open = false
+                        onRemoveTag()
+                    },
+                )
+                onAiEdit?.let { aiEdit ->
+                    DropdownMenuItem(
+                        text = { Text(stringResource(Res.string.library_ai_edit)) },
+                        leadingIcon = { Icon(Icons.Filled.AutoAwesome, contentDescription = null) },
+                        onClick = {
+                            open = false
+                            aiEdit()
+                        },
+                    )
+                }
+            }
+            // Manual reviewed marker only applies in the inbox-workflow mode.
+            if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.library_mark_reviewed)) },
+                    leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
+                    onClick = {
+                        open = false
+                        onSetReviewed(true)
+                    },
+                )
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.library_mark_needs_review)) },
+                    leadingIcon = { Icon(Icons.Filled.Unpublished, contentDescription = null) },
+                    onClick = {
+                        open = false
+                        onSetReviewed(false)
+                    },
+                )
+            }
+        }
+    }
 }
 
 @Composable

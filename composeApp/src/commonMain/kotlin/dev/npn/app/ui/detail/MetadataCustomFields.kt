@@ -1,10 +1,12 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
+@file:OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
 
 package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
@@ -17,6 +19,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -78,6 +81,9 @@ internal fun CustomFieldsSection(
     }
 }
 
+/** How many reusable field-key chips to offer before the list gets noisy. */
+private const val MAX_REUSABLE_KEY_CHIPS = 12
+
 @Composable
 private fun AddFieldRow(
     existingKeys: Set<String>,
@@ -87,6 +93,24 @@ private fun AddFieldRow(
     var key by remember { mutableStateOf("") }
     var value by remember { mutableStateOf("") }
     var expanded by remember { mutableStateOf(false) }
+    // Field keys in use elsewhere in the library, offered as one-tap chips so re-using an
+    // existing field never requires retyping its name. The key list is derived from live usage:
+    // a key that no document carries anymore disappears from here, but typing it again simply
+    // recreates it.
+    val reusableKeys =
+        remember(fieldKeys, existingKeys) {
+            fieldKeys.filter { it !in existingKeys }.take(MAX_REUSABLE_KEY_CHIPS)
+        }
+    if (reusableKeys.isNotEmpty()) {
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+            reusableKeys.forEach { reusable ->
+                SuggestionChip(
+                    onClick = { key = reusable },
+                    label = { Text(reusable) },
+                )
+            }
+        }
+    }
     val suggestions =
         remember(key, fieldKeys, existingKeys) {
             val query = key.trim()

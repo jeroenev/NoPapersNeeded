@@ -22,6 +22,8 @@
     </plurals>
     <string name="common_settings_thumbnail_cache_help">Regenerate library thumbnails at the current quality. Use this if previews look blurry.</string>
     <string name="common_settings_review_workflow">Review workflow</string>
+    <string name="common_settings_document_fields">Document fields</string>
+    <string name="common_settings_document_fields_help">Choose which built-in fields are shown on every document (synced across devices). Hidden fields keep their stored values and reappear when enabled again. Use custom fields on a document for anything else.</string>
     <string name="common_settings_auto_matching">Auto-matching</string>
     <string name="common_settings_auto_matching_rules">Auto-matching rules</string>
     <string name="common_settings_auto_matching_help">Automatically tag documents and set metadata when imported text matches a rule.</string>
@@ -61,13 +63,29 @@
     <string name="common_settings_remove_after_import_help">When on, source files are deleted from the watched folder once they are safely in the library. When off, they stay and are simply skipped as duplicates on later scans.</string>
 
     <string name="common_settings_enable_ai">Enable AI assistant</string>
-    <string name="common_settings_ai_help">Uses an OpenAI-compatible server to suggest tags and answer questions about your documents.</string>
+    <string name="common_settings_ai_help">Uses an AI provider of your choice to suggest tags and answer questions about your documents.</string>
+    <string name="common_settings_ai_provider">Provider: %1$s</string>
+    <string name="common_settings_ai_provider_help">Requests go directly to this provider with your own API key. Pick Custom for any other OpenAI-compatible server.</string>
     <string name="common_settings_server_url">Server URL</string>
     <string name="common_settings_server_url_help">OpenAI-compatible server, e.g. %1$s or %2$s. A pasted %3$s URL also works.</string>
+    <string name="common_settings_server_url_ollama_help">Ollama server address; leave empty for the default %1$s.</string>
     <string name="common_settings_api_key">API key</string>
     <string name="common_settings_api_key_help">Stored only on this device; leave empty for local servers</string>
+    <string name="common_settings_api_key_help_provider">Stored only on this device; sent only to the selected provider.</string>
     <string name="common_settings_model">Model</string>
     <string name="common_settings_model_help">Model ID exactly as the server lists it (see its %1$s), e.g. %2$s or %3$s. Client-side provider prefixes do not apply.</string>
+    <string name="common_settings_model_pick_help">Load the provider\'s models with the arrow, or type a model ID.</string>
+    <string name="common_settings_load_models">Load models</string>
+    <string name="common_settings_models_loading">Loading models…</string>
+    <string name="common_settings_models_error">Could not load models: %1$s</string>
+    <string name="common_settings_reasoning_assistant">Assistant reasoning: %1$s</string>
+    <string name="common_settings_reasoning_edit">AI edit reasoning: %1$s</string>
+    <string name="common_settings_reasoning_help">How much the model may think before answering. Default keeps the server\'s behaviour; not every provider or model supports every level.</string>
+    <string name="common_settings_reasoning_default">Default</string>
+    <string name="common_settings_reasoning_none">Off</string>
+    <string name="common_settings_reasoning_low">Low</string>
+    <string name="common_settings_reasoning_medium">Medium</string>
+    <string name="common_settings_reasoning_high">High</string>
     <string name="common_settings_ai_request_help">Requests send document text to the configured server.</string>
     <string name="common_settings_max_suggested_tags">Default max suggested tags per document</string>
     <string name="common_settings_max_suggested_tags_help">Default number of tags the assistant proposes per document (%1$d-%2$d); can be changed per run on the AI tagging page.</string>

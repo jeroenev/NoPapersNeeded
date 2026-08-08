@@ -38,17 +38,16 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.persistDirectoryAccess
-import dev.npn.core.app.AiTagging
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.StandardField
 import dev.npn.core.pathrules.StoragePathContext
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import no_papers_needed.composeapp.generated.resources.Res
@@ -58,10 +57,6 @@ import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_settings_about
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_assistant
-import no_papers_needed.composeapp.generated.resources.common_settings_ai_help
-import no_papers_needed.composeapp.generated.resources.common_settings_ai_request_help
-import no_papers_needed.composeapp.generated.resources.common_settings_api_key
-import no_papers_needed.composeapp.generated.resources.common_settings_api_key_help
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_help
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_rules
@@ -69,7 +64,8 @@ import no_papers_needed.composeapp.generated.resources.common_settings_change_li
 import no_papers_needed.composeapp.generated.resources.common_settings_choose_folder
 import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnail_cache
 import no_papers_needed.composeapp.generated.resources.common_settings_default_view
-import no_papers_needed.composeapp.generated.resources.common_settings_enable_ai
+import no_papers_needed.composeapp.generated.resources.common_settings_document_fields
+import no_papers_needed.composeapp.generated.resources.common_settings_document_fields_help
 import no_papers_needed.composeapp.generated.resources.common_settings_enable_inbox
 import no_papers_needed.composeapp.generated.resources.common_settings_grid_size_help
 import no_papers_needed.composeapp.generated.resources.common_settings_inbox_help
@@ -85,12 +81,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_library
 import no_papers_needed.composeapp.generated.resources.common_settings_mark_all_reviewed
 import no_papers_needed.composeapp.generated.resources.common_settings_mark_none_reviewed
 import no_papers_needed.composeapp.generated.resources.common_settings_mark_tagged_reviewed
-import no_papers_needed.composeapp.generated.resources.common_settings_max_new_tags
-import no_papers_needed.composeapp.generated.resources.common_settings_max_new_tags_help
-import no_papers_needed.composeapp.generated.resources.common_settings_max_suggested_tags
-import no_papers_needed.composeapp.generated.resources.common_settings_max_suggested_tags_help
-import no_papers_needed.composeapp.generated.resources.common_settings_model
-import no_papers_needed.composeapp.generated.resources.common_settings_model_help
 import no_papers_needed.composeapp.generated.resources.common_settings_no_library
 import no_papers_needed.composeapp.generated.resources.common_settings_no_watched_folder
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr
@@ -100,8 +90,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_product_v
 import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import
 import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import_help
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow
-import no_papers_needed.composeapp.generated.resources.common_settings_server_url
-import no_papers_needed.composeapp.generated.resources.common_settings_server_url_help
 import no_papers_needed.composeapp.generated.resources.common_settings_stop_watching
 import no_papers_needed.composeapp.generated.resources.common_settings_storage
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_absolute
@@ -138,6 +126,10 @@ import no_papers_needed.composeapp.generated.resources.common_settings_watched_f
 import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder_help
 import no_papers_needed.composeapp.generated.resources.common_view_grid
 import no_papers_needed.composeapp.generated.resources.common_view_list
+import no_papers_needed.composeapp.generated.resources.detail_correspondent
+import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
+import no_papers_needed.composeapp.generated.resources.detail_document_type
+import no_papers_needed.composeapp.generated.resources.detail_note
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -157,7 +149,9 @@ fun SettingsScreen(
 ) {
     val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }
     val state by vm.state.collectAsStateWithLifecycle()
+    val aiModels by vm.aiModels.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
+    val standardFields by vm.standardFields.collectAsStateWithLifecycle()
     val storagePath =
         evaluateStoragePath(
             state.storagePathTemplate,
@@ -256,18 +250,9 @@ fun SettingsScreen(
 
             SectionHeader(stringResource(Res.string.common_settings_ai_assistant))
             AiAssistantSection(
-                enabled = state.aiEnabled,
-                baseUrl = state.aiBaseUrl,
-                apiKey = state.aiApiKey,
-                model = state.aiModel,
-                maxTagsPerDoc = state.aiMaxTagsPerDoc,
-                onSetEnabled = vm::setAiEnabled,
-                onSetBaseUrl = vm::setAiBaseUrl,
-                onSetApiKey = vm::setAiApiKey,
-                onSetModel = vm::setAiModel,
-                onSetMaxTagsPerDoc = vm::setAiMaxTagsPerDoc,
-                maxNewTagsPerDoc = state.aiMaxNewTagsPerDoc,
-                onSetMaxNewTagsPerDoc = vm::setAiMaxNewTagsPerDoc,
+                state = state,
+                models = aiModels,
+                vm = vm,
             )
 
             HorizontalDivider()
@@ -329,6 +314,14 @@ fun SettingsScreen(
                 stringResource(Res.string.common_settings_thumbnail_cache_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            HorizontalDivider()
+
+            SectionHeader(stringResource(Res.string.common_settings_document_fields))
+            StandardFieldsSection(
+                enabled = standardFields,
+                onSetEnabled = vm::setStandardFieldEnabled,
             )
 
             HorizontalDivider()
@@ -476,133 +469,6 @@ private fun WatchedFolderSection(
 }
 
 @Composable
-private fun AiAssistantSection(
-    enabled: Boolean,
-    baseUrl: String,
-    apiKey: String,
-    model: String,
-    maxTagsPerDoc: Int,
-    onSetEnabled: (Boolean) -> Unit,
-    onSetBaseUrl: (String) -> Unit,
-    onSetApiKey: (String) -> Unit,
-    onSetModel: (String) -> Unit,
-    onSetMaxTagsPerDoc: (Int) -> Unit,
-    maxNewTagsPerDoc: Int,
-    onSetMaxNewTagsPerDoc: (Int) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(Res.string.common_settings_enable_ai),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    stringResource(Res.string.common_settings_ai_help),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(checked = enabled, onCheckedChange = onSetEnabled)
-        }
-        if (enabled) {
-            OutlinedTextField(
-                value = baseUrl,
-                onValueChange = onSetBaseUrl,
-                label = { Text(stringResource(Res.string.common_settings_server_url)) },
-                supportingText = {
-                    Text(
-                        stringResource(
-                            Res.string.common_settings_server_url_help,
-                            "https://api.openai.com",
-                            "http://localhost:11434",
-                            "/v1/chat/completions",
-                        ),
-                    )
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = apiKey,
-                onValueChange = onSetApiKey,
-                label = { Text(stringResource(Res.string.common_settings_api_key)) },
-                visualTransformation = PasswordVisualTransformation(),
-                supportingText = {
-                    Text(stringResource(Res.string.common_settings_api_key_help))
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            OutlinedTextField(
-                value = model,
-                onValueChange = onSetModel,
-                label = { Text(stringResource(Res.string.common_settings_model)) },
-                supportingText = {
-                    Text(
-                        stringResource(
-                            Res.string.common_settings_model_help,
-                            "/v1/models",
-                            "gpt-4.1-mini",
-                            "qwen3:8b",
-                        ),
-                    )
-                },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            AiTagCapDefaults(
-                maxTagsPerDoc = maxTagsPerDoc,
-                onSetMaxTagsPerDoc = onSetMaxTagsPerDoc,
-                maxNewTagsPerDoc = maxNewTagsPerDoc,
-                onSetMaxNewTagsPerDoc = onSetMaxNewTagsPerDoc,
-            )
-            Text(
-                stringResource(Res.string.common_settings_ai_request_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-    }
-}
-
-/** Default per-run tag caps for the AI assistant (overridable on the AI tagging page). */
-@Composable
-private fun AiTagCapDefaults(
-    maxTagsPerDoc: Int,
-    onSetMaxTagsPerDoc: (Int) -> Unit,
-    maxNewTagsPerDoc: Int,
-    onSetMaxNewTagsPerDoc: (Int) -> Unit,
-) {
-    NumericField(
-        value = maxTagsPerDoc,
-        onValueChange = onSetMaxTagsPerDoc,
-        range = AiTagging.RANGE,
-        label = stringResource(Res.string.common_settings_max_suggested_tags),
-        supportingText =
-            stringResource(
-                Res.string.common_settings_max_suggested_tags_help,
-                AiTagging.MIN_TAGS_PER_DOC,
-                AiTagging.MAX_TAGS_PER_DOC,
-            ),
-        maxDigits = 2,
-    )
-    NumericField(
-        value = maxNewTagsPerDoc,
-        onValueChange = onSetMaxNewTagsPerDoc,
-        range = AiTagging.NEW_TAGS_RANGE,
-        label = stringResource(Res.string.common_settings_max_new_tags),
-        supportingText =
-            stringResource(
-                Res.string.common_settings_max_new_tags_help,
-                AiTagging.MIN_NEW_TAGS_PER_DOC,
-                AiTagging.MAX_NEW_TAGS_PER_DOC,
-            ),
-        maxDigits = 2,
-    )
-}
-
-@Composable
 private fun SectionHeader(text: String) {
     Text(
         text = text,
@@ -681,6 +547,45 @@ private fun AppLanguageDropdown(
         }
     }
 }
+
+/**
+ * Library-wide visibility of the built-in document fields (synced across devices). Hiding a
+ * field only hides its editor on the document panel; stored values survive and come back when
+ * the field is enabled again. Title is always shown, so it is not listed here.
+ */
+@Composable
+private fun StandardFieldsSection(
+    enabled: Set<StandardField>,
+    onSetEnabled: (StandardField, Boolean) -> Unit,
+) {
+    Text(
+        stringResource(Res.string.common_settings_document_fields_help),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+    )
+    StandardField.entries.forEach { field ->
+        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                standardFieldLabel(field),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.weight(1f),
+            )
+            Switch(
+                checked = field in enabled,
+                onCheckedChange = { onSetEnabled(field, it) },
+            )
+        }
+    }
+}
+
+@Composable
+internal fun standardFieldLabel(field: StandardField): String =
+    when (field) {
+        StandardField.CORRESPONDENT -> stringResource(Res.string.detail_correspondent)
+        StandardField.DOC_TYPE -> stringResource(Res.string.detail_document_type)
+        StandardField.DOC_DATE -> stringResource(Res.string.detail_document_date_plain)
+        StandardField.NOTES -> stringResource(Res.string.detail_note)
+    }
 
 @Composable
 private fun LandscapeListToggle(

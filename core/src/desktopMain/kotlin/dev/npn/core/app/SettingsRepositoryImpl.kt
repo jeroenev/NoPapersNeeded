@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiProvider
+import dev.npn.core.ai.AiReasoningLevel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,9 +86,13 @@ class SettingsRepositoryImpl(
             storagePathEnabled = boolProp(SettingsKeys.STORAGE_PATH_ENABLED),
             autoMatchRulesJson = props.getProperty(SettingsKeys.AUTO_MATCH_RULES_JSON) ?: "[]",
             aiEnabled = boolProp(SettingsKeys.AI_ENABLED),
+            aiProvider = aiProviderProp(textProp(SettingsKeys.AI_PROVIDER), textProp(SettingsKeys.AI_BASE_URL)),
             aiBaseUrl = textProp(SettingsKeys.AI_BASE_URL),
             aiApiKey = textProp(SettingsKeys.AI_API_KEY),
             aiModel = textProp(SettingsKeys.AI_MODEL),
+            aiReasoningAssistant =
+                aiReasoningProp(textProp(SettingsKeys.AI_REASONING_ASSISTANT), AiReasoningLevel.DEFAULT),
+            aiReasoningEdit = aiReasoningProp(textProp(SettingsKeys.AI_REASONING_EDIT), AiReasoningLevel.LOW),
             aiMaxTagsPerDoc =
                 props
                     .getProperty(SettingsKeys.AI_MAX_TAGS_PER_DOC)
@@ -121,6 +127,9 @@ class SettingsRepositoryImpl(
             props.setProperty(SettingsKeys.STORAGE_PATH_ENABLED, snapshot.storagePathEnabled.toString())
             props.setProperty(SettingsKeys.AUTO_MATCH_RULES_JSON, snapshot.autoMatchRulesJson)
             props.setProperty(SettingsKeys.AI_ENABLED, snapshot.aiEnabled.toString())
+            props.setProperty(SettingsKeys.AI_PROVIDER, snapshot.aiProvider.name)
+            props.setProperty(SettingsKeys.AI_REASONING_ASSISTANT, snapshot.aiReasoningAssistant.name)
+            props.setProperty(SettingsKeys.AI_REASONING_EDIT, snapshot.aiReasoningEdit.name)
             props.setProperty(SettingsKeys.AI_BASE_URL, snapshot.aiBaseUrl)
             props.setProperty(SettingsKeys.AI_API_KEY, snapshot.aiApiKey)
             props.setProperty(SettingsKeys.AI_MODEL, snapshot.aiModel)
@@ -224,8 +233,20 @@ class SettingsRepositoryImpl(
         update { it.copy(aiEnabled = enabled) }
     }
 
+    override suspend fun setAiProvider(provider: AiProvider) {
+        update { it.copy(aiProvider = provider) }
+    }
+
     override suspend fun setAiBaseUrl(url: String) {
         update { it.copy(aiBaseUrl = url) }
+    }
+
+    override suspend fun setAiReasoningAssistant(level: AiReasoningLevel) {
+        update { it.copy(aiReasoningAssistant = level) }
+    }
+
+    override suspend fun setAiReasoningEdit(level: AiReasoningLevel) {
+        update { it.copy(aiReasoningEdit = level) }
     }
 
     override suspend fun setAiApiKey(key: String) {

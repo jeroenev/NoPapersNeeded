@@ -89,6 +89,7 @@ import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.StandardField
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_apply
 import no_papers_needed.composeapp.generated.resources.common_cancel
@@ -195,6 +196,8 @@ fun MetadataPanel(
     onSetReviewed: (Boolean) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
+    /** Creates a brand-new tag on this document with an optional color chosen inline. */
+    onAddTagWithStyle: (name: String, color: String?) -> Unit = { name, _ -> onAddTag(name) },
     aiTags: AiTagState = AiTagState(),
     onSuggestAiTags: () -> Unit = {},
     onAcceptAiTag: (String) -> Unit = {},
@@ -208,6 +211,8 @@ fun MetadataPanel(
     onLoadHistory: () -> Unit = {},
     onRefreshHistory: () -> Unit = {},
     previewTab: (@Composable (Modifier) -> Unit)? = null,
+    /** Which built-in fields to show (library-wide synced setting); title is always shown. */
+    visibleFields: Set<StandardField> = StandardField.DEFAULT,
     modifier: Modifier = Modifier,
 ) {
     val tabs =
@@ -283,6 +288,7 @@ fun MetadataPanel(
                     onSetReviewed = onSetReviewed,
                     onAddTag = onAddTag,
                     onRemoveTag = onRemoveTag,
+                    onAddTagWithStyle = onAddTagWithStyle,
                     aiTags = aiTags,
                     onSuggestAiTags = onSuggestAiTags,
                     onAcceptAiTag = onAcceptAiTag,
@@ -292,6 +298,7 @@ fun MetadataPanel(
                     onSuggestAiMetadata = onSuggestAiMetadata,
                     onAcceptAiMetadata = onAcceptAiMetadata,
                     onDismissAiMetadata = onDismissAiMetadata,
+                    visibleFields = visibleFields,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
@@ -344,6 +351,7 @@ private fun DetailsTab(
     onSetReviewed: (Boolean) -> Unit,
     onAddTag: (String) -> Unit,
     onRemoveTag: (String) -> Unit,
+    onAddTagWithStyle: (name: String, color: String?) -> Unit,
     aiTags: AiTagState,
     onSuggestAiTags: () -> Unit,
     onAcceptAiTag: (String) -> Unit,
@@ -353,6 +361,7 @@ private fun DetailsTab(
     onSuggestAiMetadata: () -> Unit,
     onAcceptAiMetadata: (AiField) -> Unit,
     onDismissAiMetadata: (AiField) -> Unit,
+    visibleFields: Set<StandardField>,
     modifier: Modifier = Modifier,
 ) {
     val doc = item.doc
@@ -365,7 +374,9 @@ private fun DetailsTab(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ReviewStatusSection(reviewMode, reviewed, onSetReviewed)
-        NoteSection(noteEditor, onNoteChange, onSaveNote)
+        if (StandardField.NOTES in visibleFields) {
+            NoteSection(noteEditor, onNoteChange, onSaveNote)
+        }
         DocumentPropertiesSection(
             title = doc.title,
             fileName = doc.fileName,
@@ -378,6 +389,7 @@ private fun DetailsTab(
             onCommitCorrespondent = onCommitCorrespondent,
             onCommitDocType = onCommitDocType,
             onCommitDocDate = onCommitDocDate,
+            visibleFields = visibleFields,
         )
 
         AiMetadataSuggestions(
@@ -410,6 +422,7 @@ private fun DetailsTab(
             tagColors = tagColors,
             onAdd = onAddTag,
             onRemove = onRemoveTag,
+            onAddWithStyle = onAddTagWithStyle,
         )
 
         AiTagSuggestions(
@@ -540,6 +553,7 @@ private fun DocumentPropertiesSection(
     onCommitCorrespondent: (String) -> Unit,
     onCommitDocType: (String) -> Unit,
     onCommitDocDate: (String) -> Unit,
+    visibleFields: Set<StandardField> = StandardField.DEFAULT,
 ) {
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         CommitTextField(
@@ -554,22 +568,28 @@ private fun DocumentPropertiesSection(
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-    SuggestField(
-        label = stringResource(Res.string.detail_correspondent),
-        initial = correspondent.orEmpty(),
-        suggestions = correspondents,
-        onCommit = onCommitCorrespondent,
-    )
-    SuggestField(
-        label = stringResource(Res.string.detail_document_type),
-        initial = docType.orEmpty(),
-        suggestions = docTypes,
-        onCommit = onCommitDocType,
-    )
-    DocumentDateField(
-        docDate = docDate,
-        onCommit = onCommitDocDate,
-    )
+    if (StandardField.CORRESPONDENT in visibleFields) {
+        SuggestField(
+            label = stringResource(Res.string.detail_correspondent),
+            initial = correspondent.orEmpty(),
+            suggestions = correspondents,
+            onCommit = onCommitCorrespondent,
+        )
+    }
+    if (StandardField.DOC_TYPE in visibleFields) {
+        SuggestField(
+            label = stringResource(Res.string.detail_document_type),
+            initial = docType.orEmpty(),
+            suggestions = docTypes,
+            onCommit = onCommitDocType,
+        )
+    }
+    if (StandardField.DOC_DATE in visibleFields) {
+        DocumentDateField(
+            docDate = docDate,
+            onCommit = onCommitDocDate,
+        )
+    }
 }
 
 /**

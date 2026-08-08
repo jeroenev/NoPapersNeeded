@@ -5,6 +5,7 @@ import ai.koog.prompt.dsl.PromptBuilder
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toStreamFrames
 import kotlinx.coroutines.CancellationException
@@ -29,6 +30,8 @@ class AiChatLoop(
     private val tools: List<AiChatTool>,
     private val systemPrompt: String,
     private val maxIterations: Int,
+    /** Optional provider-specific request params (e.g. reasoning effort); null = prompt defaults. */
+    private val params: LLMParams? = null,
 ) {
     private val toolsByName: Map<String, AiChatTool> = tools.associateBy { it.name }
     private val toolDescriptors = tools.map { it.descriptor }
@@ -175,7 +178,7 @@ class AiChatLoop(
         question: String,
         scratch: List<ScratchMessage>,
     ): Prompt =
-        prompt("npn-chat") {
+        prompt("npn-chat", params ?: LLMParams()) {
             system(systemPrompt)
             if (history.omittedEarlier) system(OMITTED_NOTE)
             for (turn in history.turns) {

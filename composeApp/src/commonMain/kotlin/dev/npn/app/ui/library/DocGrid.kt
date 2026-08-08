@@ -86,6 +86,7 @@ internal fun DocGrid(
     onOpen: (String) -> Unit,
     onToggleSelect: (String) -> Unit,
     onStartSelection: (String) -> Unit,
+    contextActionsFor: ((String) -> DocContextMenuActions)? = null,
 ) {
     // Live cell width; re-seeded when the persisted value changes (e.g. after a commit).
     var width by remember { mutableStateOf(columnWidth.toFloat()) }
@@ -174,6 +175,7 @@ internal fun DocGrid(
                         },
                         onLongClick = { onStartSelection(item.doc.docId) },
                         onToggleSelect = { onToggleSelect(item.doc.docId) },
+                        contextActions = contextActionsFor?.invoke(item.doc.docId),
                     )
                 }
             }

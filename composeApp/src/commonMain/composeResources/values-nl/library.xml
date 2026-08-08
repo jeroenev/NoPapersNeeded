@@ -25,6 +25,9 @@
     <string name="library_mark_needs_review">Markeren als te beoordelen</string>
     <string name="library_trash">Naar prullenbak</string>
     <string name="library_trash_documents">Documenten naar prullenbak verplaatsen</string>
+    <string name="library_open">Openen</string>
+    <string name="library_select">Selecteren</string>
+    <string name="library_deselect">Deselecteren</string>
     <plurals name="library_selected_count">
         <item quantity="one">%1$d geselecteerd</item>
         <item quantity="other">%1$d geselecteerd</item>

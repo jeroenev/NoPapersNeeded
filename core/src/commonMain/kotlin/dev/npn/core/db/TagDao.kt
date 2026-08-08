@@ -35,6 +35,19 @@ interface TagDao {
     )
     fun observeAllWithCounts(): Flow<List<TagWithCount>>
 
+    /**
+     * Remove tag rows that no non-deleted document references. Tags exist only through use: when
+     * the last document drops a tag (untag, rename, merge, permanent delete) it vanishes from the
+     * tag list; re-adding the name later brings it back (with its journal-kept style, if any).
+     * Trashed documents keep their tags alive so restoring is lossless.
+     */
+    @Query(
+        "DELETE FROM tags WHERE name NOT IN (" +
+            "SELECT dt.tag FROM document_tags dt " +
+            "JOIN documents d ON d.docId = dt.docId WHERE d.deleted = 0)",
+    )
+    suspend fun pruneUnreferenced()
+
     @Query("SELECT tag FROM document_tags WHERE docId = :docId ORDER BY tag")
     suspend fun tagsForDocument(docId: String): List<String>
 

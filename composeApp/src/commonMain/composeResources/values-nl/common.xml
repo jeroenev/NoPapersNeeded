@@ -14,6 +14,7 @@
     <string name="common_add_tag">Tag toevoegen</string>
     <string name="common_remove_tag">%1$s verwijderen</string>
     <string name="common_create_tag_hint">Druk op + om &quot;%1$s&quot; aan te maken</string>
+    <string name="common_create_tag_with_color">&quot;%1$s&quot; aanmaken met kleur...</string>
     <string name="common_new">nieuw</string>
     <string name="common_reviewed">Beoordeeld</string>
     <string name="common_needs_review">Te beoordelen</string>

@@ -68,6 +68,8 @@ fun TagFormDialog(
     initialColor: String?,
     confirmLabel: String,
     nameEditable: Boolean = true,
+    /** Hidden for bulk styling, where a single dialog applies one color to many tags. */
+    showNameField: Boolean = true,
     onConfirm: (name: String, color: String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -79,14 +81,16 @@ fun TagFormDialog(
         title = { Text(title) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                OutlinedTextField(
-                    value = name,
-                    onValueChange = { name = it },
-                    label = { Text(stringResource(Res.string.common_tags_name_hierarchy)) },
-                    singleLine = true,
-                    enabled = nameEditable,
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                if (showNameField) {
+                    OutlinedTextField(
+                        value = name,
+                        onValueChange = { name = it },
+                        label = { Text(stringResource(Res.string.common_tags_name_hierarchy)) },
+                        singleLine = true,
+                        enabled = nameEditable,
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
                 Text(stringResource(Res.string.common_color), style = MaterialTheme.typography.labelLarge)
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     // "None" swatch.
@@ -107,7 +111,7 @@ fun TagFormDialog(
         },
         confirmButton = {
             TextButton(
-                enabled = name.isNotBlank(),
+                enabled = !showNameField || name.isNotBlank(),
                 onClick = { onConfirm(name.trim(), color) },
             ) { Text(confirmLabel) }
         },
@@ -160,6 +164,8 @@ fun TagPickDialog(
     title: String,
     options: List<String>,
     confirmLabel: String,
+    /** Optional explanation shown above the list (e.g. what happens to the unpicked tags). */
+    message: String? = null,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -168,27 +174,30 @@ fun TagPickDialog(
         onDismissRequest = onDismiss,
         title = { Text(title) },
         text = {
-            LazyColumn(Modifier.heightIn(max = 300.dp)) {
-                items(options, key = { it }) { name ->
-                    androidx.compose.foundation.layout.Row(
-                        Modifier
-                            .fillMaxWidth()
-                            .clickable { selected = name }
-                            .padding(vertical = 10.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    ) {
-                        if (selected == name) {
-                            Icon(
-                                Icons.Filled.Check,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.primary,
-                            )
-                        } else {
-                            androidx.compose.foundation.layout
-                                .Box(Modifier.size(24.dp))
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
+                LazyColumn(Modifier.heightIn(max = 300.dp)) {
+                    items(options, key = { it }) { name ->
+                        androidx.compose.foundation.layout.Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { selected = name }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            if (selected == name) {
+                                Icon(
+                                    Icons.Filled.Check,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                )
+                            } else {
+                                androidx.compose.foundation.layout
+                                    .Box(Modifier.size(24.dp))
+                            }
+                            Text(name)
                         }
-                        Text(name)
                     }
                 }
             }
