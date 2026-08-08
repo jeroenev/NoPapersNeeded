@@ -145,6 +145,13 @@ private fun MainNav(
         value = session.ai.isConfiguredOrFalse()
     }
 
+    // Documents handed from the library's selection mode to the AI-edit page (see AiEditSelection).
+    val aiSelection =
+        remember {
+            dev.npn.app.ui.ai
+                .AiEditSelection()
+        }
+
     DriveWindowTitle(nav)
     NavigationShell(
         current = nav.currentTopLevelDestination(),
@@ -152,9 +159,19 @@ private fun MainNav(
         aiConfigured = aiConfigured,
         onNavigate = { dest -> nav.navigateTopLevel(dest) },
         onAiChat = { nav.navigateAi(Route.AiChat) },
-        onAiEdit = { nav.navigateAi(Route.AiEdit) },
+        onAiEdit = {
+            aiSelection.set(emptyList())
+            nav.navigateAi(Route.AiEdit)
+        },
     ) {
-        MainNavHost(nav = nav, env = env, session = session, browse = browse, aiConfigured = aiConfigured)
+        MainNavHost(
+            nav = nav,
+            env = env,
+            session = session,
+            browse = browse,
+            aiConfigured = aiConfigured,
+            aiSelection = aiSelection,
+        )
     }
 }
 
@@ -165,6 +182,7 @@ private fun MainNavHost(
     session: dev.npn.core.app.LibrarySession,
     browse: dev.npn.app.ui.detail.BrowseContext,
     aiConfigured: Boolean,
+    aiSelection: dev.npn.app.ui.ai.AiEditSelection,
 ) {
     NavHost(navController = nav, startDestination = Route.Library) {
         composable<Route.Library> {
@@ -178,7 +196,10 @@ private fun MainNavHost(
                 },
                 onTrash = { nav.navigate(Route.Trash) },
                 onAiChat = { nav.navigateAi(Route.AiChat) },
-                onAiEdit = { nav.navigateAi(Route.AiEdit) },
+                onAiEdit = { docIds ->
+                    aiSelection.set(docIds)
+                    nav.navigateAi(Route.AiEdit)
+                },
             )
         }
         composable<Route.DocDetail> { entry ->
@@ -233,7 +254,7 @@ private fun MainNavHost(
                 onBack = { nav.popBackStack() },
             )
         }
-        aiRoutes(nav, session, env.settings)
+        aiRoutes(nav, session, env.settings, aiSelection)
     }
 }
 
@@ -328,6 +349,7 @@ private fun NavGraphBuilder.aiRoutes(
     nav: NavHostController,
     session: dev.npn.core.app.LibrarySession,
     settings: dev.npn.core.app.SettingsRepository,
+    aiSelection: dev.npn.app.ui.ai.AiEditSelection,
 ) {
     composable<Route.AiChat> {
         AiChatScreen(
@@ -337,10 +359,13 @@ private fun NavGraphBuilder.aiRoutes(
         )
     }
     composable<Route.AiEdit> {
+        // Consumed once per navigation; remembered so recomposition keeps the same hand-off.
+        val selection = remember { aiSelection.consume() }
         AiEditScreen(
             session = session,
             settings = settings,
             onBack = { nav.popBackStack() },
+            selection = selection,
         )
     }
 }

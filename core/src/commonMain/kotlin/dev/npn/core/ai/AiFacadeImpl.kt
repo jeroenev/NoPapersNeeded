@@ -126,8 +126,8 @@ class AiFacadeImpl(
         val maxNew = (request.maxNewTags ?: config.maxNewTagsPerDoc).coerceIn(AiTagging.NEW_TAGS_RANGE)
         val thePrompt =
             prompt("npn-edit-suggest", SUGGESTION_PARAMS) {
-                system(editSystemPrompt(request, maxTags, maxNew))
-                user(renderEditRequest(doc, request, vocabulary, currentTags, correspondents, text))
+                system(editSystemPrompt(request, maxTags, maxNew, vocabulary, correspondents))
+                user(renderEditRequest(doc, request, currentTags, text))
             }
         val response = runtime.executor.execute(thePrompt, runtime.model)
         return AiText.parseEditSuggestion(
@@ -199,9 +199,7 @@ class AiFacadeImpl(
     private fun renderEditRequest(
         doc: DocumentEntity,
         request: AiEditRequest,
-        vocabulary: List<String>,
         currentTags: List<String>,
-        correspondents: List<String>,
         text: String?,
     ): String =
         buildString {
@@ -212,15 +210,6 @@ class AiFacadeImpl(
             if (request.tags || request.tagRemovals) {
                 appendLine(
                     "Tags already on this document: ${currentTags.ifEmpty { listOf("(none)") }.joinToString(", ")}",
-                )
-                appendLine(
-                    "Existing tags in this library: ${vocabulary.ifEmpty { listOf("(none)") }.joinToString(", ")}",
-                )
-            }
-            if (request.fields.isNotEmpty()) {
-                appendLine(
-                    "Existing correspondents in this library: " +
-                        correspondents.ifEmpty { listOf("(none)") }.joinToString(", "),
                 )
             }
             appendLine()
@@ -296,11 +285,19 @@ class AiFacadeImpl(
          * The single-request system prompt for the AI-edit flow. Sections are included only for
          * what the run actually asked for, so a tags-only run gets a tags-only contract and a
          * custom-prompt run still gets the same structured reply shape.
+         *
+         * Library-wide context (tag vocabulary, correspondents) lives HERE, not in the per-doc
+         * user message: it is identical for every document of a batch, so keeping the whole
+         * system message batch-constant lets prefix/KV caches on the endpoint skip re-evaluating
+         * the (potentially large) vocabulary for every document. Only per-doc data goes in the
+         * user message.
          */
         fun editSystemPrompt(
             request: AiEditRequest,
             max: Int,
             maxNew: Int,
+            vocabulary: List<String>,
+            correspondents: List<String>,
         ): String {
             val rules =
                 buildList {
@@ -349,6 +346,21 @@ class AiFacadeImpl(
                         add("\"$key\": $literal")
                     }
                 }
+            val libraryContext =
+                buildList {
+                    if (request.tags || request.tagRemovals) {
+                        add(
+                            "Existing tags in this library: " +
+                                vocabulary.ifEmpty { listOf("(none)") }.joinToString(", "),
+                        )
+                    }
+                    if (request.fields.isNotEmpty()) {
+                        add(
+                            "Existing correspondents in this library: " +
+                                correspondents.ifEmpty { listOf("(none)") }.joinToString(", "),
+                        )
+                    }
+                }
             return """
                 You propose edits for one document in a personal paperless archive. Read the
                 provided document text and current metadata carefully; never invent facts the
@@ -361,6 +373,8 @@ class AiFacadeImpl(
                 Use null / empty arrays for anything the document does not clearly support. Follow
                 the user's extra instructions when they are provided, mapping their intent onto the
                 allowed keys.
+
+                ${libraryContext.joinToString("\n")}
                 """.trimIndent()
         }
 

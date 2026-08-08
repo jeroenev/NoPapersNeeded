@@ -201,7 +201,8 @@ class DocumentRepositoryImpl(
     /**
      * Build the filtered library query. Base predicate excludes trashed/deleted/missing.
      * Tag AND/ANY/NONE are done with EXISTS subqueries; folder is a relPath LIKE prefix;
-     * untaggedOnly uses NOT EXISTS. Query text (FTS) is handled by the two-step above, so it is not
+     * untaggedOnly uses NOT EXISTS; missingAny becomes one OR-ed "field is null/blank" group.
+     * Query text (FTS) is handled by the two-step above, so it is not
      * part of this SQL beyond the id constraint being applied in memory.
      */
     private fun buildQuery(
@@ -295,9 +296,24 @@ class DocumentRepositoryImpl(
             where.add("d.relPath LIKE ? ESCAPE '\\'")
             bindText(escapeLike(prefix) + "%")
         }
+        if (filter.missingAny.isNotEmpty()) {
+            where.add(
+                filter.missingAny
+                    .distinct()
+                    .joinToString(separator = " OR ", prefix = "(", postfix = ")", transform = ::missingSql),
+            )
+        }
 
         return QueryParts(where, binds)
     }
+
+    /** "Field is absent" predicate: NULL and empty string are both treated as missing. */
+    private fun missingSql(field: DocField): String =
+        when (field) {
+            DocField.TITLE -> "(d.title IS NULL OR d.title = '')"
+            DocField.CORRESPONDENT -> "(d.correspondent IS NULL OR d.correspondent = '')"
+            DocField.DOC_DATE -> "(d.docDate IS NULL OR d.docDate = '')"
+        }
 
     private fun orderBySql(sort: LibrarySort): String {
         val dir = if (sort.ascending) "ASC" else "DESC"

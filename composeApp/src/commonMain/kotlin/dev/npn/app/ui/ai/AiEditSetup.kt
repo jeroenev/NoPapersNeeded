@@ -14,28 +14,37 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WideLayoutBreakpoint
-import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.AiTagging
+import dev.npn.core.app.DocContentFacade
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_all_documents
 import no_papers_needed.composeapp.generated.resources.ai_edit_allow_new_tags
@@ -52,7 +61,11 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_options
 import no_papers_needed.composeapp.generated.resources.ai_edit_overwrite
 import no_papers_needed.composeapp.generated.resources.ai_edit_range
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_queue
+import no_papers_needed.composeapp.generated.resources.ai_edit_saved_view_choose
 import no_papers_needed.composeapp.generated.resources.ai_edit_scope
+import no_papers_needed.composeapp.generated.resources.ai_edit_scope_missing_fields
+import no_papers_needed.composeapp.generated.resources.ai_edit_scope_saved_view
+import no_papers_needed.composeapp.generated.resources.ai_edit_scope_selection
 import no_papers_needed.composeapp.generated.resources.ai_edit_start
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tag_removals
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tag_removals_help
@@ -78,9 +91,12 @@ private val SetupMaxWidth = 1_100.dp
 @Composable
 internal fun AiEditSetup(
     ui: AiEditUiState,
-    count: Int,
     vm: AiEditViewModel,
+    content: DocContentFacade,
 ) {
+    // Collected here rather than in AiEditScreen so the (possibly library-wide) scope query only
+    // runs while this phase is on screen.
+    val preview by vm.preview.collectAsStateWithLifecycle()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > WideLayoutBreakpoint
         Column(
@@ -99,7 +115,7 @@ internal fun AiEditSetup(
                 if (wide) {
                     Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
                         SetupColumn(Modifier.weight(1f)) {
-                            ScopeSection(ui, count, vm)
+                            ScopeSection(ui, preview, vm, content)
                             FieldSection(ui, vm)
                         }
                         SetupColumn(Modifier.weight(1f)) {
@@ -109,13 +125,13 @@ internal fun AiEditSetup(
                         }
                     }
                 } else {
-                    ScopeSection(ui, count, vm)
+                    ScopeSection(ui, preview, vm, content)
                     TagSection(ui, vm)
                     FieldSection(ui, vm)
                     PromptField(ui, vm)
                     RunSection(ui, vm)
                 }
-                StartButton(ui, count, vm)
+                StartButton(ui, preview.total, vm)
             }
         }
     }
@@ -127,38 +143,66 @@ private fun SetupColumn(
     content: @Composable ColumnScope.() -> Unit,
 ) = Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
 
+/**
+ * Which documents the run targets. Unavailable scopes (no library selection handed over, no inbox
+ * workflow, no saved views, no autofill field enabled) are hidden rather than shown disabled.
+ */
 @Composable
 private fun ScopeSection(
     ui: AiEditUiState,
-    count: Int,
+    preview: ScopePreview,
     vm: AiEditViewModel,
+    content: DocContentFacade,
 ) {
     SetupSection(stringResource(Res.string.ai_edit_scope)) {
-        ScopeOption(
-            EditScope.UNTAGGED,
-            stringResource(Res.string.ai_edit_untagged_documents),
-            ui.scope,
-            vm::setScope,
-        )
-        if (ui.reviewQueueAvailable) {
-            ScopeOption(
-                EditScope.REVIEW_QUEUE,
-                stringResource(Res.string.ai_edit_review_queue),
-                ui.scope,
-                vm::setScope,
-            )
+        EditScope.entries.filter { ui.scopeAvailable(it) }.forEach { scope ->
+            ScopeOption(scope, scopeLabel(scope, ui), ui.scope, vm::setScope)
+            if (scope == EditScope.SAVED_VIEW && ui.scope == EditScope.SAVED_VIEW) {
+                SavedViewPicker(ui, vm)
+            }
         }
-        ScopeOption(
-            EditScope.ALL,
-            stringResource(Res.string.ai_edit_all_documents),
-            ui.scope,
-            vm::setScope,
-        )
-        Text(
-            scopeCountText(count, ui.batchSize).resolve(),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        BatchPreview(preview, ui.batchSize, content)
+    }
+}
+
+@Composable
+private fun scopeLabel(
+    scope: EditScope,
+    ui: AiEditUiState,
+): String =
+    when (scope) {
+        EditScope.SELECTION -> stringResource(Res.string.ai_edit_scope_selection, ui.selectionSize)
+        EditScope.UNTAGGED -> stringResource(Res.string.ai_edit_untagged_documents)
+        EditScope.REVIEW_QUEUE -> stringResource(Res.string.ai_edit_review_queue)
+        EditScope.MISSING_FIELDS -> stringResource(Res.string.ai_edit_scope_missing_fields)
+        EditScope.SAVED_VIEW -> stringResource(Res.string.ai_edit_scope_saved_view)
+        EditScope.ALL -> stringResource(Res.string.ai_edit_all_documents)
+    }
+
+/** Dropdown of stored library views, indented under the saved-view scope it parametrizes. */
+@Composable
+private fun SavedViewPicker(
+    ui: AiEditUiState,
+    vm: AiEditViewModel,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    val current = ui.savedViews.firstOrNull { it.id == ui.savedViewId }
+    Column(Modifier.padding(start = 48.dp)) {
+        OutlinedButton(onClick = { expanded = true }) {
+            Text(current?.name ?: stringResource(Res.string.ai_edit_saved_view_choose))
+            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            ui.savedViews.forEach { view ->
+                DropdownMenuItem(
+                    text = { Text(view.name) },
+                    onClick = {
+                        vm.setSavedView(view.id)
+                        expanded = false
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -382,7 +426,8 @@ private fun ScopeOption(
 
 private fun fieldMode(overwrite: Boolean): AiFieldMode = if (overwrite) AiFieldMode.ALL else AiFieldMode.UNFILLED
 
-private fun scopeCountText(
+/** "N documents" or, when the scope outgrows one run, "N documents, first M this batch". */
+internal fun scopeCountText(
     count: Int,
     batchSize: Int,
 ): UiText =

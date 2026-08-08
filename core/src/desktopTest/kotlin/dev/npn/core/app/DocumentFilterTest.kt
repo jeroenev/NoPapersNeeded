@@ -10,175 +10,242 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 class DocumentFilterTest {
-
     private fun ids(items: List<DocListItem>) = items.map { it.doc.docId }
 
     @Test
-    fun tagFilters() = runTest {
-        val rig = AppSessionRig.create(backgroundScope)
-        try {
-            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-            rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
-            rig.writePdf("c.pdf", PdfFixtures.embeddedTextPdf("charlie"))
-            rig.session.rescan()
-            val a = rig.fs.sha256("a.pdf")
-            val b = rig.fs.sha256("b.pdf")
-            val c = rig.fs.sha256("c.pdf")
+    fun tagFilters() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.writePdf("c.pdf", PdfFixtures.embeddedTextPdf("charlie"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("a.pdf")
+                val b = rig.fs.sha256("b.pdf")
+                val c = rig.fs.sha256("c.pdf")
 
-            rig.session.meta.addTag(listOf(a, b), "x")
-            rig.session.meta.addTag(listOf(b, c), "y")
+                rig.session.meta.addTag(listOf(a, b), "x")
+                rig.session.meta.addTag(listOf(b, c), "y")
 
-            val repo = rig.session.documents
-            // tagsAll [x] -> a, b
-            ids(repo.observeDocuments(LibraryFilter(tagsAll = listOf("x")), LibrarySort()).first())
-                .shouldContainExactlyInAnyOrder(listOf(a, b))
-            // tagsAll [x, y] -> b
-            ids(repo.observeDocuments(LibraryFilter(tagsAll = listOf("x", "y")), LibrarySort()).first())
-                .shouldContainExactlyInAnyOrder(listOf(b))
-            // tagsAny [x, y] -> a, b, c
-            ids(repo.observeDocuments(LibraryFilter(tagsAny = listOf("x", "y")), LibrarySort()).first())
-                .shouldContainExactlyInAnyOrder(listOf(a, b, c))
-            // tagsNone [x] -> c
-            ids(repo.observeDocuments(LibraryFilter(tagsNone = listOf("x")), LibrarySort()).first())
-                .shouldContainExactlyInAnyOrder(listOf(c))
-        } finally {
-            rig.close()
+                val repo = rig.session.documents
+                // tagsAll [x] -> a, b
+                ids(repo.observeDocuments(LibraryFilter(tagsAll = listOf("x")), LibrarySort()).first())
+                    .shouldContainExactlyInAnyOrder(listOf(a, b))
+                // tagsAll [x, y] -> b
+                ids(repo.observeDocuments(LibraryFilter(tagsAll = listOf("x", "y")), LibrarySort()).first())
+                    .shouldContainExactlyInAnyOrder(listOf(b))
+                // tagsAny [x, y] -> a, b, c
+                ids(repo.observeDocuments(LibraryFilter(tagsAny = listOf("x", "y")), LibrarySort()).first())
+                    .shouldContainExactlyInAnyOrder(listOf(a, b, c))
+                // tagsNone [x] -> c
+                ids(repo.observeDocuments(LibraryFilter(tagsNone = listOf("x")), LibrarySort()).first())
+                    .shouldContainExactlyInAnyOrder(listOf(c))
+            } finally {
+                rig.close()
+            }
         }
-    }
 
     @Test
-    fun reviewedAndUntaggedAndFolder() = runTest {
-        val rig = AppSessionRig.create(backgroundScope)
-        try {
-            rig.writePdf("inbox/a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-            rig.writePdf("filed/b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
-            rig.session.rescan()
-            val a = rig.fs.sha256("inbox/a.pdf")
-            val b = rig.fs.sha256("filed/b.pdf")
+    fun reviewedAndUntaggedAndFolder() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("inbox/a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("filed/b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("inbox/a.pdf")
+                val b = rig.fs.sha256("filed/b.pdf")
 
-            rig.session.meta.setReviewed(listOf(b), true)
-            rig.session.meta.addTag(listOf(b), "t")
+                rig.session.meta.setReviewed(listOf(b), true)
+                rig.session.meta.addTag(listOf(b), "t")
 
-            val repo = rig.session.documents
-            ids(repo.observeDocuments(LibraryFilter(reviewed = true), LibrarySort()).first())
-                .shouldContainExactly(listOf(b))
-            ids(repo.observeDocuments(LibraryFilter(reviewed = false), LibrarySort()).first())
-                .shouldContainExactly(listOf(a))
-            ids(repo.observeDocuments(LibraryFilter(untaggedOnly = true), LibrarySort()).first())
-                .shouldContainExactly(listOf(a))
-            ids(repo.observeDocuments(LibraryFilter(folder = "inbox"), LibrarySort()).first())
-                .shouldContainExactly(listOf(a))
-            // UNTAGGED_ONLY review count = untagged docs (only a).
-            repo.observeUntaggedCount().first() shouldBe 1
-        } finally {
-            rig.close()
+                val repo = rig.session.documents
+                ids(repo.observeDocuments(LibraryFilter(reviewed = true), LibrarySort()).first())
+                    .shouldContainExactly(listOf(b))
+                ids(repo.observeDocuments(LibraryFilter(reviewed = false), LibrarySort()).first())
+                    .shouldContainExactly(listOf(a))
+                ids(repo.observeDocuments(LibraryFilter(untaggedOnly = true), LibrarySort()).first())
+                    .shouldContainExactly(listOf(a))
+                ids(repo.observeDocuments(LibraryFilter(folder = "inbox"), LibrarySort()).first())
+                    .shouldContainExactly(listOf(a))
+                // UNTAGGED_ONLY review count = untagged docs (only a).
+                repo.observeUntaggedCount().first() shouldBe 1
+            } finally {
+                rig.close()
+            }
         }
-    }
 
     @Test
-    fun unreviewedOrUntaggedCoversInboxWorkflowReview() = runTest {
-        val rig = AppSessionRig.create(backgroundScope)
-        try {
-            // a: reviewed + untagged  -> review (untagged)
-            // b: unreviewed + tagged  -> review (unreviewed)
-            // c: reviewed + tagged    -> not review
-            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-            rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
-            rig.writePdf("c.pdf", PdfFixtures.embeddedTextPdf("charlie"))
-            rig.session.rescan()
-            val a = rig.fs.sha256("a.pdf")
-            val b = rig.fs.sha256("b.pdf")
-            val c = rig.fs.sha256("c.pdf")
+    fun unreviewedOrUntaggedCoversInboxWorkflowReview() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                // a: reviewed + untagged  -> review (untagged)
+                // b: unreviewed + tagged  -> review (unreviewed)
+                // c: reviewed + tagged    -> not review
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.writePdf("c.pdf", PdfFixtures.embeddedTextPdf("charlie"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("a.pdf")
+                val b = rig.fs.sha256("b.pdf")
+                val c = rig.fs.sha256("c.pdf")
 
-            rig.session.meta.setReviewed(listOf(a, c), true)
-            rig.session.meta.addTag(listOf(b, c), "t")
+                rig.session.meta.setReviewed(listOf(a, c), true)
+                rig.session.meta.addTag(listOf(b, c), "t")
 
-            val repo = rig.session.documents
-            ids(repo.observeDocuments(LibraryFilter(unreviewedOrUntagged = true), LibrarySort()).first())
-                .shouldContainExactlyInAnyOrder(listOf(a, b))
-            repo.observeUnreviewedOrUntaggedCount().first() shouldBe 2
-        } finally {
-            rig.close()
+                val repo = rig.session.documents
+                ids(repo.observeDocuments(LibraryFilter(unreviewedOrUntagged = true), LibrarySort()).first())
+                    .shouldContainExactlyInAnyOrder(listOf(a, b))
+                repo.observeUnreviewedOrUntaggedCount().first() shouldBe 2
+            } finally {
+                rig.close()
+            }
         }
-    }
 
     @Test
-    fun docDateRangeFilter() = runTest {
-        val rig = AppSessionRig.create(backgroundScope)
-        try {
-            rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
-            rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
-            rig.session.rescan()
-            val a = rig.fs.sha256("a.pdf")
-            val b = rig.fs.sha256("b.pdf")
+    fun docDateRangeFilter() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("a.pdf")
+                val b = rig.fs.sha256("b.pdf")
 
-            rig.session.meta.setDocDate(a, "2026-01-15")
-            rig.session.meta.setDocDate(b, "2026-06-20")
+                rig.session.meta.setDocDate(a, "2026-01-15")
+                rig.session.meta.setDocDate(b, "2026-06-20")
 
-            val repo = rig.session.documents
-            ids(repo.observeDocuments(
-                LibraryFilter(docDateFrom = "2026-03-01", docDateTo = "2026-12-31"),
-                LibrarySort(),
-            ).first()).shouldContainExactly(listOf(b))
-        } finally {
-            rig.close()
+                val repo = rig.session.documents
+                ids(
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(docDateFrom = "2026-03-01", docDateTo = "2026-12-31"),
+                            LibrarySort(),
+                        ).first(),
+                ).shouldContainExactly(listOf(b))
+            } finally {
+                rig.close()
+            }
         }
-    }
 
     @Test
-    fun sortByNameAscAndAddedDesc() = runTest {
-        val rig = AppSessionRig.create(backgroundScope)
-        try {
-            rig.writePdf("charlie.pdf", PdfFixtures.embeddedTextPdf("c"))
-            rig.session.rescan()
-            rig.writePdf("alpha.pdf", PdfFixtures.embeddedTextPdf("a"))
-            rig.session.rescan()
-            rig.writePdf("bravo.pdf", PdfFixtures.embeddedTextPdf("b"))
-            rig.session.rescan()
+    fun missingAnySelectsDocumentsLackingAnyOfTheGivenFields() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.writePdf("c.pdf", PdfFixtures.embeddedTextPdf("charlie"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("a.pdf")
+                val b = rig.fs.sha256("b.pdf")
+                val c = rig.fs.sha256("c.pdf")
 
-            val repo = rig.session.documents
-            val byName = repo.observeDocuments(
-                LibraryFilter(),
-                LibrarySort(SortField.NAME, ascending = true),
-            ).first().map { it.doc.fileName }
-            byName shouldContainExactly listOf("alpha.pdf", "bravo.pdf", "charlie.pdf")
+                // a: complete. b: has a date but no correspondent. c: has neither.
+                rig.session.meta.setCorrespondent(listOf(a), "Acme")
+                rig.session.meta.setDocDate(a, "2026-01-15")
+                rig.session.meta.setDocDate(b, "2026-02-20")
 
-            val byAddedDesc = repo.observeDocuments(
-                LibraryFilter(),
-                LibrarySort(SortField.ADDED, ascending = false),
-            ).first().map { it.doc.fileName }
-            // charlie added first, bravo last -> desc = bravo, alpha, charlie
-            byAddedDesc.first() shouldBe "bravo.pdf"
-            byAddedDesc.last() shouldBe "charlie.pdf"
-        } finally {
-            rig.close()
+                val repo = rig.session.documents
+                ids(
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(missingAny = listOf(DocField.CORRESPONDENT)),
+                            LibrarySort(),
+                        ).first(),
+                ).shouldContainExactlyInAnyOrder(listOf(b, c))
+                ids(
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(missingAny = listOf(DocField.DOC_DATE)),
+                            LibrarySort(),
+                        ).first(),
+                ).shouldContainExactly(listOf(c))
+                // OR-ed, not AND-ed: b misses only the correspondent, c misses both.
+                ids(
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(missingAny = listOf(DocField.CORRESPONDENT, DocField.DOC_DATE)),
+                            LibrarySort(),
+                        ).first(),
+                ).shouldContainExactlyInAnyOrder(listOf(b, c))
+                // Combines (AND) with the rest of the filter.
+                repo
+                    .observeCount(
+                        LibraryFilter(missingAny = listOf(DocField.CORRESPONDENT), untaggedOnly = true),
+                    ).first() shouldBe 2
+            } finally {
+                rig.close()
+            }
         }
-    }
 
     @Test
-    fun queryReturnsSnippet() = runTest {
-        val rig = AppSessionRig.create(backgroundScope)
-        try {
-            rig.writePdf("inv.pdf", PdfFixtures.embeddedTextPdf("invoice acme corporation total"))
-            rig.writePdf("other.pdf", PdfFixtures.embeddedTextPdf("unrelated grocery list"))
-            rig.session.rescan()
-            val inv = rig.fs.sha256("inv.pdf")
+    fun sortByNameAscAndAddedDesc() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("charlie.pdf", PdfFixtures.embeddedTextPdf("c"))
+                rig.session.rescan()
+                rig.writePdf("alpha.pdf", PdfFixtures.embeddedTextPdf("a"))
+                rig.session.rescan()
+                rig.writePdf("bravo.pdf", PdfFixtures.embeddedTextPdf("b"))
+                rig.session.rescan()
 
-            // Run the real OCR pipeline (embedded text) to populate FTS content.
-            rig.session.rescan() // ensures docs queued
-            // Directly index via FtsDao path: the OCR pipeline populates content; drive it.
-            drainOcr(rig)
+                val repo = rig.session.documents
+                val byName =
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(),
+                            LibrarySort(SortField.NAME, ascending = true),
+                        ).first()
+                        .map { it.doc.fileName }
+                byName shouldContainExactly listOf("alpha.pdf", "bravo.pdf", "charlie.pdf")
 
-            val results = rig.session.documents.observeDocuments(
-                LibraryFilter(query = "invoice"),
-                LibrarySort(),
-            ).first()
-            ids(results) shouldContainExactly listOf(inv)
-            results.first().snippet.shouldNotBeNull()
-        } finally {
-            rig.close()
+                val byAddedDesc =
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(),
+                            LibrarySort(SortField.ADDED, ascending = false),
+                        ).first()
+                        .map { it.doc.fileName }
+                // charlie added first, bravo last -> desc = bravo, alpha, charlie
+                byAddedDesc.first() shouldBe "bravo.pdf"
+                byAddedDesc.last() shouldBe "charlie.pdf"
+            } finally {
+                rig.close()
+            }
         }
-    }
+
+    @Test
+    fun queryReturnsSnippet() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("inv.pdf", PdfFixtures.embeddedTextPdf("invoice acme corporation total"))
+                rig.writePdf("other.pdf", PdfFixtures.embeddedTextPdf("unrelated grocery list"))
+                rig.session.rescan()
+                val inv = rig.fs.sha256("inv.pdf")
+
+                // Run the real OCR pipeline (embedded text) to populate FTS content.
+                rig.session.rescan() // ensures docs queued
+                // Directly index via FtsDao path: the OCR pipeline populates content; drive it.
+                drainOcr(rig)
+
+                val results =
+                    rig.session.documents
+                        .observeDocuments(
+                            LibraryFilter(query = "invoice"),
+                            LibrarySort(),
+                        ).first()
+                ids(results) shouldContainExactly listOf(inv)
+                results.first().snippet.shouldNotBeNull()
+            } finally {
+                rig.close()
+            }
+        }
 
     private suspend fun drainOcr(rig: AppSessionRig) {
         // Process each pending queue entry through the pipeline via processNext by kicking the
@@ -191,8 +258,12 @@ class DocumentFilterTest {
     private fun buildPipeline(rig: AppSessionRig): dev.npn.core.ocr.OcrPipeline =
         dev.npn.core.ocr.OcrPipeline(
             fs = rig.fs,
-            sidecars = dev.npn.core.fs.OcrSidecarFiles(rig.fs),
-            pdfEngine = dev.npn.core.pdf.PdfBoxEngine(),
+            sidecars =
+                dev.npn.core.fs
+                    .OcrSidecarFiles(rig.fs),
+            pdfEngine =
+                dev.npn.core.pdf
+                    .PdfBoxEngine(),
             ocrEngine = NoopOcrEngine(),
             documentDao = rig.db.documentDao(),
             ftsDao = rig.db.ftsDao(),
