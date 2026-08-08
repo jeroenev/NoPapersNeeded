@@ -15,6 +15,7 @@ import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocField
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.EditScope
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView

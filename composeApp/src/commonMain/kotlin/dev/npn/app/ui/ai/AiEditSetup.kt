@@ -45,6 +45,7 @@ import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
+import dev.npn.core.app.EditScope
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_all_documents
 import no_papers_needed.composeapp.generated.resources.ai_edit_allow_new_tags

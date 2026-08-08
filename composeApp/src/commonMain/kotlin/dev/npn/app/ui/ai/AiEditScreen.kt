@@ -62,8 +62,12 @@ import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiField
+import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.DocContentFacade
+import dev.npn.core.app.EditProgress
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.ReviewDoc
+import dev.npn.core.app.ReviewField
 import dev.npn.core.app.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_collapse
