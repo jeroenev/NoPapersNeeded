@@ -1,6 +1,7 @@
 package dev.npn.app.ui.ai
 
 import dev.npn.core.ai.AiChatEvent
+import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiRole
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
@@ -52,6 +53,23 @@ class ChatTranscriptTest {
         val assistant = transcript.items[1].shouldBeInstanceOf<TranscriptItem.AssistantTurn>()
         assistant.text shouldBe "Found it."
         assistant.streaming shouldBe false
+    }
+
+    @Test
+    fun persistedHistoryRestoresToolItemsWithoutBlankUserTurns() {
+        val transcript =
+            ChatTranscript.fromPersistedHistory(
+                listOf(
+                    AiChatHistoryItem.UserTurn("find tax"),
+                    AiChatHistoryItem.ToolUse("search_documents", "{}", "found one"),
+                ),
+            )
+
+        transcript.items shouldContainExactly
+            listOf(
+                TranscriptItem.UserTurn("find tax"),
+                TranscriptItem.ToolUse("search_documents", "{}", "found one", running = false),
+            )
     }
 
     @Test

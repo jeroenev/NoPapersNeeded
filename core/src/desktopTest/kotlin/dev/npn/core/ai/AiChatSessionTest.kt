@@ -1,10 +1,13 @@
 package dev.npn.core.ai
 
 import ai.koog.prompt.message.Message
+import ai.koog.prompt.message.MessagePart
+import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
@@ -47,5 +50,33 @@ class AiChatSessionTest {
 
             remaining.map { it.id } shouldContainExactly listOf("full")
             sessions.load().map { it.id } shouldContainExactly listOf("full")
+        }
+
+    @Test
+    fun chatHistorySkipsToolResultsInsteadOfReturningBlankUserTurns() =
+        runTest {
+            RoomChatHistoryProvider(db).store(
+                "tool-history",
+                listOf(
+                    Message.User("find tax", RequestMetaInfo.Empty),
+                    Message.Assistant(
+                        MessagePart.Tool.Call("call-1", "search_documents", "{\"query\":\"tax\"}"),
+                        ResponseMetaInfo.Empty,
+                    ),
+                    Message.User(
+                        MessagePart.Tool.Result("call-1", "search_documents", "found one"),
+                        RequestMetaInfo.Empty,
+                    ),
+                ),
+            )
+
+            val facade = AiFacadeImpl(db) { AiConfig() }
+            facade.chatHistoryFor("tool-history") shouldBe
+                listOf(AiChatTurn(AiRole.USER, "find tax"))
+            facade.chatTranscriptFor("tool-history") shouldContainExactly
+                listOf(
+                    AiChatHistoryItem.UserTurn("find tax"),
+                    AiChatHistoryItem.ToolUse("search_documents", "{\"query\":\"tax\"}", "found one"),
+                )
         }
 }
