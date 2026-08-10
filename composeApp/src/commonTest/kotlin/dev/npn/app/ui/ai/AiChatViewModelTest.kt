@@ -4,6 +4,8 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.ui.common.resolveEnglish
 import dev.npn.core.ai.AiChatEvent
+import dev.npn.core.ai.AiChatHistoryItem
+import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.AiRole
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -37,6 +39,31 @@ class AiChatViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.ui.value.configured shouldBe true
+            job.cancel()
+        }
+
+    @Test
+    fun startupOpensNewChatInsteadOfNewestSavedSession() =
+        runTest(dispatcher) {
+            val saved = AiChatSession("saved", "Previous chat", 2L)
+            val fresh = AiChatSession("fresh", "New chat", 3L)
+            val session =
+                FakeLibrarySession().apply {
+                    ai.savedChatSessions = listOf(saved)
+                    ai.createdChatSession = fresh
+                    ai.chatTranscripts =
+                        mapOf(
+                            saved.id to listOf(AiChatHistoryItem.UserTurn("old question")),
+                        )
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            model.ui.value.currentSessionId shouldBe fresh.id
+            model.ui.value.transcript.items shouldBe emptyList()
+            model.ui.value.sessions
+                .map { it.id } shouldContainExactly listOf(fresh.id, saved.id)
             job.cancel()
         }
 
