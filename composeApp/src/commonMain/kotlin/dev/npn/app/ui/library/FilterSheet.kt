@@ -44,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DatePickerField
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.TagInfo
+import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_needs_review
@@ -82,6 +83,7 @@ fun FilterSheet(
     tags: List<TagInfo>,
     correspondents: List<String>,
     docTypes: List<String>,
+    reviewMode: ReviewMode,
     onApply: (LibraryFilter) -> Unit,
     onClearAll: () -> Unit,
     onDismiss: () -> Unit,
@@ -92,6 +94,7 @@ fun FilterSheet(
             tags = tags,
             correspondents = correspondents,
             docTypes = docTypes,
+            reviewMode = reviewMode,
             onApply = onApply,
             onClearAll = onClearAll,
             onDismiss = onDismiss,
@@ -107,6 +110,7 @@ fun FilterPanel(
     tags: List<TagInfo>,
     correspondents: List<String>,
     docTypes: List<String>,
+    reviewMode: ReviewMode,
     onApply: (LibraryFilter) -> Unit,
     onClearAll: () -> Unit,
     onDismiss: (() -> Unit)? = null,
@@ -146,47 +150,59 @@ fun FilterPanel(
             ) {
                 TagFilterSection(tags, draft) { draft = it }
 
-                SectionLabel(stringResource(Res.string.library_reviewed_filter))
-                EnumDropdown(
-                    current = ReviewFilter.from(draft.reviewed),
-                    options = ReviewFilter.entries,
-                    label = ::reviewFilterLabel,
-                    onSelect = { draft = draft.copy(reviewed = it.value) },
-                )
+                // The stored reviewed marker is only maintained in the inbox workflow; outside it,
+                // review state is derived from tags (reviewed == tagged) and the marker is stale.
+                if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                    FilterFieldRow(stringResource(Res.string.library_reviewed_filter)) {
+                        EnumDropdown(
+                            current = ReviewFilter.from(draft.reviewed),
+                            options = ReviewFilter.entries,
+                            label = ::reviewFilterLabel,
+                            onSelect = { draft = draft.copy(reviewed = it.value) },
+                        )
+                    }
+                }
 
-                SectionLabel(stringResource(Res.string.library_correspondent_filter))
-                EnumDropdown(
-                    current = optionalFilterValue(draft.correspondent),
-                    options = optionalFilterOptions(correspondents),
-                    label = ::optionalFilterLabel,
-                    onSelect = { draft = draft.copy(correspondent = it.valueOrNull()) },
-                    searchLabel = stringResource(Res.string.library_search_correspondent),
-                    searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
-                )
+                FilterFieldRow(stringResource(Res.string.library_correspondent_filter)) {
+                    EnumDropdown(
+                        current = optionalFilterValue(draft.correspondent),
+                        options = optionalFilterOptions(correspondents),
+                        label = ::optionalFilterLabel,
+                        onSelect = { draft = draft.copy(correspondent = it.valueOrNull()) },
+                        searchLabel = stringResource(Res.string.library_search_correspondent),
+                        searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
+                    )
+                }
 
-                SectionLabel(stringResource(Res.string.library_document_type_filter))
-                EnumDropdown(
-                    current = optionalFilterValue(draft.docType),
-                    options = optionalFilterOptions(docTypes),
-                    label = ::optionalFilterLabel,
-                    onSelect = { draft = draft.copy(docType = it.valueOrNull()) },
-                    searchLabel = stringResource(Res.string.library_search_document_type),
-                    searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
-                )
+                FilterFieldRow(stringResource(Res.string.library_document_type_filter)) {
+                    EnumDropdown(
+                        current = optionalFilterValue(draft.docType),
+                        options = optionalFilterOptions(docTypes),
+                        label = ::optionalFilterLabel,
+                        onSelect = { draft = draft.copy(docType = it.valueOrNull()) },
+                        searchLabel = stringResource(Res.string.library_search_document_type),
+                        searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
+                    )
+                }
 
                 SectionLabel(stringResource(Res.string.library_document_date_filter))
-                DatePickerField(
-                    value = draft.docDateFrom,
-                    label = stringResource(Res.string.library_from),
-                    onCommit = { draft = draft.copy(docDateFrom = it) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                DatePickerField(
-                    value = draft.docDateTo,
-                    label = stringResource(Res.string.library_to),
-                    onCommit = { draft = draft.copy(docDateTo = it) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    DatePickerField(
+                        value = draft.docDateFrom,
+                        label = stringResource(Res.string.library_from),
+                        onCommit = { draft = draft.copy(docDateFrom = it) },
+                        modifier = Modifier.weight(1f),
+                    )
+                    DatePickerField(
+                        value = draft.docDateTo,
+                        label = stringResource(Res.string.library_to),
+                        onCommit = { draft = draft.copy(docDateTo = it) },
+                        modifier = Modifier.weight(1f),
+                    )
+                }
 
                 Row(
                     Modifier.fillMaxWidth(),
@@ -262,6 +278,29 @@ private fun SectionLabel(text: String) {
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.primary,
     )
+}
+
+/**
+ * One filter row: the field label on the left and its selector on the right, so the reviewer,
+ * correspondent and document-type fields read as a compact form instead of stacked sections.
+ */
+@Composable
+private fun FilterFieldRow(
+    label: String,
+    selector: @Composable () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = label,
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.primary,
+        )
+        selector()
+    }
 }
 
 @Composable

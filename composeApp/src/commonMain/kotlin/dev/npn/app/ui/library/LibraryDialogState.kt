@@ -12,6 +12,7 @@ import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.TagInfo
+import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_add
 import no_papers_needed.composeapp.generated.resources.library_add_tag_to_documents
@@ -100,6 +101,7 @@ fun LibraryDialogHost(
     tags: List<TagInfo>,
     correspondents: List<String>,
     docTypes: List<String>,
+    reviewMode: ReviewMode,
     onApplyFilter: (LibraryFilter) -> Unit,
     onClearFilter: () -> Unit,
     onSaveView: (String) -> Unit,
@@ -114,6 +116,7 @@ fun LibraryDialogHost(
             tags = tags,
             correspondents = correspondents,
             docTypes = docTypes,
+            reviewMode = reviewMode,
             onApply = {
                 onApplyFilter(it)
                 state.dismissFilter()

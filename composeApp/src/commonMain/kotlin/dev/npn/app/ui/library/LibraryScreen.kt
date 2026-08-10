@@ -298,6 +298,7 @@ fun LibraryScreen(
                             tags = tags,
                             correspondents = correspondents,
                             docTypes = docTypes,
+                            reviewMode = reviewMode,
                             onApply = {
                                 vm.setFilter(it)
                                 dialogs.dismissFilter()
@@ -331,6 +332,7 @@ fun LibraryScreen(
             tags = tags,
             correspondents = correspondents,
             docTypes = docTypes,
+            reviewMode = reviewMode,
             onApplyFilter = { applied ->
                 vm.setFilter(applied)
                 dialogs.dismissFilter()
