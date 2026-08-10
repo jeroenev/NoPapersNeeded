@@ -167,10 +167,15 @@ fun LibraryScreen(
     onTrash: () -> Unit,
     /** Opens the AI-edit page, optionally scoped to the given documents (empty = no preselection). */
     onAiEdit: (List<String>) -> Unit,
+    filterHandoff: LibraryFilterHandoff? = null,
 ) {
     val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val docs by vm.documents.collectAsStateWithLifecycle()
+
+    LaunchedEffect(Unit) {
+        filterHandoff?.consume()?.let(vm::setFilter)
+    }
 
     // Opening a doc records the current sorted+filtered order so the detail screen can page between
     // documents; ids are stable so the order stays valid across navigation. The originating search

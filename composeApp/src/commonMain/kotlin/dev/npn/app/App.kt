@@ -2,6 +2,7 @@ package dev.npn.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -40,8 +41,10 @@ import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.LocaleProvider
+import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.detail.DocDetailScreen
+import dev.npn.app.ui.library.LibraryFilterHandoff
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.AiDestination
 import dev.npn.app.ui.nav.NavigationShell
@@ -151,27 +154,33 @@ private fun MainNav(
             dev.npn.app.ui.ai
                 .AiEditSelection()
         }
+    val libraryFilterHandoff = remember { LibraryFilterHandoff() }
 
     DriveWindowTitle(nav)
-    NavigationShell(
-        current = nav.currentTopLevelDestination(),
-        aiCurrent = nav.currentAiDestination(),
-        aiConfigured = aiConfigured,
-        onNavigate = { dest -> nav.navigateTopLevel(dest) },
-        onAiChat = { nav.navigateAi(Route.AiChat) },
-        onAiEdit = {
-            aiSelection.set(emptyList())
-            nav.navigateAi(Route.AiEdit)
-        },
-    ) {
-        MainNavHost(
-            nav = nav,
-            env = env,
-            session = session,
-            browse = browse,
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val aiEditInSidebar = maxWidth > WideLayoutBreakpoint
+        NavigationShell(
+            current = nav.currentTopLevelDestination(),
+            aiCurrent = nav.currentAiDestination(),
             aiConfigured = aiConfigured,
-            aiSelection = aiSelection,
-        )
+            onNavigate = { dest -> nav.navigateTopLevel(dest) },
+            onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
+            onAiEdit = {
+                aiSelection.set(emptyList())
+                nav.navigateAi(Route.AiEdit)
+            },
+        ) {
+            MainNavHost(
+                nav = nav,
+                env = env,
+                session = session,
+                browse = browse,
+                aiConfigured = aiConfigured,
+                aiSelection = aiSelection,
+                libraryFilterHandoff = libraryFilterHandoff,
+                showAiEditTopBar = !aiEditInSidebar,
+            )
+        }
     }
 }
 
@@ -183,6 +192,8 @@ private fun MainNavHost(
     browse: dev.npn.app.ui.detail.BrowseContext,
     aiConfigured: Boolean,
     aiSelection: dev.npn.app.ui.ai.AiEditSelection,
+    libraryFilterHandoff: LibraryFilterHandoff,
+    showAiEditTopBar: Boolean,
 ) {
     NavHost(navController = nav, startDestination = Route.Library) {
         composable<Route.Library> {
@@ -199,6 +210,7 @@ private fun MainNavHost(
                     aiSelection.set(docIds)
                     nav.navigateAi(Route.AiEdit)
                 },
+                filterHandoff = libraryFilterHandoff,
             )
         }
         composable<Route.DocDetail> { entry ->
@@ -253,7 +265,7 @@ private fun MainNavHost(
                 onBack = { nav.popBackStack() },
             )
         }
-        aiRoutes(nav, session, env.settings, aiSelection)
+        aiRoutes(nav, session, env.settings, aiSelection, libraryFilterHandoff, showAiEditTopBar)
     }
 }
 
@@ -301,10 +313,14 @@ private fun NavHostController.navigateTopLevel(dest: TopLevelDestination) {
 }
 
 /** AI screens sit one level above Library, never stacked on other pushed screens or each other. */
-private fun NavHostController.navigateAi(route: Route) {
+private fun NavHostController.navigateAi(
+    route: Route,
+    restoreState: Boolean = false,
+) {
     navigate(route) {
         popUpTo(Route.Library) { saveState = true }
         launchSingleTop = true
+        this.restoreState = restoreState
     }
 }
 
@@ -349,12 +365,26 @@ private fun NavGraphBuilder.aiRoutes(
     session: dev.npn.core.app.LibrarySession,
     settings: dev.npn.core.app.SettingsRepository,
     aiSelection: dev.npn.app.ui.ai.AiEditSelection,
+    libraryFilterHandoff: LibraryFilterHandoff,
+    showAiEditTopBar: Boolean,
 ) {
     composable<Route.AiChat> {
         AiChatScreen(
             session = session,
             onBack = { nav.popBackStack() },
             onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
+            onOpenFiltered = { docIds ->
+                libraryFilterHandoff.set(
+                    dev.npn.core.app
+                        .LibraryFilter(docIds = docIds),
+                )
+                nav.navigateTopLevel(TopLevelDestination.LIBRARY)
+            },
+            onAiEditDocs = { docIds ->
+                aiSelection.set(docIds)
+                nav.navigateAi(Route.AiEdit)
+            },
+            showAiEdit = showAiEditTopBar,
             onAiEdit = {
                 aiSelection.set(emptyList())
                 nav.navigateAi(Route.AiEdit)

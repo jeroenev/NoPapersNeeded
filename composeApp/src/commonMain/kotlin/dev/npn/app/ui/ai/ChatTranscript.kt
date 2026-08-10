@@ -146,6 +146,26 @@ data class ChatTranscript(
     companion object {
         val EMPTY = ChatTranscript()
 
+        /** Restore the visible user/assistant portion of persisted Koog chat memory. */
+        fun fromHistory(turns: List<AiChatTurn>): ChatTranscript =
+            ChatTranscript(
+                turns.mapNotNull { turn ->
+                    when (turn.role) {
+                        AiRole.USER -> {
+                            TranscriptItem.UserTurn(turn.text)
+                        }
+
+                        AiRole.ASSISTANT -> {
+                            TranscriptItem.AssistantTurn(
+                                text = turn.text,
+                                docRefs = AiText.extractDocRefs(turn.text),
+                                streaming = false,
+                            )
+                        }
+                    }
+                },
+            )
+
         /**
          * If the trailing item is a still-streaming [TranscriptItem.AssistantTurn], mark it complete
          * (keeping its own accumulated text) and extract its docRefs; otherwise leave the list

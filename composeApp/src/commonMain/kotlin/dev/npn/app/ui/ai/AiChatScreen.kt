@@ -27,14 +27,19 @@ import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.Label
 import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Stop
+import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoFixHigh
+import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.ExpandLess
 import androidx.compose.material.icons.outlined.ExpandMore
+import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -53,6 +58,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
@@ -64,6 +70,7 @@ import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
@@ -71,6 +78,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.documentDisplayTitle
+import dev.npn.core.ai.AiChatSession
 import dev.npn.core.app.LibrarySession
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
@@ -80,11 +88,15 @@ import kotlinx.serialization.json.jsonPrimitive
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_ask_documents
 import no_papers_needed.composeapp.generated.resources.ai_assistant_title
+import no_papers_needed.composeapp.generated.resources.ai_chat_history
 import no_papers_needed.composeapp.generated.resources.ai_clear_conversation
 import no_papers_needed.composeapp.generated.resources.ai_collapse
 import no_papers_needed.composeapp.generated.resources.ai_configure_in_settings
+import no_papers_needed.composeapp.generated.resources.ai_delete_chat
 import no_papers_needed.composeapp.generated.resources.ai_expand
+import no_papers_needed.composeapp.generated.resources.ai_new_chat
 import no_papers_needed.composeapp.generated.resources.ai_no_output
+import no_papers_needed.composeapp.generated.resources.ai_open_all_documents
 import no_papers_needed.composeapp.generated.resources.ai_send
 import no_papers_needed.composeapp.generated.resources.ai_stop
 import no_papers_needed.composeapp.generated.resources.ai_tool_listed_tagged_documents
@@ -103,10 +115,14 @@ private const val DOC_REF_LABEL_HEX = 8
 private const val BUBBLE_MAX_WIDTH_FRACTION = 0.85f
 
 @Composable
+@Suppress("LongMethod")
 fun AiChatScreen(
     session: LibrarySession,
     onBack: () -> Unit,
     onOpenDoc: (String) -> Unit,
+    onOpenFiltered: (List<String>) -> Unit,
+    onAiEditDocs: (List<String>) -> Unit,
+    showAiEdit: Boolean,
     /** Hands off to the AI-edit page without preselection. */
     onAiEdit: () -> Unit,
 ) {
@@ -120,10 +136,18 @@ fun AiChatScreen(
     val items = ui.transcript.items
     val lastLen = (items.lastOrNull() as? TranscriptItem.AssistantTurn)?.text?.length ?: 0
     val docTitles = remember { mutableStateMapOf<String, String>() }
+    val historySessions = ui.sessions.filterNot { it.id == ui.currentSessionId && items.isEmpty() }
 
-    // Keep the newest turn visible as the transcript grows or the streaming answer lengthens.
+    var restored by rememberSaveable { mutableStateOf(false) }
+
+    // Keep new output visible without overriding the position restored by navigation.
     LaunchedEffect(items.size, lastLen) {
-        if (items.isNotEmpty()) listState.animateScrollToItem(items.size - 1)
+        if (!restored) {
+            if (items.isNotEmpty()) listState.animateScrollToItem(items.size - 1)
+            restored = true
+        } else if (items.isNotEmpty()) {
+            listState.animateScrollToItem(items.size - 1)
+        }
     }
 
     Scaffold(
@@ -131,9 +155,15 @@ fun AiChatScreen(
         topBar = {
             AiChatTopBar(
                 clearEnabled = items.isNotEmpty() && !ui.busy,
+                sessions = historySessions,
+                currentSessionId = ui.currentSessionId,
                 onBack = onBack,
                 onClear = vm::clear,
                 onAiEdit = onAiEdit,
+                showAiEdit = showAiEdit,
+                onSession = vm::switchSession,
+                onNewSession = vm::newSession,
+                onDeleteSession = vm::deleteSession,
             )
         },
     ) { padding ->
@@ -161,7 +191,7 @@ fun AiChatScreen(
                             // and keeps rendering so the in-progress bubble is visible.
                             if (item.text.isNotEmpty() || item.streaming) {
                                 LoadDocTitles(item.docRefs, docTitles, session)
-                                AssistantBubble(item, onOpenDoc, docTitles)
+                                AssistantBubble(item, onOpenDoc, onOpenFiltered, onAiEditDocs, docTitles)
                             }
                         }
 
@@ -195,14 +225,32 @@ fun AiChatScreen(
 }
 
 @Composable
+@Suppress("LongMethod")
 private fun AiChatTopBar(
     clearEnabled: Boolean,
+    sessions: List<AiChatSession>,
+    currentSessionId: String?,
     onBack: () -> Unit,
     onClear: () -> Unit,
     onAiEdit: () -> Unit,
+    showAiEdit: Boolean,
+    onSession: (String) -> Unit,
+    onNewSession: () -> Unit,
+    onDeleteSession: (String) -> Unit,
 ) {
+    var historyExpanded by remember { mutableStateOf(false) }
     TopAppBar(
-        title = { Text(stringResource(Res.string.ai_assistant_title)) },
+        title = {
+            Text(
+                sessions.firstOrNull { it.id == currentSessionId }?.title
+                    ?: if (currentSessionId != null) {
+                        stringResource(Res.string.ai_new_chat)
+                    } else {
+                        stringResource(Res.string.ai_assistant_title)
+                    },
+                maxLines = 1,
+            )
+        },
         navigationIcon = {
             IconButton(onClick = onBack) {
                 Icon(
@@ -212,11 +260,58 @@ private fun AiChatTopBar(
             }
         },
         actions = {
-            IconButton(onClick = onAiEdit) {
+            IconButton(onClick = { historyExpanded = true }) {
                 Icon(
-                    Icons.Outlined.AutoFixHigh,
-                    contentDescription = stringResource(Res.string.library_ai_edit),
+                    Icons.Outlined.History,
+                    contentDescription = stringResource(Res.string.ai_chat_history),
                 )
+            }
+            DropdownMenu(
+                expanded = historyExpanded,
+                onDismissRequest = { historyExpanded = false },
+            ) {
+                sessions.forEach { session ->
+                    DropdownMenuItem(
+                        text = {
+                            Text(
+                                session.title,
+                                fontWeight = if (session.id == currentSessionId) FontWeight.Bold else null,
+                                maxLines = 1,
+                            )
+                        },
+                        onClick = {
+                            historyExpanded = false
+                            onSession(session.id)
+                        },
+                        trailingIcon = {
+                            IconButton(onClick = {
+                                historyExpanded = false
+                                onDeleteSession(session.id)
+                            }) {
+                                Icon(
+                                    Icons.Outlined.Delete,
+                                    contentDescription = stringResource(Res.string.ai_delete_chat),
+                                )
+                            }
+                        },
+                    )
+                }
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.ai_new_chat)) },
+                    onClick = {
+                        historyExpanded = false
+                        onNewSession()
+                    },
+                    leadingIcon = { Icon(Icons.Outlined.Add, contentDescription = null) },
+                )
+            }
+            if (showAiEdit) {
+                IconButton(onClick = onAiEdit) {
+                    Icon(
+                        Icons.Outlined.AutoFixHigh,
+                        contentDescription = stringResource(Res.string.library_ai_edit),
+                    )
+                }
             }
             IconButton(onClick = onClear, enabled = clearEnabled) {
                 Icon(
@@ -264,6 +359,8 @@ private fun LoadDocTitles(
 private fun AssistantBubble(
     item: TranscriptItem.AssistantTurn,
     onOpenDoc: (String) -> Unit,
+    onOpenFiltered: (List<String>) -> Unit,
+    onAiEditDocs: (List<String>) -> Unit,
     docTitles: SnapshotStateMap<String, String>,
 ) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
@@ -275,6 +372,18 @@ private fun AssistantBubble(
             )
         }
         if (item.docRefs.isNotEmpty()) {
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                AssistChip(
+                    onClick = { onOpenFiltered(item.docRefs) },
+                    label = { Text(stringResource(Res.string.ai_open_all_documents)) },
+                    leadingIcon = { Icon(Icons.Outlined.Search, contentDescription = null) },
+                )
+                AssistChip(
+                    onClick = { onAiEditDocs(item.docRefs) },
+                    label = { Text(stringResource(Res.string.library_ai_edit)) },
+                    leadingIcon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
+                )
+            }
             FlowRow(
                 modifier = Modifier.fillMaxWidth(BUBBLE_MAX_WIDTH_FRACTION).padding(top = 4.dp),
                 horizontalArrangement = Arrangement.spacedBy(8.dp),

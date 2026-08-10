@@ -12,6 +12,8 @@ enum class DocField { TITLE, CORRESPONDENT, DOC_DATE }
 
 @Serializable
 data class LibraryFilter(
+    /** Restrict results to these document identities; empty means no identity restriction. */
+    val docIds: List<String> = emptyList(),
     val query: String? = null, // FTS query; null/blank = no text search
     val tagsAll: List<String> = emptyList(),
     val tagsAny: List<String> = emptyList(),

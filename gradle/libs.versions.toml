@@ -53,6 +53,7 @@ compose-uiTooling = { module = "org.jetbrains.compose.ui:ui-tooling", version.re
 compose-uiToolingPreview = { module = "org.jetbrains.compose.ui:ui-tooling-preview", version.ref = "composeMultiplatform" }
 filekit-dialogs-compose = { module = "io.github.vinceglb:filekit-dialogs-compose", version.ref = "filekit" }
 koog-agents-core = { module = "ai.koog:agents-core", version.ref = "koog" }
+koog-agents-features-memory = { module = "ai.koog:agents-features-memory", version.ref = "koog" }
 koog-agents-tools = { module = "ai.koog:agents-tools", version.ref = "koog" }
 koog-http-client-ktor = { module = "ai.koog:http-client-ktor", version.ref = "koog" }
 koog-prompt-executor-anthropic = { module = "ai.koog:prompt-executor-anthropic-client", version.ref = "koog" }

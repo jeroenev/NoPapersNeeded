@@ -1,6 +1,7 @@
 package dev.npn.core.ai
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.Serializable
 
 /**
  * The AI provider a configuration talks to. Every entry maps onto a dedicated Koog `LLMClient`
@@ -183,6 +184,14 @@ data class AiChatTurn(
     val text: String,
 )
 
+/** Metadata for one persisted assistant conversation. */
+@Serializable
+data class AiChatSession(
+    val id: String,
+    val title: String,
+    val updatedAt: Long,
+)
+
 /**
  * Streaming event from [AiFacade.ask]. The cold flow emits any number of [TextDelta] and
  * tool events, then exactly one terminal [Done]. Network/endpoint errors propagate as flow
@@ -235,6 +244,37 @@ interface AiFacade {
         history: List<AiChatTurn>,
         question: String,
     ): Flow<AiChatEvent>
+
+    /** Ask within a named persisted session; legacy implementations use their default session. */
+    fun askInSession(
+        sessionId: String,
+        history: List<AiChatTurn>,
+        question: String,
+    ): Flow<AiChatEvent> = ask(history, question)
+
+    /** Persisted user/assistant turns for the default library conversation. */
+    suspend fun chatHistory(): List<AiChatTurn> = emptyList()
+
+    /** Persisted turns for a named session; legacy implementations expose their default history. */
+    suspend fun chatHistoryFor(sessionId: String): List<AiChatTurn> = chatHistory()
+
+    /** All sessions, newest first. */
+    suspend fun chatSessions(): List<AiChatSession> = emptyList()
+
+    /** Create a new empty session. */
+    suspend fun createChatSession(): AiChatSession? = null
+
+    /** Rename a session. */
+    suspend fun renameChatSession(
+        sessionId: String,
+        title: String,
+    ) = Unit
+
+    /** Delete a session and its stored conversation. */
+    suspend fun deleteChatSession(sessionId: String) = Unit
+
+    /** Clear messages while keeping the session available in the session list. */
+    suspend fun clearChatSession(sessionId: String) = Unit
 
     /**
      * The single suggestion primitive: propose edits for [docId] from its indexed text and
