@@ -3,6 +3,7 @@ package dev.npn.desktop
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -58,6 +59,11 @@ fun main() =
         ) {
             // Enforce a sensible minimum window size (jpackage/AWT window).
             window.minimumSize = java.awt.Dimension(800, 600)
+
+            DisposableEffect(window) {
+                val monitorMoveWorkaround = MonitorMoveSurfaceWorkaround.install(window)
+                onDispose(monitorMoveWorkaround::close)
+            }
 
             // Mirror the shared UI's window-title flow into the native window title.
             LaunchedEffect(Unit) {
