@@ -1,6 +1,8 @@
 package dev.npn.app
 
 import dev.npn.core.ai.AiChatEvent
+import dev.npn.core.ai.AiChatHistoryItem
+import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
@@ -37,6 +39,10 @@ class FakeAiFacade : AiFacade {
     /** When set, the ask flow throws after emitting this many events (mid-stream failure). */
     var failAskAfter: Int? = null
 
+    var savedChatSessions: List<AiChatSession> = emptyList()
+    var createdChatSession: AiChatSession? = null
+    var chatTranscripts: Map<String, List<AiChatHistoryItem>> = emptyMap()
+
     /** Optional per-call delay so tests can observe progress and cancel mid-run. */
     var suggestDelayMillis: Long = 0
 
@@ -44,6 +50,13 @@ class FakeAiFacade : AiFacade {
     var suggestDelayByDoc: Map<String, Long> = emptyMap()
 
     override suspend fun config(): AiConfig = configValue
+
+    override suspend fun chatSessions(): List<AiChatSession> = savedChatSessions
+
+    override suspend fun createChatSession(): AiChatSession? = createdChatSession
+
+    override suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> =
+        chatTranscripts[sessionId].orEmpty()
 
     override fun ask(
         history: List<AiChatTurn>,

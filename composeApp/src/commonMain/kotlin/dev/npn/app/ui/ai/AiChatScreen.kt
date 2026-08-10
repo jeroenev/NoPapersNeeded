@@ -155,6 +155,7 @@ fun AiChatScreen(
         topBar = {
             AiChatTopBar(
                 clearEnabled = items.isNotEmpty() && !ui.busy,
+                newSessionEnabled = !ui.busy,
                 sessions = historySessions,
                 currentSessionId = ui.currentSessionId,
                 onBack = onBack,
@@ -228,6 +229,7 @@ fun AiChatScreen(
 @Suppress("LongMethod")
 private fun AiChatTopBar(
     clearEnabled: Boolean,
+    newSessionEnabled: Boolean,
     sessions: List<AiChatSession>,
     currentSessionId: String?,
     onBack: () -> Unit,
@@ -260,6 +262,12 @@ private fun AiChatTopBar(
             }
         },
         actions = {
+            IconButton(onClick = onNewSession, enabled = newSessionEnabled) {
+                Icon(
+                    Icons.Outlined.Add,
+                    contentDescription = stringResource(Res.string.ai_new_chat),
+                )
+            }
             IconButton(onClick = { historyExpanded = true }) {
                 Icon(
                     Icons.Outlined.History,
@@ -296,14 +304,6 @@ private fun AiChatTopBar(
                         },
                     )
                 }
-                DropdownMenuItem(
-                    text = { Text(stringResource(Res.string.ai_new_chat)) },
-                    onClick = {
-                        historyExpanded = false
-                        onNewSession()
-                    },
-                    leadingIcon = { Icon(Icons.Outlined.Add, contentDescription = null) },
-                )
             }
             if (showAiEdit) {
                 IconButton(onClick = onAiEdit) {

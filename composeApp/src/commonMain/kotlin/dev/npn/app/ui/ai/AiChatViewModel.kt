@@ -57,13 +57,13 @@ class AiChatViewModel(
         viewModelScope.launch {
             val sessions = runCatching { ai.chatSessions() }.getOrDefault(emptyList())
             val session =
-                sessions.firstOrNull()
-                    ?: runCatching { ai.createChatSession() }.getOrNull()
+                runCatching { ai.createChatSession() }.getOrNull()
+                    ?: sessions.firstOrNull()
                     ?: AiChatSession(LEGACY_SESSION_ID, "Assistant chat", 0L)
             _ui.update {
                 it.copy(
                     sessions =
-                        (sessions + session).distinctBy { item ->
+                        (listOf(session) + sessions).distinctBy { item ->
                             item.id
                         },
                     currentSessionId = session.id,
