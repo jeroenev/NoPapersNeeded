@@ -9,6 +9,9 @@ import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.Clock
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * Koog-backed [AiFacade]. Reads the endpoint configuration live on every call (settings can
@@ -19,6 +22,8 @@ class AiFacadeImpl(
     private val db: NpnDatabase,
     private val configProvider: suspend () -> AiConfig,
 ) : AiFacade {
+    private val chatHistoryStore = RoomChatHistoryProvider(db)
+    private val chatSessionStore = RoomChatSessionStore(db)
     private val runtimeMutex = Mutex()
     private var cachedRuntime: Pair<RuntimeKey, AiRuntime>? = null
 
@@ -43,22 +48,117 @@ class AiFacadeImpl(
     override fun ask(
         history: List<AiChatTurn>,
         question: String,
+    ): Flow<AiChatEvent> = askInSession(CHAT_CONVERSATION_ID, history, question)
+
+    override fun askInSession(
+        sessionId: String,
+        history: List<AiChatTurn>,
+        question: String,
     ): Flow<AiChatEvent> =
         flow {
+            touchChatSession(sessionId, question)
             // Resolve the runtime lazily inside the cold flow so config errors surface on collection
             // (as flow exceptions), matching the "throws on endpoint errors" contract.
             val runtime = runtime()
-            val loop =
-                AiChatLoop(
+            emitAll(
+                KoogChatAgent(
                     executor = runtime.executor,
                     model = runtime.model,
-                    tools = LibraryAiTools.chatToolsFor(db),
+                    db = db,
                     systemPrompt = CHAT_SYSTEM_PROMPT,
                     maxIterations = MAX_AGENT_ITERATIONS,
                     params = AiRuntime.chatParams(configProvider()),
-                )
-            emitAll(loop.run(history, question))
+                ).run(question, sessionId),
+            )
         }
+
+    override suspend fun chatHistory(): List<AiChatTurn> = chatHistoryFor(CHAT_CONVERSATION_ID)
+
+    override suspend fun chatHistoryFor(sessionId: String): List<AiChatTurn> =
+        chatHistoryStore.load(sessionId).mapNotNull { message ->
+            when (message) {
+                is ai.koog.prompt.message.Message.User -> {
+                    AiChatTurn(AiRole.USER, message.textContent())
+                }
+
+                is ai.koog.prompt.message.Message.Assistant -> {
+                    message.textContent().takeIf { it.isNotBlank() }?.let { AiChatTurn(AiRole.ASSISTANT, it) }
+                }
+
+                else -> {
+                    null
+                }
+            }
+        }
+
+    override suspend fun chatSessions(): List<AiChatSession> {
+        val sessions = chatSessionStore.load()
+        val nonEmpty = sessions.filter { chatHistoryStore.load(it.id).isNotEmpty() }
+        if (nonEmpty.size != sessions.size) chatSessionStore.save(nonEmpty)
+        if (nonEmpty.isNotEmpty()) return nonEmpty.sortedByDescending { it.updatedAt }
+        if (chatHistoryStore.load(CHAT_CONVERSATION_ID).isEmpty()) return emptyList()
+        val legacy = AiChatSession(CHAT_CONVERSATION_ID, "Assistant chat", 0L)
+        chatSessionStore.save(listOf(legacy))
+        return listOf(legacy)
+    }
+
+    @OptIn(ExperimentalUuidApi::class)
+    override suspend fun createChatSession(): AiChatSession {
+        val session = AiChatSession(Uuid.random().toString(), NEW_SESSION_TITLE, now())
+        chatSessionStore.save((chatSessionStore.load() + session).sortedByDescending { it.updatedAt })
+        return session
+    }
+
+    override suspend fun renameChatSession(
+        sessionId: String,
+        title: String,
+    ) {
+        val trimmed = title.trim()
+        if (trimmed.isEmpty()) return
+        val updated =
+            chatSessionStore.load().map { session ->
+                if (session.id == sessionId) session.copy(title = trimmed, updatedAt = now()) else session
+            }
+        chatSessionStore.save(updated.sortedByDescending { it.updatedAt })
+    }
+
+    override suspend fun deleteChatSession(sessionId: String) {
+        chatHistoryStore.delete(sessionId)
+        chatSessionStore.save(chatSessionStore.load().filterNot { it.id == sessionId })
+    }
+
+    override suspend fun clearChatSession(sessionId: String) {
+        chatHistoryStore.delete(sessionId)
+        val sessions = chatSessionStore.load()
+        chatSessionStore.save(
+            sessions.map { session ->
+                if (session.id == sessionId) session.copy(title = NEW_SESSION_TITLE, updatedAt = now()) else session
+            },
+        )
+    }
+
+    private suspend fun touchChatSession(
+        sessionId: String,
+        question: String,
+    ) {
+        val sessions = chatSessionStore.load()
+        val existing = sessions.firstOrNull { it.id == sessionId }
+        val title =
+            existing?.title?.takeUnless { it == NEW_SESSION_TITLE }
+                ?: question
+                    .replace(Regex("\\s+"), " ")
+                    .trim()
+                    .take(MAX_SESSION_TITLE_CHARS)
+                    .ifBlank { NEW_SESSION_TITLE }
+        val touched =
+            (
+                sessions.filterNot { it.id == sessionId } +
+                    AiChatSession(sessionId, title, now())
+            ).sortedByDescending { it.updatedAt }
+        chatSessionStore.save(touched)
+    }
+
+    private fun now(): Long = Clock.System.now().toEpochMilliseconds()
 
     override suspend fun suggestEdits(
         docId: String,
@@ -144,6 +244,9 @@ class AiFacadeImpl(
 
     private companion object {
         const val MAX_AGENT_ITERATIONS = 15
+        const val CHAT_CONVERSATION_ID = "main"
+        const val NEW_SESSION_TITLE = "New chat"
+        const val MAX_SESSION_TITLE_CHARS = 60
         const val MAX_DOC_TEXT_CHARS = 12_000
 
         val CHAT_SYSTEM_PROMPT =

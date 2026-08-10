@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="ai_chat_history">Chat history</string>
+    <string name="ai_new_chat">New chat</string>
+    <string name="ai_delete_chat">Delete chat</string>
+    <string name="ai_open_all_documents">Open all documents</string>
     <string name="ai_assistant_title">AI assistant</string>
     <string name="ai_clear_conversation">Clear conversation</string>
     <string name="ai_open_document">Open %1$s</string>

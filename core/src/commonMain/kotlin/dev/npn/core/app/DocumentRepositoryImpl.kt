@@ -269,6 +269,11 @@ class DocumentRepositoryImpl(
                 "(d.reviewed = 0 OR NOT EXISTS (SELECT 1 FROM document_tags dt WHERE dt.docId = d.docId))",
             )
         }
+        if (filter.docIds.isNotEmpty()) {
+            val placeholders = filter.docIds.joinToString(", ") { "?" }
+            where.add("d.docId IN ($placeholders)")
+            filter.docIds.forEach(::bindText)
+        }
         filter.reviewed?.let {
             where.add("d.reviewed = ?")
             bindLong(if (it) 1L else 0L)

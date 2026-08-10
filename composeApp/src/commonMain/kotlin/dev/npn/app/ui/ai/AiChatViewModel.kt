@@ -6,6 +6,7 @@ import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
+import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiFacade
 import dev.npn.core.app.LibrarySession
@@ -24,6 +25,8 @@ import kotlinx.coroutines.launch
  */
 data class AiChatUiState(
     val transcript: ChatTranscript = ChatTranscript.EMPTY,
+    val sessions: List<AiChatSession> = emptyList(),
+    val currentSessionId: String? = null,
     val busy: Boolean = false,
     val configured: Boolean? = null,
 )
@@ -51,24 +54,50 @@ class AiChatViewModel(
             val configured = ai.isConfiguredOrFalse()
             _ui.update { it.copy(configured = configured) }
         }
+        viewModelScope.launch {
+            val sessions = runCatching { ai.chatSessions() }.getOrDefault(emptyList())
+            val session =
+                sessions.firstOrNull()
+                    ?: runCatching { ai.createChatSession() }.getOrNull()
+                    ?: AiChatSession(LEGACY_SESSION_ID, "Assistant chat", 0L)
+            _ui.update {
+                it.copy(
+                    sessions =
+                        (sessions + session).distinctBy { item ->
+                            item.id
+                        },
+                    currentSessionId = session.id,
+                )
+            }
+            loadSession(session.id)
+        }
     }
 
     /** Send [question]; ignored when blank or while a request is in flight. */
     fun send(question: String) {
         val trimmed = question.trim()
         if (trimmed.isEmpty() || _ui.value.busy) return
+        val sessionId = _ui.value.currentSessionId ?: return
 
         val history = _ui.value.transcript.history
         _ui.update {
             it.copy(
                 transcript = it.transcript.plusUser(trimmed),
                 busy = true,
+                sessions =
+                    it.sessions.map { session ->
+                        if (session.id == sessionId && session.title == NEW_SESSION_TITLE) {
+                            session.copy(title = trimmed.replace(Regex("\\s+"), " ").take(MAX_SESSION_TITLE_CHARS))
+                        } else {
+                            session
+                        }
+                    },
             )
         }
 
         job =
             viewModelScope.launch {
-                runCatching { collectAnswer(history, trimmed) }
+                runCatching { collectAnswer(sessionId, history, trimmed) }
                     .onFailure { e ->
                         if (e is CancellationException) throw e
                         finishStreaming()
@@ -90,14 +119,101 @@ class AiChatViewModel(
     fun clear() {
         job?.cancel()
         job = null
-        _ui.update { it.copy(transcript = ChatTranscript.EMPTY, busy = false) }
+        _ui.update {
+            it.copy(
+                transcript = ChatTranscript.EMPTY,
+                busy = false,
+                sessions =
+                    it.sessions.map { session ->
+                        if (session.id == it.currentSessionId) session.copy(title = NEW_SESSION_TITLE) else session
+                    },
+            )
+        }
+        _ui.value.currentSessionId?.let { sessionId ->
+            viewModelScope.launch { ai.clearChatSession(sessionId) }
+        }
+    }
+
+    /** Switch to an existing conversation and restore its visible turns. */
+    fun switchSession(sessionId: String) {
+        if (_ui.value.busy || _ui.value.sessions.none { it.id == sessionId }) return
+        stop()
+        viewModelScope.launch { loadSession(sessionId) }
+    }
+
+    /** Create and select a new empty conversation. */
+    fun newSession() {
+        if (_ui.value.busy) return
+        viewModelScope.launch {
+            ai.createChatSession()?.let { session ->
+                val savedSessions = runCatching { ai.chatSessions() }.getOrDefault(_ui.value.sessions)
+                _ui.update {
+                    it.copy(
+                        sessions = (listOf(session) + savedSessions).distinctBy { item -> item.id },
+                        currentSessionId = session.id,
+                        transcript = ChatTranscript.EMPTY,
+                    )
+                }
+            }
+        }
+    }
+
+    /** Rename a saved conversation. */
+    fun renameSession(
+        sessionId: String,
+        title: String,
+    ) {
+        viewModelScope.launch {
+            ai.renameChatSession(sessionId, title)
+            _ui.update { state ->
+                state.copy(
+                    sessions =
+                        state.sessions.map {
+                            if (it.id ==
+                                sessionId
+                            ) {
+                                it.copy(title = title.trim())
+                            } else {
+                                it
+                            }
+                        },
+                )
+            }
+        }
+    }
+
+    /** Delete a conversation and select the newest remaining one. */
+    fun deleteSession(sessionId: String) {
+        if (_ui.value.busy) return
+        viewModelScope.launch {
+            ai.deleteChatSession(sessionId)
+            val remaining = runCatching { ai.chatSessions() }.getOrDefault(emptyList())
+            if (sessionId != _ui.value.currentSessionId) {
+                _ui.update { it.copy(sessions = remaining) }
+                return@launch
+            }
+            val next = remaining.firstOrNull() ?: ai.createChatSession()
+            if (next == null) {
+                _ui.update {
+                    it.copy(
+                        sessions = emptyList(),
+                        currentSessionId = null,
+                        transcript = ChatTranscript.EMPTY,
+                    )
+                }
+            } else {
+                _ui.update { it.copy(sessions = (remaining + next).distinctBy { item -> item.id }) }
+                loadSession(next.id)
+            }
+        }
     }
 
     private suspend fun collectAnswer(
+        sessionId: String,
         history: List<AiChatTurn>,
         question: String,
     ) {
-        ai.ask(history, question).collect { event ->
+        ai.askInSession(sessionId, history, question).collect { event ->
             _ui.update { it.copy(transcript = it.transcript + event) }
             if (event is AiChatEvent.Done) {
                 // A run that ends blank with nothing visible (no text bubble, no tool rows) would
@@ -113,4 +229,21 @@ class AiChatViewModel(
 
     /** Mark any trailing still-streaming assistant turn as complete (keeps partial text). */
     private fun finishStreaming() = _ui.update { it.copy(transcript = it.transcript.finalized()) }
+
+    private suspend fun loadSession(sessionId: String) {
+        val turns = runCatching { ai.chatHistoryFor(sessionId) }.getOrDefault(emptyList())
+        _ui.update {
+            it.copy(
+                currentSessionId = sessionId,
+                transcript = ChatTranscript.fromHistory(turns),
+                busy = false,
+            )
+        }
+    }
+
+    private companion object {
+        const val NEW_SESSION_TITLE = "New chat"
+        const val MAX_SESSION_TITLE_CHARS = 60
+        const val LEGACY_SESSION_ID = "main"
+    }
 }

@@ -139,7 +139,7 @@ class AiChatLoop(
             }
 
             is StreamFrame.ToolCallComplete -> {
-                toolCalls += frame.toToolCall(toolCalls.size)
+                frame.toToolCall(toolCalls.size)?.let { toolCalls += it }
             }
 
             else -> {
@@ -223,8 +223,8 @@ class AiChatLoop(
 
     // The streamed id is preferred; when absent, fall back to a per-turn-unique id (the same
     // tool called twice in one turn must not collapse to one id, which id ?: name would do).
-    private fun StreamFrame.ToolCallComplete.toToolCall(index: Int): ToolCall =
-        ToolCall(id = id ?: "call_$index", name = name, argsJson = content)
+    private fun StreamFrame.ToolCallComplete.toToolCall(index: Int): ToolCall? =
+        toUsableToolCall(index)?.let { ToolCall(id = it.id, name = it.name, argsJson = it.argsJson) }
 
     private data class ToolCall(
         val id: String,

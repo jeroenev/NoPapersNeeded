@@ -37,6 +37,7 @@ kotlin {
             implementation(libs.room3.runtime)
             implementation(libs.sqlite.bundled)
             implementation(libs.koog.agents.core)
+            implementation(libs.koog.agents.features.memory)
             implementation(libs.koog.agents.tools)
             implementation(libs.koog.prompt.executor.model)
             implementation(libs.koog.prompt.executor.anthropic)

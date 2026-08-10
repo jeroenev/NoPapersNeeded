@@ -1,5 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <string name="ai_chat_history">Chatgeschiedenis</string>
+    <string name="ai_new_chat">Nieuwe chat</string>
+    <string name="ai_delete_chat">Chat verwijderen</string>
+    <string name="ai_open_all_documents">Alle documenten openen</string>
     <string name="ai_assistant_title">AI-assistent</string>
     <string name="ai_clear_conversation">Gesprek wissen</string>
     <string name="ai_open_document">%1$s openen</string>
