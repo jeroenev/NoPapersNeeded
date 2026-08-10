@@ -1,6 +1,7 @@
 package dev.npn.app.ui.ai
 
 import dev.npn.core.ai.AiChatEvent
+import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiRole
 import dev.npn.core.ai.AiText
@@ -160,6 +161,35 @@ data class ChatTranscript(
                                 text = turn.text,
                                 docRefs = AiText.extractDocRefs(turn.text),
                                 streaming = false,
+                            )
+                        }
+                    }
+                },
+            )
+
+        /** Restore the complete visible transcript, including persisted tool uses. */
+        fun fromPersistedHistory(items: List<AiChatHistoryItem>): ChatTranscript =
+            ChatTranscript(
+                items.map { item ->
+                    when (item) {
+                        is AiChatHistoryItem.UserTurn -> {
+                            TranscriptItem.UserTurn(item.text)
+                        }
+
+                        is AiChatHistoryItem.AssistantTurn -> {
+                            TranscriptItem.AssistantTurn(
+                                text = item.text,
+                                docRefs = AiText.extractDocRefs(item.text),
+                                streaming = false,
+                            )
+                        }
+
+                        is AiChatHistoryItem.ToolUse -> {
+                            TranscriptItem.ToolUse(
+                                name = item.name,
+                                argsSummary = item.argsJson,
+                                result = item.result,
+                                running = false,
                             )
                         }
                     }

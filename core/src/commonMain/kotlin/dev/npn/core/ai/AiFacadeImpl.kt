@@ -75,21 +75,16 @@ class AiFacadeImpl(
     override suspend fun chatHistory(): List<AiChatTurn> = chatHistoryFor(CHAT_CONVERSATION_ID)
 
     override suspend fun chatHistoryFor(sessionId: String): List<AiChatTurn> =
-        chatHistoryStore.load(sessionId).mapNotNull { message ->
-            when (message) {
-                is ai.koog.prompt.message.Message.User -> {
-                    AiChatTurn(AiRole.USER, message.textContent())
-                }
-
-                is ai.koog.prompt.message.Message.Assistant -> {
-                    message.textContent().takeIf { it.isNotBlank() }?.let { AiChatTurn(AiRole.ASSISTANT, it) }
-                }
-
-                else -> {
-                    null
-                }
+        chatTranscriptFor(sessionId).mapNotNull { item ->
+            when (item) {
+                is AiChatHistoryItem.UserTurn -> AiChatTurn(AiRole.USER, item.text)
+                is AiChatHistoryItem.AssistantTurn -> AiChatTurn(AiRole.ASSISTANT, item.text)
+                is AiChatHistoryItem.ToolUse -> null
             }
         }
+
+    override suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> =
+        KoogChatHistoryMapper.map(chatHistoryStore.load(sessionId))
 
     override suspend fun chatSessions(): List<AiChatSession> {
         val sessions = chatSessionStore.load()

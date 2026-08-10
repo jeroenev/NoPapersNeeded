@@ -231,11 +231,11 @@ class AiChatViewModel(
     private fun finishStreaming() = _ui.update { it.copy(transcript = it.transcript.finalized()) }
 
     private suspend fun loadSession(sessionId: String) {
-        val turns = runCatching { ai.chatHistoryFor(sessionId) }.getOrDefault(emptyList())
+        val history = runCatching { ai.chatTranscriptFor(sessionId) }.getOrDefault(emptyList())
         _ui.update {
             it.copy(
                 currentSessionId = sessionId,
-                transcript = ChatTranscript.fromHistory(turns),
+                transcript = ChatTranscript.fromPersistedHistory(history),
                 busy = false,
             )
         }

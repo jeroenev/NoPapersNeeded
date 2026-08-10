@@ -184,6 +184,23 @@ data class AiChatTurn(
     val text: String,
 )
 
+/** One rendered item restored from a persisted assistant conversation. */
+sealed interface AiChatHistoryItem {
+    data class UserTurn(
+        val text: String,
+    ) : AiChatHistoryItem
+
+    data class AssistantTurn(
+        val text: String,
+    ) : AiChatHistoryItem
+
+    data class ToolUse(
+        val name: String,
+        val argsJson: String,
+        val result: String,
+    ) : AiChatHistoryItem
+}
+
 /** Metadata for one persisted assistant conversation. */
 @Serializable
 data class AiChatSession(
@@ -257,6 +274,15 @@ interface AiFacade {
 
     /** Persisted turns for a named session; legacy implementations expose their default history. */
     suspend fun chatHistoryFor(sessionId: String): List<AiChatTurn> = chatHistory()
+
+    /** Persisted transcript items for a named session, including completed tool uses. */
+    suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> =
+        chatHistoryFor(sessionId).map { turn ->
+            when (turn.role) {
+                AiRole.USER -> AiChatHistoryItem.UserTurn(turn.text)
+                AiRole.ASSISTANT -> AiChatHistoryItem.AssistantTurn(turn.text)
+            }
+        }
 
     /** All sessions, newest first. */
     suspend fun chatSessions(): List<AiChatSession> = emptyList()
