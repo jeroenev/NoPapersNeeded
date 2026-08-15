@@ -8,6 +8,7 @@ import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
@@ -30,9 +31,11 @@ import dev.npn.core.app.TagAdmin
 import dev.npn.core.app.TagRepository
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -114,6 +117,11 @@ data class AiMetadataState(
  * View model for a single document. The document row and its tags come from the session's
  * reactive [dev.npn.core.app.DocumentRepository.observeDoc] flow so external edits (journal
  * folds, OCR completion) refresh the screen. Page count is resolved once via the content facade.
+ *
+ * Everything the metadata panel renders is assembled into the single [metadata] state; the flows
+ * behind it are private, so a panel that needs a new value gets it from there rather than from a
+ * new public flow wired through two call sites. The screen's whole write surface lives here too —
+ * every setter the panel's action holders bind — which is why the function count is suppressed.
  */
 @Suppress("TooManyFunctions")
 class DocDetailViewModel(
@@ -148,47 +156,46 @@ class DocDetailViewModel(
     private val _ui = MutableStateFlow(DetailUiState())
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
     private val metadataMutex = Mutex()
-    private val _noteEditor = MutableStateFlow(NoteEditorState())
-    val noteEditor: StateFlow<NoteEditorState> = _noteEditor.asStateFlow()
+    private val noteEditor = MutableStateFlow(NoteEditorState())
 
     /**
      * Search terms from the library query that opened this document, used to highlight matches
      * in the OCR text tab.
      */
-    val highlightTerms: List<String> = searchQuery?.let { queryTerms(it) }.orEmpty()
+    private val highlightTerms: List<String> = searchQuery?.let { queryTerms(it) }.orEmpty()
 
-    val doc: StateFlow<DocListItem?> =
+    private val doc: StateFlow<DocListItem?> =
         documents
             .observeDoc(docId)
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
-    val reviewMode: StateFlow<ReviewMode> =
+    private val reviewMode: StateFlow<ReviewMode> =
         reviewConfig.reviewMode
             .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     /** Library-wide visible standard fields (synced setting); title is always shown. */
-    val standardFields: StateFlow<Set<StandardField>> =
+    private val standardFields: StateFlow<Set<StandardField>> =
         reviewConfig.standardFields
             .stateIn(viewModelScope, WhileSubscribedTimeout, StandardField.DEFAULT)
 
-    val correspondents: StateFlow<List<String>> =
+    private val correspondents: StateFlow<List<String>> =
         documents
             .observeCorrespondents()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    val docTypes: StateFlow<List<String>> =
+    private val docTypes: StateFlow<List<String>> =
         documents
             .observeDocTypes()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    val tagColors: StateFlow<Map<String, String?>> =
+    private val tagColors: StateFlow<Map<String, String?>> =
         tagRepository
             .observeTags()
             .map { tags -> tags.associate { it.name to it.color } }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
     /** Distinct custom-field keys in the library, for add-field key autocomplete. */
-    val fieldKeys: StateFlow<List<String>> =
+    private val fieldKeys: StateFlow<List<String>> =
         documents
             .observeFieldKeys()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
@@ -197,7 +204,7 @@ class DocDetailViewModel(
      * Extracted OCR/embedded text for this doc, reloaded when the doc's OCR state changes (so it
      * appears once background OCR completes). Null until loaded or when there is no text.
      */
-    val ocrText: StateFlow<String?> =
+    private val ocrText: StateFlow<String?> =
         doc
             .map { it?.doc?.ocrState }
             .distinctUntilChanged()
@@ -208,21 +215,50 @@ class DocDetailViewModel(
      * Stored OCR versions of this doc (best-ranked first), reloaded whenever the indexed OCR
      * state or engine changes so the picker reflects freshly-adopted sidecars and re-selections.
      */
-    val ocrVersions: StateFlow<List<OcrVersion>> =
+    private val ocrVersions: StateFlow<List<OcrVersion>> =
         doc
             .map { it?.doc?.ocrState to it?.doc?.ocrEngine }
             .distinctUntilChanged()
             .map { runCatching { ocr.ocrVersions(docId) }.getOrDefault(emptyList()) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    private val _history = MutableStateFlow<HistoryUiState>(HistoryUiState.NotLoaded)
-    val history: StateFlow<HistoryUiState> = _history.asStateFlow()
+    private val history = MutableStateFlow<HistoryUiState>(HistoryUiState.NotLoaded)
 
-    private val _aiTags = MutableStateFlow(AiTagState())
-    val aiTags: StateFlow<AiTagState> = _aiTags.asStateFlow()
+    private val aiTags = MutableStateFlow(AiTagState())
 
-    private val _aiMetadata = MutableStateFlow(AiMetadataState())
-    val aiMetadata: StateFlow<AiMetadataState> = _aiMetadata.asStateFlow()
+    private val aiMetadata = MutableStateFlow(AiMetadataState())
+
+    private val document: Flow<DocumentSection> =
+        combine(doc, reviewMode, standardFields, ocrText, ocrVersions) { item, mode, fields, text, versions ->
+            DocumentSection(
+                item = item,
+                reviewed = item?.effectiveReviewed(mode) == true,
+                reviewMode = mode,
+                visibleFields = fields,
+                ocrText = text,
+                ocrVersions = versions,
+                highlightTerms = highlightTerms,
+            )
+        }
+
+    private val vocabulary: Flow<VocabularyState> =
+        combine(tagColors, correspondents, docTypes, fieldKeys) { colors, senders, types, keys ->
+            VocabularyState(tagColors = colors, correspondents = senders, docTypes = types, fieldKeys = keys)
+        }
+
+    private val aiPanel: Flow<AiPanelState> =
+        combine(aiTags, aiMetadata) { tags, metadata -> AiPanelState(tags, metadata) }
+
+    /**
+     * The single state the metadata panel renders. Assembled here rather than in the composable
+     * tree so both call sites (the detail screen and the library's side panel) show the same
+     * thing without repeating the wiring — and so the panel's state is assertable in a viewmodel
+     * test.
+     */
+    val metadata: StateFlow<MetadataUiState> =
+        combine(document, vocabulary, noteEditor, aiPanel, history) { doc, vocab, note, ai, history ->
+            MetadataUiState(document = doc, vocabulary = vocab, note = note, ai = ai, history = history)
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, MetadataUiState())
 
     init {
         viewModelScope.launch {
@@ -231,7 +267,7 @@ class DocDetailViewModel(
         }
         viewModelScope.launch {
             val configured = ai.isConfiguredOrFalse()
-            _aiTags.value = _aiTags.value.copy(available = configured)
+            aiTags.value = aiTags.value.copy(available = configured)
         }
         // Sync the note editor's persisted value from the already-shared [doc] StateFlow instead of
         // subscribing to observeDoc a second time (that would double the Room invalidation wiring).
@@ -240,8 +276,8 @@ class DocDetailViewModel(
                 .map { it?.doc?.notes.orEmpty() }
                 .distinctUntilChanged()
                 .collect { persisted ->
-                    val current = _noteEditor.value
-                    _noteEditor.value =
+                    val current = noteEditor.value
+                    noteEditor.value =
                         if (current.dirty) {
                             current.copy(persisted = persisted)
                         } else {
@@ -262,11 +298,11 @@ class DocDetailViewModel(
 
     /** Load once when opened. Pass [refresh] only for an explicit retry or refresh request. */
     fun loadHistory(refresh: Boolean = false) {
-        if (!refresh && _history.value != HistoryUiState.NotLoaded) return
-        if (_history.value == HistoryUiState.Loading) return
-        _history.value = HistoryUiState.Loading
+        if (!refresh && history.value != HistoryUiState.NotLoaded) return
+        if (history.value == HistoryUiState.Loading) return
+        history.value = HistoryUiState.Loading
         viewModelScope.launch {
-            _history.value =
+            history.value =
                 runCatching {
                     HistoryMapper.toHistoryItems(documents.history(docId))
                 }.fold(
@@ -286,28 +322,28 @@ class DocDetailViewModel(
         launchMetadata(UiAction.SAVE_TITLE) { meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
 
     fun updateNoteDraft(value: String) {
-        _noteEditor.value = _noteEditor.value.copy(draft = value, saveState = NoteSaveState.Idle)
+        noteEditor.value = noteEditor.value.copy(draft = value, saveState = NoteSaveState.Idle)
     }
 
     fun saveNote() {
-        val current = _noteEditor.value
+        val current = noteEditor.value
         if (!current.dirty || current.saveState == NoteSaveState.Saving) return
-        _noteEditor.value = current.copy(saveState = NoteSaveState.Saving)
+        noteEditor.value = current.copy(saveState = NoteSaveState.Saving)
         viewModelScope.launch {
             runCatching {
                 metadataMutex.withLock { meta.setNotes(docId, current.draft) }
             }.fold(
                 onSuccess = {
-                    val latest = _noteEditor.value
-                    _noteEditor.value =
+                    val latest = noteEditor.value
+                    noteEditor.value =
                         latest.copy(
                             persisted = current.draft.takeUnless { it.isBlank() }.orEmpty(),
                             saveState = NoteSaveState.Saved,
                         )
                 },
                 onFailure = { error ->
-                    _noteEditor.value =
-                        _noteEditor.value.copy(
+                    noteEditor.value =
+                        noteEditor.value.copy(
                             saveState = NoteSaveState.Error(error.message.orEmpty()),
                         )
                 },
@@ -349,19 +385,19 @@ class DocDetailViewModel(
      * likely has no OCR text yet); failures surface the error via [messages].
      */
     fun suggestAiTags() {
-        if (_aiTags.value.suggesting) return
-        _aiTags.value = _aiTags.value.copy(suggesting = true)
+        if (aiTags.value.suggesting) return
+        aiTags.value = aiTags.value.copy(suggesting = true)
         viewModelScope.launch {
             runCatching { ai.suggestEdits(docId, AiEditRequest(tags = true)).addTags }.fold(
                 onSuccess = { suggestions ->
                     if (suggestions.isEmpty()) {
                         message(uiText(UiTextKey.NO_AI_TAG_SUGGESTIONS))
                     }
-                    _aiTags.value = _aiTags.value.copy(suggesting = false, suggestions = suggestions)
+                    aiTags.value = aiTags.value.copy(suggesting = false, suggestions = suggestions)
                 },
                 onFailure = { error ->
                     message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_TAGS, reasonOf(error)))
-                    _aiTags.value = _aiTags.value.copy(suggesting = false, suggestions = emptyList())
+                    aiTags.value = aiTags.value.copy(suggesting = false, suggestions = emptyList())
                 },
             )
         }
@@ -375,14 +411,14 @@ class DocDetailViewModel(
         }
 
     fun dismissAiTag(tag: String) {
-        _aiTags.value =
-            _aiTags.value.copy(
-                suggestions = _aiTags.value.suggestions.filterNot { it.tag == tag },
+        aiTags.value =
+            aiTags.value.copy(
+                suggestions = aiTags.value.suggestions.filterNot { it.tag == tag },
             )
     }
 
     fun clearAiTagSuggestions() {
-        _aiTags.value = _aiTags.value.copy(suggestions = emptyList())
+        aiTags.value = aiTags.value.copy(suggestions = emptyList())
     }
 
     // ---- AI metadata suggestions ----
@@ -393,8 +429,8 @@ class DocDetailViewModel(
      * (no OCR text yet, or nothing beyond the current values); failures surface via [messages].
      */
     fun suggestAiMetadata() {
-        if (_aiMetadata.value.suggesting) return
-        _aiMetadata.value = _aiMetadata.value.copy(suggesting = true)
+        if (aiMetadata.value.suggesting) return
+        aiMetadata.value = aiMetadata.value.copy(suggesting = true)
         viewModelScope.launch {
             val request =
                 AiEditRequest(
@@ -405,11 +441,11 @@ class DocDetailViewModel(
                     if (suggestion.isEmpty) {
                         message(uiText(UiTextKey.NO_AI_METADATA_SUGGESTIONS))
                     }
-                    _aiMetadata.value = AiMetadataState(suggesting = false, suggestion = suggestion)
+                    aiMetadata.value = AiMetadataState(suggesting = false, suggestion = suggestion)
                 },
                 onFailure = { error ->
                     message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_METADATA, reasonOf(error)))
-                    _aiMetadata.value = AiMetadataState()
+                    aiMetadata.value = AiMetadataState()
                 },
             )
         }
@@ -417,7 +453,7 @@ class DocDetailViewModel(
 
     /** Accept one field's suggestion: write it via the normal journal path and drop it. */
     fun acceptAiMetadata(field: AiField) {
-        val suggestion = _aiMetadata.value.suggestion
+        val suggestion = aiMetadata.value.suggestion
         when (field) {
             AiField.TITLE -> suggestion.title?.let(::setTitle)
             AiField.CORRESPONDENT -> suggestion.correspondent?.let(::setCorrespondent)
@@ -427,14 +463,7 @@ class DocDetailViewModel(
     }
 
     fun dismissAiMetadata(field: AiField) {
-        val current = _aiMetadata.value
-        val suggestion =
-            when (field) {
-                AiField.TITLE -> current.suggestion.copy(title = null)
-                AiField.CORRESPONDENT -> current.suggestion.copy(correspondent = null)
-                AiField.DOC_DATE -> current.suggestion.copy(docDate = null)
-            }
-        _aiMetadata.value = current.copy(suggestion = suggestion)
+        aiMetadata.value = aiMetadata.value.let { it.copy(suggestion = it.suggestion.without(field)) }
     }
 
     fun setField(

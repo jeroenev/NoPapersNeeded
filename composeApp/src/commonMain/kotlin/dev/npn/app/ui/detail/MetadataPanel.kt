@@ -162,59 +162,27 @@ import org.jetbrains.compose.resources.stringResource
  * Side panel for one document with three tabs: **Details** (editable metadata — title,
  * correspondent, docType, docDate, custom fields, tags, and file/OCR facts), **Text** (the
  * extracted OCR/embedded full text), and **History** (immutable journal timeline). Text fields
- * commit on focus loss via the [onCommit*] callbacks; correspondent/docType/field-keys offer
+ * commit on focus loss through [MetadataActions.edit]; correspondent/docType/field-keys offer
  * existing values as suggestions.
+ *
+ * Everything shown comes from [state] (assembled by `DocDetailViewModel.metadata`) and everything
+ * it can do from [actions] (wired by [rememberMetadataActions]), so the two call sites — the
+ * detail screen and the library's side panel — differ only in the last two parameters.
  *
  * When [previewTab] is provided (the library's side-panel preview), it is prepended as an extra
  * **Preview** tab and selected initially; the detail screen omits it since the page viewer sits
  * next to the panel there.
  */
 @Composable
-@Suppress("LongMethod")
 fun MetadataPanel(
-    item: DocListItem,
-    allTagNames: List<String>,
-    tagColors: Map<String, String?>,
-    correspondents: List<String>,
-    docTypes: List<String>,
-    fieldKeys: List<String>,
-    ocrText: String?,
-    ocrVersions: List<OcrVersion>,
-    highlightTerms: List<String> = emptyList(),
-    onSetOcrEngine: (String?) -> Unit,
-    onCommitTitle: (String) -> Unit,
-    noteEditor: NoteEditorState,
-    onNoteChange: (String) -> Unit,
-    onSaveNote: () -> Unit,
-    onCommitCorrespondent: (String) -> Unit,
-    onCommitDocType: (String) -> Unit,
-    onCommitDocDate: (String) -> Unit,
-    onCommitField: (key: String, value: String) -> Unit,
-    onRemoveField: (key: String) -> Unit,
-    reviewMode: ReviewMode,
-    reviewed: Boolean,
-    onSetReviewed: (Boolean) -> Unit,
-    onAddTag: (String) -> Unit,
-    onRemoveTag: (String) -> Unit,
-    /** Creates a brand-new tag on this document with an optional color chosen inline. */
-    onAddTagWithStyle: (name: String, color: String?) -> Unit = { name, _ -> onAddTag(name) },
-    aiTags: AiTagState = AiTagState(),
-    onSuggestAiTags: () -> Unit = {},
-    onAcceptAiTag: (String) -> Unit = {},
-    onDismissAiTag: (String) -> Unit = {},
-    onClearAiTagSuggestions: () -> Unit = {},
-    aiMetadata: AiMetadataState = AiMetadataState(),
-    onSuggestAiMetadata: () -> Unit = {},
-    onAcceptAiMetadata: (AiField) -> Unit = {},
-    onDismissAiMetadata: (AiField) -> Unit = {},
-    history: HistoryUiState = HistoryUiState.NotLoaded,
-    onLoadHistory: () -> Unit = {},
-    onRefreshHistory: () -> Unit = {},
+    state: MetadataUiState,
+    actions: MetadataActions,
     previewTab: (@Composable (Modifier) -> Unit)? = null,
-    /** Which built-in fields to show (library-wide synced setting); title is always shown. */
-    visibleFields: Set<StandardField> = StandardField.DEFAULT,
     modifier: Modifier = Modifier,
 ) {
+    // No document row yet (or the document is gone): the panel has nothing to render, and the
+    // screens above own the "unavailable" messaging.
+    val item = state.document.item ?: return
     val tabs =
         remember(previewTab != null) {
             if (previewTab != null) PanelTab.entries.toList() else PanelTab.entries.filter { it != PanelTab.PREVIEW }
@@ -222,7 +190,7 @@ fun MetadataPanel(
     var tab by remember { mutableStateOf(tabs.first()) }
     LaunchedEffect(tab) {
         if (tab == PanelTab.HISTORY) {
-            onLoadHistory()
+            actions.history.onLoad()
         }
     }
     // Shared with OcrTextTab so Ctrl+F can move focus into its find field. Focus is only requested
@@ -266,48 +234,17 @@ fun MetadataPanel(
 
             PanelTab.DETAILS -> {
                 DetailsTab(
-                    item = item,
-                    allTagNames = allTagNames,
-                    tagColors = tagColors,
-                    correspondents = correspondents,
-                    docTypes = docTypes,
-                    fieldKeys = fieldKeys,
-                    ocrVersions = ocrVersions,
-                    onSetOcrEngine = onSetOcrEngine,
-                    onCommitTitle = onCommitTitle,
-                    noteEditor = noteEditor,
-                    onNoteChange = onNoteChange,
-                    onSaveNote = onSaveNote,
-                    onCommitCorrespondent = onCommitCorrespondent,
-                    onCommitDocType = onCommitDocType,
-                    onCommitDocDate = onCommitDocDate,
-                    onCommitField = onCommitField,
-                    onRemoveField = onRemoveField,
-                    reviewMode = reviewMode,
-                    reviewed = reviewed,
-                    onSetReviewed = onSetReviewed,
-                    onAddTag = onAddTag,
-                    onRemoveTag = onRemoveTag,
-                    onAddTagWithStyle = onAddTagWithStyle,
-                    aiTags = aiTags,
-                    onSuggestAiTags = onSuggestAiTags,
-                    onAcceptAiTag = onAcceptAiTag,
-                    onDismissAiTag = onDismissAiTag,
-                    onClearAiTagSuggestions = onClearAiTagSuggestions,
-                    aiMetadata = aiMetadata,
-                    onSuggestAiMetadata = onSuggestAiMetadata,
-                    onAcceptAiMetadata = onAcceptAiMetadata,
-                    onDismissAiMetadata = onDismissAiMetadata,
-                    visibleFields = visibleFields,
+                    state = state,
+                    actions = actions,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
 
             PanelTab.TEXT -> {
                 OcrTextTab(
-                    text = ocrText,
+                    text = state.document.ocrText,
                     ocrState = item.doc.ocrState,
-                    highlightTerms = highlightTerms,
+                    highlightTerms = state.document.highlightTerms,
                     focusRequester = findFocus,
                     focusRequest = findRequestCounter,
                     modifier = Modifier.fillMaxWidth().weight(1f),
@@ -316,8 +253,8 @@ fun MetadataPanel(
 
             PanelTab.HISTORY -> {
                 HistoryTab(
-                    history = history,
-                    onRefresh = onRefreshHistory,
+                    history = state.history,
+                    onRefresh = actions.history.onRefresh,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
@@ -329,42 +266,15 @@ private enum class PanelTab { PREVIEW, DETAILS, TEXT, HISTORY }
 
 @Composable
 private fun DetailsTab(
-    item: DocListItem,
-    allTagNames: List<String>,
-    tagColors: Map<String, String?>,
-    correspondents: List<String>,
-    docTypes: List<String>,
-    fieldKeys: List<String>,
-    ocrVersions: List<OcrVersion>,
-    onSetOcrEngine: (String?) -> Unit,
-    onCommitTitle: (String) -> Unit,
-    noteEditor: NoteEditorState,
-    onNoteChange: (String) -> Unit,
-    onSaveNote: () -> Unit,
-    onCommitCorrespondent: (String) -> Unit,
-    onCommitDocType: (String) -> Unit,
-    onCommitDocDate: (String) -> Unit,
-    onCommitField: (key: String, value: String) -> Unit,
-    onRemoveField: (key: String) -> Unit,
-    reviewMode: ReviewMode,
-    reviewed: Boolean,
-    onSetReviewed: (Boolean) -> Unit,
-    onAddTag: (String) -> Unit,
-    onRemoveTag: (String) -> Unit,
-    onAddTagWithStyle: (name: String, color: String?) -> Unit,
-    aiTags: AiTagState,
-    onSuggestAiTags: () -> Unit,
-    onAcceptAiTag: (String) -> Unit,
-    onDismissAiTag: (String) -> Unit,
-    onClearAiTagSuggestions: () -> Unit,
-    aiMetadata: AiMetadataState,
-    onSuggestAiMetadata: () -> Unit,
-    onAcceptAiMetadata: (AiField) -> Unit,
-    onDismissAiMetadata: (AiField) -> Unit,
-    visibleFields: Set<StandardField>,
+    state: MetadataUiState,
+    actions: MetadataActions,
     modifier: Modifier = Modifier,
 ) {
+    val item = state.document.item ?: return
     val doc = item.doc
+    val vocabulary = state.vocabulary
+    val edit = actions.edit
+    val visibleFields = state.document.visibleFields
 
     Column(
         modifier =
@@ -373,9 +283,9 @@ private fun DetailsTab(
                 .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        ReviewStatusSection(reviewMode, reviewed, onSetReviewed)
+        ReviewStatusSection(state.document.reviewMode, state.document.reviewed, edit.onSetReviewed)
         if (StandardField.NOTES in visibleFields) {
-            NoteSection(noteEditor, onNoteChange, onSaveNote)
+            NoteSection(state.note, edit.onNoteChange, edit.onSaveNote)
         }
         DocumentPropertiesSection(
             title = doc.title,
@@ -383,30 +293,28 @@ private fun DetailsTab(
             correspondent = doc.correspondent,
             docType = doc.docType,
             docDate = doc.docDate,
-            correspondents = correspondents,
-            docTypes = docTypes,
-            onCommitTitle = onCommitTitle,
-            onCommitCorrespondent = onCommitCorrespondent,
-            onCommitDocType = onCommitDocType,
-            onCommitDocDate = onCommitDocDate,
+            correspondents = vocabulary.correspondents,
+            docTypes = vocabulary.docTypes,
+            onCommitTitle = edit.onCommitTitle,
+            onCommitCorrespondent = edit.onCommitCorrespondent,
+            onCommitDocType = edit.onCommitDocType,
+            onCommitDocDate = edit.onCommitDocDate,
             visibleFields = visibleFields,
         )
 
         AiMetadataSuggestions(
-            available = aiTags.available == true,
-            state = aiMetadata,
-            onSuggest = onSuggestAiMetadata,
-            onAccept = onAcceptAiMetadata,
-            onDismiss = onDismissAiMetadata,
+            available = state.ai.tags.available == true,
+            state = state.ai.metadata,
+            actions = actions.ai,
         )
 
         HorizontalDivider()
 
         CustomFieldsSection(
             fields = item.fields,
-            fieldKeys = fieldKeys,
-            onCommitField = onCommitField,
-            onRemoveField = onRemoveField,
+            fieldKeys = vocabulary.fieldKeys,
+            onCommitField = edit.onCommitField,
+            onRemoveField = edit.onRemoveField,
         )
 
         HorizontalDivider()
@@ -418,19 +326,16 @@ private fun DetailsTab(
         )
         TagEditor(
             tags = item.tags,
-            allTagNames = allTagNames,
-            tagColors = tagColors,
-            onAdd = onAddTag,
-            onRemove = onRemoveTag,
-            onAddWithStyle = onAddTagWithStyle,
+            allTagNames = vocabulary.allTagNames,
+            tagColors = vocabulary.tagColors,
+            onAdd = actions.tags.onAdd,
+            onRemove = actions.tags.onRemove,
+            onAddWithStyle = actions.tags.onAddWithStyle,
         )
 
         AiTagSuggestions(
-            state = aiTags,
-            onSuggest = onSuggestAiTags,
-            onAccept = onAcceptAiTag,
-            onDismiss = onDismissAiTag,
-            onClearAll = onClearAiTagSuggestions,
+            state = state.ai.tags,
+            actions = actions.ai,
         )
 
         HorizontalDivider()
@@ -445,8 +350,8 @@ private fun DetailsTab(
             OcrEngineRow(
                 indexedEngine = doc.ocrEngine,
                 pinned = doc.ocrEngineOverride != null,
-                versions = ocrVersions,
-                onSetEngine = onSetOcrEngine,
+                versions = state.document.ocrVersions,
+                onSetEngine = edit.onSetOcrEngine,
             )
         }
     }
@@ -646,10 +551,7 @@ private fun DocumentDateField(
 @Composable
 private fun AiTagSuggestions(
     state: AiTagState,
-    onSuggest: () -> Unit,
-    onAccept: (String) -> Unit,
-    onDismiss: (String) -> Unit,
-    onClearAll: () -> Unit,
+    actions: AiActions,
 ) {
     if (state.available != true) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -658,7 +560,7 @@ private fun AiTagSuggestions(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onSuggest, enabled = !state.suggesting) {
+            TextButton(onClick = actions.onSuggestTags, enabled = !state.suggesting) {
                 Icon(
                     Icons.Outlined.AutoAwesome,
                     contentDescription = null,
@@ -673,10 +575,12 @@ private fun AiTagSuggestions(
         if (state.suggestions.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 state.suggestions.forEach { suggestion ->
-                    AiTagChip(suggestion, onAccept, onDismiss)
+                    AiTagChip(suggestion, actions.onAcceptTag, actions.onDismissTag)
                 }
             }
-            TextButton(onClick = onClearAll) { Text(stringResource(Res.string.detail_dismiss_all)) }
+            TextButton(onClick = actions.onClearTagSuggestions) {
+                Text(stringResource(Res.string.detail_dismiss_all))
+            }
         }
     }
 }
@@ -722,24 +626,25 @@ private fun AiTagChip(
  * unless the AI endpoint is configured ([available], shared with the tag probe). Offers a
  * "Suggest details" button (spinner while running) and renders each suggested field as a row:
  * the check accepts it through the normal commit path, the × dismisses it.
+ *
+ * Rows are driven by [AiField.entries], so a new suggestable field renders here as soon as the
+ * enum gains it — the only thing to add is its label in [aiFieldLabel], which the compiler
+ * demands.
  */
 @Composable
 private fun AiMetadataSuggestions(
     available: Boolean,
     state: AiMetadataState,
-    onSuggest: () -> Unit,
-    onAccept: (AiField) -> Unit,
-    onDismiss: (AiField) -> Unit,
+    actions: AiActions,
 ) {
     if (!available) return
-    val suggestion = state.suggestion
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Row(
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = onSuggest, enabled = !state.suggesting) {
+            TextButton(onClick = actions.onSuggestMetadata, enabled = !state.suggesting) {
                 Icon(
                     Icons.Outlined.AutoAwesome,
                     contentDescription = null,
@@ -751,35 +656,30 @@ private fun AiMetadataSuggestions(
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             }
         }
-        suggestion.title?.let {
-            AiMetadataSuggestionRow(
-                stringResource(Res.string.detail_title),
-                it,
-                AiField.TITLE,
-                onAccept,
-                onDismiss,
-            )
-        }
-        suggestion.correspondent?.let {
-            AiMetadataSuggestionRow(
-                stringResource(Res.string.detail_correspondent),
-                it,
-                AiField.CORRESPONDENT,
-                onAccept,
-                onDismiss,
-            )
-        }
-        suggestion.docDate?.let {
-            AiMetadataSuggestionRow(
-                stringResource(Res.string.detail_document_date_plain),
-                it,
-                AiField.DOC_DATE,
-                onAccept,
-                onDismiss,
-            )
+        AiField.entries.forEach { field ->
+            state.suggestion[field]?.let { value ->
+                AiMetadataSuggestionRow(
+                    label = aiFieldLabel(field),
+                    value = value,
+                    field = field,
+                    onAccept = actions.onAcceptMetadata,
+                    onDismiss = actions.onDismissMetadata,
+                )
+            }
         }
     }
 }
+
+/** Human label for a suggestable field; exhaustive, so a new [AiField] cannot ship unlabelled. */
+@Composable
+private fun aiFieldLabel(field: AiField): String =
+    stringResource(
+        when (field) {
+            AiField.TITLE -> Res.string.detail_title
+            AiField.CORRESPONDENT -> Res.string.detail_correspondent
+            AiField.DOC_DATE -> Res.string.detail_document_date_plain
+        },
+    )
 
 /** One suggested property value with accept (check) and dismiss (×) actions. */
 @Composable

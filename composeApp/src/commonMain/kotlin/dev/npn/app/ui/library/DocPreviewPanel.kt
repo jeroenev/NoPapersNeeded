@@ -35,6 +35,7 @@ import dev.npn.app.ui.detail.DocActions
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.MetadataPanel
 import dev.npn.app.ui.detail.PageViewer
+import dev.npn.app.ui.detail.rememberMetadataActions
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
@@ -98,19 +99,8 @@ private fun PreviewBody(
     SnackbarMessages(vm.messages, snackbar)
 
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val correspondents by vm.correspondents.collectAsStateWithLifecycle()
-    val docTypes by vm.docTypes.collectAsStateWithLifecycle()
-    val tagColors by vm.tagColors.collectAsStateWithLifecycle()
-    val fieldKeys by vm.fieldKeys.collectAsStateWithLifecycle()
-    val ocrText by vm.ocrText.collectAsStateWithLifecycle()
-    val ocrVersions by vm.ocrVersions.collectAsStateWithLifecycle()
-    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
-    val standardFields by vm.standardFields.collectAsStateWithLifecycle()
-    val noteEditor by vm.noteEditor.collectAsStateWithLifecycle()
-    val aiTags by vm.aiTags.collectAsStateWithLifecycle()
-    val aiMetadata by vm.aiMetadata.collectAsStateWithLifecycle()
-    val history by vm.history.collectAsStateWithLifecycle()
-    val allTagNames = remember(tagColors) { tagColors.keys.toList() }
+    val metadata by vm.metadata.collectAsStateWithLifecycle()
+    val actions = rememberMetadataActions(vm)
 
     Column(Modifier.fillMaxSize()) {
         PreviewHeader(
@@ -123,43 +113,8 @@ private fun PreviewBody(
         )
         HorizontalDivider()
         MetadataPanel(
-            item = item,
-            allTagNames = allTagNames,
-            tagColors = tagColors,
-            correspondents = correspondents,
-            docTypes = docTypes,
-            fieldKeys = fieldKeys,
-            ocrText = ocrText,
-            ocrVersions = ocrVersions,
-            onSetOcrEngine = vm::setOcrEngine,
-            onCommitTitle = vm::setTitle,
-            noteEditor = noteEditor,
-            onNoteChange = vm::updateNoteDraft,
-            onSaveNote = vm::saveNote,
-            onCommitCorrespondent = vm::setCorrespondent,
-            onCommitDocType = vm::setDocType,
-            onCommitDocDate = vm::setDocDate,
-            onCommitField = { key, value -> vm.setField(key, value) },
-            onRemoveField = vm::removeField,
-            reviewMode = reviewMode,
-            reviewed = item.effectiveReviewed(reviewMode),
-            onSetReviewed = vm::setReviewed,
-            onAddTag = vm::addTag,
-            onAddTagWithStyle = vm::addTagWithStyle,
-            visibleFields = standardFields,
-            onRemoveTag = vm::removeTag,
-            aiTags = aiTags,
-            onSuggestAiTags = vm::suggestAiTags,
-            onAcceptAiTag = vm::acceptAiTag,
-            onDismissAiTag = vm::dismissAiTag,
-            onClearAiTagSuggestions = vm::clearAiTagSuggestions,
-            aiMetadata = aiMetadata,
-            onSuggestAiMetadata = vm::suggestAiMetadata,
-            onAcceptAiMetadata = vm::acceptAiMetadata,
-            onDismissAiMetadata = vm::dismissAiMetadata,
-            history = history,
-            onLoadHistory = { vm.loadHistory() },
-            onRefreshHistory = { vm.loadHistory(refresh = true) },
+            state = metadata,
+            actions = actions,
             previewTab = { m ->
                 // Keyed on the document: the viewer's remembered state (page-bitmap cache, pager
                 // position, zoom) must not survive a document switch, or it would briefly show
