@@ -19,7 +19,7 @@ class FakeMetadataWriter : MetadataWriter {
     val docTypeSets = mutableListOf<Pair<List<String>, String?>>()
     val docDateSets = mutableListOf<Pair<String, String?>>()
     val fieldSets = mutableListOf<Triple<String, String, String?>>()
-    val batchedEdits = mutableListOf<Triple<String, List<String>, Map<DocProperty, String?>>>()
+    val batchedEdits = mutableListOf<Triple<List<String>, List<String>, Map<DocProperty, String?>>>()
 
     /** If set, every batched op (addTag/removeTag/setReviewed/applyEdits) throws this. */
     var failBatchOps: (() -> Nothing)? = null
@@ -108,12 +108,12 @@ class FakeMetadataWriter : MetadataWriter {
     }
 
     override suspend fun applyEdits(
-        docId: String,
+        docIds: List<String>,
         addTags: List<String>,
         properties: Map<DocProperty, String?>,
     ) {
         failBatchOps?.invoke()
-        batchedEdits += Triple(docId, addTags, properties)
+        batchedEdits += Triple(docIds, addTags, properties)
     }
 }
 

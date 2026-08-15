@@ -4,6 +4,7 @@ import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiField
+import dev.npn.core.model.DocProperty
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -60,6 +61,18 @@ data class ReviewField(
     val current: String?,
     val selected: Boolean,
 )
+
+/**
+ * The stored property an autofill field writes to. Kept here rather than on [AiField] so the AI
+ * contract layer stays free of the storage model.
+ */
+internal val AiField.property: DocProperty
+    get() =
+        when (this) {
+            AiField.TITLE -> DocProperty.TITLE
+            AiField.CORRESPONDENT -> DocProperty.CORRESPONDENT
+            AiField.DOC_DATE -> DocProperty.DOC_DATE
+        }
 
 /**
  * One document's row in the review phase. [chips] are tag additions, [removals] are tag removals
@@ -328,25 +341,26 @@ class AiEditRun(
                     _processed.update { it + docIds }
                 }.onFailure { failedDocs += docIds }
         }
-        // Field values are inherently per document, so each selected (doc, field) is one setter
-        // call; failures retain only that pair for retry.
-        for ((docId, field) in pendingFields) {
-            runCatching { writeField(docId, field) }
-                .onSuccess {
-                    succeededFields += docId to field.field
-                    _processed.update { it + docId }
-                }.onFailure { failedDocs += docId }
+        // Field values are inherently per document, so these group by document rather than by tag:
+        // one MetadataWriter.applyEdits per document writes all of its selected fields as a single
+        // change. Setter-per-field would re-run the storage path rules once per field, renaming a
+        // document up to three times for one apply — and on a synced library folder every replica
+        // sees each intermediate name.
+        //
+        // That makes retry granularity per document rather than per field, which is the honest
+        // grain: applyEdits is all-or-nothing, so a failure wrote none of that document's fields
+        // and all of them are owed. Deliberately still one call per document even though applyEdits
+        // takes many: the suggested values differ per document, and one transaction over all of
+        // them would let a single rejected document lose every other document's write.
+        for ((docId, fields) in pendingFields.groupBy({ it.first }, { it.second })) {
+            runCatching {
+                meta.applyEdits(listOf(docId), properties = fields.associate { it.field.property to it.value })
+            }.onSuccess {
+                fields.forEach { succeededFields += docId to it.field }
+                _processed.update { it + docId }
+            }.onFailure { failedDocs += docId }
         }
         return finishApply(key, docs, succeededAdds, succeededRemovals, succeededFields, failedDocs)
-    }
-
-    private suspend fun writeField(
-        docId: String,
-        field: ReviewField,
-    ) = when (field.field) {
-        AiField.TITLE -> meta.setTitle(docId, field.value)
-        AiField.CORRESPONDENT -> meta.setCorrespondent(listOf(docId), field.value)
-        AiField.DOC_DATE -> meta.setDocDate(docId, field.value)
     }
 
     @Suppress("LongParameterList")

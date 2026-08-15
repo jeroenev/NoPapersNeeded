@@ -33,6 +33,7 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.model.DocProperty
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import dev.npn.core.ocr.OcrConfig
@@ -260,22 +261,36 @@ class LibrarySessionImpl private constructor(
         return SplitOutcome.Done(partIds)
     }
 
-    /** Carry tags and single-value properties of the split source onto its parts. */
+    /**
+     * Carry tags and single-value properties of the split source onto its parts.
+     *
+     * One [MetadataWriter.applyEdits] for every part rather than a setter per tag and per property:
+     * the setters each re-run the storage path rules, so a source with several tags would rename
+     * every part once per tag before it settled. Parts are brand-new files, so those intermediate
+     * names are churn no replica needs to see.
+     *
+     * All-or-nothing across the parts is what this path wants: the parts were created together
+     * from one source, so a half-copied set is worse than none, and the caller's retry is a rerun
+     * of the same split.
+     */
     private suspend fun copyMetadataToParts(
         docId: String,
         partIds: List<String>,
     ) {
         val doc = db.documentDao().getByDocId(docId) ?: return
-        for (tag in db
-            .documentDao()
-            .tagsForDocs(listOf(docId))
-            .map { it.tag }
-            .distinct()) {
-            writer.addTag(partIds, tag)
-        }
-        doc.correspondent?.let { writer.setCorrespondent(partIds, it) }
-        doc.docType?.let { writer.setDocType(partIds, it) }
-        doc.docDate?.let { date -> partIds.forEach { writer.setDocDate(it, date) } }
+        val tags =
+            db
+                .documentDao()
+                .tagsForDocs(listOf(docId))
+                .map { it.tag }
+                .distinct()
+        val properties =
+            buildMap {
+                doc.correspondent?.let { put(DocProperty.CORRESPONDENT, it) }
+                doc.docType?.let { put(DocProperty.DOC_TYPE, it) }
+                doc.docDate?.let { put(DocProperty.DOC_DATE, it) }
+            }
+        writer.applyEdits(partIds, addTags = tags, properties = properties)
     }
 
     override fun start(scope: CoroutineScope) {

@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.MutableClock
 import dev.npn.core.ocr.OcrEngine
@@ -68,6 +69,15 @@ class AppSessionRig private constructor(
     }
 
     fun exists(relPath: String): Boolean = Files.exists(libRoot.resolve(relPath))
+
+    /** A document's id is the hash of its bytes, so the library path is enough to name it. */
+    suspend fun docId(relPath: String): String = fs.sha256(relPath)
+
+    /** Published journal objects, for asserting that a write committed exactly once. */
+    suspend fun journalObjectCount(): Int =
+        fs
+            .listAllUnder(NpnPaths.JOURNAL_DIR)
+            .count { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
 
     suspend fun close() {
         session.close()
