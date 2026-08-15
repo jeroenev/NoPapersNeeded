@@ -27,6 +27,7 @@ class FakeLibrarySession : LibrarySession {
     override val ocr = FakeOcrFacade()
     override val reviewConfig = FakeReviewConfigFacade()
     override val maintenance = FakeMaintenanceFacade()
+    override val work = FakeWorkFacade()
 
     override fun start(scope: CoroutineScope) = Unit
 

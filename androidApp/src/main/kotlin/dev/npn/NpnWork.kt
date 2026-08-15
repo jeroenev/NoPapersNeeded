@@ -18,9 +18,10 @@ import java.util.concurrent.TimeUnit
  * foreign OCR sidecars) and process the OCR queue. Uses the process-wide [AppEnvironment] singleton
  * from [NpnApplication] so it shares the same session/DB/scope as the UI.
  *
- * [LibrarySession.rescan] already adopts foreign sidecars, queues pending OCR and kicks the OCR
- * worker; the worker then waits (bounded) for the OCR queue and then the automatic AI enrichment
- * queue to drain, so WorkManager keeps the process alive while that background work runs.
+ * [LibrarySession.rescan] already adopts foreign sidecars and queues pending OCR; the worker then
+ * drains (bounded) the OCR queue and then the automatic AI enrichment queue through
+ * [dev.npn.core.app.WorkFacade], so WorkManager keeps the process alive while that background work
+ * runs.
  */
 class RescanOcrWorker(
     context: Context,
@@ -49,12 +50,12 @@ class RescanOcrWorker(
             // process dies, and both queues are persistent, so whatever is left is picked up by
             // the next run. That is also what happens to enrichment when a large import uses the
             // whole window on OCR alone.
+            // Both drains rather than watching counts, so each returns as soon as no further
+            // progress is possible — queue empty, feature off, endpoint unconfigured, or a backlog
+            // waiting out a backoff — instead of holding the wakelock until the timeout.
             withTimeoutOrNull(DRAIN_TIMEOUT_MS) {
-                session.ocr.ocrStatus.first { it.pending == 0 && !it.running }
-                // Drains rather than watching a count, so it returns as soon as no further
-                // progress is possible — feature off, endpoint unconfigured, or a backlog waiting
-                // out a backoff — instead of holding the wakelock until the timeout.
-                session.aiSuggest.drainAutoEnrich()
+                session.work.drainOcr()
+                session.work.drainEnrichment()
             }
             Result.success()
         } catch (t: Throwable) {

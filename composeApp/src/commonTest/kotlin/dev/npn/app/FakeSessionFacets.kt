@@ -9,6 +9,7 @@ import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SplitOutcome
+import dev.npn.core.app.WorkFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
@@ -16,7 +17,7 @@ import dev.npn.core.model.StandardField
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
-// Test doubles for the session's own facets: ingest, OCR ops, review config and maintenance.
+// Test doubles for the session's own facets: ingest, OCR ops, review config, maintenance and work.
 // Flows are public MutableStateFlows so tests can push emissions; calls are recorded in lists.
 
 /** Imports and rescans. [FakeIngestFacade.importOutcomes] is consumed in order, repeating the last. */
@@ -147,6 +148,20 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     ): SplitOutcome {
         splits += docId to segments
         return splitOutcome
+    }
+}
+
+/** Background queue drains; records how often each was asked to run. */
+class FakeWorkFacade : WorkFacade {
+    var ocrDrains = 0
+    var enrichmentDrains = 0
+
+    override suspend fun drainOcr() {
+        ocrDrains++
+    }
+
+    override suspend fun drainEnrichment() {
+        enrichmentDrains++
     }
 }
 

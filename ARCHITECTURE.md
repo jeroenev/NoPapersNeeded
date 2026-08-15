@@ -36,7 +36,7 @@ source sets hold implementations. Key packages:
 
 | Package | Contents |
 |---|---|
-| `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `Ingest.kt`, `Ocr.kt`, `ReviewConfigFacade.kt`, `Maintenance.kt`, `DocContentFacade.kt`, `Filters.kt`, `Settings.kt`. Consumers depend on the facets they use, not on `LibrarySession`. `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events. |
+| `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `Ingest.kt`, `Ocr.kt`, `ReviewConfigFacade.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`, `Settings.kt`. Consumers depend on the facets they use, not on `LibrarySession`. `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events. |
 | `core.journal` | The metadata journal: content-addressed JSONL transactions (`JournalEvent`, `JournalOp`), segments (`Segment`, `SegmentWriter`), codec (`JournalCodec`), HLC (`Hlc`), snapshot compaction (`SnapshotCompactor`, `SnapshotFormat`), and the HLC/OR-set fold (`FoldedState`, `FoldTest`). |
 | `core.fs` | Filesystem abstraction over the library folder: `LibraryFileSystem` (platform impl), `NpnPaths` (`.npn/` layout), `ContentIdentity`/`HexEncoding` (hash handling), `OcrSidecarFiles`, `TrashOps`. |
 | `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsWriteGate`, `DbLocalJournalState`, `DeviceIdentity`, `ScanReport`. |
@@ -106,7 +106,8 @@ via `mise hot`.
 - New platform behavior → interface in `core` commonMain, impl in each platform
   source set, wire in `AppEnvironment.*`.
 - Background work → `core.watch` importer loops, `NpnWork` (Android), and the
-  `core.work.QueueDrainer` instances in `LibrarySessionImpl` (OCR, AI enrichment).
+  `core.work.QueueDrainer` instances in `LibrarySessionImpl` (OCR, AI enrichment),
+  exposed to callers that must await them as `session.work` (`WorkFacade`).
   A new kind of deferrable work means a queue table + a drain step + a kick, not a
   `launch` at the point of discovery.
 - Follow-up work after OCR → `OcrPipeline.onTextIndexed` fires whenever text is indexed,
