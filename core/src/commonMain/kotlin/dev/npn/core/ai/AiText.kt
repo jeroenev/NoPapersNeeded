@@ -7,15 +7,6 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonPrimitive
 
-/**
- * Result of budget-trimming a conversation: the [turns] to send (oldest-first) and whether any
- * older turns were [omittedEarlier] so the prompt can add a "earlier conversation omitted" note.
- */
-data class TrimmedHistory(
-    val turns: List<AiChatTurn>,
-    val omittedEarlier: Boolean,
-)
-
 /** Pure text helpers for the AI layer, split out so they are unit-testable without a model. */
 object AiText {
     private val json =
@@ -29,14 +20,6 @@ object AiText {
     /** Cap on accepted title suggestions; anything longer is model rambling, not a title. */
     const val MAX_TITLE_SUGGESTION_CHARS = 200
 
-    /**
-     * Character budget for conversation history sent as real user/assistant messages. Derived
-     * from the default `contextLength = 128_000` tokens at ~3 chars/token, reserving room for the
-     * system prompt, tool schemas, and the answer. Large enough that normal chats never trigger
-     * trimming; it exists only to bound pathological growth without an arbitrary turn-count cliff.
-     */
-    const val CHAT_HISTORY_CHAR_BUDGET = 200_000
-
     /** Full docIds cited as `[doc:<hash>]` in an assistant answer, first occurrence order. */
     fun extractDocRefs(text: String): List<String> =
         docRefRegex
@@ -44,27 +27,6 @@ object AiText {
             .map { it.groupValues[1].lowercase() }
             .distinct()
             .toList()
-
-    /**
-     * Newest-first whole turns kept under [budgetChars] cumulative characters, then restored to
-     * oldest-first order. Oldest turns are dropped first; [TrimmedHistory.omittedEarlier] is true
-     * when anything was dropped so the prompt can note it. The current question is never part of
-     * [history] and so is never dropped here.
-     */
-    fun trimHistory(
-        history: List<AiChatTurn>,
-        budgetChars: Int = CHAT_HISTORY_CHAR_BUDGET,
-    ): TrimmedHistory {
-        val kept = ArrayDeque<AiChatTurn>()
-        var used = 0
-        for (turn in history.asReversed()) {
-            val cost = turn.text.length
-            if (used + cost > budgetChars && kept.isNotEmpty()) break
-            kept.addFirst(turn)
-            used += cost
-        }
-        return TrimmedHistory(kept.toList(), omittedEarlier = kept.size < history.size)
-    }
 
     /**
      * Parse raw tag strings out of a model response: the first JSON string array found wins

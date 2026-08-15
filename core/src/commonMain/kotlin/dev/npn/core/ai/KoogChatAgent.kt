@@ -101,15 +101,6 @@ class KoogChatAgent(
             agent.run(question, conversationId)
         }
 
-    suspend fun history(conversationId: String): List<AiChatTurn> =
-        KoogChatHistoryMapper.map(historyProvider.load(conversationId)).mapNotNull { item ->
-            when (item) {
-                is AiChatHistoryItem.UserTurn -> AiChatTurn(AiRole.USER, item.text)
-                is AiChatHistoryItem.AssistantTurn -> AiChatTurn(AiRole.ASSISTANT, item.text)
-                is AiChatHistoryItem.ToolUse -> null
-            }
-        }
-
     private suspend fun dispatch(call: ToolCall): String =
         toolSet.chatTools.firstOrNull { it.name == call.name }?.let { tool ->
             runCatching { tool.call(call.argsJson) }

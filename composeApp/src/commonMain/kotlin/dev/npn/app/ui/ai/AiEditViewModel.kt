@@ -7,10 +7,10 @@ import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
+import dev.npn.core.ai.AiSuggest
 import dev.npn.core.app.AiEditRun
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.ApplyOutcome
@@ -172,7 +172,7 @@ class AiEditViewModel(
     documents: DocumentRepository,
     meta: MetadataWriter,
     content: DocContentFacade,
-    ai: AiFacade,
+    ai: AiSuggest,
     savedViewRepository: SavedViewRepository,
     reviewConfig: ReviewConfigFacade,
     private val settings: SettingsRepository,
@@ -187,7 +187,7 @@ class AiEditViewModel(
         documents = session.documents,
         meta = session.meta,
         content = session.content,
-        ai = session.ai,
+        ai = session.aiSuggest,
         savedViewRepository = session.savedViews,
         reviewConfig = session.reviewConfig,
         settings = settings,

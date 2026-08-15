@@ -48,7 +48,7 @@ source sets hold implementations. Key packages:
 | `core.model` | `Document` domain model. |
 | `core.rules` / `core.pathrules` | Auto-match rules (`RuleMatcher`, `RuleApplier`, `AutoMatchRule`) and storage-path templates (`StoragePathRule*`, `StoragePathContext`). |
 | `core.watch` | Watched inbox folder: `WatchedFolder` (platform), `WatchedFolderImporter`. |
-| `core.ai` | Local/AI chat loop and tools over the library (`KoogChatAgent`, `AiChatTool`, `AiFacadeImpl`, `LibraryAiTools`). Two consumers in `core.app` drive it: `AiEditRun` (bulk, review-then-apply) and `AiAutoEnricher` (unattended, queued in `ai_enrich_queue` off the OCR thread). |
+| `core.ai` | Local/AI chat loop and tools over the library (`KoogChatAgent`, `AiChatTool`, `AiFacadeImpl`, `LibraryAiTools`). Contracts split per concept: `AiChat.kt`, `AiSuggest.kt`, `AiConfig.kt`; `AiFacadeImpl` implements both facets. Two consumers in `core.app` drive it: `AiEditRun` (bulk, review-then-apply) and `AiAutoEnricher` (unattended, queued in `ai_enrich_queue` off the OCR thread). |
 
 Platform impls live in the same package under `androidMain`/`desktopMain` (e.g.
 `core.fs.LibraryFileSystem`, `core.pdf.PdfEngine`, `core.ocr.OcrEngines`,

@@ -1,8 +1,9 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiConfig
-import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiFacadeImpl
+import dev.npn.core.ai.AiSuggest
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.toEntity
@@ -86,7 +87,7 @@ class LibrarySessionImpl private constructor(
     override val rules: AutoMatchRuleRepository,
     private val writer: MetadataWriterImpl,
     override val content: DocContentFacade,
-    override val ai: AiFacade,
+    private val aiFacade: AiFacadeImpl,
 ) : LibrarySession,
     IngestFacade,
     OcrFacade,
@@ -96,7 +97,8 @@ class LibrarySessionImpl private constructor(
     private val db get() = deps.db
 
     // The session implements every facet itself; the facet properties only narrow the type a
-    // consumer sees. [MetadataWriterImpl] likewise backs all three write facets.
+    // consumer sees. [MetadataWriterImpl] likewise backs all three write facets, and
+    // [AiFacadeImpl] backs both AI facets.
     override val ingest: IngestFacade get() = this
     override val ocr: OcrFacade get() = this
     override val reviewConfig: ReviewConfigFacade get() = this
@@ -104,6 +106,8 @@ class LibrarySessionImpl private constructor(
     override val meta: MetadataWriter get() = writer
     override val tagAdmin: TagAdmin get() = writer
     override val docLifecycle: DocLifecycle get() = writer
+    override val aiChat: AiChat get() = aiFacade
+    override val aiSuggest: AiSuggest get() = aiFacade
 
     private val _lastScanReport = MutableStateFlow<ScanReport?>(null)
     override val lastScanReport: Flow<ScanReport?> = _lastScanReport.asStateFlow()
@@ -657,7 +661,7 @@ class LibrarySessionImpl private constructor(
                 rules = rules,
                 writer = meta,
                 content = content,
-                ai = ai,
+                aiFacade = ai,
             )
         }
 

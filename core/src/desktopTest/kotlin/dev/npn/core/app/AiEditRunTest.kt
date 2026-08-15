@@ -2,13 +2,11 @@
 
 package dev.npn.core.app
 
-import dev.npn.core.ai.AiChatEvent
-import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiField
+import dev.npn.core.ai.FakeAiSuggest
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.DocumentEntity
@@ -214,46 +212,6 @@ private class FakeContent : DocContentFacade {
     override suspend fun clearThumbnailCache(): Int = error("unused")
 }
 
-private class FakeAi : AiFacade {
-    /** Backs [suggestEdits] for docs without an [editByDoc] entry. */
-    var edit: AiEditSuggestion = AiEditSuggestion.EMPTY
-
-    /** Per-doc [suggestEdits] results (wins over [edit]). */
-    var editByDoc: Map<String, AiEditSuggestion> = emptyMap()
-
-    /** docIds passed to [suggestEdits], recorded at entry so the list reflects dispatch order. */
-    val suggestEditsCalls = mutableListOf<String>()
-    val suggestEditsRequests = mutableListOf<AiEditRequest>()
-
-    /** suggestEdits throws for these docIds only (per-doc partial-failure testing). */
-    var failSuggestEditsForDocs: Set<String> = emptySet()
-
-    /** Optional per-call delay so tests can observe progress and concurrency. */
-    var suggestDelayMillis: Long = 0
-
-    /** Per-doc delay override (wins over [suggestDelayMillis]); lets tests skew completion order. */
-    var suggestDelayByDoc: Map<String, Long> = emptyMap()
-
-    override suspend fun suggestEdits(
-        docId: String,
-        request: AiEditRequest,
-    ): AiEditSuggestion {
-        suggestEditsCalls += docId
-        suggestEditsRequests += request
-        val delayMillis = suggestDelayByDoc[docId] ?: suggestDelayMillis
-        if (delayMillis > 0) delay(delayMillis)
-        if (docId in failSuggestEditsForDocs) error("suggest edits failed for $docId")
-        return editByDoc[docId] ?: edit
-    }
-
-    override suspend fun config(): AiConfig = error("unused")
-
-    override fun ask(
-        history: List<AiChatTurn>,
-        question: String,
-    ): Flow<AiChatEvent> = error("unused")
-}
-
 // ---------- harness ----------
 
 private class Harness(
@@ -262,7 +220,7 @@ private class Harness(
     val documents = FakeDocuments()
     val meta = FakeMeta()
     val content = FakeContent()
-    val ai = FakeAi()
+    val ai = FakeAiSuggest()
     val run = AiEditRun(documents, meta, content, ai, selection)
 }
 
@@ -425,7 +383,7 @@ class AiEditRunSuggestTest {
         runTest {
             val h = Harness()
             h.documents.documents.value = listOf(item("a"), item("b"))
-            h.ai.failSuggestEditsForDocs = setOf("a")
+            h.ai.failWith = { if (it == "a") error("suggest edits failed for a") }
             h.ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
 
             val review = h.run.suggest(key()).shouldBeInstanceOf<BatchResult.Review>()
@@ -434,7 +392,7 @@ class AiEditRunSuggestTest {
             review.total shouldBe 2
 
             // b is processed; the failed a is not, so the next batch retries exactly a.
-            h.ai.failSuggestEditsForDocs = emptySet()
+            h.ai.failWith = null
             h.ai.suggestEditsCalls.clear()
             h.run.suggest(key())
             h.ai.suggestEditsCalls shouldContainExactly listOf("a")

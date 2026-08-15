@@ -145,7 +145,7 @@ private fun MainNav(
         }
     // Probe once whether the AI assistant is configured; gates the AI entries in rail and menus.
     val aiConfigured by produceState(initialValue = false, session) {
-        value = session.ai.isConfiguredOrFalse()
+        value = session.aiSuggest.isConfiguredOrFalse()
     }
 
     // Documents handed from the library's selection mode to the AI-edit page (see AiEditSelection).

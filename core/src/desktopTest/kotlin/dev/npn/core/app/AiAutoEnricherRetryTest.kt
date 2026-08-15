@@ -24,7 +24,7 @@ class AiAutoEnricherRetryTest {
 
                 rig.drain() shouldBe 3
 
-                rig.ai.calls shouldContainExactly listOf("d1", "d2", "d3")
+                rig.ai.suggestEditsCalls shouldContainExactly listOf("d1", "d2", "d3")
             }
         }
 
@@ -39,7 +39,7 @@ class AiAutoEnricherRetryTest {
 
                 rig.drain() shouldBe 1
 
-                rig.ai.calls.shouldBeEmpty()
+                rig.ai.suggestEditsCalls.shouldBeEmpty()
                 rig.row("d1").shouldBeNull()
             }
         }
@@ -92,12 +92,12 @@ class AiAutoEnricherRetryTest {
                 rig.drain()
                 rig.clock.advance(AiAutoEnricher.backoffMs(1))
                 rig.drain()
-                rig.ai.calls.size shouldBe 2
+                rig.ai.suggestEditsCalls.size shouldBe 2
 
                 // Still inside the backoff window: nothing is due.
                 rig.clock.advance(AiAutoEnricher.backoffMs(2) - 1)
                 rig.drain() shouldBe 0
-                rig.ai.calls.size shouldBe 2
+                rig.ai.suggestEditsCalls.size shouldBe 2
 
                 rig.clock.advance(1)
                 rig.ai.failWith = null
@@ -117,7 +117,7 @@ class AiAutoEnricherRetryTest {
 
                 rig.drain() shouldBe 0
 
-                rig.ai.calls shouldContainExactly listOf("d1")
+                rig.ai.suggestEditsCalls shouldContainExactly listOf("d1")
                 rig.row("d2").shouldNotBeNull().attempts shouldBe 0
             }
         }
@@ -140,7 +140,7 @@ class AiAutoEnricherRetryTest {
                 // Trips on "bad" and stops, taking the queue with it for the cooldown.
                 rig.drain() shouldBe 0
                 rig.drain() shouldBe 0
-                rig.ai.calls shouldContainExactly listOf("bad")
+                rig.ai.suggestEditsCalls shouldContainExactly listOf("bad")
 
                 // Once it lifts, "good" is served: "bad" has been pushed out to its own retry time.
                 rig.clock.advance(AiAutoEnricher.FAILURE_COOLDOWN_MS)
@@ -172,7 +172,7 @@ class AiAutoEnricherRetryTest {
                 }
 
                 // 100s of imports at one minute of cooldown: two calls, not twenty.
-                rig.ai.calls.size shouldBe 2
+                rig.ai.suggestEditsCalls.size shouldBe 2
                 // Nothing is dropped — every document is still owed its pass.
                 rig.db.aiEnrichQueueDao().countPending() shouldBe 20
             }
@@ -215,7 +215,7 @@ class AiAutoEnricherRetryTest {
                 rig.insertAndQueue("good")
 
                 rig.drain() shouldBe 1
-                rig.ai.calls shouldContainExactly listOf("bad", "good", "bad")
+                rig.ai.suggestEditsCalls shouldContainExactly listOf("bad", "good", "bad")
                 rig.enrichedAt("good").shouldNotBeNull()
             }
         }
@@ -238,7 +238,7 @@ class AiAutoEnricherRetryTest {
                     rig.clock.advance(1.days.inWholeMilliseconds)
                     rig.drain() shouldBe 0
                 }
-                rig.ai.calls.size shouldBe 14
+                rig.ai.suggestEditsCalls.size shouldBe 14
                 rig.row("d1").shouldNotBeNull().attempts shouldBe 14
 
                 // The endpoint comes back: still enriched, nothing lost.
@@ -274,7 +274,7 @@ class AiAutoEnricherRetryTest {
 
                 rig.config = ACTIVE.copy(autoOnOcr = false)
                 rig.drain() shouldBe 0
-                rig.ai.calls.shouldBeEmpty()
+                rig.ai.suggestEditsCalls.shouldBeEmpty()
                 rig.row("d1").shouldNotBeNull().attempts shouldBe 0
 
                 rig.config = ACTIVE
@@ -301,7 +301,7 @@ class AiAutoEnricherRetryTest {
                 rig.drain()
 
                 // One request, not one per document: the drain stops at the first failure.
-                rig.ai.calls.size shouldBe 1
+                rig.ai.suggestEditsCalls.size shouldBe 1
                 // And a second drain at the same instant returns at once rather than sleeping on
                 // either the cooldown or the row's backoff.
                 rig.drain() shouldBe 0

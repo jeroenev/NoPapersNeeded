@@ -5,10 +5,9 @@ import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatSession
-import dev.npn.core.ai.AiChatTurn
-import dev.npn.core.ai.AiFacade
 import dev.npn.core.app.LibrarySession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
@@ -34,15 +33,15 @@ data class AiChatUiState(
 /**
  * Drives the AI assistant conversation for one opened library. Holds the running [ChatTranscript]
  * in a [MutableStateFlow]; [send] launches a collection job that folds [AiChatEvent]s into the
- * transcript (see [ChatTranscript] for the fold rules). History for the next `ask` is the
- * user/assistant text turns only. Network/config failures keep the partial answer and surface a
- * one-shot message via [MessagesViewModel]. [stop] cancels the running job and finalises the
- * partial assistant turn so it stays in history.
+ * transcript (see [ChatTranscript] for the fold rules). The transcript is display state only —
+ * the next `ask` sees the history the session persisted, not this fold. Network/config failures
+ * keep the partial answer and surface a one-shot message via [MessagesViewModel]. [stop] cancels
+ * the running job and finalises the partial assistant turn so it stays in history.
  */
 class AiChatViewModel(
-    private val ai: AiFacade,
+    private val ai: AiChat,
 ) : MessagesViewModel() {
-    constructor(session: LibrarySession) : this(session.ai)
+    constructor(session: LibrarySession) : this(session.aiChat)
 
     private val _ui = MutableStateFlow(AiChatUiState())
     val ui: StateFlow<AiChatUiState> = _ui.asStateFlow()
@@ -79,7 +78,6 @@ class AiChatViewModel(
         if (trimmed.isEmpty() || _ui.value.busy) return
         val sessionId = _ui.value.currentSessionId ?: return
 
-        val history = _ui.value.transcript.history
         _ui.update {
             it.copy(
                 transcript = it.transcript.plusUser(trimmed),
@@ -97,7 +95,7 @@ class AiChatViewModel(
 
         job =
             viewModelScope.launch {
-                runCatching { collectAnswer(sessionId, history, trimmed) }
+                runCatching { collectAnswer(sessionId, trimmed) }
                     .onFailure { e ->
                         if (e is CancellationException) throw e
                         finishStreaming()
@@ -210,10 +208,9 @@ class AiChatViewModel(
 
     private suspend fun collectAnswer(
         sessionId: String,
-        history: List<AiChatTurn>,
         question: String,
     ) {
-        ai.askInSession(sessionId, history, question).collect { event ->
+        ai.ask(sessionId, question).collect { event ->
             _ui.update { it.copy(transcript = it.transcript + event) }
             if (event is AiChatEvent.Done) {
                 // A run that ends blank with nothing visible (no text bubble, no tool rows) would
