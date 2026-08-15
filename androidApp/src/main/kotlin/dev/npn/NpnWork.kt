@@ -19,8 +19,8 @@ import java.util.concurrent.TimeUnit
  * from [NpnApplication] so it shares the same session/DB/scope as the UI.
  *
  * [LibrarySession.rescan] already adopts foreign sidecars, queues pending OCR and kicks the OCR
- * worker; the worker then waits (bounded) for the queue to drain via [LibrarySession.ocrStatus] so
- * WorkManager keeps the process alive while OCR runs.
+ * worker; the worker then waits (bounded) for the OCR queue and then the automatic AI enrichment
+ * queue to drain, so WorkManager keeps the process alive while that background work runs.
  */
 class RescanOcrWorker(
     context: Context,
@@ -43,9 +43,18 @@ class RescanOcrWorker(
 
             session.ingest.rescan()
 
-            // Wait for the OCR queue to drain, bounded so we never exceed WorkManager's window.
-            withTimeoutOrNull(OCR_DRAIN_TIMEOUT_MS) {
+            // Hold the wakelock while the OCR queue drains and the documents it produced are
+            // enriched, bounded so this job never exceeds WorkManager's window. The bound is on
+            // how long we *wait*: on timeout the work carries on under the session until the
+            // process dies, and both queues are persistent, so whatever is left is picked up by
+            // the next run. That is also what happens to enrichment when a large import uses the
+            // whole window on OCR alone.
+            withTimeoutOrNull(DRAIN_TIMEOUT_MS) {
                 session.ocr.ocrStatus.first { it.pending == 0 && !it.running }
+                // Drains rather than watching a count, so it returns as soon as no further
+                // progress is possible — feature off, endpoint unconfigured, or a backlog waiting
+                // out a backoff — instead of holding the wakelock until the timeout.
+                session.ai.drainAutoEnrich()
             }
             Result.success()
         } catch (t: Throwable) {
@@ -56,7 +65,7 @@ class RescanOcrWorker(
 
     companion object {
         private const val TAG = "npn"
-        private const val OCR_DRAIN_TIMEOUT_MS = 8L * 60L * 1000L // 8 min, under WM's 10 min limit
+        private const val DRAIN_TIMEOUT_MS = 8L * 60L * 1000L // 8 min, under WM's 10 min limit
     }
 }
 

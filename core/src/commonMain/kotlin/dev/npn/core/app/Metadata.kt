@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.model.DocProperty
+
 // ---------- write side (journal-backed) ----------
 
 /**
@@ -54,6 +56,25 @@ interface MetadataWriter {
         docId: String,
         key: String,
         value: String?,
+    )
+
+    /**
+     * Write several edits to one document as a single change: one journal transaction, one
+     * auto-match pass, one storage-path evaluation.
+     *
+     * Prefer this to a sequence of setters whenever the values are known together. Each setter
+     * re-runs the storage path rules on its own, so a path template keyed on correspondent and
+     * date renames the file once per setter — the intermediate names are meaningless, and on a
+     * synced library folder every device sees each of them.
+     *
+     * Only keys present in [properties] are touched; a present key with a null or blank value
+     * clears that property, as in the individual setters. Blank and duplicate [addTags] are
+     * ignored. Unlike the setters, this is all-or-nothing: nothing is written if the commit fails.
+     */
+    suspend fun applyEdits(
+        docId: String,
+        addTags: List<String> = emptyList(),
+        properties: Map<DocProperty, String?> = emptyMap(),
     )
 }
 

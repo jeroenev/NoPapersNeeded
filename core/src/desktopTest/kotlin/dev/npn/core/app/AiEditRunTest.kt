@@ -12,6 +12,7 @@ import dev.npn.core.ai.AiField
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.model.DocProperty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
@@ -158,6 +159,12 @@ private class FakeMeta : MetadataWriter {
     ) {
         docDateSets += docId to isoDate
     }
+
+    override suspend fun applyEdits(
+        docId: String,
+        addTags: List<String>,
+        properties: Map<DocProperty, String?>,
+    ) = error("unused")
 
     override suspend fun setReviewed(
         docIds: List<String>,

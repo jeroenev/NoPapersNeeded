@@ -50,6 +50,7 @@ data class SettingsUiState(
     val aiReasoningEdit: AiReasoningLevel = AiReasoningLevel.LOW,
     val aiMaxTagsPerDoc: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val aiMaxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
+    val aiAutoOnOcr: Boolean = false,
 )
 
 /**
@@ -121,6 +122,7 @@ class SettingsViewModel(
                     aiReasoningEdit = snapshot.aiReasoningEdit,
                     aiMaxTagsPerDoc = snapshot.aiMaxTagsPerDoc,
                     aiMaxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc,
+                    aiAutoOnOcr = snapshot.aiAutoOnOcr,
                 )
             }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
@@ -222,6 +224,8 @@ class SettingsViewModel(
     fun setAiMaxTagsPerDoc(value: Int) = viewModelScope.launch { settings.setAiMaxTagsPerDoc(value) }
 
     fun setAiMaxNewTagsPerDoc(value: Int) = viewModelScope.launch { settings.setAiMaxNewTagsPerDoc(value) }
+
+    fun setAiAutoOnOcr(enabled: Boolean) = viewModelScope.launch { settings.setAiAutoOnOcr(enabled) }
 
     /**
      * Drop all cached thumbnails so they regenerate at the current render quality. Invokes [onDone]

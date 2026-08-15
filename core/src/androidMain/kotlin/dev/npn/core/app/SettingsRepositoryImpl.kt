@@ -96,6 +96,7 @@ class SettingsRepositoryImpl(
                 prefs
                     .getInt(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, AiTagging.DEFAULT_NEW_TAGS_PER_DOC)
                     .coerceIn(AiTagging.NEW_TAGS_RANGE),
+            aiAutoOnOcr = prefs.getBoolean(SettingsKeys.AI_AUTO_ON_OCR, false),
         )
 
     override val settings: Flow<SettingsSnapshot> = state
@@ -244,6 +245,11 @@ class SettingsRepositoryImpl(
 
     override suspend fun setAiMaxNewTagsPerDoc(value: Int) {
         prefs.edit().putInt(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, value.coerceIn(AiTagging.NEW_TAGS_RANGE)).apply()
+        state.value = load()
+    }
+
+    override suspend fun setAiAutoOnOcr(enabled: Boolean) {
+        prefs.edit().putBoolean(SettingsKeys.AI_AUTO_ON_OCR, enabled).apply()
         state.value = load()
     }
 

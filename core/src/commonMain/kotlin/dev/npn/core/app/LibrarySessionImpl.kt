@@ -38,7 +38,6 @@ import dev.npn.core.model.StandardField
 import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrPipeline
-import dev.npn.core.ocr.OcrWorker
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfEngine
@@ -46,6 +45,7 @@ import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.rules.RuleApplier
+import dev.npn.core.work.QueueDrainer
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.PdfXmpIO
 import kotlinx.coroutines.CoroutineScope
@@ -77,7 +77,8 @@ class LibrarySessionImpl private constructor(
     private val relinkService: RelinkService,
     private val splitService: SplitService,
     private val ocrPipeline: OcrPipeline,
-    private val ocrWorker: OcrWorker,
+    private val ocrWorker: QueueDrainer,
+    private val enrichWorker: QueueDrainer,
     override val documents: DocumentRepository,
     override val tags: TagRepository,
     override val savedViews: SavedViewRepository,
@@ -290,6 +291,18 @@ class LibrarySessionImpl private constructor(
             },
         )
 
+        // Automatic AI enrichment is NOT driven by an observer of its queue table. Such an observer
+        // cannot distinguish new work from a failed document being rescheduled — a reschedule
+        // rewrites a row without changing the row count — so it would either loop the drain back
+        // into an endpoint that just failed, or, once filtered to changes only, silently drop a
+        // kick whenever a delete and an insert coalesce into one refresh at the same count.
+        // Instead every producer of new work kicks explicitly (see AiAutoEnricher.enqueue), and
+        // time-based retries come from the maintenance tick below.
+        //
+        // This one kick resumes whatever survived the last run: a killed process, an endpoint that
+        // was down. It costs a single query when the queue is empty.
+        enrichWorker.kick()
+
         // Metadata paths are routed separately so journal sync never scans or hashes PDFs.
         jobs.add(
             scope.launch {
@@ -325,6 +338,9 @@ class LibrarySessionImpl private constructor(
                     // Compaction runs under the same single-writer mutex; it only fires when the
                     // stable object count exceeds the threshold, so most reconciles are a cheap no-op.
                     runCatching { coordinator.compact() }
+                    // Enrichment rows become due by the passage of time, which no Room flow can
+                    // observe; this tick is what actually retries a backed-off document.
+                    enrichWorker.kick()
                 }
             },
         )
@@ -399,6 +415,7 @@ class LibrarySessionImpl private constructor(
     private suspend fun doWatchTriggeredRescan() {
         rescan()
         ocrWorker.kick()
+        enrichWorker.kick()
         // Respect the configured retention at call time.
         val days =
             runCatching { deps.trashRetentionDays() }
@@ -410,6 +427,7 @@ class LibrarySessionImpl private constructor(
         jobs.forEach { it.cancelAndJoin() }
         jobs.clear()
         ocrWorker.close()
+        enrichWorker.close()
         started = false
         // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
     }
@@ -533,7 +551,7 @@ class LibrarySessionImpl private constructor(
                     config = OcrConfig(lang = deps.ocrLanguage()),
                     ftsWriteGate = ftsWriteGate,
                 )
-            val ocrWorker = OcrWorker(ocrPipeline, deps.scope)
+            val ocrWorker = QueueDrainer(deps.scope) { ocrPipeline.processNext() }
 
             // Single shared gate so thumbnail + page rendering share one bounded concurrency
             // budget and a first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
@@ -582,10 +600,29 @@ class LibrarySessionImpl private constructor(
                     pathRuleApplicator,
                     applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
                 )
-            ocrPipeline.onTextIndexed = { docId, text ->
-                ruleApplier.applyToDoc(docId, text)
-            }
             val ai = AiFacadeImpl(db, deps.aiConfig)
+            val autoEnricher =
+                AiAutoEnricher(
+                    documentDao = db.documentDao(),
+                    queueDao = db.aiEnrichQueueDao(),
+                    ai = ai,
+                    meta = meta,
+                    readConfig = deps.aiConfig,
+                    clock = deps.clock,
+                )
+            val enrichWorker = QueueDrainer(deps.scope) { autoEnricher.processNext() }
+            // Awaited rather than run inline: the caller is Android's WorkManager, outside this
+            // session's lifecycle, and the drain must still stop when the session closes.
+            ai.autoEnrichDrain = { enrichWorker.drainAndAwait() }
+            // Deterministic local rules run on any newly indexed text, including a re-index.
+            ocrPipeline.onTextIndexed = { docId, text -> ruleApplier.applyToDoc(docId, text) }
+            // The paid pass runs only on text this device just produced. It fires after the rules
+            // above, so rule-applied tags and fields are part of the context the model sees. Only
+            // the *intent* is recorded here: this runs on the OCR queue-drain thread, where a
+            // network call would stall OCR of every remaining document.
+            ocrPipeline.onOcrProduced = { docId ->
+                if (autoEnricher.enqueue(docId)) enrichWorker.kick()
+            }
 
             return LibrarySessionImpl(
                 deviceId = effectiveDeviceId,
@@ -598,6 +635,7 @@ class LibrarySessionImpl private constructor(
                 splitService = splitService,
                 ocrPipeline = ocrPipeline,
                 ocrWorker = ocrWorker,
+                enrichWorker = enrichWorker,
                 documents = documents,
                 tags = tags,
                 savedViews = savedViews,

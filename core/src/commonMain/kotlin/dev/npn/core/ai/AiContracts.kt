@@ -75,6 +75,17 @@ data class AiConfig(
     val maxTagsPerDoc: Int = 8,
     /** User-configured cap on genuinely-new (non-vocabulary) tags per document (device-local, 0..10). */
     val maxNewTagsPerDoc: Int = 5,
+    /**
+     * Whether a document is enriched automatically (existing-vocabulary tags + empty single-value
+     * fields) when *this device* OCRs it. Device-local: it spends the user's own endpoint quota, so
+     * it must not sync to other replicas. Off by default — it writes without a review step.
+     *
+     * Tied to producing the text rather than indexing it, so a document another replica already
+     * OCR'd is not enriched when its sidecar arrives here. That also means enabling this on a
+     * device that only receives synced documents does nothing; the enriching device is the one that
+     * scans or imports.
+     */
+    val autoOnOcr: Boolean = false,
 ) {
     /** The effective server root: the explicit override, or the provider default. */
     val effectiveBaseUrl: String
@@ -247,6 +258,18 @@ sealed interface AiChatEvent {
 interface AiFacade {
     /** Current endpoint configuration (live settings values). */
     suspend fun config(): AiConfig
+
+    /**
+     * Run the automatic post-OCR enrichment queue until there is nothing more it can do right now,
+     * then return. Lets a caller that must keep the process alive while background work runs (the
+     * Android maintenance job) do so without guessing at a duration.
+     *
+     * Returns rather than waiting out a retry backoff, and returns immediately when the feature is
+     * off or the endpoint unconfigured — in every one of those cases no further progress is
+     * possible until a later drain, so there is nothing to hold the process open for. No-op by
+     * default so test fakes need not implement it.
+     */
+    suspend fun drainAutoEnrich() {}
 
     /**
      * Answer [question] with a tool-calling agent that can search the library index

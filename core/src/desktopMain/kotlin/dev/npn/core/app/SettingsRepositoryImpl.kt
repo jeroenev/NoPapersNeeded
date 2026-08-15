@@ -103,6 +103,7 @@ class SettingsRepositoryImpl(
                     .getProperty(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC)
                     ?.toIntOrNull()
                     ?.coerceIn(AiTagging.NEW_TAGS_RANGE) ?: AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
+            aiAutoOnOcr = boolProp(SettingsKeys.AI_AUTO_ON_OCR),
         )
     }
 
@@ -135,6 +136,7 @@ class SettingsRepositoryImpl(
             props.setProperty(SettingsKeys.AI_MODEL, snapshot.aiModel)
             props.setProperty(SettingsKeys.AI_MAX_TAGS_PER_DOC, snapshot.aiMaxTagsPerDoc.toString())
             props.setProperty(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, snapshot.aiMaxNewTagsPerDoc.toString())
+            props.setProperty(SettingsKeys.AI_AUTO_ON_OCR, snapshot.aiAutoOnOcr.toString())
             storeProperties()
         }
 
@@ -263,6 +265,10 @@ class SettingsRepositoryImpl(
 
     override suspend fun setAiMaxNewTagsPerDoc(value: Int) {
         update { it.copy(aiMaxNewTagsPerDoc = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
+    }
+
+    override suspend fun setAiAutoOnOcr(enabled: Boolean) {
+        update { it.copy(aiAutoOnOcr = enabled) }
     }
 
     companion object {

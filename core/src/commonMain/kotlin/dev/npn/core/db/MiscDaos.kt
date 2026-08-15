@@ -167,6 +167,33 @@ interface OcrQueueDao {
 }
 
 @Dao
+interface AiEnrichQueueDao {
+    /**
+     * Oldest due row, never-tried ones first.
+     *
+     * Ordering by [AiEnrichQueueEntity.attempts] before [AiEnrichQueueEntity.nextAttemptAt] is what
+     * keeps one failing document from costing fresh imports their enrichment: a failure stops the
+     * whole drain, so a retry that sorted ahead of a just-imported document would spend the kick on
+     * itself and leave the new document waiting for the next one.
+     */
+    @Query("SELECT * FROM ai_enrich_queue WHERE nextAttemptAt <= :now ORDER BY attempts, nextAttemptAt LIMIT 1")
+    suspend fun nextDue(now: Long): AiEnrichQueueEntity?
+
+    @Upsert
+    suspend fun upsert(entry: AiEnrichQueueEntity)
+
+    @Query("SELECT * FROM ai_enrich_queue WHERE docId = :docId")
+    suspend fun getByDocId(docId: String): AiEnrichQueueEntity?
+
+    /** Rows owed a pass, including ones waiting out a retry backoff. */
+    @Query("SELECT COUNT(*) FROM ai_enrich_queue")
+    suspend fun countPending(): Int
+
+    @Query("DELETE FROM ai_enrich_queue WHERE docId = :docId")
+    suspend fun delete(docId: String)
+}
+
+@Dao
 interface KeyValueDao {
     @Query("SELECT value FROM kv WHERE key = :key")
     suspend fun get(key: String): String?
