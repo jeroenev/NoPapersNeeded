@@ -109,9 +109,9 @@ private class FakeDocuments : DocumentRepository {
 private class FakeMeta : MetadataWriter {
     val addedTags = mutableListOf<Pair<List<String>, String>>()
     val removedTags = mutableListOf<Pair<List<String>, String>>()
-    val titleSets = mutableListOf<Pair<String, String?>>()
-    val correspondentSets = mutableListOf<Pair<List<String>, String?>>()
-    val docDateSets = mutableListOf<Pair<String, String?>>()
+
+    /** Field writes, in the order applied: one entry per document, never one per field. */
+    val batchedEdits = mutableListOf<Pair<String, Map<DocProperty, String?>>>()
 
     /** addTag throws when any of these ids is in the call's docIds (per-doc partial failure). */
     var failAddTagForDocs: Set<String> = emptySet()
@@ -119,8 +119,8 @@ private class FakeMeta : MetadataWriter {
     /** removeTag throws when any of these ids is in the call's docIds. */
     var failRemoveTagForDocs: Set<String> = emptySet()
 
-    /** If set, setTitle throws. */
-    var failSetTitle: (() -> Nothing)? = null
+    /** applyEdits throws for these docIds (per-doc partial failure on the field write). */
+    var failEditsForDocs: Set<String> = emptySet()
 
     override suspend fun addTag(
         docIds: List<String>,
@@ -138,33 +138,34 @@ private class FakeMeta : MetadataWriter {
         removedTags += docIds to tag
     }
 
+    override suspend fun applyEdits(
+        docIds: List<String>,
+        addTags: List<String>,
+        properties: Map<DocProperty, String?>,
+    ) {
+        // Field values are per document, so an apply must never fold several into one call: that
+        // would make one document's rejection lose the others' writes.
+        val docId = docIds.single()
+        if (docId in failEditsForDocs) error("applyEdits failed for $docId")
+        batchedEdits += docId to properties
+    }
+
+    // Field writes must go through applyEdits: a setter per field would re-run the storage path
+    // rules once per field and rename the document repeatedly for one apply.
     override suspend fun setTitle(
         docId: String,
         title: String?,
-    ) {
-        failSetTitle?.invoke()
-        titleSets += docId to title
-    }
+    ) = error("must batch through applyEdits")
 
     override suspend fun setCorrespondent(
         docIds: List<String>,
         value: String?,
-    ) {
-        correspondentSets += docIds to value
-    }
+    ) = error("must batch through applyEdits")
 
     override suspend fun setDocDate(
         docId: String,
         isoDate: String?,
-    ) {
-        docDateSets += docId to isoDate
-    }
-
-    override suspend fun applyEdits(
-        docId: String,
-        addTags: List<String>,
-        properties: Map<DocProperty, String?>,
-    ) = error("unused")
+    ) = error("must batch through applyEdits")
 
     override suspend fun setReviewed(
         docIds: List<String>,
@@ -615,8 +616,13 @@ class AiEditRunApplyTest {
 
     private fun ReviewDoc.withRemovalsSelected(): ReviewDoc = copy(removals = removals.map { it.copy(selected = true) })
 
+    /**
+     * Every selected field of a document is written as ONE edit. A setter per field would re-run
+     * the storage path rules per field, renaming the document up to three times for one apply and
+     * propagating each intermediate name to every replica.
+     */
     @Test
-    fun applyRoutesFieldsThroughMatchingSetters() =
+    fun applyWritesAllOfADocumentsFieldsAsOneEdit() =
         runTest {
             val h = Harness()
             h.documents.documents.value = listOf(item("a"))
@@ -632,10 +638,55 @@ class AiEditRunApplyTest {
             val review = reviewOf(h)
             val outcome = h.run.apply(key(), review.docs)
 
-            h.meta.correspondentSets shouldContainExactly listOf(listOf("a") to "Acme")
-            h.meta.docDateSets shouldContainExactly listOf("a" to "2024-01-15")
-            h.meta.titleSets shouldBe emptyList()
+            h.meta.batchedEdits shouldContainExactly
+                listOf(
+                    "a" to
+                        mapOf(
+                            DocProperty.CORRESPONDENT to "Acme",
+                            DocProperty.DOC_DATE to "2024-01-15",
+                        ),
+                )
+            // Both fields still count as applied; batching changes the write, not the tally.
             outcome.shouldBeInstanceOf<ApplyOutcome.Done>().result.applied shouldBe 2
+        }
+
+    /**
+     * Batching moves field-retry granularity from per field to per document, which is the honest
+     * grain: applyEdits is all-or-nothing, so a failed write left none of the document's fields
+     * written and every one of them is still owed.
+     */
+    @Test
+    fun aFailedFieldWriteRetainsEveryFieldOfThatDocument() =
+        runTest {
+            val h = Harness()
+            h.documents.documents.value = listOf(item("a"))
+            h.ai.edit =
+                edit(
+                    metadata = MetadataSuggestion(correspondent = "Acme", docDate = "2024-01-15"),
+                )
+
+            val review = reviewOf(h)
+            h.meta.failEditsForDocs = setOf("a")
+            val retry = h.run.apply(key(), review.docs).shouldBeInstanceOf<ApplyOutcome.Retry>()
+
+            retry.remaining
+                .single()
+                .fields
+                .map { it.selected } shouldContainExactly listOf(true, true)
+        }
+
+    /** Documents are still written one at a time, so one document's failure cannot cost another's. */
+    @Test
+    fun applyWritesOneEditPerDocument() =
+        runTest {
+            val h = Harness()
+            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.ai.edit = edit(metadata = MetadataSuggestion(correspondent = "Acme"))
+
+            val review = reviewOf(h)
+            h.run.apply(key(), review.docs)
+
+            h.meta.batchedEdits.map { it.first } shouldContainExactly listOf("a", "b")
         }
 
     @Test

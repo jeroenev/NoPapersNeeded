@@ -135,24 +135,30 @@ class MetadataWriterImpl(
     }
 
     override suspend fun applyEdits(
-        docId: String,
+        docIds: List<String>,
         addTags: List<String>,
         properties: Map<DocProperty, String?>,
     ) {
-        val tagOps =
+        if (docIds.isEmpty()) return
+        val tags =
             addTags
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
                 .distinct()
-                .map { PendingOp.tagAdd(docId, it) }
-        val propOps = properties.map { (key, value) -> PendingOp.propSet(docId, key, value.normalized()) }
-        val ops = tagOps + propOps
+        val ids = docIds.distinct()
+        val ops =
+            ids.flatMap { docId ->
+                tags.map { PendingOp.tagAdd(docId, it) } +
+                    properties.map { (key, value) -> PendingOp.propSet(docId, key, value.normalized()) }
+            }
         if (ops.isEmpty()) return
         coordinator.commitAndApply(ops)
-        // The same follow-ups the individual setters do, but once for the whole edit. Auto-match
-        // only reacts to a new title, matching setTitle.
-        if (DocProperty.TITLE in properties) applyAutoMatch(docId)
-        pathRuleApplicator.applyFor(docId)
+        // The same follow-ups the individual setters do, but once per document for the whole edit
+        // instead of once per value. Auto-match only reacts to a new title, matching setTitle.
+        ids.forEach { docId ->
+            if (DocProperty.TITLE in properties) applyAutoMatch(docId)
+            pathRuleApplicator.applyFor(docId)
+        }
     }
 
     override suspend fun renameTag(

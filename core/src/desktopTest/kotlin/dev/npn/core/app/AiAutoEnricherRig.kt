@@ -83,11 +83,13 @@ internal class RecordingMeta : MetadataWriter {
     )
 
     override suspend fun applyEdits(
-        docId: String,
+        docIds: List<String>,
         addTags: List<String>,
         properties: Map<DocProperty, String?>,
     ) {
-        edits += Edit(docId, addTags, properties)
+        // The enricher works a document at a time; a multi-doc call here would mean it had started
+        // batching unrelated documents into one transaction.
+        edits += Edit(docIds.single(), addTags, properties)
     }
 
     override suspend fun addTag(

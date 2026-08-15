@@ -59,8 +59,8 @@ interface MetadataWriter {
     )
 
     /**
-     * Write several edits to one document as a single change: one journal transaction, one
-     * auto-match pass, one storage-path evaluation.
+     * Write several edits to [docIds] as a single change: one journal transaction for all of them,
+     * then one auto-match pass and one storage-path evaluation per document.
      *
      * Prefer this to a sequence of setters whenever the values are known together. Each setter
      * re-runs the storage path rules on its own, so a path template keyed on correspondent and
@@ -69,10 +69,15 @@ interface MetadataWriter {
      *
      * Only keys present in [properties] are touched; a present key with a null or blank value
      * clears that property, as in the individual setters. Blank and duplicate [addTags] are
-     * ignored. Unlike the setters, this is all-or-nothing: nothing is written if the commit fails.
+     * ignored. Unlike the setters, the commit is all-or-nothing: nothing is written for any
+     * document if it fails.
+     *
+     * Every document gets the same values, so this fits carrying one set of metadata onto many
+     * documents (a split's parts, a bulk edit). Per-document *values* still need a call each —
+     * batching those into one transaction would make one document's rejection lose the rest.
      */
     suspend fun applyEdits(
-        docId: String,
+        docIds: List<String>,
         addTags: List<String> = emptyList(),
         properties: Map<DocProperty, String?> = emptyMap(),
     )

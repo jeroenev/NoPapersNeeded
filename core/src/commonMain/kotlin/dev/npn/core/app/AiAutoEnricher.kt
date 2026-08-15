@@ -218,7 +218,7 @@ class AiAutoEnricher(
             }
         // A model that found nothing gets no transaction, no rename, no journal entry at all.
         if (tags.isEmpty() && properties.isEmpty()) return
-        meta.applyEdits(docId, addTags = tags, properties = properties)
+        meta.applyEdits(listOf(docId), addTags = tags, properties = properties)
     }
 
     companion object {
