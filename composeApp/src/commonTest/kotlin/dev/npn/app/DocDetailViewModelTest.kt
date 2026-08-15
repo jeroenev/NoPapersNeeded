@@ -9,21 +9,30 @@ import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
+import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.StandardField
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailViewModelTest : MainDispatcherTest() {
-    private fun vm(
+    /**
+     * A viewmodel with its panel state kept live for the whole test: [DocDetailViewModel.metadata]
+     * shares while subscribed, so an assertion on `metadata.value` needs a standing collector.
+     */
+    private fun TestScope.vm(
         session: FakeLibrarySession = FakeLibrarySession(),
         docId: String = "doc-1",
-    ) = DocDetailViewModel(docId, session)
+    ) = DocDetailViewModel(docId, session).also { model ->
+        backgroundScope.launch { model.metadata.collect {} }
+    }
 
     private fun tagSuggestions(vararg tags: String): List<TagSuggestion> = tags.map { TagSuggestion(it, isNew = false) }
 
@@ -272,10 +281,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     documents.singleDoc.value = listItem("doc-1")
                 }
             val model = vm(session = session)
-            val job = launch { model.ocrVersions.collect {} }
             advanceUntilIdle()
-            model.ocrVersions.value shouldContainExactly session.ocr.ocrVersionsList
-            job.cancel()
+            model.metadata.value.document.ocrVersions shouldContainExactly session.ocr.ocrVersionsList
         }
 
     @Test
@@ -286,17 +293,62 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     documents.singleDoc.value = DocListItem(doc("doc-1").copy(ocrState = "none"), emptyList())
                 }
             val model = vm(session = session)
-            val job = launch { model.ocrVersions.collect {} }
             advanceUntilIdle()
-            model.ocrVersions.value shouldBe emptyList()
+            model.metadata.value.document.ocrVersions shouldBe emptyList()
 
             // A newly-completed OCR run (state -> done) should trigger a reload with the fresh version.
             val fresh = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
             session.ocr.ocrVersionsList = fresh
             session.documents.singleDoc.value = DocListItem(doc("doc-1").copy(ocrState = "done"), emptyList())
             advanceUntilIdle()
-            model.ocrVersions.value shouldContainExactly fresh
-            job.cancel()
+            model.metadata.value.document.ocrVersions shouldContainExactly fresh
+        }
+
+    // ---- assembled panel state ----
+
+    @Test
+    fun metadataCarriesTheDocumentVocabularyAndDerivedReviewFlag() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.singleDoc.value = DocListItem(doc("doc-1", reviewed = true), listOf("finance"))
+                    documents.correspondents.value = listOf("ACME")
+                    documents.docTypes.value = listOf("invoice")
+                    documents.fieldKeys.value = listOf("amount")
+                    tags.tags.value = listOf(TagInfo("finance", "#ff0000", null, 1))
+                    reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
+                    reviewConfig.standardFieldsFlow.value = setOf(StandardField.NOTES)
+                }
+            val model = vm(session = session)
+            advanceUntilIdle()
+
+            val state = model.metadata.value
+            state.document.item
+                ?.doc
+                ?.docId shouldBe "doc-1"
+            // The panel is handed the resolved flag, not the raw one plus a mode to re-derive from.
+            state.document.reviewed shouldBe true
+            state.document.reviewMode shouldBe ReviewMode.INBOX_WORKFLOW
+            state.document.visibleFields shouldBe setOf(StandardField.NOTES)
+            state.vocabulary.correspondents shouldContainExactly listOf("ACME")
+            state.vocabulary.docTypes shouldContainExactly listOf("invoice")
+            state.vocabulary.fieldKeys shouldContainExactly listOf("amount")
+            state.vocabulary.allTagNames shouldContainExactly listOf("finance")
+        }
+
+    @Test
+    fun metadataDerivesReviewedFromTagsInUntaggedOnlyMode() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    // Stored flag false, but the doc carries a tag: UNTAGGED_ONLY treats it reviewed.
+                    documents.singleDoc.value = DocListItem(doc("doc-1", reviewed = false), listOf("finance"))
+                    reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
+                }
+            val model = vm(session = session)
+            advanceUntilIdle()
+
+            model.metadata.value.document.reviewed shouldBe true
         }
 
     // ---- bake ----
@@ -339,8 +391,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.suggestAiTags()
             advanceUntilIdle()
             session.aiSuggest.suggestEditsCalls shouldContainExactly listOf("doc-1")
-            model.aiTags.value.suggestions shouldContainExactly tagSuggestions("finance", "invoice")
-            model.aiTags.value.suggesting shouldBe false
+            model.metadata.value.ai.tags.suggestions shouldContainExactly tagSuggestions("finance", "invoice")
+            model.metadata.value.ai.tags.suggesting shouldBe false
         }
 
     @Test
@@ -357,7 +409,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.acceptAiTag("finance")
             advanceUntilIdle()
             session.meta.addedTags shouldContainExactly listOf(listOf("doc-1") to "finance")
-            model.aiTags.value.suggestions shouldContainExactly tagSuggestions("invoice")
+            model.metadata.value.ai.tags.suggestions shouldContainExactly tagSuggestions("invoice")
         }
 
     @Test
@@ -376,7 +428,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.acceptAiTag("finance")
             advanceUntilIdle()
 
-            model.aiTags.value.suggestions shouldContainExactly tagSuggestions("finance", "invoice")
+            model.metadata.value.ai.tags.suggestions shouldContainExactly tagSuggestions("finance", "invoice")
         }
 
     @Test
@@ -390,8 +442,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.suggestAiTags()
             advanceUntilIdle()
             messages shouldContainExactly listOf("No suggestions - document may not be OCRed yet")
-            model.aiTags.value.suggestions shouldBe emptyList()
-            model.aiTags.value.suggesting shouldBe false
+            model.metadata.value.ai.tags.suggestions shouldBe emptyList()
+            model.metadata.value.ai.tags.suggesting shouldBe false
             job.cancel()
         }
 
@@ -406,8 +458,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.suggestAiTags()
             advanceUntilIdle()
             messages shouldContainExactly listOf("Could not suggest tags: network down")
-            model.aiTags.value.suggestions shouldBe emptyList()
-            model.aiTags.value.suggesting shouldBe false
+            model.metadata.value.ai.tags.suggestions shouldBe emptyList()
+            model.metadata.value.ai.tags.suggesting shouldBe false
             job.cancel()
         }
 
@@ -417,7 +469,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val configured = FakeLibrarySession()
             val configuredVm = vm(session = configured)
             advanceUntilIdle()
-            configuredVm.aiTags.value.available shouldBe true
+            configuredVm.metadata.value.ai.tags.available shouldBe true
 
             val disabled =
                 FakeLibrarySession().apply {
@@ -425,7 +477,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                 }
             val disabledVm = vm(session = disabled)
             advanceUntilIdle()
-            disabledVm.aiTags.value.available shouldBe false
+            disabledVm.metadata.value.ai.tags.available shouldBe false
         }
 
     // ---- AI metadata suggestions ----
@@ -440,8 +492,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.suggestAiMetadata()
             advanceUntilIdle()
             session.aiSuggest.suggestEditsCalls shouldContainExactly listOf("doc-1")
-            model.aiMetadata.value.suggestion shouldBe suggestion
-            model.aiMetadata.value.suggesting shouldBe false
+            model.metadata.value.ai.metadata.suggestion shouldBe suggestion
+            model.metadata.value.ai.metadata.suggesting shouldBe false
         }
 
     @Test
@@ -462,7 +514,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             session.meta.titleSets shouldContainExactly listOf("doc-1" to "Invoice Jan")
             session.meta.correspondentSets shouldContainExactly listOf(listOf("doc-1") to "Acme")
             session.meta.docDateSets shouldContainExactly listOf("doc-1" to "2024-01-15")
-            model.aiMetadata.value.suggestion shouldBe MetadataSuggestion.EMPTY
+            model.metadata.value.ai.metadata.suggestion shouldBe MetadataSuggestion.EMPTY
         }
 
     @Test
@@ -476,8 +528,9 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.dismissAiMetadata(AiField.CORRESPONDENT)
+            advanceUntilIdle()
 
-            model.aiMetadata.value.suggestion shouldBe suggestion.copy(correspondent = null)
+            model.metadata.value.ai.metadata.suggestion shouldBe suggestion.copy(correspondent = null)
             session.meta.correspondentSets shouldBe emptyList()
         }
 
@@ -492,7 +545,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.suggestAiMetadata()
             advanceUntilIdle()
             messages shouldContainExactly listOf("No suggestions - document may not be OCRed yet")
-            model.aiMetadata.value.suggesting shouldBe false
+            model.metadata.value.ai.metadata.suggesting shouldBe false
             job.cancel()
         }
 
@@ -507,8 +560,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.suggestAiMetadata()
             advanceUntilIdle()
             messages shouldContainExactly listOf("Could not suggest details: network down")
-            model.aiMetadata.value.suggestion shouldBe MetadataSuggestion.EMPTY
-            model.aiMetadata.value.suggesting shouldBe false
+            model.metadata.value.ai.metadata.suggestion shouldBe MetadataSuggestion.EMPTY
+            model.metadata.value.ai.metadata.suggesting shouldBe false
             job.cancel()
         }
 
@@ -526,9 +579,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                         )
                 }
             val model = vm(session = session)
-            val job = launch { model.tagColors.collect {} }
             advanceUntilIdle()
-            model.tagColors.value shouldContainExactly mapOf("finance" to "#ff0000", "draft" to null)
-            job.cancel()
+            model.metadata.value.vocabulary.tagColors shouldContainExactly
+                mapOf("finance" to "#ff0000", "draft" to null)
         }
 }

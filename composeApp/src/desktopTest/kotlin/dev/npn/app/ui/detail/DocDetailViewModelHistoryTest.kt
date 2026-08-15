@@ -45,15 +45,15 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
                         )
                 }
             val model = DocDetailViewModel("doc-1", session)
-            val job = launch { model.history.collect {} }
+            val job = launch { model.metadata.collect {} }
             advanceUntilIdle()
 
-            model.history.value shouldBe HistoryUiState.NotLoaded
+            model.metadata.value.history shouldBe HistoryUiState.NotLoaded
 
             model.loadHistory()
             advanceUntilIdle()
 
-            (model.history.value as HistoryUiState.Loaded).items.map { it.description } shouldContainExactly
+            (model.metadata.value.history as HistoryUiState.Loaded).items.map { it.description } shouldContainExactly
                 listOf(
                     HistoryDescription(HistoryTextKey.TAG_ADDED, listOf("invoice")),
                     HistoryDescription(HistoryTextKey.TITLE_CHANGED, listOf("X")),
@@ -66,10 +66,12 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = DocDetailViewModel("doc-1", session)
+            // metadata shares while subscribed, so keep a collector for the whole test.
+            backgroundScope.launch { model.metadata.collect {} }
 
             model.loadHistory()
             advanceUntilIdle()
-            model.history.value shouldBe HistoryUiState.Empty
+            model.metadata.value.history shouldBe HistoryUiState.Empty
             model.loadHistory()
             advanceUntilIdle()
             session.documents.historyCalls shouldBe 1
@@ -77,7 +79,7 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
             session.documents.historyError = IllegalStateException("index unavailable")
             model.loadHistory(refresh = true)
             advanceUntilIdle()
-            model.history.value shouldBe HistoryUiState.Error("index unavailable")
+            model.metadata.value.history shouldBe HistoryUiState.Error("index unavailable")
             session.documents.historyCalls shouldBe 2
         }
 

@@ -42,7 +42,6 @@ import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.documentDisplayTitle
-import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
@@ -77,34 +76,19 @@ fun DocDetailScreen(
         viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") {
             DocDetailViewModel(docId, session, searchQuery)
         }
-    val doc by vm.doc.collectAsStateWithLifecycle()
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val correspondents by vm.correspondents.collectAsStateWithLifecycle()
-    val docTypes by vm.docTypes.collectAsStateWithLifecycle()
-    val tagColors by vm.tagColors.collectAsStateWithLifecycle()
-    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
-    val standardFields by vm.standardFields.collectAsStateWithLifecycle()
-    val fieldKeys by vm.fieldKeys.collectAsStateWithLifecycle()
-    val ocrText by vm.ocrText.collectAsStateWithLifecycle()
-    val ocrVersions by vm.ocrVersions.collectAsStateWithLifecycle()
-    val history by vm.history.collectAsStateWithLifecycle()
-    val noteEditor by vm.noteEditor.collectAsStateWithLifecycle()
-    val aiTags by vm.aiTags.collectAsStateWithLifecycle()
-    val aiMetadata by vm.aiMetadata.collectAsStateWithLifecycle()
-    val highlightTerms = vm.highlightTerms
+    val metadata by vm.metadata.collectAsStateWithLifecycle()
+    val actions = rememberMetadataActions(vm)
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
-    // Tag autocomplete: tagColors already carries every tag name reactively (from observeTags,
-    // ordered by name), so derive the suggestion list from it instead of a separate one-shot load.
-    val allTagNames = remember(tagColors) { tagColors.keys.toList() }
 
     // Focus the viewer on entry (and when switching docs) so its keyboard shortcuts work on desktop.
     // Re-run when the document finishes loading so the request happens after the viewer node is
     // attached; wait one frame so it is registered with the focus owner before asking.
     val viewerFocus = remember { FocusRequester() }
-    LaunchedEffect(docId, doc != null) {
-        if (doc != null) {
+    LaunchedEffect(docId, metadata.document.item != null) {
+        if (metadata.document.item != null) {
             withFrameNanos { }
             runCatching { viewerFocus.requestFocus() }
         }
@@ -117,15 +101,15 @@ fun DocDetailScreen(
     val goPrevDoc: (() -> Unit)? = prevDocId?.let { { onNavigateToDoc(it) } }
     val goNextDoc: (() -> Unit)? = nextDocId?.let { { onNavigateToDoc(it) } }
 
-    val current = doc
+    val current = metadata.document.item
     if (current == null) {
         UnavailableDocScaffold(onBack)
         return
     }
 
-    val reviewed = current.effectiveReviewed(reviewMode)
+    val reviewed = metadata.document.reviewed
     // Manual reviewed toggle only makes sense in inbox-workflow mode (derived otherwise).
-    val canToggleReviewed = reviewMode == ReviewMode.INBOX_WORKFLOW
+    val canToggleReviewed = metadata.document.reviewMode == ReviewMode.INBOX_WORKFLOW
 
     // Reflect the open document in the native window title (desktop); inert elsewhere.
     val displayTitle = documentDisplayTitle(current.doc.title, current.doc.fileName)
@@ -174,44 +158,8 @@ fun DocDetailScreen(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         MetadataPanel(
-            item = current,
-            allTagNames = allTagNames,
-            tagColors = tagColors,
-            correspondents = correspondents,
-            docTypes = docTypes,
-            fieldKeys = fieldKeys,
-            ocrText = ocrText,
-            ocrVersions = ocrVersions,
-            highlightTerms = highlightTerms,
-            onSetOcrEngine = vm::setOcrEngine,
-            onCommitTitle = vm::setTitle,
-            noteEditor = noteEditor,
-            onNoteChange = vm::updateNoteDraft,
-            onSaveNote = vm::saveNote,
-            onCommitCorrespondent = vm::setCorrespondent,
-            onCommitDocType = vm::setDocType,
-            onCommitDocDate = vm::setDocDate,
-            onCommitField = { key, value -> vm.setField(key, value) },
-            onRemoveField = vm::removeField,
-            reviewMode = reviewMode,
-            reviewed = reviewed,
-            onSetReviewed = vm::setReviewed,
-            onAddTag = vm::addTag,
-            onAddTagWithStyle = vm::addTagWithStyle,
-            visibleFields = standardFields,
-            onRemoveTag = vm::removeTag,
-            aiTags = aiTags,
-            onSuggestAiTags = vm::suggestAiTags,
-            onAcceptAiTag = vm::acceptAiTag,
-            onDismissAiTag = vm::dismissAiTag,
-            onClearAiTagSuggestions = vm::clearAiTagSuggestions,
-            aiMetadata = aiMetadata,
-            onSuggestAiMetadata = vm::suggestAiMetadata,
-            onAcceptAiMetadata = vm::acceptAiMetadata,
-            onDismissAiMetadata = vm::dismissAiMetadata,
-            history = history,
-            onLoadHistory = { vm.loadHistory() },
-            onRefreshHistory = { vm.loadHistory(refresh = true) },
+            state = metadata,
+            actions = actions,
             previewTab = { m ->
                 PageViewer(
                     pageIndex = ui.pageIndex,
