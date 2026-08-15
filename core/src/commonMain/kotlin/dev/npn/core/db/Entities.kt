@@ -63,6 +63,17 @@ data class DocumentEntity(
      * [dev.npn.core.model.DocProperty.OCR_ENGINE] LWW property. Null = automatic (best engine).
      */
     val ocrEngineOverride: String? = null,
+    /**
+     * Epoch millis of the automatic post-OCR AI enrichment pass, or null when it has not run.
+     * Device-local by nature (it guards spend on *this* device's endpoint), so it stays out of the
+     * journal.
+     *
+     * Losing it to an index rebuild is safe rather than expensive: enrichment is queued from
+     * [dev.npn.core.ocr.OcrPipeline.onOcrProduced], which a rebuild does not fire, so nothing
+     * re-enqueues those documents. This guards the narrower case of the same document being OCR'd
+     * again on this device under a better engine.
+     */
+    val aiEnrichedAt: Long? = null,
 )
 
 @Entity(tableName = "tags")
@@ -162,6 +173,31 @@ data class OcrQueueEntity(
     /** pending | running | done | failed */
     val state: String,
     val attempts: Int = 0,
+    val updatedAt: Long,
+    val lastError: String? = null,
+)
+
+/**
+ * Work list for the automatic post-OCR AI enrichment pass. A row means "this document is owed an
+ * enrichment call"; the completed fact lives on [DocumentEntity.aiEnrichedAt], so a successful pass
+ * deletes the row rather than keeping a terminal state.
+ *
+ * The row has no state column at all. There is no `running` — the drain is single-flight in-process
+ * and a row stays as it is while being worked on, so a process death mid-call leaves it due rather
+ * than stranded — and no terminal `failed`, because a row that is owed a call is owed it until it
+ * is made or the document stops being enrichable. Existence is the whole state; [nextAttemptAt]
+ * says from when.
+ */
+@Entity(tableName = "ai_enrich_queue")
+data class AiEnrichQueueEntity(
+    @PrimaryKey val docId: String,
+    /**
+     * Failed attempts so far. Not a budget — the row is never given up on — but it does set
+     * [nextAttemptAt] via the backoff, and orders the queue so retries yield to fresh work.
+     */
+    val attempts: Int = 0,
+    /** Epoch millis before which this row must not be retried (exponential backoff). */
+    val nextAttemptAt: Long,
     val updatedAt: Long,
     val lastError: String? = null,
 )

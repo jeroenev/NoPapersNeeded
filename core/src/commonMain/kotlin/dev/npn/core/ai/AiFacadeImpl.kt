@@ -24,6 +24,18 @@ class AiFacadeImpl(
 ) : AiFacade {
     private val chatHistoryStore = RoomChatHistoryProvider(db)
     private val chatSessionStore = RoomChatSessionStore(db)
+
+    /**
+     * Wired by the session once the enrichment drainer exists (the drainer is built after this
+     * facade, since it drives an enricher that calls into it). Unset outside a started session, in
+     * which case there is no drain to run.
+     */
+    var autoEnrichDrain: (suspend () -> Unit)? = null
+
+    override suspend fun drainAutoEnrich() {
+        autoEnrichDrain?.invoke()
+    }
+
     private val runtimeMutex = Mutex()
     private var cachedRuntime: Pair<RuntimeKey, AiRuntime>? = null
 

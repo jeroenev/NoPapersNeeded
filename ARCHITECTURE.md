@@ -42,12 +42,13 @@ source sets hold implementations. Key packages:
 | `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsWriteGate`, `DbLocalJournalState`, `DeviceIdentity`, `ScanReport`. |
 | `core.db` | Room entities and DAOs (`NpnDatabase`, `DocumentDao`, `TagDao`, `FtsDao`, `MetadataProjectionDao`, `MiscDaos`, `Projections`). Schema files in `core/schemas`. Platform `NpnDatabase.android/desktop.kt` build the instance. |
 | `core.pdf` | PDF rendering/thumbnails: `PdfEngine` (platform impl), `RenderGate`, `ThumbnailService`. |
-| `core.ocr` | OCR pipeline and sidecars: `OcrEngine`/`OcrEngines` (platform impl), `OcrPipeline`, `OcrSidecar`, `OcrWorker`. |
+| `core.ocr` | OCR pipeline and sidecars: `OcrEngine`/`OcrEngines` (platform impl), `OcrPipeline`, `OcrSidecar`. |
+| `core.work` | `QueueDrainer`: the single-flight background drain shared by the OCR queue and the automatic AI enrichment queue. |
 | `core.xmp` | XMP metadata on export/bake-in-place: `PdfXmpIO` (platform), `XmpBytes`, `XmpParser`, `XmpSerializer`, `XmpMerger`, `NpnXmpData`, `BakeService`. |
 | `core.model` | `Document` domain model. |
 | `core.rules` / `core.pathrules` | Auto-match rules (`RuleMatcher`, `RuleApplier`, `AutoMatchRule`) and storage-path templates (`StoragePathRule*`, `StoragePathContext`). |
 | `core.watch` | Watched inbox folder: `WatchedFolder` (platform), `WatchedFolderImporter`. |
-| `core.ai` | Local/AI chat loop and tools over the library (`AiChatLoop`, `AiChatTool`, `AiFacadeImpl`, `LibraryAiTools`). |
+| `core.ai` | Local/AI chat loop and tools over the library (`AiChatLoop`, `AiChatTool`, `AiFacadeImpl`, `LibraryAiTools`). Two consumers in `core.app` drive it: `AiEditRun` (bulk, review-then-apply) and `AiAutoEnricher` (unattended, queued in `ai_enrich_queue` off the OCR thread). |
 
 Platform impls live in the same package under `androidMain`/`desktopMain` (e.g.
 `core.fs.LibraryFileSystem`, `core.pdf.PdfEngine`, `core.ocr.OcrEngines`,
@@ -104,4 +105,11 @@ via `mise hot`.
   route in `app/ui/nav/Route.kt`.
 - New platform behavior → interface in `core` commonMain, impl in each platform
   source set, wire in `AppEnvironment.*`.
-- Background work → `core.watch` importer loops, `NpnWork` (Android), `OcrWorker`.
+- Background work → `core.watch` importer loops, `NpnWork` (Android), and the
+  `core.work.QueueDrainer` instances in `LibrarySessionImpl` (OCR, AI enrichment).
+  A new kind of deferrable work means a queue table + a drain step + a kick, not a
+  `launch` at the point of discovery.
+- Follow-up work after OCR → `OcrPipeline.onTextIndexed` fires whenever text is indexed,
+  including on every index rebuild, so hang free/idempotent work there (auto-match rules).
+  `OcrPipeline.onOcrProduced` fires only when this device just wrote a sidecar; anything
+  that costs money or is externally visible belongs there (automatic AI enrichment).

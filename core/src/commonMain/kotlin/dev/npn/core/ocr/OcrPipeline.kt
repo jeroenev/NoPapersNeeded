@@ -11,6 +11,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.pdf.PdfEngine
+import kotlinx.coroutines.CancellationException
 import kotlin.time.Clock
 
 /**
@@ -52,10 +53,22 @@ class OcrPipeline(
     private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
 ) {
     /**
-     * Optional hook called whenever text is indexed for a document. Used by the auto-matching
-     * rule engine to apply rules once extracted text is available.
+     * Optional hook called whenever text is indexed for a document — including when an existing
+     * sidecar is merely adopted or re-selected, and so on every index rebuild. Used by the
+     * auto-matching rule engine, whose work is local, deterministic and free to repeat.
      */
     var onTextIndexed: (suspend (docId: String, text: String) -> Unit)? = null
+
+    /**
+     * Optional hook called only when *this device just produced* a new OCR sidecar, i.e. the
+     * document's text is new here rather than re-indexed. Used by automatic AI enrichment, which
+     * costs a paid request per document and so must not fire for work already done.
+     *
+     * This is deliberately narrower than [onTextIndexed]. The index is a disposable cache: after a
+     * destructive rebuild every document is re-queued and re-adopts its stored sidecar, which would
+     * otherwise look exactly like a library's worth of brand-new documents.
+     */
+    var onOcrProduced: (suspend (docId: String) -> Unit)? = null
 
     companion object {
         const val STATE_PENDING = "pending"
@@ -118,9 +131,14 @@ class OcrPipeline(
         }
 
         var versions = loadVersions(docId)
+        var ocrProduced = false
         if (versions.isEmpty() || canImprove(versions)) {
-            val produced = runOwnOcr(doc)
-            if (produced == null && versions.isEmpty()) return // failure already recorded
+            val own = runOwnOcr(doc)
+            if (own == OwnOcr.FAILED && versions.isEmpty()) return // failure already recorded
+            // Only a sidecar this call published counts as new text. Being queued is not enough: a
+            // rebuilt index re-queues every document, and those runs land here and adopt what is
+            // already stored.
+            ocrProduced = own == OwnOcr.PUBLISHED
             versions = loadVersions(docId)
         }
 
@@ -131,39 +149,81 @@ class OcrPipeline(
             return
         }
         indexAndMarkSelected(docId, desired, sidecar)
-        // Mark the queue entry done, carrying its attempts count forward.
+        val hookError = notifyTextIndexed(docId, sidecar, ocrProduced)
+        // Mark the queue entry done, carrying its attempts count forward. After the hooks, so an
+        // observer watching the queue empty out (the Android maintenance job) cannot see this
+        // document finish before the follow-up work they schedule has been recorded.
+        //
+        // Done even when a hook failed — the text is indexed and searchable, which is what this
+        // queue tracks — but the failure is kept on the row rather than dropped, since nothing
+        // retries a hook and there is no other trace of it.
         ocrQueueDao.upsert(
             OcrQueueEntity(
                 docId = docId,
                 state = STATE_DONE,
-                attempts = queueEntry(docId)?.attempts ?: 0,
+                attempts = ocrQueueDao.getByDocId(docId)?.attempts ?: 0,
                 updatedAt = now(),
-                lastError = null,
+                lastError = hookError,
             ),
         )
-        onTextIndexed?.invoke(docId, sidecar.fullText())
+    }
+
+    /**
+     * Run the post-index hooks, [onOcrProduced] only when [ocrProduced], and return the first
+     * failure for the caller to record if it has somewhere durable to put it.
+     *
+     * Each is contained separately. They are follow-up work (auto-match rules, queueing AI
+     * enrichment) on a result that is already indexed and searchable, so one throwing must neither
+     * abort the queue drain, nor leave this document's entry unresolved, nor cost the document the
+     * other hook — which nothing would retry.
+     */
+    private suspend fun notifyTextIndexed(
+        docId: String,
+        sidecar: OcrSidecar,
+        ocrProduced: Boolean,
+    ): String? {
+        val hooks =
+            listOfNotNull(
+                onTextIndexed?.let { hook -> "onTextIndexed" to suspend { hook(docId, sidecar.fullText()) } },
+                onOcrProduced?.takeIf { ocrProduced }?.let { hook -> "onOcrProduced" to suspend { hook(docId) } },
+            )
+        var firstError: String? = null
+        for ((name, hook) in hooks) {
+            try {
+                hook()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (t: Throwable) {
+                if (firstError == null) {
+                    firstError = "$name: ${t.message ?: t::class.simpleName}"
+                }
+            }
+        }
+        return firstError
     }
 
     /**
      * Run this device's extract-or-OCR pass and publish the result as an engine-qualified
-     * sidecar (`<hash>.<deviceId>.<engine>.json`, write-once). Returns the writer key, or null
-     * on failure (recorded via [fail]). An already-published identical key is adopted, not an
-     * error (write-once: never rewrite a published object).
+     * sidecar (`<hash>.<deviceId>.<engine>.json`, write-once). An already-published identical key
+     * is adopted rather than an error (write-once: never rewrite a published object), which the
+     * result distinguishes from [OwnOcr.PUBLISHED] because adopting text that was already on disk
+     * is not the arrival of new text. The caller re-reads the versions either way, so the key
+     * itself is not returned.
      */
-    private suspend fun runOwnOcr(doc: DocumentEntity): String? {
+    private suspend fun runOwnOcr(doc: DocumentEntity): OwnOcr {
         val bytes =
             try {
                 fs.readBytes(doc.relPath)
             } catch (t: Throwable) {
                 fail(doc.docId, "read failed: ${t.message}")
-                return null
+                return OwnOcr.FAILED
             }
         val result =
             try {
                 extractOrOcr(bytes)
             } catch (t: Throwable) {
                 fail(doc.docId, "ocr failed: ${t.message}")
-                return null
+                return OwnOcr.FAILED
             }
         val writerKey = NpnPaths.ocrWriterKey(deviceId, result.engine)
         val sidecar =
@@ -175,16 +235,30 @@ class OcrPipeline(
                 createdAt = now(),
                 pages = result.pages,
             )
-        try {
+        return try {
             sidecars.writeOnce(doc.docId, writerKey, OcrSidecarCodec.encode(sidecar))
+            OwnOcr.PUBLISHED
         } catch (_: Throwable) {
             // Already exists for this device+engine: keep the published file.
             if (decode(doc.docId, writerKey) == null) {
                 fail(doc.docId, "sidecar write/read failed for $writerKey")
-                return null
+                OwnOcr.FAILED
+            } else {
+                OwnOcr.ADOPTED
             }
         }
-        return writerKey
+    }
+
+    /** Outcome of a [runOwnOcr] pass. */
+    private enum class OwnOcr {
+        /** This call wrote the sidecar: new text exists that did not before. */
+        PUBLISHED,
+
+        /** The sidecar for this device and engine was already on disk and is readable. */
+        ADOPTED,
+
+        /** Nothing usable came out of the pass; already recorded via [fail]. */
+        FAILED,
     }
 
     private class PageResult(
@@ -282,8 +356,12 @@ class OcrPipeline(
         if (!needsIndex) return
         val sidecar = decode(doc.docId, desired.writerKey) ?: return
         indexAndMarkSelected(doc.docId, desired, sidecar)
+        // Adoption or re-selection of a stored sidecar: no new text, so no enrichment. A hook
+        // failure is discarded rather than recorded, unlike in processDoc: the row is deleted here,
+        // and the only hook that can run is onTextIndexed, which reconcile re-fires on every rescan
+        // rather than marking the document done. Nothing is permanently lost by dropping it.
+        notifyTextIndexed(doc.docId, sidecar, ocrProduced = false)
         ocrQueueDao.delete(doc.docId)
-        onTextIndexed?.invoke(doc.docId, sidecar.fullText())
     }
 
     /**
@@ -313,7 +391,7 @@ class OcrPipeline(
     ) {
         if (doc.trashed || doc.deleted || doc.missing) return
         if (!canImprove(versions)) return
-        val entry = queueEntry(doc.docId)
+        val entry = ocrQueueDao.getByDocId(doc.docId)
         if (entry != null && (entry.state != STATE_DONE || entry.attempts >= config.maxAttempts)) return
         ocrQueueDao.upsert(
             OcrQueueEntity(
@@ -427,7 +505,7 @@ class OcrPipeline(
         docId: String,
         error: String,
     ) {
-        val attempts = (queueEntry(docId)?.attempts ?: 0) + 1
+        val attempts = (ocrQueueDao.getByDocId(docId)?.attempts ?: 0) + 1
         val state = if (attempts >= config.maxAttempts) STATE_FAILED else STATE_PENDING
         ocrQueueDao.upsert(
             OcrQueueEntity(
@@ -440,8 +518,6 @@ class OcrPipeline(
         )
         setOcrState(docId, if (state == STATE_FAILED) OCR_FAILED else OCR_PENDING)
     }
-
-    private suspend fun queueEntry(docId: String): OcrQueueEntity? = ocrQueueDao.getByDocId(docId)
 
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
 }

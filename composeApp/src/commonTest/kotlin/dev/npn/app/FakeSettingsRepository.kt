@@ -118,6 +118,8 @@ class FakeSettingsRepository(
         updateSettings { it.copy(aiMaxNewTagsPerDoc = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
     }
 
+    override suspend fun setAiAutoOnOcr(enabled: Boolean) = updateSettings { it.copy(aiAutoOnOcr = enabled) }
+
     val setWatchedFolders = mutableListOf<String?>()
     val setWatchedDeleteFlags = mutableListOf<Boolean>()
 

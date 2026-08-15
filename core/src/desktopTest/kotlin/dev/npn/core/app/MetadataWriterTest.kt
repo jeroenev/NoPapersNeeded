@@ -11,6 +11,8 @@ import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.StorageV2Reader
+import dev.npn.core.model.DocProperty
+import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -184,6 +186,81 @@ class MetadataWriterTest {
                 rig.close()
             }
         }
+
+    /**
+     * One call, one journal transaction, one move. Writing the same values setter-by-setter
+     * publishes an object and re-runs the storage path rules per value, so a synced library folder
+     * sees a rename for each half-finished name.
+     */
+    @Test
+    fun applyEditsCommitsOnceAndMovesOnce() =
+        runTest {
+            val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
+            val rig = AppSessionRig.create(backgroundScope, storagePathRule = { rule })
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                val objectsBefore = journalObjectCount(rig)
+
+                rig.session.meta.applyEdits(
+                    docId = id,
+                    // Blank and duplicate tags are dropped rather than committed.
+                    addTags = listOf("invoice", "invoice", "  "),
+                    properties =
+                        mapOf(
+                            DocProperty.TITLE to "Annual report",
+                            DocProperty.CORRESPONDENT to "Acme",
+                            DocProperty.DOC_DATE to "2026-01-31",
+                        ),
+                )
+
+                journalObjectCount(rig) shouldBe objectsBefore + 1
+                val doc = rig.db.documentDao().getByDocId(id)!!
+                doc.title shouldBe "Annual report"
+                doc.correspondent shouldBe "Acme"
+                doc.docDate shouldBe "2026-01-31"
+                doc.relPath shouldBe "Acme/Annual report.pdf"
+                rig.exists(doc.relPath) shouldBe true
+
+                val items =
+                    rig.session.documents
+                        .observeDocuments(LibraryFilter(), LibrarySort())
+                        .first()
+                tagsOf(items, id) shouldContainExactlyInAnyOrder listOf("invoice")
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** Absent keys are untouched; a present key with a blank value clears that property. */
+    @Test
+    fun applyEditsClearsOnlyThePropertiesItCarries() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.meta.applyEdits(
+                    id,
+                    properties = mapOf(DocProperty.TITLE to "Keep me", DocProperty.CORRESPONDENT to "Acme"),
+                )
+
+                rig.session.meta.applyEdits(id, properties = mapOf(DocProperty.CORRESPONDENT to null))
+
+                val doc = rig.db.documentDao().getByDocId(id)!!
+                doc.title shouldBe "Keep me"
+                doc.correspondent shouldBe null
+            } finally {
+                rig.close()
+            }
+        }
+
+    private suspend fun journalObjectCount(rig: AppSessionRig): Int =
+        rig.fs
+            .listAllUnder(NpnPaths.JOURNAL_DIR)
+            .count { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
 
     @Test
     fun setFieldProjectsToDbAndObserveDocAndKeys() =

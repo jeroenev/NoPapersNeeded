@@ -32,6 +32,7 @@ data class SettingsSnapshot(
     val aiReasoningEdit: AiReasoningLevel = AiReasoningLevel.LOW,
     val aiMaxTagsPerDoc: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val aiMaxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
+    val aiAutoOnOcr: Boolean = false,
 )
 
 /** Project the AI-related settings into the domain [AiConfig] the facade consumes. */
@@ -46,6 +47,7 @@ fun SettingsSnapshot.toAiConfig(): AiConfig =
         reasoningEdit = aiReasoningEdit,
         maxTagsPerDoc = aiMaxTagsPerDoc,
         maxNewTagsPerDoc = aiMaxNewTagsPerDoc,
+        autoOnOcr = aiAutoOnOcr,
     )
 
 // A flat contract of one-line per-setting setters; splitting it up would only scatter the
@@ -128,6 +130,12 @@ interface SettingsRepository {
      * [AiTagging.NEW_TAGS_RANGE] (0 disables proposing new tags entirely).
      */
     suspend fun setAiMaxNewTagsPerDoc(value: Int)
+
+    /**
+     * Whether newly OCR'd documents are enriched automatically, without a review step. See
+     * [dev.npn.core.ai.AiConfig.autoOnOcr]. Default false.
+     */
+    suspend fun setAiAutoOnOcr(enabled: Boolean)
 }
 
 internal object SettingsKeys {
@@ -155,6 +163,7 @@ internal object SettingsKeys {
     const val AI_REASONING_EDIT = "aiReasoningEdit"
     const val AI_MAX_TAGS_PER_DOC = "aiMaxTagsPerDoc"
     const val AI_MAX_NEW_TAGS_PER_DOC = "aiMaxNewTagsPerDoc"
+    const val AI_AUTO_ON_OCR = "aiAutoOnOcr"
 }
 
 /**

@@ -134,6 +134,27 @@ class MetadataWriterImpl(
         coordinator.commitAndApply(listOf(PendingOp.fieldSet(docId, k, v)))
     }
 
+    override suspend fun applyEdits(
+        docId: String,
+        addTags: List<String>,
+        properties: Map<DocProperty, String?>,
+    ) {
+        val tagOps =
+            addTags
+                .map { it.trim() }
+                .filter { it.isNotEmpty() }
+                .distinct()
+                .map { PendingOp.tagAdd(docId, it) }
+        val propOps = properties.map { (key, value) -> PendingOp.propSet(docId, key, value.normalized()) }
+        val ops = tagOps + propOps
+        if (ops.isEmpty()) return
+        coordinator.commitAndApply(ops)
+        // The same follow-ups the individual setters do, but once for the whole edit. Auto-match
+        // only reacts to a new title, matching setTitle.
+        if (DocProperty.TITLE in properties) applyAutoMatch(docId)
+        pathRuleApplicator.applyFor(docId)
+    }
+
     override suspend fun renameTag(
         from: String,
         to: String,

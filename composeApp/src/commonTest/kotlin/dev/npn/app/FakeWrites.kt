@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.TagAdmin
+import dev.npn.core.model.DocProperty
 
 // Write-side test doubles, one per write facet. Each records its calls so tests can assert what
 // was invoked, and each `fail*` hook makes the matching op throw.
@@ -18,8 +19,9 @@ class FakeMetadataWriter : MetadataWriter {
     val docTypeSets = mutableListOf<Pair<List<String>, String?>>()
     val docDateSets = mutableListOf<Pair<String, String?>>()
     val fieldSets = mutableListOf<Triple<String, String, String?>>()
+    val batchedEdits = mutableListOf<Triple<String, List<String>, Map<DocProperty, String?>>>()
 
-    /** If set, every batched op (addTag/removeTag/setReviewed) throws this. */
+    /** If set, every batched op (addTag/removeTag/setReviewed/applyEdits) throws this. */
     var failBatchOps: (() -> Nothing)? = null
 
     /** addTag throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
@@ -103,6 +105,15 @@ class FakeMetadataWriter : MetadataWriter {
     ) {
         failSetField?.invoke()
         fieldSets += Triple(docId, key, value)
+    }
+
+    override suspend fun applyEdits(
+        docId: String,
+        addTags: List<String>,
+        properties: Map<DocProperty, String?>,
+    ) {
+        failBatchOps?.invoke()
+        batchedEdits += Triple(docId, addTags, properties)
     }
 }
 

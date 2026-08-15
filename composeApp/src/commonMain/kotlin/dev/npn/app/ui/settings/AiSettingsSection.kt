@@ -29,6 +29,8 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.app.AiTagging
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider_help
@@ -138,12 +140,39 @@ internal fun AiAssistantSection(
                 maxNewTagsPerDoc = state.aiMaxNewTagsPerDoc,
                 onSetMaxNewTagsPerDoc = vm::setAiMaxNewTagsPerDoc,
             )
+            AiAutoOnOcrToggle(enabled = state.aiAutoOnOcr, onToggle = vm::setAiAutoOnOcr)
             Text(
                 stringResource(Res.string.common_settings_ai_request_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
         }
+    }
+}
+
+/**
+ * The unattended post-OCR enrichment switch. Nested under the AI section (and therefore only
+ * reachable once AI is on) because it spends the same endpoint; the help text spells out that it
+ * writes without a review step, which is what separates it from the AI tagging page.
+ */
+@Composable
+private fun AiAutoOnOcrToggle(
+    enabled: Boolean,
+    onToggle: (Boolean) -> Unit,
+) {
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Text(
+                stringResource(Res.string.common_settings_ai_auto_on_ocr),
+                style = MaterialTheme.typography.bodyLarge,
+            )
+            Text(
+                stringResource(Res.string.common_settings_ai_auto_on_ocr_help),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        Switch(checked = enabled, onCheckedChange = onToggle)
     }
 }
 
