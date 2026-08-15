@@ -9,10 +9,10 @@ import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
+import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.DocContentFacade
@@ -124,7 +124,7 @@ class DocDetailViewModel(
     private val tagAdmin: TagAdmin,
     private val docLifecycle: DocLifecycle,
     private val content: DocContentFacade,
-    private val ai: AiFacade,
+    private val ai: AiSuggest,
     private val ocr: OcrFacade,
     private val maintenance: MaintenanceFacade,
     reviewConfig: ReviewConfigFacade,
@@ -138,7 +138,7 @@ class DocDetailViewModel(
         tagAdmin = session.tagAdmin,
         docLifecycle = session.docLifecycle,
         content = session.content,
-        ai = session.ai,
+        ai = session.aiSuggest,
         ocr = session.ocr,
         maintenance = session.maintenance,
         reviewConfig = session.reviewConfig,

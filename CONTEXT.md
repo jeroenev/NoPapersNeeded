@@ -38,8 +38,10 @@ state in `composeApp` and is not part of the domain vocabulary.
 - Load-bearing fold rules: a tool call ends the current narration turn (pre-tool
   text is finalised into its own bubble, never merged with post-tool text or the
   run's full answer); each finalised assistant bubble carries only its own
-  docRefs; finalising keeps whatever partial text streamed; history for the next
-  ask is user/assistant text turns only (tool items excluded).
+  docRefs; finalising keeps whatever partial text streamed.
+- The transcript is display state only. The next ask sees the conversation the
+  session persisted (`RoomChatHistoryProvider`), not this fold — the caller
+  passes a session id and a question, never a history.
 - `EditPhase`-style presentation state stays out of `ChatTranscript` — the
   reducer is pure, with no snackbar/message/effect logic.
 
@@ -69,3 +71,14 @@ whole session. Each operation has exactly one public home:
 - **Doc Lifecycle** (`DocLifecycle`, session property `docLifecycle`) — a
   document's existence and location: `trashDoc`, `restoreDoc`,
   `deleteDocPermanently`, `renameFile`, `moveFile`.
+- **AI chat** (`AiChat`, session property `aiChat`) — the assistant
+  conversation: `ask` plus session management (`chatSessions`,
+  `createChatSession`, `renameChatSession`, `deleteChatSession`,
+  `clearChatSession`, `chatTranscriptFor`).
+- **AI suggestions** (`AiSuggest`, session property `aiSuggest`) — the
+  suggestion primitive `suggestEdits` (plus, until the work facet exists,
+  `drainAutoEnrich`). No consumer needs both AI facets.
+
+Both AI facets extend **`AiAvailability`** (`configured()`): the only piece of
+the endpoint configuration that crosses the seam is that boolean — `AiConfig`
+itself belongs to settings.

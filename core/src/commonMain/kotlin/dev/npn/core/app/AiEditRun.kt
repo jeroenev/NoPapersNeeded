@@ -2,8 +2,8 @@ package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiField
+import dev.npn.core.ai.AiSuggest
 import dev.npn.core.model.DocProperty
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -157,7 +157,7 @@ sealed interface ApplyOutcome {
  * session and drive it batch by batch; the run remembers already-[processed] documents so
  * follow-up batches (and the caller's preview) exclude them.
  *
- * - [suggestNextBatch] runs [AiFacade.suggestEdits] over the next [ScopeKey.batchSize] unprocessed
+ * - [suggestNextBatch] runs [AiSuggest.suggestEdits] over the next [ScopeKey.batchSize] unprocessed
  *   documents with bounded concurrency ([SUGGEST_CONCURRENCY]); each document is ONE model request
  *   covering every requested section. Progress is reported as each document completes; results are
  *   re-ordered to match the original batch order. Cancellation propagates (nothing is written).
@@ -176,7 +176,7 @@ class AiEditRun(
     private val documents: DocumentRepository,
     private val meta: MetadataWriter,
     private val content: DocContentFacade,
-    private val ai: AiFacade,
+    private val ai: AiSuggest,
     /** Documents handed over from the library's selection mode; empty when opened standalone. */
     private val selection: List<String> = emptyList(),
 ) {

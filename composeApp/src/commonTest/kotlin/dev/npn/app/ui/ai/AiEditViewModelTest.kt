@@ -66,8 +66,8 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"), item("c"))
-                    ai.suggestDelayByDoc = mapOf("a" to 300, "b" to 200, "c" to 100)
-                    ai.editByDoc =
+                    aiSuggest.suggestDelayByDoc = mapOf("a" to 300, "b" to 200, "c" to 100)
+                    aiSuggest.editByDoc =
                         mapOf(
                             "a" to edit(addTags = listOf(TagSuggestion("x", isNew = false))),
                             "b" to edit(addTags = listOf(TagSuggestion("y", isNew = false))),
@@ -90,7 +90,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            session.ai.suggestEditsCalls shouldContainExactlyInAnyOrder listOf("a", "b", "c")
+            session.aiSuggest.suggestEditsCalls shouldContainExactlyInAnyOrder listOf("a", "b", "c")
             progress.last() shouldBe 3
             progress shouldContainExactly listOf(0, 1, 2, 3)
             val review =
@@ -106,7 +106,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit =
+                    aiSuggest.edit =
                         edit(
                             addTags = listOf(TagSuggestion("t", isNew = false)),
                             removeTags = listOf("utility"),
@@ -119,7 +119,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            session.ai.suggestEditsCalls shouldContainExactly listOf("a")
+            session.aiSuggest.suggestEditsCalls shouldContainExactly listOf("a")
             job.cancel()
         }
 
@@ -129,7 +129,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit =
+                    aiSuggest.edit =
                         edit(
                             addTags = listOf(TagSuggestion("invoice", isNew = false)),
                             removeTags = listOf("utility"),
@@ -158,7 +158,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit = edit(metadata = MetadataSuggestion(title = "New title"))
+                    aiSuggest.edit = edit(metadata = MetadataSuggestion(title = "New title"))
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -185,7 +185,7 @@ class AiEditApplicationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"))
-                    ai.editByDoc =
+                    aiSuggest.editByDoc =
                         mapOf(
                             "a" to
                                 edit(
@@ -229,7 +229,7 @@ class AiEditApplicationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a", title = "Old title"), item("b"))
-                    ai.edit =
+                    aiSuggest.edit =
                         edit(
                             addTags = listOf(TagSuggestion("t1", isNew = false)),
                             removeTags = listOf("utility"),
@@ -281,7 +281,7 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"))
-                    ai.editByDoc =
+                    aiSuggest.editByDoc =
                         mapOf(
                             "a" to edit(addTags = listOf(TagSuggestion("t1", isNew = false))),
                             "b" to edit(addTags = listOf(TagSuggestion("t2", isNew = false))),
@@ -325,8 +325,8 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"), item("c"))
-                    ai.suggestDelayMillis = 1_000
-                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                    aiSuggest.suggestDelayMillis = 1_000
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -350,8 +350,8 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"))
-                    ai.failSuggestEditsForDocs = setOf("a")
-                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                    aiSuggest.failSuggestEditsForDocs = setOf("a")
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = vm(session)
             val messages = mutableListOf<String>()
@@ -399,7 +399,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"), item("c"))
-                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = vm(session)
             val jobs = listOf(launch { model.ui.collect {} }, launch { model.preview.collect {} })
@@ -424,7 +424,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"), item("c"))
-                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = AiEditViewModel(session, FakeSettingsRepository(), listOf("a", "c"))
             val jobs = listOf(launch { model.ui.collect {} }, launch { model.preview.collect {} })
@@ -437,7 +437,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
 
             model.start()
             advanceUntilIdle()
-            session.ai.suggestEditsCalls shouldContainExactly listOf("a", "c")
+            session.aiSuggest.suggestEditsCalls shouldContainExactly listOf("a", "c")
             jobs.forEach { it.cancel() }
         }
 
@@ -521,7 +521,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = many
-                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -530,7 +530,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            session.ai.suggestEditsCalls shouldHaveSize AiTagging.DEFAULT_BATCH_DOCS
+            session.aiSuggest.suggestEditsCalls shouldHaveSize AiTagging.DEFAULT_BATCH_DOCS
             job.cancel()
         }
 
@@ -561,7 +561,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"), item("c"))
-                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -571,7 +571,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            session.ai.suggestEditsCalls shouldHaveSize 2
+            session.aiSuggest.suggestEditsCalls shouldHaveSize 2
             // Suggested tags are existing-vocabulary -> pre-selected; apply then confirm more remain.
             model.ui.value.phase
                 .shouldBeInstanceOf<EditPhase.Review>()
@@ -589,7 +589,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -600,7 +600,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            session.ai.suggestEditsRequests
+            session.aiSuggest.suggestEditsRequests
                 .single()
                 .let {
                     it.maxTags shouldBe 11
@@ -615,7 +615,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit = AiEditSuggestion.EMPTY
+                    aiSuggest.edit = AiEditSuggestion.EMPTY
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -623,7 +623,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            val request = session.ai.suggestEditsRequests.single()
+            val request = session.aiSuggest.suggestEditsRequests.single()
             request.fields.map { it.field } shouldContainExactly AiField.entries
             request.fields.all { it.mode == AiFieldMode.UNFILLED } shouldBe true
             request.tags shouldBe true
@@ -638,7 +638,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit = AiEditSuggestion.EMPTY
+                    aiSuggest.edit = AiEditSuggestion.EMPTY
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -651,7 +651,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            val request = session.ai.suggestEditsRequests.single()
+            val request = session.aiSuggest.suggestEditsRequests.single()
             request.fields.map { it.field } shouldContainExactly listOf(AiField.CORRESPONDENT, AiField.DOC_DATE)
             request.fields.single { it.field == AiField.CORRESPONDENT }.mode shouldBe AiFieldMode.ALL
             request.tags shouldBe true
@@ -666,7 +666,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit = AiEditSuggestion.EMPTY
+                    aiSuggest.edit = AiEditSuggestion.EMPTY
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -677,7 +677,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            val request = session.ai.suggestEditsRequests.single()
+            val request = session.aiSuggest.suggestEditsRequests.single()
             request.tags shouldBe true
             request.maxNewTags shouldBe 0
             // The cap the user typed is remembered for when new tags are re-enabled.
@@ -691,7 +691,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit = AiEditSuggestion.EMPTY
+                    aiSuggest.edit = AiEditSuggestion.EMPTY
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -701,8 +701,8 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            session.ai.suggestEditsCalls shouldContainExactly listOf("a")
-            val request = session.ai.suggestEditsRequests.single()
+            session.aiSuggest.suggestEditsCalls shouldContainExactly listOf("a")
+            val request = session.aiSuggest.suggestEditsRequests.single()
             request.tags shouldBe false
             request.fields.map { it.field } shouldContainExactly AiField.entries
             job.cancel()
@@ -714,7 +714,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit = AiEditSuggestion.EMPTY
+                    aiSuggest.edit = AiEditSuggestion.EMPTY
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -728,7 +728,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            session.ai.suggestEditsCalls shouldBe emptyList()
+            session.aiSuggest.suggestEditsCalls shouldBe emptyList()
             model.ui.value.phase
                 .shouldBeInstanceOf<EditPhase.Idle>()
             job.cancel()
@@ -740,7 +740,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -794,7 +794,7 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"))
-                    ai.editByDoc =
+                    aiSuggest.editByDoc =
                         mapOf(
                             "a" to edit(addTags = listOf(TagSuggestion("t", isNew = false))),
                             "b" to AiEditSuggestion.EMPTY,
@@ -820,7 +820,7 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"), item("c"))
-                    ai.editByDoc =
+                    aiSuggest.editByDoc =
                         mapOf(
                             // a: existing tag (pre-selected), b: no suggestions, c: existing tag we deselect.
                             "a" to edit(addTags = listOf(TagSuggestion("t1", isNew = false))),
@@ -843,11 +843,11 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
                 .shouldBeInstanceOf<EditPhase.Done>()
 
             // Next batch must not re-suggest a, b (no suggestion) or c (deselected) — all reviewed.
-            session.ai.suggestEditsCalls.clear()
+            session.aiSuggest.suggestEditsCalls.clear()
             model.nextBatch()
             advanceUntilIdle()
 
-            session.ai.suggestEditsCalls shouldBe emptyList()
+            session.aiSuggest.suggestEditsCalls shouldBe emptyList()
             val done =
                 model.ui.value.phase
                     .shouldBeInstanceOf<EditPhase.Done>()
@@ -861,7 +861,7 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    ai.edit = edit(addTags = listOf(TagSuggestion("brandnew", isNew = true)))
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("brandnew", isNew = true)))
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }

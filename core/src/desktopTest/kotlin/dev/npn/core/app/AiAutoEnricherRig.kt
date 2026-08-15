@@ -1,12 +1,8 @@
 package dev.npn.core.app
 
-import dev.npn.core.ai.AiChatEvent
-import dev.npn.core.ai.AiChatTurn
 import dev.npn.core.ai.AiConfig
-import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiProvider
+import dev.npn.core.ai.FakeAiSuggest
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.AiEnrichQueueEntity
@@ -17,7 +13,6 @@ import dev.npn.core.index.MutableClock
 import dev.npn.core.model.DocProperty
 import dev.npn.core.work.QueueDrainer
 import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.test.TestScope
 import java.io.File
 import java.nio.file.Files
@@ -36,32 +31,6 @@ internal val ACTIVE =
         model = "test-model",
         autoOnOcr = true,
     )
-
-internal class StubAi : AiFacade {
-    var suggestion: AiEditSuggestion = AiEditSuggestion.EMPTY
-
-    /** Called with the docId; throw to simulate an endpoint or model failure for that document. */
-    var failWith: ((String) -> Unit)? = null
-    val calls = mutableListOf<String>()
-    val requests = mutableListOf<AiEditRequest>()
-
-    override suspend fun suggestEdits(
-        docId: String,
-        request: AiEditRequest,
-    ): AiEditSuggestion {
-        calls += docId
-        requests += request
-        failWith?.invoke(docId)
-        return suggestion
-    }
-
-    override suspend fun config(): AiConfig = error("unused")
-
-    override fun ask(
-        history: List<AiChatTurn>,
-        question: String,
-    ): Flow<AiChatEvent> = error("unused")
-}
 
 /**
  * Records the batched writes. Every setter errors: the enricher must write through
@@ -145,7 +114,7 @@ internal class Rig(
     val dbDir: File,
     private val scope: CoroutineScope,
 ) {
-    val ai = StubAi()
+    val ai = FakeAiSuggest()
     val meta = RecordingMeta()
     val clock = MutableClock(start = 5_000L)
     var config: AiConfig = ACTIVE

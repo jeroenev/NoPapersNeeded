@@ -54,7 +54,7 @@ class RescanOcrWorker(
                 // Drains rather than watching a count, so it returns as soon as no further
                 // progress is possible — feature off, endpoint unconfigured, or a backlog waiting
                 // out a backoff — instead of holding the wakelock until the timeout.
-                session.ai.drainAutoEnrich()
+                session.aiSuggest.drainAutoEnrich()
             }
             Result.success()
         } catch (t: Throwable) {

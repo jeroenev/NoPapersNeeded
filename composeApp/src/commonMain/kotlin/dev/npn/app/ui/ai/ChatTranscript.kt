@@ -2,8 +2,6 @@ package dev.npn.app.ui.ai
 
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
-import dev.npn.core.ai.AiChatTurn
-import dev.npn.core.ai.AiRole
 import dev.npn.core.ai.AiText
 
 /** One rendered item in the chat transcript: a user turn, a tool use, or an assistant turn. */
@@ -110,8 +108,8 @@ data class ChatTranscript(
             // the documents it actually cited.
             ChatTranscript(finaliseTrailingAssistant(items))
         } else {
-            // No delta ever arrived (e.g. an answer produced entirely through the non-streaming
-            // fallback that only emits Done): materialise the full answer as one finished turn.
+            // No delta ever arrived (a run whose only text reaches us on Done): materialise the
+            // full answer as one finished turn.
             ChatTranscript(
                 items +
                     TranscriptItem.AssistantTurn(fullText, AiText.extractDocRefs(fullText), streaming = false),
@@ -121,17 +119,6 @@ data class ChatTranscript(
 
     /** Mark any trailing still-streaming assistant turn as complete (keeps partial text). */
     fun finalized(): ChatTranscript = ChatTranscript(finaliseTrailingAssistant(items))
-
-    /** History for the next ask: user/assistant text turns only (tool items excluded). */
-    val history: List<AiChatTurn>
-        get() =
-            items.mapNotNull { item ->
-                when (item) {
-                    is TranscriptItem.UserTurn -> AiChatTurn(AiRole.USER, item.text)
-                    is TranscriptItem.AssistantTurn -> AiChatTurn(AiRole.ASSISTANT, item.text)
-                    is TranscriptItem.ToolUse -> null
-                }
-            }
 
     /** True when the transcript shows any tool row or any non-blank assistant text. */
     val hasVisibleContent: Boolean
@@ -146,26 +133,6 @@ data class ChatTranscript(
 
     companion object {
         val EMPTY = ChatTranscript()
-
-        /** Restore the visible user/assistant portion of persisted Koog chat memory. */
-        fun fromHistory(turns: List<AiChatTurn>): ChatTranscript =
-            ChatTranscript(
-                turns.mapNotNull { turn ->
-                    when (turn.role) {
-                        AiRole.USER -> {
-                            TranscriptItem.UserTurn(turn.text)
-                        }
-
-                        AiRole.ASSISTANT -> {
-                            TranscriptItem.AssistantTurn(
-                                text = turn.text,
-                                docRefs = AiText.extractDocRefs(turn.text),
-                                streaming = false,
-                            )
-                        }
-                    }
-                },
-            )
 
         /** Restore the complete visible transcript, including persisted tool uses. */
         fun fromPersistedHistory(items: List<AiChatHistoryItem>): ChatTranscript =

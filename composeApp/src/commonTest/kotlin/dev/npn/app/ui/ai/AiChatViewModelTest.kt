@@ -6,7 +6,6 @@ import dev.npn.app.ui.common.resolveEnglish
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
-import dev.npn.core.ai.AiRole
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -31,7 +30,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
     @Test
     fun configProbePopulatesConfiguredFlag() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ai.configValue = ai.configValue.copy(enabled = true) }
+            val session = FakeLibrarySession().apply { aiChat.configuredValue = true }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
 
@@ -49,9 +48,9 @@ class AiChatViewModelTest : MainDispatcherTest() {
             val fresh = AiChatSession("fresh", "New chat", 3L)
             val session =
                 FakeLibrarySession().apply {
-                    ai.savedChatSessions = listOf(saved)
-                    ai.createdChatSession = fresh
-                    ai.chatTranscripts =
+                    aiChat.savedChatSessions = listOf(saved)
+                    aiChat.createdChatSession = fresh
+                    aiChat.chatTranscripts =
                         mapOf(
                             saved.id to listOf(AiChatHistoryItem.UserTurn("old question")),
                         )
@@ -70,7 +69,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
     @Test
     fun sendAppendsUserTurnAndClearsBusy() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ai.askResponses = listOf("hello back") }
+            val session = FakeLibrarySession().apply { aiChat.askResponses = listOf("hello back") }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
             advanceUntilIdle()
@@ -90,8 +89,8 @@ class AiChatViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    ai.askDelayMillis = 1_000
-                    ai.askScripts =
+                    aiChat.askDelayMillis = 1_000
+                    aiChat.askScripts =
                         listOf(
                             listOf(AiChatEvent.TextDelta("partial"), AiChatEvent.Done("partial")),
                         )
@@ -111,11 +110,11 @@ class AiChatViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun sendCapturesHistoryBeforeAppendingTheUserTurn() =
+    fun sendPassesOnlyTheQuestionToTheSession() =
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    ai.askScripts =
+                    aiChat.askScripts =
                         listOf(
                             listOf(AiChatEvent.TextDelta("a1"), AiChatEvent.Done("a1")),
                             listOf(AiChatEvent.TextDelta("a2"), AiChatEvent.Done("a2")),
@@ -130,22 +129,20 @@ class AiChatViewModelTest : MainDispatcherTest() {
             model.send("q2")
             advanceUntilIdle()
 
-            // First ask sees no history and the current question is never part of the history.
-            session.ai.asked[0].first shouldBe emptyList()
-            session.ai.asked[0].second shouldBe "q1"
-            // Second ask sees prior user+assistant turns but NOT the just-sent q2.
-            session.ai.asked[1]
-                .first
-                .map { it.role to it.text } shouldContainExactly
-                listOf(AiRole.USER to "q1", AiRole.ASSISTANT to "a1")
-            session.ai.asked[1].second shouldBe "q2"
+            // Both asks go to the same session; history is the session's own persisted
+            // transcript, so the viewmodel passes nothing but the question.
+            val sessionId = model.ui.value.currentSessionId
+            session.aiChat.asked
+                .map { it.first }
+                .distinct() shouldContainExactly listOf(sessionId)
+            session.aiChat.asked.map { it.second } shouldContainExactly listOf("q1", "q2")
             job.cancel()
         }
 
     @Test
     fun failedAskKeepsUserTurnAndSurfacesMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ai.failAsk = { error("connection refused") } }
+            val session = FakeLibrarySession().apply { aiChat.failAsk = { error("connection refused") } }
             val model = vm(session)
             val messages = mutableListOf<String>()
             val jobs =
@@ -171,7 +168,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    ai.askScripts =
+                    aiChat.askScripts =
                         listOf(
                             listOf(
                                 AiChatEvent.TextDelta("partial"),
@@ -179,7 +176,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
                                 AiChatEvent.Done("partial more"),
                             ),
                         )
-                    ai.failAskAfter = 1
+                    aiChat.failAskAfter = 1
                 }
             val model = vm(session)
             val messages = mutableListOf<String>()
@@ -211,7 +208,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
             // rows). Busy must clear and the user must get a one-shot message so the run leaves a trace.
             val session =
                 FakeLibrarySession().apply {
-                    ai.askScripts = listOf(listOf(AiChatEvent.Done("")))
+                    aiChat.askScripts = listOf(listOf(AiChatEvent.Done("")))
                 }
             val model = vm(session)
             val messages = mutableListOf<String>()
@@ -235,8 +232,8 @@ class AiChatViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    ai.askDelayMillis = 1_000
-                    ai.askScripts =
+                    aiChat.askDelayMillis = 1_000
+                    aiChat.askScripts =
                         listOf(
                             listOf(
                                 AiChatEvent.TextDelta("partial"),
@@ -278,14 +275,14 @@ class AiChatViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.ui.value.transcript.items shouldBe emptyList()
-            session.ai.asked shouldBe emptyList()
+            session.aiChat.asked shouldBe emptyList()
             job.cancel()
         }
 
     @Test
     fun clearResetsTranscript() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ai.askResponses = listOf("hi") }
+            val session = FakeLibrarySession().apply { aiChat.askResponses = listOf("hi") }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
             advanceUntilIdle()

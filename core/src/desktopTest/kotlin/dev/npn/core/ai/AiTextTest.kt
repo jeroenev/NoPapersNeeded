@@ -31,47 +31,6 @@ class AiTextTest {
     }
 
     @Test
-    fun trimHistoryKeepsAllTurnsUnderBudget() {
-        val history =
-            listOf(
-                AiChatTurn(AiRole.USER, "hi"),
-                AiChatTurn(AiRole.ASSISTANT, "hello"),
-            )
-        val trimmed = AiText.trimHistory(history, budgetChars = 1_000)
-        trimmed.turns shouldContainExactly history
-        trimmed.omittedEarlier shouldBe false
-    }
-
-    @Test
-    fun trimHistoryDropsOldestTurnsFirstAndFlagsOmission() {
-        val history =
-            listOf(
-                AiChatTurn(AiRole.USER, "aaaa"),
-                AiChatTurn(AiRole.ASSISTANT, "bbbb"),
-                AiChatTurn(AiRole.USER, "cc"),
-            )
-        // Budget fits the newest two turns (4+2 chars) but not the oldest.
-        val trimmed = AiText.trimHistory(history, budgetChars = 6)
-        trimmed.turns shouldContainExactly history.drop(1)
-        trimmed.omittedEarlier shouldBe true
-    }
-
-    @Test
-    fun trimHistoryKeepsNewestTurnEvenWhenItAloneExceedsBudget() {
-        val history = listOf(AiChatTurn(AiRole.USER, "way too long"))
-        val trimmed = AiText.trimHistory(history, budgetChars = 1)
-        trimmed.turns shouldContainExactly history
-        trimmed.omittedEarlier shouldBe false
-    }
-
-    @Test
-    fun trimHistoryEmptyIsEmptyAndNotOmitted() {
-        val trimmed = AiText.trimHistory(emptyList(), budgetChars = 10)
-        trimmed.turns shouldContainExactly emptyList()
-        trimmed.omittedEarlier shouldBe false
-    }
-
-    @Test
     fun parseTagSuggestionsPlainJsonArray() {
         AiText.parseTagSuggestions("[\"tax\", \"invoice\"]", emptyList()) shouldContainExactly
             listOf("tax", "invoice")

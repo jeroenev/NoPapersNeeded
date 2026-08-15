@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
-import dev.npn.core.ai.AiFacade
+import dev.npn.core.ai.AiChat
+import dev.npn.core.ai.AiSuggest
 import kotlinx.coroutines.CoroutineScope
 
 // ---------- session ----------
@@ -19,7 +20,8 @@ interface LibrarySession {
     val tagAdmin: TagAdmin
     val docLifecycle: DocLifecycle
     val content: DocContentFacade
-    val ai: AiFacade
+    val aiChat: AiChat
+    val aiSuggest: AiSuggest
     val ingest: IngestFacade
     val ocr: OcrFacade
     val reviewConfig: ReviewConfigFacade

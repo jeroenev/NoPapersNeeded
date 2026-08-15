@@ -7,7 +7,6 @@ import ai.koog.prompt.message.ResponseMetaInfo
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import io.kotest.matchers.collections.shouldContainExactly
-import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
@@ -53,7 +52,7 @@ class AiChatSessionTest {
         }
 
     @Test
-    fun chatHistorySkipsToolResultsInsteadOfReturningBlankUserTurns() =
+    fun chatTranscriptRendersToolResultsInsteadOfBlankUserTurns() =
         runTest {
             RoomChatHistoryProvider(db).store(
                 "tool-history",
@@ -71,8 +70,6 @@ class AiChatSessionTest {
             )
 
             val facade = AiFacadeImpl(db) { AiConfig() }
-            facade.chatHistoryFor("tool-history") shouldBe
-                listOf(AiChatTurn(AiRole.USER, "find tax"))
             facade.chatTranscriptFor("tool-history") shouldContainExactly
                 listOf(
                     AiChatHistoryItem.UserTurn("find tax"),

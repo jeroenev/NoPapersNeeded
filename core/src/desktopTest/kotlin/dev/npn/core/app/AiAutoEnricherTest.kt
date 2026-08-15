@@ -29,7 +29,7 @@ class AiAutoEnricherTest {
 
                 rig.enricher.enqueue("d1")
 
-                rig.ai.calls.shouldBeEmpty()
+                rig.ai.suggestEditsCalls.shouldBeEmpty()
                 rig.row("d1").shouldNotBeNull().attempts shouldBe 0
                 rig.enrichedAt("d1").shouldBeNull()
             }
@@ -117,7 +117,7 @@ class AiAutoEnricherTest {
         runTest {
             withRig { rig ->
                 rig.insert("d1")
-                rig.ai.suggestion =
+                rig.ai.edit =
                     AiEditSuggestion(
                         addTags = listOf(TagSuggestion("invoice", isNew = false)),
                         removeTags = listOf("draft"),
@@ -160,8 +160,8 @@ class AiAutoEnricherTest {
 
                 rig.drain()
 
-                rig.ai.calls shouldContainExactly listOf("d1")
-                val request = rig.ai.requests.single()
+                rig.ai.suggestEditsCalls shouldContainExactly listOf("d1")
+                val request = rig.ai.suggestEditsRequests.single()
                 request.tags shouldBe true
                 // No removals: nothing reviews this pass, so it must not undo a rule or a user.
                 request.tagRemovals shouldBe false
@@ -179,7 +179,7 @@ class AiAutoEnricherTest {
         runTest {
             withRig { rig ->
                 rig.insert("d1")
-                rig.ai.suggestion =
+                rig.ai.edit =
                     AiEditSuggestion(
                         addTags =
                             listOf(
@@ -200,7 +200,7 @@ class AiAutoEnricherTest {
         runTest {
             withRig { rig ->
                 rig.insert("d1")
-                rig.ai.suggestion = AiEditSuggestion.EMPTY
+                rig.ai.edit = AiEditSuggestion.EMPTY
                 rig.enricher.enqueue("d1")
 
                 rig.drain()

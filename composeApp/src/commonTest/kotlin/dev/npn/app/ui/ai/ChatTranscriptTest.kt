@@ -2,7 +2,6 @@ package dev.npn.app.ui.ai
 
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
-import dev.npn.core.ai.AiRole
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactly
@@ -250,41 +249,6 @@ class ChatTranscriptTest {
 
         transcript.items shouldHaveSize 1
         transcript.items[0].shouldBeInstanceOf<TranscriptItem.UserTurn>().text shouldBe "hello"
-    }
-
-    @Test
-    fun historyIsUserAndAssistantTextTurnsOnlyExcludingTools() {
-        val transcript =
-            ChatTranscript.EMPTY.plusUser("q1") +
-                AiChatEvent.ToolCallStarted("list_tags", "{}") +
-                AiChatEvent.ToolCallFinished("list_tags", "{}", "tags") +
-                AiChatEvent.TextDelta("a1") +
-                AiChatEvent.Done("a1")
-
-        transcript.history.map { it.role to it.text } shouldContainExactly
-            listOf(
-                AiRole.USER to "q1",
-                AiRole.ASSISTANT to "a1",
-            )
-    }
-
-    @Test
-    fun historyAfterTextToolTextHasNoDuplication() {
-        val transcript =
-            ChatTranscript.EMPTY.plusUser("q1") +
-                AiChatEvent.TextDelta("Let me search") +
-                AiChatEvent.ToolCallStarted("search_documents", "{}") +
-                AiChatEvent.ToolCallFinished("search_documents", "{}", "hit") +
-                AiChatEvent.TextDelta("Found it.") +
-                AiChatEvent.Done("Let me searchFound it.")
-
-        // user q1 + the two distinct assistant turns; no text repeated, no concatenated fullText.
-        transcript.history.map { it.role to it.text } shouldContainExactly
-            listOf(
-                AiRole.USER to "q1",
-                AiRole.ASSISTANT to "Let me search",
-                AiRole.ASSISTANT to "Found it.",
-            )
     }
 
     @Test

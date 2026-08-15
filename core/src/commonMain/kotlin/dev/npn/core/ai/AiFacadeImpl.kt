@@ -14,14 +14,16 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
- * Koog-backed [AiFacade]. Reads the endpoint configuration live on every call (settings can
- * change between calls) and caches the built runtime while the config is unchanged. Purely a
- * read-side consumer of the Room index; all writes stay with MetadataWriter/JournalCoordinator.
+ * Koog-backed implementation of both AI facets ([AiChat], [AiSuggest]). Reads the endpoint
+ * configuration live on every call (settings can change between calls) and caches the built
+ * runtime while the config is unchanged. Purely a read-side consumer of the Room index; all
+ * writes stay with MetadataWriter/JournalCoordinator.
  */
 class AiFacadeImpl(
     private val db: NpnDatabase,
     private val configProvider: suspend () -> AiConfig,
-) : AiFacade {
+) : AiChat,
+    AiSuggest {
     private val chatHistoryStore = RoomChatHistoryProvider(db)
     private val chatSessionStore = RoomChatSessionStore(db)
 
@@ -55,16 +57,10 @@ class AiFacadeImpl(
 
     private fun AiConfig.runtimeKey() = RuntimeKey(enabled, provider, baseUrl, apiKey, model)
 
-    override suspend fun config(): AiConfig = configProvider()
+    override suspend fun configured(): Boolean = configProvider().configured
 
     override fun ask(
-        history: List<AiChatTurn>,
-        question: String,
-    ): Flow<AiChatEvent> = askInSession(CHAT_CONVERSATION_ID, history, question)
-
-    override fun askInSession(
         sessionId: String,
-        history: List<AiChatTurn>,
         question: String,
     ): Flow<AiChatEvent> =
         flow {
@@ -82,17 +78,6 @@ class AiFacadeImpl(
                     params = AiRuntime.chatParams(configProvider()),
                 ).run(question, sessionId),
             )
-        }
-
-    override suspend fun chatHistory(): List<AiChatTurn> = chatHistoryFor(CHAT_CONVERSATION_ID)
-
-    override suspend fun chatHistoryFor(sessionId: String): List<AiChatTurn> =
-        chatTranscriptFor(sessionId).mapNotNull { item ->
-            when (item) {
-                is AiChatHistoryItem.UserTurn -> AiChatTurn(AiRole.USER, item.text)
-                is AiChatHistoryItem.AssistantTurn -> AiChatTurn(AiRole.ASSISTANT, item.text)
-                is AiChatHistoryItem.ToolUse -> null
-            }
         }
 
     override suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> =

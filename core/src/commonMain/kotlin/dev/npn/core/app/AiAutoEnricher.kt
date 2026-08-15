@@ -3,10 +3,10 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiFacade
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
+import dev.npn.core.ai.AiSuggest
 import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentDao
@@ -32,7 +32,7 @@ import kotlinx.coroutines.CancellationException
  *   are filled, so an automatic pass can never overwrite a value a human entered. Tags and fields
  *   are independent — fields are written even when no vocabulary tag matched.
  *
- * Everything comes from ONE [AiFacade.suggestEdits] call per document, and all writes go through
+ * Everything comes from ONE [AiSuggest.suggestEdits] call per document, and all writes go through
  * [MetadataWriter] (i.e. the journal), never straight to the index.
  *
  * ## Why a queue
@@ -62,7 +62,7 @@ import kotlinx.coroutines.CancellationException
 class AiAutoEnricher(
     private val documentDao: DocumentDao,
     private val queueDao: AiEnrichQueueDao,
-    private val ai: AiFacade,
+    private val ai: AiSuggest,
     private val meta: MetadataWriter,
     private val readConfig: suspend () -> AiConfig,
     private val clock: EpochClock,
