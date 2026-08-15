@@ -29,8 +29,8 @@ class KoogChatAgent(
     private val maxIterations: Int,
 ) {
     private val historyProvider = RoomChatHistoryProvider(db)
-    private val chatTools = LibraryAiTools.chatToolsFor(db)
-    private val toolRegistry = ToolRegistry { LibraryAiTools.forDatabase(db).forEach(::tool) }
+    private val toolSet = LibraryAiTools.toolSetFor(db)
+    private val toolRegistry = ToolRegistry { toolSet.tools.forEach(::tool) }
 
     fun run(
         question: String,
@@ -111,7 +111,7 @@ class KoogChatAgent(
         }
 
     private suspend fun dispatch(call: ToolCall): String =
-        chatTools.firstOrNull { it.name == call.name }?.let { tool ->
+        toolSet.chatTools.firstOrNull { it.name == call.name }?.let { tool ->
             runCatching { tool.call(call.argsJson) }
                 .getOrElse { "Error running ${call.name}: ${it.message ?: "unknown error"}" }
         } ?: "Error: unknown tool \"${call.name}\"."
