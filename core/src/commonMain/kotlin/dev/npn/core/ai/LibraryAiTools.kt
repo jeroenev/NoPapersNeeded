@@ -18,6 +18,18 @@ import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
 
 /**
+ * The library tool set in the two shapes one chat run needs, over a single construction of the
+ * tools: [tools] is what Koog advertises to the model through its `ToolRegistry`, [chatTools] is
+ * the name-keyed dispatcher the streaming loop calls. The chat view hand-rolls argument decoding
+ * instead of going through the registry because the streaming API hands us the raw args JSON, and
+ * decoding it against our own `@Serializable Args` types is the smaller, type-safe path.
+ */
+class LibraryToolSet internal constructor(
+    val tools: List<ToolBase<*, *>>,
+    val chatTools: List<AiChatTool>,
+)
+
+/**
  * Read-only tools the chat agent can call to search the library index: OCR/embedded text,
  * tags, filenames, and single-value metadata. Tools never write; every result line carries
  * the full docId so the model can cite documents as `[doc:<docId>]`.
@@ -27,48 +39,46 @@ object LibraryAiTools {
     const val MAX_LISTED_DOCS = 50
     const val TEXT_CHUNK_CHARS = 4_000
 
-    fun forDatabase(db: NpnDatabase): List<ToolBase<*, *>> =
-        listOf(
-            SearchDocumentsTool(db.ftsDao(), db.documentDao()),
-            ListTagsTool(db.tagDao()),
-            DocumentsWithTagTool(db.documentDao()),
-            SearchFileNamesTool(db.documentDao()),
-            ListFieldsTool(db.documentFieldDao()),
-            SearchFieldsTool(db.documentDao(), db.documentFieldDao()),
-            GetDocumentTool(db.documentDao(), db.tagDao(), db.documentFieldDao()),
-            GetDocumentTextTool(db.ftsDao()),
-        )
-
     /**
-     * The same tools wrapped as [AiChatTool]s the streaming loop can drive: each exposes its
-     * Koog [ToolDescriptor] (advertised to the model) and a name-keyed dispatcher that decodes
-     * a raw arguments JSON string with kotlinx.serialization and runs the tool. We hand-roll the
-     * decode instead of going through Koog's `ToolRegistry` because the streaming API hands us the
-     * raw args JSON, and decoding it against our own `@Serializable Args` types is the smaller,
-     * type-safe path.
+     * Build the library tool set once, in both shapes the chat agent needs (see [LibraryToolSet]).
+     * Each tool is constructed a single time and shared by the two views, so a tool the model is
+     * advertised is the same instance the loop dispatches to.
      */
-    fun chatToolsFor(db: NpnDatabase): List<AiChatTool> {
+    fun toolSetFor(db: NpnDatabase): LibraryToolSet {
         val json =
             Json {
                 ignoreUnknownKeys = true
                 isLenient = true
             }
-        return listOf(
-            SearchDocumentsTool(db.ftsDao(), db.documentDao())
-                .asChatTool(SearchDocumentsTool.Args.serializer(), json),
-            ListTagsTool(db.tagDao()).asChatTool(ListTagsTool.Args.serializer(), json),
-            DocumentsWithTagTool(db.documentDao())
-                .asChatTool(DocumentsWithTagTool.Args.serializer(), json),
-            SearchFileNamesTool(db.documentDao())
-                .asChatTool(SearchFileNamesTool.Args.serializer(), json),
-            ListFieldsTool(db.documentFieldDao())
-                .asChatTool(ListFieldsTool.Args.serializer(), json),
-            SearchFieldsTool(db.documentDao(), db.documentFieldDao())
-                .asChatTool(SearchFieldsTool.Args.serializer(), json),
-            GetDocumentTool(db.documentDao(), db.tagDao(), db.documentFieldDao())
-                .asChatTool(GetDocumentTool.Args.serializer(), json),
-            GetDocumentTextTool(db.ftsDao()).asChatTool(GetDocumentTextTool.Args.serializer(), json),
+        val entries =
+            listOf(
+                Entry(SearchDocumentsTool(db.ftsDao(), db.documentDao()), SearchDocumentsTool.Args.serializer()),
+                Entry(ListTagsTool(db.tagDao()), ListTagsTool.Args.serializer()),
+                Entry(DocumentsWithTagTool(db.documentDao()), DocumentsWithTagTool.Args.serializer()),
+                Entry(SearchFileNamesTool(db.documentDao()), SearchFileNamesTool.Args.serializer()),
+                Entry(ListFieldsTool(db.documentFieldDao()), ListFieldsTool.Args.serializer()),
+                Entry(
+                    SearchFieldsTool(db.documentDao(), db.documentFieldDao()),
+                    SearchFieldsTool.Args.serializer(),
+                ),
+                Entry(
+                    GetDocumentTool(db.documentDao(), db.tagDao(), db.documentFieldDao()),
+                    GetDocumentTool.Args.serializer(),
+                ),
+                Entry(GetDocumentTextTool(db.ftsDao()), GetDocumentTextTool.Args.serializer()),
+            )
+        return LibraryToolSet(
+            tools = entries.map { it.tool },
+            chatTools = entries.map { it.chatTool(json) },
         )
+    }
+
+    /** One tool with the serializer for its `Args`, so both views can be derived from it. */
+    private class Entry<A>(
+        val tool: SimpleTool<A>,
+        private val serializer: KSerializer<A>,
+    ) {
+        fun chatTool(json: Json): AiChatTool = tool.asChatTool(serializer, json)
     }
 
     private fun <A> SimpleTool<A>.asChatTool(
