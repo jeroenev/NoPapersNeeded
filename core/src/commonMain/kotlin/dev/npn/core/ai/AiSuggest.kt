@@ -107,18 +107,6 @@ data class AiEditSuggestion(
  */
 interface AiSuggest : AiAvailability {
     /**
-     * Run the automatic post-OCR enrichment queue until there is nothing more it can do right now,
-     * then return. Lets a caller that must keep the process alive while background work runs (the
-     * Android maintenance job) do so without guessing at a duration.
-     *
-     * Returns rather than waiting out a retry backoff, and returns immediately when the feature is
-     * off or the endpoint unconfigured — in every one of those cases no further progress is
-     * possible until a later drain, so there is nothing to hold the process open for. No-op by
-     * default so test fakes need not implement it.
-     */
-    suspend fun drainAutoEnrich() {}
-
-    /**
      * The single suggestion primitive: propose edits for [docId] from its indexed text and
      * current metadata, honouring [request]'s field selection/modes, tag-add/removal flags and
      * optional [AiEditRequest.customPrompt]. All requested pieces come back from ONE model

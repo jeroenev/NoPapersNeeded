@@ -92,7 +92,8 @@ class LibrarySessionImpl private constructor(
     IngestFacade,
     OcrFacade,
     ReviewConfigFacade,
-    MaintenanceFacade {
+    MaintenanceFacade,
+    WorkFacade {
     private val fs get() = deps.fs
     private val db get() = deps.db
 
@@ -103,6 +104,7 @@ class LibrarySessionImpl private constructor(
     override val ocr: OcrFacade get() = this
     override val reviewConfig: ReviewConfigFacade get() = this
     override val maintenance: MaintenanceFacade get() = this
+    override val work: WorkFacade get() = this
     override val meta: MetadataWriter get() = writer
     override val tagAdmin: TagAdmin get() = writer
     override val docLifecycle: DocLifecycle get() = writer
@@ -239,6 +241,16 @@ class LibrarySessionImpl private constructor(
         // The commit above already folded the override into the doc row; re-select now so this
         // device's index reflects the choice immediately.
         ocrPipeline.reselect(docId)
+    }
+
+    // Both drains go through the session's own drainers rather than running on the caller's
+    // coroutine, so closing the session cancels them (see QueueDrainer.drainAndAwait).
+    override suspend fun drainOcr() {
+        ocrWorker.drainAndAwait()
+    }
+
+    override suspend fun drainEnrichment() {
+        enrichWorker.drainAndAwait()
     }
 
     override suspend fun splitPdf(
@@ -630,9 +642,6 @@ class LibrarySessionImpl private constructor(
                     clock = deps.clock,
                 )
             val enrichWorker = QueueDrainer(deps.scope) { autoEnricher.processNext() }
-            // Awaited rather than run inline: the caller is Android's WorkManager, outside this
-            // session's lifecycle, and the drain must still stop when the session closes.
-            ai.autoEnrichDrain = { enrichWorker.drainAndAwait() }
             // Deterministic local rules run on any newly indexed text, including a re-index.
             ocrPipeline.onTextIndexed = { docId, text -> ruleApplier.applyToDoc(docId, text) }
             // The paid pass runs only on text this device just produced. It fires after the rules

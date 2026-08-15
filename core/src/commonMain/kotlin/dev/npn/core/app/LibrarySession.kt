@@ -26,6 +26,7 @@ interface LibrarySession {
     val ocr: OcrFacade
     val reviewConfig: ReviewConfigFacade
     val maintenance: MaintenanceFacade
+    val work: WorkFacade
 
     /** Start folder watching (desktop), OCR worker, periodic reconciliation. Idempotent. */
     fun start(scope: CoroutineScope)
