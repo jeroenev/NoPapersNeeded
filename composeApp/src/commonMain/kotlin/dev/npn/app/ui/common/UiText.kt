@@ -55,6 +55,7 @@ import no_papers_needed.composeapp.generated.resources.common_tagging_done_empty
 import no_papers_needed.composeapp.generated.resources.common_tagging_done_summary
 import no_papers_needed.composeapp.generated.resources.common_tagging_scope_count_batch
 import no_papers_needed.composeapp.generated.resources.common_unknown_error
+import org.jetbrains.compose.resources.PluralStringResource
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
@@ -138,134 +139,156 @@ fun uiText(
     vararg arguments: Any?,
 ): UiText = UiText.Resource(key, arguments.toList())
 
-/** Resolve text with the active Compose resource locale at the UI boundary. */
-@Composable
-fun UiText.resolve(): String =
+/**
+ * The rendering plan for one [UiTextKey]: which resource to read and which arguments to feed it.
+ *
+ * Splitting the plan from the rendering is what lets the app and the non-Compose unit tests share
+ * a single wording table. [spec] is the only place a key is mapped to a resource; the composable
+ * and suspending renderers both consume the result, so neither can drift from the other or from
+ * `values/common.xml`. Arguments may themselves be [TextSpec]s, which renderers resolve first.
+ */
+internal sealed interface TextSpec {
+    data class Str(
+        val res: StringResource,
+        val args: List<Any?> = emptyList(),
+    ) : TextSpec
+
+    data class Plural(
+        val res: PluralStringResource,
+        val quantity: Int,
+        val args: List<Any?> = emptyList(),
+    ) : TextSpec
+
+    /**
+     * Parts joined pairwise with `common_join_items`, used by the import summary.
+     * [parts] must not be empty — both renderers fold from the first element.
+     */
+    data class Join(
+        val parts: List<TextSpec>,
+    ) : TextSpec
+
+    data class Literal(
+        val value: String,
+    ) : TextSpec
+}
+
+internal fun UiText.spec(): TextSpec =
     when (this) {
-        is UiText.Dynamic -> value
-        is UiText.Resource -> key.resolve(arguments)
+        is UiText.Dynamic -> TextSpec.Literal(value)
+        is UiText.Resource -> key.spec(arguments)
     }
 
-@Composable
-fun UiMessage.resolve(): String = text.resolve()
-
-@Composable
-private fun UiTextKey.resolve(args: List<Any?>): String =
+private fun UiTextKey.spec(args: List<Any?>): TextSpec =
     when (this) {
         UiTextKey.COULD_NOT_OPEN_LIBRARY -> {
-            stringResource(Res.string.common_could_not_open_library)
+            TextSpec.Str(Res.string.common_could_not_open_library)
         }
 
         UiTextKey.UNKNOWN_ERROR -> {
-            stringResource(Res.string.common_unknown_error)
+            TextSpec.Str(Res.string.common_unknown_error)
         }
 
         UiTextKey.COULD_NOT_ACTION,
         UiTextKey.COULD_NOT_DOCUMENTS,
         UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS,
         -> {
-            writeFailure(args)
+            writeFailureSpec(args)
         }
 
         UiTextKey.COULD_NOT_SUGGEST_TAGS_PARTIAL -> {
-            pluralStringResource(
+            TextSpec.Plural(
                 Res.plurals.common_could_not_suggest_tags_partial,
                 args.intAt(1),
-                args.intAt(0),
-                args.intAt(1),
+                listOf(args.intAt(0), args.intAt(1)),
             )
         }
 
         UiTextKey.NO_AI_TAG_SUGGESTIONS -> {
-            stringResource(Res.string.common_no_ai_tag_suggestions)
+            TextSpec.Str(Res.string.common_no_ai_tag_suggestions)
         }
 
         UiTextKey.NO_AI_METADATA_SUGGESTIONS -> {
-            stringResource(Res.string.common_no_ai_metadata_suggestions)
+            TextSpec.Str(Res.string.common_no_ai_metadata_suggestions)
         }
 
         UiTextKey.AI_ASSISTANT_UNREACHABLE -> {
-            stringResource(Res.string.common_ai_assistant_unreachable, args[0].displayArgument())
+            TextSpec.Str(Res.string.common_ai_assistant_unreachable, listOf(args[0].argumentSpec()))
         }
 
         UiTextKey.AI_ASSISTANT_EMPTY_ANSWER -> {
-            stringResource(Res.string.common_ai_assistant_empty_answer)
+            TextSpec.Str(Res.string.common_ai_assistant_empty_answer)
         }
 
         UiTextKey.IMPORT_SUMMARY -> {
-            importSummary(args)
+            importSummarySpec(args)
         }
 
         UiTextKey.SCAN_IMPORTED -> {
-            stringResource(Res.string.common_scan_imported)
+            TextSpec.Str(Res.string.common_scan_imported)
         }
 
         UiTextKey.SCAN_ALREADY_IN_LIBRARY -> {
-            stringResource(Res.string.common_scan_already_in_library)
+            TextSpec.Str(Res.string.common_scan_already_in_library)
         }
 
         UiTextKey.SCAN_IMPORT_FAILED -> {
-            stringResource(Res.string.common_scan_import_failed, args[0].displayArgument())
+            TextSpec.Str(Res.string.common_scan_import_failed, listOf(args[0].argumentSpec()))
         }
 
         UiTextKey.TAGGING_SCOPE_COUNT -> {
-            documentCount(args.intAt(0))
+            documentCountSpec(args.intAt(0))
         }
 
         UiTextKey.TAGGING_SCOPE_COUNT_BATCH -> {
-            pluralStringResource(
+            TextSpec.Plural(
                 Res.plurals.common_tagging_scope_count_batch,
                 args.intAt(0),
-                args.intAt(0),
-                args.intAt(1),
+                listOf(args.intAt(0), args.intAt(1)),
             )
         }
 
         UiTextKey.TAGGING_APPLY_SUMMARY -> {
-            stringResource(
+            TextSpec.Str(
                 Res.string.common_tagging_apply_summary,
-                suggestionCount(args.intAt(0)),
-                documentCount(args.intAt(1)),
+                listOf(suggestionCountSpec(args.intAt(0)), documentCountSpec(args.intAt(1))),
             )
         }
 
         UiTextKey.TAGGING_DONE_SUMMARY -> {
-            stringResource(
+            TextSpec.Str(
                 Res.string.common_tagging_done_summary,
-                suggestionCount(args.intAt(0)),
-                documentCount(args.intAt(1)),
+                listOf(suggestionCountSpec(args.intAt(0)), documentCountSpec(args.intAt(1))),
             )
         }
 
         UiTextKey.TAGGING_DONE_EMPTY -> {
-            stringResource(Res.string.common_tagging_done_empty)
+            TextSpec.Str(Res.string.common_tagging_done_empty)
         }
     }
 
-@Composable
-private fun UiTextKey.writeFailure(args: List<Any?>): String {
-    val action = actionTextResource(args[0] as UiAction)
-    return when (this) {
+/** The three keys that report a failed write, all of which lead with a [UiAction]. */
+private fun UiTextKey.writeFailureSpec(args: List<Any?>): TextSpec =
+    when (this) {
         UiTextKey.COULD_NOT_ACTION -> {
-            stringResource(Res.string.common_could_not_action, action, args[1].displayArgument())
+            TextSpec.Str(
+                Res.string.common_could_not_action,
+                listOf(args.actionAt(0), args[1].argumentSpec()),
+            )
         }
 
         UiTextKey.COULD_NOT_DOCUMENTS -> {
-            pluralStringResource(
+            TextSpec.Plural(
                 Res.plurals.common_could_not_documents,
                 args.intAt(1),
-                action,
-                args.intAt(1),
+                listOf(args.actionAt(0), args.intAt(1)),
             )
         }
 
         UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS -> {
-            pluralStringResource(
+            TextSpec.Plural(
                 Res.plurals.common_could_not_partial_documents,
                 args.intAt(2),
-                action,
-                args.intAt(1),
-                args.intAt(2),
+                listOf(args.actionAt(0), args.intAt(1), args.intAt(2)),
             )
         }
 
@@ -273,31 +296,40 @@ private fun UiTextKey.writeFailure(args: List<Any?>): String {
             error("Not a write-failure text key: $this")
         }
     }
-}
 
-@Composable
-private fun importSummary(args: List<Any?>): String {
-    val parts =
+private fun importSummarySpec(args: List<Any?>): TextSpec =
+    TextSpec.Join(
         buildList {
             val imported = args.intAt(0)
-            add(pluralStringResource(Res.plurals.common_imported_count, imported, imported))
+            add(TextSpec.Plural(Res.plurals.common_imported_count, imported, listOf(imported)))
             val duplicates = args.intAt(1)
-            if (duplicates > 0) add(pluralStringResource(Res.plurals.common_duplicate_count, duplicates, duplicates))
+            if (duplicates > 0) {
+                add(TextSpec.Plural(Res.plurals.common_duplicate_count, duplicates, listOf(duplicates)))
+            }
             val failed = args.intAt(2)
-            if (failed > 0) add(pluralStringResource(Res.plurals.common_failed_count, failed, failed))
-        }
-    return parts.reduce { summary, part -> stringResource(Res.string.common_join_items, summary, part) }
-}
+            if (failed > 0) {
+                add(TextSpec.Plural(Res.plurals.common_failed_count, failed, listOf(failed)))
+            }
+        },
+    )
 
-@Composable
-private fun documentCount(count: Int): String = pluralStringResource(Res.plurals.common_document_count, count, count)
+private fun documentCountSpec(count: Int): TextSpec =
+    TextSpec.Plural(Res.plurals.common_document_count, count, listOf(count))
 
-@Composable
-private fun suggestionCount(count: Int): String =
-    pluralStringResource(Res.plurals.common_suggestion_count, count, count)
+private fun suggestionCountSpec(count: Int): TextSpec =
+    TextSpec.Plural(Res.plurals.common_suggestion_count, count, listOf(count))
 
-@Composable
-private fun actionTextResource(action: UiAction): String = stringResource(action.stringResource)
+private fun List<Any?>.intAt(index: Int): Int = this[index] as Int
+
+private fun List<Any?>.actionAt(index: Int): TextSpec = TextSpec.Str((this[index] as UiAction).stringResource)
+
+/** Message arguments may be nested [UiText]s; anything else is passed to the formatter as-is. */
+private fun Any?.argumentSpec(): Any? =
+    when (this) {
+        is UiText -> spec()
+        null -> ""
+        else -> this
+    }
 
 private val UiAction.stringResource: StringResource
     get() =
@@ -334,157 +366,34 @@ private val UiAction.stringResource: StringResource
             UiAction.TAG -> Res.string.common_action_tag
         }
 
-private fun List<Any?>.intAt(index: Int): Int = this[index] as Int
+/** Resolve text with the active Compose resource locale at the UI boundary. */
+@Composable
+fun UiText.resolve(): String = spec().render()
 
 @Composable
-private fun Any?.displayArgument(): String =
+fun UiMessage.resolve(): String = text.resolve()
+
+@Composable
+private fun TextSpec.render(): String =
     when (this) {
-        is UiText.Dynamic -> value
-        is UiText.Resource -> resolve()
-        null -> ""
-        else -> toString()
-    }
-
-/**
- * Deterministic renderer retained for non-Compose unit tests.
- *
- * Test-only: it hardcodes the English wording of [UiTextKey]s so assertions stay deterministic
- * without a resource environment. Keep these strings in sync with `values/common.xml`, which is
- * what the app actually renders (the two can drift without failing any automated check).
- */
-fun UiText.resolveEnglish(): String =
-    when (this) {
-        is UiText.Dynamic -> value
-        is UiText.Resource -> key.resolveEnglish(arguments)
-    }
-
-fun UiMessage.resolveEnglish(): String = text.resolveEnglish()
-
-private fun UiTextKey.resolveEnglish(args: List<Any?>): String =
-    when (this) {
-        UiTextKey.COULD_NOT_OPEN_LIBRARY -> {
-            "Could not open the library."
+        is TextSpec.Literal -> {
+            value
         }
 
-        UiTextKey.UNKNOWN_ERROR -> {
-            "unknown error"
+        is TextSpec.Str -> {
+            stringResource(res, *args.renderAll())
         }
 
-        UiTextKey.COULD_NOT_ACTION -> {
-            "Could not ${actionText(args[0])}: ${args[1].englishArgument()}"
+        is TextSpec.Plural -> {
+            pluralStringResource(res, quantity, *args.renderAll())
         }
 
-        UiTextKey.COULD_NOT_DOCUMENTS -> {
-            "Could not ${actionText(args[0])} ${args[1]} document(s)"
-        }
-
-        UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS -> {
-            "Could not ${actionText(args[0])} ${args[1]} of ${args[2]} document(s)"
-        }
-
-        UiTextKey.COULD_NOT_SUGGEST_TAGS_PARTIAL -> {
-            "Could not get suggestions for ${args[0]} of ${args[1]} document(s)"
-        }
-
-        UiTextKey.NO_AI_TAG_SUGGESTIONS -> {
-            "No suggestions - document may not be OCRed yet"
-        }
-
-        UiTextKey.NO_AI_METADATA_SUGGESTIONS -> {
-            "No suggestions - document may not be OCRed yet"
-        }
-
-        UiTextKey.AI_ASSISTANT_UNREACHABLE -> {
-            "Could not reach the AI assistant: ${args[0].englishArgument()}"
-        }
-
-        UiTextKey.AI_ASSISTANT_EMPTY_ANSWER -> {
-            "The assistant returned an empty answer."
-        }
-
-        UiTextKey.IMPORT_SUMMARY -> {
-            importSummaryEnglish(args)
-        }
-
-        UiTextKey.SCAN_IMPORTED -> {
-            "Scan imported"
-        }
-
-        UiTextKey.SCAN_ALREADY_IN_LIBRARY -> {
-            "Scan already in library"
-        }
-
-        UiTextKey.SCAN_IMPORT_FAILED -> {
-            "Scan import failed: ${args[0].englishArgument()}"
-        }
-
-        UiTextKey.TAGGING_SCOPE_COUNT -> {
-            "${args[0]} ${plural(args[0] as Int, "document")}"
-        }
-
-        UiTextKey.TAGGING_SCOPE_COUNT_BATCH -> {
-            "${args[0]} ${plural(args[0] as Int, "document")} - the first ${args[1]} run in this batch"
-        }
-
-        UiTextKey.TAGGING_APPLY_SUMMARY -> {
-            "Apply ${args[0]} ${plural(args[0] as Int, "suggestion")} across " +
-                "${args[1]} ${plural(args[1] as Int, "document")}"
-        }
-
-        UiTextKey.TAGGING_DONE_SUMMARY -> {
-            "Applied ${args[0]} ${plural(args[0] as Int, "suggestion")} across " +
-                "${args[1]} ${plural(args[1] as Int, "document")}"
-        }
-
-        UiTextKey.TAGGING_DONE_EMPTY -> {
-            "No documents to tag"
+        is TextSpec.Join -> {
+            parts.map { it.render() }.reduce { summary, part ->
+                stringResource(Res.string.common_join_items, summary, part)
+            }
         }
     }
 
-private fun importSummaryEnglish(args: List<Any?>): String =
-    buildString {
-        append("${args[0]} imported")
-        if (args[1] as Int > 0) append(", ${args[1]} duplicate")
-        if (args[2] as Int > 0) append(", ${args[2]} failed")
-    }
-
-private fun Any?.englishArgument(): String =
-    when (this) {
-        is UiText -> resolveEnglish()
-        null -> ""
-        else -> toString()
-    }
-
-private fun actionText(value: Any?): String =
-    when (value as UiAction) {
-        UiAction.SAVE_TITLE -> "save title"
-        UiAction.SAVE_CORRESPONDENT -> "save correspondent"
-        UiAction.SAVE_DOCUMENT_TYPE -> "save document type"
-        UiAction.SAVE_DATE -> "save date"
-        UiAction.ADD_TAG -> "add tag"
-        UiAction.REMOVE_TAG -> "remove tag"
-        UiAction.SAVE_FIELD -> "save field"
-        UiAction.REMOVE_FIELD -> "remove field"
-        UiAction.UPDATE_REVIEW_STATE -> "update review state"
-        UiAction.MOVE_TO_TRASH -> "move to trash"
-        UiAction.RENAME_FILE -> "rename file"
-        UiAction.RERUN_OCR -> "re-run OCR"
-        UiAction.CHANGE_OCR_ENGINE -> "change OCR engine"
-        UiAction.CREATE_TAG -> "create tag"
-        UiAction.RENAME_TAG -> "rename tag"
-        UiAction.MERGE_TAGS -> "merge tags"
-        UiAction.DELETE_TAG -> "delete tag"
-        UiAction.UPDATE_TAG_STYLE -> "update tag style"
-        UiAction.RESTORE_DOCUMENT -> "restore document"
-        UiAction.DELETE_DOCUMENT -> "delete document"
-        UiAction.REMOVE_DUPLICATE -> "remove duplicate"
-        UiAction.RELINK_DOCUMENT -> "relink document"
-        UiAction.SAVE_RULE -> "save rule"
-        UiAction.DELETE_RULE -> "delete rule"
-        UiAction.UPDATE_RULE -> "update rule"
-        UiAction.UPDATE -> "update"
-        UiAction.TRASH -> "trash"
-        UiAction.SUGGEST_TAGS -> "suggest tags"
-        UiAction.SUGGEST_METADATA -> "suggest details"
-        UiAction.TAG -> "tag"
-    }
+@Composable
+private fun List<Any?>.renderAll(): Array<Any> = map { if (it is TextSpec) it.render() else it ?: "" }.toTypedArray()

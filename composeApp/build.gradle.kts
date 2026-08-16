@@ -75,6 +75,13 @@ kotlin {
                 implementation(libs.kotlinx.coroutines.swing)
             }
         }
+        getByName("desktopTest") {
+            dependencies {
+                // Skiko natives. ViewModel tests assert real wording read from composeResources,
+                // and the desktop resource reader initialises Skiko even with no composition.
+                implementation(compose.desktop.currentOs)
+            }
+        }
     }
 
     compilerOptions {
@@ -85,6 +92,14 @@ kotlin {
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
     kover(project(":core"))
+}
+
+// ViewModel tests assert real user-facing wording read from `values/common.xml`. Compose resources
+// pick a locale from the JVM default, so pin the test JVM to English: without this the suite passes
+// on an English machine and fails on a Dutch one by resolving `values-nl` instead.
+tasks.withType<Test>().configureEach {
+    systemProperty("user.language", "en")
+    systemProperty("user.country", "US")
 }
 
 compose.resources {

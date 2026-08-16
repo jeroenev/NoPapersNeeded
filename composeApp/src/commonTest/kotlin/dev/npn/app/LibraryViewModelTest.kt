@@ -1,6 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.resolveEnglish
 import dev.npn.app.ui.library.ImportSummary
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.app.ImportOutcome
@@ -239,11 +238,12 @@ class LibraryViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun importSummaryMessageFormatsCounts() {
-        ImportSummary(3, 0, 0).asUiText().resolveEnglish() shouldBe "3 imported"
-        ImportSummary(2, 1, 0).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate"
-        ImportSummary(2, 1, 3).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate, 3 failed"
-    }
+    fun importSummaryMessageFormatsCounts() =
+        runTest(dispatcher) {
+            ImportSummary(3, 0, 0).asUiText().resolveEnglish() shouldBe "3 imported"
+            ImportSummary(2, 1, 0).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate"
+            ImportSummary(2, 1, 3).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate, 3 failed"
+        }
 
     // ---- bulk batched op failure handling ----
 
@@ -275,7 +275,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.bulkAddTag("finance")
             advanceUntilIdle()
             collector.cancel()
-            messages shouldContainExactly listOf("Could not add tag 2 document(s)")
+            messages shouldContainExactly listOf("Could not add tag 2 documents")
             // Selection preserved so the user can retry.
             model.ui.value.selected shouldBe setOf("d1", "d2")
             model.ui.value.selectionMode shouldBe true
@@ -323,7 +323,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.bulkTrash()
             advanceUntilIdle()
             collector.cancel()
-            messages shouldContainExactly listOf("Could not trash 1 of 3 document(s)")
+            messages shouldContainExactly listOf("Could not trash 1 of 3 documents")
             // d1 and d3 succeeded; only d2 kept selected for retry.
             session.docLifecycle.trashedDocs shouldContainExactlyInAnyOrder listOf("d1", "d3")
             model.ui.value.selected shouldBe setOf("d2")

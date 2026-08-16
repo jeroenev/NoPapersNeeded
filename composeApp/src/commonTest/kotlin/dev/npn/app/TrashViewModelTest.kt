@@ -1,6 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.resolveEnglish
 import dev.npn.app.ui.trash.TrashViewModel
 import dev.npn.core.index.RelinkCandidate
 import io.kotest.matchers.collections.shouldContainExactly

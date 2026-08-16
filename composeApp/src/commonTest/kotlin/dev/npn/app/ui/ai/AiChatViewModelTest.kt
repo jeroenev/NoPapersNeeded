@@ -2,7 +2,7 @@ package dev.npn.app.ui.ai
 
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
-import dev.npn.app.ui.common.resolveEnglish
+import dev.npn.app.resolveEnglish
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
