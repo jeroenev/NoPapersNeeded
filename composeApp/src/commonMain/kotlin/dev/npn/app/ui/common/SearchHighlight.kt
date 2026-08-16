@@ -16,7 +16,10 @@ import androidx.compose.ui.text.withStyle
  * One segment of text with an associated highlight flag. Produced by parsing FTS5 snippet
  * markers or matching query terms against plain text.
  */
-data class HighlightSegment(val text: String, val highlight: Boolean)
+data class HighlightSegment(
+    val text: String,
+    val highlight: Boolean,
+)
 
 /**
  * Parse an FTS5 snippet that wraps matched terms in [startMarker] and [endMarker]
@@ -45,10 +48,11 @@ fun parseFtsSnippet(
                 segments += HighlightSegment(remaining.substring(start), false)
                 remaining = ""
             } else {
-                segments += HighlightSegment(
-                    remaining.substring(start + startLen, end),
-                    true,
-                )
+                segments +=
+                    HighlightSegment(
+                        remaining.substring(start + startLen, end),
+                        true,
+                    )
                 remaining = remaining.substring(end + endLen)
             }
         }
@@ -59,20 +63,24 @@ fun parseFtsSnippet(
 /**
  * Tokenize [query] into non-empty search terms. Terms are lowercased and deduplicated.
  */
-fun queryTerms(query: String): List<String> = TOKEN_REGEX.findAll(query)
-    .map { it.groupValues[1].ifEmpty { it.groupValues[2] } }
-    .filter { it.isNotBlank() }
-    .distinctBy { it.lowercase() }
-    .toList()
+fun queryTerms(query: String): List<String> =
+    TOKEN_REGEX
+        .findAll(query)
+        .map { it.groupValues[1].ifEmpty { it.groupValues[2] } }
+        .filter { it.isNotBlank() }
+        .distinctBy { it.lowercase() }
+        .toList()
 
 private val TOKEN_REGEX = Regex("\"([^\"]+)\"|([^\\s\"]+)")
 
 /** The token currently being typed, excluding an unmatched opening quote. */
-fun activeSearchToken(query: String): String =
-    query.substring(activeTokenStart(query)).trim().removePrefix("\"")
+fun activeSearchToken(query: String): String = query.substring(activeTokenStart(query)).trim().removePrefix("\"")
 
 /** Replace only the token currently being typed, preserving previous terms and quote style. */
-fun completeActiveSearchToken(query: String, suggestion: String): String {
+fun completeActiveSearchToken(
+    query: String,
+    suggestion: String,
+): String {
     val tokenStart = activeTokenStart(query)
     val quoted = query.getOrNull(tokenStart) == '"'
     val replacement = if (quoted) "\"$suggestion\"" else suggestion
@@ -89,7 +97,10 @@ private fun activeTokenStart(query: String): Int {
  * Split [text] into segments, marking each occurrence of any [queryTerms] as highlighted.
  * Matching is case-insensitive and respects the original casing of the matched text.
  */
-fun parseQueryHighlight(text: String, query: String): List<HighlightSegment> {
+fun parseQueryHighlight(
+    text: String,
+    query: String,
+): List<HighlightSegment> {
     val terms = queryTerms(query)
     if (terms.isEmpty()) {
         return listOf(HighlightSegment(text, false))
@@ -124,38 +135,18 @@ fun HighlightText(
 ) {
     val highlightColor = MaterialTheme.colorScheme.primaryContainer
     Text(
-        text = buildAnnotatedString {
-            segments.forEach { segment ->
-                if (segment.highlight) {
-                    withStyle(SpanStyle(background = highlightColor)) {
+        text =
+            buildAnnotatedString {
+                segments.forEach { segment ->
+                    if (segment.highlight) {
+                        withStyle(SpanStyle(background = highlightColor)) {
+                            append(segment.text)
+                        }
+                    } else {
                         append(segment.text)
                     }
-                } else {
-                    append(segment.text)
                 }
-            }
-        },
-        style = style,
-        modifier = modifier,
-        maxLines = maxLines,
-        overflow = overflow,
-    )
-}
-
-/**
- * Convenience wrapper that highlights all occurrences of [query] inside [text].
- */
-@Composable
-fun QueryHighlightText(
-    text: String,
-    query: String,
-    style: TextStyle,
-    modifier: Modifier = Modifier,
-    maxLines: Int = Int.MAX_VALUE,
-    overflow: TextOverflow = TextOverflow.Clip,
-) {
-    HighlightText(
-        segments = parseQueryHighlight(text, query),
+            },
         style = style,
         modifier = modifier,
         maxLines = maxLines,

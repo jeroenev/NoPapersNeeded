@@ -6,7 +6,6 @@
     <string name="ai_open_all_documents">Alle documenten openen</string>
     <string name="ai_assistant_title">AI-assistent</string>
     <string name="ai_clear_conversation">Gesprek wissen</string>
-    <string name="ai_open_document">%1$s openen</string>
     <string name="ai_collapse">Inklappen</string>
     <string name="ai_expand">Uitklappen</string>
     <string name="ai_no_output">(geen uitvoer)</string>

@@ -24,7 +24,6 @@ object StoragePathTemplate {
     private const val PLACEHOLDER_START = '{'
     private const val PLACEHOLDER_END = '}'
     private const val FORMAT_SEPARATOR = ':'
-    private const val ESCAPE_CHAR = '{'
     private const val ESCAPED_BRACE_LENGTH = 2
 
     private const val DEFAULT_FALLBACK_TITLE = "document"

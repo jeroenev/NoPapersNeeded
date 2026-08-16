@@ -19,12 +19,6 @@ import dev.npn.core.model.DocProperty
  * is deterministic regardless of the order events were applied.
  */
 class FoldedState {
-    /** A live tag add: which dot created it and at what HLC. */
-    data class TagDot(
-        val dot: Dot,
-        val hlc: Hlc,
-    )
-
     // --- raw tag data ---
     // doc -> literal tag name -> (dot -> hlc) of live adds
     private val tagAdds = HashMap<String, HashMap<String, HashMap<Dot, Hlc>>>()
@@ -329,12 +323,6 @@ class FoldedState {
             addAll(props.keys)
             addAll(fields.keys)
         }
-
-    // --------- accessors used by compaction (raw data, read-only copies) ---------
-
-    internal fun rawRemovedDots(): Set<Dot> = removedDots.toSet()
-
-    internal fun isDotLive(dot: Dot): Boolean = dot !in removedDots
 }
 
 interface HlcStamped {

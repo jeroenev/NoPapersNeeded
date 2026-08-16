@@ -156,30 +156,6 @@ class AiChatViewModel(
         }
     }
 
-    /** Rename a saved conversation. */
-    fun renameSession(
-        sessionId: String,
-        title: String,
-    ) {
-        viewModelScope.launch {
-            ai.renameChatSession(sessionId, title)
-            _ui.update { state ->
-                state.copy(
-                    sessions =
-                        state.sessions.map {
-                            if (it.id ==
-                                sessionId
-                            ) {
-                                it.copy(title = title.trim())
-                            } else {
-                                it
-                            }
-                        },
-                )
-            }
-        }
-    }
-
     /** Delete a conversation and select the newest remaining one. */
     fun deleteSession(sessionId: String) {
         if (_ui.value.busy) return

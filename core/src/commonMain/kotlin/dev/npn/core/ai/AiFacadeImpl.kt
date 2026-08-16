@@ -90,19 +90,6 @@ class AiFacadeImpl(
         return session
     }
 
-    override suspend fun renameChatSession(
-        sessionId: String,
-        title: String,
-    ) {
-        val trimmed = title.trim()
-        if (trimmed.isEmpty()) return
-        val updated =
-            chatSessionStore.load().map { session ->
-                if (session.id == sessionId) session.copy(title = trimmed, updatedAt = now()) else session
-            }
-        chatSessionStore.save(updated.sortedByDescending { it.updatedAt })
-    }
-
     override suspend fun deleteChatSession(sessionId: String) {
         chatHistoryStore.delete(sessionId)
         chatSessionStore.save(chatSessionStore.load().filterNot { it.id == sessionId })
