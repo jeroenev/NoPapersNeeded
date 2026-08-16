@@ -1,6 +1,6 @@
 package dev.npn.app
 
-import dev.npn.app.ui.library.FilterChip
+import dev.npn.app.ui.library.ActiveFilterChip
 import dev.npn.app.ui.library.TagBucket
 import dev.npn.app.ui.library.activeChips
 import dev.npn.app.ui.library.cycleTag
@@ -124,30 +124,30 @@ class LibraryFilterEditsTest {
             )
         filter.activeChips() shouldContainExactly
             listOf(
-                FilterChip.TagAll("a1"),
-                FilterChip.TagAll("a2"),
-                FilterChip.TagAny("o1"),
-                FilterChip.TagNone("n1"),
-                FilterChip.Reviewed(true),
-                FilterChip.Correspondent("ACME"),
-                FilterChip.DocType("invoice"),
-                FilterChip.DocDateFrom("2024-01-01"),
-                FilterChip.DocDateTo("2024-12-31"),
-                FilterChip.UntaggedOnly,
-                FilterChip.ReviewQueue,
+                ActiveFilterChip.TagAll("a1"),
+                ActiveFilterChip.TagAll("a2"),
+                ActiveFilterChip.TagAny("o1"),
+                ActiveFilterChip.TagNone("n1"),
+                ActiveFilterChip.Reviewed(true),
+                ActiveFilterChip.Correspondent("ACME"),
+                ActiveFilterChip.DocType("invoice"),
+                ActiveFilterChip.DocDateFrom("2024-01-01"),
+                ActiveFilterChip.DocDateTo("2024-12-31"),
+                ActiveFilterChip.UntaggedOnly,
+                ActiveFilterChip.ReviewQueue,
             )
     }
 
     @Test
     fun reviewedChipCarriesTheFilteredValue() {
         LibraryFilter(reviewed = false).activeChips() shouldContainExactly
-            listOf(FilterChip.Reviewed(false))
+            listOf(ActiveFilterChip.Reviewed(false))
     }
 
     @Test
     fun onlyActiveFacetsProduceChips() {
         LibraryFilter(correspondent = "ACME", untaggedOnly = true).activeChips() shouldContainExactly
-            listOf(FilterChip.Correspondent("ACME"), FilterChip.UntaggedOnly)
+            listOf(ActiveFilterChip.Correspondent("ACME"), ActiveFilterChip.UntaggedOnly)
     }
 
     // ---- removeChip: each chip clears exactly the right facet ----
@@ -156,7 +156,7 @@ class LibraryFilterEditsTest {
     fun removingATagChipClearsOnlyThatTagFromOnlyItsBucket() {
         // Same tag string in ALL and NONE; removing the ALL chip must not touch the NONE entry.
         val filter = LibraryFilter(tagsAll = listOf("x", "y"), tagsNone = listOf("x"))
-        val removed = filter.removeChip(FilterChip.TagAll("x"))
+        val removed = filter.removeChip(ActiveFilterChip.TagAll("x"))
         removed.tagsAll shouldContainExactly listOf("y")
         removed.tagsNone shouldContainExactly listOf("x")
     }
@@ -174,14 +174,14 @@ class LibraryFilterEditsTest {
                 untaggedOnly = true,
                 unreviewedOrUntagged = true,
             )
-        full.removeChip(FilterChip.TagAny("t")).tagsAny shouldBe emptyList()
-        full.removeChip(FilterChip.Reviewed(true)).reviewed shouldBe null
-        full.removeChip(FilterChip.Correspondent("ACME")).correspondent shouldBe null
-        full.removeChip(FilterChip.DocType("invoice")).docType shouldBe null
-        full.removeChip(FilterChip.DocDateFrom("2024-01-01")).docDateFrom shouldBe null
-        full.removeChip(FilterChip.DocDateTo("2024-12-31")).docDateTo shouldBe null
-        full.removeChip(FilterChip.UntaggedOnly).untaggedOnly shouldBe false
-        full.removeChip(FilterChip.ReviewQueue).unreviewedOrUntagged shouldBe false
+        full.removeChip(ActiveFilterChip.TagAny("t")).tagsAny shouldBe emptyList()
+        full.removeChip(ActiveFilterChip.Reviewed(true)).reviewed shouldBe null
+        full.removeChip(ActiveFilterChip.Correspondent("ACME")).correspondent shouldBe null
+        full.removeChip(ActiveFilterChip.DocType("invoice")).docType shouldBe null
+        full.removeChip(ActiveFilterChip.DocDateFrom("2024-01-01")).docDateFrom shouldBe null
+        full.removeChip(ActiveFilterChip.DocDateTo("2024-12-31")).docDateTo shouldBe null
+        full.removeChip(ActiveFilterChip.UntaggedOnly).untaggedOnly shouldBe false
+        full.removeChip(ActiveFilterChip.ReviewQueue).unreviewedOrUntagged shouldBe false
     }
 
     @Test
@@ -193,7 +193,7 @@ class LibraryFilterEditsTest {
                 correspondent = "ACME",
                 untaggedOnly = true,
             )
-        val afterReviewed = full.removeChip(FilterChip.Reviewed(true))
+        val afterReviewed = full.removeChip(ActiveFilterChip.Reviewed(true))
         afterReviewed shouldBe full.copy(reviewed = null)
     }
 

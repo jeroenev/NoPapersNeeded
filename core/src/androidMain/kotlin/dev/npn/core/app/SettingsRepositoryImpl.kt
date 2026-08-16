@@ -2,8 +2,12 @@ package dev.npn.core.app
 
 import android.content.Context
 import android.content.SharedPreferences
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 import java.util.UUID
 
 /**
@@ -37,6 +41,12 @@ class SettingsRepositoryImpl(
         }
 
     private val state = MutableStateFlow(load())
+
+    // `edit` is a read-modify-write over the whole snapshot, so two concurrent calls could
+    // interleave and have the later commit rewrite every key from a stale mirror — losing the
+    // earlier edit across all settings, not just the field it touched. Serialise them, as the
+    // desktop implementation does.
+    private val persistMutex = Mutex()
 
     private val listener =
         SharedPreferences.OnSharedPreferenceChangeListener { _, _ ->
@@ -86,15 +96,21 @@ class SettingsRepositoryImpl(
 
     override val settings: Flow<SettingsSnapshot> = state
 
-    override suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) {
-        val next = SettingsCodec.normalise(transform(state.value))
-        val editor = prefs.edit()
-        SettingsCodec.store(writer(editor), next)
-        // commit() (synchronous) rather than apply() so a following settings read — e.g. the rules
-        // flow re-reading autoMatchRulesJson right after a write — never sees the previous value.
-        editor.commit()
-        state.value = next
-    }
+    override suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
+        persistMutex.withLock {
+            val next = SettingsCodec.normalise(transform(state.value))
+            withContext(Dispatchers.IO) {
+                val editor = prefs.edit()
+                SettingsCodec.store(writer(editor), next)
+                // commit() (synchronous) rather than apply() so a following settings read — e.g.
+                // the rules flow re-reading autoMatchRulesJson right after a write — never sees the
+                // previous value. It writes to disk inline, hence the IO dispatcher: callers reach
+                // here from viewModelScope (Dispatchers.Main.immediate), and the text settings
+                // write on every keystroke.
+                editor.commit()
+            }
+            state.value = next
+        }
 
     companion object {
         private const val PREFS_NAME = "npn_settings"

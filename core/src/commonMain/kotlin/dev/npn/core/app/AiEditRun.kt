@@ -4,7 +4,6 @@ import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiSuggest
-import dev.npn.core.model.DocProperty
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -308,8 +307,7 @@ class AiEditRun(
                     docId = doc.docId,
                     addTags = doc.chips.filter { it.selected }.map { it.tag },
                     removeTags = doc.removals.filter { it.selected }.map { it.tag },
-                    properties =
-                        doc.fields.filter { it.selected }.associate { it.field.property to it.value },
+                    properties = doc.fields.filter { it.selected }.associate { it.field to it.value },
                 )
             }
         if (edits.all { it.isEmpty }) return ApplyOutcome.NothingSelected

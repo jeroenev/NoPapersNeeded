@@ -11,7 +11,6 @@ import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.journal.EpochClock
-import dev.npn.core.model.DocProperty
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -239,9 +238,9 @@ class AiAutoEnricher(
             removeTags = emptyList(), // never removes unattended
             properties =
                 buildMap {
-                    suggestion.metadata.title?.let { put(DocProperty.TITLE, it) }
-                    suggestion.metadata.correspondent?.let { put(DocProperty.CORRESPONDENT, it) }
-                    suggestion.metadata.docDate?.let { put(DocProperty.DOC_DATE, it) }
+                    suggestion.metadata.title?.let { put(AiField.TITLE, it) }
+                    suggestion.metadata.correspondent?.let { put(AiField.CORRESPONDENT, it) }
+                    suggestion.metadata.docDate?.let { put(AiField.DOC_DATE, it) }
                 },
         )
 

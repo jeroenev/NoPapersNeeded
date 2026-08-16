@@ -31,7 +31,7 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Removable chips for each active filter facet under the search bar. The set, order and removal of
  * chips is pure logic in [activeChips]/[removeChip]; this composable only renders each
- * [FilterChip] with its localized label and wires the tap to clear that one facet.
+ * [ActiveFilterChip] with its localized label and wires the tap to clear that one facet.
  */
 @Composable
 fun ActiveFilters(
@@ -64,45 +64,45 @@ fun ActiveFilters(
 
 /** Localized label for one active-filter chip. Presentation only; the chip's meaning is the type. */
 @Composable
-private fun chipLabel(chip: FilterChip): String =
+private fun chipLabel(chip: ActiveFilterChip): String =
     when (chip) {
-        is FilterChip.TagAll -> {
+        is ActiveFilterChip.TagAll -> {
             stringResource(Res.string.library_tag_filter_all, chip.tag)
         }
 
-        is FilterChip.TagAny -> {
+        is ActiveFilterChip.TagAny -> {
             stringResource(Res.string.library_tag_filter_any, chip.tag)
         }
 
-        is FilterChip.TagNone -> {
+        is ActiveFilterChip.TagNone -> {
             stringResource(Res.string.library_tag_filter_none, chip.tag)
         }
 
-        is FilterChip.Reviewed -> {
+        is ActiveFilterChip.Reviewed -> {
             stringResource(if (chip.reviewed) Res.string.common_reviewed else Res.string.common_needs_review)
         }
 
-        is FilterChip.Correspondent -> {
+        is ActiveFilterChip.Correspondent -> {
             chip.value
         }
 
-        is FilterChip.DocType -> {
+        is ActiveFilterChip.DocType -> {
             chip.value
         }
 
-        is FilterChip.DocDateFrom -> {
+        is ActiveFilterChip.DocDateFrom -> {
             stringResource(Res.string.library_date_from, chip.value)
         }
 
-        is FilterChip.DocDateTo -> {
+        is ActiveFilterChip.DocDateTo -> {
             stringResource(Res.string.library_date_to, chip.value)
         }
 
-        FilterChip.UntaggedOnly -> {
+        ActiveFilterChip.UntaggedOnly -> {
             stringResource(Res.string.library_untagged)
         }
 
-        FilterChip.ReviewQueue -> {
+        ActiveFilterChip.ReviewQueue -> {
             stringResource(Res.string.library_review_queue)
         }
     }
