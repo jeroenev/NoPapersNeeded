@@ -316,6 +316,25 @@ class FoldedState {
         return out
     }
 
+    /**
+     * Build the OR-set `tag-remove` [PendingOp]s for [tag] over [docIds] from THIS state's live
+     * dots: for each doc, list the dots currently observed for `(doc, tag)` and emit a remove
+     * carrying them, skipping docs that do not hold the tag (empty dots).
+     *
+     * This is the ONLY way to construct a `tag-remove` op ([PendingOp.tagRemove] is `internal`),
+     * so a correct removal can only be built against a live [FoldedState] read under the
+     * [dev.npn.core.app.JournalCoordinator] mutex (via `commitBuilt`). That makes a removal against
+     * stale or fabricated dots unexpressible: a caller with no live state cannot mint one.
+     */
+    fun tagRemovalOps(
+        docIds: Collection<String>,
+        tag: String,
+    ): List<PendingOp> =
+        docIds.mapNotNull { docId ->
+            val dots = liveTagDots(docId, tag)
+            if (dots.isEmpty()) null else PendingOp.tagRemove(docId, tag, dots)
+        }
+
     /** All documents this state has any tag, prop, or custom-field data for (before resolveDocId). */
     fun docsWithMetadata(): Set<String> =
         LinkedHashSet<String>().apply {

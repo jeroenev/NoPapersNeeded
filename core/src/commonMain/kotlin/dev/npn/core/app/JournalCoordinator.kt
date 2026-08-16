@@ -34,9 +34,16 @@ import kotlinx.coroutines.withContext
  *
  * Normal commits apply their frozen events directly to the persisted accumulator and bounded DB
  * projection.
+ *
+ * This is the ONLY sanctioned journal write path (see AGENTS.md). The invariant is enforced at
+ * the type level rather than by convention: [SegmentWriter] and [ContentAddressedJournalWriter]
+ * are `internal` to `core`, and both the primary constructor and the held [writer] are `internal`
+ * too, so no caller outside `core` can obtain the raw writer and skip the mutex, the live
+ * [FoldedState] refresh, or the DB projection. Expose new capabilities as named members here
+ * rather than widening [writer] back to public.
  */
-class JournalCoordinator(
-    val writer: SegmentWriter,
+class JournalCoordinator internal constructor(
+    internal val writer: SegmentWriter,
     private val indexer: Indexer,
     private val accumulator: MetadataAccumulator,
     objectWriter: ContentAddressedJournalWriter? = null,

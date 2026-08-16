@@ -6,25 +6,74 @@ import dev.npn.core.model.DocProperty
  * A pending op the caller wants to commit. The writer assigns seq and HLC and fills in the
  * envelope. `doc` follows the op's requirements (see [JournalOp]).
  */
-data class PendingOp(val doc: String?, val op: JournalOp) {
+data class PendingOp(
+    val doc: String?,
+    val op: JournalOp,
+) {
     companion object {
-        fun tagAdd(doc: String, tag: String) = PendingOp(doc, JournalOp.TagAdd(tag))
-        fun tagRemove(doc: String, tag: String, dots: List<Dot>) =
-            PendingOp(doc, JournalOp.TagRemove(tag, dots))
-        fun propSet(doc: String, key: DocProperty, value: String?) =
-            PendingOp(doc, JournalOp.PropSet(key, value))
-        fun fieldSet(doc: String, key: String, value: String?) =
-            PendingOp(doc, JournalOp.FieldSet(key, value))
-        fun docTrash(doc: String, origPath: String) = PendingOp(doc, JournalOp.DocTrash(origPath))
+        fun tagAdd(
+            doc: String,
+            tag: String,
+        ) = PendingOp(doc, JournalOp.TagAdd(tag))
+
+        /**
+         * `internal` on purpose: a correct OR-set `tag-remove` must carry the dots CURRENTLY live
+         * for `(doc, tag)`. The only sanctioned way to obtain those is [FoldedState.tagRemovalOps],
+         * which reads a live [FoldedState] under the coordinator mutex. Keeping this factory out of
+         * the public surface makes a removal against stale/fabricated dots unexpressible.
+         */
+        internal fun tagRemove(
+            doc: String,
+            tag: String,
+            dots: List<Dot>,
+        ) = PendingOp(doc, JournalOp.TagRemove(tag, dots))
+
+        fun propSet(
+            doc: String,
+            key: DocProperty,
+            value: String?,
+        ) = PendingOp(doc, JournalOp.PropSet(key, value))
+
+        fun fieldSet(
+            doc: String,
+            key: String,
+            value: String?,
+        ) = PendingOp(doc, JournalOp.FieldSet(key, value))
+
+        fun docTrash(
+            doc: String,
+            origPath: String,
+        ) = PendingOp(doc, JournalOp.DocTrash(origPath))
+
         fun docRestore(doc: String) = PendingOp(doc, JournalOp.DocRestore)
+
         fun docDelete(doc: String) = PendingOp(doc, JournalOp.DocDelete)
-        fun relink(oldDoc: String, newDoc: String) = PendingOp(oldDoc, JournalOp.Relink(newDoc))
-        fun tagRename(from: String, to: String) = PendingOp(null, JournalOp.TagRename(from, to))
-        fun tagMerge(from: String, to: String) = PendingOp(null, JournalOp.TagMerge(from, to))
-        fun tagStyle(tag: String, color: String?, icon: String?) =
-            PendingOp(null, JournalOp.TagStyle(tag, color, icon))
-        fun settingSet(key: String, value: String?) =
-            PendingOp(null, JournalOp.SettingSet(key, value))
+
+        fun relink(
+            oldDoc: String,
+            newDoc: String,
+        ) = PendingOp(oldDoc, JournalOp.Relink(newDoc))
+
+        fun tagRename(
+            from: String,
+            to: String,
+        ) = PendingOp(null, JournalOp.TagRename(from, to))
+
+        fun tagMerge(
+            from: String,
+            to: String,
+        ) = PendingOp(null, JournalOp.TagMerge(from, to))
+
+        fun tagStyle(
+            tag: String,
+            color: String?,
+            icon: String?,
+        ) = PendingOp(null, JournalOp.TagStyle(tag, color, icon))
+
+        fun settingSet(
+            key: String,
+            value: String?,
+        ) = PendingOp(null, JournalOp.SettingSet(key, value))
     }
 }
 
@@ -38,7 +87,9 @@ sealed class ForkCheck {
      * another installation shares this device id (backup restore / clone). The caller must
      * generate a fresh device id to preserve the single-writer invariant.
      */
-    data class ForkNeeded(val unknownSegments: List<String>) : ForkCheck()
+    data class ForkNeeded(
+        val unknownSegments: List<String>,
+    ) : ForkCheck()
 }
 
 /**
@@ -49,8 +100,15 @@ sealed class ForkCheck {
  * never reused. HLCs are generated from [hlcClock].
  *
  * Not concurrency-safe; a device has exactly one writer.
+ *
+ * `internal` to the `core` module so the single-writer invariant is enforced at the type
+ * level, not by convention: the only sanctioned commit path is [JournalCoordinator], which
+ * serializes every write behind its mutex and keeps the live [FoldedState]/DB projection in
+ * step. A caller outside `core` cannot reach this writer's raw [commit] and so cannot bypass
+ * that ordering (e.g. publishing a `tag-remove` against stale OR-set dots). `core`'s own test
+ * source sets stay in-module and may still construct and drive it directly.
  */
-class SegmentWriter(
+internal class SegmentWriter(
     private val store: SegmentStore,
     val deviceId: String,
     private val hlcClock: HlcClock,
@@ -117,17 +175,18 @@ class SegmentWriter(
         recover()
         var seq = localState.getLastSeq() ?: 0L
         val firstSeq = seq + 1
-        val built = events.map { pending ->
-            seq += 1
-            JournalEvent(
-                version = JournalEventVersions.CANONICAL,
-                seq = seq,
-                hlc = hlcClock.next(),
-                dev = deviceId,
-                doc = pending.doc,
-                op = pending.op,
-            )
-        }
+        val built =
+            events.map { pending ->
+                seq += 1
+                JournalEvent(
+                    version = JournalEventVersions.CANONICAL,
+                    seq = seq,
+                    hlc = hlcClock.next(),
+                    dev = deviceId,
+                    doc = pending.doc,
+                    op = pending.op,
+                )
+            }
         val fileName = SegmentRef.plainName(firstSeq)
         store.writeSegment(deviceId, fileName, JournalCodec.encodeLines(built))
         localState.setLastSeq(seq)
@@ -135,6 +194,5 @@ class SegmentWriter(
         return built
     }
 
-    private suspend fun ownSegments(): List<SegmentRef> =
-        store.listSegments().filter { it.deviceId == deviceId }
+    private suspend fun ownSegments(): List<SegmentRef> = store.listSegments().filter { it.deviceId == deviceId }
 }
