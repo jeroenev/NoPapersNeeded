@@ -137,8 +137,20 @@ class DocDetailViewModel(
     private val maintenance: MaintenanceFacade,
     reviewConfig: ReviewConfigFacade,
     searchQuery: String? = null,
+    /**
+     * The document row a caller already has in hand (the library list feeds its preview panel one).
+     * Seeds [metadata] so the panel renders immediately instead of blanking for the first
+     * `observeDoc` query, which a caller that recreates this viewmodel per document would pay on
+     * every switch. Null when the caller only knows the id.
+     */
+    initialItem: DocListItem? = null,
 ) : MessagesViewModel() {
-    constructor(docId: String, session: LibrarySession, searchQuery: String? = null) : this(
+    constructor(
+        docId: String,
+        session: LibrarySession,
+        searchQuery: String? = null,
+        initialItem: DocListItem? = null,
+    ) : this(
         docId = docId,
         documents = session.documents,
         tagRepository = session.tags,
@@ -151,6 +163,7 @@ class DocDetailViewModel(
         maintenance = session.maintenance,
         reviewConfig = session.reviewConfig,
         searchQuery = searchQuery,
+        initialItem = initialItem,
     )
 
     private val _ui = MutableStateFlow(DetailUiState())
@@ -167,7 +180,7 @@ class DocDetailViewModel(
     private val doc: StateFlow<DocListItem?> =
         documents
             .observeDoc(docId)
-            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, initialItem)
 
     private val reviewMode: StateFlow<ReviewMode> =
         reviewConfig.reviewMode
@@ -258,7 +271,22 @@ class DocDetailViewModel(
     val metadata: StateFlow<MetadataUiState> =
         combine(document, vocabulary, noteEditor, aiPanel, history) { doc, vocab, note, ai, history ->
             MetadataUiState(document = doc, vocabulary = vocab, note = note, ai = ai, history = history)
-        }.stateIn(viewModelScope, WhileSubscribedTimeout, MetadataUiState())
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, seedState(initialItem))
+
+    /**
+     * What the panel shows before the first combined emission. [ReviewMode.DEFAULT] matches the
+     * initial value of the review-mode flow, so the seeded badge is exactly what the previous
+     * `item.effectiveReviewed(reviewMode)` at the call site produced on its first frame.
+     */
+    private fun seedState(item: DocListItem?): MetadataUiState =
+        MetadataUiState(
+            document =
+                DocumentSection(
+                    item = item,
+                    reviewed = item?.effectiveReviewed(ReviewMode.DEFAULT) == true,
+                    highlightTerms = highlightTerms,
+                ),
+        )
 
     init {
         viewModelScope.launch {

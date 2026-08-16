@@ -337,6 +337,18 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun metadataStartsAtTheSeededItemBeforeTheIndexEmits() =
+        runTest(dispatcher) {
+            // The library's preview panel already holds the row and rebuilds this viewmodel per
+            // document; the seed is what keeps the panel from blanking on every switch, so it must
+            // be visible before anything is collected or dispatched.
+            val seed = DocListItem(doc("doc-1", title = "Seeded"), listOf("finance"))
+            val model = DocDetailViewModel("doc-1", FakeLibrarySession(), initialItem = seed)
+
+            model.metadata.value.document.item shouldBe seed
+        }
+
+    @Test
     fun metadataDerivesReviewedFromTagsInUntaggedOnlyMode() =
         runTest(dispatcher) {
             val session =

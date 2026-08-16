@@ -4,6 +4,7 @@ package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -74,6 +75,7 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.IsoDatePickerDialog
 import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
@@ -108,6 +110,8 @@ import no_papers_needed.composeapp.generated.resources.detail_dismiss_tag
 import no_papers_needed.composeapp.generated.resources.detail_document_date
 import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
 import no_papers_needed.composeapp.generated.resources.detail_document_type
+import no_papers_needed.composeapp.generated.resources.detail_document_unavailable
+import no_papers_needed.composeapp.generated.resources.detail_document_unavailable_hint
 import no_papers_needed.composeapp.generated.resources.detail_engine
 import no_papers_needed.composeapp.generated.resources.detail_engine_ai
 import no_papers_needed.composeapp.generated.resources.detail_engine_embedded
@@ -180,9 +184,15 @@ fun MetadataPanel(
     previewTab: (@Composable (Modifier) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    // No document row yet (or the document is gone): the panel has nothing to render, and the
-    // screens above own the "unavailable" messaging.
-    val item = state.document.item ?: return
+    // The document is gone — trashed or deleted on another replica while the panel was open, or
+    // never loaded at all. Say so rather than leaving the surface empty; the detail screen catches
+    // this first and shows its own scaffold (with a way back), so in practice this is the library's
+    // side panel reacting to a document disappearing under it.
+    val item = state.document.item
+    if (item == null) {
+        DocumentUnavailable(modifier)
+        return
+    }
     val tabs =
         remember(previewTab != null) {
             if (previewTab != null) PanelTab.entries.toList() else PanelTab.entries.filter { it != PanelTab.PREVIEW }
@@ -259,6 +269,17 @@ fun MetadataPanel(
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun DocumentUnavailable(modifier: Modifier = Modifier) {
+    Box(modifier.fillMaxWidth()) {
+        EmptyState(
+            icon = Icons.Filled.Delete,
+            title = stringResource(Res.string.detail_document_unavailable),
+            subtitle = stringResource(Res.string.detail_document_unavailable_hint),
+        )
     }
 }
 
