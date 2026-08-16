@@ -1,6 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.resolveEnglish
 import dev.npn.app.ui.tags.TagManagementViewModel
 import dev.npn.app.ui.tags.buildTree
 import dev.npn.core.app.TagInfo

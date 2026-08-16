@@ -6,7 +6,7 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.doc
-import dev.npn.app.ui.common.resolveEnglish
+import dev.npn.app.resolveEnglish
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldMode
@@ -304,7 +304,7 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             messages shouldHaveSize 1
-            messages.single() shouldBe "Could not tag 1 of 2 document(s)"
+            messages.single() shouldBe "Could not tag 1 of 2 documents"
             // b was written; a kept for retry in a Review phase.
             session.meta.addedTags shouldContainExactly listOf(listOf("b") to "t2")
             val review =
@@ -364,7 +364,7 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            messages shouldContainExactly listOf("Could not get suggestions for 1 of 2 document(s)")
+            messages shouldContainExactly listOf("Could not get suggestions for 1 of 2 documents")
             val review =
                 model.ui.value.phase
                     .shouldBeInstanceOf<EditPhase.Review>()

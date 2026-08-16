@@ -1,6 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.resolveEnglish
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiField
