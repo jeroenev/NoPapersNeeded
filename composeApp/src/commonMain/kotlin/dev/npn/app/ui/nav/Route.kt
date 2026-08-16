@@ -5,9 +5,6 @@ import kotlinx.serialization.Serializable
 /** Type-safe navigation destinations for navigation-compose. */
 sealed interface Route {
     @Serializable
-    data object Onboarding : Route
-
-    @Serializable
     data object Library : Route
 
     @Serializable
@@ -32,9 +29,4 @@ sealed interface Route {
 
     @Serializable
     data object AiEdit : Route
-
-    @Serializable
-    data class SavedViewRoute(
-        val id: String,
-    ) : Route
 }

@@ -6,7 +6,6 @@
     <string name="ai_open_all_documents">Open all documents</string>
     <string name="ai_assistant_title">AI assistant</string>
     <string name="ai_clear_conversation">Clear conversation</string>
-    <string name="ai_open_document">Open %1$s</string>
     <string name="ai_collapse">Collapse</string>
     <string name="ai_expand">Expand</string>
     <string name="ai_no_output">(no output)</string>

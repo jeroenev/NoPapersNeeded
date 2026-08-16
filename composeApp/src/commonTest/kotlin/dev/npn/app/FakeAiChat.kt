@@ -39,11 +39,6 @@ class FakeAiChat : AiChat {
 
     override suspend fun createChatSession(): AiChatSession? = createdChatSession
 
-    override suspend fun renameChatSession(
-        sessionId: String,
-        title: String,
-    ) = Unit
-
     override suspend fun deleteChatSession(sessionId: String) = Unit
 
     override suspend fun clearChatSession(sessionId: String) = Unit

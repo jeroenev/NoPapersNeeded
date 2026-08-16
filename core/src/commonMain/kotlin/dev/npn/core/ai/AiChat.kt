@@ -88,12 +88,6 @@ interface AiChat : AiAvailability {
     /** Create a new empty session. */
     suspend fun createChatSession(): AiChatSession?
 
-    /** Rename a session. */
-    suspend fun renameChatSession(
-        sessionId: String,
-        title: String,
-    )
-
     /** Delete a session and its stored conversation. */
     suspend fun deleteChatSession(sessionId: String)
 

@@ -18,8 +18,6 @@ import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -50,15 +48,7 @@ class JournalCoordinator(
     private var objectWriter = objectWriter
     private var writeBlockReason: String? = null
 
-    private val mutableState = MutableStateFlow(FoldedState())
-    private var state: FoldedState
-        get() = mutableState.value
-        set(value) {
-            mutableState.value = value
-        }
-
-    /** Observable folded state; re-emits after every refresh/commit. */
-    val stateFlow: StateFlow<FoldedState> = mutableState.asStateFlow()
+    private var state = FoldedState()
 
     private val mutableSettings = MutableStateFlow<Map<String, String?>>(emptyMap())
 

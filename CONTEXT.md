@@ -73,8 +73,8 @@ whole session. Each operation has exactly one public home:
   `deleteDocPermanently`, `renameFile`, `moveFile`.
 - **AI chat** (`AiChat`, session property `aiChat`) — the assistant
   conversation: `ask` plus session management (`chatSessions`,
-  `createChatSession`, `renameChatSession`, `deleteChatSession`,
-  `clearChatSession`, `chatTranscriptFor`).
+  `createChatSession`, `deleteChatSession`, `clearChatSession`,
+  `chatTranscriptFor`).
 - **AI suggestions** (`AiSuggest`, session property `aiSuggest`) — the single
   suggestion primitive `suggestEdits`. No consumer needs both AI facets.
 - **Work** (`WorkFacade`, session property `work`) — the persisted background
