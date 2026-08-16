@@ -104,7 +104,6 @@ fun FilterSheet(
 }
 
 @Composable
-@Suppress("LongMethod")
 fun FilterPanel(
     filter: LibraryFilter,
     tags: List<TagInfo>,
@@ -121,24 +120,13 @@ fun FilterPanel(
 
     Surface(modifier = modifier, tonalElevation = 3.dp) {
         Column(if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
-            Row(
-                Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Text(stringResource(Res.string.library_filters), style = MaterialTheme.typography.titleLarge)
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    TextButton(onClick = {
-                        draft = LibraryFilter()
-                        onClearAll()
-                    }) { Text(stringResource(Res.string.library_clear_all)) }
-                    onDismiss?.let {
-                        IconButton(onClick = it) {
-                            Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.common_cancel))
-                        }
-                    }
-                }
-            }
+            FilterPanelHeader(
+                onClearAll = {
+                    draft = LibraryFilter()
+                    onClearAll()
+                },
+                onDismiss = onDismiss,
+            )
 
             Column(
                 Modifier
@@ -148,73 +136,14 @@ fun FilterPanel(
                     .padding(bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                TagFilterSection(tags, draft) { draft = it }
-
-                // The stored reviewed marker is only maintained in the inbox workflow; outside it,
-                // review state is derived from tags (reviewed == tagged) and the marker is stale.
-                if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
-                    FilterFieldRow(stringResource(Res.string.library_reviewed_filter)) {
-                        EnumDropdown(
-                            current = ReviewFilter.from(draft.reviewed),
-                            options = ReviewFilter.entries,
-                            label = ::reviewFilterLabel,
-                            onSelect = { draft = draft.copy(reviewed = it.value) },
-                        )
-                    }
-                }
-
-                FilterFieldRow(stringResource(Res.string.library_correspondent_filter)) {
-                    EnumDropdown(
-                        current = optionalFilterValue(draft.correspondent),
-                        options = optionalFilterOptions(correspondents),
-                        label = ::optionalFilterLabel,
-                        onSelect = { draft = draft.copy(correspondent = it.valueOrNull()) },
-                        searchLabel = stringResource(Res.string.library_search_correspondent),
-                        searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
-                    )
-                }
-
-                FilterFieldRow(stringResource(Res.string.library_document_type_filter)) {
-                    EnumDropdown(
-                        current = optionalFilterValue(draft.docType),
-                        options = optionalFilterOptions(docTypes),
-                        label = ::optionalFilterLabel,
-                        onSelect = { draft = draft.copy(docType = it.valueOrNull()) },
-                        searchLabel = stringResource(Res.string.library_search_document_type),
-                        searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
-                    )
-                }
-
-                SectionLabel(stringResource(Res.string.library_document_date_filter))
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                ) {
-                    DatePickerField(
-                        value = draft.docDateFrom,
-                        label = stringResource(Res.string.library_from),
-                        onCommit = { draft = draft.copy(docDateFrom = it) },
-                        modifier = Modifier.weight(1f),
-                    )
-                    DatePickerField(
-                        value = draft.docDateTo,
-                        label = stringResource(Res.string.library_to),
-                        onCommit = { draft = draft.copy(docDateTo = it) },
-                        modifier = Modifier.weight(1f),
-                    )
-                }
-
-                Row(
-                    Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    Text(stringResource(Res.string.library_untagged_only))
-                    Switch(
-                        checked = draft.untaggedOnly,
-                        onCheckedChange = { draft = draft.copy(untaggedOnly = it) },
-                    )
-                }
+                FilterFields(
+                    draft = draft,
+                    tags = tags,
+                    correspondents = correspondents,
+                    docTypes = docTypes,
+                    reviewMode = reviewMode,
+                    onDraftChange = { draft = it },
+                )
             }
 
             HorizontalDivider()
@@ -223,6 +152,111 @@ fun FilterPanel(
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
             ) { Text(stringResource(Res.string.library_apply_filters)) }
         }
+    }
+}
+
+/** Title row of the filter panel: the "Filters" heading, the clear-all button and optional close. */
+@Composable
+private fun FilterPanelHeader(
+    onClearAll: () -> Unit,
+    onDismiss: (() -> Unit)?,
+) {
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(Res.string.library_filters), style = MaterialTheme.typography.titleLarge)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            TextButton(onClick = onClearAll) { Text(stringResource(Res.string.library_clear_all)) }
+            onDismiss?.let {
+                IconButton(onClick = it) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.common_cancel))
+                }
+            }
+        }
+    }
+}
+
+/**
+ * The editable filter fields (tags, reviewed, correspondent, doc type, date range, untagged-only).
+ * Edits produce a new draft [LibraryFilter] via [onDraftChange]; the panel owns the draft state.
+ */
+@Composable
+private fun FilterFields(
+    draft: LibraryFilter,
+    tags: List<TagInfo>,
+    correspondents: List<String>,
+    docTypes: List<String>,
+    reviewMode: ReviewMode,
+    onDraftChange: (LibraryFilter) -> Unit,
+) {
+    TagFilterSection(tags, draft, onDraftChange)
+
+    // The stored reviewed marker is only maintained in the inbox workflow; outside it,
+    // review state is derived from tags (reviewed == tagged) and the marker is stale.
+    if (reviewMode.reviewMarkerIsAuthoritative) {
+        FilterFieldRow(stringResource(Res.string.library_reviewed_filter)) {
+            EnumDropdown(
+                current = ReviewFilter.from(draft.reviewed),
+                options = ReviewFilter.entries,
+                label = ::reviewFilterLabel,
+                onSelect = { onDraftChange(draft.copy(reviewed = it.value)) },
+            )
+        }
+    }
+
+    FilterFieldRow(stringResource(Res.string.library_correspondent_filter)) {
+        EnumDropdown(
+            current = optionalFilterValue(draft.correspondent),
+            options = optionalFilterOptions(correspondents),
+            label = ::optionalFilterLabel,
+            onSelect = { onDraftChange(draft.copy(correspondent = it.valueOrNull())) },
+            searchLabel = stringResource(Res.string.library_search_correspondent),
+            searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
+        )
+    }
+
+    FilterFieldRow(stringResource(Res.string.library_document_type_filter)) {
+        EnumDropdown(
+            current = optionalFilterValue(draft.docType),
+            options = optionalFilterOptions(docTypes),
+            label = ::optionalFilterLabel,
+            onSelect = { onDraftChange(draft.copy(docType = it.valueOrNull())) },
+            searchLabel = stringResource(Res.string.library_search_document_type),
+            searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
+        )
+    }
+
+    SectionLabel(stringResource(Res.string.library_document_date_filter))
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+    ) {
+        DatePickerField(
+            value = draft.docDateFrom,
+            label = stringResource(Res.string.library_from),
+            onCommit = { onDraftChange(draft.copy(docDateFrom = it)) },
+            modifier = Modifier.weight(1f),
+        )
+        DatePickerField(
+            value = draft.docDateTo,
+            label = stringResource(Res.string.library_to),
+            onCommit = { onDraftChange(draft.copy(docDateTo = it)) },
+            modifier = Modifier.weight(1f),
+        )
+    }
+
+    Row(
+        Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.SpaceBetween,
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(stringResource(Res.string.library_untagged_only))
+        Switch(
+            checked = draft.untaggedOnly,
+            onCheckedChange = { onDraftChange(draft.copy(untaggedOnly = it)) },
+        )
     }
 }
 
@@ -402,19 +436,6 @@ private fun OptionalFilterValue.valueOrNull(): String? =
         is OptionalFilterValue.Value -> value
     }
 
-private enum class TagBucket { OFF, ALL, ANY, NONE }
-
-private fun tagBucket(
-    f: LibraryFilter,
-    tag: String,
-): TagBucket =
-    when (tag) {
-        in f.tagsAll -> TagBucket.ALL
-        in f.tagsAny -> TagBucket.ANY
-        in f.tagsNone -> TagBucket.NONE
-        else -> TagBucket.OFF
-    }
-
 @Composable
 private fun tagFilterLabel(
     bucket: TagBucket,
@@ -426,21 +447,3 @@ private fun tagFilterLabel(
         TagBucket.ANY -> stringResource(Res.string.library_tag_filter_any, tag)
         TagBucket.NONE -> stringResource(Res.string.library_tag_filter_none, tag)
     }
-
-private fun cycleTag(
-    f: LibraryFilter,
-    tag: String,
-): LibraryFilter {
-    val stripped =
-        f.copy(
-            tagsAll = f.tagsAll - tag,
-            tagsAny = f.tagsAny - tag,
-            tagsNone = f.tagsNone - tag,
-        )
-    return when (tagBucket(f, tag)) {
-        TagBucket.OFF -> stripped.copy(tagsAll = stripped.tagsAll + tag)
-        TagBucket.ALL -> stripped.copy(tagsAny = stripped.tagsAny + tag)
-        TagBucket.ANY -> stripped.copy(tagsNone = stripped.tagsNone + tag)
-        TagBucket.NONE -> stripped
-    }
-}
