@@ -77,7 +77,6 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
-import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.app.LibrarySession
 import kotlinx.coroutines.flow.first
@@ -348,7 +347,7 @@ private fun LoadDocTitles(
                 runCatching { session.documents.observeDoc(docId).first() }
                     .getOrNull()
                     ?.let { item ->
-                        docTitles[docId] = documentDisplayTitle(item.doc.title, item.doc.fileName)
+                        docTitles[docId] = item.doc.displayTitle
                     }
             }
         }

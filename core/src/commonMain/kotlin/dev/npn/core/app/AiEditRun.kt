@@ -77,8 +77,8 @@ internal val AiField.property: DocProperty
 /**
  * One document's row in the review phase. [chips] are tag additions, [removals] are tag removals
  * (a tag never appears in both — additions exclude current tags, removals are current tags) and
- * [fields] are the single-value autofill suggestions. Title and file name stay separate so display
- * fallback and future localization remain UI concerns.
+ * [fields] are the single-value autofill suggestions. Title and file name stay separate because the
+ * review rows compare against the raw stored title; [displayTitle] is what to render.
  */
 data class ReviewDoc(
     val docId: String,
@@ -88,7 +88,10 @@ data class ReviewDoc(
     val chips: List<ReviewChip>,
     val removals: List<ReviewChip>,
     val fields: List<ReviewField>,
-)
+) {
+    /** Same fallback as [Doc.displayTitle]. */
+    val displayTitle: String get() = displayTitleOf(title, fileName)
+}
 
 /**
  * Suggestion progress, including structured identity for the most recently completed document.
@@ -98,7 +101,10 @@ data class EditProgress(
     val total: Int,
     val currentTitle: String?,
     val currentFileName: String,
-)
+) {
+    /** Same fallback as [Doc.displayTitle]. */
+    val currentDisplayTitle: String get() = displayTitleOf(currentTitle, currentFileName)
+}
 
 /**
  * Terminal counts after Apply: [applied] suggestions (tags added, tags removed, data fields)

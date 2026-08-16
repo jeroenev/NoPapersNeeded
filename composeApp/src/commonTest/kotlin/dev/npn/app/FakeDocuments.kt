@@ -1,6 +1,7 @@
 package dev.npn.app
 
 import dev.npn.core.app.AutoMatchRuleRepository
+import dev.npn.core.app.Doc
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.DocumentRepository
@@ -10,7 +11,7 @@ import dev.npn.core.app.SavedView
 import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TagRepository
-import dev.npn.core.db.DocumentEntity
+import dev.npn.core.ocr.OcrState
 import dev.npn.core.rules.AutoMatchRule
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -31,20 +32,28 @@ fun doc(
     docDate: String? = null,
     title: String? = null,
     trashed: Boolean = false,
-): DocumentEntity =
-    DocumentEntity(
+    ocrState: OcrState = OcrState.NONE,
+): Doc =
+    Doc(
         docId = docId,
         relPath = relPath,
         fileName = fileName,
+        displayTitle = title?.takeIf { it.isNotBlank() } ?: fileName,
+        title = title,
         size = 0L,
-        mtime = 0L,
+        pageCount = null,
         addedAt = 0L,
         reviewed = reviewed,
         correspondent = correspondent,
         docType = docType,
         docDate = docDate,
-        title = title,
+        notes = null,
         trashed = trashed,
+        trashedOrigPath = null,
+        missing = false,
+        ocrState = ocrState,
+        ocrEngine = null,
+        ocrEngineOverride = null,
     )
 
 fun listItem(
@@ -59,7 +68,7 @@ class FakeDocumentRepository : DocumentRepository {
     val untaggedCount = MutableStateFlow(0)
     val unreviewedOrUntaggedCount = MutableStateFlow(0)
     val trashed = MutableStateFlow<List<DocListItem>>(emptyList())
-    val missing = MutableStateFlow<List<DocumentEntity>>(emptyList())
+    val missing = MutableStateFlow<List<Doc>>(emptyList())
     val duplicates = MutableStateFlow<List<Pair<String, String>>>(emptyList())
     val correspondents = MutableStateFlow<List<String>>(emptyList())
     val docTypes = MutableStateFlow<List<String>>(emptyList())
@@ -83,7 +92,7 @@ class FakeDocumentRepository : DocumentRepository {
 
     override fun observeTrashed(): Flow<List<DocListItem>> = trashed
 
-    override fun observeMissing(): Flow<List<DocumentEntity>> = missing
+    override fun observeMissing(): Flow<List<Doc>> = missing
 
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> = duplicates
 

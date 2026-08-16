@@ -56,7 +56,7 @@ private fun item(
     title: String? = null,
     correspondent: String? = null,
     docDate: String? = null,
-): DocListItem = DocListItem(doc = doc(id, title, correspondent, docDate), tags = emptyList())
+): DocListItem = DocListItem(doc = doc(id, title, correspondent, docDate).toDoc(), tags = emptyList())
 
 private fun edit(
     addTags: List<TagSuggestion> = emptyList(),
@@ -86,7 +86,7 @@ private class FakeDocuments : DocumentRepository {
 
     override fun observeTrashed(): Flow<List<DocListItem>> = error("unused")
 
-    override fun observeMissing(): Flow<List<DocumentEntity>> = error("unused")
+    override fun observeMissing(): Flow<List<Doc>> = error("unused")
 
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> = error("unused")
 

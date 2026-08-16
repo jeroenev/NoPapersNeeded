@@ -23,7 +23,6 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TextInputDialog
-import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.common.sharePdfBytes
 import dev.npn.app.ui.common.supportsSharing
 import dev.npn.core.app.DocListItem
@@ -383,7 +382,7 @@ private fun SplitActionDialog(
 
 internal fun exportName(item: DocListItem): String {
     val base =
-        documentDisplayTitle(item.doc.title, item.doc.fileName)
+        item.doc.displayTitle
             .substringBeforeLast('.')
             .ifBlank { "document" }
     return base

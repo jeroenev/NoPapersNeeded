@@ -41,7 +41,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
-import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
@@ -112,7 +111,7 @@ fun DocDetailScreen(
     val canToggleReviewed = metadata.document.reviewMode == ReviewMode.INBOX_WORKFLOW
 
     // Reflect the open document in the native window title (desktop); inert elsewhere.
-    val displayTitle = documentDisplayTitle(current.doc.title, current.doc.fileName)
+    val displayTitle = current.doc.displayTitle
     LaunchedEffect(displayTitle) { DesktopBridge.windowTitle.value = displayTitle }
 
     Scaffold(

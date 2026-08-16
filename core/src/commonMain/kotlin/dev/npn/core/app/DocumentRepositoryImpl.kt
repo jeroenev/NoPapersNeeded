@@ -7,6 +7,8 @@ import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
+import dev.npn.core.ocr.OcrEngineRef
+import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -14,6 +16,35 @@ import kotlinx.coroutines.flow.conflate
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.mapLatest
+
+/**
+ * The single translation from the disposable index row to the [Doc] the rest of the app sees.
+ * Every read in [DocumentRepositoryImpl] goes through here, which is what keeps a `documents`
+ * column change confined to this file. Stringly-typed columns are decoded to their closed
+ * vocabularies ([OcrState], [OcrEngineRef]) and the display-title fallback is resolved once.
+ */
+internal fun DocumentEntity.toDoc(): Doc =
+    Doc(
+        docId = docId,
+        relPath = relPath,
+        fileName = fileName,
+        displayTitle = displayTitleOf(title, fileName),
+        title = title,
+        size = size,
+        pageCount = pageCount,
+        addedAt = addedAt,
+        reviewed = reviewed,
+        correspondent = correspondent,
+        docType = docType,
+        docDate = docDate,
+        notes = notes,
+        trashed = trashed,
+        trashedOrigPath = trashedOrigPath,
+        missing = missing,
+        ocrState = OcrState.fromColumn(ocrState),
+        ocrEngine = OcrEngineRef.ofColumn(ocrEngine),
+        ocrEngineOverride = OcrEngineRef.ofColumn(ocrEngineOverride),
+    )
 
 /**
  * Read side of the library, built on [NpnDatabase]. Filtering/sorting SQL is assembled here and
@@ -50,7 +81,7 @@ class DocumentRepositoryImpl(
                     val tagsByDoc = tagsFor(ids)
                     val fieldsByDoc = fieldsFor(ids)
                     docs.map {
-                        DocListItem(it, tagsByDoc[it.docId].orEmpty(), fields = fieldsByDoc[it.docId].orEmpty())
+                        DocListItem(it.toDoc(), tagsByDoc[it.docId].orEmpty(), fields = fieldsByDoc[it.docId].orEmpty())
                     }
                 } else {
                     // FTS-first: the base flow stays authoritative for the WHERE clause (all filter
@@ -69,7 +100,7 @@ class DocumentRepositoryImpl(
                         .sortedBy { order[it.docId] ?: Int.MAX_VALUE }
                         .map {
                             DocListItem(
-                                it,
+                                it.toDoc(),
                                 tagsByDoc[it.docId].orEmpty(),
                                 snippetById[it.docId],
                                 fieldsByDoc[it.docId].orEmpty(),
@@ -110,7 +141,7 @@ class DocumentRepositoryImpl(
                 null
             } else {
                 DocListItem(
-                    doc,
+                    doc.toDoc(),
                     tags,
                     fields = fields.associate { it.fieldKey to it.fieldValue },
                 )
@@ -170,10 +201,11 @@ class DocumentRepositoryImpl(
             .conflate()
             .mapLatest { docs ->
                 val tags = tagsFor(docs.map { it.docId })
-                docs.map { DocListItem(it, tags[it.docId].orEmpty()) }
+                docs.map { DocListItem(it.toDoc(), tags[it.docId].orEmpty()) }
             }.flowOn(Dispatchers.Default)
 
-    override fun observeMissing(): Flow<List<DocumentEntity>> = documentDao.observeMissing()
+    override fun observeMissing(): Flow<List<Doc>> =
+        documentDao.observeMissing().map { docs -> docs.map { it.toDoc() } }
 
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> =
         db.duplicateDao().observeAll().map { rows -> rows.map { it.docId to it.relPath } }

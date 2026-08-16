@@ -11,6 +11,7 @@ import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
+import dev.npn.core.ocr.OcrState
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -290,7 +291,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session =
                 FakeLibrarySession().apply {
-                    documents.singleDoc.value = DocListItem(doc("doc-1").copy(ocrState = "none"), emptyList())
+                    documents.singleDoc.value = DocListItem(doc("doc-1", ocrState = OcrState.NONE), emptyList())
                 }
             val model = vm(session = session)
             advanceUntilIdle()
@@ -299,7 +300,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             // A newly-completed OCR run (state -> done) should trigger a reload with the fresh version.
             val fresh = listOf(OcrVersion("tesseract", "dev-a", "eng", 0L, active = true))
             session.ocr.ocrVersionsList = fresh
-            session.documents.singleDoc.value = DocListItem(doc("doc-1").copy(ocrState = "done"), emptyList())
+            session.documents.singleDoc.value = DocListItem(doc("doc-1", ocrState = OcrState.DONE), emptyList())
             advanceUntilIdle()
             model.metadata.value.document.ocrVersions shouldContainExactly fresh
         }

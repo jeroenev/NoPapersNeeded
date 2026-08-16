@@ -22,7 +22,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DocThumbnail
-import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
@@ -89,7 +88,7 @@ private fun PreviewRow(
         DocThumbnail(docId = item.doc.docId, content = content, size = PreviewThumbnailSize)
         Column(Modifier.weight(1f)) {
             Text(
-                documentDisplayTitle(item.doc.title, item.doc.fileName),
+                item.doc.displayTitle,
                 style = MaterialTheme.typography.bodyMedium,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
