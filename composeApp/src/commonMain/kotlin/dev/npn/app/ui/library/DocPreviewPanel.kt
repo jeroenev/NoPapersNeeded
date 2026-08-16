@@ -95,7 +95,10 @@ private fun PreviewBody(
     onClose: () -> Unit,
 ) {
     val docId = item.doc.docId
-    val vm: DocDetailViewModel = viewModel { DocDetailViewModel(docId, session) }
+    // Seeded with the row the library list already loaded: this viewmodel is rebuilt for every
+    // document the user selects (see ScopedToDoc), so without the seed the panel would blank for
+    // one index query on every switch.
+    val vm: DocDetailViewModel = viewModel { DocDetailViewModel(docId, session, initialItem = item) }
     SnackbarMessages(vm.messages, snackbar)
 
     val ui by vm.ui.collectAsStateWithLifecycle()
