@@ -130,7 +130,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             runCurrent()
             model.ui.value.viewType shouldBe ViewType.GRID
             // Now the deferred default arrives; it must NOT clobber the explicit choice.
-            settings.emitDefaultView(ViewType.LIST)
+            settings.updateSettings { it.copy(defaultViewType = ViewType.LIST) }
             advanceUntilIdle()
             model.ui.value.viewType shouldBe ViewType.GRID
         }
@@ -142,7 +142,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             model.setViewType(ViewType.GRID)
             advanceUntilIdle()
-            settings.setDefaultViews shouldContainExactly listOf(ViewType.GRID)
+            settings.settingsFlow.value?.defaultViewType shouldBe ViewType.GRID
         }
 
     // ---- applyReviewPreset ----
@@ -414,7 +414,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.ui.value.viewType shouldBe ViewType.GRID
             model.queryText.value shouldBe "tax"
             // The late default must not override the applied saved view.
-            settings.emitDefaultView(ViewType.LIST)
+            settings.updateSettings { it.copy(defaultViewType = ViewType.LIST) }
             advanceUntilIdle()
             model.ui.value.viewType shouldBe ViewType.GRID
         }
@@ -435,7 +435,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             model.setSort(SortField.SIZE, ascending = true)
             advanceUntilIdle()
-            settings.setSorts shouldContainExactly listOf(LibrarySort(SortField.SIZE, ascending = true))
+            settings.settingsFlow.value?.librarySort shouldBe LibrarySort(SortField.SIZE, ascending = true)
         }
 
     @Test
@@ -471,7 +471,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             model.setGridColumnWidth(220)
             advanceUntilIdle()
-            settings.setGridWidths shouldContainExactly listOf(220)
+            settings.settingsFlow.value?.gridColumnWidth shouldBe 220
         }
 
     // ---- saved views ----

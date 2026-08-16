@@ -2,8 +2,6 @@ package dev.npn.core.app
 
 import android.content.Context
 import android.content.SharedPreferences
-import dev.npn.core.ai.AiProvider
-import dev.npn.core.ai.AiReasoningLevel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import java.util.UUID
@@ -14,12 +12,29 @@ import java.util.UUID
  *
  * SharedPreferences avoids the extra DataStore dependency
  * and okio path handling, and these are a handful of small app-global settings.
+ *
+ * All key mapping, defaults and clamping live in the shared [SettingsCodec]; this class only owns
+ * the storage primitive (SharedPreferences and its change listener).
  */
 class SettingsRepositoryImpl(
     context: Context,
 ) : SettingsRepository {
     private val prefs: SharedPreferences =
         context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+
+    // Adapters that let the shared codec read from / write to SharedPreferences. Readers return
+    // null when a key is absent (the codec then supplies the default) and treat empty strings as
+    // null, matching the pre-refactor behaviour. Declared before `state` because `state`'s
+    // initializer calls load(), which uses `reader`.
+    private val reader =
+        object : SettingsCodec.Reader {
+            override fun string(key: String): String? = prefs.getString(key, null)?.ifEmpty { null }
+
+            override fun int(key: String): Int? = if (prefs.contains(key)) prefs.getInt(key, 0) else null
+
+            override fun boolean(key: String): Boolean? =
+                if (prefs.contains(key)) prefs.getBoolean(key, false) else null
+        }
 
     private val state = MutableStateFlow(load())
 
@@ -32,229 +47,56 @@ class SettingsRepositoryImpl(
         prefs.registerOnSharedPreferenceChangeListener(listener)
     }
 
-    private fun load(): SettingsSnapshot =
-        SettingsSnapshot(
-            installationId =
-                prefs.getString(SettingsKeys.INSTALLATION_ID, null)
-                    ?: UUID.randomUUID().toString().also {
-                        prefs.edit().putString(SettingsKeys.INSTALLATION_ID, it).apply()
-                    },
-            libraryLocation = prefs.getString(SettingsKeys.LIBRARY_LOCATION, null)?.ifEmpty { null },
-            appLanguage = prefs.getString(SettingsKeys.APP_LANGUAGE, null)?.ifEmpty { null },
-            ocrLanguage = prefs.getString(SettingsKeys.OCR_LANGUAGE, null) ?: DEFAULTS.ocrLanguage,
-            trashRetentionDays =
-                prefs.getInt(
-                    SettingsKeys.TRASH_RETENTION_DAYS,
-                    DEFAULTS.trashRetentionDays,
-                ),
-            defaultViewType =
-                prefs
-                    .getString(SettingsKeys.DEFAULT_VIEW_TYPE, null)
-                    ?.let { runCatching { ViewType.valueOf(it) }.getOrNull() } ?: ViewType.GRID,
-            librarySort =
-                LibrarySort(
-                    field =
-                        prefs
-                            .getString(SettingsKeys.LIBRARY_SORT_FIELD, null)
-                            ?.let { runCatching { SortField.valueOf(it) }.getOrNull() } ?: LibrarySort().field,
-                    ascending = prefs.getBoolean(SettingsKeys.LIBRARY_SORT_ASCENDING, LibrarySort().ascending),
-                ),
-            gridColumnWidth =
-                prefs
-                    .getInt(SettingsKeys.GRID_COLUMN_WIDTH, GridSizing.DEFAULT_COLUMN_WIDTH)
-                    .coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
-            landscapeListColumns = prefs.getBoolean(SettingsKeys.LANDSCAPE_LIST_COLUMNS, false),
-            watchedFolder = prefs.getString(SettingsKeys.WATCHED_FOLDER, null)?.ifEmpty { null },
-            watchedFolderDeleteAfterImport = prefs.getBoolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT, false),
-            storagePathTemplate = prefs.getString(SettingsKeys.STORAGE_PATH_TEMPLATE, null)?.ifEmpty { null },
-            storagePathEnabled = prefs.getBoolean(SettingsKeys.STORAGE_PATH_ENABLED, false),
-            autoMatchRulesJson = prefs.getString(SettingsKeys.AUTO_MATCH_RULES_JSON, null) ?: "[]",
-            aiEnabled = prefs.getBoolean(SettingsKeys.AI_ENABLED, false),
-            aiProvider =
-                aiProviderProp(
-                    prefs.getString(SettingsKeys.AI_PROVIDER, null),
-                    prefs.getString(SettingsKeys.AI_BASE_URL, null),
-                ),
-            aiBaseUrl = prefs.getString(SettingsKeys.AI_BASE_URL, null) ?: "",
-            aiApiKey = prefs.getString(SettingsKeys.AI_API_KEY, null) ?: "",
-            aiModel = prefs.getString(SettingsKeys.AI_MODEL, null) ?: "",
-            aiReasoningAssistant =
-                aiReasoningProp(
-                    prefs.getString(SettingsKeys.AI_REASONING_ASSISTANT, null),
-                    AiReasoningLevel.DEFAULT,
-                ),
-            aiReasoningEdit =
-                aiReasoningProp(
-                    prefs.getString(SettingsKeys.AI_REASONING_EDIT, null),
-                    AiReasoningLevel.LOW,
-                ),
-            aiMaxTagsPerDoc =
-                prefs
-                    .getInt(SettingsKeys.AI_MAX_TAGS_PER_DOC, AiTagging.DEFAULT_TAGS_PER_DOC)
-                    .coerceIn(AiTagging.RANGE),
-            aiMaxNewTagsPerDoc =
-                prefs
-                    .getInt(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, AiTagging.DEFAULT_NEW_TAGS_PER_DOC)
-                    .coerceIn(AiTagging.NEW_TAGS_RANGE),
-            aiAutoOnOcr = prefs.getBoolean(SettingsKeys.AI_AUTO_ON_OCR, false),
-        )
+    private fun writer(editor: SharedPreferences.Editor) =
+        object : SettingsCodec.Writer {
+            override fun putString(
+                key: String,
+                value: String,
+            ) {
+                editor.putString(key, value)
+            }
+
+            override fun putInt(
+                key: String,
+                value: Int,
+            ) {
+                editor.putInt(key, value)
+            }
+
+            override fun putBoolean(
+                key: String,
+                value: Boolean,
+            ) {
+                editor.putBoolean(key, value)
+            }
+
+            override fun remove(key: String) {
+                editor.remove(key)
+            }
+        }
+
+    private fun load(): SettingsSnapshot {
+        val installationId =
+            prefs.getString(SettingsKeys.INSTALLATION_ID, null)
+                ?: UUID.randomUUID().toString().also {
+                    prefs.edit().putString(SettingsKeys.INSTALLATION_ID, it).apply()
+                }
+        return SettingsCodec.load(reader, installationId)
+    }
 
     override val settings: Flow<SettingsSnapshot> = state
 
-    override suspend fun setLibraryLocation(location: String?) {
-        prefs
-            .edit()
-            .apply {
-                if (location.isNullOrEmpty()) {
-                    remove(SettingsKeys.LIBRARY_LOCATION)
-                } else {
-                    putString(SettingsKeys.LIBRARY_LOCATION, location)
-                }
-            }.apply()
-        state.value = load()
-    }
-
-    override suspend fun setOcrLanguage(lang: String) {
-        prefs.edit().putString(SettingsKeys.OCR_LANGUAGE, lang).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAppLanguage(lang: String?) {
-        prefs
-            .edit()
-            .apply {
-                if (lang.isNullOrEmpty()) {
-                    remove(SettingsKeys.APP_LANGUAGE)
-                } else {
-                    putString(SettingsKeys.APP_LANGUAGE, lang)
-                }
-            }.apply()
-        state.value = load()
-    }
-
-    override suspend fun setTrashRetentionDays(days: Int) {
-        prefs.edit().putInt(SettingsKeys.TRASH_RETENTION_DAYS, days).apply()
-        state.value = load()
-    }
-
-    override suspend fun setDefaultViewType(v: ViewType) {
-        prefs.edit().putString(SettingsKeys.DEFAULT_VIEW_TYPE, v.name).apply()
-        state.value = load()
-    }
-
-    override suspend fun setLibrarySort(sort: LibrarySort) {
-        prefs
-            .edit()
-            .putString(SettingsKeys.LIBRARY_SORT_FIELD, sort.field.name)
-            .putBoolean(SettingsKeys.LIBRARY_SORT_ASCENDING, sort.ascending)
-            .apply()
-        state.value = load()
-    }
-
-    override suspend fun setGridColumnWidth(dp: Int) {
-        val clamped = dp.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
-        prefs.edit().putInt(SettingsKeys.GRID_COLUMN_WIDTH, clamped).apply()
-        state.value = load()
-    }
-
-    override suspend fun setLandscapeListColumns(enabled: Boolean) {
-        prefs.edit().putBoolean(SettingsKeys.LANDSCAPE_LIST_COLUMNS, enabled).apply()
-        state.value = load()
-    }
-
-    override suspend fun setWatchedFolder(location: String?) {
-        prefs
-            .edit()
-            .apply {
-                if (location.isNullOrEmpty()) {
-                    remove(SettingsKeys.WATCHED_FOLDER)
-                } else {
-                    putString(SettingsKeys.WATCHED_FOLDER, location)
-                }
-            }.apply()
-        state.value = load()
-    }
-
-    override suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean) {
-        prefs.edit().putBoolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT, enabled).apply()
-        state.value = load()
-    }
-
-    override suspend fun setStoragePathTemplate(template: String?) {
-        prefs
-            .edit()
-            .apply {
-                if (template.isNullOrEmpty()) {
-                    remove(SettingsKeys.STORAGE_PATH_TEMPLATE)
-                } else {
-                    putString(SettingsKeys.STORAGE_PATH_TEMPLATE, template)
-                }
-            }.apply()
-        state.value = load()
-    }
-
-    override suspend fun setStoragePathEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(SettingsKeys.STORAGE_PATH_ENABLED, enabled).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAutoMatchRulesJson(json: String) {
-        prefs.edit().putString(SettingsKeys.AUTO_MATCH_RULES_JSON, json).commit()
-        state.value = load()
-    }
-
-    override suspend fun setAiEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(SettingsKeys.AI_ENABLED, enabled).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAiProvider(provider: AiProvider) {
-        prefs.edit().putString(SettingsKeys.AI_PROVIDER, provider.name).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAiBaseUrl(url: String) {
-        prefs.edit().putString(SettingsKeys.AI_BASE_URL, url).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAiReasoningAssistant(level: AiReasoningLevel) {
-        prefs.edit().putString(SettingsKeys.AI_REASONING_ASSISTANT, level.name).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAiReasoningEdit(level: AiReasoningLevel) {
-        prefs.edit().putString(SettingsKeys.AI_REASONING_EDIT, level.name).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAiApiKey(key: String) {
-        prefs.edit().putString(SettingsKeys.AI_API_KEY, key).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAiModel(model: String) {
-        prefs.edit().putString(SettingsKeys.AI_MODEL, model).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAiMaxTagsPerDoc(value: Int) {
-        prefs.edit().putInt(SettingsKeys.AI_MAX_TAGS_PER_DOC, value.coerceIn(AiTagging.RANGE)).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAiMaxNewTagsPerDoc(value: Int) {
-        prefs.edit().putInt(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, value.coerceIn(AiTagging.NEW_TAGS_RANGE)).apply()
-        state.value = load()
-    }
-
-    override suspend fun setAiAutoOnOcr(enabled: Boolean) {
-        prefs.edit().putBoolean(SettingsKeys.AI_AUTO_ON_OCR, enabled).apply()
-        state.value = load()
+    override suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) {
+        val next = SettingsCodec.normalise(transform(state.value))
+        val editor = prefs.edit()
+        SettingsCodec.store(writer(editor), next)
+        // commit() (synchronous) rather than apply() so a following settings read — e.g. the rules
+        // flow re-reading autoMatchRulesJson right after a write — never sees the previous value.
+        editor.commit()
+        state.value = next
     }
 
     companion object {
         private const val PREFS_NAME = "npn_settings"
-        private val DEFAULTS = SettingsSnapshot(installationId = "")
     }
 }

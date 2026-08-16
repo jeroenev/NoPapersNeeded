@@ -55,7 +55,7 @@ fun createAppEnvironment(context: Context): AppEnvironment {
                     if (template.isNullOrBlank()) null else StoragePathRule(template, snapshot.storagePathEnabled)
                 },
                 autoMatchRulesJson = { settings.settings.first().autoMatchRulesJson },
-                persistAutoMatchRulesJson = settings::setAutoMatchRulesJson,
+                persistAutoMatchRulesJson = { json -> settings.edit { it.copy(autoMatchRulesJson = json) } },
                 aiConfig = { settings.settings.first().toAiConfig() },
             )
         OpenedLibrary(deps) { deps.closeDb() }

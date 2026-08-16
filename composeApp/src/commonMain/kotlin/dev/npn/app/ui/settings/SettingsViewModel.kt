@@ -1,7 +1,8 @@
 package dev.npn.app.ui.settings
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.core.ai.AiModelCatalog
 import dev.npn.core.ai.AiProvider
@@ -11,6 +12,7 @@ import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SettingsRepository
+import dev.npn.core.app.SettingsSnapshot
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.toAiConfig
@@ -87,14 +89,22 @@ enum class StoragePathErrorKind {
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
 enum class ReviewMigration { MARK_ALL, MARK_TAGGED, MARK_NONE }
 
-// Mirrors SettingsRepository's flat per-setting setter surface (one-liners); splitting the
-// screen's viewmodel apart would not make it simpler.
-@Suppress("TooManyFunctions")
+/**
+ * Settings screen view model. Writes go through the one [SettingsRepository.edit] mutation, so the
+ * screen edits a field with `vm.edit { it.copy(field = value) }` and there is no per-setting
+ * forwarder to keep in sync. The few settings that need surrounding logic (provider switch clears
+ * the stale model list, storage-path enable is gated on template validity, the review-mode
+ * migration) keep their own methods.
+ *
+ * Extends [MessagesViewModel] so a failed write (properties-file I/O, SAF errors) surfaces as a
+ * "Could not update …" snackbar instead of being silently swallowed — every write is routed
+ * through [launchReporting].
+ */
 class SettingsViewModel(
     private val settings: SettingsRepository,
     private val content: DocContentFacade,
     private val reviewConfig: ReviewConfigFacade,
-) : ViewModel() {
+) : MessagesViewModel() {
     constructor(settings: SettingsRepository, session: LibrarySession) :
         this(settings, session.content, session.reviewConfig)
 
@@ -143,30 +153,21 @@ class SettingsViewModel(
     fun setStandardFieldEnabled(
         field: StandardField,
         enabled: Boolean,
-    ) = viewModelScope.launch {
+    ) = launchReporting(UiAction.UPDATE) {
         val current = reviewConfig.standardFields.first()
         reviewConfig.setStandardFields(if (enabled) current + field else current - field)
     }
 
-    fun setOcrLanguage(lang: String) = viewModelScope.launch { settings.setOcrLanguage(lang) }
-
-    fun setAppLanguage(lang: String?) = viewModelScope.launch { settings.setAppLanguage(lang) }
-
-    fun setTrashRetentionDays(days: Int) = viewModelScope.launch { settings.setTrashRetentionDays(days) }
-
-    fun setDefaultViewType(v: ViewType) = viewModelScope.launch { settings.setDefaultViewType(v) }
-
-    fun setLandscapeListColumns(enabled: Boolean) = viewModelScope.launch { settings.setLandscapeListColumns(enabled) }
-
-    fun setWatchedFolder(location: String?) = viewModelScope.launch { settings.setWatchedFolder(location) }
-
-    fun setWatchedFolderDeleteAfterImport(enabled: Boolean) =
-        viewModelScope.launch { settings.setWatchedFolderDeleteAfterImport(enabled) }
-
-    fun setStoragePathTemplate(template: String) = viewModelScope.launch { settings.setStoragePathTemplate(template) }
+    /**
+     * The single write path for a plain setting: the screen edits one field with
+     * `vm.edit { it.copy(field = value) }`. Clamping and defaults are applied inside the repository,
+     * and a failed write is reported via the inherited [messages] snackbar.
+     */
+    fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
+        launchReporting(UiAction.UPDATE) { settings.edit(transform) }
 
     fun setStoragePathEnabled(enabled: Boolean) =
-        viewModelScope.launch {
+        launchReporting(UiAction.UPDATE) {
             // Re-derive validity from the stored template rather than the projected UI state, which
             // can be the stale default when nothing is currently collecting `state`.
             val valid =
@@ -176,29 +177,16 @@ class SettingsViewModel(
                     val template = settings.settings.first().storagePathTemplate ?: DEFAULT_STORAGE_PATH_TEMPLATE
                     StoragePathTemplate.expand(template, VALIDATION_CONTEXT).isSuccess
                 }
-            if (valid) settings.setStoragePathEnabled(enabled)
+            if (valid) settings.edit { it.copy(storagePathEnabled = enabled) }
         }
-
-    fun setAiEnabled(enabled: Boolean) = viewModelScope.launch { settings.setAiEnabled(enabled) }
 
     /** Switch provider and drop the stale model list (it belongs to the previous endpoint). */
     fun setAiProvider(provider: AiProvider) =
-        viewModelScope.launch {
+        launchReporting(UiAction.UPDATE) {
             aiModelsJob?.cancel()
             _aiModels.value = AiModelListState()
-            settings.setAiProvider(provider)
+            settings.edit { it.copy(aiProvider = provider) }
         }
-
-    fun setAiBaseUrl(url: String) = viewModelScope.launch { settings.setAiBaseUrl(url) }
-
-    fun setAiApiKey(key: String) = viewModelScope.launch { settings.setAiApiKey(key) }
-
-    fun setAiModel(model: String) = viewModelScope.launch { settings.setAiModel(model) }
-
-    fun setAiReasoningAssistant(level: AiReasoningLevel) =
-        viewModelScope.launch { settings.setAiReasoningAssistant(level) }
-
-    fun setAiReasoningEdit(level: AiReasoningLevel) = viewModelScope.launch { settings.setAiReasoningEdit(level) }
 
     /**
      * Fetch the model ids the currently configured provider offers (for the model dropdown).
@@ -220,12 +208,6 @@ class SettingsViewModel(
                 }
             }
     }
-
-    fun setAiMaxTagsPerDoc(value: Int) = viewModelScope.launch { settings.setAiMaxTagsPerDoc(value) }
-
-    fun setAiMaxNewTagsPerDoc(value: Int) = viewModelScope.launch { settings.setAiMaxNewTagsPerDoc(value) }
-
-    fun setAiAutoOnOcr(enabled: Boolean) = viewModelScope.launch { settings.setAiAutoOnOcr(enabled) }
 
     /**
      * Drop all cached thumbnails so they regenerate at the current render quality. Invokes [onDone]
