@@ -43,6 +43,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.NumericField
+import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.persistDirectoryAccess
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ViewType
@@ -170,6 +171,8 @@ fun SettingsScreen(
         )
 
     val snackbar = remember { SnackbarHostState() }
+    // Surface failed settings writes (properties-file I/O, SAF errors) on the same snackbar host.
+    SnackbarMessages(vm.messages, snackbar)
     var thumbnailResult by remember { mutableStateOf<Int?>(null) }
     val thumbnailMessage =
         thumbnailResult?.let { count ->
@@ -226,8 +229,8 @@ fun SettingsScreen(
             WatchedFolderSection(
                 watchedFolder = state.watchedFolder,
                 deleteAfterImport = state.watchedFolderDeleteAfterImport,
-                onSetFolder = vm::setWatchedFolder,
-                onSetDeleteAfterImport = vm::setWatchedFolderDeleteAfterImport,
+                onSetFolder = { folder -> vm.edit { it.copy(watchedFolder = folder) } },
+                onSetDeleteAfterImport = { on -> vm.edit { it.copy(watchedFolderDeleteAfterImport = on) } },
             )
 
             HorizontalDivider()
@@ -235,7 +238,7 @@ fun SettingsScreen(
             SectionHeader(stringResource(Res.string.common_settings_ocr))
             OutlinedTextField(
                 value = state.ocrLanguage,
-                onValueChange = vm::setOcrLanguage,
+                onValueChange = { lang -> vm.edit { it.copy(ocrLanguage = lang) } },
                 label = { Text(stringResource(Res.string.common_settings_ocr_language_code)) },
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
@@ -260,7 +263,7 @@ fun SettingsScreen(
             SectionHeader(stringResource(Res.string.common_settings_trash))
             NumericField(
                 value = state.trashRetentionDays,
-                onValueChange = vm::setTrashRetentionDays,
+                onValueChange = { days -> vm.edit { it.copy(trashRetentionDays = days) } },
                 range = TRASH_RETENTION_RANGE,
                 label = stringResource(Res.string.common_settings_trash_retention_days),
                 maxDigits = TRASH_RETENTION_MAX_DIGITS,
@@ -271,7 +274,7 @@ fun SettingsScreen(
             SectionHeader(stringResource(Res.string.common_settings_views))
             DefaultViewTypeDropdown(
                 current = state.defaultViewType,
-                onSelect = vm::setDefaultViewType,
+                onSelect = { v -> vm.edit { it.copy(defaultViewType = v) } },
             )
             Text(
                 stringResource(Res.string.common_settings_grid_size_help),
@@ -280,7 +283,7 @@ fun SettingsScreen(
             )
             LandscapeListToggle(
                 enabled = state.landscapeListColumns,
-                onToggle = vm::setLandscapeListColumns,
+                onToggle = { on -> vm.edit { it.copy(landscapeListColumns = on) } },
             )
 
             HorizontalDivider()
@@ -288,7 +291,7 @@ fun SettingsScreen(
             SectionHeader(stringResource(Res.string.common_settings_language))
             AppLanguageDropdown(
                 current = state.appLanguage,
-                onSelect = vm::setAppLanguage,
+                onSelect = { lang -> vm.edit { it.copy(appLanguage = lang) } },
             )
             Text(
                 stringResource(Res.string.common_settings_language_help),
@@ -304,7 +307,7 @@ fun SettingsScreen(
                 enabled = state.storagePathEnabled,
                 preview = storagePath.preview,
                 error = storagePath.error,
-                onTemplateChange = vm::setStoragePathTemplate,
+                onTemplateChange = { template -> vm.edit { it.copy(storagePathTemplate = template) } },
                 onEnabledChange = vm::setStoragePathEnabled,
             )
             OutlinedButton(onClick = {

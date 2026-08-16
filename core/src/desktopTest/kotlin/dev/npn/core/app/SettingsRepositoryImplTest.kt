@@ -18,7 +18,7 @@ class SettingsRepositoryImplTest {
             val directory = Files.createTempDirectory("npn-settings-test")
             try {
                 val file = directory.resolve("settings.properties").toFile()
-                SettingsRepositoryImpl(file).setAiApiKey("secret")
+                SettingsRepositoryImpl(file).edit { it.copy(aiApiKey = "secret") }
 
                 if (supportsPosixView(file)) {
                     Files.getPosixFilePermissions(file.toPath()) shouldBe
@@ -45,9 +45,9 @@ class SettingsRepositoryImplTest {
                 val repository = SettingsRepositoryImpl(file)
 
                 listOf(
-                    async { repository.setAiBaseUrl("https://example.test") },
-                    async { repository.setAiApiKey("secret") },
-                    async { repository.setAiModel("model") },
+                    async { repository.edit { it.copy(aiBaseUrl = "https://example.test") } },
+                    async { repository.edit { it.copy(aiApiKey = "secret") } },
+                    async { repository.edit { it.copy(aiModel = "model") } },
                 ).awaitAll()
 
                 val reloaded = SettingsRepositoryImpl(file)
@@ -67,9 +67,9 @@ class SettingsRepositoryImplTest {
             try {
                 val file = directory.resolve("settings.properties").toFile()
                 val repository = SettingsRepositoryImpl(file)
-                repository.setAiProvider(AiProvider.ANTHROPIC)
-                repository.setAiReasoningAssistant(AiReasoningLevel.MEDIUM)
-                repository.setAiReasoningEdit(AiReasoningLevel.NONE)
+                repository.edit { it.copy(aiProvider = AiProvider.ANTHROPIC) }
+                repository.edit { it.copy(aiReasoningAssistant = AiReasoningLevel.MEDIUM) }
+                repository.edit { it.copy(aiReasoningEdit = AiReasoningLevel.NONE) }
 
                 val snapshot = SettingsRepositoryImpl(file).settings.first()
                 snapshot.aiProvider shouldBe AiProvider.ANTHROPIC
@@ -112,17 +112,38 @@ class SettingsRepositoryImplTest {
         }
 
     @Test
+    fun outOfRangeValuesAreClampedByTheRepository() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                val file = directory.resolve("settings.properties").toFile()
+                // Caller passes values outside the allowed ranges; the repository (via SettingsCodec)
+                // coerces them, so neither a write nor a reload can hold an out-of-range value.
+                SettingsRepositoryImpl(file).edit {
+                    it.copy(aiMaxTagsPerDoc = 999, aiMaxNewTagsPerDoc = -5, gridColumnWidth = 10)
+                }
+
+                val snapshot = SettingsRepositoryImpl(file).settings.first()
+                snapshot.aiMaxTagsPerDoc shouldBe AiTagging.MAX_TAGS_PER_DOC
+                snapshot.aiMaxNewTagsPerDoc shouldBe AiTagging.MIN_NEW_TAGS_PER_DOC
+                snapshot.gridColumnWidth shouldBe GridSizing.MIN_COLUMN_WIDTH
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
     fun appLanguagePersistsAndClears() =
         runTest {
             val directory = Files.createTempDirectory("npn-settings-test")
             try {
                 val file = directory.resolve("settings.properties").toFile()
-                SettingsRepositoryImpl(file).setAppLanguage("nl")
+                SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "nl") }
 
                 var reloaded = SettingsRepositoryImpl(file)
                 reloaded.settings.first().appLanguage shouldBe "nl"
 
-                SettingsRepositoryImpl(file).setAppLanguage(null)
+                SettingsRepositoryImpl(file).edit { it.copy(appLanguage = null) }
                 reloaded = SettingsRepositoryImpl(file)
                 reloaded.settings.first().appLanguage shouldBe null
             } finally {

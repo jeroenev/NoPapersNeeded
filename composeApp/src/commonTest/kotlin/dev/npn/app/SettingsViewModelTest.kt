@@ -6,6 +6,7 @@ import dev.npn.app.ui.settings.StoragePathErrorKind
 import dev.npn.app.ui.settings.evaluateStoragePath
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
+import dev.npn.core.app.AiTagging
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
@@ -104,28 +105,29 @@ class SettingsViewModelTest : MainDispatcherTest() {
             "Factuur/Voorbeeld Energie/nutsvoorzieningen, thuis/Elektriciteitsrekening.pdf"
     }
 
-    // ---- setters delegate to repository ----
+    // ---- writes go through the single edit mutation ----
 
     @Test
-    fun settersDelegateToRepository() =
+    fun editPersistsPlainSettingsThroughRepository() =
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
-            model.setOcrLanguage("deu")
-            model.setTrashRetentionDays(60)
-            model.setDefaultViewType(ViewType.GRID)
-            model.setLandscapeListColumns(true)
-            model.setStoragePathTemplate("{docType}/{title}.pdf")
+            model.edit { it.copy(ocrLanguage = "deu") }
+            model.edit { it.copy(trashRetentionDays = 60) }
+            model.edit { it.copy(defaultViewType = ViewType.GRID) }
+            model.edit { it.copy(landscapeListColumns = true) }
+            model.edit { it.copy(storagePathTemplate = "{docType}/{title}.pdf") }
             model.setStoragePathEnabled(true)
-            model.setAppLanguage("nl")
+            model.edit { it.copy(appLanguage = "nl") }
             advanceUntilIdle()
-            settings.setOcrLanguages shouldContainExactly listOf("deu")
-            settings.setRetentionDays shouldContainExactly listOf(60)
-            settings.setDefaultViews shouldContainExactly listOf(ViewType.GRID)
-            settings.setLandscapeFlags shouldContainExactly listOf(true)
-            settings.setStoragePathTemplates shouldContainExactly listOf("{docType}/{title}.pdf")
-            settings.setStoragePathEnabledFlags shouldContainExactly listOf(true)
-            settings.setAppLanguages shouldContainExactly listOf("nl")
+            val s = settings.settingsFlow.value
+            s?.ocrLanguage shouldBe "deu"
+            s?.trashRetentionDays shouldBe 60
+            s?.defaultViewType shouldBe ViewType.GRID
+            s?.landscapeListColumns shouldBe true
+            s?.storagePathTemplate shouldBe "{docType}/{title}.pdf"
+            s?.storagePathEnabled shouldBe true
+            s?.appLanguage shouldBe "nl"
         }
 
     @Test
@@ -135,30 +137,30 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             val job = launch { model.state.collect {} }
             advanceUntilIdle()
-            model.setAppLanguage("nl")
+            model.edit { it.copy(appLanguage = "nl") }
             advanceUntilIdle()
             model.state.value.appLanguage shouldBe "nl"
-            model.setAppLanguage(null)
+            model.edit { it.copy(appLanguage = null) }
             advanceUntilIdle()
             model.state.value.appLanguage shouldBe null
-            settings.setAppLanguages shouldContainExactly listOf("nl", null)
+            settings.settingsFlow.value?.appLanguage shouldBe null
             job.cancel()
         }
 
     @Test
-    fun aiSettersDelegateToRepository() =
+    fun aiEditsPersistThroughRepository() =
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
-            model.setAiEnabled(true)
+            model.edit { it.copy(aiEnabled = true) }
             model.setAiProvider(AiProvider.ANTHROPIC)
-            model.setAiBaseUrl("http://localhost:11434")
-            model.setAiApiKey("secret")
-            model.setAiModel("qwen3:8b")
-            model.setAiReasoningAssistant(AiReasoningLevel.HIGH)
-            model.setAiReasoningEdit(AiReasoningLevel.MEDIUM)
-            model.setAiMaxTagsPerDoc(5)
-            model.setAiMaxNewTagsPerDoc(3)
+            model.edit { it.copy(aiBaseUrl = "http://localhost:11434") }
+            model.edit { it.copy(aiApiKey = "secret") }
+            model.edit { it.copy(aiModel = "qwen3:8b") }
+            model.edit { it.copy(aiReasoningAssistant = AiReasoningLevel.HIGH) }
+            model.edit { it.copy(aiReasoningEdit = AiReasoningLevel.MEDIUM) }
+            model.edit { it.copy(aiMaxTagsPerDoc = 5) }
+            model.edit { it.copy(aiMaxNewTagsPerDoc = 3) }
             advanceUntilIdle()
             settings.settingsFlow.value?.aiEnabled shouldBe true
             settings.settingsFlow.value?.aiProvider shouldBe AiProvider.ANTHROPIC
@@ -169,6 +171,18 @@ class SettingsViewModelTest : MainDispatcherTest() {
             settings.settingsFlow.value?.aiReasoningEdit shouldBe AiReasoningLevel.MEDIUM
             settings.settingsFlow.value?.aiMaxTagsPerDoc shouldBe 5
             settings.settingsFlow.value?.aiMaxNewTagsPerDoc shouldBe 3
+        }
+
+    @Test
+    fun editClampsOutOfRangeValuesInsideTheRepository() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            val model = vm(settings = settings)
+            // The caller does not clamp: the repository coerces into AiTagging.RANGE / NEW_TAGS_RANGE.
+            model.edit { it.copy(aiMaxTagsPerDoc = 999, aiMaxNewTagsPerDoc = -5) }
+            advanceUntilIdle()
+            settings.settingsFlow.value?.aiMaxTagsPerDoc shouldBe AiTagging.MAX_TAGS_PER_DOC
+            settings.settingsFlow.value?.aiMaxNewTagsPerDoc shouldBe AiTagging.MIN_NEW_TAGS_PER_DOC
         }
 
     @Test

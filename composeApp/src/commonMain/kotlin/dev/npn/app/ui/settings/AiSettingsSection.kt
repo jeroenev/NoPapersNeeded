@@ -89,10 +89,12 @@ internal fun AiAssistantSection(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
             }
-            Switch(checked = state.aiEnabled, onCheckedChange = vm::setAiEnabled)
+            Switch(checked = state.aiEnabled, onCheckedChange = { on -> vm.edit { it.copy(aiEnabled = on) } })
         }
         if (state.aiEnabled) {
             AiProviderDropdown(current = state.aiProvider, onSelect = vm::setAiProvider)
+            // setAiProvider stays a named method (it clears the stale model list), unlike the plain
+            // field edits below.
             Text(
                 stringResource(Res.string.common_settings_ai_provider_help),
                 style = MaterialTheme.typography.bodySmall,
@@ -102,32 +104,32 @@ internal fun AiAssistantSection(
                 AiBaseUrlField(
                     provider = state.aiProvider,
                     baseUrl = state.aiBaseUrl,
-                    onSetBaseUrl = vm::setAiBaseUrl,
+                    onSetBaseUrl = { url -> vm.edit { it.copy(aiBaseUrl = url) } },
                 )
             }
             if (state.aiProvider != AiProvider.OLLAMA) {
                 AiApiKeyField(
                     provider = state.aiProvider,
                     apiKey = state.aiApiKey,
-                    onSetApiKey = vm::setAiApiKey,
+                    onSetApiKey = { key -> vm.edit { it.copy(aiApiKey = key) } },
                 )
             }
             AiModelField(
                 provider = state.aiProvider,
                 model = state.aiModel,
                 models = models,
-                onSetModel = vm::setAiModel,
+                onSetModel = { model -> vm.edit { it.copy(aiModel = model) } },
                 onLoadModels = vm::loadAiModels,
             )
             AiReasoningDropdown(
                 labelRes = { level -> stringResource(Res.string.common_settings_reasoning_assistant, level) },
                 current = state.aiReasoningAssistant,
-                onSelect = vm::setAiReasoningAssistant,
+                onSelect = { level -> vm.edit { it.copy(aiReasoningAssistant = level) } },
             )
             AiReasoningDropdown(
                 labelRes = { level -> stringResource(Res.string.common_settings_reasoning_edit, level) },
                 current = state.aiReasoningEdit,
-                onSelect = vm::setAiReasoningEdit,
+                onSelect = { level -> vm.edit { it.copy(aiReasoningEdit = level) } },
             )
             Text(
                 stringResource(Res.string.common_settings_reasoning_help),
@@ -136,11 +138,11 @@ internal fun AiAssistantSection(
             )
             AiTagCapDefaults(
                 maxTagsPerDoc = state.aiMaxTagsPerDoc,
-                onSetMaxTagsPerDoc = vm::setAiMaxTagsPerDoc,
+                onSetMaxTagsPerDoc = { value -> vm.edit { it.copy(aiMaxTagsPerDoc = value) } },
                 maxNewTagsPerDoc = state.aiMaxNewTagsPerDoc,
-                onSetMaxNewTagsPerDoc = vm::setAiMaxNewTagsPerDoc,
+                onSetMaxNewTagsPerDoc = { value -> vm.edit { it.copy(aiMaxNewTagsPerDoc = value) } },
             )
-            AiAutoOnOcrToggle(enabled = state.aiAutoOnOcr, onToggle = vm::setAiAutoOnOcr)
+            AiAutoOnOcrToggle(enabled = state.aiAutoOnOcr, onToggle = { on -> vm.edit { it.copy(aiAutoOnOcr = on) } })
             Text(
                 stringResource(Res.string.common_settings_ai_request_help),
                 style = MaterialTheme.typography.bodySmall,

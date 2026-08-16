@@ -280,7 +280,7 @@ class LibraryViewModel(
         val sort = LibrarySort(field, ascending)
         _ui.value = _ui.value.copy(sort = sort)
         // Persist so the choice survives restart.
-        viewModelScope.launch { settings.setLibrarySort(sort) }
+        viewModelScope.launch { settings.edit { it.copy(librarySort = sort) } }
     }
 
     fun setViewType(v: ViewType) {
@@ -288,7 +288,7 @@ class LibraryViewModel(
         _ui.value = _ui.value.copy(viewType = v)
         // Persist so the choice becomes the default and survives restart (also keeps the settings
         // screen in sync with the top-bar switcher).
-        viewModelScope.launch { settings.setDefaultViewType(v) }
+        viewModelScope.launch { settings.edit { it.copy(defaultViewType = v) } }
     }
 
     fun applySavedView(view: SavedView) {
@@ -304,7 +304,7 @@ class LibraryViewModel(
      * buttons) on the grid. The grid previews changes locally and commits through here.
      */
     fun setGridColumnWidth(dp: Int) {
-        viewModelScope.launch { settings.setGridColumnWidth(dp) }
+        viewModelScope.launch { settings.edit { it.copy(gridColumnWidth = dp) } }
     }
 
     private companion object {

@@ -1,7 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.ai.AiProvider
-import dev.npn.core.ai.AiReasoningLevel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +21,9 @@ import java.util.UUID
  *
  * A plain properties file sidesteps okio/path
  * fiddling on desktop and is enough for a handful of app-global settings.
+ *
+ * All key mapping, defaults and clamping live in the shared [SettingsCodec]; this class only owns
+ * the storage primitive (the properties file, its owner-only permissions, and the persist mutex).
  */
 class SettingsRepositoryImpl(
     private val file: File = defaultFile(),
@@ -30,12 +31,49 @@ class SettingsRepositoryImpl(
     private val props = Properties()
     private val isWindows =
         System.getProperty("os.name")?.startsWith("Windows", ignoreCase = true) ?: false
-    private val state = MutableStateFlow(load())
     private val persistMutex = Mutex()
 
-    private fun boolProp(key: String): Boolean = props.getProperty(key)?.toBoolean() ?: false
+    // Adapters that let the shared codec read from / write to the Properties file. Empty strings
+    // read back as null so the codec's default fills in, matching the pre-refactor behaviour.
+    // Declared before `state` because `state`'s initializer calls load(), which uses `reader`.
+    private val reader =
+        object : SettingsCodec.Reader {
+            override fun string(key: String): String? = props.getProperty(key)?.ifEmpty { null }
 
-    private fun textProp(key: String): String = props.getProperty(key) ?: ""
+            override fun int(key: String): Int? = props.getProperty(key)?.toIntOrNull()
+
+            override fun boolean(key: String): Boolean? = props.getProperty(key)?.toBooleanStrictOrNull()
+        }
+
+    private val writer =
+        object : SettingsCodec.Writer {
+            override fun putString(
+                key: String,
+                value: String,
+            ) {
+                props.setProperty(key, value)
+            }
+
+            override fun putInt(
+                key: String,
+                value: Int,
+            ) {
+                props.setProperty(key, value.toString())
+            }
+
+            override fun putBoolean(
+                key: String,
+                value: Boolean,
+            ) {
+                props.setProperty(key, value.toString())
+            }
+
+            override fun remove(key: String) {
+                props.remove(key)
+            }
+        }
+
+    private val state = MutableStateFlow(load())
 
     private fun load(): SettingsSnapshot {
         if (file.exists()) {
@@ -46,106 +84,16 @@ class SettingsRepositoryImpl(
             props.getProperty(SettingsKeys.INSTALLATION_ID)
                 ?: UUID.randomUUID().toString().also { fresh ->
                     props.setProperty(SettingsKeys.INSTALLATION_ID, fresh)
-                    runCatching {
-                        storeProperties()
-                    }
+                    runCatching { storeProperties() }
                 }
-        return SettingsSnapshot(
-            installationId = installationId,
-            libraryLocation = props.getProperty(SettingsKeys.LIBRARY_LOCATION)?.ifEmpty { null },
-            appLanguage = props.getProperty(SettingsKeys.APP_LANGUAGE)?.ifEmpty { null },
-            ocrLanguage = props.getProperty(SettingsKeys.OCR_LANGUAGE) ?: "eng",
-            trashRetentionDays =
-                props.getProperty(SettingsKeys.TRASH_RETENTION_DAYS)?.toIntOrNull()
-                    ?: TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
-            defaultViewType =
-                props
-                    .getProperty(SettingsKeys.DEFAULT_VIEW_TYPE)
-                    ?.let { runCatching { ViewType.valueOf(it) }.getOrNull() }
-                    ?: ViewType.GRID,
-            librarySort =
-                LibrarySort(
-                    field =
-                        props
-                            .getProperty(SettingsKeys.LIBRARY_SORT_FIELD)
-                            ?.let { runCatching { SortField.valueOf(it) }.getOrNull() } ?: LibrarySort().field,
-                    ascending =
-                        props.getProperty(SettingsKeys.LIBRARY_SORT_ASCENDING)?.toBooleanStrictOrNull()
-                            ?: LibrarySort().ascending,
-                ),
-            gridColumnWidth =
-                props
-                    .getProperty(SettingsKeys.GRID_COLUMN_WIDTH)
-                    ?.toIntOrNull()
-                    ?.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH)
-                    ?: GridSizing.DEFAULT_COLUMN_WIDTH,
-            landscapeListColumns = boolProp(SettingsKeys.LANDSCAPE_LIST_COLUMNS),
-            watchedFolder = props.getProperty(SettingsKeys.WATCHED_FOLDER)?.ifEmpty { null },
-            watchedFolderDeleteAfterImport = boolProp(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT),
-            storagePathTemplate = props.getProperty(SettingsKeys.STORAGE_PATH_TEMPLATE)?.ifEmpty { null },
-            storagePathEnabled = boolProp(SettingsKeys.STORAGE_PATH_ENABLED),
-            autoMatchRulesJson = props.getProperty(SettingsKeys.AUTO_MATCH_RULES_JSON) ?: "[]",
-            aiEnabled = boolProp(SettingsKeys.AI_ENABLED),
-            aiProvider = aiProviderProp(textProp(SettingsKeys.AI_PROVIDER), textProp(SettingsKeys.AI_BASE_URL)),
-            aiBaseUrl = textProp(SettingsKeys.AI_BASE_URL),
-            aiApiKey = textProp(SettingsKeys.AI_API_KEY),
-            aiModel = textProp(SettingsKeys.AI_MODEL),
-            aiReasoningAssistant =
-                aiReasoningProp(textProp(SettingsKeys.AI_REASONING_ASSISTANT), AiReasoningLevel.DEFAULT),
-            aiReasoningEdit = aiReasoningProp(textProp(SettingsKeys.AI_REASONING_EDIT), AiReasoningLevel.LOW),
-            aiMaxTagsPerDoc =
-                props
-                    .getProperty(SettingsKeys.AI_MAX_TAGS_PER_DOC)
-                    ?.toIntOrNull()
-                    ?.coerceIn(AiTagging.RANGE) ?: AiTagging.DEFAULT_TAGS_PER_DOC,
-            aiMaxNewTagsPerDoc =
-                props
-                    .getProperty(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC)
-                    ?.toIntOrNull()
-                    ?.coerceIn(AiTagging.NEW_TAGS_RANGE) ?: AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
-            aiAutoOnOcr = boolProp(SettingsKeys.AI_AUTO_ON_OCR),
-        )
+        return SettingsCodec.load(reader, installationId)
     }
 
     private suspend fun persist(snapshot: SettingsSnapshot) =
         withContext(Dispatchers.IO) {
-            setOptionalProperty(SettingsKeys.LIBRARY_LOCATION, snapshot.libraryLocation)
-            setOptionalProperty(SettingsKeys.APP_LANGUAGE, snapshot.appLanguage)
-            props.setProperty(SettingsKeys.OCR_LANGUAGE, snapshot.ocrLanguage)
-            props.setProperty(SettingsKeys.TRASH_RETENTION_DAYS, snapshot.trashRetentionDays.toString())
-            props.setProperty(SettingsKeys.DEFAULT_VIEW_TYPE, snapshot.defaultViewType.name)
-            props.setProperty(SettingsKeys.LIBRARY_SORT_FIELD, snapshot.librarySort.field.name)
-            props.setProperty(SettingsKeys.LIBRARY_SORT_ASCENDING, snapshot.librarySort.ascending.toString())
-            props.setProperty(SettingsKeys.GRID_COLUMN_WIDTH, snapshot.gridColumnWidth.toString())
-            props.setProperty(SettingsKeys.LANDSCAPE_LIST_COLUMNS, snapshot.landscapeListColumns.toString())
-            props.setProperty(SettingsKeys.INSTALLATION_ID, snapshot.installationId)
-            setOptionalProperty(SettingsKeys.WATCHED_FOLDER, snapshot.watchedFolder)
-            props.setProperty(
-                SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT,
-                snapshot.watchedFolderDeleteAfterImport.toString(),
-            )
-            setOptionalProperty(SettingsKeys.STORAGE_PATH_TEMPLATE, snapshot.storagePathTemplate)
-            props.setProperty(SettingsKeys.STORAGE_PATH_ENABLED, snapshot.storagePathEnabled.toString())
-            props.setProperty(SettingsKeys.AUTO_MATCH_RULES_JSON, snapshot.autoMatchRulesJson)
-            props.setProperty(SettingsKeys.AI_ENABLED, snapshot.aiEnabled.toString())
-            props.setProperty(SettingsKeys.AI_PROVIDER, snapshot.aiProvider.name)
-            props.setProperty(SettingsKeys.AI_REASONING_ASSISTANT, snapshot.aiReasoningAssistant.name)
-            props.setProperty(SettingsKeys.AI_REASONING_EDIT, snapshot.aiReasoningEdit.name)
-            props.setProperty(SettingsKeys.AI_BASE_URL, snapshot.aiBaseUrl)
-            props.setProperty(SettingsKeys.AI_API_KEY, snapshot.aiApiKey)
-            props.setProperty(SettingsKeys.AI_MODEL, snapshot.aiModel)
-            props.setProperty(SettingsKeys.AI_MAX_TAGS_PER_DOC, snapshot.aiMaxTagsPerDoc.toString())
-            props.setProperty(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, snapshot.aiMaxNewTagsPerDoc.toString())
-            props.setProperty(SettingsKeys.AI_AUTO_ON_OCR, snapshot.aiAutoOnOcr.toString())
+            SettingsCodec.store(writer, snapshot)
             storeProperties()
         }
-
-    private fun setOptionalProperty(
-        key: String,
-        value: String?,
-    ) {
-        if (value == null) props.remove(key) else props.setProperty(key, value)
-    }
 
     private fun storeProperties() {
         file.parentFile?.mkdirs()
@@ -166,110 +114,14 @@ class SettingsRepositoryImpl(
         }
     }
 
-    private suspend fun update(transform: (SettingsSnapshot) -> SettingsSnapshot) =
+    override val settings: Flow<SettingsSnapshot> = state
+
+    override suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
         persistMutex.withLock {
-            val next = transform(state.value)
+            val next = SettingsCodec.normalise(transform(state.value))
             state.value = next
             persist(next)
         }
-
-    override val settings: Flow<SettingsSnapshot> = state
-
-    override suspend fun setLibraryLocation(location: String?) {
-        update { it.copy(libraryLocation = location?.ifEmpty { null }) }
-    }
-
-    override suspend fun setAppLanguage(lang: String?) {
-        update { it.copy(appLanguage = lang?.ifEmpty { null }) }
-    }
-
-    override suspend fun setOcrLanguage(lang: String) {
-        update { it.copy(ocrLanguage = lang) }
-    }
-
-    override suspend fun setTrashRetentionDays(days: Int) {
-        update { it.copy(trashRetentionDays = days) }
-    }
-
-    override suspend fun setDefaultViewType(v: ViewType) {
-        update { it.copy(defaultViewType = v) }
-    }
-
-    override suspend fun setLibrarySort(sort: LibrarySort) {
-        update { it.copy(librarySort = sort) }
-    }
-
-    override suspend fun setGridColumnWidth(dp: Int) {
-        update {
-            it.copy(
-                gridColumnWidth = dp.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
-            )
-        }
-    }
-
-    override suspend fun setLandscapeListColumns(enabled: Boolean) {
-        update { it.copy(landscapeListColumns = enabled) }
-    }
-
-    override suspend fun setWatchedFolder(location: String?) {
-        update { it.copy(watchedFolder = location?.ifEmpty { null }) }
-    }
-
-    override suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean) {
-        update { it.copy(watchedFolderDeleteAfterImport = enabled) }
-    }
-
-    override suspend fun setStoragePathTemplate(template: String?) {
-        update { it.copy(storagePathTemplate = template?.ifEmpty { null }) }
-    }
-
-    override suspend fun setStoragePathEnabled(enabled: Boolean) {
-        update { it.copy(storagePathEnabled = enabled) }
-    }
-
-    override suspend fun setAutoMatchRulesJson(json: String) {
-        update { it.copy(autoMatchRulesJson = json) }
-    }
-
-    override suspend fun setAiEnabled(enabled: Boolean) {
-        update { it.copy(aiEnabled = enabled) }
-    }
-
-    override suspend fun setAiProvider(provider: AiProvider) {
-        update { it.copy(aiProvider = provider) }
-    }
-
-    override suspend fun setAiBaseUrl(url: String) {
-        update { it.copy(aiBaseUrl = url) }
-    }
-
-    override suspend fun setAiReasoningAssistant(level: AiReasoningLevel) {
-        update { it.copy(aiReasoningAssistant = level) }
-    }
-
-    override suspend fun setAiReasoningEdit(level: AiReasoningLevel) {
-        update { it.copy(aiReasoningEdit = level) }
-    }
-
-    override suspend fun setAiApiKey(key: String) {
-        update { it.copy(aiApiKey = key) }
-    }
-
-    override suspend fun setAiModel(model: String) {
-        update { it.copy(aiModel = model) }
-    }
-
-    override suspend fun setAiMaxTagsPerDoc(value: Int) {
-        update { it.copy(aiMaxTagsPerDoc = value.coerceIn(AiTagging.RANGE)) }
-    }
-
-    override suspend fun setAiMaxNewTagsPerDoc(value: Int) {
-        update { it.copy(aiMaxNewTagsPerDoc = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
-    }
-
-    override suspend fun setAiAutoOnOcr(enabled: Boolean) {
-        update { it.copy(aiAutoOnOcr = enabled) }
-    }
 
     companion object {
         private val OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------")

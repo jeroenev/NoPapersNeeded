@@ -50,92 +50,198 @@ fun SettingsSnapshot.toAiConfig(): AiConfig =
         autoOnOcr = aiAutoOnOcr,
     )
 
-// A flat contract of one-line per-setting setters; splitting it up would only scatter the
-// device-local settings surface across artificial sub-interfaces.
-@Suppress("TooManyFunctions")
+/**
+ * Device-local, app-global settings (never per library, never synced through the journal — the
+ * API key, watched-folder path and UI preferences are meaningless on another device).
+ *
+ * The seam is deliberately narrow: one [settings] snapshot flow to read and one [edit] mutation
+ * to write. It used to be 27 members — a snapshot flow plus 26 one-line setters — so the interface
+ * *was* the storage schema and every new setting cost five edits (contract, both platform impls,
+ * the fake, the viewmodel). Now a new setting is one field on [SettingsSnapshot] and one line in
+ * [SettingsCodec]; nothing changes here.
+ *
+ * Clamping, defaults and key mapping are NOT caller discipline: they live inside the
+ * implementations (via the shared [SettingsCodec]), which normalise every snapshot before it is
+ * persisted or handed back. A caller that writes `copy(aiMaxTagsPerDoc = 999)` still gets the
+ * value coerced into [AiTagging.RANGE].
+ */
 interface SettingsRepository {
+    /** The current settings, already normalised (clamped, defaults filled). */
     val settings: Flow<SettingsSnapshot>
 
-    suspend fun setLibraryLocation(location: String?)
+    /**
+     * Mutate the settings: [transform] receives the current normalised snapshot and returns the
+     * desired one (typically `it.copy(field = value)`). The implementation normalises the result
+     * (clamping and defaults) and persists it, then re-emits it on [settings]. This is the single
+     * write path; there are no per-field setters to keep in sync.
+     */
+    suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot)
+}
+
+/**
+ * The single home for how a [SettingsSnapshot] maps to and from stored key/value strings, and for
+ * the clamping/defaults that keep stored values in range. Both platform implementations
+ * ([dev.npn.core.app.SettingsRepositoryImpl] on android and desktop) drive this object, so the key
+ * names, parsing quirks (enum fallbacks, empty-string-as-null, the pre-provider CUSTOM migration)
+ * and range clamps are defined once instead of re-derived per target. The only thing the platforms
+ * own is the storage primitive (SharedPreferences vs a properties file) and how a key is read,
+ * written and removed — supplied via [Reader] / [Writer].
+ *
+ * Persistence keys are frozen here: renaming one silently resets that setting for existing users,
+ * so [SettingsKeys] must never change without a migration.
+ */
+object SettingsCodec {
+    /** Reads a stored value for a key, or null when absent. String, int and boolean accessors. */
+    interface Reader {
+        fun string(key: String): String?
+
+        fun int(key: String): Int?
+
+        fun boolean(key: String): Boolean?
+    }
+
+    /** Writes stored values for keys; [remove] clears a key so its default applies on next read. */
+    interface Writer {
+        fun putString(
+            key: String,
+            value: String,
+        )
+
+        fun putInt(
+            key: String,
+            value: Int,
+        )
+
+        fun putBoolean(
+            key: String,
+            value: Boolean,
+        )
+
+        fun remove(key: String)
+    }
 
     /**
-     * App interface language override as an ISO 639-1 code (e.g. "en", "nl"), or null to follow
-     * the system locale. Device-local by design: language is a per-user UI preference.
+     * Clamp/normalise a snapshot so out-of-range or otherwise invalid values become valid. Applied
+     * before persisting and after loading, so neither callers nor stored files can hold an
+     * out-of-range value. New per-setting rules go here, not at the call sites.
      */
-    suspend fun setAppLanguage(lang: String?)
-
-    suspend fun setOcrLanguage(lang: String)
-
-    suspend fun setTrashRetentionDays(days: Int)
-
-    suspend fun setDefaultViewType(v: ViewType)
-
-    suspend fun setLibrarySort(sort: LibrarySort)
-
-    suspend fun setGridColumnWidth(dp: Int)
-
-    suspend fun setLandscapeListColumns(enabled: Boolean)
+    fun normalise(snapshot: SettingsSnapshot): SettingsSnapshot =
+        snapshot.copy(
+            libraryLocation = snapshot.libraryLocation?.ifEmpty { null },
+            appLanguage = snapshot.appLanguage?.ifEmpty { null },
+            watchedFolder = snapshot.watchedFolder?.ifEmpty { null },
+            storagePathTemplate = snapshot.storagePathTemplate?.ifEmpty { null },
+            gridColumnWidth =
+                snapshot.gridColumnWidth.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
+            aiMaxTagsPerDoc = snapshot.aiMaxTagsPerDoc.coerceIn(AiTagging.RANGE),
+            aiMaxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc.coerceIn(AiTagging.NEW_TAGS_RANGE),
+        )
 
     /**
-     * Folder watched for new PDFs to auto-import (e.g. a scanner app's output folder). Desktop:
-     * absolute path; android: SAF tree uri string (persistable permission taken by the caller).
-     * Null = feature disabled. Device-local by design: paths/uris never make sense on another
-     * device, so this must not sync through the journal.
+     * Build a normalised [SettingsSnapshot] from stored values, filling defaults for absent keys.
+     * [installationId] is passed in because minting and persisting a fresh id is a platform-owned
+     * side effect (each impl writes it back through its own storage primitive).
      */
-    suspend fun setWatchedFolder(location: String?)
-
-    /** Whether source files in the watched folder are removed after a successful import. Default false. */
-    suspend fun setWatchedFolderDeleteAfterImport(enabled: Boolean)
-
-    /** Storage path template, e.g. `{correspondent}/{doc_date:yyyy}/{title}.pdf`. Null = unset. */
-    suspend fun setStoragePathTemplate(template: String?)
-
-    /** Whether automatic storage path rule application is enabled. Default false. */
-    suspend fun setStoragePathEnabled(enabled: Boolean)
-
-    /** Durable device-local JSON source for auto-match rules; Room only projects this value. */
-    suspend fun setAutoMatchRulesJson(json: String)
-
-    // --- AI assistant (device-local by design: the API key must never sync via the journal) ---
-
-    /** Master switch for all AI features. Default false. */
-    suspend fun setAiEnabled(enabled: Boolean)
-
-    /** Provider AI requests go to; [AiProvider.CUSTOM] is the fully manual escape hatch. */
-    suspend fun setAiProvider(provider: AiProvider)
+    fun load(
+        reader: Reader,
+        installationId: String,
+    ): SettingsSnapshot =
+        normalise(
+            SettingsSnapshot(
+                installationId = installationId,
+                libraryLocation = reader.string(SettingsKeys.LIBRARY_LOCATION),
+                appLanguage = reader.string(SettingsKeys.APP_LANGUAGE),
+                ocrLanguage = reader.string(SettingsKeys.OCR_LANGUAGE) ?: DEFAULTS.ocrLanguage,
+                trashRetentionDays = reader.int(SettingsKeys.TRASH_RETENTION_DAYS) ?: DEFAULTS.trashRetentionDays,
+                defaultViewType = enumOr(reader.string(SettingsKeys.DEFAULT_VIEW_TYPE), DEFAULTS.defaultViewType),
+                librarySort =
+                    LibrarySort(
+                        field = enumOr(reader.string(SettingsKeys.LIBRARY_SORT_FIELD), DEFAULTS.librarySort.field),
+                        ascending =
+                            reader.boolean(SettingsKeys.LIBRARY_SORT_ASCENDING) ?: DEFAULTS.librarySort.ascending,
+                    ),
+                gridColumnWidth = reader.int(SettingsKeys.GRID_COLUMN_WIDTH) ?: DEFAULTS.gridColumnWidth,
+                landscapeListColumns =
+                    reader.boolean(SettingsKeys.LANDSCAPE_LIST_COLUMNS) ?: DEFAULTS.landscapeListColumns,
+                watchedFolder = reader.string(SettingsKeys.WATCHED_FOLDER),
+                watchedFolderDeleteAfterImport =
+                    reader.boolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT)
+                        ?: DEFAULTS.watchedFolderDeleteAfterImport,
+                storagePathTemplate = reader.string(SettingsKeys.STORAGE_PATH_TEMPLATE),
+                storagePathEnabled = reader.boolean(SettingsKeys.STORAGE_PATH_ENABLED) ?: DEFAULTS.storagePathEnabled,
+                autoMatchRulesJson = reader.string(SettingsKeys.AUTO_MATCH_RULES_JSON) ?: DEFAULTS.autoMatchRulesJson,
+                aiEnabled = reader.boolean(SettingsKeys.AI_ENABLED) ?: DEFAULTS.aiEnabled,
+                aiProvider =
+                    aiProviderProp(
+                        reader.string(SettingsKeys.AI_PROVIDER),
+                        reader.string(SettingsKeys.AI_BASE_URL),
+                    ),
+                aiBaseUrl = reader.string(SettingsKeys.AI_BASE_URL) ?: DEFAULTS.aiBaseUrl,
+                aiApiKey = reader.string(SettingsKeys.AI_API_KEY) ?: DEFAULTS.aiApiKey,
+                aiModel = reader.string(SettingsKeys.AI_MODEL) ?: DEFAULTS.aiModel,
+                aiReasoningAssistant =
+                    aiReasoningProp(reader.string(SettingsKeys.AI_REASONING_ASSISTANT), AiReasoningLevel.DEFAULT),
+                aiReasoningEdit =
+                    aiReasoningProp(reader.string(SettingsKeys.AI_REASONING_EDIT), AiReasoningLevel.LOW),
+                aiMaxTagsPerDoc = reader.int(SettingsKeys.AI_MAX_TAGS_PER_DOC) ?: DEFAULTS.aiMaxTagsPerDoc,
+                aiMaxNewTagsPerDoc = reader.int(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC) ?: DEFAULTS.aiMaxNewTagsPerDoc,
+                aiAutoOnOcr = reader.boolean(SettingsKeys.AI_AUTO_ON_OCR) ?: DEFAULTS.aiAutoOnOcr,
+            ),
+        )
 
     /**
-     * Server root override, e.g. `https://api.openai.com` or `http://localhost:11434`. Blank
-     * means the provider's default; required only for [AiProvider.CUSTOM].
+     * Persist a snapshot through [writer]. The snapshot is normalised first, so stored values are
+     * always in range. Nullable string settings are removed when null (so their default applies on
+     * next read) rather than stored as an empty string. [installationId] is written too so a
+     * freshly minted id survives.
      */
-    suspend fun setAiBaseUrl(url: String)
+    fun store(
+        writer: Writer,
+        snapshot: SettingsSnapshot,
+    ) {
+        val s = normalise(snapshot)
+        writer.putString(SettingsKeys.INSTALLATION_ID, s.installationId)
+        writer.putOptional(SettingsKeys.LIBRARY_LOCATION, s.libraryLocation)
+        writer.putOptional(SettingsKeys.APP_LANGUAGE, s.appLanguage)
+        writer.putString(SettingsKeys.OCR_LANGUAGE, s.ocrLanguage)
+        writer.putInt(SettingsKeys.TRASH_RETENTION_DAYS, s.trashRetentionDays)
+        writer.putString(SettingsKeys.DEFAULT_VIEW_TYPE, s.defaultViewType.name)
+        writer.putString(SettingsKeys.LIBRARY_SORT_FIELD, s.librarySort.field.name)
+        writer.putBoolean(SettingsKeys.LIBRARY_SORT_ASCENDING, s.librarySort.ascending)
+        writer.putInt(SettingsKeys.GRID_COLUMN_WIDTH, s.gridColumnWidth)
+        writer.putBoolean(SettingsKeys.LANDSCAPE_LIST_COLUMNS, s.landscapeListColumns)
+        writer.putOptional(SettingsKeys.WATCHED_FOLDER, s.watchedFolder)
+        writer.putBoolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT, s.watchedFolderDeleteAfterImport)
+        writer.putOptional(SettingsKeys.STORAGE_PATH_TEMPLATE, s.storagePathTemplate)
+        writer.putBoolean(SettingsKeys.STORAGE_PATH_ENABLED, s.storagePathEnabled)
+        writer.putString(SettingsKeys.AUTO_MATCH_RULES_JSON, s.autoMatchRulesJson)
+        writer.putBoolean(SettingsKeys.AI_ENABLED, s.aiEnabled)
+        writer.putString(SettingsKeys.AI_PROVIDER, s.aiProvider.name)
+        writer.putString(SettingsKeys.AI_BASE_URL, s.aiBaseUrl)
+        writer.putString(SettingsKeys.AI_API_KEY, s.aiApiKey)
+        writer.putString(SettingsKeys.AI_MODEL, s.aiModel)
+        writer.putString(SettingsKeys.AI_REASONING_ASSISTANT, s.aiReasoningAssistant.name)
+        writer.putString(SettingsKeys.AI_REASONING_EDIT, s.aiReasoningEdit.name)
+        writer.putInt(SettingsKeys.AI_MAX_TAGS_PER_DOC, s.aiMaxTagsPerDoc)
+        writer.putInt(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, s.aiMaxNewTagsPerDoc)
+        writer.putBoolean(SettingsKeys.AI_AUTO_ON_OCR, s.aiAutoOnOcr)
+    }
 
-    /** Bearer token for the endpoint; blank for local servers without auth. */
-    suspend fun setAiApiKey(key: String)
+    private fun Writer.putOptional(
+        key: String,
+        value: String?,
+    ) {
+        if (value == null) remove(key) else putString(key, value)
+    }
 
-    /** Model id as the endpoint knows it, e.g. `gpt-4.1-mini` or `qwen3:8b`. */
-    suspend fun setAiModel(model: String)
+    private inline fun <reified T : Enum<T>> enumOr(
+        stored: String?,
+        default: T,
+    ): T = stored?.let { runCatching { enumValueOf<T>(it) }.getOrNull() } ?: default
 
-    /** Reasoning effort for the chat assistant. Default: endpoint behaviour. */
-    suspend fun setAiReasoningAssistant(level: AiReasoningLevel)
-
-    /** Reasoning effort for AI-edit suggestion calls. Default: LOW (cheap extraction tasks). */
-    suspend fun setAiReasoningEdit(level: AiReasoningLevel)
-
-    /** Max tag suggestions produced per document. Default 8, coerced into [AiTagging.RANGE]. */
-    suspend fun setAiMaxTagsPerDoc(value: Int)
-
-    /**
-     * Max genuinely-new (non-vocabulary) tags proposed per document. Default 5, coerced into
-     * [AiTagging.NEW_TAGS_RANGE] (0 disables proposing new tags entirely).
-     */
-    suspend fun setAiMaxNewTagsPerDoc(value: Int)
-
-    /**
-     * Whether newly OCR'd documents are enriched automatically, without a review step. See
-     * [dev.npn.core.ai.AiConfig.autoOnOcr]. Default false.
-     */
-    suspend fun setAiAutoOnOcr(enabled: Boolean)
+    // Field defaults are declared once on SettingsSnapshot; read them off a throwaway instance so
+    // they cannot drift from the data class.
+    private val DEFAULTS = SettingsSnapshot(installationId = "")
 }
 
 internal object SettingsKeys {

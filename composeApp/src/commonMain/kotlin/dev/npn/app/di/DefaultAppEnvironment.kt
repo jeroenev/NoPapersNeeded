@@ -137,7 +137,7 @@ class DefaultAppEnvironment(
                 session.start(appScope)
                 currentClose = opened.close
                 _session.value = session
-                settings.setLibraryLocation(location)
+                settings.edit { it.copy(libraryLocation = location) }
             } finally {
                 _opening.value = false
             }
