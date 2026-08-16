@@ -365,9 +365,9 @@ class DocumentRepositoryImpl(
 
             SortField.ADDED -> "d.addedAt $dir"
 
+            // nulls last
             SortField.DOC_DATE -> "d.docDate IS NULL, d.docDate $dir"
 
-            // nulls last
             SortField.SIZE -> "d.size $dir"
         }
     }
