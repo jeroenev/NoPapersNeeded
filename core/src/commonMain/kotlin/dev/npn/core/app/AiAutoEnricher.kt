@@ -67,6 +67,9 @@ class AiAutoEnricher(
     private val readConfig: suspend () -> AiConfig,
     private val clock: EpochClock,
 ) {
+    /** The shared write mechanics; this pass only projects the suggestion onto what it may write. */
+    private val editApply = AiEditApply(meta)
+
     /**
      * When the next call may be attempted after a failure. In memory rather than on a row: it is a
      * statement about the endpoint, not about a document, and it must not survive a restart — an
@@ -191,35 +194,56 @@ class AiAutoEnricher(
     }
 
     /**
-     * Write one suggestion as a single edit.
+     * Write one suggestion through [AiEditApply.applyAtomically], which commits the whole edit —
+     * this document's vocabulary tags AND its fields — in ONE journal transaction. That gives both
+     * things this unattended pass depends on: the file is renamed at most once (a template keyed on
+     * correspondent and date does not rename per field), and the commit is all-or-nothing, so a
+     * failed pass writes nothing and its retry re-asks the model about the state it was originally
+     * shown rather than a half-written one. The shared [apply] entry point would split this into a
+     * transaction per tag plus one for the fields, which is right for the reviewed multi-document
+     * Edit Run but would break that all-or-nothing retry contract here — hence the separate grain.
      *
-     * Batched rather than setter-by-setter because this runs on every import: each setter re-runs
-     * the storage path rules, so a template keyed on correspondent and date would rename the file
-     * two or three times per document, and on a synced library folder each of those intermediate
-     * names is propagated. One transaction also makes a failure all-or-nothing, so a retry starts
-     * from the state the model was asked about rather than a half-written one.
-     *
-     * Only non-null suggestions are included: absent means "the model had nothing", which must
-     * leave the document's value alone, not clear it.
+     * A failed write is rethrown so the [processNext] catch drives the queue's cooldown and
+     * backoff — [AiEditApply] collects the cause rather than throwing, so this path re-raises the
+     * document's own cause instead of a synthetic one.
      */
     private suspend fun write(
         docId: String,
         suggestion: AiEditSuggestion,
     ) {
-        // Belt and braces: the request already caps new tags at 0 and asks for no removals, but
-        // this path writes without review, so an out-of-contract facade must not be able to grow
-        // the vocabulary or take a tag off a document. Removals are dropped, not applied.
-        val tags = suggestion.addTags.filterNot { it.isNew }.map { it.tag }
-        val properties =
-            buildMap {
-                suggestion.metadata.title?.let { put(DocProperty.TITLE, it) }
-                suggestion.metadata.correspondent?.let { put(DocProperty.CORRESPONDENT, it) }
-                suggestion.metadata.docDate?.let { put(DocProperty.DOC_DATE, it) }
-            }
-        // A model that found nothing gets no transaction, no rename, no journal entry at all.
-        if (tags.isEmpty() && properties.isEmpty()) return
-        meta.applyEdits(listOf(docId), addTags = tags, properties = properties)
+        val edit = writableEdit(docId, suggestion)
+        // A model that found nothing gets no transaction, no rename, no journal entry at all. An
+        // empty edit would already commit nothing; the explicit guard states that intent.
+        if (edit.isEmpty) return
+        val report = editApply.applyAtomically(edit)
+        report.failures[docId]?.let { throw it }
     }
+
+    /**
+     * The suggestion projected onto what this unattended pass is allowed to write.
+     *
+     * Belt and braces: the request already caps new tags at 0 and asks for no removals, but this
+     * path writes without review, so an out-of-contract facade must not be able to grow the
+     * vocabulary or take a tag off a document. New tags are dropped and removals are never carried.
+     *
+     * Only non-null field suggestions are included: absent means "the model had nothing", which
+     * must leave the document's value alone, not clear it.
+     */
+    private fun writableEdit(
+        docId: String,
+        suggestion: AiEditSuggestion,
+    ): WritableEdit =
+        WritableEdit(
+            docId = docId,
+            addTags = suggestion.addTags.filterNot { it.isNew }.map { it.tag }, // closed vocabulary
+            removeTags = emptyList(), // never removes unattended
+            properties =
+                buildMap {
+                    suggestion.metadata.title?.let { put(DocProperty.TITLE, it) }
+                    suggestion.metadata.correspondent?.let { put(DocProperty.CORRESPONDENT, it) }
+                    suggestion.metadata.docDate?.let { put(DocProperty.DOC_DATE, it) }
+                },
+        )
 
     companion object {
         /** How long a failed call parks the whole queue, regardless of which document failed. */

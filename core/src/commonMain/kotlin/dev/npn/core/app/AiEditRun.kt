@@ -63,18 +63,6 @@ data class ReviewField(
 )
 
 /**
- * The stored property an autofill field writes to. Kept here rather than on [AiField] so the AI
- * contract layer stays free of the storage model.
- */
-internal val AiField.property: DocProperty
-    get() =
-        when (this) {
-            AiField.TITLE -> DocProperty.TITLE
-            AiField.CORRESPONDENT -> DocProperty.CORRESPONDENT
-            AiField.DOC_DATE -> DocProperty.DOC_DATE
-        }
-
-/**
  * One document's row in the review phase. [chips] are tag additions, [removals] are tag removals
  * (a tag never appears in both — additions exclude current tags, removals are current tags) and
  * [fields] are the single-value autofill suggestions. Title and file name stay separate because the
@@ -186,6 +174,9 @@ class AiEditRun(
     /** Documents handed over from the library's selection mode; empty when opened standalone. */
     private val selection: List<String> = emptyList(),
 ) {
+    /** The shared write mechanics; this run only decides *which* selected items to hand it. */
+    private val editApply = AiEditApply(meta)
+
     /** Documents already reviewed in this run; excluded from every later batch. */
     private val _processed = MutableStateFlow(emptySet<String>())
     val processed: StateFlow<Set<String>> = _processed.asStateFlow()
@@ -308,65 +299,31 @@ class AiEditRun(
         key: ScopeKey,
         docs: List<ReviewDoc>,
     ): ApplyOutcome {
-        val pendingAdds =
-            docs.flatMap { doc ->
-                doc.chips.filter { it.selected }.map { doc.docId to it.tag }
+        // Project each reviewed document onto its selected items as one WritableEdit. The
+        // group-by-tag, one-applyEdits-per-doc and all-or-nothing write semantics live in the
+        // shared AiEditApply; this run only decides what is selected.
+        val edits =
+            docs.map { doc ->
+                WritableEdit(
+                    docId = doc.docId,
+                    addTags = doc.chips.filter { it.selected }.map { it.tag },
+                    removeTags = doc.removals.filter { it.selected }.map { it.tag },
+                    properties =
+                        doc.fields.filter { it.selected }.associate { it.field.property to it.value },
+                )
             }
-        val pendingRemovals =
-            docs.flatMap { doc ->
-                doc.removals.filter { it.selected }.map { doc.docId to it.tag }
-            }
-        val pendingFields =
-            docs.flatMap { doc ->
-                doc.fields.filter { it.selected }.map { doc.docId to it }
-            }
-        if (pendingAdds.isEmpty() && pendingRemovals.isEmpty() && pendingFields.isEmpty()) {
-            return ApplyOutcome.NothingSelected
-        }
-        val failedDocs = mutableSetOf<String>()
-        val succeededAdds = mutableSetOf<Pair<String, String>>()
-        val succeededRemovals = mutableSetOf<Pair<String, String>>()
-        val succeededFields = mutableSetOf<Pair<String, AiField>>()
-        // Group by tag so each distinct tag is written once for all its docs in a single journal
-        // transaction (MetadataWriter.addTag/removeTag commit a multi-doc op list atomically). A
-        // tag's call is all-or-nothing: on failure every (doc, tag) pair for that tag is retained
-        // for retry.
-        val addsByTag = pendingAdds.groupBy({ it.second }, { it.first })
-        for ((tag, docIds) in addsByTag) {
-            runCatching { meta.addTag(docIds, tag) }
-                .onSuccess {
-                    docIds.forEach { docId -> succeededAdds += docId to tag }
-                    _processed.update { it + docIds }
-                }.onFailure { failedDocs += docIds }
-        }
-        val removalsByTag = pendingRemovals.groupBy({ it.second }, { it.first })
-        for ((tag, docIds) in removalsByTag) {
-            runCatching { meta.removeTag(docIds, tag) }
-                .onSuccess {
-                    docIds.forEach { docId -> succeededRemovals += docId to tag }
-                    _processed.update { it + docIds }
-                }.onFailure { failedDocs += docIds }
-        }
-        // Field values are inherently per document, so these group by document rather than by tag:
-        // one MetadataWriter.applyEdits per document writes all of its selected fields as a single
-        // change. Setter-per-field would re-run the storage path rules once per field, renaming a
-        // document up to three times for one apply — and on a synced library folder every replica
-        // sees each intermediate name.
-        //
-        // That makes retry granularity per document rather than per field, which is the honest
-        // grain: applyEdits is all-or-nothing, so a failure wrote none of that document's fields
-        // and all of them are owed. Deliberately still one call per document even though applyEdits
-        // takes many: the suggested values differ per document, and one transaction over all of
-        // them would let a single rejected document lose every other document's write.
-        for ((docId, fields) in pendingFields.groupBy({ it.first }, { it.second })) {
-            runCatching {
-                meta.applyEdits(listOf(docId), properties = fields.associate { it.field.property to it.value })
-            }.onSuccess {
-                fields.forEach { succeededFields += docId to it.field }
-                _processed.update { it + docId }
-            }.onFailure { failedDocs += docId }
-        }
-        return finishApply(key, docs, succeededAdds, succeededRemovals, succeededFields, failedDocs)
+        if (edits.all { it.isEmpty }) return ApplyOutcome.NothingSelected
+        // _processed is Review state, so it stays this run's to keep: onDocWritten marks each
+        // document as its grouped op commits, matching the previous per-op update timing.
+        val report = editApply.apply(edits) { docId -> _processed.update { it + docId } }
+        return finishApply(
+            key,
+            docs,
+            succeededAdds = report.addsWritten,
+            succeededRemovals = report.removalsWritten,
+            succeededFields = report.fieldsWritten,
+            failedDocs = report.failedDocs,
+        )
     }
 
     @Suppress("LongParameterList")

@@ -151,6 +151,38 @@ class AiAutoEnricherTest {
             }
         }
 
+    /**
+     * The invariant that silently broke once already: a pass carrying BOTH a vocabulary tag and a
+     * field must commit them in exactly ONE write, not one per tag plus one for the fields. That
+     * atomicity is what makes a failed pass all-or-nothing, so a retry re-asks the model about the
+     * state it was originally shown rather than a half-written document. A regression to the
+     * per-tag grain would produce more than one recorded edit and fail here.
+     */
+    @Test
+    fun `commits a tag and a field together in exactly one write`() =
+        runTest {
+            withRig { rig ->
+                rig.insert("d1")
+                rig.ai.edit =
+                    AiEditSuggestion(
+                        addTags = listOf(TagSuggestion("invoice", isNew = false)),
+                        metadata = MetadataSuggestion(title = "Electricity invoice"),
+                    )
+                rig.enricher.enqueue("d1")
+
+                rig.drain() shouldBe 1
+
+                // Exactly one write, carrying the tag AND the field. Two writes would mean the
+                // enricher had regressed to the Edit Run's per-tag/per-doc split, losing atomicity.
+                val edit =
+                    rig.meta.edits
+                        .shouldBeSingleton()
+                        .single()
+                edit.addTags shouldContainExactly listOf("invoice")
+                edit.properties shouldBe mapOf(DocProperty.TITLE to "Electricity invoice")
+            }
+        }
+
     @Test
     fun `asks for one additive closed-vocabulary request covering tags and unfilled fields`() =
         runTest {

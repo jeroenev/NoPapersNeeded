@@ -40,10 +40,20 @@ internal val ACTIVE =
 internal class RecordingMeta : MetadataWriter {
     val edits = mutableListOf<Edit>()
 
+    /**
+     * Every tag written, as (docId, its tags): the enricher writes tags in the SAME atomic
+     * `applyEdits` as the fields, so they arrive on the edit, never through [addTag].
+     */
     val addedTags get() = edits.map { it.docId to it.addTags }
     val titles get() = edits.mapNotNull { e -> e.properties[DocProperty.TITLE]?.let { e.docId to it } }
     val correspondents get() = edits.mapNotNull { e -> e.properties[DocProperty.CORRESPONDENT]?.let { e.docId to it } }
     val docDates get() = edits.mapNotNull { e -> e.properties[DocProperty.DOC_DATE]?.let { e.docId to it } }
+
+    /**
+     * When set, the atomic write (`applyEdits`) throws this instead of recording — so a test can
+     * assert the write's own cause is what reaches the queue's backoff, not a synthetic one.
+     */
+    var failEditsWith: (() -> Throwable)? = null
 
     class Edit(
         val docId: String,
@@ -56,6 +66,7 @@ internal class RecordingMeta : MetadataWriter {
         addTags: List<String>,
         properties: Map<DocProperty, String?>,
     ) {
+        failEditsWith?.let { throw it() }
         // The enricher works a document at a time; a multi-doc call here would mean it had started
         // batching unrelated documents into one transaction.
         edits += Edit(docIds.single(), addTags, properties)
@@ -64,7 +75,7 @@ internal class RecordingMeta : MetadataWriter {
     override suspend fun addTag(
         docIds: List<String>,
         tag: String,
-    ) = error("must batch through applyEdits")
+    ) = error("the enricher writes tags atomically through applyEdits, not addTag")
 
     override suspend fun removeTag(
         docIds: List<String>,

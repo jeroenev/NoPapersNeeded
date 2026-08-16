@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiEditSuggestion
+import dev.npn.core.ai.MetadataSuggestion
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
@@ -75,6 +77,32 @@ class AiAutoEnricherRetryTest {
                 row.attempts shouldBe 1
                 row.nextAttemptAt shouldBe 5_000L + AiAutoEnricher.backoffMs(1)
                 row.lastError shouldBe "endpoint down"
+                rig.enrichedAt("d1").shouldBeNull()
+            }
+        }
+
+    /**
+     * The write goes through the shared [AiEditApply], which collects failures rather than
+     * throwing. The enricher must re-raise the document's own cause so the queue backs off on the
+     * real error — regressing to a synthetic one (or swallowing it) would blind the backoff and
+     * the row's `lastError`. This covers the seam the extraction could silently break.
+     */
+    @Test
+    fun `a failed write backs off on the write's own cause, not a synthetic one`() =
+        runTest {
+            withRig { rig ->
+                rig.insert("d1")
+                rig.ai.edit =
+                    AiEditSuggestion(metadata = MetadataSuggestion(title = "Electricity invoice"))
+                rig.enricher.enqueue("d1")
+                rig.meta.failEditsWith = { IllegalStateException("journal rejected the write") }
+
+                rig.drain()
+
+                val row = rig.row("d1").shouldNotBeNull()
+                row.attempts shouldBe 1
+                row.nextAttemptAt shouldBe 5_000L + AiAutoEnricher.backoffMs(1)
+                row.lastError shouldBe "journal rejected the write"
                 rig.enrichedAt("d1").shouldBeNull()
             }
         }
