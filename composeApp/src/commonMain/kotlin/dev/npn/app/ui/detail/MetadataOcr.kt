@@ -51,6 +51,9 @@ import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.parseQueryHighlight
 import dev.npn.core.app.OcrVersion
+import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineRef
+import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.delay
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_apply
@@ -92,7 +95,7 @@ import org.jetbrains.compose.resources.stringResource
 @Suppress("LongMethod")
 internal fun OcrTextTab(
     text: String?,
-    ocrState: String,
+    ocrState: OcrState,
     highlightTerms: List<String>,
     focusRequester: FocusRequester,
     focusRequest: Int = 0,
@@ -102,10 +105,14 @@ internal fun OcrTextTab(
         Column(modifier.verticalScroll(rememberScrollState()).padding(16.dp)) {
             Text(
                 when (ocrState) {
-                    "pending" -> stringResource(Res.string.detail_text_queued)
-                    "failed" -> stringResource(Res.string.detail_text_failed)
-                    "none" -> stringResource(Res.string.detail_text_not_extracted)
-                    else -> stringResource(Res.string.detail_text_unavailable)
+                    OcrState.PENDING -> stringResource(Res.string.detail_text_queued)
+
+                    OcrState.FAILED -> stringResource(Res.string.detail_text_failed)
+
+                    OcrState.NONE -> stringResource(Res.string.detail_text_not_extracted)
+
+                    // Indexed, but the sidecar could not be read back right now.
+                    OcrState.DONE, OcrState.ADOPTED -> stringResource(Res.string.detail_text_unavailable)
                 },
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -351,7 +358,7 @@ private fun FindHighlightText(
 
 @Composable
 internal fun OcrEngineRow(
-    indexedEngine: String?,
+    indexedEngine: OcrEngineRef?,
     pinned: Boolean,
     versions: List<OcrVersion>,
     onSetEngine: (String?) -> Unit,
@@ -392,7 +399,7 @@ internal fun OcrEngineRow(
     if (showPicker) {
         OcrEnginePickerDialog(
             versions = versions,
-            pinnedEngine = if (pinned) indexedEngine else null,
+            pinnedEngine = if (pinned) indexedEngine?.label else null,
             onConfirm = {
                 onSetEngine(it)
                 showPicker = false
@@ -424,7 +431,7 @@ private fun OcrEnginePickerDialog(
                 )
                 engines.forEach { version ->
                     OcrEngineOption(
-                        label = engineLabel(version.engine),
+                        label = engineLabel(OcrEngineRef.of(version.engine)),
                         secondary =
                             stringResource(
                                 Res.string.detail_engine_source,
@@ -480,23 +487,39 @@ private val OCR_TEXT_PADDING = 16.dp
 /** Debounce before re-scanning/re-highlighting the (potentially very long) text while typing. */
 private const val FIND_DEBOUNCE_MS = 200L
 
+/** Human label for an OCR state; exhaustive, so a new [OcrState] cannot ship unlabelled. */
 @Composable
-internal fun ocrLabel(state: String): String =
-    when (state) {
-        "none" -> stringResource(Res.string.detail_ocr_not_processed)
-        "pending" -> stringResource(Res.string.detail_ocr_queued)
-        "done" -> stringResource(Res.string.detail_ocr_done)
-        "failed" -> stringResource(Res.string.detail_ocr_failed)
-        "adopted" -> stringResource(Res.string.detail_ocr_adopted)
-        else -> state
+internal fun ocrLabel(state: OcrState): String =
+    stringResource(
+        when (state) {
+            OcrState.NONE -> Res.string.detail_ocr_not_processed
+            OcrState.PENDING -> Res.string.detail_ocr_queued
+            OcrState.DONE -> Res.string.detail_ocr_done
+            OcrState.FAILED -> Res.string.detail_ocr_failed
+            OcrState.ADOPTED -> Res.string.detail_ocr_adopted
+        },
+    )
+
+/**
+ * Label for any stored engine reference. An engine this build has no [OcrEngineId] for (a legacy
+ * "mixed" sidecar, one written by a newer build) shows its raw label rather than being hidden —
+ * the document really is indexed with it, so claiming otherwise would be a lie.
+ */
+@Composable
+private fun engineLabel(engine: OcrEngineRef): String =
+    when (engine) {
+        is OcrEngineRef.Known -> knownEngineLabel(engine.id)
+        is OcrEngineRef.Unknown -> engine.label
     }
 
+/** Human label for a known engine; exhaustive, so a new [OcrEngineId] cannot ship unlabelled. */
 @Composable
-private fun engineLabel(engine: String): String =
-    when (engine) {
-        "tesseract" -> stringResource(Res.string.detail_engine_tesseract)
-        "mlkit" -> stringResource(Res.string.detail_engine_mlkit)
-        "ai" -> stringResource(Res.string.detail_engine_ai)
-        "embedded" -> stringResource(Res.string.detail_engine_embedded)
-        else -> engine
-    }
+private fun knownEngineLabel(engine: OcrEngineId): String =
+    stringResource(
+        when (engine) {
+            OcrEngineId.TESSERACT -> Res.string.detail_engine_tesseract
+            OcrEngineId.MLKIT -> Res.string.detail_engine_mlkit
+            OcrEngineId.AI -> Res.string.detail_engine_ai
+            OcrEngineId.EMBEDDED -> Res.string.detail_engine_embedded
+        },
+    )

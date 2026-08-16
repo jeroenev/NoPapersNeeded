@@ -1,5 +1,6 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.app.DocumentRepositoryImpl
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
@@ -344,6 +345,36 @@ class OcrPipelineTest {
                 .observeQueue()
                 .first()
                 .none { it.docId == docId && it.state == OcrPipeline.STATE_PENDING } shouldBe true
+        }
+
+    /**
+     * End-to-end guard for the read seam: the pipeline stores whatever engine label a sidecar
+     * carries, including one this build has no [OcrEngineId] for, and [DocumentRepositoryImpl]
+     * must surface that as [OcrEngineRef.Unknown] rather than "no engine". Collapsing the two
+     * would make an indexed document read as un-indexed and an active pin read as unpinned.
+     */
+    @Test
+    fun unknownEngineSurvivesTheReadSeamAsAnUnknownRefNotAsAbsent() =
+        runTest {
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            // The only stored version carries a label this build does not know.
+            writeForeignSidecar(docId, dev = "olddev", engine = "mixed", text = "legacy mixed words")
+
+            rig.pipeline("devA", FakeOcrEngine(available = false, name = "mlkit")).processDoc(docId)
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mixed"
+
+            val repo = DocumentRepositoryImpl(db)
+            repo
+                .observeDoc(docId)
+                .first()!!
+                .doc.ocrEngine shouldBe OcrEngineRef.Unknown("mixed")
+
+            // A pin on that same unknown engine stays visible and keeps its label, so re-applying
+            // it writes back the identical column value instead of silently clearing the pin.
+            setOverride(docId, "mixed")
+            val pinned = repo.observeDoc(docId).first()!!.doc
+            pinned.ocrEngineOverride shouldBe OcrEngineRef.Unknown("mixed")
+            pinned.ocrEngineOverride?.label shouldBe "mixed"
         }
 
     /** Publish a sidecar as if another device produced it (legacy, non-engine-qualified name). */

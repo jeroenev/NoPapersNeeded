@@ -1,14 +1,60 @@
 package dev.npn.core.app
 
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
+import dev.npn.core.ocr.OcrEngineRef
+import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.flow.Flow
 
 // ---------- read side ----------
 
+/**
+ * The stable view of one document across this read seam. `dev.npn.core.db.DocumentEntity` — the
+ * disposable index row — never leaves `core.db`; [DocumentRepositoryImpl] maps it here exactly
+ * once, so a column change ripples no further than that mapping.
+ *
+ * Deliberately absent: `mtime`, `deleted` and `aiEnrichedAt`. They are index bookkeeping with no
+ * consumer outside `core`.
+ */
+data class Doc(
+    val docId: String,
+    val relPath: String,
+    val fileName: String,
+    /** [title] when it is non-blank, else [fileName]. Derived once here, never at a call site. */
+    val displayTitle: String,
+    /** The raw stored title; null/blank means "untitled". The metadata panel edits this value. */
+    val title: String?,
+    val size: Long,
+    val pageCount: Int?,
+    val addedAt: Long,
+    val reviewed: Boolean,
+    val correspondent: String?,
+    val docType: String?,
+    /** ISO-8601 local date, e.g. 2026-07-15. */
+    val docDate: String?,
+    val notes: String?,
+    val trashed: Boolean,
+    val trashedOrigPath: String?,
+    val missing: Boolean,
+    val ocrState: OcrState,
+    /** Engine of the OCR sidecar currently indexed for search; null until first indexing. */
+    val ocrEngine: OcrEngineRef?,
+    /** User-pinned engine, or null for automatic best-engine selection. */
+    val ocrEngineOverride: OcrEngineRef?,
+)
+
+/**
+ * The one rule for "what do we call this document": its title when it has one, else the file name.
+ * Applied when a [Doc] is built and by the few other read types that carry a title/file-name pair,
+ * so no UI call site repeats it.
+ */
+internal fun displayTitleOf(
+    title: String?,
+    fileName: String,
+): String = title?.takeIf { it.isNotBlank() } ?: fileName
+
 data class DocListItem(
-    val doc: DocumentEntity,
+    val doc: Doc,
     val tags: List<String>,
     val snippet: String? = null, // only set for FTS query results
     val fields: Map<String, String> = emptyMap(), // custom metadata fields (key -> value)
@@ -43,7 +89,7 @@ interface DocumentRepository {
 
     fun observeTrashed(): Flow<List<DocListItem>>
 
-    fun observeMissing(): Flow<List<DocumentEntity>>
+    fun observeMissing(): Flow<List<Doc>>
 
     fun observeDuplicates(): Flow<List<Pair<String, String>>> // docId to extra relPath
 

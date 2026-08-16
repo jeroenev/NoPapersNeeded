@@ -43,7 +43,6 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
-import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_back
@@ -82,7 +81,7 @@ private enum class TrashBulkAction { RESTORE_ALL, EMPTY_TRASH }
 private data class TrashContentState(
     val trashed: List<dev.npn.core.app.DocListItem>,
     val duplicates: List<Pair<String, String>>,
-    val missing: List<dev.npn.core.db.DocumentEntity>,
+    val missing: List<dev.npn.core.app.Doc>,
     val relinks: List<dev.npn.core.index.RelinkCandidate>,
 )
 
@@ -334,7 +333,7 @@ private fun TrashList(
                     DocThumbnail(docId = item.doc.docId, content = content, size = 48.dp)
                     Column(Modifier.weight(1f)) {
                         Text(
-                            documentDisplayTitle(item.doc.title, item.doc.fileName),
+                            item.doc.displayTitle,
                             style = MaterialTheme.typography.titleSmall,
                             maxLines = 2,
                             overflow = TextOverflow.Ellipsis,
@@ -408,7 +407,7 @@ private fun DuplicatesList(
 
 @Composable
 private fun MissingList(
-    missing: List<dev.npn.core.db.DocumentEntity>,
+    missing: List<dev.npn.core.app.Doc>,
     relinks: List<dev.npn.core.index.RelinkCandidate>,
     onRelink: (oldDocId: String, newDocId: String) -> Unit,
 ) {
@@ -430,7 +429,7 @@ private fun MissingList(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                     Text(
-                        documentDisplayTitle(doc.title, doc.fileName),
+                        doc.displayTitle,
                         style = MaterialTheme.typography.titleSmall,
                     )
                     Text(

@@ -58,7 +58,6 @@ import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.UiTextKey
-import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiField
@@ -155,7 +154,7 @@ private fun SuggestingPhase(
         val fraction = if (progress.total == 0) 0f else progress.done.toFloat() / progress.total
         LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
         Text(
-            documentDisplayTitle(progress.currentTitle, progress.currentFileName),
+            progress.currentDisplayTitle,
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
@@ -247,7 +246,7 @@ private fun ReviewRow(
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
         DocThumbnail(docId = doc.docId, content = content, size = 56.dp)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(documentDisplayTitle(doc.title, doc.fileName), style = MaterialTheme.typography.titleSmall)
+            Text(doc.displayTitle, style = MaterialTheme.typography.titleSmall)
             doc.snippet?.let {
                 Text(
                     it,
@@ -422,7 +421,7 @@ private fun NoSuggestionsSection(docs: List<ReviewDoc>) {
         if (expanded) {
             docs.forEach { doc ->
                 Text(
-                    documentDisplayTitle(doc.title, doc.fileName),
+                    doc.displayTitle,
                     Modifier.padding(vertical = 2.dp),
                     style = MaterialTheme.typography.bodyMedium,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,

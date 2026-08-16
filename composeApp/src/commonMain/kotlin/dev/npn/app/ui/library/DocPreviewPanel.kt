@@ -30,7 +30,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
-import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.detail.DocActions
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.MetadataPanel
@@ -148,7 +147,7 @@ private fun PreviewHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            documentDisplayTitle(item.doc.title, item.doc.fileName),
+            item.doc.displayTitle,
             style = MaterialTheme.typography.titleMedium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,

@@ -6,13 +6,13 @@ import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.app.Doc
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.MaintenanceFacade
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.index.RelinkCandidate
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -42,7 +42,7 @@ class TrashViewModel(
             .observeDuplicates()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    val missing: StateFlow<List<DocumentEntity>> =
+    val missing: StateFlow<List<Doc>> =
         documents
             .observeMissing()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())

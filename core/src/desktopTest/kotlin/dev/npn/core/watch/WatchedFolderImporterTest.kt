@@ -4,6 +4,7 @@ import dev.npn.core.app.AppSessionRig
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.ocr.OcrEngine
+import dev.npn.core.ocr.OcrState
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
@@ -63,7 +64,7 @@ class WatchedFolderImporterTest {
                         .first()
                 docs.map { it.doc.fileName }.sorted() shouldBe listOf("scan-a.pdf", "scan-b.pdf")
                 // Every auto-import is queued for OCR like a manual import.
-                docs.all { it.doc.ocrState == "pending" || it.doc.ocrState == "done" } shouldBe true
+                docs.all { it.doc.ocrState == OcrState.PENDING || it.doc.ocrState == OcrState.DONE } shouldBe true
             } finally {
                 rig.close()
             }

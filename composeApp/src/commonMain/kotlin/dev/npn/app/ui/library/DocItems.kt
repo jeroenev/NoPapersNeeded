@@ -45,7 +45,6 @@ import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagChip
-import dev.npn.app.ui.common.documentDisplayTitle
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.common.formatSize
 import dev.npn.app.ui.common.onSecondaryClick
@@ -62,8 +61,6 @@ import no_papers_needed.composeapp.generated.resources.library_select
 import no_papers_needed.composeapp.generated.resources.library_trash
 import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
-
-private fun DocListItem.displayTitle(): String = documentDisplayTitle(doc.title, doc.fileName)
 
 /**
  * Effective reviewed state for display. In UNTAGGED_ONLY the marker is derived (reviewed == has
@@ -254,7 +251,7 @@ private fun DocListRowDetails(
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
-            text = item.displayTitle(),
+            text = item.doc.displayTitle,
             style = MaterialTheme.typography.titleSmall,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -342,7 +339,7 @@ fun DocGridCard(
                     )
                 }
                 Text(
-                    text = item.displayTitle(),
+                    text = item.doc.displayTitle,
                     style = MaterialTheme.typography.bodyMedium,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
