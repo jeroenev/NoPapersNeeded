@@ -21,9 +21,29 @@ and discussion; sharpen them here when they drift.
   tags are pre-selected; new tags and all removals are pre-deselected; metadata
   fill-ins (empty current value) are pre-selected; overwrites are pre-deselected.
 - **Apply** — writing accepted suggestions to the journal. Tag writes are
-  grouped per distinct tag and are all-or-nothing per tag. Partial failure
-  yields a Retry outcome: a rebuilt Review containing only failed documents,
-  with already-succeeded items deselected so retry never re-writes.
+  grouped per distinct tag and are all-or-nothing per tag; field writes are one
+  `applyEdits` per document, because a setter per field re-runs the storage path
+  rules and renames the file once per field. Partial failure yields a Retry
+  outcome: a rebuilt Review containing only failed documents, with
+  already-succeeded items deselected so retry never re-writes.
+  Apply is owned by `AiEditApply` (core.app) — the single home of those write
+  mechanics, shared by the Edit Run and by automatic enrichment. It reports per
+  `(doc, item)` success and carries the cause of each failed document, because
+  its two callers want failure in different shapes: the Edit Run wants it as
+  data to rebuild a Review, enrichment wants it as a throwable to drive backoff.
+  The two callers also write at different atomic grains, so `AiEditApply` offers
+  two entry points, not one policy toggle. The reviewed Edit Run uses the
+  batched grain above (per-tag transactions across documents, one `applyEdits`
+  per document for fields). Automatic enrichment writes ONE unattended document
+  and, on failure, re-asks the model, so it uses `applyAtomically`: the whole
+  edit — tags and fields — in a single `applyEdits`, so a failed pass writes
+  nothing and its retry starts from the state the model was originally shown.
+- **Writable Edit** — the part of one document's suggestion that policy permits
+  writing: tag additions, tag removals, and property values, after new tags and
+  removals have been dropped for the closed-vocabulary flows. A Writable Edit is
+  binary — a dropped item is gone. That is what separates it from Review
+  pre-selection, which is tri-state: a new tag stays visible as a deselected
+  chip so the user can opt in. The two must not be collapsed into one rule.
 
 The UI's `EditPhase` (Idle/Suggesting/Review/Applying/Done) is presentation
 state in `composeApp` and is not part of the domain vocabulary.

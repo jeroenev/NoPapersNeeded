@@ -12,7 +12,6 @@ import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.model.DocProperty
 import io.kotest.matchers.collections.shouldContainExactly
-import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -473,34 +472,6 @@ class AiEditRunApplyTest {
     ): BatchResult.Review = h.run.suggest(key).shouldBeInstanceOf<BatchResult.Review>()
 
     @Test
-    fun applyGroupsAddsByTagIntoOneCallPerTag() =
-        runTest {
-            // a and b both suggest "shared"; a also suggests "onlyA". Expect one grouped call per
-            // distinct tag, not one per (doc, tag) pair.
-            val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
-            val shared = TagSuggestion("shared", isNew = false)
-            h.ai.editByDoc =
-                mapOf(
-                    "a" to edit(addTags = listOf(shared, TagSuggestion("onlyA", isNew = false))),
-                    "b" to edit(addTags = listOf(shared)),
-                )
-
-            val review = reviewOf(h)
-            val outcome = h.run.apply(key(), review.docs)
-
-            h.meta.addedTags shouldContainExactlyInAnyOrder
-                listOf(
-                    listOf("a", "b") to "shared",
-                    listOf("a") to "onlyA",
-                )
-            val done = outcome.shouldBeInstanceOf<ApplyOutcome.Done>()
-            done.result.applied shouldBe 3
-            done.result.docsChanged shouldBe 2
-            done.result.moreRemain shouldBe false
-        }
-
-    @Test
     fun applyWritesOnlySelectedItems() =
         runTest {
             val h = Harness()
@@ -520,23 +491,6 @@ class AiEditRunApplyTest {
 
             h.meta.addedTags shouldContainExactly listOf(listOf("a") to "kept")
             h.meta.removedTags shouldBe emptyList()
-        }
-
-    @Test
-    fun applyWritesSelectedRemovalsGroupedByTag() =
-        runTest {
-            // "utility" is on both docs -> one grouped removeTag call for both.
-            val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
-            h.ai.edit = edit(removeTags = listOf("utility"))
-
-            val review = reviewOf(h)
-            val selected = review.docs.map { it.withRemovalsSelected() }
-            val done = h.run.apply(key(), selected).shouldBeInstanceOf<ApplyOutcome.Done>()
-
-            h.meta.removedTags shouldContainExactly listOf(listOf("a", "b") to "utility")
-            done.result.applied shouldBe 2
-            done.result.docsChanged shouldBe 2
         }
 
     @Test
@@ -575,40 +529,6 @@ class AiEditRunApplyTest {
     private fun ReviewDoc.withRemovalsSelected(): ReviewDoc = copy(removals = removals.map { it.copy(selected = true) })
 
     /**
-     * Every selected field of a document is written as ONE edit. A setter per field would re-run
-     * the storage path rules per field, renaming the document up to three times for one apply and
-     * propagating each intermediate name to every replica.
-     */
-    @Test
-    fun applyWritesAllOfADocumentsFieldsAsOneEdit() =
-        runTest {
-            val h = Harness()
-            h.documents.documents.value = listOf(item("a"))
-            h.ai.edit =
-                edit(
-                    metadata =
-                        MetadataSuggestion(
-                            correspondent = "Acme",
-                            docDate = "2024-01-15",
-                        ),
-                )
-
-            val review = reviewOf(h)
-            val outcome = h.run.apply(key(), review.docs)
-
-            h.meta.batchedEdits shouldContainExactly
-                listOf(
-                    "a" to
-                        mapOf(
-                            DocProperty.CORRESPONDENT to "Acme",
-                            DocProperty.DOC_DATE to "2024-01-15",
-                        ),
-                )
-            // Both fields still count as applied; batching changes the write, not the tally.
-            outcome.shouldBeInstanceOf<ApplyOutcome.Done>().result.applied shouldBe 2
-        }
-
-    /**
      * Batching moves field-retry granularity from per field to per document, which is the honest
      * grain: applyEdits is all-or-nothing, so a failed write left none of the document's fields
      * written and every one of them is still owed.
@@ -631,20 +551,6 @@ class AiEditRunApplyTest {
                 .single()
                 .fields
                 .map { it.selected } shouldContainExactly listOf(true, true)
-        }
-
-    /** Documents are still written one at a time, so one document's failure cannot cost another's. */
-    @Test
-    fun applyWritesOneEditPerDocument() =
-        runTest {
-            val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
-            h.ai.edit = edit(metadata = MetadataSuggestion(correspondent = "Acme"))
-
-            val review = reviewOf(h)
-            h.run.apply(key(), review.docs)
-
-            h.meta.batchedEdits.map { it.first } shouldContainExactly listOf("a", "b")
         }
 
     @Test
