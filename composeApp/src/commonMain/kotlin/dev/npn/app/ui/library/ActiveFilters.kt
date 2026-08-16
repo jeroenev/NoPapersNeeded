@@ -28,87 +28,29 @@ import no_papers_needed.composeapp.generated.resources.library_tag_filter_none
 import no_papers_needed.composeapp.generated.resources.library_untagged
 import org.jetbrains.compose.resources.stringResource
 
-/** Removable chips for each active filter facet under the search bar. */
+/**
+ * Removable chips for each active filter facet under the search bar. The set, order and removal of
+ * chips is pure logic in [activeChips]/[removeChip]; this composable only renders each
+ * [FilterChip] with its localized label and wires the tap to clear that one facet.
+ */
 @Composable
-@Suppress("LongMethod")
 fun ActiveFilters(
     filter: LibraryFilter,
     onFilterChange: (LibraryFilter) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val chips =
-        buildList {
-            filter.tagsAll.forEach { t ->
-                add(
-                    stringResource(Res.string.library_tag_filter_all, t) to {
-                        onFilterChange(filter.copy(tagsAll = filter.tagsAll - t))
-                    },
-                )
-            }
-            filter.tagsAny.forEach { t ->
-                add(
-                    stringResource(Res.string.library_tag_filter_any, t) to {
-                        onFilterChange(filter.copy(tagsAny = filter.tagsAny - t))
-                    },
-                )
-            }
-            filter.tagsNone.forEach { t ->
-                add(
-                    stringResource(Res.string.library_tag_filter_none, t) to {
-                        onFilterChange(filter.copy(tagsNone = filter.tagsNone - t))
-                    },
-                )
-            }
-            filter.reviewed?.let { r ->
-                add(
-                    stringResource(if (r) Res.string.common_reviewed else Res.string.common_needs_review) to {
-                        onFilterChange(filter.copy(reviewed = null))
-                    },
-                )
-            }
-            filter.correspondent?.let { c -> add(c to { onFilterChange(filter.copy(correspondent = null)) }) }
-            filter.docType?.let { d -> add(d to { onFilterChange(filter.copy(docType = null)) }) }
-            filter.docDateFrom?.let { from ->
-                add(
-                    stringResource(Res.string.library_date_from, from) to {
-                        onFilterChange(filter.copy(docDateFrom = null))
-                    },
-                )
-            }
-            filter.docDateTo?.let { to ->
-                add(
-                    stringResource(Res.string.library_date_to, to) to {
-                        onFilterChange(filter.copy(docDateTo = null))
-                    },
-                )
-            }
-            if (filter.untaggedOnly) {
-                add(
-                    stringResource(Res.string.library_untagged) to {
-                        onFilterChange(filter.copy(untaggedOnly = false))
-                    },
-                )
-            }
-            if (filter.unreviewedOrUntagged) {
-                add(
-                    stringResource(Res.string.library_review_queue) to {
-                        onFilterChange(filter.copy(unreviewedOrUntagged = false))
-                    },
-                )
-            }
-        }
-
+    val chips = filter.activeChips()
     if (chips.isEmpty()) return
 
     FlowRow(
         modifier = modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        chips.forEach { (label, remove) ->
+        chips.forEach { chip ->
             InputChip(
                 selected = false,
-                onClick = remove,
-                label = { Text(label) },
+                onClick = { onFilterChange(filter.removeChip(chip)) },
+                label = { Text(chipLabel(chip)) },
                 trailingIcon = {
                     Icon(
                         Icons.Filled.Clear,
@@ -119,3 +61,48 @@ fun ActiveFilters(
         }
     }
 }
+
+/** Localized label for one active-filter chip. Presentation only; the chip's meaning is the type. */
+@Composable
+private fun chipLabel(chip: FilterChip): String =
+    when (chip) {
+        is FilterChip.TagAll -> {
+            stringResource(Res.string.library_tag_filter_all, chip.tag)
+        }
+
+        is FilterChip.TagAny -> {
+            stringResource(Res.string.library_tag_filter_any, chip.tag)
+        }
+
+        is FilterChip.TagNone -> {
+            stringResource(Res.string.library_tag_filter_none, chip.tag)
+        }
+
+        is FilterChip.Reviewed -> {
+            stringResource(if (chip.reviewed) Res.string.common_reviewed else Res.string.common_needs_review)
+        }
+
+        is FilterChip.Correspondent -> {
+            chip.value
+        }
+
+        is FilterChip.DocType -> {
+            chip.value
+        }
+
+        is FilterChip.DocDateFrom -> {
+            stringResource(Res.string.library_date_from, chip.value)
+        }
+
+        is FilterChip.DocDateTo -> {
+            stringResource(Res.string.library_date_to, chip.value)
+        }
+
+        FilterChip.UntaggedOnly -> {
+            stringResource(Res.string.library_untagged)
+        }
+
+        FilterChip.ReviewQueue -> {
+            stringResource(Res.string.library_review_queue)
+        }
+    }

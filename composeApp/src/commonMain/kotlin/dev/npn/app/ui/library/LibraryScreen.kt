@@ -352,7 +352,14 @@ fun LibraryScreen(
     }
 }
 
-/** Desktop keyboard shortcuts for the library screen. Returns true when the event was handled. */
+/**
+ * Desktop keyboard shortcuts for the library screen. Returns true when the event was handled.
+ *
+ * This is the thin Compose adapter: it gates on key-down + search-not-focused, translates the
+ * Compose [KeyEvent] into a pure [LibraryKeyPress], and dispatches the [LibraryShortcut] the pure
+ * [libraryShortcutFor] decides on. The shortcut semantics themselves (which keys map to what, and
+ * Escape's two-branch behaviour) are asserted in tests against [libraryShortcutFor], not here.
+ */
 private fun handleLibraryKeyEvent(
     event: KeyEvent,
     searchFocused: Boolean,
@@ -365,46 +372,32 @@ private fun handleLibraryKeyEvent(
     onClearQuery: () -> Unit,
 ): Boolean {
     if (event.type != KeyEventType.KeyDown || searchFocused) return false
-    return when {
-        event.isCtrlPressed && event.key == Key.F -> {
-            searchFocus.requestFocus()
-            true
-        }
-
-        event.isCtrlPressed && event.key == Key.O -> {
-            onImport()
-            true
-        }
-
-        event.isCtrlPressed && event.key == Key.A -> {
-            onSelectAll()
-            true
-        }
-
-        event.key == Key.Slash -> {
-            searchFocus.requestFocus()
-            true
-        }
-
-        event.key == Key.Delete && selectionMode -> {
-            onRequestTrash()
-            true
-        }
-
-        event.key == Key.Escape -> {
-            if (selectionMode) {
-                onClearSelection()
-            } else {
-                onClearQuery()
-            }
-            true
-        }
-
-        else -> {
-            false
-        }
+    val libraryKey = event.toLibraryKey() ?: return false
+    val shortcut =
+        libraryShortcutFor(LibraryKeyPress(libraryKey, event.isCtrlPressed), selectionMode)
+            ?: return false
+    when (shortcut) {
+        LibraryShortcut.FOCUS_SEARCH -> searchFocus.requestFocus()
+        LibraryShortcut.IMPORT -> onImport()
+        LibraryShortcut.SELECT_ALL -> onSelectAll()
+        LibraryShortcut.REQUEST_TRASH -> onRequestTrash()
+        LibraryShortcut.CLEAR_SELECTION -> onClearSelection()
+        LibraryShortcut.CLEAR_QUERY -> onClearQuery()
     }
+    return true
 }
+
+/** Map a Compose [Key] to the pure [LibraryKey] the shortcut map understands, or null. */
+private fun KeyEvent.toLibraryKey(): LibraryKey? =
+    when (key) {
+        Key.F -> LibraryKey.F
+        Key.O -> LibraryKey.O
+        Key.A -> LibraryKey.A
+        Key.Slash -> LibraryKey.SLASH
+        Key.Delete -> LibraryKey.DELETE
+        Key.Escape -> LibraryKey.ESCAPE
+        else -> null
+    }
 
 @Composable
 private fun LibraryContent(

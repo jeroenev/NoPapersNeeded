@@ -63,16 +63,6 @@ import org.jetbrains.compose.resources.stringResource
 import kotlin.math.roundToInt
 
 /**
- * Effective reviewed state for display. In UNTAGGED_ONLY the marker is derived (reviewed == has
- * any tag); in INBOX_WORKFLOW the stored reviewed flag is authoritative.
- */
-fun DocListItem.effectiveReviewed(mode: ReviewMode): Boolean =
-    when (mode) {
-        ReviewMode.UNTAGGED_ONLY -> tags.isNotEmpty()
-        ReviewMode.INBOX_WORKFLOW -> doc.reviewed
-    }
-
-/**
  * Desktop convenience: Ctrl/Cmd+click toggles the document's selection instead of opening it.
  * The press is consumed on the [PointerEventPass.Initial] pass so [combinedClickable]'s tap
  * detector never sees it; all other gestures pass straight through. Toggling happens on press
@@ -296,7 +286,7 @@ private fun DocListRowDetails(
         ) {
             // Only the inbox workflow surfaces a review status. Without it, an untagged
             // document is not "wrong", so no "Needs review" badge is shown.
-            if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+            if (reviewMode.reviewMarkerIsAuthoritative) {
                 ReviewedBadge(item.effectiveReviewed(reviewMode))
             }
             Text(
