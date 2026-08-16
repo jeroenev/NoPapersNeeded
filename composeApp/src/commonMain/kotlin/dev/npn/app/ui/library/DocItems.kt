@@ -183,6 +183,48 @@ private fun HoverSelectCheckbox(
     Checkbox(checked = selected, onCheckedChange = { onToggleSelect() }, modifier = modifier)
 }
 
+/**
+ * Shared selection scaffolding for a single document item, in list or grid form.
+ *
+ * Owns the gesture contract every item shares — hover tracking, ctrl-click toggle, secondary-click
+ * context menu, and click/long-click — so the two item shapes cannot drift apart. [itemContent]
+ * receives the modifier carrying those gestures and must apply it to its own root, plus the current
+ * hover state for the select checkbox.
+ */
+@Composable
+private fun SelectableDocItem(
+    selected: Boolean,
+    onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    onToggleSelect: () -> Unit,
+    contextActions: DocContextMenuActions?,
+    itemContent: @Composable (itemModifier: Modifier, hovered: Boolean) -> Unit,
+) {
+    val hoverInteraction = remember { MutableInteractionSource() }
+    val hovered by hoverInteraction.collectIsHoveredAsState()
+    var menuAt by remember { mutableStateOf<Offset?>(null) }
+    Box {
+        itemContent(
+            Modifier
+                .fillMaxWidth()
+                .hoverable(hoverInteraction)
+                .ctrlClickToggle(onToggleSelect)
+                .onSecondaryClick { if (contextActions != null) menuAt = it }
+                .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+            hovered,
+        )
+        contextActions?.let { actions ->
+            DocContextMenu(
+                at = menuAt,
+                selected = selected,
+                onDismiss = { menuAt = null },
+                onToggleSelect = onToggleSelect,
+                actions = actions,
+            )
+        }
+    }
+}
+
 @Composable
 fun DocListRow(
     item: DocListItem,
@@ -196,19 +238,15 @@ fun DocListRow(
     onToggleSelect: () -> Unit,
     contextActions: DocContextMenuActions? = null,
 ) {
-    val hoverInteraction = remember { MutableInteractionSource() }
-    val hovered by hoverInteraction.collectIsHoveredAsState()
-    var menuAt by remember { mutableStateOf<Offset?>(null) }
-    Box {
+    SelectableDocItem(
+        selected = selected,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onToggleSelect = onToggleSelect,
+        contextActions = contextActions,
+    ) { itemModifier, hovered ->
         Row(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .hoverable(hoverInteraction)
-                    .ctrlClickToggle(onToggleSelect)
-                    .onSecondaryClick { if (contextActions != null) menuAt = it }
-                    .combinedClickable(onClick = onClick, onLongClick = onLongClick)
-                    .padding(horizontal = 16.dp, vertical = 10.dp),
+            modifier = itemModifier.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
@@ -227,15 +265,6 @@ fun DocListRow(
                 tagColors = tagColors,
                 reviewMode = reviewMode,
                 modifier = Modifier.weight(1f),
-            )
-        }
-        contextActions?.let { actions ->
-            DocContextMenu(
-                at = menuAt,
-                selected = selected,
-                onDismiss = { menuAt = null },
-                onToggleSelect = onToggleSelect,
-                actions = actions,
             )
         }
     }
@@ -308,19 +337,14 @@ fun DocGridCard(
     onToggleSelect: () -> Unit,
     contextActions: DocContextMenuActions? = null,
 ) {
-    val hoverInteraction = remember { MutableInteractionSource() }
-    val hovered by hoverInteraction.collectIsHoveredAsState()
-    var menuAt by remember { mutableStateOf<Offset?>(null) }
-    Box {
-        Card(
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .hoverable(hoverInteraction)
-                    .ctrlClickToggle(onToggleSelect)
-                    .onSecondaryClick { if (contextActions != null) menuAt = it }
-                    .combinedClickable(onClick = onClick, onLongClick = onLongClick),
-        ) {
+    SelectableDocItem(
+        selected = selected,
+        onClick = onClick,
+        onLongClick = onLongClick,
+        onToggleSelect = onToggleSelect,
+        contextActions = contextActions,
+    ) { itemModifier, hovered ->
+        Card(modifier = itemModifier) {
             Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box {
                     DocThumbnail(
@@ -350,15 +374,6 @@ fun DocGridCard(
                     }
                 }
             }
-        }
-        contextActions?.let { actions ->
-            DocContextMenu(
-                at = menuAt,
-                selected = selected,
-                onDismiss = { menuAt = null },
-                onToggleSelect = onToggleSelect,
-                actions = actions,
-            )
         }
     }
 }
