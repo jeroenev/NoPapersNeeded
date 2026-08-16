@@ -12,9 +12,19 @@ import dev.npn.core.model.ReviewMode
  * In [ReviewMode.UNTAGGED_ONLY] review state is derived from tags (reviewed == tagged) and the
  * stored marker is stale, so both the badge and the filter are hidden — surfacing a stale flag
  * would lie to the user. Callers that need the derived value use [DocListItem.effectiveReviewed].
+ *
+ * Deliberately an exhaustive `when` rather than an `== INBOX_WORKFLOW` comparison: a new
+ * [ReviewMode] must fail to compile here and be given an explicit answer, instead of silently
+ * inheriting [ReviewMode.UNTAGGED_ONLY]'s derived-from-tags semantics. Check
+ * [DocListItem.effectiveReviewed] too when adding one — a third mode may need a third derivation
+ * rather than one of these two.
  */
 val ReviewMode.reviewMarkerIsAuthoritative: Boolean
-    get() = this == ReviewMode.INBOX_WORKFLOW
+    get() =
+        when (this) {
+            ReviewMode.INBOX_WORKFLOW -> true
+            ReviewMode.UNTAGGED_ONLY -> false
+        }
 
 /**
  * Effective reviewed state for display. In [ReviewMode.UNTAGGED_ONLY] the marker is derived

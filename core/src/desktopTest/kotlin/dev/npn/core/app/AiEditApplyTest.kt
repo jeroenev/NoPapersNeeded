@@ -88,7 +88,7 @@ private fun writableEdit(
     docId: String,
     addTags: List<String> = emptyList(),
     removeTags: List<String> = emptyList(),
-    properties: Map<DocProperty, String?> = emptyMap(),
+    properties: Map<AiField, String?> = emptyMap(),
 ) = WritableEdit(docId, addTags, removeTags, properties)
 
 /**
@@ -160,8 +160,8 @@ class AiEditApplyTest {
                             "a",
                             properties =
                                 mapOf(
-                                    DocProperty.CORRESPONDENT to "Acme",
-                                    DocProperty.DOC_DATE to "2024-01-15",
+                                    AiField.CORRESPONDENT to "Acme",
+                                    AiField.DOC_DATE to "2024-01-15",
                                 ),
                         ),
                     ),
@@ -190,8 +190,8 @@ class AiEditApplyTest {
 
             apply.apply(
                 listOf(
-                    writableEdit("a", properties = mapOf(DocProperty.CORRESPONDENT to "Acme")),
-                    writableEdit("b", properties = mapOf(DocProperty.CORRESPONDENT to "Acme")),
+                    writableEdit("a", properties = mapOf(AiField.CORRESPONDENT to "Acme")),
+                    writableEdit("b", properties = mapOf(AiField.CORRESPONDENT to "Acme")),
                 ),
             )
 

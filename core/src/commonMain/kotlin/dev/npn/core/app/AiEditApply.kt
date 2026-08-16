@@ -20,15 +20,20 @@ internal val AiField.property: DocProperty
  *
  * This is the part of a suggestion that policy already permits writing: [addTags] and [removeTags]
  * have had new tags and removals dropped for the closed-vocabulary flows, and [properties] carry
- * the accepted field values keyed by the storage property they set (a null value clears it, as in
- * [MetadataWriter.applyEdits]). A Writable Edit is binary — a dropped item is simply absent — which
- * is what separates it from Review pre-selection's tri-state chips; the two must not be collapsed.
+ * the accepted field values (a null value clears it, as in [MetadataWriter.applyEdits]). A Writable
+ * Edit is binary — a dropped item is simply absent — which is what separates it from Review
+ * pre-selection's tri-state chips; the two must not be collapsed.
+ *
+ * [properties] is keyed by [AiField], not [DocProperty]: only the autofill fields are AI-writable,
+ * so keying by the narrower type makes an unwritable property unrepresentable rather than a
+ * runtime check, and lets [ApplyReport.fieldsWritten] be built without a partial inverse mapping.
+ * The widening to [DocProperty] happens once, at the [MetadataWriter] boundary.
  */
 data class WritableEdit(
     val docId: String,
     val addTags: List<String>,
     val removeTags: List<String>,
-    val properties: Map<DocProperty, String?>,
+    val properties: Map<AiField, String?>,
 ) {
     val isEmpty: Boolean get() = addTags.isEmpty() && removeTags.isEmpty() && properties.isEmpty()
 }
@@ -161,11 +166,9 @@ class AiEditApply(
         // single change (see the class doc for why this is load-bearing, not a style choice).
         for (edit in edits) {
             if (edit.properties.isEmpty()) continue
-            runCatching { meta.applyEdits(listOf(edit.docId), properties = edit.properties) }
+            runCatching { meta.applyEdits(listOf(edit.docId), properties = edit.storageProperties()) }
                 .onSuccess {
-                    edit.properties.keys.forEach { property ->
-                        fieldsWritten += edit.docId to property.field
-                    }
+                    edit.properties.keys.forEach { field -> fieldsWritten += edit.docId to field }
                     onDocWritten(edit.docId)
                 }.onFailure { cause -> failures[edit.docId] = cause }
         }
@@ -200,22 +203,21 @@ class AiEditApply(
 
         // The whole edit — tags and fields together — as one applyEdits so a failure writes none
         // of it and a retry re-asks the model about the state it was originally shown.
-        runCatching { meta.applyEdits(listOf(edit.docId), addTags = edit.addTags, properties = edit.properties) }
-            .onSuccess {
-                edit.addTags.forEach { tag -> addsWritten += edit.docId to tag }
-                edit.properties.keys.forEach { property -> fieldsWritten += edit.docId to property.field }
-            }.onFailure { cause -> failures[edit.docId] = cause }
+        runCatching {
+            meta.applyEdits(listOf(edit.docId), addTags = edit.addTags, properties = edit.storageProperties())
+        }.onSuccess {
+            edit.addTags.forEach { tag -> addsWritten += edit.docId to tag }
+            edit.properties.keys.forEach { field -> fieldsWritten += edit.docId to field }
+        }.onFailure { cause -> failures[edit.docId] = cause }
 
         return ApplyReport(addsWritten, removalsWritten = emptySet(), fieldsWritten, failures)
     }
 }
 
-/** The autofill field a stored property is written by; inverse of [AiField.property]. */
-private val DocProperty.field: AiField
-    get() =
-        when (this) {
-            DocProperty.TITLE -> AiField.TITLE
-            DocProperty.CORRESPONDENT -> AiField.CORRESPONDENT
-            DocProperty.DOC_DATE -> AiField.DOC_DATE
-            else -> error("no AiField writes $this")
-        }
+/**
+ * Widen the edit's [AiField] keys to the [DocProperty] keys [MetadataWriter.applyEdits] takes.
+ *
+ * This is the single conversion point, and it is total: every [AiField] has a [DocProperty], so
+ * unlike the inverse it needs no failure branch that could throw after a write has committed.
+ */
+private fun WritableEdit.storageProperties(): Map<DocProperty, String?> = properties.mapKeys { it.key.property }

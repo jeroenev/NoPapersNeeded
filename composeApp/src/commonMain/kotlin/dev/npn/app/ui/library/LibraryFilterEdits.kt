@@ -65,56 +65,56 @@ fun cycleTag(
  * label and know how to clear it, without re-encoding the filter's shape.
  *
  * Each variant carries only the data the label needs. Removal is NOT a closure here — the pure
- * [FilterChip.remove] does the clearing so the "which field does this chip clear" rule is asserted
+ * [ActiveFilterChip.remove] does the clearing so the "which field does this chip clear" rule is asserted
  * in tests rather than buried in a composable's `buildList`. The display side matches on the
  * variant purely to pick a `stringResource`.
  */
-sealed interface FilterChip {
+sealed interface ActiveFilterChip {
     /** A tag in the AND bucket ([LibraryFilter.tagsAll]). */
     data class TagAll(
         val tag: String,
-    ) : FilterChip
+    ) : ActiveFilterChip
 
     /** A tag in the OR bucket ([LibraryFilter.tagsAny]). */
     data class TagAny(
         val tag: String,
-    ) : FilterChip
+    ) : ActiveFilterChip
 
     /** A tag in the NOT bucket ([LibraryFilter.tagsNone]). */
     data class TagNone(
         val tag: String,
-    ) : FilterChip
+    ) : ActiveFilterChip
 
     /** The reviewed marker; [reviewed] is the value being filtered on (true = reviewed). */
     data class Reviewed(
         val reviewed: Boolean,
-    ) : FilterChip
+    ) : ActiveFilterChip
 
     /** A correspondent equality filter. */
     data class Correspondent(
         val value: String,
-    ) : FilterChip
+    ) : ActiveFilterChip
 
     /** A document-type equality filter. */
     data class DocType(
         val value: String,
-    ) : FilterChip
+    ) : ActiveFilterChip
 
     /** Lower bound of the document-date range (ISO yyyy-MM-dd). */
     data class DocDateFrom(
         val value: String,
-    ) : FilterChip
+    ) : ActiveFilterChip
 
     /** Upper bound of the document-date range (ISO yyyy-MM-dd). */
     data class DocDateTo(
         val value: String,
-    ) : FilterChip
+    ) : ActiveFilterChip
 
     /** The "untagged only" toggle. */
-    data object UntaggedOnly : FilterChip
+    data object UntaggedOnly : ActiveFilterChip
 
     /** The INBOX_WORKFLOW "review queue" preset (unreviewed OR untagged). */
-    data object ReviewQueue : FilterChip
+    data object ReviewQueue : ActiveFilterChip
 }
 
 /**
@@ -126,18 +126,18 @@ sealed interface FilterChip {
  * so the chip list can never disagree with what [cycleTag] produced. Empty facets contribute no
  * chip, so an empty filter yields an empty list.
  */
-fun LibraryFilter.activeChips(): List<FilterChip> =
+fun LibraryFilter.activeChips(): List<ActiveFilterChip> =
     buildList {
-        tagsAll.forEach { add(FilterChip.TagAll(it)) }
-        tagsAny.forEach { add(FilterChip.TagAny(it)) }
-        tagsNone.forEach { add(FilterChip.TagNone(it)) }
-        reviewed?.let { add(FilterChip.Reviewed(it)) }
-        correspondent?.let { add(FilterChip.Correspondent(it)) }
-        docType?.let { add(FilterChip.DocType(it)) }
-        docDateFrom?.let { add(FilterChip.DocDateFrom(it)) }
-        docDateTo?.let { add(FilterChip.DocDateTo(it)) }
-        if (untaggedOnly) add(FilterChip.UntaggedOnly)
-        if (unreviewedOrUntagged) add(FilterChip.ReviewQueue)
+        tagsAll.forEach { add(ActiveFilterChip.TagAll(it)) }
+        tagsAny.forEach { add(ActiveFilterChip.TagAny(it)) }
+        tagsNone.forEach { add(ActiveFilterChip.TagNone(it)) }
+        reviewed?.let { add(ActiveFilterChip.Reviewed(it)) }
+        correspondent?.let { add(ActiveFilterChip.Correspondent(it)) }
+        docType?.let { add(ActiveFilterChip.DocType(it)) }
+        docDateFrom?.let { add(ActiveFilterChip.DocDateFrom(it)) }
+        docDateTo?.let { add(ActiveFilterChip.DocDateTo(it)) }
+        if (untaggedOnly) add(ActiveFilterChip.UntaggedOnly)
+        if (unreviewedOrUntagged) add(ActiveFilterChip.ReviewQueue)
     }
 
 /**
@@ -148,16 +148,16 @@ fun LibraryFilter.activeChips(): List<FilterChip> =
  * is the assertable "removing this chip clears exactly this" rule that used to live as per-chip
  * closures inside the composable.
  */
-fun LibraryFilter.removeChip(chip: FilterChip): LibraryFilter =
+fun LibraryFilter.removeChip(chip: ActiveFilterChip): LibraryFilter =
     when (chip) {
-        is FilterChip.TagAll -> copy(tagsAll = tagsAll - chip.tag)
-        is FilterChip.TagAny -> copy(tagsAny = tagsAny - chip.tag)
-        is FilterChip.TagNone -> copy(tagsNone = tagsNone - chip.tag)
-        is FilterChip.Reviewed -> copy(reviewed = null)
-        is FilterChip.Correspondent -> copy(correspondent = null)
-        is FilterChip.DocType -> copy(docType = null)
-        is FilterChip.DocDateFrom -> copy(docDateFrom = null)
-        is FilterChip.DocDateTo -> copy(docDateTo = null)
-        FilterChip.UntaggedOnly -> copy(untaggedOnly = false)
-        FilterChip.ReviewQueue -> copy(unreviewedOrUntagged = false)
+        is ActiveFilterChip.TagAll -> copy(tagsAll = tagsAll - chip.tag)
+        is ActiveFilterChip.TagAny -> copy(tagsAny = tagsAny - chip.tag)
+        is ActiveFilterChip.TagNone -> copy(tagsNone = tagsNone - chip.tag)
+        is ActiveFilterChip.Reviewed -> copy(reviewed = null)
+        is ActiveFilterChip.Correspondent -> copy(correspondent = null)
+        is ActiveFilterChip.DocType -> copy(docType = null)
+        is ActiveFilterChip.DocDateFrom -> copy(docDateFrom = null)
+        is ActiveFilterChip.DocDateTo -> copy(docDateTo = null)
+        ActiveFilterChip.UntaggedOnly -> copy(untaggedOnly = false)
+        ActiveFilterChip.ReviewQueue -> copy(unreviewedOrUntagged = false)
     }
