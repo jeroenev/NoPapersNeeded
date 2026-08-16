@@ -6,10 +6,10 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.SegmentWriter
-import dev.npn.core.index.ScanReport
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -51,7 +51,7 @@ class IndexRig private constructor(
     }
 
     /** Build a SegmentWriter for [deviceId] over this library, with its own local state. */
-    fun writer(deviceId: String): SegmentWriter =
+    internal fun writer(deviceId: String): SegmentWriter =
         SegmentWriter(
             store = fsSegmentStore,
             deviceId = deviceId,
@@ -60,11 +60,14 @@ class IndexRig private constructor(
         )
 
     /** Build a [JournalCoordinator] over [writer] backed by this rig's accumulator + indexer. */
-    fun coordinator(writer: SegmentWriter): JournalCoordinator =
+    internal fun coordinator(writer: SegmentWriter): JournalCoordinator =
         JournalCoordinator(writer, indexer, accumulator)
 
     /** Write a fake PDF (bytes need not be valid; only the .pdf suffix matters to the indexer). */
-    fun writePdf(relPath: String, content: String) {
+    fun writePdf(
+        relPath: String,
+        content: String,
+    ) {
         val p = libRoot.resolve(relPath)
         Files.createDirectories(p.parent)
         Files.write(p, content.encodeToByteArray())
@@ -72,7 +75,10 @@ class IndexRig private constructor(
 
     fun exists(relPath: String): Boolean = Files.exists(libRoot.resolve(relPath))
 
-    fun moveFile(from: String, to: String) {
+    fun moveFile(
+        from: String,
+        to: String,
+    ) {
         val target = libRoot.resolve(to)
         Files.createDirectories(target.parent)
         Files.move(libRoot.resolve(from), target)
@@ -82,16 +88,23 @@ class IndexRig private constructor(
         Files.deleteIfExists(libRoot.resolve(relPath))
     }
 
-    fun copyFile(from: String, to: String) {
+    fun copyFile(
+        from: String,
+        to: String,
+    ) {
         val target = libRoot.resolve(to)
         Files.createDirectories(target.parent)
         Files.copy(libRoot.resolve(from), target)
     }
 
-    fun externalFile(name: String, content: String): dev.npn.core.fs.ExternalSource {
+    fun externalFile(
+        name: String,
+        content: String,
+    ): dev.npn.core.fs.ExternalSource {
         val ext = Files.createTempDirectory("npn-ext").resolve(name)
         Files.write(ext, content.encodeToByteArray())
-        return dev.npn.core.fs.ExternalSource(ext)
+        return dev.npn.core.fs
+            .ExternalSource(ext)
     }
 
     fun close() {
@@ -126,11 +139,18 @@ suspend fun DocumentDao.rowAtPath(relPath: String): DocumentEntity? =
  * app/session tests want without manual bookkeeping. Consolidates the former TestClock
  * (auto-increment) and MutableClock (explicit advance).
  */
-class MutableClock(start: Long = 1_000L, private val autoTick: Boolean = false) : EpochClock {
+class MutableClock(
+    start: Long = 1_000L,
+    private val autoTick: Boolean = false,
+) : EpochClock {
     var now: Long = start
+
     override fun nowMillis(): Long {
         if (autoTick) now += 1
         return now
     }
-    fun advance(by: Long = 1L) { now += by }
+
+    fun advance(by: Long = 1L) {
+        now += by
+    }
 }

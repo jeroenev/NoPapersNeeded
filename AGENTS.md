@@ -43,7 +43,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - All app-written files in `.npn/` are write-once. Journal transactions are content-addressed
   by their complete-file SHA-256 and require verified create-without-replacement publication;
   OCR sidecars are keyed by hash+deviceId. Never append to or rewrite a published object. New
-  journal writes must go through `JournalCoordinator`.
+  journal writes must go through `JournalCoordinator` — this is enforced at the type level, not
+  just by convention: `SegmentWriter`/`ContentAddressedJournalWriter` and the coordinator's
+  `writer` are `internal` to `core`, so no outside caller can grab a raw writer.
 - Document identity = SHA-256 of bytes; duplicates are forbidden (one canonical path per hash).
 - Merge semantics: OR-set for tags, HLC last-writer-wins for single-value properties.
 

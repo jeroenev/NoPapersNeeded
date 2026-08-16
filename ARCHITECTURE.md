@@ -36,7 +36,7 @@ source sets hold implementations. Key packages:
 
 | Package | Contents |
 |---|---|
-| `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `Ingest.kt`, `Ocr.kt`, `ReviewConfigFacade.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`, `Settings.kt`. Consumers depend on the facets they use, not on `LibrarySession`. `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events. |
+| `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `Ingest.kt`, `Ocr.kt`, `ReviewConfigFacade.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`, `Settings.kt`. Consumers depend on the facets they use, not on `LibrarySession`. `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events, enforced at the type level: the writers it wraps are `internal` to `core` and its `writer` is not public. |
 | `core.journal` | The metadata journal: content-addressed JSONL transactions (`JournalEvent`, `JournalOp`), segments (`Segment`, `SegmentWriter`), codec (`JournalCodec`), HLC (`Hlc`), snapshot compaction (`SnapshotCompactor`, `SnapshotFormat`), and the HLC/OR-set fold (`FoldedState`, `FoldTest`). |
 | `core.fs` | Filesystem abstraction over the library folder: `LibraryFileSystem` (platform impl), `NpnPaths` (`.npn/` layout), `ContentIdentity`/`HexEncoding` (hash handling), `OcrSidecarFiles`, `TrashOps`. |
 | `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsWriteGate`, `DbLocalJournalState`, `DeviceIdentity`, `ScanReport`. |
@@ -84,8 +84,11 @@ via `mise hot`.
    identity), dedups, moves the file into the library, writes OCR sidecars, and
    appends metadata to the journal.
 2. **Journal is source of truth for metadata**: every change (tags, properties,
-   trash, relink) is an immutable, content-addressed JSONL transaction written by
-   `JournalCoordinator`. Never write to the journal directly.
+    trash, relink) is an immutable, content-addressed JSONL transaction written by
+    `JournalCoordinator`. You cannot write to the journal directly: the underlying
+    `SegmentWriter`/`ContentAddressedJournalWriter` and the coordinator's held
+    `writer` are `internal` to `core`, so the coordinator is the only reachable
+    write path (enforced at the type level, not by convention).
 3. **Index is a cache**: `Indexer` folds journal state (OR-set tags, HLC LWW) into
    the Room database (`FoldedState`, `MetadataAccumulator`). The db lives
    device-local, outside the library folder, and is rebuildable from the folder.

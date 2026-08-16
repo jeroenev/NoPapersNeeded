@@ -12,7 +12,15 @@ data class PublishedTransaction(
     val events: List<JournalEvent>,
 )
 
-class ContentAddressedJournalWriter(
+/**
+ * Publishes a journal transaction as a single write-once, content-addressed object (storage-v2).
+ *
+ * `internal` to the `core` module for the same reason as [SegmentWriter]: [JournalCoordinator]
+ * is the only sanctioned write path, so its mutex + [FoldedState] refresh + DB projection cannot
+ * be bypassed by an outside caller grabbing [commit] directly. `core`'s test source sets remain
+ * in-module and may construct it.
+ */
+internal class ContentAddressedJournalWriter(
     private val fs: LibraryFileSystem,
     private val installationId: String,
     private val allocator: HlcWatermarkAllocator,
@@ -29,16 +37,17 @@ class ContentAddressedJournalWriter(
         if (ops.isEmpty()) return null
         check(supported) { "Storage provider does not support verified object publication" }
         val actor = randomUuidV4()
-        val events = ops.mapIndexed { index, pending ->
-            JournalEvent(
-                version = JournalEventVersions.CANONICAL,
-                seq = index + 1L,
-                hlc = allocator.next(actor),
-                dev = actor,
-                doc = pending.doc,
-                op = pending.op,
-            )
-        }
+        val events =
+            ops.mapIndexed { index, pending ->
+                JournalEvent(
+                    version = JournalEventVersions.CANONICAL,
+                    seq = index + 1L,
+                    hlc = allocator.next(actor),
+                    dev = actor,
+                    doc = pending.doc,
+                    op = pending.op,
+                )
+            }
         val bytes = JournalCodec.encodeLines(events).encodeToByteArray()
         val hash = sha256Bytes(bytes)
         val canonicalPath = stageAndPublishVerifiedObject(fs, installationId, hash, bytes, snapshot = false)

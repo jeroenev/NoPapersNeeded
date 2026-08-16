@@ -5,7 +5,6 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
-import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.DocProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
@@ -49,7 +48,7 @@ class MetadataWriterImpl(
     ) {
         val t = tag.trim()
         if (t.isEmpty() || docIds.isEmpty()) return
-        coordinator.commitBuilt { state -> orSetTagRemovals(state, docIds, t) }
+        coordinator.commitBuilt { state -> state.tagRemovalOps(docIds, t) }
         docIds.forEach { pathRuleApplicator.applyFor(it) }
     }
 
@@ -189,7 +188,7 @@ class MetadataWriterImpl(
         val affected = documentDao.getDocIdsWithTag(t)
         // No dedicated journal op by design: remove the tag from every doc currently holding it,
         // listing all observed dots (OR-set delete-everywhere).
-        coordinator.commitBuilt { state -> orSetTagRemovals(state, state.taggedDocs(), t) }
+        coordinator.commitBuilt { state -> state.tagRemovalOps(state.taggedDocs(), t) }
         affected.forEach { pathRuleApplicator.applyFor(it) }
     }
 
@@ -298,22 +297,6 @@ class MetadataWriterImpl(
         pathRuleApplicator.applyFor(docId)
         // No journal event: path is file-level state, re-derived on rescan.
     }
-
-    /**
-     * Build the OR-set `tag-remove` ops for [tag] over [docIds]: for each doc, list the dots
-     * currently observed for `(doc, tag)` in [state] and emit a remove carrying them, skipping docs
-     * that do not hold the tag (empty dots). Shared by [removeTag] (a doc subset) and [deleteTag]
-     * (every tagged doc) so the "delete-everywhere by observed dots" rule lives in one place.
-     */
-    private fun orSetTagRemovals(
-        state: FoldedState,
-        docIds: Collection<String>,
-        tag: String,
-    ): List<PendingOp> =
-        docIds.mapNotNull { docId ->
-            val dots = state.liveTagDots(docId, tag)
-            if (dots.isEmpty()) null else PendingOp.tagRemove(docId, tag, dots)
-        }
 
     /** Trim a single-value metadata input, coercing null/blank to null (clears the property). */
     private fun String?.normalized(): String? = this?.trim()?.ifEmpty { null }

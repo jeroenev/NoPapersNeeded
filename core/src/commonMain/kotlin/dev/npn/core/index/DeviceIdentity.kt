@@ -37,8 +37,11 @@ class DeviceIdentity(
      * id does not inherit the old device's `lastSeq` or known-segment set (which belong to the id
      * that was cloned). The caller is expected to build a new [SegmentWriter] with the returned id
      * and this now-reset [localState] when the id differs.
+     *
+     * `internal`: it takes a raw [SegmentWriter], which is `internal` to `core` so the single-writer
+     * invariant is enforced at the type level. The fork check is a `core`-internal boot step.
      */
-    suspend fun ensureSingleWriter(
+    internal suspend fun ensureSingleWriter(
         writer: SegmentWriter,
         localState: LocalJournalState,
     ): String {
