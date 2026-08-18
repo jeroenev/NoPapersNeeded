@@ -131,6 +131,9 @@ import no_papers_needed.composeapp.generated.resources.detail_correspondent
 import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
 import no_papers_needed.composeapp.generated.resources.detail_document_type
 import no_papers_needed.composeapp.generated.resources.detail_note
+import no_papers_needed.composeapp.generated.resources.queue_settings_help
+import no_papers_needed.composeapp.generated.resources.queue_settings_section
+import no_papers_needed.composeapp.generated.resources.queue_show
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -147,6 +150,7 @@ fun SettingsScreen(
     onBack: () -> Unit,
     onChangeLibrary: () -> Unit,
     onAutoMatchRules: () -> Unit,
+    onProcessingQueue: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }
     val state by vm.state.collectAsStateWithLifecycle()
@@ -344,6 +348,18 @@ fun SettingsScreen(
             }
             Text(
                 stringResource(Res.string.common_settings_auto_matching_help),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+
+            HorizontalDivider()
+
+            SectionHeader(stringResource(Res.string.queue_settings_section))
+            OutlinedButton(onClick = onProcessingQueue) {
+                Text(stringResource(Res.string.queue_show))
+            }
+            Text(
+                stringResource(Res.string.queue_settings_help),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )

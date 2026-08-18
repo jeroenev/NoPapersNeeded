@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import kotlinx.coroutines.flow.Flow
+
 // ---------- background queues: run them to a standstill on demand ----------
 
 /**
@@ -21,4 +23,60 @@ interface WorkFacade {
 
     /** Drain the automatic post-OCR AI enrichment queue until it can make no further progress. */
     suspend fun drainEnrichment()
+
+    /**
+     * Everything both queues still owe, for a read-only "what is the app still working on" view.
+     * Emits on every queue change. Ordered OCR entries first, then enrichment entries — the order
+     * the pipeline runs in — each in the order its own drain will take them.
+     *
+     * Outstanding work only: OCR rows already `done` are history and are left out, as are rows
+     * whose document has since been trashed or deleted. One document can legitimately appear
+     * twice, once per stage, so entries are keyed by [QueuedWork.docId] *and* [QueuedWork.stage].
+     */
+    val queue: Flow<List<QueuedWork>>
 }
+
+/** Which background pass a [QueuedWork] entry is waiting on. */
+enum class WorkStage {
+    OCR,
+    AI_ENRICHMENT,
+}
+
+/**
+ * How a [QueuedWork] entry is faring. Deliberately clock-free: [WorkState.RETRYING] means "has
+ * failed at least once and will be tried again", not "is due now", so the value does not silently
+ * go stale between emissions. Read [QueuedWork.nextAttemptAt] for the timing.
+ */
+enum class WorkState {
+    /** Queued and never attempted. */
+    WAITING,
+
+    /** Being worked on right now. Only the OCR queue tracks this; enrichment drains single-flight. */
+    RUNNING,
+
+    /** Attempted and failed, and will be attempted again after a backoff. */
+    RETRYING,
+
+    /** Attempted and given up on. Only the OCR queue is terminal; enrichment retries forever. */
+    FAILED,
+}
+
+/** One document waiting on one background pass. */
+data class QueuedWork(
+    val docId: String,
+    /** The document's title when it has one, else its file name. */
+    val displayTitle: String,
+    val stage: WorkStage,
+    val state: WorkState,
+    /** Failed attempts so far; 0 until something goes wrong. */
+    val attempts: Int,
+    /** Epoch millis the queue row last changed. */
+    val updatedAt: Long,
+    /**
+     * Epoch millis this entry may next be attempted, or null when nothing is holding it back.
+     * Only the enrichment queue schedules retries this way; OCR retries on the next drain.
+     */
+    val nextAttemptAt: Long? = null,
+    /** Message from the most recent failure, or null while the entry has never failed. */
+    val lastError: String? = null,
+)

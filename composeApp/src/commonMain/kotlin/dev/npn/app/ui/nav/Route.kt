@@ -24,6 +24,10 @@ sealed interface Route {
     @Serializable
     data object AutoMatchRules : Route
 
+    /** The read-only OCR / AI-enrichment backlog. Wide layouts show it in the library side panel. */
+    @Serializable
+    data object Queue : Route
+
     @Serializable
     data object AiChat : Route
 

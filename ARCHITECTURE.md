@@ -63,7 +63,7 @@ Shared Compose Multiplatform UI + viewmodels + dependency wiring.
 | `app/App.kt` | Root composable / app shell. |
 | `app/di/` | `AppEnvironment` (session lifecycle: open/close/swap, watched folder) + `DefaultAppEnvironment`. `PlatformLibraryFactory`/`WatchedFolderFactory` are fun interfaces the platform source sets implement; `AppEnvironment.android/desktop.kt` build the real per-target pieces. |
 | `app/platform/` | Small shared platform hooks. |
-| `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split), `tags/`, `rules/`, `settings/`, `trash/`, `onboarding/`, `nav/` (shell + routes), `ai/`, `common/` (shared components: `TagEditor`, `DocThumbnail`, `SearchField`, `MessagesViewModel`, `SnackbarMessages`, `UiText`), `theme/`. ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). |
+| `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split), `tags/`, `rules/`, `settings/`, `trash/`, `queue/` (the read-only OCR + AI enrichment backlog; a top-level rail destination on wide layouts, reached from settings on compact ones), `onboarding/`, `nav/` (shell + routes), `ai/`, `common/` (shared components: `TagEditor`, `DocThumbnail`, `SearchField`, `MessagesViewModel`, `SnackbarMessages`, `UiText`), `theme/`. ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). |
 | `commonMain/composeResources` | `values/` + `values-nl/` string resources (localization checked by `checkLocalization`). |
 
 ### `androidApp` — `dev.npn.*`
@@ -117,6 +117,9 @@ via `mise hot`.
   exposed to callers that must await them as `session.work` (`WorkFacade`).
   A new kind of deferrable work means a queue table + a drain step + a kick, not a
   `launch` at the point of discovery.
+- Showing background work to the user → `WorkQueueReader` joins the queue tables to
+  document names behind `WorkFacade.queue`; a new queue table joins the same read
+  there so the processing queue view keeps showing everything the app still owes.
 - Follow-up work after OCR → `OcrPipeline.onTextIndexed` fires whenever text is indexed,
   including on every index rebuild, so hang free/idempotent work there (auto-match rules).
   `OcrPipeline.onOcrProduced` fires only when this device just wrote a sidecar; anything

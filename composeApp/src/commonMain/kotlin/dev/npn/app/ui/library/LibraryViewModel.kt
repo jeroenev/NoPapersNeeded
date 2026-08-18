@@ -9,6 +9,7 @@ import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.completeActiveSearchToken
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
@@ -29,6 +30,7 @@ import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TagRepository
 import dev.npn.core.app.ViewType
+import dev.npn.core.app.WorkFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
@@ -79,6 +81,7 @@ class LibraryViewModel(
     private val docLifecycle: DocLifecycle,
     private val ingest: IngestFacade,
     ocr: OcrFacade,
+    work: WorkFacade,
     private val reviewConfig: ReviewConfigFacade,
     private val settings: SettingsRepository,
 ) : MessagesViewModel() {
@@ -90,6 +93,7 @@ class LibraryViewModel(
         docLifecycle = session.docLifecycle,
         ingest = session.ingest,
         ocr = session.ocr,
+        work = session.work,
         reviewConfig = session.reviewConfig,
         settings = settings,
     )
@@ -231,6 +235,15 @@ class LibraryViewModel(
     val ocrStatus: StateFlow<OcrStatus> =
         ocr.ocrStatus
             .stateIn(viewModelScope, WhileSubscribedTimeout, OcrStatus(0, false))
+
+    /**
+     * Backlog sizes behind the library's progress banners. Only the counts: the banners open the
+     * queue view, which subscribes to the entries itself.
+     */
+    val queueCounts: StateFlow<QueueCounts> =
+        work.queue
+            .map { QueueCounts.of(it) }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, QueueCounts())
 
     // ---- filter/sort/view controls ----
 

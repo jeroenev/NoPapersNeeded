@@ -98,11 +98,13 @@ whole session. Each operation has exactly one public home:
 - **AI suggestions** (`AiSuggest`, session property `aiSuggest`) — the single
   suggestion primitive `suggestEdits`. No consumer needs both AI facets.
 - **Work** (`WorkFacade`, session property `work`) — the persisted background
-  queues: `drainOcr`, `drainEnrichment`. Each drains until no further progress
-  is possible right now (queue empty, feature off, endpoint unconfigured, or a
-  backoff pending) and returns; it never waits out a backoff. For callers that
-  must hold a process open while background work runs — today only Android's
-  maintenance job.
+  queues. Two drains, `drainOcr` and `drainEnrichment`: each drains until no
+  further progress is possible right now (queue empty, feature off, endpoint
+  unconfigured, or a backoff pending) and returns; it never waits out a backoff.
+  For callers that must hold a process open while background work runs — today
+  only Android's maintenance job. Plus one read, `queue`, which flattens both
+  tables into `QueuedWork` entries (outstanding work only) for the processing
+  queue view.
 
 Both AI facets extend **`AiAvailability`** (`configured()`): the only piece of
 the endpoint configuration that crosses the seam is that boolean — `AiConfig`
