@@ -51,6 +51,7 @@ import dev.npn.app.ui.nav.NavigationShell
 import dev.npn.app.ui.nav.Route
 import dev.npn.app.ui.nav.TopLevelDestination
 import dev.npn.app.ui.onboarding.OnboardingScreen
+import dev.npn.app.ui.queue.QueueScreen
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
 import dev.npn.app.ui.settings.SettingsScreen
 import dev.npn.app.ui.tags.TagManagementScreen
@@ -206,6 +207,7 @@ private fun MainNavHost(
                     nav.navigate(Route.DocDetail(docId))
                 },
                 onTrash = { nav.navigate(Route.Trash) },
+                onOpenQueue = { nav.navigate(Route.Queue) },
                 onAiEdit = { docIds ->
                     aiSelection.set(docIds)
                     nav.navigateAi(Route.AiEdit)
@@ -241,31 +243,47 @@ private fun MainNavHost(
                 onBack = { nav.popBackStack() },
             )
         }
-        composable<Route.Settings> {
-            val changePicker =
-                rememberDirectoryPickerLauncher { dir ->
-                    if (dir != null) {
-                        env.requestOpenLibrary(
-                            dev.npn.app.ui.common
-                                .persistDirectoryAccess(dir),
-                        )
-                    }
-                }
-            SettingsScreen(
-                env = env,
-                session = session,
-                onBack = { nav.popBackStack() },
-                onChangeLibrary = { changePicker.launch() },
-                onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
-            )
-        }
-        composable<Route.AutoMatchRules> {
-            AutoMatchRulesScreen(
+        composable<Route.Queue> {
+            QueueScreen(
                 session = session,
                 onBack = { nav.popBackStack() },
             )
         }
+        settingsRoutes(nav, env, session)
         aiRoutes(nav, session, env.settings, aiSelection, libraryFilterHandoff, showAiEditTopBar)
+    }
+}
+
+/** Settings and the pages only reachable from it. */
+private fun NavGraphBuilder.settingsRoutes(
+    nav: NavHostController,
+    env: AppEnvironment,
+    session: dev.npn.core.app.LibrarySession,
+) {
+    composable<Route.Settings> {
+        val changePicker =
+            rememberDirectoryPickerLauncher { dir ->
+                if (dir != null) {
+                    env.requestOpenLibrary(
+                        dev.npn.app.ui.common
+                            .persistDirectoryAccess(dir),
+                    )
+                }
+            }
+        SettingsScreen(
+            env = env,
+            session = session,
+            onBack = { nav.popBackStack() },
+            onChangeLibrary = { changePicker.launch() },
+            onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
+            onProcessingQueue = { nav.navigate(Route.Queue) },
+        )
+    }
+    composable<Route.AutoMatchRules> {
+        AutoMatchRulesScreen(
+            session = session,
+            onBack = { nav.popBackStack() },
+        )
     }
 }
 
@@ -278,6 +296,7 @@ private fun NavHostController.currentTopLevelDestination(): TopLevelDestination?
         destination.hasRoute<Route.Library>() -> TopLevelDestination.LIBRARY
         destination.hasRoute<Route.TagManagement>() -> TopLevelDestination.TAGS
         destination.hasRoute<Route.Trash>() -> TopLevelDestination.TRASH
+        destination.hasRoute<Route.Queue>() -> TopLevelDestination.QUEUE
         destination.hasRoute<Route.Settings>() -> TopLevelDestination.SETTINGS
         else -> null
     }
@@ -301,6 +320,7 @@ private fun NavHostController.navigateTopLevel(dest: TopLevelDestination) {
             TopLevelDestination.LIBRARY -> Route.Library
             TopLevelDestination.TAGS -> Route.TagManagement
             TopLevelDestination.TRASH -> Route.Trash
+            TopLevelDestination.QUEUE -> Route.Queue
             TopLevelDestination.SETTINGS -> Route.Settings
         }
     navigate(route) {

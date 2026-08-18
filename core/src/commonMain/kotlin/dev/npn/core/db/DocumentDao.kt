@@ -21,6 +21,17 @@ interface DocumentDao {
     @Query("SELECT * FROM documents WHERE relPath = :relPath")
     suspend fun getByRelPath(relPath: String): DocumentEntity?
 
+    /**
+     * Names for [docIds], skipping any that are trashed or tombstoned. A queue row outlives the
+     * document it points at, so a caller that starts from a queue table must treat a missing
+     * result as "no longer worth showing" rather than assuming one row back per id.
+     */
+    @Query(
+        "SELECT docId, title, fileName FROM documents " +
+            "WHERE docId IN (:docIds) AND trashed = 0 AND deleted = 0",
+    )
+    suspend fun titlesFor(docIds: List<String>): List<DocTitle>
+
     /** Doc ids currently tagged with [tag]. */
     @Query("SELECT docId FROM document_tags WHERE tag = :tag")
     suspend fun getDocIdsWithTag(tag: String): List<String>

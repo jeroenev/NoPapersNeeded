@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="queue_title">Processing queue</string>
+    <!-- Navigation rail item; kept short to fit beside the other rail labels. -->
+    <string name="queue_nav_label">Queue</string>
+    <string name="queue_help">Documents still waiting on text recognition or AI enrichment. This list clears itself as the work finishes.</string>
+    <string name="queue_empty">Nothing left to process</string>
+    <string name="queue_empty_subtitle">Every document has been read and enriched.</string>
+
+    <string name="queue_stage_ocr">Text recognition</string>
+    <string name="queue_stage_ai">AI enrichment</string>
+
+    <string name="queue_state_waiting">Waiting</string>
+    <string name="queue_state_running">Running</string>
+    <string name="queue_state_retrying">Retrying</string>
+    <string name="queue_state_failed">Failed</string>
+
+    <string name="queue_retry_after">Next try after %1$s</string>
+
+    <plurals name="queue_attempts">
+        <item quantity="one">%1$d failed attempt</item>
+        <item quantity="other">%1$d failed attempts</item>
+    </plurals>
+
+    <plurals name="queue_ai_pending">
+        <item quantity="one">AI enrichment pending: %1$d</item>
+        <item quantity="other">AI enrichment pending: %1$d</item>
+    </plurals>
+
+    <string name="queue_show">Show processing queue</string>
+    <string name="queue_settings_section">Processing</string>
+    <string name="queue_settings_help">See which documents are still queued for text recognition and AI enrichment.</string>
+</resources>

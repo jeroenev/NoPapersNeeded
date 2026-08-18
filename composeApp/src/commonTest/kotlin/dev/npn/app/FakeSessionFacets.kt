@@ -6,6 +6,7 @@ import dev.npn.core.app.MaintenanceFacade
 import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.OcrStatus
 import dev.npn.core.app.OcrVersion
+import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SplitOutcome
@@ -151,10 +152,13 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     }
 }
 
-/** Background queue drains; records how often each was asked to run. */
+/** Background queue drains; records how often each was asked to run, and serves a scripted queue. */
 class FakeWorkFacade : WorkFacade {
     var ocrDrains = 0
     var enrichmentDrains = 0
+
+    val queueEntries = MutableStateFlow<List<QueuedWork>>(emptyList())
+    override val queue: Flow<List<QueuedWork>> get() = queueEntries
 
     override suspend fun drainOcr() {
         ocrDrains++

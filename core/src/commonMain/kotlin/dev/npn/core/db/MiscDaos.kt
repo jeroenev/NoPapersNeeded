@@ -155,6 +155,14 @@ interface OcrQueueDao {
     @Query("SELECT * FROM ocr_queue ORDER BY updatedAt")
     fun observeQueue(): Flow<List<OcrQueueEntity>>
 
+    /**
+     * Rows still owed something: waiting, being worked on, or given up on after the attempt cap.
+     * Excludes `done`, which this table keeps as history rather than deleting, for
+     * [dev.npn.core.app.WorkFacade.queue].
+     */
+    @Query("SELECT * FROM ocr_queue WHERE state <> 'done' ORDER BY updatedAt")
+    fun observeOutstanding(): Flow<List<OcrQueueEntity>>
+
     @Query("SELECT * FROM ocr_queue WHERE docId = :docId")
     suspend fun getByDocId(docId: String): OcrQueueEntity?
 
@@ -188,6 +196,14 @@ interface AiEnrichQueueDao {
     /** Rows owed a pass, including ones waiting out a retry backoff. */
     @Query("SELECT COUNT(*) FROM ai_enrich_queue")
     suspend fun countPending(): Int
+
+    /**
+     * Every row owed a pass, in the order [nextDue] will take them, for
+     * [dev.npn.core.app.WorkFacade.queue]. Existence is the whole state here, so unlike the OCR
+     * queue there is nothing to filter out.
+     */
+    @Query("SELECT * FROM ai_enrich_queue ORDER BY attempts, nextAttemptAt")
+    fun observeQueue(): Flow<List<AiEnrichQueueEntity>>
 
     @Query("DELETE FROM ai_enrich_queue WHERE docId = :docId")
     suspend fun delete(docId: String)

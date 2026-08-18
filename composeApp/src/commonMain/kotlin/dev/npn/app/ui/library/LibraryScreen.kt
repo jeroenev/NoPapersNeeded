@@ -2,6 +2,7 @@
 
 package dev.npn.app.ui.library
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +20,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LabelOff
 import androidx.compose.material.icons.automirrored.filled.Sort
@@ -72,8 +74,10 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEvent
 import androidx.compose.ui.input.key.KeyEventType
@@ -93,6 +97,7 @@ import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.platformFileToExternalSource
+import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
@@ -145,6 +150,7 @@ import no_papers_needed.composeapp.generated.resources.library_sort_size
 import no_papers_needed.composeapp.generated.resources.library_switch_view
 import no_papers_needed.composeapp.generated.resources.library_trash
 import no_papers_needed.composeapp.generated.resources.library_trash_documents
+import no_papers_needed.composeapp.generated.resources.queue_ai_pending
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -165,6 +171,8 @@ fun LibraryScreen(
     aiConfigured: Boolean,
     onOpenDoc: (docId: String, order: List<String>, searchQuery: String?) -> Unit,
     onTrash: () -> Unit,
+    /** Opens the processing queue page, behind the OCR / AI-enrichment progress banners. */
+    onOpenQueue: () -> Unit,
     /** Opens the AI-edit page, optionally scoped to the given documents (empty = no preselection). */
     onAiEdit: (List<String>) -> Unit,
     filterHandoff: LibraryFilterHandoff? = null,
@@ -192,6 +200,7 @@ fun LibraryScreen(
     val scanProgress by vm.scanProgress.collectAsStateWithLifecycle()
     val lastScan by vm.lastScanReport.collectAsStateWithLifecycle()
     val ocr by vm.ocrStatus.collectAsStateWithLifecycle()
+    val queueCounts by vm.queueCounts.collectAsStateWithLifecycle()
 
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
@@ -258,6 +267,8 @@ fun LibraryScreen(
                 scanProgress = scanProgress,
                 lastScan = lastScan,
                 ocr = ocr,
+                queueCounts = queueCounts,
+                onOpenQueue = onOpenQueue,
                 snackbar = snackbar,
                 topBarExtras = topBarExtras,
                 onOpenDoc = onDocClick,
@@ -410,6 +421,8 @@ private fun LibraryContent(
     scanProgress: dev.npn.core.app.ScanProgressUi?,
     lastScan: dev.npn.core.index.ScanReport?,
     ocr: dev.npn.core.app.OcrStatus,
+    queueCounts: QueueCounts,
+    onOpenQueue: () -> Unit,
     snackbar: SnackbarHostState,
     topBarExtras: @Composable () -> Unit,
     onOpenDoc: (String) -> Unit,
@@ -542,9 +555,11 @@ private fun LibraryContent(
                 scanProgress = scanProgress,
                 lastScan = lastScan,
                 ocr = ocr,
+                queueCounts = queueCounts,
                 dismissed = ui.bannerDismissed,
                 onDismiss = vm::dismissBanner,
                 onGoToTrash = onTrashBanner,
+                onOpenQueue = onOpenQueue,
             )
 
             PullToRefreshBox(
@@ -895,9 +910,11 @@ private fun Banners(
     scanProgress: dev.npn.core.app.ScanProgressUi?,
     lastScan: dev.npn.core.index.ScanReport?,
     ocr: dev.npn.core.app.OcrStatus,
+    queueCounts: QueueCounts,
     dismissed: Boolean,
     onDismiss: () -> Unit,
     onGoToTrash: () -> Unit,
+    onOpenQueue: () -> Unit,
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
         scanProgress?.let { ScanProgressBanner(it) }
@@ -906,7 +923,9 @@ private fun Banners(
         if (!dismissed && (conflicts.isNotEmpty() || dupes.isNotEmpty())) {
             ScanIssuesBanner(conflicts.size, dupes.size, onGoToTrash, onDismiss)
         }
-        if (ocr.pending > 0) OcrStatusIndicator(ocr)
+        // Both indicators open the same queue view, which is the detail behind either count.
+        if (ocr.pending > 0) OcrStatusIndicator(ocr, onOpenQueue)
+        if (queueCounts.enrichment > 0) EnrichmentStatusIndicator(queueCounts.enrichment, onOpenQueue)
     }
 }
 
@@ -971,24 +990,57 @@ private fun ScanIssuesBanner(
 }
 
 @Composable
-private fun OcrStatusIndicator(ocr: dev.npn.core.app.OcrStatus) {
-    Row(
-        Modifier.padding(vertical = 4.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(
-            Icons.Filled.Refresh,
-            contentDescription = null,
-            modifier = Modifier.size(16.dp),
-            tint = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
+private fun OcrStatusIndicator(
+    ocr: dev.npn.core.app.OcrStatus,
+    onOpenQueue: () -> Unit,
+) {
+    QueueStatusIndicator(
+        icon = Icons.Filled.Refresh,
+        label =
             if (ocr.running) {
                 pluralStringResource(Res.plurals.library_ocr_pending_running, ocr.pending, ocr.pending)
             } else {
                 pluralStringResource(Res.plurals.library_ocr_pending, ocr.pending, ocr.pending)
             },
+        onClick = onOpenQueue,
+    )
+}
+
+@Composable
+private fun EnrichmentStatusIndicator(
+    pending: Int,
+    onOpenQueue: () -> Unit,
+) {
+    QueueStatusIndicator(
+        icon = Icons.Filled.AutoAwesome,
+        label = pluralStringResource(Res.plurals.queue_ai_pending, pending, pending),
+        onClick = onOpenQueue,
+    )
+}
+
+/** One line of "N documents still waiting", clickable through to the queue view behind the count. */
+@Composable
+private fun QueueStatusIndicator(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+) {
+    Row(
+        Modifier
+            .clip(RoundedCornerShape(4.dp))
+            .clickable(onClick = onClick)
+            .padding(vertical = 4.dp, horizontal = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            modifier = Modifier.size(16.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Text(
+            label,
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )

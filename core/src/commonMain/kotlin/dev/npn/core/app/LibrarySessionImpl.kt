@@ -122,6 +122,9 @@ class LibrarySessionImpl private constructor(
     override val ocrStatus: Flow<OcrStatus> =
         db.ocrQueueDao().countActive().map { active -> OcrStatus(pending = active, running = active > 0) }
 
+    override val queue: Flow<List<QueuedWork>> =
+        WorkQueueReader(db.documentDao(), db.ocrQueueDao(), db.aiEnrichQueueDao()).queue
+
     override val reviewMode: Flow<ReviewMode> =
         coordinator.settingFlow(ReviewMode.WIRE_KEY).map(ReviewMode::fromWire)
 

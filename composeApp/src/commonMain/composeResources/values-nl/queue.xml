@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="queue_title">Verwerkingswachtrij</string>
+    <string name="queue_nav_label">Wachtrij</string>
+    <string name="queue_help">Documenten die nog wachten op tekstherkenning of AI-verrijking. Deze lijst loopt vanzelf leeg zodra het werk klaar is.</string>
+    <string name="queue_empty">Niets meer te verwerken</string>
+    <string name="queue_empty_subtitle">Elk document is gelezen en verrijkt.</string>
+
+    <string name="queue_stage_ocr">Tekstherkenning</string>
+    <string name="queue_stage_ai">AI-verrijking</string>
+
+    <string name="queue_state_waiting">Wachten</string>
+    <string name="queue_state_running">Bezig</string>
+    <string name="queue_state_retrying">Opnieuw proberen</string>
+    <string name="queue_state_failed">Mislukt</string>
+
+    <string name="queue_retry_after">Volgende poging na %1$s</string>
+
+    <plurals name="queue_attempts">
+        <item quantity="one">%1$d mislukte poging</item>
+        <item quantity="other">%1$d mislukte pogingen</item>
+    </plurals>
+
+    <plurals name="queue_ai_pending">
+        <item quantity="one">AI-verrijking in wachtrij: %1$d</item>
+        <item quantity="other">AI-verrijking in wachtrij: %1$d</item>
+    </plurals>
+
+    <string name="queue_show">Verwerkingswachtrij tonen</string>
+    <string name="queue_settings_section">Verwerking</string>
+    <string name="queue_settings_help">Bekijk welke documenten nog in de wachtrij staan voor tekstherkenning en AI-verrijking.</string>
+</resources>
