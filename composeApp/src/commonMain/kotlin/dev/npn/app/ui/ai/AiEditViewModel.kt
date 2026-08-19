@@ -11,6 +11,7 @@ import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.AiSuggest
+import dev.npn.core.app.AiEditQueueFacade
 import dev.npn.core.app.AiEditRun
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.ApplyOutcome
@@ -62,7 +63,7 @@ data class AiFieldOption(
     val mode: AiFieldMode = AiFieldMode.UNFILLED,
 )
 
-/** The five phases of the bulk AI-edit flow. */
+/** The phases of the bulk AI-edit flow. */
 sealed interface EditPhase {
     /** Scope/fields/tags/prompt selection + Start. */
     data object Idle : EditPhase
@@ -70,6 +71,15 @@ sealed interface EditPhase {
     /** Concurrent single-request `suggestEdits` calls in progress. */
     data class Suggesting(
         val progress: EditProgress,
+    ) : EditPhase
+
+    /**
+     * The run was handed to the background queue: [documents] documents were submitted and no
+     * model call has been made yet. Terminal for this screen — the result is picked up from the
+     * processing queue, not here.
+     */
+    data class Queued(
+        val documents: Int,
     ) : EditPhase
 
     /** Per-doc suggestion chips + field rows awaiting the user's confirmation; nothing written yet. */
@@ -116,7 +126,21 @@ data class AiEditUiState(
     val allowNewTags: Boolean = true,
     val includeTagRemovals: Boolean = false,
     val customPrompt: String = "",
+    /**
+     * The user's explicit choice about running in the background, or null while they have not
+     * made one — in which case the scope size decides (see [runsInBackground]). Kept as an
+     * override rather than a plain flag so the default stays live: changing the scope from three
+     * documents to three hundred should flip it, and only until the user says otherwise.
+     */
+    val backgroundOverride: Boolean? = null,
 )
+
+/**
+ * Whether a run over [count] documents goes to the background queue: the user's choice when they
+ * made one, otherwise [AiTagging.BACKGROUND_THRESHOLD_DOCS].
+ */
+fun AiEditUiState.runsInBackground(count: Int): Boolean =
+    backgroundOverride ?: (count > AiTagging.BACKGROUND_THRESHOLD_DOCS)
 
 /** Whether the configured run asks the model for anything at all (drives the Start affordance). */
 fun AiEditUiState.hasEdits(): Boolean =
@@ -167,7 +191,7 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
  * Runs are cancellable via the shared [run] job and by leaving the screen (viewModelScope).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LongParameterList")
 class AiEditViewModel(
     documents: DocumentRepository,
     meta: MetadataWriter,
@@ -175,6 +199,7 @@ class AiEditViewModel(
     ai: AiSuggest,
     savedViewRepository: SavedViewRepository,
     reviewConfig: ReviewConfigFacade,
+    private val editQueue: AiEditQueueFacade,
     private val settings: SettingsRepository,
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
     selection: List<String> = emptyList(),
@@ -190,6 +215,7 @@ class AiEditViewModel(
         ai = session.aiSuggest,
         savedViewRepository = session.savedViews,
         reviewConfig = session.reviewConfig,
+        editQueue = session.aiEditQueue,
         settings = settings,
         selection = selection,
     )
@@ -316,6 +342,12 @@ class AiEditViewModel(
         _ui.update { it.copy(customPrompt = value) }
     }
 
+    /** Choose whether this run goes to the background queue, overriding the size-based default. */
+    fun setBackground(value: Boolean) {
+        if (_ui.value.phase != EditPhase.Idle) return
+        _ui.update { it.copy(backgroundOverride = value) }
+    }
+
     private fun updateFieldOption(
         field: AiField,
         transform: (AiFieldOption) -> AiFieldOption,
@@ -327,11 +359,45 @@ class AiEditViewModel(
         }
     }
 
-    /** Kick off the concurrent suggestion run over the next batch of the current scope. */
+    /**
+     * Start the run: suggest the next batch here, or hand the whole scope to the background queue.
+     * Which one is [AiEditUiState.runsInBackground] of the *current* scope size, resolved here
+     * rather than from the preview flow so the decision cannot be made against a stale count.
+     */
     fun start() {
         if (run?.isActive == true) return
         if (!_ui.value.hasEdits()) return
-        run = viewModelScope.launch { suggestBatch() }
+        run =
+            viewModelScope.launch {
+                val remaining = edit.remainingDocs(_ui.value.scopeKey())
+                if (_ui.value.runsInBackground(remaining.size)) {
+                    queueRun(remaining.map { it.doc.docId })
+                } else {
+                    suggestBatch()
+                }
+            }
+    }
+
+    /**
+     * Hand the whole remaining scope to the background queue. The whole scope, not one batch: the
+     * point of queueing is that nobody is waiting, so splitting it would only make the user come
+     * back for the rest.
+     */
+    private suspend fun queueRun(docIds: List<String>) {
+        if (docIds.isEmpty()) {
+            _ui.update { it.copy(phase = EditPhase.Done(ApplyResult(0, 0, moreRemain = false))) }
+            return
+        }
+        runCatching { editQueue.enqueueEditRun(docIds, buildRequest()) }
+            .onSuccess {
+                // Queued documents are spent as far as this page is concerned: the preview and any
+                // later batch must not offer them again while the run is still out there.
+                edit.markHandedOff(docIds)
+                _ui.update { it.copy(phase = EditPhase.Queued(docIds.size)) }
+            }.onFailure { cause ->
+                message(uiText(UiTextKey.COULD_NOT_QUEUE_EDIT_RUN, cause.message.orEmpty()))
+                _ui.update { it.copy(phase = EditPhase.Idle) }
+            }
     }
 
     /** Cancel an in-flight suggestion run and return to Idle (nothing was written). */
@@ -348,74 +414,29 @@ class AiEditViewModel(
     fun toggleChip(
         docId: String,
         tag: String,
-    ) = _ui.update { state ->
-        val review = state.phase as? EditPhase.Review ?: return@update state
-        val docs =
-            review.docs.map { doc ->
-                if (doc.docId != docId) {
-                    doc
-                } else {
-                    doc.copy(
-                        chips = doc.chips.mapChip(tag),
-                        removals = doc.removals.mapChip(tag),
-                    )
-                }
-            }
-        state.copy(phase = review.copy(docs = docs))
-    }
-
-    private fun List<ReviewChip>.mapChip(tag: String): List<ReviewChip> =
-        map { chip -> if (chip.tag == tag) chip.copy(selected = !chip.selected) else chip }
+    ) = updateReview { it.toggleChip(docId, tag) }
 
     /** Toggle whether a doc's suggested field value is selected for Apply (Review phase only). */
     fun toggleField(
         docId: String,
         field: AiField,
-    ) = _ui.update { state ->
-        val review = state.phase as? EditPhase.Review ?: return@update state
-        val docs =
-            review.docs.map { doc ->
-                if (doc.docId != docId) {
-                    doc
-                } else {
-                    doc.copy(
-                        fields =
-                            doc.fields.map { f ->
-                                if (f.field == field) f.copy(selected = !f.selected) else f
-                            },
-                    )
-                }
-            }
-        state.copy(phase = review.copy(docs = docs))
-    }
+    ) = updateReview { it.toggleField(docId, field) }
 
     /** Select or deselect every suggestion of one document (Review phase only; no-op otherwise). */
     fun setDocSelection(
         docId: String,
         selected: Boolean,
-    ) = _ui.update { state ->
-        val review = state.phase as? EditPhase.Review ?: return@update state
-        val docs =
-            review.docs.map { doc ->
-                if (doc.docId != docId) doc else doc.withAllSelected(selected)
-            }
-        state.copy(phase = review.copy(docs = docs))
-    }
+    ) = updateReview { it.setDocSelection(docId, selected) }
 
     /** Select or deselect every suggestion of every document (Review phase only; no-op otherwise). */
-    fun setAllSelection(selected: Boolean) =
+    fun setAllSelection(selected: Boolean) = updateReview { it.setAllSelected(selected) }
+
+    /** Apply a selection transform to the current Review batch; a no-op in every other phase. */
+    private fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
         _ui.update { state ->
             val review = state.phase as? EditPhase.Review ?: return@update state
-            val docs = review.docs.map { doc -> doc.withAllSelected(selected) }
-            state.copy(phase = review.copy(docs = docs))
+            state.copy(phase = review.copy(docs = transform(review.docs)))
         }
-
-    private fun ReviewDoc.withAllSelected(selected: Boolean): ReviewDoc =
-        copy(
-            chips = chips.map { it.copy(selected = selected) },
-            removals = removals.map { it.copy(selected = selected) },
-            fields = fields.map { it.copy(selected = selected) },
-        )
 
     /** Write the selected suggestions; see [AiEditRun] for partial-failure semantics. */
     fun apply() {

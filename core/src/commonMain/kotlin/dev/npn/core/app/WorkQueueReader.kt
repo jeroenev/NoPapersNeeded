@@ -1,5 +1,8 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.AiEditJobDao
+import dev.npn.core.db.AiEditJobEntity
+import dev.npn.core.db.AiEditJobProgress
 import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentDao
@@ -11,19 +14,25 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
 
 /**
- * Read seam over the two persisted work queues, joining their rows to document names so the UI can
+ * Read seam over the persisted work queues, joining their rows to document names so the UI can
  * show what the app still owes. Read-only by design: the queues are driven by their own pipelines
  * and nothing here writes.
  *
- * This is where the two queues' unlike shapes are reconciled into one [QueuedWork] vocabulary — the
- * OCR queue's explicit state column and attempt cap, and the enrichment queue's existence-as-state
- * plus backoff. Doing it once here is what keeps [WorkState] meaningful to a caller that should not
- * have to know either table.
+ * This is where the queues' unlike shapes are reconciled into one vocabulary — the OCR queue's
+ * explicit state column and attempt cap, the enrichment queue's existence-as-state plus backoff,
+ * and the edit queue's progress derived from its document rows. Doing it once here is what keeps
+ * [WorkState] meaningful to a caller that should not have to know any of those tables.
+ *
+ * Per-document work and whole-run work stay two flows rather than one list. They differ in grain
+ * (a document owed a pass versus a batch owed a review), in lifetime (the first clears itself, the
+ * second waits for a human) and in what the user can do with them, so flattening them would only
+ * force every consumer to split them apart again.
  */
 internal class WorkQueueReader(
     private val documentDao: DocumentDao,
     private val ocrQueueDao: OcrQueueDao,
     private val enrichQueueDao: AiEnrichQueueDao,
+    private val editJobDao: AiEditJobDao,
 ) {
     val queue: Flow<List<QueuedWork>> =
         combine(
@@ -31,6 +40,53 @@ internal class WorkQueueReader(
             enrichQueueDao.observeQueue(),
         ) { ocr, enrich -> ocr to enrich }
             .map { (ocr, enrich) -> join(ocr, enrich) }
+
+    val editRuns: Flow<List<QueuedEditRun>> =
+        combine(
+            editJobDao.observeJobs(),
+            editJobDao.observeProgress(),
+        ) { jobs, progress -> jobs to progress.associateBy { it.jobId } }
+            .map { (jobs, progress) -> jobs.mapNotNull { it.toQueuedEditRun(progress[it.jobId]) }.readyFirst() }
+
+    /**
+     * Finished runs first, newest first, then the rest in the order the drain will take them. The
+     * only entries the user can act on are the finished ones, and the newest is the one they were
+     * most likely waiting for.
+     */
+    private fun List<QueuedEditRun>.readyFirst(): List<QueuedEditRun> {
+        val (ready, working) = partition { it.state == WorkState.READY }
+        return ready.sortedByDescending { it.updatedAt } + working
+    }
+
+    /**
+     * A job's state is derived from its document rows rather than stored, so the two can never
+     * disagree: nothing owed means the suggestions are complete and a human is the only thing
+     * left; a failed attempt means retrying; any progress at all means the run is under way.
+     *
+     * A job whose document rows have vanished entirely is skipped — it can neither be finished nor
+     * reviewed, and the only way to reach that state is a partially applied delete.
+     */
+    private fun AiEditJobEntity.toQueuedEditRun(progress: AiEditJobProgress?): QueuedEditRun? {
+        if (progress == null || progress.total == 0) return null
+        return QueuedEditRun(
+            jobId = jobId,
+            total = progress.total,
+            done = progress.done,
+            failures = progress.failures,
+            state =
+                when {
+                    progress.done >= progress.total -> WorkState.READY
+                    attempts > 0 -> WorkState.RETRYING
+                    progress.done > 0 -> WorkState.RUNNING
+                    else -> WorkState.WAITING
+                },
+            createdAt = createdAt,
+            updatedAt = updatedAt,
+            attempts = attempts,
+            nextAttemptAt = nextAttemptAt.takeIf { attempts > 0 },
+            lastError = lastError,
+        )
+    }
 
     /**
      * Resolve both row sets against the document table in one pass. A queue row outlives the

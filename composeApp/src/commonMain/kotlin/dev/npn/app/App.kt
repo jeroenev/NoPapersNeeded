@@ -38,6 +38,7 @@ import androidx.navigation.compose.rememberNavController
 import androidx.navigation.toRoute
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.ai.AiChatScreen
+import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.LocaleProvider
@@ -247,6 +248,7 @@ private fun MainNavHost(
             QueueScreen(
                 session = session,
                 onBack = { nav.popBackStack() },
+                onOpenEditRun = { jobId -> nav.navigate(Route.AiEditReview(jobId)) },
             )
         }
         settingsRoutes(nav, env, session)
@@ -418,7 +420,15 @@ private fun NavGraphBuilder.aiRoutes(
             session = session,
             settings = settings,
             onBack = { nav.popBackStack() },
+            onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
             selection = selection,
+        )
+    }
+    composable<Route.AiEditReview> { entry ->
+        AiEditReviewScreen(
+            session = session,
+            jobId = entry.toRoute<Route.AiEditReview>().jobId,
+            onBack = { nav.popBackStack() },
         )
     }
 }

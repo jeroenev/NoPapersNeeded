@@ -22,6 +22,7 @@
     <string name="common_view_grid">Grid</string>
     <string name="common_unknown_error">unknown error</string>
     <string name="common_could_not_open_library">Could not open the library.</string>
+    <string name="common_could_not_queue_edit_run">Could not queue the AI edit: %1$s</string>
 
     <string name="common_opening_library">Opening library...</string>
     <string name="common_open_saved_library_failed">Could not open the saved library.</string>

@@ -24,7 +24,10 @@ sealed interface Route {
     @Serializable
     data object AutoMatchRules : Route
 
-    /** The read-only OCR / AI-enrichment backlog. Wide layouts show it in the library side panel. */
+    /**
+     * The processing queue: the OCR / AI-enrichment backlog plus the AI edit runs handed to the
+     * background. Wide layouts show it in the library side panel.
+     */
     @Serializable
     data object Queue : Route
 
@@ -33,4 +36,10 @@ sealed interface Route {
 
     @Serializable
     data object AiEdit : Route
+
+    /** Review of one finished background AI edit run, opened from the processing queue. */
+    @Serializable
+    data class AiEditReview(
+        val jobId: String,
+    ) : Route
 }

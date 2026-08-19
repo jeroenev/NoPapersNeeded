@@ -7,6 +7,22 @@
     <string name="queue_empty">Nothing left to process</string>
     <string name="queue_empty_subtitle">Every document has been read and enriched.</string>
 
+    <!-- Section above the per-document queue: AI edit runs handed to the background. -->
+    <string name="queue_edit_runs">AI edit runs</string>
+    <string name="queue_edit_run_progress">%1$d of %2$d documents suggested</string>
+    <string name="queue_edit_run_review">Review</string>
+    <string name="queue_edit_run_discard">Discard</string>
+
+    <plurals name="queue_edit_run_documents">
+        <item quantity="one">AI edit of %1$d document</item>
+        <item quantity="other">AI edit of %1$d documents</item>
+    </plurals>
+
+    <plurals name="queue_edit_run_failures">
+        <item quantity="one">%1$d document could not be suggested</item>
+        <item quantity="other">%1$d documents could not be suggested</item>
+    </plurals>
+
     <string name="queue_stage_ocr">Text recognition</string>
     <string name="queue_stage_ai">AI enrichment</string>
 
@@ -14,6 +30,7 @@
     <string name="queue_state_running">Running</string>
     <string name="queue_state_retrying">Retrying</string>
     <string name="queue_state_failed">Failed</string>
+    <string name="queue_state_ready">Ready to review</string>
 
     <string name="queue_retry_after">Next try after %1$s</string>
 

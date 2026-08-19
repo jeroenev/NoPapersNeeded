@@ -1,11 +1,15 @@
 package dev.npn.app
 
+import dev.npn.core.ai.AiEditRequest
+import dev.npn.core.app.AiEditQueueFacade
+import dev.npn.core.app.EditRunReview
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.MaintenanceFacade
 import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.OcrStatus
 import dev.npn.core.app.OcrVersion
+import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.ScanProgressUi
@@ -156,9 +160,13 @@ class FakeMaintenanceFacade : MaintenanceFacade {
 class FakeWorkFacade : WorkFacade {
     var ocrDrains = 0
     var enrichmentDrains = 0
+    var editRunDrains = 0
 
     val queueEntries = MutableStateFlow<List<QueuedWork>>(emptyList())
     override val queue: Flow<List<QueuedWork>> get() = queueEntries
+
+    val editRunEntries = MutableStateFlow<List<QueuedEditRun>>(emptyList())
+    override val editRuns: Flow<List<QueuedEditRun>> get() = editRunEntries
 
     override suspend fun drainOcr() {
         ocrDrains++
@@ -166,6 +174,43 @@ class FakeWorkFacade : WorkFacade {
 
     override suspend fun drainEnrichment() {
         enrichmentDrains++
+    }
+
+    override suspend fun drainEditRuns() {
+        editRunDrains++
+    }
+}
+
+/**
+ * Queued AI edit runs. Records what was queued and discarded, and serves whichever review a test
+ * scripted for a job id.
+ */
+class FakeAiEditQueue : AiEditQueueFacade {
+    val queued = mutableListOf<Pair<List<String>, AiEditRequest>>()
+    val discarded = mutableListOf<String>()
+
+    /** Job id handed back by the next [enqueueEditRun]. */
+    var nextJobId = "job"
+
+    /** Thrown by [enqueueEditRun] when set, to drive the failure path. */
+    var enqueueFailure: Throwable? = null
+
+    /** Reviews [openEditRun] serves, by job id; a missing id reads as a run that is gone. */
+    val reviews = mutableMapOf<String, EditRunReview>()
+
+    override suspend fun enqueueEditRun(
+        docIds: List<String>,
+        request: AiEditRequest,
+    ): String {
+        enqueueFailure?.let { throw it }
+        queued += docIds to request
+        return nextJobId
+    }
+
+    override suspend fun openEditRun(jobId: String): EditRunReview? = reviews[jobId]
+
+    override suspend fun discardEditRun(jobId: String) {
+        discarded += jobId
     }
 }
 

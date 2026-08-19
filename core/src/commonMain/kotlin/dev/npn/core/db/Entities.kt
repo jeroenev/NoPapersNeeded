@@ -202,6 +202,55 @@ data class AiEnrichQueueEntity(
     val lastError: String? = null,
 )
 
+/**
+ * A bulk AI edit the user handed to the background: the run's configuration, plus the retry
+ * bookkeeping of its suggestion pass. The documents it covers live in [AiEditJobDocEntity].
+ *
+ * Like [AiEnrichQueueEntity] there is no state column — a job's state is derived from its document
+ * rows (all suggested = ready for review, some suggested = in progress, none = waiting) so the two
+ * tables cannot disagree. The row is deleted when the user finishes reviewing it or discards it;
+ * nothing else ends a job, because the suggestions it holds are the only copy of work already paid
+ * for.
+ */
+@Entity(tableName = "ai_edit_jobs")
+data class AiEditJobEntity(
+    @PrimaryKey val jobId: String,
+    /** The run's `AiEditRequest`, serialized; every document of the job is asked with it. */
+    val requestJson: String,
+    val createdAt: Long,
+    val updatedAt: Long,
+    /** Failed *whole-chunk* attempts; drives [nextAttemptAt] and orders the queue. */
+    val attempts: Int = 0,
+    /** Epoch millis before which this job must not be worked on again (exponential backoff). */
+    val nextAttemptAt: Long,
+    val lastError: String? = null,
+)
+
+/**
+ * One document of a queued AI edit, and its suggestion once the model has answered.
+ *
+ * [suggestionJson] null and [failed] false is the whole "still owed a call" state. A suggestion is
+ * kept verbatim rather than as review rows: the Review is re-projected against the document's
+ * *current* metadata when the user opens it, which can be hours later.
+ */
+@Entity(
+    tableName = "ai_edit_job_docs",
+    primaryKeys = ["jobId", "docId"],
+    indices = [Index(value = ["jobId"])],
+)
+data class AiEditJobDocEntity(
+    val jobId: String,
+    val docId: String,
+    /** Position in the submitted order, so the Review reads in the order the user chose. */
+    val position: Int,
+    /** Serialized `AiEditSuggestion`; null while the document is still owed a model call. */
+    val suggestionJson: String? = null,
+    val attempts: Int = 0,
+    /** Given up on after the attempt cap; contributes no suggestions but is reported as a failure. */
+    val failed: Boolean = false,
+    val lastError: String? = null,
+)
+
 /** Small local state: deviceId, last journal seq, known own segments as JSON, schema markers. */
 @Entity(tableName = "kv")
 data class KeyValueEntity(

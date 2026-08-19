@@ -38,6 +38,7 @@ import no_papers_needed.composeapp.generated.resources.common_could_not_action
 import no_papers_needed.composeapp.generated.resources.common_could_not_documents
 import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
 import no_papers_needed.composeapp.generated.resources.common_could_not_partial_documents
+import no_papers_needed.composeapp.generated.resources.common_could_not_queue_edit_run
 import no_papers_needed.composeapp.generated.resources.common_could_not_suggest_tags_partial
 import no_papers_needed.composeapp.generated.resources.common_document_count
 import no_papers_needed.composeapp.generated.resources.common_duplicate_count
@@ -85,6 +86,7 @@ enum class UiTextKey {
     COULD_NOT_DOCUMENTS,
     COULD_NOT_PARTIAL_DOCUMENTS,
     COULD_NOT_SUGGEST_TAGS_PARTIAL,
+    COULD_NOT_QUEUE_EDIT_RUN,
     NO_AI_TAG_SUGGESTIONS,
     NO_AI_METADATA_SUGGESTIONS,
     AI_ASSISTANT_UNREACHABLE,
@@ -201,6 +203,10 @@ private fun UiTextKey.spec(args: List<Any?>): TextSpec =
                 args.intAt(1),
                 listOf(args.intAt(0), args.intAt(1)),
             )
+        }
+
+        UiTextKey.COULD_NOT_QUEUE_EDIT_RUN -> {
+            TextSpec.Str(Res.string.common_could_not_queue_edit_run, listOf(args[0].argumentSpec()))
         }
 
         UiTextKey.NO_AI_TAG_SUGGESTIONS -> {

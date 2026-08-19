@@ -113,13 +113,19 @@ via `mise hot`.
 - New platform behavior → interface in `core` commonMain, impl in each platform
   source set, wire in `AppEnvironment.*`.
 - Background work → `core.watch` importer loops, `NpnWork` (Android), and the
-  `core.work.QueueDrainer` instances in `LibrarySessionImpl` (OCR, AI enrichment),
-  exposed to callers that must await them as `session.work` (`WorkFacade`).
-  A new kind of deferrable work means a queue table + a drain step + a kick, not a
-  `launch` at the point of discovery.
+  `core.work.QueueDrainer` instances in `LibrarySessionImpl` (OCR, AI enrichment,
+  queued AI edit runs), exposed to callers that must await them as `session.work`
+  (`WorkFacade`). A new kind of deferrable work means a queue table + a drain step
+  + a kick, not a `launch` at the point of discovery.
 - Showing background work to the user → `WorkQueueReader` joins the queue tables to
-  document names behind `WorkFacade.queue`; a new queue table joins the same read
-  there so the processing queue view keeps showing everything the app still owes.
+  document names behind `WorkFacade.queue`, and derives whole-run progress behind
+  `WorkFacade.editRuns`; a new queue table joins the same read there so the
+  processing queue view keeps showing everything the app still owes.
+- Deferrable work the user must come back to → `AiEditQueue` is the pattern:
+  persist the request and its subjects, buy the expensive part on a drain, store
+  the answer verbatim, and surface it on the processing queue as something to open.
+  Work that writes unattended (`AiAutoEnricher`) is the other pattern; pick by
+  whether a human must confirm the result.
 - Follow-up work after OCR → `OcrPipeline.onTextIndexed` fires whenever text is indexed,
   including on every index rebuild, so hang free/idempotent work there (auto-match rules).
   `OcrPipeline.onOcrProduced` fires only when this device just wrote a sidecar; anything

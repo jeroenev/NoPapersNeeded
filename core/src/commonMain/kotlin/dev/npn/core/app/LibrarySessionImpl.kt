@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiConfig
+import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.db.NpnDatabase
@@ -81,6 +82,8 @@ class LibrarySessionImpl private constructor(
     private val ocrPipeline: OcrPipeline,
     private val ocrWorker: QueueDrainer,
     private val enrichWorker: QueueDrainer,
+    private val editQueue: AiEditQueue,
+    private val editWorker: QueueDrainer,
     override val documents: DocumentRepository,
     override val tags: TagRepository,
     override val savedViews: SavedViewRepository,
@@ -93,7 +96,8 @@ class LibrarySessionImpl private constructor(
     OcrFacade,
     ReviewConfigFacade,
     MaintenanceFacade,
-    WorkFacade {
+    WorkFacade,
+    AiEditQueueFacade {
     private val fs get() = deps.fs
     private val db get() = deps.db
 
@@ -105,6 +109,7 @@ class LibrarySessionImpl private constructor(
     override val reviewConfig: ReviewConfigFacade get() = this
     override val maintenance: MaintenanceFacade get() = this
     override val work: WorkFacade get() = this
+    override val aiEditQueue: AiEditQueueFacade get() = this
     override val meta: MetadataWriter get() = writer
     override val tagAdmin: TagAdmin get() = writer
     override val docLifecycle: DocLifecycle get() = writer
@@ -122,8 +127,12 @@ class LibrarySessionImpl private constructor(
     override val ocrStatus: Flow<OcrStatus> =
         db.ocrQueueDao().countActive().map { active -> OcrStatus(pending = active, running = active > 0) }
 
-    override val queue: Flow<List<QueuedWork>> =
-        WorkQueueReader(db.documentDao(), db.ocrQueueDao(), db.aiEnrichQueueDao()).queue
+    private val workQueueReader =
+        WorkQueueReader(db.documentDao(), db.ocrQueueDao(), db.aiEnrichQueueDao(), db.aiEditJobDao())
+
+    override val queue: Flow<List<QueuedWork>> = workQueueReader.queue
+
+    override val editRuns: Flow<List<QueuedEditRun>> = workQueueReader.editRuns
 
     override val reviewMode: Flow<ReviewMode> =
         coordinator.settingFlow(ReviewMode.WIRE_KEY).map(ReviewMode::fromWire)
@@ -256,6 +265,21 @@ class LibrarySessionImpl private constructor(
         enrichWorker.drainAndAwait()
     }
 
+    override suspend fun drainEditRuns() {
+        editWorker.drainAndAwait()
+    }
+
+    // Queueing is a local write; the kick is what turns it into work, so the two belong together
+    // at the one boundary a caller reaches. The queue itself never sees the drainer.
+    override suspend fun enqueueEditRun(
+        docIds: List<String>,
+        request: AiEditRequest,
+    ): String = editQueue.enqueueEditRun(docIds, request).also { editWorker.kick() }
+
+    override suspend fun openEditRun(jobId: String): EditRunReview? = editQueue.openEditRun(jobId)
+
+    override suspend fun discardEditRun(jobId: String) = editQueue.discardEditRun(jobId)
+
     override suspend fun splitPdf(
         docId: String,
         segments: List<IntRange>,
@@ -337,6 +361,13 @@ class LibrarySessionImpl private constructor(
         // was down. It costs a single query when the queue is empty.
         enrichWorker.kick()
 
+        // Queued edit runs are kicked the same way and for the same reason: a run's rows change
+        // shape (a document gets its suggestion) without the row count moving, so an observer of
+        // the table could not tell new work from progress. Producers kick (see enqueueEditRun),
+        // this resumes a run the last process left half-suggested, and the maintenance tick below
+        // serves backoffs.
+        editWorker.kick()
+
         // Metadata paths are routed separately so journal sync never scans or hashes PDFs.
         jobs.add(
             scope.launch {
@@ -372,9 +403,10 @@ class LibrarySessionImpl private constructor(
                     // Compaction runs under the same single-writer mutex; it only fires when the
                     // stable object count exceeds the threshold, so most reconciles are a cheap no-op.
                     runCatching { coordinator.compact() }
-                    // Enrichment rows become due by the passage of time, which no Room flow can
-                    // observe; this tick is what actually retries a backed-off document.
+                    // Enrichment rows and edit runs become due by the passage of time, which no
+                    // Room flow can observe; this tick is what actually retries a backed-off one.
                     enrichWorker.kick()
+                    editWorker.kick()
                 }
             },
         )
@@ -450,6 +482,7 @@ class LibrarySessionImpl private constructor(
         rescan()
         ocrWorker.kick()
         enrichWorker.kick()
+        editWorker.kick()
         // Respect the configured retention at call time.
         val days =
             runCatching { deps.trashRetentionDays() }
@@ -462,6 +495,7 @@ class LibrarySessionImpl private constructor(
         jobs.clear()
         ocrWorker.close()
         enrichWorker.close()
+        editWorker.close()
         started = false
         // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
     }
@@ -645,6 +679,17 @@ class LibrarySessionImpl private constructor(
                     clock = deps.clock,
                 )
             val enrichWorker = QueueDrainer(deps.scope) { autoEnricher.processNext() }
+            val editQueue =
+                AiEditQueue(
+                    dao = db.aiEditJobDao(),
+                    documents = documents,
+                    content = content,
+                    meta = meta,
+                    ai = ai,
+                    readConfig = deps.aiConfig,
+                    clock = deps.clock,
+                )
+            val editWorker = QueueDrainer(deps.scope) { editQueue.processNext() }
             // Deterministic local rules run on any newly indexed text, including a re-index.
             ocrPipeline.onTextIndexed = { docId, text -> ruleApplier.applyToDoc(docId, text) }
             // The paid pass runs only on text this device just produced. It fires after the rules
@@ -667,6 +712,8 @@ class LibrarySessionImpl private constructor(
                 ocrPipeline = ocrPipeline,
                 ocrWorker = ocrWorker,
                 enrichWorker = enrichWorker,
+                editQueue = editQueue,
+                editWorker = editWorker,
                 documents = documents,
                 tags = tags,
                 savedViews = savedViews,

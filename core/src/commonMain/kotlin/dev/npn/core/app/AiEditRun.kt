@@ -1,7 +1,6 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiSuggest
 import kotlinx.coroutines.CancellationException
@@ -154,16 +153,16 @@ sealed interface ApplyOutcome {
  *   documents with bounded concurrency ([SUGGEST_CONCURRENCY]); each document is ONE model request
  *   covering every requested section. Progress is reported as each document completes; results are
  *   re-ordered to match the original batch order. Cancellation propagates (nothing is written).
- * - Review pre-selection: existing-vocabulary tag additions pre-selected, new tags and removals
- *   pre-deselected; field fill-ins pre-selected, overwrites pre-deselected.
- * - [apply]: selected tag additions/removals are grouped by tag and written with one `addTag` /
- *   `removeTag` journal call per distinct tag (multi-doc op lists committed in a single
- *   transaction, all-or-nothing per tag); selected field values are written per (doc, field).
- *   Failures are collected into an [ApplyOutcome.Retry]; successes are not rolled back (mirrors
- *   the bulk-op convention).
+ * - Review pre-selection is [ReviewProjector]'s: existing-vocabulary tag additions pre-selected,
+ *   new tags and removals pre-deselected; field fill-ins pre-selected, overwrites pre-deselected.
+ * - [apply] delegates the write and the retry rebuild to [ReviewApply] (per-tag transactions, one
+ *   `applyEdits` per document, failures as an [ApplyOutcome.Retry] with succeeded items
+ *   deselected) and adds only this run's own accounting: suggestions written by earlier attempts
+ *   of the same batch, and whether the scope has documents left.
  *
  * [processed] marks every reviewed document (including no-suggestion ones) at review time, not on
- * apply, so deselecting or skipping a document never sends it back through the model.
+ * apply, so deselecting or skipping a document never sends it back through the model. A run handed
+ * to the background ([remainingDocs] + [markHandedOff]) counts the same way.
  */
 class AiEditRun(
     private val documents: DocumentRepository,
@@ -173,8 +172,11 @@ class AiEditRun(
     /** Documents handed over from the library's selection mode; empty when opened standalone. */
     private val selection: List<String> = emptyList(),
 ) {
-    /** The shared write mechanics; this run only decides *which* selected items to hand it. */
-    private val editApply = AiEditApply(meta)
+    /** The shared Review→journal step; this run adds only its own cross-batch accounting. */
+    private val reviewApply = ReviewApply(meta)
+
+    /** The shared pre-select policy, applied to each answered document. */
+    private val projector = ReviewProjector(content)
 
     /** Documents already reviewed in this run; excluded from every later batch. */
     private val _processed = MutableStateFlow(emptySet<String>())
@@ -229,6 +231,23 @@ class AiEditRun(
     suspend fun moreRemain(key: ScopeKey): Boolean = nextBatchDocs(key).isNotEmpty()
 
     /**
+     * Every document of the scope this run has not reviewed yet — the batch cap deliberately not
+     * applied. This is what a run handed to the background covers: the point of queueing is that
+     * nobody is waiting on the answer, so splitting it into review-sized batches would only make
+     * the user come back for the rest.
+     */
+    suspend fun remainingDocs(key: ScopeKey): List<DocListItem> =
+        docsFor(key).first().filterNot { it.doc.docId in _processed.value }
+
+    /**
+     * Mark [docIds] reviewed by something other than this run's own batches — a background run
+     * that took them — so the preview and any later batch skip documents already spent.
+     */
+    fun markHandedOff(docIds: List<String>) {
+        _processed.update { it + docIds }
+    }
+
+    /**
      * Suggest edits for the next batch of the scope; see class docs for concurrency, ordering and
      * failure semantics. [onProgress] fires once before the first request and then as each
      * document completes.
@@ -256,8 +275,7 @@ class AiEditRun(
                         semaphore.withPermit {
                             val outcome =
                                 runCatching {
-                                    val suggestion = ai.suggestEdits(item.doc.docId, request)
-                                    reviewDoc(item, suggestion, snippetFor(item.doc.docId))
+                                    projector.project(item, ai.suggestEdits(item.doc.docId, request))
                                 }
                             // CancellationException must propagate so the whole scope tears down.
                             outcome.exceptionOrNull()?.let { if (it is CancellationException) throw it }
@@ -298,137 +316,35 @@ class AiEditRun(
         key: ScopeKey,
         docs: List<ReviewDoc>,
     ): ApplyOutcome {
-        // Project each reviewed document onto its selected items as one WritableEdit. The
-        // group-by-tag, one-applyEdits-per-doc and all-or-nothing write semantics live in the
-        // shared AiEditApply; this run only decides what is selected.
-        val edits =
-            docs.map { doc ->
-                WritableEdit(
-                    docId = doc.docId,
-                    addTags = doc.chips.filter { it.selected }.map { it.tag },
-                    removeTags = doc.removals.filter { it.selected }.map { it.tag },
-                    properties = doc.fields.filter { it.selected }.associate { it.field to it.value },
-                )
-            }
-        if (edits.all { it.isEmpty }) return ApplyOutcome.NothingSelected
+        // The selection projection, the write grain and the retry rebuild all live in the shared
+        // ReviewApply; what stays here is this run's own accounting — the suggestions written by
+        // earlier attempts of the same batch, and whether the scope has more documents left.
+        //
         // _processed is Review state, so it stays this run's to keep: onDocWritten marks each
         // document as its grouped op commits, matching the previous per-op update timing.
-        val report = editApply.apply(edits) { docId -> _processed.update { it + docId } }
-        return finishApply(
-            key,
-            docs,
-            succeededAdds = report.addsWritten,
-            succeededRemovals = report.removalsWritten,
-            succeededFields = report.fieldsWritten,
-            failedDocs = report.failedDocs,
-        )
-    }
+        return when (val outcome = reviewApply.apply(docs) { docId -> _processed.update { it + docId } }) {
+            ReviewOutcome.NothingSelected -> {
+                ApplyOutcome.NothingSelected
+            }
 
-    @Suppress("LongParameterList")
-    private suspend fun finishApply(
-        key: ScopeKey,
-        docs: List<ReviewDoc>,
-        succeededAdds: Set<Pair<String, String>>,
-        succeededRemovals: Set<Pair<String, String>>,
-        succeededFields: Set<Pair<String, AiField>>,
-        failedDocs: Set<String>,
-    ): ApplyOutcome {
-        val succeededCount = succeededAdds.size + succeededRemovals.size + succeededFields.size
-        if (failedDocs.isEmpty()) {
-            // Include suggestions written in earlier partial-failure attempts of this same batch.
-            val totalWritten = succeededCount + appliedSoFar
-            val changedDocs =
-                (succeededAdds.map { it.first } + succeededRemovals.map { it.first } + succeededFields.map { it.first })
-                    .toSet()
-                    .size
-            return ApplyOutcome.Done(ApplyResult(totalWritten, changedDocs, moreRemain(key)))
+            is ReviewOutcome.Written -> {
+                ApplyOutcome.Done(
+                    // Include suggestions written in earlier partial-failure attempts of this batch.
+                    ApplyResult(outcome.applied + appliedSoFar, outcome.docsChanged, moreRemain(key)),
+                )
+            }
+
+            is ReviewOutcome.Retry -> {
+                // Carry the succeeded count forward so it is not lost when Done is finally produced.
+                appliedSoFar += outcome.applied
+                ApplyOutcome.Retry(outcome.remaining, outcome.failedDocs, outcome.total)
+            }
         }
-        // Keep only the actually-unapplied selections on the retained failed rows, so a retry never
-        // re-writes a (doc, tag) or (doc, field) that already succeeded. Carry the succeeded count
-        // forward so it is not lost when the eventual Done result is produced.
-        val remaining =
-            docs
-                .filter { it.docId in failedDocs }
-                .map { doc ->
-                    doc.copy(
-                        chips =
-                            doc.chips.map { chip ->
-                                if (chip.selected && (doc.docId to chip.tag) in succeededAdds) {
-                                    chip.copy(selected = false)
-                                } else {
-                                    chip
-                                }
-                            },
-                        removals =
-                            doc.removals.map { removal ->
-                                if (removal.selected && (doc.docId to removal.tag) in succeededRemovals) {
-                                    removal.copy(selected = false)
-                                } else {
-                                    removal
-                                }
-                            },
-                        fields =
-                            doc.fields.map { field ->
-                                if (field.selected && (doc.docId to field.field) in succeededFields) {
-                                    field.copy(selected = false)
-                                } else {
-                                    field
-                                }
-                            },
-                    )
-                }
-        appliedSoFar += succeededCount
-        return ApplyOutcome.Retry(remaining, failedDocs.size, docs.size)
     }
 
     // Taken as a one-shot snapshot rather than a live flow: a run continues (and finishes with a
     // correct moreRemain) while the caller's preview subscription is gone.
-    private suspend fun nextBatchDocs(key: ScopeKey): List<DocListItem> =
-        docsFor(key).first().filterNot { it.doc.docId in _processed.value }.take(key.batchSize)
-
-    private fun reviewDoc(
-        item: DocListItem,
-        suggestion: AiEditSuggestion,
-        snippet: String?,
-    ): ReviewDoc =
-        ReviewDoc(
-            docId = item.doc.docId,
-            title = item.doc.title,
-            fileName = item.doc.fileName,
-            snippet = snippet,
-            chips = suggestion.addTags.map { ReviewChip(it.tag, it.isNew, selected = !it.isNew) },
-            removals = suggestion.removeTags.map { ReviewChip(it, isNew = false, selected = false) },
-            fields =
-                buildList {
-                    suggestion.metadata.title?.let { add(reviewField(AiField.TITLE, it, item.doc.title)) }
-                    suggestion.metadata.correspondent?.let {
-                        add(reviewField(AiField.CORRESPONDENT, it, item.doc.correspondent))
-                    }
-                    suggestion.metadata.docDate?.let { add(reviewField(AiField.DOC_DATE, it, item.doc.docDate)) }
-                },
-        )
-
-    /** Fill-ins (no current value) are pre-selected; overwrites require an explicit opt-in. */
-    private fun reviewField(
-        field: AiField,
-        value: String,
-        current: String?,
-    ): ReviewField =
-        ReviewField(
-            field = field,
-            value = value,
-            current = current?.takeIf { it.isNotBlank() },
-            selected = current.isNullOrBlank(),
-        )
-
-    /** First ~[SNIPPET_LENGTH] chars of extracted text, whitespace-collapsed; null when unavailable. */
-    private suspend fun snippetFor(docId: String): String? =
-        runCatching { content.extractedText(docId) }
-            .getOrNull()
-            ?.replace(Regex("\\s+"), " ")
-            ?.trim()
-            ?.takeIf { it.isNotBlank() }
-            ?.take(SNIPPET_LENGTH)
+    private suspend fun nextBatchDocs(key: ScopeKey): List<DocListItem> = remainingDocs(key).take(key.batchSize)
 
     private companion object {
         val SORT = LibrarySort()
@@ -439,8 +355,5 @@ class AiEditRun(
          * large speedup over serial execution.
          */
         const val SUGGEST_CONCURRENCY = 12
-
-        /** Max characters of extracted text kept for a Review row's preview snippet. */
-        const val SNIPPET_LENGTH = 200
     }
 }

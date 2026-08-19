@@ -6,6 +6,21 @@
     <string name="queue_empty">Niets meer te verwerken</string>
     <string name="queue_empty_subtitle">Elk document is gelezen en verrijkt.</string>
 
+    <string name="queue_edit_runs">AI-bewerkingen</string>
+    <string name="queue_edit_run_progress">%1$d van %2$d documenten voorgesteld</string>
+    <string name="queue_edit_run_review">Nakijken</string>
+    <string name="queue_edit_run_discard">Weggooien</string>
+
+    <plurals name="queue_edit_run_documents">
+        <item quantity="one">AI-bewerking van %1$d document</item>
+        <item quantity="other">AI-bewerking van %1$d documenten</item>
+    </plurals>
+
+    <plurals name="queue_edit_run_failures">
+        <item quantity="one">%1$d document kon geen voorstel krijgen</item>
+        <item quantity="other">%1$d documenten konden geen voorstel krijgen</item>
+    </plurals>
+
     <string name="queue_stage_ocr">Tekstherkenning</string>
     <string name="queue_stage_ai">AI-verrijking</string>
 
@@ -13,6 +28,7 @@
     <string name="queue_state_running">Bezig</string>
     <string name="queue_state_retrying">Opnieuw proberen</string>
     <string name="queue_state_failed">Mislukt</string>
+    <string name="queue_state_ready">Klaar om na te kijken</string>
 
     <string name="queue_retry_after">Volgende poging na %1$s</string>
 
