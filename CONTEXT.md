@@ -10,6 +10,22 @@ and discussion; sharpen them here when they drift.
   set and the `appliedSoFar` accumulator. One run spans a whole edit session
   (its `processed` set survives cancels and scope changes) and is consumed
   batch by batch via `suggestNextBatch` and `apply`.
+- **Queued Edit Run** — an Edit Run whose *suggestion* half was handed to the
+  background: `AiEditQueue` (core.app) persists the run's request and its
+  documents, buys one model call per document on the `QueueDrainer`, and stores
+  each answer verbatim. Nothing is written unattended — the run turns into an
+  `EditRunReview` on the processing queue and goes through the same human
+  Review and Apply as an interactive batch. That is the whole difference from
+  automatic enrichment, which may write because its policy is fixed.
+  A queued run covers the WHOLE scope, not one batch: the batch cap exists to
+  bound what a human reviews in one sitting, and nobody is sitting. It is the
+  default above `AiTagging.BACKGROUND_THRESHOLD_DOCS` documents, and the user
+  can flip it either way per run.
+  Failure is read two ways: a partly failed chunk is the *documents'* fault and
+  charges them attempts (given up on at `MAX_DOC_ATTEMPTS`); a wholly failed one
+  is read as an endpoint outage and charges only the run's backoff — but only
+  for `MAX_JOB_ATTEMPTS` retries, after which it too is charged, because "the
+  whole chunk failed" says nothing once the chunk is one document.
 - **Scope** — which documents an Edit Run covers: `SELECTION`, `UNTAGGED`,
   `REVIEW_QUEUE`, `MISSING_FIELDS`, `SAVED_VIEW`, `ALL`. Resolution to a
   `LibraryFilter` (including SELECTION's in-memory intersection and
@@ -17,9 +33,15 @@ and discussion; sharpen them here when they drift.
   the single definition of what each scope means, shared by the preview count
   and the run itself.
 - **Review** — the phase where suggested edits await human acceptance. The
-  **pre-select policy** is domain logic in core: additions of existing-vocabulary
-  tags are pre-selected; new tags and all removals are pre-deselected; metadata
-  fill-ins (empty current value) are pre-selected; overwrites are pre-deselected.
+  **pre-select policy** is domain logic in core, owned by `ReviewProjector`:
+  additions of existing-vocabulary tags are pre-selected; new tags and all
+  removals are pre-deselected; metadata fill-ins (empty current value) are
+  pre-selected; overwrites are pre-deselected. A stored suggestion is projected
+  *late* — when the user opens it — so "would this overwrite something" is
+  decided against the document as it is now, not as it was when the model ran.
+  `ReviewApply` owns the step from a reviewed batch to the journal: the
+  selection projection plus the Retry rebuild, shared by both flows so an
+  interactive and a queued run cannot drift apart.
 - **Apply** — writing accepted suggestions to the journal. Tag writes are
   grouped per distinct tag and are all-or-nothing per tag; field writes are one
   `applyEdits` per document, because a setter per field re-runs the storage path
@@ -45,8 +67,9 @@ and discussion; sharpen them here when they drift.
   pre-selection, which is tri-state: a new tag stays visible as a deselected
   chip so the user can opt in. The two must not be collapsed into one rule.
 
-The UI's `EditPhase` (Idle/Suggesting/Review/Applying/Done) is presentation
-state in `composeApp` and is not part of the domain vocabulary.
+The UI's `EditPhase` (Idle/Suggesting/Review/Applying/Queued/Done) and
+`QueuedReviewPhase` are presentation state in `composeApp` and are not part of
+the domain vocabulary.
 
 ## Transcript
 
@@ -98,13 +121,19 @@ whole session. Each operation has exactly one public home:
 - **AI suggestions** (`AiSuggest`, session property `aiSuggest`) — the single
   suggestion primitive `suggestEdits`. No consumer needs both AI facets.
 - **Work** (`WorkFacade`, session property `work`) — the persisted background
-  queues. Two drains, `drainOcr` and `drainEnrichment`: each drains until no
-  further progress is possible right now (queue empty, feature off, endpoint
-  unconfigured, or a backoff pending) and returns; it never waits out a backoff.
-  For callers that must hold a process open while background work runs — today
-  only Android's maintenance job. Plus one read, `queue`, which flattens both
-  tables into `QueuedWork` entries (outstanding work only) for the processing
-  queue view.
+  queues. Three drains, `drainOcr`, `drainEnrichment` and `drainEditRuns`: each
+  drains until no further progress is possible right now (queue empty, feature
+  off, endpoint unconfigured, or a backoff pending) and returns; it never waits
+  out a backoff. For callers that must hold a process open while background work
+  runs — today only Android's maintenance job. Plus two reads: `queue`, which
+  flattens the per-document tables into `QueuedWork` entries (outstanding work
+  only), and `editRuns`, the queued AI edits at batch grain with finished ones
+  first. The two stay separate because they differ in grain, in lifetime (the
+  first clears itself, the second waits for a human) and in what the user can do
+  with them.
+- **AI edit queue** (`AiEditQueueFacade`, session property `aiEditQueue`) —
+  handing a bulk AI edit to the background and picking it back up:
+  `enqueueEditRun`, `openEditRun`, `discardEditRun`.
 
 Both AI facets extend **`AiAvailability`** (`configured()`): the only piece of
 the endpoint configuration that crosses the seam is that boolean — `AiConfig`

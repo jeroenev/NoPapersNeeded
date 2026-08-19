@@ -52,7 +52,15 @@
     <string name="ai_edit_documents_per_batch">Documents per batch</string>
     <string name="ai_edit_range">%1$d-%2$d</string>
     <string name="ai_edit_new_tags_range">%1$d-%2$d (%3$d = existing only)</string>
+    <string name="ai_edit_background">Run in the background</string>
+    <string name="ai_edit_background_help">Covers every document in scope and keeps going after you leave this page. Results wait in the processing queue for you to review; nothing is written without you.</string>
     <string name="ai_edit_start">Start</string>
+    <string name="ai_edit_start_background">Add to queue</string>
+    <string name="ai_edit_queued_open">Open the queue</string>
+    <string name="ai_edit_queued_review_title">Review AI edit</string>
+    <string name="ai_edit_queued_loading">Loading suggestions...</string>
+    <string name="ai_edit_queued_gone">This run is no longer available</string>
+    <string name="ai_edit_queued_gone_subtitle">It was already reviewed or discarded, or it is still working.</string>
     <string name="ai_edit_suggesting_progress">Suggesting - %1$d of %2$d</string>
     <string name="ai_edit_select_all">Select all</string>
     <string name="ai_edit_clear_selection">Clear</string>
@@ -68,5 +76,9 @@
     <plurals name="ai_edit_no_suggestions">
         <item quantity="one">No suggestions (%1$d document)</item>
         <item quantity="other">No suggestions (%1$d documents)</item>
+    </plurals>
+    <plurals name="ai_edit_queued">
+        <item quantity="one">%1$d document queued. You will find the suggestions in the processing queue.</item>
+        <item quantity="other">%1$d documents queued. You will find the suggestions in the processing queue.</item>
     </plurals>
 </resources>

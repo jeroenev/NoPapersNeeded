@@ -19,9 +19,9 @@ import java.util.concurrent.TimeUnit
  * from [NpnApplication] so it shares the same session/DB/scope as the UI.
  *
  * [LibrarySession.rescan] already adopts foreign sidecars and queues pending OCR; the worker then
- * drains (bounded) the OCR queue and then the automatic AI enrichment queue through
- * [dev.npn.core.app.WorkFacade], so WorkManager keeps the process alive while that background work
- * runs.
+ * drains (bounded) the OCR queue, the automatic AI enrichment queue and the queued AI edit runs
+ * through [dev.npn.core.app.WorkFacade], so WorkManager keeps the process alive while that
+ * background work runs.
  */
 class RescanOcrWorker(
     context: Context,
@@ -53,9 +53,13 @@ class RescanOcrWorker(
             // Both drains rather than watching counts, so each returns as soon as no further
             // progress is possible — queue empty, feature off, endpoint unconfigured, or a backlog
             // waiting out a backoff — instead of holding the wakelock until the timeout.
+            // Edit runs drain last: they are work the user explicitly queued and will review, so
+            // unlike OCR and enrichment nothing downstream is waiting on them, and a finished run
+            // is just as useful an hour later.
             withTimeoutOrNull(DRAIN_TIMEOUT_MS) {
                 session.work.drainOcr()
                 session.work.drainEnrichment()
+                session.work.drainEditRuns()
             }
             Result.success()
         } catch (t: Throwable) {

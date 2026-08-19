@@ -2,6 +2,7 @@
 
 package dev.npn.app.ui.queue
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,9 +22,11 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -39,12 +42,19 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.queue_attempts
+import no_papers_needed.composeapp.generated.resources.queue_edit_run_discard
+import no_papers_needed.composeapp.generated.resources.queue_edit_run_documents
+import no_papers_needed.composeapp.generated.resources.queue_edit_run_failures
+import no_papers_needed.composeapp.generated.resources.queue_edit_run_progress
+import no_papers_needed.composeapp.generated.resources.queue_edit_run_review
+import no_papers_needed.composeapp.generated.resources.queue_edit_runs
 import no_papers_needed.composeapp.generated.resources.queue_empty
 import no_papers_needed.composeapp.generated.resources.queue_empty_subtitle
 import no_papers_needed.composeapp.generated.resources.queue_help
@@ -52,6 +62,7 @@ import no_papers_needed.composeapp.generated.resources.queue_retry_after
 import no_papers_needed.composeapp.generated.resources.queue_stage_ai
 import no_papers_needed.composeapp.generated.resources.queue_stage_ocr
 import no_papers_needed.composeapp.generated.resources.queue_state_failed
+import no_papers_needed.composeapp.generated.resources.queue_state_ready
 import no_papers_needed.composeapp.generated.resources.queue_state_retrying
 import no_papers_needed.composeapp.generated.resources.queue_state_running
 import no_papers_needed.composeapp.generated.resources.queue_state_waiting
@@ -61,17 +72,23 @@ import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * The processing queue: everything the OCR and AI-enrichment passes still owe. The single
- * presentation of that list — reached from the navigation rail on wide layouts, from settings on
- * compact ones, and from the library's progress banners on both.
+ * The processing queue: everything the OCR and AI-enrichment passes still owe, plus the AI edit
+ * runs handed to the background. The single presentation of that list — reached from the
+ * navigation rail on wide layouts, from settings on compact ones, and from the library's progress
+ * banners on both.
+ *
+ * Edit runs sit at the top and finished ones first, because they are the only entries that need a
+ * person: a finished run is a review waiting to be opened, while everything below it clears itself.
  */
 @Composable
 fun QueueScreen(
     session: LibrarySession,
     onBack: () -> Unit,
+    onOpenEditRun: (String) -> Unit,
 ) {
     val vm: QueueViewModel = viewModel { QueueViewModel(session) }
     val items by vm.items.collectAsStateWithLifecycle()
+    val editRuns by vm.editRuns.collectAsStateWithLifecycle()
 
     Scaffold(
         topBar = {
@@ -88,16 +105,25 @@ fun QueueScreen(
             )
         },
     ) { padding ->
-        QueueList(items, Modifier.fillMaxSize().padding(padding))
+        QueueList(
+            items = items,
+            editRuns = editRuns,
+            onOpenEditRun = onOpenEditRun,
+            onDiscardEditRun = vm::discardEditRun,
+            modifier = Modifier.fillMaxSize().padding(padding),
+        )
     }
 }
 
 @Composable
 private fun QueueList(
     items: List<QueuedWork>,
+    editRuns: List<QueuedEditRun>,
+    onOpenEditRun: (String) -> Unit,
+    onDiscardEditRun: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    if (items.isEmpty()) {
+    if (items.isEmpty() && editRuns.isEmpty()) {
         Box(modifier) {
             EmptyState(
                 icon = Icons.Filled.DoneAll,
@@ -108,6 +134,13 @@ private fun QueueList(
         return
     }
     LazyColumn(modifier) {
+        if (editRuns.isNotEmpty()) {
+            item { SectionHeader(stringResource(Res.string.queue_edit_runs)) }
+            items(editRuns, key = { "run:${it.jobId}" }) { run ->
+                EditRunRow(run, onOpenEditRun, onDiscardEditRun)
+                HorizontalDivider()
+            }
+        }
         item {
             Text(
                 stringResource(Res.string.queue_help),
@@ -121,6 +154,111 @@ private fun QueueList(
             QueueRow(entry)
             HorizontalDivider()
         }
+    }
+}
+
+@Composable
+private fun SectionHeader(title: String) {
+    Text(
+        title,
+        style = MaterialTheme.typography.titleSmall,
+        color = MaterialTheme.colorScheme.primary,
+        modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
+    )
+}
+
+/**
+ * One background edit run. A finished run is the whole point of the section, so it is the one that
+ * is clickable and leads with its call to action; a run still being suggested shows how far along
+ * it is and offers only the way out.
+ */
+@Composable
+private fun EditRunRow(
+    run: QueuedEditRun,
+    onOpen: (String) -> Unit,
+    onDiscard: (String) -> Unit,
+) {
+    val ready = run.state == WorkState.READY
+    Row(
+        Modifier
+            .fillMaxWidth()
+            .then(if (ready) Modifier.clickable { onOpen(run.jobId) } else Modifier)
+            .padding(horizontal = 16.dp, vertical = 10.dp),
+        verticalAlignment = Alignment.Top,
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        Icon(
+            Icons.Filled.AutoAwesome,
+            contentDescription = null,
+            modifier = Modifier.size(20.dp),
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                pluralStringResource(Res.plurals.queue_edit_run_documents, run.total, run.total),
+                style = MaterialTheme.typography.titleSmall,
+            )
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                Text(
+                    formatEpochDateTime(run.createdAt),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+                StateBadge(run.state)
+            }
+            if (!ready) {
+                LinearProgressIndicator(
+                    progress = { if (run.total == 0) 0f else run.done.toFloat() / run.total },
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Text(
+                    stringResource(Res.string.queue_edit_run_progress, run.done, run.total),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            EditRunTrouble(run)
+        }
+        if (ready) {
+            TextButton(onClick = { onOpen(run.jobId) }) {
+                Text(stringResource(Res.string.queue_edit_run_review))
+            }
+        } else {
+            TextButton(onClick = { onDiscard(run.jobId) }) {
+                Text(stringResource(Res.string.queue_edit_run_discard))
+            }
+        }
+    }
+}
+
+/** The "why is this taking so long" line of an edit run: retry timing, errors, given-up documents. */
+@Composable
+private fun EditRunTrouble(run: QueuedEditRun) {
+    run.nextAttemptAt?.let {
+        Text(
+            stringResource(Res.string.queue_retry_after, formatEpochDateTime(it)),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    if (run.failures > 0) {
+        Text(
+            pluralStringResource(Res.plurals.queue_edit_run_failures, run.failures, run.failures),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+    }
+    run.lastError?.let {
+        Text(
+            it,
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.error,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -196,6 +334,7 @@ private fun StateBadge(state: WorkState) {
             WorkState.WAITING -> scheme.surfaceVariant to scheme.onSurfaceVariant
             WorkState.RETRYING -> scheme.tertiaryContainer to scheme.onTertiaryContainer
             WorkState.FAILED -> scheme.errorContainer to scheme.onErrorContainer
+            WorkState.READY -> scheme.secondaryContainer to scheme.onSecondaryContainer
         }
     StatusBadge(stringResource(state.label), background, content)
 }
@@ -221,4 +360,5 @@ private val WorkState.label: StringResource
             WorkState.RUNNING -> Res.string.queue_state_running
             WorkState.RETRYING -> Res.string.queue_state_retrying
             WorkState.FAILED -> Res.string.queue_state_failed
+            WorkState.READY -> Res.string.queue_state_ready
         }

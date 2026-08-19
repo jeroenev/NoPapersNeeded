@@ -1,5 +1,6 @@
 package dev.npn.core.ai
 
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.delay
 
 /**
@@ -33,6 +34,12 @@ internal class FakeAiSuggest : AiSuggest {
     /** Per-doc delay override (wins over [suggestDelayMillis]); lets tests skew completion order. */
     var suggestDelayByDoc: Map<String, Long> = emptyMap()
 
+    /**
+     * When set, [suggestEdits] records its call and then suspends until the gate completes, so a
+     * test can hold a drain mid-model-call and exercise what the user does meanwhile.
+     */
+    var gate: CompletableDeferred<Unit>? = null
+
     override suspend fun configured(): Boolean = configured
 
     override suspend fun suggestEdits(
@@ -43,6 +50,7 @@ internal class FakeAiSuggest : AiSuggest {
         suggestEditsRequests += request
         val delayMillis = suggestDelayByDoc[docId] ?: suggestDelayMillis
         if (delayMillis > 0) delay(delayMillis)
+        gate?.await()
         failWith?.invoke(docId)
         return editByDoc[docId] ?: edit
     }

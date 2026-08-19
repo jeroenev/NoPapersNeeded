@@ -21,6 +21,7 @@
     <string name="common_view_grid">Raster</string>
     <string name="common_unknown_error">onbekende fout</string>
     <string name="common_could_not_open_library">De bibliotheek kon niet worden geopend.</string>
+    <string name="common_could_not_queue_edit_run">De AI-bewerking kon niet in de wachtrij worden gezet: %1$s</string>
 
     <string name="common_opening_library">Bibliotheek openen...</string>
     <string name="common_open_saved_library_failed">De opgeslagen bibliotheek kon niet worden geopend.</string>

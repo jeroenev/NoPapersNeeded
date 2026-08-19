@@ -50,6 +50,8 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_all_documents
 import no_papers_needed.composeapp.generated.resources.ai_edit_allow_new_tags
 import no_papers_needed.composeapp.generated.resources.ai_edit_allow_new_tags_help
+import no_papers_needed.composeapp.generated.resources.ai_edit_background
+import no_papers_needed.composeapp.generated.resources.ai_edit_background_help
 import no_papers_needed.composeapp.generated.resources.ai_edit_custom_prompt
 import no_papers_needed.composeapp.generated.resources.ai_edit_custom_prompt_hint
 import no_papers_needed.composeapp.generated.resources.ai_edit_documents_per_batch
@@ -68,6 +70,7 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_scope_missing_fie
 import no_papers_needed.composeapp.generated.resources.ai_edit_scope_saved_view
 import no_papers_needed.composeapp.generated.resources.ai_edit_scope_selection
 import no_papers_needed.composeapp.generated.resources.ai_edit_start
+import no_papers_needed.composeapp.generated.resources.ai_edit_start_background
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tag_removals
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tag_removals_help
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tags
@@ -122,7 +125,7 @@ internal fun AiEditSetup(
                         SetupColumn(Modifier.weight(1f)) {
                             TagSection(ui, vm)
                             PromptField(ui, vm)
-                            RunSection(ui, vm)
+                            RunSection(ui, preview.total, vm)
                         }
                     }
                 } else {
@@ -130,7 +133,7 @@ internal fun AiEditSetup(
                     TagSection(ui, vm)
                     FieldSection(ui, vm)
                     PromptField(ui, vm)
-                    RunSection(ui, vm)
+                    RunSection(ui, preview.total, vm)
                 }
                 StartButton(ui, preview.total, vm)
             }
@@ -304,26 +307,42 @@ private fun PromptField(
     )
 }
 
-/** The per-run batch override. */
+/**
+ * Where the run executes, and — while it executes here — how much of the scope one batch takes.
+ *
+ * The batch cap only exists to keep a Review a human can sit through in one go, so it is hidden
+ * for a background run: that one covers the whole scope, because nobody is waiting on it and
+ * splitting it would only make the user come back for the rest.
+ */
 @Composable
 private fun RunSection(
     ui: AiEditUiState,
+    count: Int,
     vm: AiEditViewModel,
 ) {
+    val background = ui.runsInBackground(count)
     SetupSection(stringResource(Res.string.ai_edit_options)) {
-        NumericField(
-            value = ui.batchSize,
-            onValueChange = vm::setBatchSize,
-            range = AiTagging.BATCH_RANGE,
-            label = stringResource(Res.string.ai_edit_documents_per_batch),
-            supportingText =
-                stringResource(
-                    Res.string.ai_edit_range,
-                    AiTagging.MIN_BATCH_DOCS,
-                    AiTagging.MAX_BATCH_DOCS,
-                ),
-            maxDigits = 3,
+        SwitchRow(
+            label = stringResource(Res.string.ai_edit_background),
+            help = stringResource(Res.string.ai_edit_background_help),
+            checked = background,
+            onCheckedChange = vm::setBackground,
         )
+        if (!background) {
+            NumericField(
+                value = ui.batchSize,
+                onValueChange = vm::setBatchSize,
+                range = AiTagging.BATCH_RANGE,
+                label = stringResource(Res.string.ai_edit_documents_per_batch),
+                supportingText =
+                    stringResource(
+                        Res.string.ai_edit_range,
+                        AiTagging.MIN_BATCH_DOCS,
+                        AiTagging.MAX_BATCH_DOCS,
+                    ),
+                maxDigits = 3,
+            )
+        }
     }
 }
 
@@ -336,7 +355,12 @@ private fun StartButton(
     // Nothing requested means there is nothing to ask the model for, so Start stays inert.
     Button(onClick = vm::start, enabled = count > 0 && ui.hasEdits()) {
         Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
-        Text(stringResource(Res.string.ai_edit_start), Modifier.padding(start = 8.dp))
+        Text(
+            stringResource(
+                if (ui.runsInBackground(count)) Res.string.ai_edit_start_background else Res.string.ai_edit_start,
+            ),
+            Modifier.padding(start = 8.dp),
+        )
     }
 }
 

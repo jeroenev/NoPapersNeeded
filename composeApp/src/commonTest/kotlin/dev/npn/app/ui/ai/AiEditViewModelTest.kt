@@ -52,10 +52,18 @@ private fun edit(
     metadata: MetadataSuggestion = MetadataSuggestion.EMPTY,
 ) = AiEditSuggestion(addTags = addTags, removeTags = removeTags, metadata = metadata)
 
+/**
+ * A viewmodel with the run pinned to the foreground unless a test says otherwise. Left to itself
+ * the background default depends on the scope size, which is not what most of these tests are
+ * about; the ones that *are* pass `background = null` and let it decide.
+ */
 private fun vm(
     session: FakeLibrarySession = FakeLibrarySession(),
     settings: FakeSettingsRepository = FakeSettingsRepository(),
-) = AiEditViewModel(session, settings)
+    background: Boolean? = false,
+) = AiEditViewModel(session, settings).also { model ->
+    background?.let(model::setBackground)
+}
 
 class AiEditSuggestionTest : MainDispatcherTest() {
     @Test
@@ -920,5 +928,137 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
             model.setScope(EditScope.REVIEW_QUEUE)
             model.ui.value.scope shouldBe EditScope.REVIEW_QUEUE
             job.cancel()
+        }
+}
+
+/**
+ * Where a run executes. The default follows the scope size, an explicit choice overrides it, and a
+ * backgrounded run hands over the WHOLE scope rather than one review-sized batch.
+ */
+class AiEditBackgroundTest : MainDispatcherTest() {
+    private fun sessionOf(count: Int) =
+        FakeLibrarySession().apply {
+            documents.documents.value = (1..count).map { item("d$it") }
+            aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+        }
+
+    @Test
+    fun aScopeOverTheThresholdIsQueuedByDefault() =
+        runTest(dispatcher) {
+            val session = sessionOf(AiTagging.BACKGROUND_THRESHOLD_DOCS + 1)
+            val model = vm(session, background = null)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setScope(EditScope.ALL)
+
+            model.start()
+            advanceUntilIdle()
+
+            session.aiSuggest.suggestEditsCalls shouldBe emptyList()
+            session.aiEditQueue.queued
+                .single()
+                .first shouldHaveSize AiTagging.BACKGROUND_THRESHOLD_DOCS + 1
+            model.ui.value.phase shouldBe EditPhase.Queued(AiTagging.BACKGROUND_THRESHOLD_DOCS + 1)
+            job.cancel()
+        }
+
+    @Test
+    fun aScopeAtOrUnderTheThresholdRunsHere() =
+        runTest(dispatcher) {
+            val session = sessionOf(AiTagging.BACKGROUND_THRESHOLD_DOCS)
+            val model = vm(session, background = null)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setScope(EditScope.ALL)
+
+            model.start()
+            advanceUntilIdle()
+
+            session.aiEditQueue.queued shouldBe emptyList()
+            session.aiSuggest.suggestEditsCalls shouldHaveSize AiTagging.BACKGROUND_THRESHOLD_DOCS
+            model.ui.value.phase
+                .shouldBeInstanceOf<EditPhase.Review>()
+            job.cancel()
+        }
+
+    @Test
+    fun anExplicitChoiceBeatsTheSizeDefaultInBothDirections() =
+        runTest(dispatcher) {
+            val big = sessionOf(AiTagging.BACKGROUND_THRESHOLD_DOCS + 1)
+            val foreground = vm(big, background = false)
+            val bigJob = launch { foreground.ui.collect {} }
+            advanceUntilIdle()
+            foreground.setScope(EditScope.ALL)
+            foreground.start()
+            advanceUntilIdle()
+            big.aiEditQueue.queued shouldBe emptyList()
+            bigJob.cancel()
+
+            val small = sessionOf(1)
+            val background = vm(small, background = true)
+            val smallJob = launch { background.ui.collect {} }
+            advanceUntilIdle()
+            background.setScope(EditScope.ALL)
+            background.start()
+            advanceUntilIdle()
+            small.aiSuggest.suggestEditsCalls shouldBe emptyList()
+            small.aiEditQueue.queued shouldHaveSize 1
+            smallJob.cancel()
+        }
+
+    @Test
+    fun aQueuedRunCoversTheWholeScopeNotOneBatch() =
+        runTest(dispatcher) {
+            val session = sessionOf(AiTagging.DEFAULT_BATCH_DOCS + 7)
+            val model = vm(session, background = true)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setScope(EditScope.ALL)
+
+            model.start()
+            advanceUntilIdle()
+
+            session.aiEditQueue.queued
+                .single()
+                .first shouldHaveSize AiTagging.DEFAULT_BATCH_DOCS + 7
+            job.cancel()
+        }
+
+    @Test
+    fun queuedDocumentsAreSpentSoAFollowUpRunSkipsThem() =
+        runTest(dispatcher) {
+            val session = sessionOf(3)
+            val model = vm(session, background = true)
+            val job = launch { model.ui.collect {} }
+            val preview = launch { model.preview.collect {} }
+            advanceUntilIdle()
+            model.setScope(EditScope.ALL)
+            model.start()
+            advanceUntilIdle()
+
+            model.preview.value.total shouldBe 0
+            job.cancel()
+            preview.cancel()
+        }
+
+    @Test
+    fun aFailedQueueingReportsAndStaysOnTheSetupPage() =
+        runTest(dispatcher) {
+            val session = sessionOf(3)
+            session.aiEditQueue.enqueueFailure = IllegalStateException("disk full")
+            val model = vm(session, background = true)
+            val job = launch { model.ui.collect {} }
+            val messages = mutableListOf<String>()
+            val messageJob = launch { model.messages.collect { messages += it.text.resolveEnglish() } }
+            advanceUntilIdle()
+            model.setScope(EditScope.ALL)
+
+            model.start()
+            advanceUntilIdle()
+
+            model.ui.value.phase shouldBe EditPhase.Idle
+            messages.single() shouldBe "Could not queue the AI edit: disk full"
+            job.cancel()
+            messageJob.cancel()
         }
 }

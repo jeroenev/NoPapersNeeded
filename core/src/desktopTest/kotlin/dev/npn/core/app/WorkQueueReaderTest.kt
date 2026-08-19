@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.AiEditJobDocEntity
+import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
@@ -16,21 +18,23 @@ import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
 
-/**
- * Covers the read seam that turns the two unlike queue tables into one [QueuedWork] list: which
- * rows are outstanding, how each table's notion of failure maps onto [WorkState], and what happens
- * to rows whose document has gone away.
- */
-class WorkQueueReaderTest {
+/** A real index database wired to the reader under test; the two suites below share it. */
+internal abstract class WorkQueueReaderFixture {
     private lateinit var dbDir: File
-    private lateinit var db: NpnDatabase
-    private lateinit var reader: WorkQueueReader
+    protected lateinit var db: NpnDatabase
+    protected lateinit var reader: WorkQueueReader
 
     @BeforeTest
     fun setup() {
         dbDir = Files.createTempDirectory("npn-queue-test").toFile()
         db = npnDatabase(File(dbDir, "index.db"))
-        reader = WorkQueueReader(db.documentDao(), db.ocrQueueDao(), db.aiEnrichQueueDao())
+        reader =
+            WorkQueueReader(
+                db.documentDao(),
+                db.ocrQueueDao(),
+                db.aiEnrichQueueDao(),
+                db.aiEditJobDao(),
+            )
     }
 
     @AfterTest
@@ -38,7 +42,13 @@ class WorkQueueReaderTest {
         db.close()
         dbDir.deleteRecursively()
     }
+}
 
+/**
+ * The per-document half of the read seam: which rows are outstanding, how each table's notion of
+ * failure maps onto [WorkState], and what happens to rows whose document has gone away.
+ */
+internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
     private suspend fun putDoc(
         id: String,
         title: String? = null,
@@ -172,5 +182,93 @@ class WorkQueueReaderTest {
             putOcr("never-existed")
 
             queue() shouldBe emptyList()
+        }
+}
+
+/**
+ * The whole-run half of the read seam: a queued edit run's state and ordering fall out of its
+ * document rows rather than a stored column, so the two can never disagree.
+ */
+internal class EditRunReaderTest : WorkQueueReaderFixture() {
+    private suspend fun putRun(
+        jobId: String,
+        docIds: List<String>,
+        suggested: Int = 0,
+        failed: Int = 0,
+        attempts: Int = 0,
+        createdAt: Long = 1,
+        updatedAt: Long = 1,
+    ) {
+        db.aiEditJobDao().upsertJob(
+            AiEditJobEntity(
+                jobId = jobId,
+                requestJson = "{}",
+                createdAt = createdAt,
+                updatedAt = updatedAt,
+                attempts = attempts,
+                nextAttemptAt = 9_000,
+            ),
+        )
+        db.aiEditJobDao().upsertDocs(
+            docIds.mapIndexed { index, docId ->
+                AiEditJobDocEntity(
+                    jobId = jobId,
+                    docId = docId,
+                    position = index,
+                    suggestionJson = "{}".takeIf { index < suggested },
+                    failed = index >= docIds.size - failed,
+                )
+            },
+        )
+    }
+
+    private suspend fun runs(): List<QueuedEditRun> = reader.editRuns.first()
+
+    @Test
+    fun `an edit run's state is derived from how many of its documents are answered`() =
+        runTest {
+            putRun("untouched", listOf("a", "b", "c"))
+            putRun("underway", listOf("d", "e", "f"), suggested = 1)
+            putRun("backing-off", listOf("g", "h"), attempts = 2)
+            putRun("finished", listOf("i", "j"), suggested = 2)
+
+            val byId = runs().associateBy { it.jobId }
+            byId.getValue("untouched").state shouldBe WorkState.WAITING
+            byId.getValue("underway").state shouldBe WorkState.RUNNING
+            byId.getValue("underway").done shouldBe 1
+            byId.getValue("backing-off").state shouldBe WorkState.RETRYING
+            byId.getValue("backing-off").nextAttemptAt shouldBe 9_000
+            byId.getValue("finished").state shouldBe WorkState.READY
+        }
+
+    @Test
+    fun `a document given up on still counts as answered, so the run can finish`() =
+        runTest {
+            putRun("run", listOf("a", "b"), suggested = 1, failed = 1)
+
+            val run = runs().single()
+            run.state shouldBe WorkState.READY
+            run.failures shouldBe 1
+            run.total shouldBe 2
+        }
+
+    @Test
+    fun `finished runs come first, newest first, then the ones still working`() =
+        runTest {
+            putRun("working", listOf("a"), createdAt = 1)
+            putRun("older-ready", listOf("b"), suggested = 1, createdAt = 2, updatedAt = 5)
+            putRun("newest-ready", listOf("c"), suggested = 1, createdAt = 3, updatedAt = 7)
+
+            runs().map { it.jobId } shouldContainExactly listOf("newest-ready", "older-ready", "working")
+        }
+
+    @Test
+    fun `a run with no documents left is not reported at all`() =
+        runTest {
+            db.aiEditJobDao().upsertJob(
+                AiEditJobEntity(jobId = "empty", requestJson = "{}", createdAt = 1, updatedAt = 1, nextAttemptAt = 1),
+            )
+
+            runs() shouldBe emptyList()
         }
 }

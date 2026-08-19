@@ -52,7 +52,15 @@
     <string name="ai_edit_documents_per_batch">Documenten per batch</string>
     <string name="ai_edit_range">%1$d-%2$d</string>
     <string name="ai_edit_new_tags_range">%1$d-%2$d (%3$d = alleen bestaande)</string>
+    <string name="ai_edit_background">Op de achtergrond uitvoeren</string>
+    <string name="ai_edit_background_help">Behandelt alle documenten in het bereik en loopt door nadat je deze pagina verlaat. De resultaten wachten in de verwerkingswachtrij tot je ze nakijkt; er wordt niets weggeschreven zonder jou.</string>
     <string name="ai_edit_start">Start</string>
+    <string name="ai_edit_start_background">Aan wachtrij toevoegen</string>
+    <string name="ai_edit_queued_open">Wachtrij openen</string>
+    <string name="ai_edit_queued_review_title">AI-bewerking nakijken</string>
+    <string name="ai_edit_queued_loading">Suggesties laden...</string>
+    <string name="ai_edit_queued_gone">Deze bewerking is niet meer beschikbaar</string>
+    <string name="ai_edit_queued_gone_subtitle">Ze is al nagekeken of weggegooid, of ze is nog bezig.</string>
     <string name="ai_edit_suggesting_progress">Voorstellen - %1$d van %2$d</string>
     <string name="ai_edit_select_all">Alles selecteren</string>
     <string name="ai_edit_clear_selection">Wissen</string>
@@ -68,5 +76,9 @@
     <plurals name="ai_edit_no_suggestions">
         <item quantity="one">Geen suggesties (%1$d document)</item>
         <item quantity="other">Geen suggesties (%1$d documenten)</item>
+    </plurals>
+    <plurals name="ai_edit_queued">
+        <item quantity="one">%1$d document in de wachtrij. Je vindt de suggesties in de verwerkingswachtrij.</item>
+        <item quantity="other">%1$d documenten in de wachtrij. Je vindt de suggesties in de verwerkingswachtrij.</item>
     </plurals>
 </resources>

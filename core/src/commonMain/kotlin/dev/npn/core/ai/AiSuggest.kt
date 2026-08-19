@@ -1,10 +1,13 @@
 package dev.npn.core.ai
 
+import kotlinx.serialization.Serializable
+
 /**
  * One AI tag proposal for a document. [tag] is already canonicalized to the library's exact
  * spelling when it matches an existing vocabulary entry case-insensitively; [isNew] is true when
  * no existing tag matches (the suggestion would introduce a brand-new tag).
  */
+@Serializable
 data class TagSuggestion(
     val tag: String,
     val isNew: Boolean,
@@ -16,6 +19,7 @@ data class TagSuggestion(
  * is canonicalized to the library's exact spelling when it matches an existing correspondent
  * case-insensitively; [docDate] is always a valid `yyyy-MM-dd` ISO date.
  */
+@Serializable
 data class MetadataSuggestion(
     val title: String? = null,
     val correspondent: String? = null,
@@ -46,12 +50,14 @@ data class MetadataSuggestion(
 }
 
 /** A single-value document property the AI can suggest a value for. */
+@Serializable
 enum class AiField { TITLE, CORRESPONDENT, DOC_DATE }
 
 /**
  * Whether a field suggestion should be produced for every document or only documents that are
  * currently missing that field's value.
  */
+@Serializable
 enum class AiFieldMode {
     /** Suggest a value even when the document already has one (the user may accept a replacement). */
     ALL,
@@ -61,6 +67,7 @@ enum class AiFieldMode {
 }
 
 /** One field to ask about in an edit run, with the user's [mode]. */
+@Serializable
 data class AiFieldConfig(
     val field: AiField,
     val mode: AiFieldMode = AiFieldMode.UNFILLED,
@@ -71,7 +78,11 @@ data class AiFieldConfig(
  * also propose tag additions ([tags]) and/or tag removals ([tagRemovals]), the optional per-call
  * tag caps ([maxTags]/[maxNewTags]; null means the configured defaults), and an optional free-text
  * [customPrompt] the user typed (e.g. "merge tags that differ only in case").
+ *
+ * Serializable because a run handed to the background outlives the process that configured it:
+ * the queued job stores its request so every one of its documents is asked the same question.
  */
+@Serializable
 data class AiEditRequest(
     val fields: List<AiFieldConfig> = emptyList(),
     val tags: Boolean = false,
@@ -86,7 +97,11 @@ data class AiEditRequest(
  * [TagSuggestion]), [removeTags] are tags already on the document that the model proposes
  * removing (verbatim current spelling), and [metadata] carries the validated single-value field
  * suggestions (subject to the run's [AiFieldMode]).
+ *
+ * Serializable because a background run persists it: the model call is what costs money and time,
+ * so its answer is stored verbatim and only projected onto a Review when the user opens the run.
  */
+@Serializable
 data class AiEditSuggestion(
     val addTags: List<TagSuggestion> = emptyList(),
     val removeTags: List<String> = emptyList(),

@@ -23,7 +23,8 @@ import androidx.room3.migration.AutoMigrationSpec
     // v8: adds auto_match_rules. v9 adds journal-projected notes and their FTS column.
     // v10: indexes documents.addedAt for the default library sort.
     // v11: adds documents.aiEnrichedAt (post-OCR AI enrichment marker) + its ai_enrich_queue.
-    version = 11,
+    // v12: adds ai_edit_jobs + ai_edit_job_docs (AI edit runs handed to the background).
+    version = 12,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -34,6 +35,7 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 8, to = 9),
         AutoMigration(from = 9, to = 10),
         AutoMigration(from = 10, to = 11),
+        AutoMigration(from = 11, to = 12),
     ],
     entities = [
         DocumentEntity::class,
@@ -46,6 +48,8 @@ import androidx.room3.migration.AutoMigrationSpec
         DuplicateEntity::class,
         OcrQueueEntity::class,
         AiEnrichQueueEntity::class,
+        AiEditJobEntity::class,
+        AiEditJobDocEntity::class,
         KeyValueEntity::class,
         MetadataSourceEntity::class,
         MetadataEventEntity::class,
@@ -75,6 +79,8 @@ abstract class NpnDatabase : RoomDatabase() {
     abstract fun ocrQueueDao(): OcrQueueDao
 
     abstract fun aiEnrichQueueDao(): AiEnrichQueueDao
+
+    abstract fun aiEditJobDao(): AiEditJobDao
 
     abstract fun keyValueDao(): KeyValueDao
 
