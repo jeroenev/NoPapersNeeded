@@ -49,8 +49,10 @@ import dev.npn.app.ui.library.LibraryFilterHandoff
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.AiDestination
 import dev.npn.app.ui.nav.NavigationShell
+import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.Route
 import dev.npn.app.ui.nav.TopLevelDestination
+import dev.npn.app.ui.nav.queueStatus
 import dev.npn.app.ui.onboarding.OnboardingScreen
 import dev.npn.app.ui.queue.QueueScreen
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
@@ -149,6 +151,12 @@ private fun MainNav(
     val aiConfigured by produceState(initialValue = false, session) {
         value = session.aiSuggest.isConfiguredOrFalse()
     }
+    // Outstanding background work, for the shell's queue badge. Read here rather than in a screen
+    // because the badge is the only standing sign that the app is still busy — or, once a
+    // background AI edit finishes, that it is waiting on the user — and on compact layouts the
+    // queue itself sits behind the bar's "More" item.
+    val queue by remember(session) { session.work.queueStatus() }
+        .collectAsStateWithLifecycle(QueueStatus.None)
 
     // Documents handed from the library's selection mode to the AI-edit page (see AiEditSelection).
     val aiSelection =
@@ -165,6 +173,7 @@ private fun MainNav(
             current = nav.currentTopLevelDestination(),
             aiCurrent = nav.currentAiDestination(),
             aiConfigured = aiConfigured,
+            queue = queue,
             onNavigate = { dest -> nav.navigateTopLevel(dest) },
             onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
             onAiEdit = {
@@ -278,7 +287,6 @@ private fun NavGraphBuilder.settingsRoutes(
             onBack = { nav.popBackStack() },
             onChangeLibrary = { changePicker.launch() },
             onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
-            onProcessingQueue = { nav.navigate(Route.Queue) },
         )
     }
     composable<Route.AutoMatchRules> {

@@ -44,7 +44,4 @@
         <item quantity="other">AI enrichment pending: %1$d</item>
     </plurals>
 
-    <string name="queue_show">Show processing queue</string>
-    <string name="queue_settings_section">Processing</string>
-    <string name="queue_settings_help">See which documents are still queued for text recognition and AI enrichment.</string>
 </resources>

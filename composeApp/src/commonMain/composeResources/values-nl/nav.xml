@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="nav_more">Meer</string>
+    <string name="nav_more_destinations">Meer bestemmingen</string>
+
+    <plurals name="nav_queue_pending">
+        <item quantity="one">%1$d document wordt nog verwerkt</item>
+        <item quantity="other">%1$d documenten worden nog verwerkt</item>
+    </plurals>
+
+    <plurals name="nav_queue_review">
+        <item quantity="one">%1$d AI-bewerking wacht op controle</item>
+        <item quantity="other">%1$d AI-bewerkingen wachten op controle</item>
+    </plurals>
+</resources>

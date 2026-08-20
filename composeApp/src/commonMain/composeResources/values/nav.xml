@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Compact bottom bar item opening the sheet with the destinations the bar cannot hold. -->
+    <string name="nav_more">More</string>
+    <string name="nav_more_destinations">More destinations</string>
+
+    <!-- Read out for the badge on the queue, whose bare digits mean nothing on their own. -->
+    <plurals name="nav_queue_pending">
+        <item quantity="one">%1$d document still processing</item>
+        <item quantity="other">%1$d documents still processing</item>
+    </plurals>
+
+    <!-- Same badge, when a background AI edit has finished and is waiting to be reviewed. -->
+    <plurals name="nav_queue_review">
+        <item quantity="one">%1$d AI edit waiting for review</item>
+        <item quantity="other">%1$d AI edits waiting for review</item>
+    </plurals>
+</resources>
