@@ -42,7 +42,4 @@
         <item quantity="other">AI-verrijking in wachtrij: %1$d</item>
     </plurals>
 
-    <string name="queue_show">Verwerkingswachtrij tonen</string>
-    <string name="queue_settings_section">Verwerking</string>
-    <string name="queue_settings_help">Bekijk welke documenten nog in de wachtrij staan voor tekstherkenning en AI-verrijking.</string>
 </resources>
