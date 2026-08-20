@@ -56,6 +56,7 @@ import dev.npn.app.ui.nav.queueStatus
 import dev.npn.app.ui.onboarding.OnboardingScreen
 import dev.npn.app.ui.queue.QueueScreen
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
+import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.SettingsScreen
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
@@ -271,7 +272,7 @@ private fun NavGraphBuilder.settingsRoutes(
     env: AppEnvironment,
     session: dev.npn.core.app.LibrarySession,
 ) {
-    composable<Route.Settings> {
+    composable<Route.Settings> { entry ->
         val changePicker =
             rememberDirectoryPickerLauncher { dir ->
                 if (dir != null) {
@@ -284,6 +285,8 @@ private fun NavGraphBuilder.settingsRoutes(
         SettingsScreen(
             env = env,
             session = session,
+            category = SettingsCategoryId.fromRouteKey(entry.toRoute<Route.Settings>().category),
+            onOpenCategory = { id -> nav.navigate(Route.Settings(id.routeKey)) },
             onBack = { nav.popBackStack() },
             onChangeLibrary = { changePicker.launch() },
             onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
@@ -331,7 +334,7 @@ private fun NavHostController.navigateTopLevel(dest: TopLevelDestination) {
             TopLevelDestination.TAGS -> Route.TagManagement
             TopLevelDestination.TRASH -> Route.Trash
             TopLevelDestination.QUEUE -> Route.Queue
-            TopLevelDestination.SETTINGS -> Route.Settings
+            TopLevelDestination.SETTINGS -> Route.Settings()
         }
     navigate(route) {
         // Keep a single branch: switching destinations never stacks top-level screens on

@@ -18,8 +18,17 @@ sealed interface Route {
     @Serializable
     data object Trash : Route
 
+    /**
+     * Settings, optionally with one category pane open. Carrying the category in the route (rather
+     * than in screen state) is what makes drill-down on compact layouts answer to system back and
+     * survive process death, and lets other screens deep-link straight to the pane they mean.
+     * The value is a [dev.npn.app.ui.settings.SettingsCategoryId] route key; unknown keys from an
+     * older back stack fall back to the table of contents.
+     */
     @Serializable
-    data object Settings : Route
+    data class Settings(
+        val category: String? = null,
+    ) : Route
 
     @Serializable
     data object AutoMatchRules : Route
