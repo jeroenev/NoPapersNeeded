@@ -1,6 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="common_settings_title">Instellingen</string>
+    <string name="common_settings_search">Instellingen zoeken</string>
+    <string name="common_settings_search_no_results">Geen instellingen gevonden voor “%1$s”.</string>
+    <string name="common_settings_category_import">Importeren &amp; OCR</string>
+    <string name="common_settings_category_documents">Documenten</string>
+    <string name="common_settings_category_appearance">Weergave</string>
     <string name="common_settings_library">Bibliotheek</string>
     <string name="common_settings_no_library">Geen bibliotheek geselecteerd</string>
     <string name="common_settings_change_library">Bibliotheek wijzigen</string>

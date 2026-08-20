@@ -3,147 +3,86 @@
 package dev.npn.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.NavigationDrawerItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
+import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
-import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SnackbarMessages
-import dev.npn.app.ui.common.persistDirectoryAccess
+import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.ViewType
-import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
-import dev.npn.core.pathrules.StoragePathContext
-import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_back
-import no_papers_needed.composeapp.generated.resources.common_cancel
-import no_papers_needed.composeapp.generated.resources.common_settings_about
-import no_papers_needed.composeapp.generated.resources.common_settings_about_help
-import no_papers_needed.composeapp.generated.resources.common_settings_ai_assistant
-import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching
-import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_help
-import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_rules
-import no_papers_needed.composeapp.generated.resources.common_settings_change_library
-import no_papers_needed.composeapp.generated.resources.common_settings_choose_folder
-import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnail_cache
-import no_papers_needed.composeapp.generated.resources.common_settings_default_view
-import no_papers_needed.composeapp.generated.resources.common_settings_document_fields
-import no_papers_needed.composeapp.generated.resources.common_settings_document_fields_help
-import no_papers_needed.composeapp.generated.resources.common_settings_enable_inbox
-import no_papers_needed.composeapp.generated.resources.common_settings_grid_size_help
-import no_papers_needed.composeapp.generated.resources.common_settings_inbox_help
-import no_papers_needed.composeapp.generated.resources.common_settings_inbox_migration_question
-import no_papers_needed.composeapp.generated.resources.common_settings_landscape_columns
-import no_papers_needed.composeapp.generated.resources.common_settings_landscape_columns_help
-import no_papers_needed.composeapp.generated.resources.common_settings_language
-import no_papers_needed.composeapp.generated.resources.common_settings_language_dutch
-import no_papers_needed.composeapp.generated.resources.common_settings_language_english
-import no_papers_needed.composeapp.generated.resources.common_settings_language_help
-import no_papers_needed.composeapp.generated.resources.common_settings_language_system
-import no_papers_needed.composeapp.generated.resources.common_settings_library
-import no_papers_needed.composeapp.generated.resources.common_settings_mark_all_reviewed
-import no_papers_needed.composeapp.generated.resources.common_settings_mark_none_reviewed
-import no_papers_needed.composeapp.generated.resources.common_settings_mark_tagged_reviewed
-import no_papers_needed.composeapp.generated.resources.common_settings_no_library
-import no_papers_needed.composeapp.generated.resources.common_settings_no_watched_folder
-import no_papers_needed.composeapp.generated.resources.common_settings_ocr
-import no_papers_needed.composeapp.generated.resources.common_settings_ocr_language_code
-import no_papers_needed.composeapp.generated.resources.common_settings_ocr_language_help
-import no_papers_needed.composeapp.generated.resources.common_settings_product_version
-import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import
-import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import_help
-import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow
-import no_papers_needed.composeapp.generated.resources.common_settings_stop_watching
-import no_papers_needed.composeapp.generated.resources.common_settings_storage
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_absolute
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_backslash
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_blank
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_date_format_only
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_invalid
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_invalid_segment
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_reserved
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_traversal
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_unclosed
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_unexpected_closing
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_unknown_variable
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_whitespace
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_organize_help
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_organize_paths
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_path_template
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_preview
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_correspondent
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_tag_home
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_tag_utilities
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_title
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_type
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_variables
-import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
+import no_papers_needed.composeapp.generated.resources.common_clear_search
+import no_papers_needed.composeapp.generated.resources.common_settings_search
+import no_papers_needed.composeapp.generated.resources.common_settings_search_no_results
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
-import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_help
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 import no_papers_needed.composeapp.generated.resources.common_settings_title
-import no_papers_needed.composeapp.generated.resources.common_settings_trash
-import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
-import no_papers_needed.composeapp.generated.resources.common_settings_views
-import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder
-import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder_help
-import no_papers_needed.composeapp.generated.resources.common_view_grid
-import no_papers_needed.composeapp.generated.resources.common_view_list
-import no_papers_needed.composeapp.generated.resources.detail_correspondent
-import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
-import no_papers_needed.composeapp.generated.resources.detail_document_type
-import no_papers_needed.composeapp.generated.resources.detail_note
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
-const val NPN_VERSION = "0.1.0"
+/** Width of the category list when it sits beside a pane. Matches the Material nav-drawer width. */
+private val CategoryListWidth: Dp = 280.dp
 
-/** Accepted range for the trash-retention field (0 = purge immediately; capped at four digits). */
-private val TRASH_RETENTION_RANGE = 0..9999
-private const val TRASH_RETENTION_MAX_DIGITS = 4
+private val PaneContentPadding: Dp = 16.dp
+private val PaneGroupSpacing: Dp = 24.dp
 
+/**
+ * Settings, laid out as a table of contents plus one open pane.
+ *
+ * Which categories exist and what they contain lives entirely in [SettingsCategories]; this file
+ * only decides where the list and the pane go. Wide windows show both side by side (the same
+ * list-detail shape the library uses); compact windows show the list and drill down into a pane,
+ * so Android's system back walks back to the list.
+ *
+ * [category] comes from the route, which makes a pane deep-linkable and survives process death.
+ * A null category means "no pane chosen yet": the list on compact, the first category on wide,
+ * where an empty right-hand pane would just be a hole.
+ */
 @Composable
 fun SettingsScreen(
     env: AppEnvironment,
     session: LibrarySession,
+    category: SettingsCategoryId?,
+    onOpenCategory: (SettingsCategoryId) -> Unit,
     onBack: () -> Unit,
     onChangeLibrary: () -> Unit,
     onAutoMatchRules: () -> Unit,
@@ -153,607 +92,247 @@ fun SettingsScreen(
     val aiModels by vm.aiModels.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
     val standardFields by vm.standardFields.collectAsStateWithLifecycle()
-    val storagePath =
-        evaluateStoragePath(
-            state.storagePathTemplate,
-            StoragePathContext(
-                title = stringResource(Res.string.common_settings_storage_sample_title),
-                docDate = "2026-07-20",
-                docType = stringResource(Res.string.common_settings_storage_sample_type),
-                correspondent = stringResource(Res.string.common_settings_storage_sample_correspondent),
-                tags =
-                    listOf(
-                        stringResource(Res.string.common_settings_storage_sample_tag_home),
-                        stringResource(Res.string.common_settings_storage_sample_tag_utilities),
-                    ),
-                originalFileName = "scan.pdf",
-            ),
-        )
 
     val snackbar = remember { SnackbarHostState() }
     // Surface failed settings writes (properties-file I/O, SAF errors) on the same snackbar host.
     SnackbarMessages(vm.messages, snackbar)
     var thumbnailResult by remember { mutableStateOf<Int?>(null) }
-    val thumbnailMessage =
-        thumbnailResult?.let { count ->
+    ThumbnailCacheSnackbar(thumbnailResult, snackbar) { thumbnailResult = null }
+
+    val context =
+        SettingsPaneContext(
+            vm = vm,
+            state = state,
+            aiModels = aiModels,
+            reviewMode = reviewMode,
+            standardFields = standardFields,
+            onChangeLibrary = onChangeLibrary,
+            onAutoMatchRules = onAutoMatchRules,
+            onThumbnailsCleared = { count -> thumbnailResult = count },
+        )
+
+    BoxWithConstraints(Modifier.fillMaxSize()) {
+        val wide = maxWidth > WideLayoutBreakpoint
+        // Wide layouts keep the list on screen, so switching panes is a selection, not navigation:
+        // it must not stack back-stack entries, and it must not reset the search box by tearing
+        // the screen down. Compact layouts drill down for real, which is what makes system back
+        // return to the list.
+        var picked by rememberSaveable { mutableStateOf<String?>(null) }
+        SettingsScaffold(
+            wide = wide,
+            selected =
+                if (wide) {
+                    SettingsCategoryId.fromRouteKey(picked) ?: category ?: SettingsCategoryId.LIBRARY
+                } else {
+                    category
+                },
+            snackbar = snackbar,
+            context = context,
+            onSelect = { id -> if (wide) picked = id.routeKey else onOpenCategory(id) },
+            onBack = onBack,
+        )
+    }
+}
+
+@Composable
+private fun SettingsScaffold(
+    wide: Boolean,
+    selected: SettingsCategoryId?,
+    snackbar: SnackbarHostState,
+    context: SettingsPaneContext,
+    onSelect: (SettingsCategoryId) -> Unit,
+    onBack: () -> Unit,
+) {
+    val openCategory = selected?.let(::settingsCategory)
+    // On compact the pane replaces the list, so the bar has to say which pane is open.
+    val paneTitle = if (wide) null else openCategory?.title
+    Scaffold(
+        topBar = {
+            SettingsTopBar(
+                title = stringResource(paneTitle ?: Res.string.common_settings_title),
+                onBack = onBack,
+            )
+        },
+        snackbarHost = { SnackbarHost(snackbar) },
+    ) { padding ->
+        Box(Modifier.fillMaxSize().padding(padding)) {
+            when {
+                wide -> {
+                    Row(Modifier.fillMaxSize()) {
+                        SettingsCategoryList(
+                            selected = selected,
+                            onSelect = onSelect,
+                            modifier = Modifier.width(CategoryListWidth).fillMaxHeight(),
+                        )
+                        VerticalDivider()
+                        SettingsPane(openCategory, context, showTitle = true, Modifier.weight(1f).fillMaxHeight())
+                    }
+                }
+
+                openCategory != null -> {
+                    SettingsPane(openCategory, context, showTitle = false, Modifier.fillMaxSize())
+                }
+
+                else -> {
+                    SettingsCategoryList(
+                        selected = null,
+                        onSelect = onSelect,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsTopBar(
+    title: String,
+    onBack: () -> Unit,
+) {
+    TopAppBar(
+        title = { Text(text = title) },
+        navigationIcon = {
+            IconButton(onClick = onBack) {
+                Icon(
+                    Icons.AutoMirrored.Filled.ArrowBack,
+                    contentDescription = stringResource(Res.string.common_back),
+                )
+            }
+        },
+    )
+}
+
+/**
+ * The table of contents, filtered by a search box. Search matches a category's title or the label
+ * of any setting inside it, so "thumbnail" finds Library without every individual setting needing
+ * to be a navigable destination of its own.
+ */
+@Composable
+private fun SettingsCategoryList(
+    selected: SettingsCategoryId?,
+    onSelect: (SettingsCategoryId) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val labels = settingsCategoryLabels()
+    val results = labels.filter { it.matches(query) }
+    Column(modifier) {
+        SettingsSearchField(query = query, onQueryChange = { query = it })
+        if (results.isEmpty()) {
+            Text(
+                text = stringResource(Res.string.common_settings_search_no_results, query.trim()),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = PaneContentPadding),
+            )
+        }
+        LazyColumn(Modifier.fillMaxWidth().weight(1f)) {
+            items(results, key = { it.category.id.name }) { entry ->
+                SettingsCategoryRow(
+                    entry = entry,
+                    query = query,
+                    selected = entry.category.id == selected,
+                    onClick = { onSelect(entry.category.id) },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun SettingsSearchField(
+    query: String,
+    onQueryChange: (String) -> Unit,
+) {
+    OutlinedTextField(
+        value = query,
+        onValueChange = onQueryChange,
+        label = { Text(text = stringResource(Res.string.common_settings_search)) },
+        leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
+        trailingIcon = {
+            if (query.isNotEmpty()) {
+                IconButton(onClick = { onQueryChange("") }) {
+                    Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.common_clear_search))
+                }
+            }
+        },
+        singleLine = true,
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp),
+    )
+}
+
+@Composable
+private fun SettingsCategoryRow(
+    entry: SettingsCategoryLabels,
+    query: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    // While searching, name the setting that matched so the row explains why it is in the results.
+    val matched = entry.matchedKeyword(query)?.takeIf { !entry.title.contains(query.trim(), ignoreCase = true) }
+    NavigationDrawerItem(
+        label = {
+            Column {
+                Text(text = entry.title)
+                if (matched != null) {
+                    Text(
+                        text = matched,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+        },
+        icon = { Icon(entry.category.icon, contentDescription = null) },
+        selected = selected,
+        onClick = onClick,
+        modifier = Modifier.padding(horizontal = 12.dp),
+    )
+}
+
+/**
+ * Hosts one category's controls. Panes emit a run of [SettingsGroup]s and nothing else; the
+ * scrolling, padding, and inter-group spacing all live here so no pane has to reproduce them.
+ */
+@Composable
+private fun SettingsPane(
+    category: SettingsCategory?,
+    context: SettingsPaneContext,
+    showTitle: Boolean,
+    modifier: Modifier = Modifier,
+) {
+    if (category == null) return
+    Column(
+        modifier.verticalScroll(rememberScrollState()).padding(PaneContentPadding),
+        verticalArrangement = Arrangement.spacedBy(PaneGroupSpacing),
+    ) {
+        if (showTitle) {
+            Text(text = stringResource(category.title), style = MaterialTheme.typography.headlineSmall)
+        }
+        category.content(context)
+    }
+}
+
+/** Confirms a thumbnail-cache clear, then clears the pending result so it shows only once. */
+@Composable
+private fun ThumbnailCacheSnackbar(
+    cleared: Int?,
+    snackbar: SnackbarHostState,
+    onShown: () -> Unit,
+) {
+    val message =
+        cleared?.let { count ->
             if (count > 0) {
                 pluralStringResource(Res.plurals.common_settings_thumbnails_cleared, count, count)
             } else {
                 stringResource(Res.string.common_settings_thumbnail_cache_empty)
             }
         }
-    LaunchedEffect(thumbnailMessage) {
-        thumbnailMessage?.let {
-            snackbar.showSnackbar(it)
-            thumbnailResult = null
-        }
-    }
-
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(Res.string.common_settings_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(Res.string.common_back),
-                        )
-                    }
-                },
-            )
-        },
-        snackbarHost = { SnackbarHost(snackbar) },
-    ) { padding ->
-        Column(
-            Modifier
-                .fillMaxSize()
-                .padding(padding)
-                .verticalScroll(rememberScrollState())
-                .padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(20.dp),
-        ) {
-            SectionHeader(stringResource(Res.string.common_settings_library))
-            Text(
-                text = state.libraryLocation ?: stringResource(Res.string.common_settings_no_library),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            OutlinedButton(onClick = onChangeLibrary) {
-                Text(stringResource(Res.string.common_settings_change_library))
-            }
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_watched_folder))
-            WatchedFolderSection(
-                watchedFolder = state.watchedFolder,
-                deleteAfterImport = state.watchedFolderDeleteAfterImport,
-                onSetFolder = { folder -> vm.edit { it.copy(watchedFolder = folder) } },
-                onSetDeleteAfterImport = { on -> vm.edit { it.copy(watchedFolderDeleteAfterImport = on) } },
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_ocr))
-            OutlinedTextField(
-                value = state.ocrLanguage,
-                onValueChange = { lang -> vm.edit { it.copy(ocrLanguage = lang) } },
-                label = { Text(stringResource(Res.string.common_settings_ocr_language_code)) },
-                singleLine = true,
-                modifier = Modifier.fillMaxWidth(),
-            )
-            Text(
-                stringResource(Res.string.common_settings_ocr_language_help, "eng, nld, fra"),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_ai_assistant))
-            AiAssistantSection(
-                state = state,
-                models = aiModels,
-                vm = vm,
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_trash))
-            NumericField(
-                value = state.trashRetentionDays,
-                onValueChange = { days -> vm.edit { it.copy(trashRetentionDays = days) } },
-                range = TRASH_RETENTION_RANGE,
-                label = stringResource(Res.string.common_settings_trash_retention_days),
-                maxDigits = TRASH_RETENTION_MAX_DIGITS,
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_views))
-            DefaultViewTypeDropdown(
-                current = state.defaultViewType,
-                onSelect = { v -> vm.edit { it.copy(defaultViewType = v) } },
-            )
-            Text(
-                stringResource(Res.string.common_settings_grid_size_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            LandscapeListToggle(
-                enabled = state.landscapeListColumns,
-                onToggle = { on -> vm.edit { it.copy(landscapeListColumns = on) } },
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_language))
-            AppLanguageDropdown(
-                current = state.appLanguage,
-                onSelect = { lang -> vm.edit { it.copy(appLanguage = lang) } },
-            )
-            Text(
-                stringResource(Res.string.common_settings_language_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_storage))
-            StoragePathRuleEditor(
-                template = state.storagePathTemplate,
-                enabled = state.storagePathEnabled,
-                preview = storagePath.preview,
-                error = storagePath.error,
-                onTemplateChange = { template -> vm.edit { it.copy(storagePathTemplate = template) } },
-                onEnabledChange = vm::setStoragePathEnabled,
-            )
-            OutlinedButton(onClick = {
-                vm.clearThumbnailCache { count -> thumbnailResult = count }
-            }) { Text(stringResource(Res.string.common_settings_clear_thumbnail_cache)) }
-            Text(
-                stringResource(Res.string.common_settings_thumbnail_cache_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_document_fields))
-            StandardFieldsSection(
-                enabled = standardFields,
-                onSetEnabled = vm::setStandardFieldEnabled,
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_review_workflow))
-            InboxWorkflowToggle(
-                current = reviewMode,
-                onUntaggedOnly = vm::setUntaggedOnlyMode,
-                onInboxWorkflow = vm::setInboxWorkflowMode,
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_auto_matching))
-            OutlinedButton(onClick = onAutoMatchRules) {
-                Text(stringResource(Res.string.common_settings_auto_matching_rules))
-            }
-            Text(
-                stringResource(Res.string.common_settings_auto_matching_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-
-            HorizontalDivider()
-
-            SectionHeader(stringResource(Res.string.common_settings_about))
-            Text(
-                stringResource(
-                    Res.string.common_settings_product_version,
-                    stringResource(Res.string.common_app_name),
-                    NPN_VERSION,
-                ),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                stringResource(Res.string.common_settings_about_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+    LaunchedEffect(message) {
+        if (message != null) {
+            snackbar.showSnackbar(message)
+            onShown()
         }
     }
 }
-
-@Composable
-private fun StoragePathRuleEditor(
-    template: String,
-    enabled: Boolean,
-    preview: String?,
-    error: StoragePathError?,
-    onTemplateChange: (String) -> Unit,
-    onEnabledChange: (Boolean) -> Unit,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(Res.string.common_settings_storage_organize_paths),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    stringResource(Res.string.common_settings_storage_organize_help),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = enabled,
-                enabled = error == null,
-                onCheckedChange = onEnabledChange,
-            )
-        }
-        OutlinedTextField(
-            value = template,
-            onValueChange = onTemplateChange,
-            label = { Text(stringResource(Res.string.common_settings_storage_path_template)) },
-            supportingText = {
-                Text(
-                    error?.localizedMessage()
-                        ?: stringResource(Res.string.common_settings_storage_preview, preview.orEmpty()),
-                )
-            },
-            isError = error != null,
-            modifier = Modifier.fillMaxWidth(),
-        )
-        Text(
-            stringResource(
-                Res.string.common_settings_storage_variables,
-                "{title}, {doc_date}, {doc_date:yyyy-MM}, {docType}, {correspondent}, {tags}",
-            ),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-}
-
-@Composable
-private fun WatchedFolderSection(
-    watchedFolder: String?,
-    deleteAfterImport: Boolean,
-    onSetFolder: (String?) -> Unit,
-    onSetDeleteAfterImport: (Boolean) -> Unit,
-) {
-    val picker =
-        rememberDirectoryPickerLauncher { dir ->
-            if (dir != null) onSetFolder(persistDirectoryAccess(dir))
-        }
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            stringResource(Res.string.common_settings_watched_folder_help),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Text(
-            text = watchedFolder ?: stringResource(Res.string.common_settings_no_watched_folder),
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { picker.launch() }) {
-                Text(stringResource(Res.string.common_settings_choose_folder))
-            }
-            if (watchedFolder != null) {
-                OutlinedButton(onClick = { onSetFolder(null) }) {
-                    Text(stringResource(Res.string.common_settings_stop_watching))
-                }
-            }
-        }
-        if (watchedFolder != null) {
-            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-                Column(Modifier.weight(1f)) {
-                    Text(
-                        stringResource(Res.string.common_settings_remove_after_import),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                    Text(
-                        stringResource(Res.string.common_settings_remove_after_import_help),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-                Switch(checked = deleteAfterImport, onCheckedChange = onSetDeleteAfterImport)
-            }
-        }
-    }
-}
-
-@Composable
-private fun SectionHeader(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.titleMedium,
-        color = MaterialTheme.colorScheme.primary,
-    )
-}
-
-@Composable
-private fun DefaultViewTypeDropdown(
-    current: ViewType,
-    onSelect: (ViewType) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column {
-        OutlinedButton(onClick = { expanded = true }) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    stringResource(
-                        Res.string.common_settings_default_view,
-                        viewTypeLabelResource(current),
-                    ),
-                )
-                Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-            }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ViewType.entries.forEach { vt ->
-                DropdownMenuItem(
-                    text = { Text(viewTypeLabelResource(vt)) },
-                    onClick = {
-                        onSelect(vt)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
-}
-
-/** Languages the app UI can be switched to. Null = follow the system locale. */
-private val APP_LANGUAGES: List<String?> = listOf(null, "en", "nl")
-
-@Composable
-private fun appLanguageLabel(language: String?): String =
-    when (language) {
-        null -> stringResource(Res.string.common_settings_language_system)
-        "en" -> stringResource(Res.string.common_settings_language_english)
-        "nl" -> stringResource(Res.string.common_settings_language_dutch)
-        else -> language
-    }
-
-@Composable
-private fun AppLanguageDropdown(
-    current: String?,
-    onSelect: (String?) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column {
-        OutlinedButton(onClick = { expanded = true }) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(appLanguageLabel(current))
-                Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-            }
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            APP_LANGUAGES.forEach { lang ->
-                DropdownMenuItem(
-                    text = { Text(appLanguageLabel(lang)) },
-                    onClick = {
-                        onSelect(lang)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
-}
-
-/**
- * Library-wide visibility of the built-in document fields (synced across devices). Hiding a
- * field only hides its editor on the document panel; stored values survive and come back when
- * the field is enabled again. Title is always shown, so it is not listed here.
- */
-@Composable
-private fun StandardFieldsSection(
-    enabled: Set<StandardField>,
-    onSetEnabled: (StandardField, Boolean) -> Unit,
-) {
-    Text(
-        stringResource(Res.string.common_settings_document_fields_help),
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-    )
-    StandardField.entries.forEach { field ->
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                standardFieldLabel(field),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier.weight(1f),
-            )
-            Switch(
-                checked = field in enabled,
-                onCheckedChange = { onSetEnabled(field, it) },
-            )
-        }
-    }
-}
-
-@Composable
-internal fun standardFieldLabel(field: StandardField): String =
-    when (field) {
-        StandardField.CORRESPONDENT -> stringResource(Res.string.detail_correspondent)
-        StandardField.DOC_TYPE -> stringResource(Res.string.detail_document_type)
-        StandardField.DOC_DATE -> stringResource(Res.string.detail_document_date_plain)
-        StandardField.NOTES -> stringResource(Res.string.detail_note)
-    }
-
-@Composable
-private fun LandscapeListToggle(
-    enabled: Boolean,
-    onToggle: (Boolean) -> Unit,
-) {
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                stringResource(Res.string.common_settings_landscape_columns),
-                style = MaterialTheme.typography.bodyMedium,
-            )
-            Text(
-                stringResource(Res.string.common_settings_landscape_columns_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        Switch(checked = enabled, onCheckedChange = onToggle)
-    }
-}
-
-@Composable
-private fun InboxWorkflowToggle(
-    current: ReviewMode,
-    onUntaggedOnly: () -> Unit,
-    onInboxWorkflow: (ReviewMigration) -> Unit,
-) {
-    var showMigration by remember { mutableStateOf(false) }
-    val enabled = current == ReviewMode.INBOX_WORKFLOW
-
-    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-            Column(Modifier.weight(1f)) {
-                Text(
-                    stringResource(Res.string.common_settings_enable_inbox),
-                    style = MaterialTheme.typography.bodyLarge,
-                )
-                Text(
-                    stringResource(Res.string.common_settings_inbox_help),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
-            Switch(
-                checked = enabled,
-                onCheckedChange = { checked ->
-                    if (checked) showMigration = true else onUntaggedOnly()
-                },
-            )
-        }
-        Text(
-            stringResource(Res.string.common_settings_syncs_across_devices),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-
-    if (showMigration) {
-        AlertDialog(
-            onDismissRequest = { showMigration = false },
-            title = { Text(stringResource(Res.string.common_settings_enable_inbox)) },
-            text = {
-                Text(
-                    stringResource(Res.string.common_settings_inbox_migration_question),
-                )
-            },
-            confirmButton = {
-                Column {
-                    TextButton(onClick = {
-                        onInboxWorkflow(ReviewMigration.MARK_ALL)
-                        showMigration = false
-                    }) { Text(stringResource(Res.string.common_settings_mark_all_reviewed)) }
-                    TextButton(onClick = {
-                        onInboxWorkflow(ReviewMigration.MARK_TAGGED)
-                        showMigration = false
-                    }) { Text(stringResource(Res.string.common_settings_mark_tagged_reviewed)) }
-                    TextButton(onClick = {
-                        onInboxWorkflow(ReviewMigration.MARK_NONE)
-                        showMigration = false
-                    }) { Text(stringResource(Res.string.common_settings_mark_none_reviewed)) }
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { showMigration = false }) {
-                    Text(stringResource(Res.string.common_cancel))
-                }
-            },
-        )
-    }
-}
-
-@Composable
-private fun viewTypeLabelResource(viewType: ViewType): String =
-    when (viewType) {
-        ViewType.LIST -> stringResource(Res.string.common_view_list)
-        ViewType.GRID -> stringResource(Res.string.common_view_grid)
-    }
-
-@Composable
-private fun StoragePathError.localizedMessage(): String =
-    when (kind) {
-        StoragePathErrorKind.UNCLOSED_PLACEHOLDER -> {
-            stringResource(
-                Res.string.common_settings_storage_error_unclosed,
-                argument.orEmpty(),
-            )
-        }
-
-        StoragePathErrorKind.UNEXPECTED_CLOSING_BRACE -> {
-            stringResource(
-                Res.string.common_settings_storage_error_unexpected_closing,
-                argument.orEmpty(),
-            )
-        }
-
-        StoragePathErrorKind.DATE_FORMAT_ONLY -> {
-            stringResource(
-                Res.string.common_settings_storage_error_date_format_only,
-                argument.orEmpty(),
-            )
-        }
-
-        StoragePathErrorKind.UNKNOWN_VARIABLE -> {
-            stringResource(
-                Res.string.common_settings_storage_error_unknown_variable,
-                argument.orEmpty(),
-            )
-        }
-
-        StoragePathErrorKind.BLANK -> {
-            stringResource(Res.string.common_settings_storage_error_blank)
-        }
-
-        StoragePathErrorKind.ABSOLUTE -> {
-            stringResource(Res.string.common_settings_storage_error_absolute)
-        }
-
-        StoragePathErrorKind.BACKSLASH -> {
-            stringResource(Res.string.common_settings_storage_error_backslash)
-        }
-
-        StoragePathErrorKind.TRAVERSAL -> {
-            stringResource(Res.string.common_settings_storage_error_traversal)
-        }
-
-        StoragePathErrorKind.RESERVED_DIRECTORY -> {
-            stringResource(
-                Res.string.common_settings_storage_error_reserved,
-                argument.orEmpty(),
-            )
-        }
-
-        StoragePathErrorKind.WHITESPACE -> {
-            stringResource(Res.string.common_settings_storage_error_whitespace)
-        }
-
-        StoragePathErrorKind.INVALID_SEGMENT -> {
-            stringResource(
-                Res.string.common_settings_storage_error_invalid_segment,
-                argument.orEmpty(),
-            )
-        }
-
-        StoragePathErrorKind.INVALID -> {
-            stringResource(Res.string.common_settings_storage_error_invalid)
-        }
-    }
