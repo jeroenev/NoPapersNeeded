@@ -7,6 +7,7 @@ import dev.npn.core.db.NpnDatabase
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlin.time.Clock
@@ -67,7 +68,11 @@ class AiFacadeImpl(
                     params = AiRuntime.chatParams(configProvider()),
                 ).run(question, sessionId),
             )
-        }
+            // Endpoints that want a conversation id per request (the OpenCode Go gateway's
+            // x-opencode-session header) read it off the coroutine context, since Koog exposes no
+            // seam to pass one down. flowOn puts it there for the whole turn without changing
+            // dispatchers. Cheap and inert for every other provider.
+        }.flowOn(AiGatewaySession(sessionId))
 
     override suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem> =
         KoogChatHistoryMapper.map(chatHistoryStore.load(sessionId))

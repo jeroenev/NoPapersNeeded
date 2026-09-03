@@ -28,6 +28,10 @@ import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
+import io.ktor.client.HttpClient
+import io.ktor.client.request.HttpRequestPipeline
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 
 /**
  * Koog executor + model pair built from one [AiConfig]. Rebuilt only when the config
@@ -71,8 +75,15 @@ internal class AiRuntime(
          */
         private const val ANTHROPIC_ANSWER_HEADROOM = 4_096
 
+        private const val OPENCODE_SESSION_HEADER = "x-opencode-session"
+
         fun build(config: AiConfig): AiRuntime {
-            val httpFactory = KtorKoogHttpClient.Factory()
+            val httpFactory =
+                if (config.provider == AiProvider.OPENCODE_GO) {
+                    KtorKoogHttpClient.Factory(openCodeGoClient())
+                } else {
+                    KtorKoogHttpClient.Factory()
+                }
             return when (config.provider) {
                 AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> openAiRuntime(config, httpFactory)
                 AiProvider.ANTHROPIC -> anthropicRuntime(config, httpFactory)
@@ -81,6 +92,38 @@ internal class AiRuntime(
                 AiProvider.DEEPSEEK -> deepSeekRuntime(config, httpFactory)
                 AiProvider.OPENROUTER -> openRouterRuntime(config, httpFactory)
                 AiProvider.OLLAMA -> ollamaRuntime(config, httpFactory)
+            }
+        }
+
+        /**
+         * Base Ktor client for the OpenCode Go gateway, which rejects requests that carry no
+         * `x-opencode-session` header (one stable id per conversation).
+         *
+         * Koog's provider clients expose no per-request header hook, so the header is stamped
+         * here, in the request pipeline: each request reports the [AiGatewaySession] its caller
+         * put in the coroutine context — chat passes its chat session id, so one conversation
+         * keeps one id across turns.
+         *
+         * Requests without one (one-shot edit suggestions, the settings model list) share the
+         * per-client [fallbackSessionId]. That sharing is deliberate rather than a shortcut:
+         * those runs are not conversations, and they send a batch-constant system prompt (see
+         * `AiFacadeImpl.editSystemPrompt`), so keeping a whole batch on one id helps the
+         * gateway's prefix caching instead of fragmenting it.
+         *
+         * Koog derives its own client off this one (`HttpClient.config {}` layers its SSE,
+         * timeout and JSON plugins on top and shares this engine), and closes that derived
+         * client — releasing the shared engine — when [close] runs.
+         */
+        @OptIn(ExperimentalUuidApi::class)
+        internal fun openCodeGoClient(): HttpClient {
+            val fallbackSessionId = Uuid.random().toString()
+            return HttpClient {
+                install("npn-opencode-session") {
+                    requestPipeline.intercept(HttpRequestPipeline.Before) {
+                        context.headers[OPENCODE_SESSION_HEADER] =
+                            currentGatewaySessionId() ?: fallbackSessionId
+                    }
+                }
             }
         }
 
