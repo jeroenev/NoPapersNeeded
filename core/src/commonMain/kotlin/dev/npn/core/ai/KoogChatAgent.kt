@@ -46,11 +46,14 @@ class KoogChatAgent(
                     while (!finished && iteration < maxIterations) {
                         val calls = mutableListOf<ToolCall>()
                         val responseFrames = mutableListOf<StreamFrame>()
+                        val turnText = StringBuilder()
+                        var textFlushed = false
                         llm.writeSession {
                             requestLLMStreaming().collect { frame ->
                                 when (frame) {
                                     is StreamFrame.TextDelta -> {
                                         responseFrames += frame
+                                        turnText.append(frame.text)
                                         answer.append(frame.text)
                                         send(AiChatEvent.TextDelta(frame.text))
                                     }
@@ -63,12 +66,14 @@ class KoogChatAgent(
                                     }
 
                                     else -> {
+                                        if (frame is StreamFrame.TextComplete) textFlushed = true
                                         responseFrames += frame
                                         Unit
                                     }
                                 }
                             }
-                            val response = responseFrames.toMessageResponse()
+                            val response =
+                                responseFrames.withFlushedText(turnText.toString(), textFlushed).toMessageResponse()
                             appendPrompt { message(response) }
                             if (calls.isEmpty()) {
                                 finished = true
@@ -134,6 +139,25 @@ private val TOOL_ARGS_JSON =
     Json {
         ignoreUnknownKeys = true
         isLenient = true
+    }
+
+/**
+ * `toMessageResponse()` materialises only `*Complete` frames, so a turn's text survives into the
+ * next prompt (and into the persisted history) only if the client flushed a
+ * [StreamFrame.TextComplete]. Koog's chat/completions path does that before every tool call and at
+ * `End`; its Responses path emits deltas and `End` only. When no flush arrived, stand in for it
+ * with the text this turn actually streamed — ahead of the tool-call frames, so the replayed
+ * assistant message keeps OpenAI's content-then-tool_calls order. When one did arrive the client is
+ * already doing the job and the frames are left alone, so text is never counted twice.
+ */
+private fun List<StreamFrame>.withFlushedText(
+    turnText: String,
+    textFlushed: Boolean,
+): List<StreamFrame> =
+    if (textFlushed || turnText.isEmpty()) {
+        this
+    } else {
+        listOf(StreamFrame.TextComplete(turnText, index = null)) + this
     }
 
 private fun StreamFrame.ToolCallComplete.withSafeArguments(call: UsableToolCall): StreamFrame.ToolCallComplete {

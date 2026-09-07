@@ -20,6 +20,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
@@ -421,7 +422,9 @@ private fun Bubble(
             shape = MaterialTheme.shapes.medium,
             modifier = Modifier.fillMaxWidth(BUBBLE_MAX_WIDTH_FRACTION),
         ) {
-            content()
+            // One container per bubble, not one around the whole list: a LazyColumn disposes
+            // scrolled-off items, which would drop an in-progress cross-bubble selection.
+            SelectionContainer { content() }
         }
     }
 }
@@ -477,12 +480,14 @@ private fun ToolRow(item: TranscriptItem.ToolUse) {
                 shape = MaterialTheme.shapes.small,
                 modifier = Modifier.fillMaxWidth().padding(top = 4.dp),
             ) {
-                Text(
-                    resultText,
-                    Modifier.padding(12.dp),
-                    style = MaterialTheme.typography.bodySmall,
-                    fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
-                )
+                SelectionContainer {
+                    Text(
+                        resultText,
+                        Modifier.padding(12.dp),
+                        style = MaterialTheme.typography.bodySmall,
+                        fontFamily = androidx.compose.ui.text.font.FontFamily.Monospace,
+                    )
+                }
             }
         }
     }

@@ -243,6 +243,51 @@ class KoogChatAgentTest {
             resultIds shouldContainExactly listOf("call_a", "call_b")
         }
 
+    /**
+     * Koog's Responses-API path emits text deltas and the terminal `End` but never flushes a
+     * `TextComplete` (unlike the chat/completions path), and `toMessageResponse()` only
+     * materialises `*Complete` frames. The loop must not depend on that flush: a delta-only turn
+     * is still the assistant's answer, so it has to reach the persisted history — otherwise
+     * reopening the chat shows the questions and tool rows with no replies.
+     */
+    @Test
+    fun aDeltaOnlyTurnIsStillPersistedAsTheAssistantAnswer() =
+        runTest {
+            val executor =
+                scriptedExecutor(
+                    listOf(listOf(StreamFrame.TextDelta("Hi ", null), StreamFrame.TextDelta("there", null), end())),
+                )
+            agent(executor).run("hi", "session-1").collectList()
+
+            RoomChatHistoryProvider(db)
+                .load("session-1")
+                .filterIsInstance<Message.Assistant>()
+                .map { it.textContent() } shouldContainExactly listOf("Hi there")
+        }
+
+    @Test
+    fun aDeltaOnlyNarrationIsReplayedInTheNextIterationPrompt() =
+        runTest {
+            val executor =
+                scriptedExecutor(
+                    listOf(
+                        listOf(
+                            StreamFrame.TextDelta("Let me search.", null),
+                            toolFrame("search_documents", "{\"query\":\"tax\"}"),
+                            end(),
+                        ),
+                        listOf(StreamFrame.TextDelta("Found it.", null), end()),
+                    ),
+                )
+            agent(executor).run("find tax", "session-1").collectList()
+
+            executor.prompts[1]
+                .messages
+                .filterIsInstance<Message.Assistant>()
+                .map { it.textContent() }
+                .filter { it.isNotBlank() } shouldContainExactly listOf("Let me search.")
+        }
+
     private suspend fun Flow<AiChatEvent>.collectList(): List<AiChatEvent> {
         val out = mutableListOf<AiChatEvent>()
         collect { out += it }
