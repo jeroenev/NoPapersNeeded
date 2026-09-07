@@ -2,6 +2,7 @@ package dev.npn.app
 
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.app.AiEditQueueFacade
+import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.EditRunReview
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
@@ -82,9 +83,21 @@ class FakeOcrFacade : OcrFacade {
     val ocrEngineSets = mutableListOf<Pair<String, String?>>()
     var failSetOcrEngine: (() -> Nothing)? = null
 
+    /** What the "read text with assistant" action is offered as; drives whether it appears at all. */
+    var aiOcr: AiOcrOffer = AiOcrOffer.Unavailable
+    val aiOcrIds = mutableListOf<String>()
+    var failAiOcr: (() -> Nothing)? = null
+
     override suspend fun reOcr(docId: String) {
         failReOcr?.invoke()
         reOcrIds += docId
+    }
+
+    override suspend fun aiOcrOffer(docId: String): AiOcrOffer = aiOcr
+
+    override suspend fun ocrWithAi(docId: String) {
+        failAiOcr?.invoke()
+        aiOcrIds += docId
     }
 
     override suspend fun ocrVersions(docId: String): List<OcrVersion> = ocrVersionsList

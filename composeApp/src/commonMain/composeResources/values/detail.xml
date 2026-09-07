@@ -30,6 +30,10 @@
     <string name="detail_more_actions">More actions</string>
     <string name="detail_rerunning_ocr">Re-running OCR...</string>
     <string name="detail_rerun_ocr">Re-run OCR</string>
+    <string name="detail_ai_ocr">Read text with assistant</string>
+    <string name="detail_ai_ocr_large">Read text with assistant (%1$d pages)</string>
+    <string name="detail_ai_ocr_large_prompt">This document has %1$d pages. The assistant reads one page per request, so this will cost about %1$d requests. On-device OCR is free and stays available.</string>
+    <string name="detail_ai_ocr_confirm">Read anyway</string>
     <string name="detail_splitting">Splitting...</string>
     <string name="detail_split_document">Split document</string>
     <string name="detail_baking">Baking...</string>

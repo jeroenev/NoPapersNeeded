@@ -18,7 +18,8 @@ import java.nio.file.Path
 
 /** No-op OCR engine (unavailable) so the pipeline uses embedded text only. */
 class NoopOcrEngine : OcrEngine {
-    override val available: Boolean = false
+    override suspend fun available(): Boolean = false
+
     override val name: String = "noop"
 
     override suspend fun recognizePng(

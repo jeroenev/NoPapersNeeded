@@ -4,6 +4,7 @@ import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFacadeImpl
+import dev.npn.core.ai.AiOcrEngine
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
@@ -40,6 +41,8 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngine
+import dev.npn.core.ocr.OcrEngineSelector
+import dev.npn.core.ocr.OcrEngines
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathRuleApplicator
@@ -80,6 +83,8 @@ class LibrarySessionImpl private constructor(
     private val relinkService: RelinkService,
     private val splitService: SplitService,
     private val ocrPipeline: OcrPipeline,
+    /** Same instance the pipeline runs on, so the AI-OCR facet answers from the real policy. */
+    private val ocrEngines: OcrEngineSelector,
     private val ocrWorker: QueueDrainer,
     private val enrichWorker: QueueDrainer,
     private val editQueue: AiEditQueue,
@@ -228,6 +233,35 @@ class LibrarySessionImpl private constructor(
 
     override suspend fun reOcr(docId: String) {
         if (db.documentDao().getByDocId(docId) == null) return
+        enqueuePendingOcr(docId)
+        ocrWorker.kick()
+    }
+
+    /**
+     * The page count is asked of [content] rather than read off `DocumentEntity`: the row's
+     * `pageCount` is a backfilled cache that stays NULL until something has opened the PDF, and a
+     * NULL would quietly downgrade a 200-page document's warning to [AiOcrOffer.Ready]. A count
+     * that cannot be read at all (unreadable PDF) is not this warning's problem — offer it plainly
+     * and let the OCR run report the real fault.
+     */
+    override suspend fun aiOcrOffer(docId: String): AiOcrOffer {
+        if (!ocrEngines.aiAvailable()) return AiOcrOffer.Unavailable
+        val pages = content.pageCount(docId) ?: return AiOcrOffer.Ready
+        return if (ocrEngines.isLargeForAi(pages)) AiOcrOffer.Large(pages) else AiOcrOffer.Ready
+    }
+
+    override suspend fun ocrWithAi(docId: String) {
+        db.documentDao().getByDocId(docId) ?: return
+        check(ocrEngines.aiAvailable()) {
+            "AI OCR needs a configured AI endpoint (Settings > AI assistant)"
+        }
+        // Deliberately no page limit here: length is something aiOcrOffer warns about, not
+        // something this refuses. The caller asked for this document by name.
+        //
+        // The pin is the request (see OcrFacade.ocrWithAi): it survives an index rebuild and picks
+        // the ai sidecar for search once it exists. Queue after pinning so the run that drains sees
+        // the override already folded onto the row.
+        setOcrEngine(docId, OcrEngines.AI)
         enqueuePendingOcr(docId)
         ocrWorker.kick()
     }
@@ -605,12 +639,21 @@ class LibrarySessionImpl private constructor(
             val relinkService = RelinkService(coordinator)
             val splitService = SplitService(fs, deps.pdfEngine, importService, db.documentDao())
 
+            // Built before the OCR pipeline because it is also the pipeline's AI engine: one
+            // facade, so the vision calls share the cached endpoint client with chat and edits.
+            val ai = AiFacadeImpl(db, deps.aiConfig)
+            val ocrEngines =
+                OcrEngineSelector(
+                    local = deps.ocrEngine,
+                    ai = AiOcrEngine(ai),
+                    aiAuto = { deps.aiConfig().ocrAuto },
+                )
             val ocrPipeline =
                 OcrPipeline(
                     fs = fs,
                     sidecars = OcrSidecarFiles(fs),
                     pdfEngine = deps.pdfEngine,
-                    ocrEngine = deps.ocrEngine,
+                    engines = ocrEngines,
                     documentDao = db.documentDao(),
                     ftsDao = db.ftsDao(),
                     ocrQueueDao = db.ocrQueueDao(),
@@ -668,7 +711,6 @@ class LibrarySessionImpl private constructor(
                     pathRuleApplicator,
                     applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
                 )
-            val ai = AiFacadeImpl(db, deps.aiConfig)
             val autoEnricher =
                 AiAutoEnricher(
                     documentDao = db.documentDao(),
@@ -710,6 +752,7 @@ class LibrarySessionImpl private constructor(
                 relinkService = relinkService,
                 splitService = splitService,
                 ocrPipeline = ocrPipeline,
+                ocrEngines = ocrEngines,
                 ocrWorker = ocrWorker,
                 enrichWorker = enrichWorker,
                 editQueue = editQueue,

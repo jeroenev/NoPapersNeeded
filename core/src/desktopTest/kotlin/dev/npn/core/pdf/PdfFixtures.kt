@@ -14,7 +14,6 @@ import javax.imageio.ImageIO
 
 /** Test fixtures: real PDFs and images generated with PDFBox 3.x in-process. */
 object PdfFixtures {
-
     /** Two-page PDF with an embedded text layer containing [lines] on each page. */
     fun embeddedTextPdf(vararg lines: String): ByteArray {
         PDDocument().use { doc ->
@@ -25,11 +24,12 @@ object PdfFixtures {
                     cs.beginText()
                     cs.setFont(PDType1Font(Standard14Fonts.FontName.HELVETICA), 12f)
                     cs.newLineAtOffset(72f, 700f)
-                    val text = if (lines.isNotEmpty()) {
-                        lines.joinToString(" ") + " page ${pageNo + 1} of the document"
-                    } else {
-                        "page ${pageNo + 1}"
-                    }
+                    val text =
+                        if (lines.isNotEmpty()) {
+                            lines.joinToString(" ") + " page ${pageNo + 1} of the document"
+                        } else {
+                            "page ${pageNo + 1}"
+                        }
                     cs.showText(text)
                     cs.endText()
                 }
@@ -40,15 +40,17 @@ object PdfFixtures {
         }
     }
 
-    /** Single-page PDF whose only content is a rendered image (no text layer). */
-    fun imageOnlyPdf(): ByteArray {
+    /** PDF of [pages] pages whose only content is a rendered image (no text layer). */
+    fun imageOnlyPdf(pages: Int = 1): ByteArray {
         PDDocument().use { doc ->
             val img = solidImage(400, 300, Color.LIGHT_GRAY)
             val xobj = LosslessFactory.createFromImage(doc, img)
-            val page = PDPage(PDRectangle(img.width.toFloat(), img.height.toFloat()))
-            doc.addPage(page)
-            PDPageContentStream(doc, page).use { cs ->
-                cs.drawImage(xobj, 0f, 0f, img.width.toFloat(), img.height.toFloat())
+            repeat(pages) {
+                val page = PDPage(PDRectangle(img.width.toFloat(), img.height.toFloat()))
+                doc.addPage(page)
+                PDPageContentStream(doc, page).use { cs ->
+                    cs.drawImage(xobj, 0f, 0f, img.width.toFloat(), img.height.toFloat())
+                }
             }
             val out = ByteArrayOutputStream()
             doc.save(out)
@@ -56,13 +58,21 @@ object PdfFixtures {
         }
     }
 
-    fun pngBytes(width: Int = 100, height: Int = 80, color: Color = Color.RED): ByteArray {
+    fun pngBytes(
+        width: Int = 100,
+        height: Int = 80,
+        color: Color = Color.RED,
+    ): ByteArray {
         val out = ByteArrayOutputStream()
         ImageIO.write(solidImage(width, height, color), "png", out)
         return out.toByteArray()
     }
 
-    fun jpegBytes(width: Int = 120, height: Int = 90, color: Color = Color.BLUE): ByteArray {
+    fun jpegBytes(
+        width: Int = 120,
+        height: Int = 90,
+        color: Color = Color.BLUE,
+    ): ByteArray {
         val out = ByteArrayOutputStream()
         // JPEG has no alpha channel; use TYPE_INT_RGB.
         val img = BufferedImage(width, height, BufferedImage.TYPE_INT_RGB)
@@ -74,7 +84,11 @@ object PdfFixtures {
         return out.toByteArray()
     }
 
-    private fun solidImage(width: Int, height: Int, color: Color): BufferedImage {
+    private fun solidImage(
+        width: Int,
+        height: Int,
+        color: Color,
+    ): BufferedImage {
         val img = BufferedImage(width, height, BufferedImage.TYPE_INT_ARGB)
         val g = img.createGraphics()
         g.color = color

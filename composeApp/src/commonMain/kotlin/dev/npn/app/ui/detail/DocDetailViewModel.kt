@@ -16,6 +16,7 @@ import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
@@ -54,6 +55,11 @@ data class DetailUiState(
     val baking: Boolean = false,
     val reindexing: Boolean = false,
     val splitting: Boolean = false,
+    /**
+     * Whether to offer "read text with assistant" for this document, and whether to warn about
+     * its length first. See [AiOcrOffer].
+     */
+    val aiOcr: AiOcrOffer = AiOcrOffer.Unavailable,
 )
 
 sealed interface NoteSaveState {
@@ -297,6 +303,10 @@ class DocDetailViewModel(
             val configured = ai.isConfiguredOrFalse()
             aiTags.value = aiTags.value.copy(available = configured)
         }
+        viewModelScope.launch {
+            val offer = runCatching { ocr.aiOcrOffer(docId) }.getOrDefault(AiOcrOffer.Unavailable)
+            _ui.value = _ui.value.copy(aiOcr = offer)
+        }
         // Sync the note editor's persisted value from the already-shared [doc] StateFlow instead of
         // subscribing to observeDoc a second time (that would double the Room invalidation wiring).
         viewModelScope.launch {
@@ -524,6 +534,26 @@ class DocDetailViewModel(
             _ui.value = _ui.value.copy(reindexing = true)
             try {
                 ocr.reOcr(docId)
+            } finally {
+                _ui.value = _ui.value.copy(reindexing = false)
+            }
+        }
+
+    /**
+     * Re-read this document's text with the AI (vision) engine. Shares [DetailUiState.reindexing]
+     * with [reOcr]: to the user this is the same "the text is being redone" state, and both queue
+     * the same document, so letting one run while the other is in flight would only mean two
+     * requeues of one document.
+     *
+     * Runs whatever [DetailUiState.aiOcr] reports short of [AiOcrOffer.Unavailable] — warning
+     * about a long document is the caller's job, not this one's. A rejected request still throws
+     * and surfaces as a snackbar via [launchReporting] rather than failing silently.
+     */
+    fun ocrWithAi() =
+        launchReporting(UiAction.AI_OCR) {
+            _ui.value = _ui.value.copy(reindexing = true)
+            try {
+                ocr.ocrWithAi(docId)
             } finally {
                 _ui.value = _ui.value.copy(reindexing = false)
             }

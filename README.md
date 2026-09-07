@@ -43,7 +43,10 @@ same library.
 - Review queue with a choice of workflow (synced across devices): "untagged only" (documents just appear, needing review until tagged) or "inbox workflow" (an explicit reviewed marker you set by hand).
 - Trash with restore and configurable auto-purge.
 - Maintenance: duplicate detection, missing-file detection and relink flow.
-- Background OCR: MLKit on Android, Tesseract CLI on desktop.
+- Background OCR: MLKit on Android, Tesseract CLI on desktop. With an AI endpoint
+  configured, a vision model can read a page instead — per document ("Read text with
+  assistant", for handwriting, tables and faint scans) or as the device's default engine.
+  It costs one request per page, so it is never automatic unless you turn it on.
 - Cached first-page thumbnails; list and grid views.
 
 ## Requirements
@@ -186,7 +189,7 @@ Library/
   .npn/
     journal/objects-v2-<00..ff>/
       <sha256>.jsonl                    # content-addressed metadata transactions
-    ocr/<sha256>.<deviceId>.json        # OCR sidecars, adopted across devices
+    ocr/<sha256>.<deviceId>.<engine>.json # OCR sidecars, adopted across devices
     trash/                              # soft-deleted files (synced, not indexed)
 ```
 

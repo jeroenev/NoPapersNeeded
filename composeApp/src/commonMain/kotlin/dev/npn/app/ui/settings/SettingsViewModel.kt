@@ -53,6 +53,7 @@ data class SettingsUiState(
     val aiMaxTagsPerDoc: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val aiMaxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
     val aiAutoOnOcr: Boolean = false,
+    val aiOcrAuto: Boolean = false,
 )
 
 /**
@@ -133,6 +134,7 @@ class SettingsViewModel(
                     aiMaxTagsPerDoc = snapshot.aiMaxTagsPerDoc,
                     aiMaxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc,
                     aiAutoOnOcr = snapshot.aiAutoOnOcr,
+                    aiOcrAuto = snapshot.aiOcrAuto,
                 )
             }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 

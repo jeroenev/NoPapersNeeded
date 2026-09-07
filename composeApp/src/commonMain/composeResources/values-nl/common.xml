@@ -57,6 +57,7 @@
     <string name="common_action_move_to_trash">naar de prullenbak verplaatsen</string>
     <string name="common_action_rename_file">bestand hernoemen</string>
     <string name="common_action_rerun_ocr">OCR opnieuw uitvoeren</string>
+    <string name="common_action_ai_ocr">tekst uitlezen met de assistent</string>
     <string name="common_action_change_ocr_engine">OCR-engine wijzigen</string>
     <string name="common_action_create_tag">tag aanmaken</string>
     <string name="common_action_rename_tag">tag hernoemen</string>

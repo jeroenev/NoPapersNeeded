@@ -30,6 +30,10 @@
     <string name="detail_more_actions">Meer acties</string>
     <string name="detail_rerunning_ocr">OCR opnieuw uitvoeren...</string>
     <string name="detail_rerun_ocr">OCR opnieuw uitvoeren</string>
+    <string name="detail_ai_ocr">Tekst uitlezen met assistent</string>
+    <string name="detail_ai_ocr_large">Tekst uitlezen met assistent (%1$d pagina's)</string>
+    <string name="detail_ai_ocr_large_prompt">Dit document heeft %1$d pagina's. De assistent leest één pagina per aanvraag, dus dit kost ongeveer %1$d aanvragen. OCR op het toestel is gratis en blijft beschikbaar.</string>
+    <string name="detail_ai_ocr_confirm">Toch uitlezen</string>
     <string name="detail_splitting">Splitsen...</string>
     <string name="detail_split_document">Document splitsen</string>
     <string name="detail_baking">Insluiten...</string>

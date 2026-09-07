@@ -33,6 +33,7 @@ data class SettingsSnapshot(
     val aiMaxTagsPerDoc: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val aiMaxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
     val aiAutoOnOcr: Boolean = false,
+    val aiOcrAuto: Boolean = false,
 )
 
 /** Project the AI-related settings into the domain [AiConfig] the facade consumes. */
@@ -48,6 +49,7 @@ fun SettingsSnapshot.toAiConfig(): AiConfig =
         maxTagsPerDoc = aiMaxTagsPerDoc,
         maxNewTagsPerDoc = aiMaxNewTagsPerDoc,
         autoOnOcr = aiAutoOnOcr,
+        ocrAuto = aiOcrAuto,
     )
 
 /**
@@ -186,6 +188,7 @@ object SettingsCodec {
                 aiMaxTagsPerDoc = reader.int(SettingsKeys.AI_MAX_TAGS_PER_DOC) ?: DEFAULTS.aiMaxTagsPerDoc,
                 aiMaxNewTagsPerDoc = reader.int(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC) ?: DEFAULTS.aiMaxNewTagsPerDoc,
                 aiAutoOnOcr = reader.boolean(SettingsKeys.AI_AUTO_ON_OCR) ?: DEFAULTS.aiAutoOnOcr,
+                aiOcrAuto = reader.boolean(SettingsKeys.AI_OCR_AUTO) ?: DEFAULTS.aiOcrAuto,
             ),
         )
 
@@ -225,6 +228,7 @@ object SettingsCodec {
         writer.putInt(SettingsKeys.AI_MAX_TAGS_PER_DOC, s.aiMaxTagsPerDoc)
         writer.putInt(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, s.aiMaxNewTagsPerDoc)
         writer.putBoolean(SettingsKeys.AI_AUTO_ON_OCR, s.aiAutoOnOcr)
+        writer.putBoolean(SettingsKeys.AI_OCR_AUTO, s.aiOcrAuto)
     }
 
     private fun Writer.putOptional(
@@ -270,6 +274,7 @@ internal object SettingsKeys {
     const val AI_MAX_TAGS_PER_DOC = "aiMaxTagsPerDoc"
     const val AI_MAX_NEW_TAGS_PER_DOC = "aiMaxNewTagsPerDoc"
     const val AI_AUTO_ON_OCR = "aiAutoOnOcr"
+    const val AI_OCR_AUTO = "aiOcrAuto"
 }
 
 /**

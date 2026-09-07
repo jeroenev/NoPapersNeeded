@@ -146,8 +146,10 @@ class WatchedFolderImporterTest {
 }
 
 private class BlockingOcrEngine : OcrEngine {
-    override val available = true
     override val name = "blocking-test"
+
+    override suspend fun available() = true
+
     val started = CompletableDeferred<Unit>()
     val allowFinish = CompletableDeferred<Unit>()
     val finished = CompletableDeferred<Unit>()

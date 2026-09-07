@@ -98,6 +98,8 @@
     <string name="common_settings_max_new_tags_help">Aantal nieuwe tags per document (%1$d-%2$d; 0 = nooit). Per uitvoering aanpasbaar.</string>
     <string name="common_settings_ai_auto_on_ocr">Nieuwe documenten automatisch taggen en invullen</string>
     <string name="common_settings_ai_auto_on_ocr_help">Zodra een document is gescand of geïmporteerd en de tekst is uitgelezen, kent de assistent tags toe uit je bestaande tags (nooit nieuwe) en vult titel, correspondent en datum in zolang die leeg zijn. Wordt zonder controle toegepast, dus elk nieuw document kost één aanvraag.</string>
+    <string name="common_settings_ai_ocr_auto">Tekst uitlezen met de assistent in plaats van met OCR op het toestel</string>
+    <string name="common_settings_ai_ocr_auto_help">Laat het model elke gescande pagina uitlezen. Dat gaat veel beter om met handschrift, tabellen en vage scans dan OCR op het toestel. Dit kost één aanvraag per pagina, niet per document, en documenten die al met OCR op het toestel zijn uitgelezen worden opnieuw gelezen. Documenten van meer dan %1$d pagina's blijven hier OCR op het toestel gebruiken; je kunt ze nog wel één voor één laten uitlezen. Laat dit uit om tekst op het toestel uit te lezen en gebruik "Tekst uitlezen met assistent" op losse documenten.</string>
 
     <string name="common_settings_default_view">Standaardweergave: %1$s</string>
     <string name="common_settings_landscape_columns">Lijst met meerdere kolommen in liggende stand</string>

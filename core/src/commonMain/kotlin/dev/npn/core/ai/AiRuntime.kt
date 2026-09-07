@@ -75,6 +75,14 @@ internal class AiRuntime(
          */
         private const val ANTHROPIC_ANSWER_HEADROOM = 4_096
 
+        /**
+         * Output budget for one page transcription ([AiOcr]). Comfortably more than any single
+         * scanned page holds, and the ceiling every Claude 3+ model accepts — raising it further
+         * would be an API error on the older ones, and costs nothing to leave here since output
+         * tokens are billed as produced, not as reserved.
+         */
+        private const val OCR_ANSWER_MAX_TOKENS = 4_096
+
         private const val OPENCODE_SESSION_HEADER = "x-opencode-session"
 
         fun build(config: AiConfig): AiRuntime {
@@ -133,6 +141,37 @@ internal class AiRuntime(
          */
         fun suggestionParams(config: AiConfig): LLMParams =
             reasoningParams(config.provider, config.reasoningEdit, toolLoop = false) ?: LLMParams()
+
+        /**
+         * Params for one page transcription ([AiOcr]).
+         *
+         * Deliberately not [suggestionParams]. That maps [AiConfig.reasoningEdit], and neither
+         * half of it suits OCR: reasoning buys nothing on a verbatim transcription, and it would
+         * be charged once per PAGE here rather than once per document. On Anthropic it is worse
+         * than pointless — [anthropicReasoningParams] hands most of `max_tokens` to the thinking
+         * budget, so a dense page can be truncated mid-transcription into a write-once sidecar.
+         *
+         * Only Anthropic gets an override, because only Anthropic needs one: Koog's client falls
+         * back to a flat 2048 `max_tokens`, which a dense page can exceed. The other providers
+         * keep their endpoint defaults rather than an explicit "no reasoning" label, because
+         * those labels are themselves a failure mode (see [reasoningParams]: `reasoning_effort:
+         * none` errors on older OpenAI-shaped models, and a zero Google thinking budget errors on
+         * the Pro models). An unwanted thought on a transcription call is a smaller problem than
+         * a page that cannot be read at all.
+         */
+        fun ocrParams(config: AiConfig): LLMParams =
+            when (config.provider) {
+                AiProvider.ANTHROPIC -> {
+                    AnthropicParams(
+                        maxTokens = OCR_ANSWER_MAX_TOKENS,
+                        thinking = AnthropicThinking.Disabled(),
+                    )
+                }
+
+                else -> {
+                    LLMParams()
+                }
+            }
 
         /**
          * Params for the chat assistant, from [AiConfig.reasoningAssistant]; null keeps the
@@ -249,6 +288,7 @@ internal class AiRuntime(
                             LLMCapability.Temperature,
                             LLMCapability.Tools,
                             LLMCapability.ToolChoice,
+                            LLMCapability.Vision.Image,
                         ),
                     contextLength = DEFAULT_CONTEXT_LENGTH,
                 )
@@ -384,6 +424,7 @@ internal class AiRuntime(
                             LLMCapability.Completion,
                             LLMCapability.Temperature,
                             LLMCapability.Tools,
+                            LLMCapability.Vision.Image,
                         ),
                     contextLength = DEFAULT_CONTEXT_LENGTH,
                 )
@@ -394,6 +435,13 @@ internal class AiRuntime(
          * Capabilities for the native (non-OpenAI-shaped) clients. [LLMCapability.Thinking] is
          * included so the Anthropic/Google clients accept reasoning content on replayed assistant
          * messages (Google injects its fallback thought signature only for Thinking-capable models).
+         *
+         * [LLMCapability.Vision.Image] is included because page-image OCR ([AiOcr]) sends image
+         * parts, and the clients reject an image for a model that does not declare it. Like Tools
+         * and Thinking above, this is a claim rather than a fact: the model id is free text the
+         * user typed, so nothing here can know what it really supports. A model without vision
+         * fails the OCR call at the endpoint with a message the user can act on, which is strictly
+         * better than the client refusing to send it and every model needing a capability probe.
          */
         private fun standardCapabilities(): List<LLMCapability> =
             listOf(
@@ -402,6 +450,7 @@ internal class AiRuntime(
                 LLMCapability.Tools,
                 LLMCapability.ToolChoice,
                 LLMCapability.Thinking,
+                LLMCapability.Vision.Image,
             )
 
         /**

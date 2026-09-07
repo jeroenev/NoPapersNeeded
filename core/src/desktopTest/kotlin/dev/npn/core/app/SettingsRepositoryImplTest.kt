@@ -81,6 +81,25 @@ class SettingsRepositoryImplTest {
         }
 
     @Test
+    fun aiOcrEngineToggleDefaultsOffAndPersists() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                // Default off matters more than persistence here: this switch bills per page, so a
+                // settings file that predates it must never load as "on".
+                val file = directory.resolve("settings.properties").toFile()
+                SettingsRepositoryImpl(file).settings.first().aiOcrAuto shouldBe false
+
+                SettingsRepositoryImpl(file).edit { it.copy(aiOcrAuto = true) }
+                val snapshot = SettingsRepositoryImpl(file).settings.first()
+                snapshot.aiOcrAuto shouldBe true
+                snapshot.toAiConfig().ocrAuto shouldBe true
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
     fun preProviderSettingsWithBaseUrlMigrateToCustom() =
         runTest {
             val directory = Files.createTempDirectory("npn-settings-test")

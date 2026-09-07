@@ -5,6 +5,7 @@ import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
@@ -235,6 +236,84 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.ui.value.reindexing shouldBe false
             messages shouldContainExactly listOf("Could not re-run OCR: ocr engine missing")
+            job.cancel()
+        }
+
+    // ---- AI (vision) OCR ----
+
+    @Test
+    fun aiOcrActionIsOfferedOnlyWithAConfiguredEndpoint() =
+        runTest(dispatcher) {
+            val without = vm(session = FakeLibrarySession())
+            advanceUntilIdle()
+            without.ui.value.aiOcr shouldBe AiOcrOffer.Unavailable
+
+            val with = vm(session = FakeLibrarySession().apply { ocr.aiOcr = AiOcrOffer.Ready })
+            advanceUntilIdle()
+            with.ui.value.aiOcr shouldBe AiOcrOffer.Ready
+        }
+
+    @Test
+    fun aLongDocumentIsStillOfferedButCarriesItsPageCount() =
+        runTest(dispatcher) {
+            // Size is a warning the UI delivers, not a refusal: the state has to carry the number
+            // so the confirmation can name it.
+            val session = FakeLibrarySession().apply { ocr.aiOcr = AiOcrOffer.Large(pages = 214) }
+            val model = vm(session = session)
+            advanceUntilIdle()
+
+            model.ui.value.aiOcr shouldBe AiOcrOffer.Large(pages = 214)
+        }
+
+    @Test
+    fun ocrWithAiQueuesTheDocumentAndClearsTheReindexingFlag() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { ocr.aiOcr = AiOcrOffer.Ready }
+            val model = vm(session = session)
+            model.ocrWithAi()
+            advanceUntilIdle()
+            session.ocr.aiOcrIds shouldContainExactly listOf("doc-1")
+            model.ui.value.reindexing shouldBe false
+        }
+
+    @Test
+    fun ocrWithAiRunsALongDocumentOnceItIsConfirmed() =
+        runTest(dispatcher) {
+            // The confirmation lives in the UI, so the viewmodel must not add a second refusal
+            // behind it: a confirmed long document queues like any other.
+            val session = FakeLibrarySession().apply { ocr.aiOcr = AiOcrOffer.Large(pages = 214) }
+            val model = vm(session = session)
+            model.ocrWithAi()
+            advanceUntilIdle()
+
+            session.ocr.aiOcrIds shouldContainExactly listOf("doc-1")
+            model.ui.value.reindexing shouldBe false
+        }
+
+    @Test
+    fun rejectedAiOcrRequestSurfacesAsAMessage() =
+        runTest(dispatcher) {
+            // A request the session refuses (the endpoint went away between offering the action and
+            // tapping it) comes back as a throw; the user has to see why nothing happened rather
+            // than watch the action do nothing.
+            val session =
+                FakeLibrarySession().apply {
+                    ocr.aiOcr = AiOcrOffer.Ready
+                    ocr.failAiOcr = { error("AI OCR needs a configured AI endpoint (Settings > AI assistant)") }
+                }
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            advanceUntilIdle()
+            model.ocrWithAi()
+            advanceUntilIdle()
+            session.ocr.aiOcrIds shouldBe emptyList()
+            model.ui.value.reindexing shouldBe false
+            messages shouldContainExactly
+                listOf(
+                    "Could not read text with the assistant: " +
+                        "AI OCR needs a configured AI endpoint (Settings > AI assistant)",
+                )
             job.cancel()
         }
 

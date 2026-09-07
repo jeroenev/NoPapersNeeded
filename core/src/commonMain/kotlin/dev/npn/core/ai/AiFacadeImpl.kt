@@ -1,6 +1,9 @@
 package dev.npn.core.ai
 
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.dsl.prompt
+import ai.koog.prompt.message.AttachmentContent
+import ai.koog.prompt.message.AttachmentSource
 import dev.npn.core.app.AiTagging
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
@@ -15,7 +18,7 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
- * Koog-backed implementation of both AI facets ([AiChat], [AiSuggest]). Reads the endpoint
+ * Koog-backed implementation of the AI facets ([AiChat], [AiSuggest], [AiOcr]). Reads the endpoint
  * configuration live on every call (settings can change between calls) and caches the built
  * runtime while the config is unchanged. Purely a read-side consumer of the Room index; all
  * writes stay with MetadataWriter/JournalCoordinator.
@@ -24,7 +27,8 @@ class AiFacadeImpl(
     private val db: NpnDatabase,
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
-    AiSuggest {
+    AiSuggest,
+    AiOcr {
     private val chatHistoryStore = RoomChatHistoryProvider(db)
     private val chatSessionStore = RoomChatSessionStore(db)
 
@@ -169,6 +173,41 @@ class AiFacadeImpl(
         )
     }
 
+    override suspend fun ocrConfigured(): Boolean = configProvider().configured
+
+    override suspend fun transcribePage(
+        png: ByteArray,
+        lang: String,
+    ): String {
+        val thePrompt = pagePrompt(png, lang, configProvider())
+        return transcribeWithRetry(PAGE_ATTEMPTS) { executePage(thePrompt) }
+    }
+
+    private suspend fun executePage(thePrompt: Prompt): String? {
+        val runtime = runtime()
+        return AiText.parseTranscription(runtime.executor.execute(thePrompt, runtime.model).textContent())
+    }
+
+    private fun pagePrompt(
+        png: ByteArray,
+        lang: String,
+        config: AiConfig,
+    ): Prompt =
+        prompt("npn-ocr-page", AiRuntime.ocrParams(config)) {
+            system(OCR_SYSTEM_PROMPT)
+            user {
+                text("Language hint: $lang. Transcribe this page.")
+                image(
+                    AttachmentSource.Image(
+                        content = AttachmentContent.Binary.Bytes(png),
+                        format = "png",
+                        mimeType = "image/png",
+                        fileName = "page.png",
+                    ),
+                )
+            }
+        }
+
     private suspend fun runtime(): AiRuntime {
         val config = configProvider()
         check(config.configured) { "AI endpoint is not configured (see Settings > AI assistant)" }
@@ -221,6 +260,42 @@ class AiFacadeImpl(
         const val NEW_SESSION_TITLE = "New chat"
         const val MAX_SESSION_TITLE_CHARS = 60
         const val MAX_DOC_TEXT_CHARS = 12_000
+
+        /**
+         * Calls one page may cost: the attempt plus a single retry (see [transcribeWithRetry]).
+         *
+         * One retry, and deliberately only one. Vision models do occasionally answer a page with a
+         * refusal, an empty message or a transient endpoint error, and asking again fixes it — but
+         * this runs once per PAGE, under a pipeline that already retries the whole document
+         * ([dev.npn.core.ocr.OcrConfig.maxAttempts]), so anything more multiplies a systematically
+         * failing endpoint into a bill instead of an error.
+         */
+        const val PAGE_ATTEMPTS = 2
+
+        /**
+         * The page-transcription prompt. Written to make the reply *usable as archived text*, which
+         * is a stricter goal than "read the page": every instruction here exists to stop the model
+         * doing something a local OCR engine cannot do — summarising, translating, correcting,
+         * describing, or introducing itself. The output goes verbatim into a write-once sidecar and
+         * into the search index, so invented or reflowed text is not a cosmetic problem.
+         */
+        val OCR_SYSTEM_PROMPT =
+            """
+            You are an OCR engine. You transcribe one scanned page image into plain text.
+
+            Rules:
+            - Output ONLY the page's text. No preamble, no commentary, no explanation of what the
+              document is, no markdown code fences.
+            - Transcribe VERBATIM in the page's own language. Never translate, summarise, rephrase,
+              correct spelling, or fix what looks like an error: reproduce what is printed.
+            - Keep the natural reading order and the line and paragraph breaks of the page.
+            - Render tables as plain text rows, keeping columns separated by spaces or tabs.
+            - Transcribe handwriting too. For a word you genuinely cannot read, write [?] in its
+              place rather than guessing.
+            - Do not describe images, logos or stamps; transcribe only text that appears in them.
+            - If the page contains no text at all (blank, or purely an image), reply with exactly
+              ${AiText.BLANK_PAGE_MARKER} and nothing else.
+            """.trimIndent()
 
         val CHAT_SYSTEM_PROMPT =
             """

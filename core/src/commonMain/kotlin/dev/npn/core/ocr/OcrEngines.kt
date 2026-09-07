@@ -11,7 +11,11 @@ package dev.npn.core.ocr
  * known engine supersedes them.
  */
 object OcrEngines {
-    /** Reserved for a future AI-based engine; already ranked so its sidecars win on arrival. */
+    /**
+     * The LLM vision engine ([dev.npn.core.ai.AiOcrEngine]). Ranked above every local engine
+     * because it reads what they cannot, which is also why [OcrEngineSelector] — not this ranking
+     * — decides when it is allowed to run.
+     */
     const val AI = "ai"
     const val MLKIT = "mlkit"
     const val TESSERACT = "tesseract"

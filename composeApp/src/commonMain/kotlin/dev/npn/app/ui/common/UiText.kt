@@ -3,6 +3,7 @@ package dev.npn.app.ui.common
 import androidx.compose.runtime.Composable
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_action_add_tag
+import no_papers_needed.composeapp.generated.resources.common_action_ai_ocr
 import no_papers_needed.composeapp.generated.resources.common_action_change_ocr_engine
 import no_papers_needed.composeapp.generated.resources.common_action_create_tag
 import no_papers_needed.composeapp.generated.resources.common_action_delete_document
@@ -116,6 +117,7 @@ enum class UiAction {
     MOVE_TO_TRASH,
     RENAME_FILE,
     RERUN_OCR,
+    AI_OCR,
     CHANGE_OCR_ENGINE,
     CREATE_TAG,
     RENAME_TAG,
@@ -352,6 +354,7 @@ private val UiAction.stringResource: StringResource
             UiAction.MOVE_TO_TRASH -> Res.string.common_action_move_to_trash
             UiAction.RENAME_FILE -> Res.string.common_action_rename_file
             UiAction.RERUN_OCR -> Res.string.common_action_rerun_ocr
+            UiAction.AI_OCR -> Res.string.common_action_ai_ocr
             UiAction.CHANGE_OCR_ENGINE -> Res.string.common_action_change_ocr_engine
             UiAction.CREATE_TAG -> Res.string.common_action_create_tag
             UiAction.RENAME_TAG -> Res.string.common_action_rename_tag

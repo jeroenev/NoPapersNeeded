@@ -7,17 +7,20 @@ import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
- * Desktop [OcrEngine] that shells out to the `tesseract` CLI. Detects the binary once at
- * construction. If tesseract is not on PATH, [available] is false and the
- * pipeline skips OCR for text-less pages. No JNI/native bindings, so it degrades gracefully.
+ * Desktop [OcrEngine] that shells out to the `tesseract` CLI. Detects the binary once, on the
+ * first availability check. If tesseract is not on PATH, [available] is false and the pipeline
+ * skips OCR for text-less pages. No JNI/native bindings, so it degrades gracefully.
  */
 class TesseractCliEngine(
     private val binary: String = "tesseract",
     private val timeoutSeconds: Long = 60,
 ) : OcrEngine {
-    override val name: String = "tesseract"
+    override val name: String = OcrEngines.TESSERACT
 
-    override val available: Boolean by lazy { detect() }
+    /** Probed once; the binary does not appear or disappear over a session's lifetime. */
+    private val detected: Boolean by lazy { detect() }
+
+    override suspend fun available(): Boolean = detected
 
     private fun detect(): Boolean =
         try {
@@ -42,7 +45,7 @@ class TesseractCliEngine(
         lang: String,
     ): String =
         withContext(Dispatchers.IO) {
-            if (!available) return@withContext ""
+            if (!detected) return@withContext ""
             val temp = File.createTempFile("npn-ocr-", ".png")
             try {
                 temp.writeBytes(png)

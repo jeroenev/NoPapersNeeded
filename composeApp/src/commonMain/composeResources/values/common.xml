@@ -58,6 +58,7 @@
     <string name="common_action_move_to_trash">move to trash</string>
     <string name="common_action_rename_file">rename file</string>
     <string name="common_action_rerun_ocr">re-run OCR</string>
+    <string name="common_action_ai_ocr">read text with the assistant</string>
     <string name="common_action_change_ocr_engine">change OCR engine</string>
     <string name="common_action_create_tag">create tag</string>
     <string name="common_action_rename_tag">rename tag</string>

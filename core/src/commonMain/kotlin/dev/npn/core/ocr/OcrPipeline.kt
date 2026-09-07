@@ -37,13 +37,16 @@ data class OcrConfig(
  * (`DocumentEntity.ocrEngineOverride`, synced via the journal). A device runs its own engine
  * only when that engine outranks every existing version; otherwise it adopts the best sidecar.
  *
+ * More than one engine can be in play per device (a free local one, optionally a paid vision one);
+ * picking between them for a given document is [engines]' job, not this class's.
+ *
  * Only touches the `dev.npn.core.ocr`/`dev.npn.core.pdf` surface plus the DAOs it is given.
  */
 class OcrPipeline(
     private val fs: LibraryFileSystem,
     private val sidecars: OcrSidecarFiles,
     private val pdfEngine: PdfEngine,
-    private val ocrEngine: OcrEngine,
+    private val engines: OcrEngineSelector,
     private val documentDao: DocumentDao,
     private val ftsDao: FtsDao,
     private val ocrQueueDao: OcrQueueDao,
@@ -132,7 +135,7 @@ class OcrPipeline(
 
         var versions = loadVersions(docId)
         var ocrProduced = false
-        if (versions.isEmpty() || canImprove(versions)) {
+        if (versions.isEmpty() || canImprove(doc, versions)) {
             val own = runOwnOcr(doc)
             if (own == OwnOcr.FAILED && versions.isEmpty()) return // failure already recorded
             // Only a sidecar this call published counts as new text. Being queued is not enough: a
@@ -220,7 +223,7 @@ class OcrPipeline(
             }
         val result =
             try {
-                extractOrOcr(bytes)
+                extractOrOcr(bytes, doc)
             } catch (t: Throwable) {
                 fail(doc.docId, "ocr failed: ${t.message}")
                 return OwnOcr.FAILED
@@ -266,27 +269,35 @@ class OcrPipeline(
         val engine: String,
     )
 
-    private suspend fun extractOrOcr(bytes: ByteArray): PageResult {
+    private suspend fun extractOrOcr(
+        bytes: ByteArray,
+        doc: DocumentEntity,
+    ): PageResult {
         val handle = pdfEngine.open(bytes) // throws PdfOpenException on invalid pdf
         try {
+            // Chosen once, off the PDF's real page count (the doc row's may still be null on a
+            // first run), so the whole document is transcribed by one engine and its sidecar's
+            // engine label is the truth about every OCR'd page in it.
+            val engine = engines.forDocument(doc.ocrEngineOverride, handle.pageCount)
+            val canOcr = engine.available()
             val pages = ArrayList<String>(handle.pageCount)
             var usedOcr = false
             for (i in 0 until handle.pageCount) {
                 val embedded = handle.extractText(i)
-                if (embedded.trim().length >= config.minEmbeddedCharsPerPage || !ocrEngine.available) {
+                if (embedded.trim().length >= config.minEmbeddedCharsPerPage || !canOcr) {
                     // Usable text layer (or no engine): keep the embedded text as-is.
                     pages.add(embedded)
                 } else {
                     val png = handle.renderPagePng(i, config.renderDpiDim)
-                    pages.add(ocrEngine.recognizePng(png, config.lang))
+                    pages.add(engine.recognizePng(png, config.lang))
                     usedOcr = true
                 }
             }
             // The engine label records which OCR engine produced the OCR'd pages; embedded
             // pages are deterministic and identical across devices, so a partially embedded
             // result is still labeled (and ranked) by its OCR engine.
-            val engine = if (usedOcr) ocrEngine.name else ENGINE_EMBEDDED
-            return PageResult(pages, engine)
+            val name = if (usedOcr) engine.name else ENGINE_EMBEDDED
+            return PageResult(pages, name)
         } finally {
             handle.close()
         }
@@ -365,18 +376,27 @@ class OcrPipeline(
     }
 
     /**
-     * True when running this device's engine would produce a better version than anything
+     * True when running this device's engine for [doc] would produce a better version than anything
      * stored: the engine outranks every stored version and this device has not already
      * published a sidecar for that engine. An own `embedded` sidecar also counts as "already
      * tried": it means every page had a text layer, so re-running any engine is pointless.
+     *
+     * Selects with the doc row's page count rather than the PDF's, so this and the run it gates
+     * agree about the AI page cap. They have to: without that, a document over the cap would be
+     * queued because AI outranks its stored version, produce a local sidecar instead, and be queued
+     * again on the next reconcile, forever.
      */
-    private fun canImprove(versions: List<Version>): Boolean {
-        if (!ocrEngine.available) return false
+    private suspend fun canImprove(
+        doc: DocumentEntity,
+        versions: List<Version>,
+    ): Boolean {
+        val engine = engines.forDocument(doc.ocrEngineOverride, doc.pageCount)
+        if (!engine.available()) return false
         if (versions.isEmpty()) return true
-        val ownRank = OcrEngines.rank(ocrEngine.name)
+        val ownRank = OcrEngines.rank(engine.name)
         if (ownRank <= versions.maxOf { OcrEngines.rank(it.engine) }) return false
         return versions.none {
-            it.deviceId == deviceId && (it.engine == ocrEngine.name || it.engine == ENGINE_EMBEDDED)
+            it.deviceId == deviceId && (it.engine == engine.name || it.engine == ENGINE_EMBEDDED)
         }
     }
 
@@ -390,7 +410,7 @@ class OcrPipeline(
         versions: List<Version>,
     ) {
         if (doc.trashed || doc.deleted || doc.missing) return
-        if (!canImprove(versions)) return
+        if (!canImprove(doc, versions)) return
         val entry = ocrQueueDao.getByDocId(doc.docId)
         if (entry != null && (entry.state != STATE_DONE || entry.attempts >= config.maxAttempts)) return
         ocrQueueDao.upsert(

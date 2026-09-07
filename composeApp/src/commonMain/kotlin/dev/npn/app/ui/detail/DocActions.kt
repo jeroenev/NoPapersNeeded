@@ -2,6 +2,7 @@ package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.MoreVert
@@ -25,6 +26,7 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.sharePdfBytes
 import dev.npn.app.ui.common.supportsSharing
+import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.SplitOutcome
 import io.github.vinceglb.filekit.PlatformFile
@@ -34,6 +36,10 @@ import io.github.vinceglb.filekit.write
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_unknown_error
+import no_papers_needed.composeapp.generated.resources.detail_ai_ocr
+import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_confirm
+import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large
+import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large_prompt
 import no_papers_needed.composeapp.generated.resources.detail_bake_failed
 import no_papers_needed.composeapp.generated.resources.detail_bake_in_place
 import no_papers_needed.composeapp.generated.resources.detail_bake_metadata_in_place
@@ -63,7 +69,7 @@ import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
 /** Which document-action dialog is open, if any. */
-private enum class DocActionDialog { RENAME, TRASH, BAKE, SPLIT }
+private enum class DocActionDialog { RENAME, TRASH, BAKE, SPLIT, AI_OCR }
 
 /**
  * Shared document actions: a share/export button for a baked copy plus an overflow menu with
@@ -90,8 +96,15 @@ fun DocActions(
         splitting = ui.splitting,
         baking = ui.baking,
         canSplit = ui.pageCount > 1,
+        aiOcr = ui.aiOcr,
         onRename = { dialog = DocActionDialog.RENAME },
         onReOcr = vm::reOcr,
+        // A long document is offered like any other, but its cost is worth a sentence first: the
+        // model is billed per page, and the page count is the one thing the user cannot see from
+        // a menu item.
+        onAiOcr = {
+            if (ui.aiOcr is AiOcrOffer.Large) dialog = DocActionDialog.AI_OCR else vm.ocrWithAi()
+        },
         onSplit = { dialog = DocActionDialog.SPLIT },
         onBakeInPlace = { dialog = DocActionDialog.BAKE },
         onTrash = { dialog = DocActionDialog.TRASH },
@@ -99,6 +112,7 @@ fun DocActions(
     DocActionDialogs(
         dialog = dialog,
         pageCount = ui.pageCount,
+        aiOcr = ui.aiOcr,
         vm = vm,
         snackbar = snackbar,
         onGone = onGone,
@@ -174,13 +188,16 @@ private fun ShareOrExportButton(
 }
 
 @Composable
+@Suppress("LongMethod")
 private fun DocActionsMenu(
     reindexing: Boolean,
     splitting: Boolean,
     baking: Boolean,
     canSplit: Boolean,
+    aiOcr: AiOcrOffer,
     onRename: () -> Unit,
     onReOcr: () -> Unit,
+    onAiOcr: () -> Unit,
     onSplit: () -> Unit,
     onBakeInPlace: () -> Unit,
     onTrash: () -> Unit,
@@ -216,6 +233,33 @@ private fun DocActionsMenu(
                     onReOcr()
                 },
             )
+            // Hidden only without an endpoint: there the action can do nothing but explain itself,
+            // and this menu is not where AI gets introduced. Length never hides or disables it —
+            // a long document is the case the vision model is most wanted for — so the label just
+            // says so, and the confirmation carries the cost.
+            if (aiOcr != AiOcrOffer.Unavailable) {
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            when (aiOcr) {
+                                is AiOcrOffer.Large -> {
+                                    stringResource(Res.string.detail_ai_ocr_large, aiOcr.pages)
+                                }
+
+                                else -> {
+                                    stringResource(Res.string.detail_ai_ocr)
+                                }
+                            },
+                        )
+                    },
+                    leadingIcon = { Icon(Icons.Filled.AutoAwesome, contentDescription = null) },
+                    enabled = !reindexing,
+                    onClick = {
+                        menu = false
+                        onAiOcr()
+                    },
+                )
+            }
             DropdownMenuItem(
                 text = {
                     Text(
@@ -261,6 +305,7 @@ private fun DocActionsMenu(
 private fun DocActionDialogs(
     dialog: DocActionDialog?,
     pageCount: Int,
+    aiOcr: AiOcrOffer,
     vm: DocDetailViewModel,
     snackbar: SnackbarHostState,
     onGone: () -> Unit,
@@ -295,6 +340,21 @@ private fun DocActionDialogs(
 
         DocActionDialog.BAKE -> {
             BakeDialog(vm = vm, snackbar = snackbar, onDismiss = onDismiss)
+        }
+
+        DocActionDialog.AI_OCR -> {
+            // Only reachable for a long document; a plain one runs straight off the menu item.
+            val pages = (aiOcr as? AiOcrOffer.Large)?.pages ?: pageCount
+            ConfirmDialog(
+                title = stringResource(Res.string.detail_ai_ocr),
+                message = stringResource(Res.string.detail_ai_ocr_large_prompt, pages),
+                confirmLabel = stringResource(Res.string.detail_ai_ocr_confirm),
+                onConfirm = {
+                    onDismiss()
+                    vm.ocrWithAi()
+                },
+                onDismiss = onDismiss,
+            )
         }
 
         DocActionDialog.SPLIT -> {

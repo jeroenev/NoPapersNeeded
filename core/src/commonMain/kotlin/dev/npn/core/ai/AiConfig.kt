@@ -83,6 +83,16 @@ data class AiConfig(
      * scans or imports.
      */
     val autoOnOcr: Boolean = false,
+    /**
+     * Whether the endpoint is this device's *automatic* OCR engine ([AiOcr]), i.e. every document
+     * this device OCRs is transcribed by the vision model — including documents a lower-ranked
+     * engine already did, which the pipeline then upgrades.
+     *
+     * Device-local and off by default, because it is the most expensive switch in the app: one
+     * model call per page, not per document. Off does not mean unavailable — a per-document "OCR
+     * with AI" request still runs (`OcrFacade.ocrWithAi`); it means nothing starts one unattended.
+     */
+    val ocrAuto: Boolean = false,
 ) {
     /** The effective server root: the explicit override, or the provider default. */
     val effectiveBaseUrl: String

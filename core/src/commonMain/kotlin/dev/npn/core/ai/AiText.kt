@@ -20,6 +20,40 @@ object AiText {
     /** Cap on accepted title suggestions; anything longer is model rambling, not a title. */
     const val MAX_TITLE_SUGGESTION_CHARS = 200
 
+    /**
+     * What a page-OCR prompt tells the model to answer for a page that carries no text at all.
+     *
+     * A sentinel exists because "" is ambiguous on the wire: a blank page and a call that produced
+     * no answer both come back as no text, and only the second one is worth retrying. See
+     * [parseTranscription].
+     */
+    const val BLANK_PAGE_MARKER = "[[BLANK]]"
+
+    /** Fences a model may wrap a transcription in even when told not to. */
+    private val codeFenceRegex = Regex("^\\s*```[a-zA-Z]*\\s*\\n(.*?)\\n?\\s*```\\s*$", RegexOption.DOT_MATCHES_ALL)
+
+    /**
+     * Read one page's transcription out of a vision-model reply.
+     *
+     * Three outcomes, not two:
+     *  - **null** — no usable answer (an empty message, or a refusal that carried no text). The
+     *    caller may retry; the page's text is still unknown.
+     *  - **""** — the model explicitly reported a page with no text ([BLANK_PAGE_MARKER]). A
+     *    definitive answer: retrying would only buy the same one again.
+     *  - anything else — the transcription, unwrapped from a markdown code fence if the model
+     *    added one.
+     *
+     * Nothing else is normalised. The text is the document's own content and goes into a write-once
+     * sidecar, so trimming or reflowing it here would silently alter what the archive stores.
+     */
+    fun parseTranscription(response: String): String? {
+        val unfenced = codeFenceRegex.matchEntire(response)?.groupValues?.get(1) ?: response
+        val trimmed = unfenced.trim()
+        if (trimmed.isEmpty()) return null
+        if (trimmed.equals(BLANK_PAGE_MARKER, ignoreCase = true)) return ""
+        return trimmed
+    }
+
     /** Full docIds cited as `[doc:<hash>]` in an assistant answer, first occurrence order. */
     fun extractDocRefs(text: String): List<String> =
         docRefRegex

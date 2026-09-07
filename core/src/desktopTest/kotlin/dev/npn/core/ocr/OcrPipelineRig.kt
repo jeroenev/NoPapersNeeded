@@ -26,11 +26,12 @@ internal class OcrPipelineRig {
         deviceId: String,
         ocr: OcrEngine,
         database: NpnDatabase = db,
+        engines: OcrEngineSelector = OcrEngineSelector(local = ocr),
     ) = OcrPipeline(
         fs = fs,
         sidecars = OcrSidecarFiles(fs),
         pdfEngine = PdfBoxEngine(),
-        ocrEngine = ocr,
+        engines = engines,
         documentDao = database.documentDao(),
         ftsDao = database.ftsDao(),
         ocrQueueDao = database.ocrQueueDao(),
@@ -74,12 +75,14 @@ internal class OcrPipelineRig {
 
 /** Records how many times OCR was invoked and returns canned text. */
 internal class FakeOcrEngine(
-    override val available: Boolean,
+    private val isAvailable: Boolean,
     override val name: String,
     private val canned: String = "canned ocr text",
 ) : OcrEngine {
     var calls = 0
         private set
+
+    override suspend fun available(): Boolean = isAvailable
 
     override suspend fun recognizePng(
         png: ByteArray,

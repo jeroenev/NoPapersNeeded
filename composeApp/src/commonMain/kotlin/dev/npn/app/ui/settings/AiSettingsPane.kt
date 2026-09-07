@@ -22,10 +22,13 @@ import dev.npn.app.ui.common.NumericField
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.app.AiTagging
+import dev.npn.core.ocr.OcrEngineSelector
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_ocr_auto
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_ocr_auto_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_request_help
@@ -156,6 +159,20 @@ private fun AiBehaviourSettings(
         help = stringResource(Res.string.common_settings_ai_auto_on_ocr_help),
         checked = state.aiAutoOnOcr,
         onCheckedChange = { on -> vm.edit { it.copy(aiAutoOnOcr = on) } },
+    )
+    // Making the vision model the default OCR engine. Kept next to the switch above because both
+    // spend the endpoint unattended, but this one is charged per PAGE rather than per document, and
+    // it also re-transcribes documents a local engine already did — so the help text leads with the
+    // cost, and "OCR with AI" on a single document stays available whether this is on or off.
+    SettingsSwitchRow(
+        title = stringResource(Res.string.common_settings_ai_ocr_auto),
+        help =
+            stringResource(
+                Res.string.common_settings_ai_ocr_auto_help,
+                OcrEngineSelector.DEFAULT_LARGE_DOCUMENT_PAGES,
+            ),
+        checked = state.aiOcrAuto,
+        onCheckedChange = { on -> vm.edit { it.copy(aiOcrAuto = on) } },
     )
     SettingsHelpText(stringResource(Res.string.common_settings_ai_request_help))
 }

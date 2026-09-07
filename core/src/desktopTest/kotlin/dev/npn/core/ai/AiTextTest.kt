@@ -30,6 +30,47 @@ class AiTextTest {
         AiText.extractDocRefs("[doc:abc] [see above] plain [brackets]") shouldContainExactly emptyList()
     }
 
+    // ---- parseTranscription: page OCR replies ----
+
+    @Test
+    fun parseTranscriptionReturnsThePageText() {
+        AiText.parseTranscription("Invoice 42\nAcme Corporation") shouldBe "Invoice 42\nAcme Corporation"
+    }
+
+    @Test
+    fun parseTranscriptionKeepsInternalLineBreaksAndBlankLines() {
+        // The text goes verbatim into a write-once sidecar and the search index, so the page's own
+        // layout must survive; only the reply's outer whitespace is dropped.
+        AiText.parseTranscription("\n  line one\n\nline two  \n") shouldBe "line one\n\nline two"
+    }
+
+    @Test
+    fun parseTranscriptionUnwrapsACodeFenceTheModelAdded() {
+        AiText.parseTranscription("```\nInvoice 42\nAcme\n```") shouldBe "Invoice 42\nAcme"
+        AiText.parseTranscription("```text\nInvoice 42\n```") shouldBe "Invoice 42"
+    }
+
+    @Test
+    fun parseTranscriptionReportsAnExplicitlyBlankPageAsEmptyText() {
+        // "" is a definitive answer, not a failure: retrying would only buy the same one again.
+        AiText.parseTranscription(AiText.BLANK_PAGE_MARKER) shouldBe ""
+        AiText.parseTranscription("  [[blank]]  ") shouldBe ""
+    }
+
+    @Test
+    fun parseTranscriptionReportsAnEmptyReplyAsNoAnswer() {
+        // null, not "": the page's text is still unknown, so the caller may retry.
+        AiText.parseTranscription("") shouldBe null
+        AiText.parseTranscription("   \n  ") shouldBe null
+    }
+
+    @Test
+    fun parseTranscriptionKeepsAPageWhoseTextMerelyMentionsTheMarker() {
+        // Only a reply that is nothing but the marker means "blank"; a page quoting it is content.
+        AiText.parseTranscription("The form says ${AiText.BLANK_PAGE_MARKER} here") shouldBe
+            "The form says ${AiText.BLANK_PAGE_MARKER} here"
+    }
+
     @Test
     fun parseTagSuggestionsPlainJsonArray() {
         AiText.parseTagSuggestions("[\"tax\", \"invoice\"]", emptyList()) shouldContainExactly

@@ -264,7 +264,9 @@ class DocumentFilterTest {
             pdfEngine =
                 dev.npn.core.pdf
                     .PdfBoxEngine(),
-            ocrEngine = NoopOcrEngine(),
+            engines =
+                dev.npn.core.ocr
+                    .OcrEngineSelector(local = NoopOcrEngine()),
             documentDao = rig.db.documentDao(),
             ftsDao = rig.db.ftsDao(),
             ocrQueueDao = rig.db.ocrQueueDao(),

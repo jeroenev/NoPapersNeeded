@@ -10,15 +10,15 @@ import kotlin.coroutines.resumeWithException
 
 /**
  * Android [OcrEngine] using MLKit text recognition v2 with the bundled offline Latin model. Always
- * [available] because the model ships with the app.
+ * available because the model ships with the app.
  *
  * The MLKit `Task` is awaited with [suspendCancellableCoroutine] to avoid adding
  * kotlinx-coroutines-play-services.
  */
 class MlKitOcrEngine : OcrEngine {
-    override val available: Boolean = true
+    override val name: String = OcrEngines.MLKIT
 
-    override val name: String = "mlkit"
+    override suspend fun available(): Boolean = true
 
     private val recognizer = TextRecognition.getClient(TextRecognizerOptions.DEFAULT_OPTIONS)
 
