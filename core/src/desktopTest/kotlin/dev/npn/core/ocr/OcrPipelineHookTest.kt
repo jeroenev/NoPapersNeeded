@@ -49,7 +49,9 @@ class OcrPipelineHookTest {
 
             pipeline.processNext()
 
-            stateDuringHook shouldBe OcrPipeline.STATE_RUNNING
+            // Still owed while the hook runs — the queue has no "being worked on" state, only the
+            // in-process [OcrPipeline.inFlight] does.
+            stateDuringHook shouldBe OcrPipeline.STATE_PENDING
             rig.db
                 .ocrQueueDao()
                 .getByDocId(docId)

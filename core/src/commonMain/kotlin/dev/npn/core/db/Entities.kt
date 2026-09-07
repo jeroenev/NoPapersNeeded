@@ -167,10 +167,28 @@ data class DuplicateEntity(
     val relPath: String,
 )
 
+/**
+ * Work list for the OCR pipeline. A row means "this document is owed an OCR pass". Unlike
+ * [AiEnrichQueueEntity] it does keep terminal states: `done` is the history
+ * `OcrPipeline.maybeQueueUpgrade` reads to decide whether a better engine is worth re-queueing,
+ * and `failed` is the attempt cap being spent.
+ *
+ * There is no `running`, for the same reason [AiEnrichQueueEntity] has no state column at all —
+ * learned the harder way here. The drain is single-flight in-process
+ * ([dev.npn.core.work.QueueDrainer]), so the only thing that could write `running` was the pass
+ * that was running, and the only thing that could clear it was that same pass surviving to the
+ * end. It often did not: a killed process or a cancelled drain left the row marked running with
+ * nobody left to tidy up, and a running row is one `OcrQueueDao.nextPending` never returns again.
+ * The document became invisible to the drain permanently while still reading as busy to the user.
+ *
+ * So a row stays `pending` while it is being worked on, and an interrupted pass leaves it exactly
+ * as it found it — owed, and taken by the next drain. Who is being worked on right now is
+ * in-process knowledge (`OcrPipeline.inFlight`), which cannot outlive the process that knows it.
+ */
 @Entity(tableName = "ocr_queue")
 data class OcrQueueEntity(
     @PrimaryKey val docId: String,
-    /** pending | running | done | failed */
+    /** pending | done | failed — see the class doc for why `running` is not one of them. */
     val state: String,
     val attempts: Int = 0,
     val updatedAt: Long,

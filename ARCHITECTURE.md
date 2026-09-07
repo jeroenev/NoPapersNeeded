@@ -120,6 +120,14 @@ via `mise hot`.
   queued AI edit runs), exposed to callers that must await them as `session.work`
   (`WorkFacade`). A new kind of deferrable work means a queue table + a drain step
   + a kick, not a `launch` at the point of discovery.
+- A queue row records only that work is *owed*, never that it is under way. No queue
+  table has a `running` state: the drain is single-flight in-process, so a row left
+  claiming to be running has nobody alive to withdraw the claim, and every drain
+  thereafter skips it (`OcrQueueEntity` documents the outage this caused). "Who is
+  being worked on right now" is a `StateFlow` on the pipeline (`OcrPipeline.inFlight`),
+  which the read seam and `OcrStatus` combine in. An interrupted pass must leave its
+  row exactly as it found it — including its attempt count, which is why cancellation
+  is rethrown rather than recorded as a failure.
 - Showing background work to the user → `WorkQueueReader` joins the queue tables to
   document names behind `WorkFacade.queue`, and derives whole-run progress behind
   `WorkFacade.editRuns`; a new queue table joins the same read there so the

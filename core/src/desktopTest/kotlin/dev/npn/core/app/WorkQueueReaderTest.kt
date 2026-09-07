@@ -10,6 +10,7 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.ocr.OcrPipeline
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.io.File
@@ -24,6 +25,9 @@ internal abstract class WorkQueueReaderFixture {
     protected lateinit var db: NpnDatabase
     protected lateinit var reader: WorkQueueReader
 
+    /** Stands in for the live pipeline's `inFlight`; tests set it to name the document being run. */
+    protected val ocrInFlight = MutableStateFlow<String?>(null)
+
     @BeforeTest
     fun setup() {
         dbDir = Files.createTempDirectory("npn-queue-test").toFile()
@@ -34,6 +38,7 @@ internal abstract class WorkQueueReaderFixture {
                 db.ocrQueueDao(),
                 db.aiEnrichQueueDao(),
                 db.aiEditJobDao(),
+                ocrInFlight,
             )
     }
 
@@ -107,11 +112,47 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
     fun `one document mid-pipeline appears once per stage`() =
         runTest {
             putDoc("a")
-            putOcr("a", state = OcrPipeline.STATE_RUNNING)
+            putOcr("a")
             putEnrich("a")
 
             queue().map { it.stage } shouldContainExactly
                 listOf(WorkStage.OCR, WorkStage.AI_ENRICHMENT)
+        }
+
+    @Test
+    fun `the document the pipeline is working on right now reads as running`() =
+        runTest {
+            putDoc("a")
+            putDoc("b")
+            putOcr("a")
+            putOcr("b", updatedAt = 2)
+            ocrInFlight.value = "a"
+
+            queue().associate { it.docId to it.state } shouldBe
+                mapOf("a" to WorkState.RUNNING, "b" to WorkState.WAITING)
+        }
+
+    @Test
+    fun `nothing reads as running when no pipeline is working`() =
+        runTest {
+            // The state a restart used to leave behind: rows owed a pass, nobody working them.
+            // Running now comes from the live pipeline, so an idle one cannot report otherwise.
+            putDoc("a")
+            putOcr("a", attempts = 1)
+
+            queue().single().state shouldBe WorkState.RETRYING
+        }
+
+    @Test
+    fun `a row left running by an older build is ordinary outstanding work`() =
+        runTest {
+            // Builds before the in-process rework wrote "running" into the row; nothing could
+            // clear one once its process died. It must read as work still owed, not as work
+            // forever under way.
+            putDoc("a")
+            putOcr("a", state = "running")
+
+            queue().single().state shouldBe WorkState.WAITING
         }
 
     @Test

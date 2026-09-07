@@ -19,9 +19,14 @@ import kotlinx.coroutines.flow.map
  * and nothing here writes.
  *
  * This is where the queues' unlike shapes are reconciled into one vocabulary — the OCR queue's
- * explicit state column and attempt cap, the enrichment queue's existence-as-state plus backoff,
+ * terminal-state column and attempt cap, the enrichment queue's existence-as-state plus backoff,
  * and the edit queue's progress derived from its document rows. Doing it once here is what keeps
  * [WorkState] meaningful to a caller that should not have to know any of those tables.
+ *
+ * Neither per-document queue stores "running": that fact belongs to the process doing the work and
+ * would be a lie the moment one died (see [dev.npn.core.db.OcrQueueEntity]). [ocrInFlight] carries
+ * it in from the live pipeline instead, which is why [WorkState.RUNNING] can never survive a
+ * restart here.
  *
  * Per-document work and whole-run work stay two flows rather than one list. They differ in grain
  * (a document owed a pass versus a batch owed a review), in lifetime (the first clears itself, the
@@ -33,13 +38,14 @@ internal class WorkQueueReader(
     private val ocrQueueDao: OcrQueueDao,
     private val enrichQueueDao: AiEnrichQueueDao,
     private val editJobDao: AiEditJobDao,
+    ocrInFlight: Flow<String?>,
 ) {
     val queue: Flow<List<QueuedWork>> =
         combine(
             ocrQueueDao.observeOutstanding(),
             enrichQueueDao.observeQueue(),
-        ) { ocr, enrich -> ocr to enrich }
-            .map { (ocr, enrich) -> join(ocr, enrich) }
+            ocrInFlight,
+        ) { ocr, enrich, inFlight -> join(ocr, enrich, inFlight) }
 
     val editRuns: Flow<List<QueuedEditRun>> =
         combine(
@@ -96,12 +102,13 @@ internal class WorkQueueReader(
     private suspend fun join(
         ocr: List<OcrQueueEntity>,
         enrich: List<AiEnrichQueueEntity>,
+        ocrInFlight: String?,
     ): List<QueuedWork> {
         if (ocr.isEmpty() && enrich.isEmpty()) return emptyList()
         val names = displayTitles(ocr.map { it.docId } + enrich.map { it.docId })
         // OCR first: it is upstream of enrichment, so this reads as the pipeline runs. Within each
         // stage the rows already arrive in the order their drain will take them.
-        return ocr.mapNotNull { row -> names[row.docId]?.let { row.toQueuedWork(it) } } +
+        return ocr.mapNotNull { row -> names[row.docId]?.let { row.toQueuedWork(it, ocrInFlight) } } +
             enrich.mapNotNull { row -> names[row.docId]?.let { row.toQueuedWork(it) } }
     }
 
@@ -112,29 +119,33 @@ internal class WorkQueueReader(
             .flatMap { documentDao.titlesFor(it) }
             .associate { it.docId to displayTitleOf(it.title, it.fileName) }
 
-    private fun OcrQueueEntity.toQueuedWork(title: String) =
-        QueuedWork(
-            docId = docId,
-            displayTitle = title,
-            stage = WorkStage.OCR,
-            state =
-                when {
-                    state == OcrPipeline.STATE_RUNNING -> WorkState.RUNNING
+    private fun OcrQueueEntity.toQueuedWork(
+        title: String,
+        inFlight: String?,
+    ) = QueuedWork(
+        docId = docId,
+        displayTitle = title,
+        stage = WorkStage.OCR,
+        state =
+            when {
+                // Asked of the live pipeline, not of the row: the row says only that this
+                // document is owed a pass, which stays true while the pass is happening.
+                docId == inFlight -> WorkState.RUNNING
 
-                    state == OcrPipeline.STATE_FAILED -> WorkState.FAILED
+                state == OcrPipeline.STATE_FAILED -> WorkState.FAILED
 
-                    // A pending row that has already burned attempts is a retry, not fresh work.
-                    attempts > 0 -> WorkState.RETRYING
+                // A pending row that has already burned attempts is a retry, not fresh work.
+                attempts > 0 -> WorkState.RETRYING
 
-                    else -> WorkState.WAITING
-                },
-            attempts = attempts,
-            updatedAt = updatedAt,
-            // The OCR queue has no scheduled retry: a failed attempt leaves the row pending and the
-            // next drain picks it up.
-            nextAttemptAt = null,
-            lastError = lastError,
-        )
+                else -> WorkState.WAITING
+            },
+        attempts = attempts,
+        updatedAt = updatedAt,
+        // The OCR queue has no scheduled retry: a failed attempt leaves the row pending and the
+        // next drain picks it up.
+        nextAttemptAt = null,
+        lastError = lastError,
+    )
 
     private fun AiEnrichQueueEntity.toQueuedWork(title: String) =
         QueuedWork(

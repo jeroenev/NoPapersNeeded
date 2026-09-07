@@ -61,6 +61,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
@@ -129,11 +130,23 @@ class LibrarySessionImpl private constructor(
             p?.let { ScanProgressUi(it.phase.name, it.hashed, it.total) }
         }
 
+    // `running` is asked of the pipeline rather than inferred from the count. The two are not the
+    // same question — a queue can be full while nothing is draining it (nothing has kicked yet, or
+    // the endpoint is down) — and inferring it made the indicator claim work was under way whenever
+    // anything was owed, including for rows no drain would ever pick up.
     override val ocrStatus: Flow<OcrStatus> =
-        db.ocrQueueDao().countActive().map { active -> OcrStatus(pending = active, running = active > 0) }
+        combine(db.ocrQueueDao().countActive(), ocrPipeline.inFlight) { owed, inFlight ->
+            OcrStatus(pending = owed, running = inFlight != null)
+        }
 
     private val workQueueReader =
-        WorkQueueReader(db.documentDao(), db.ocrQueueDao(), db.aiEnrichQueueDao(), db.aiEditJobDao())
+        WorkQueueReader(
+            db.documentDao(),
+            db.ocrQueueDao(),
+            db.aiEnrichQueueDao(),
+            db.aiEditJobDao(),
+            ocrPipeline.inFlight,
+        )
 
     override val queue: Flow<List<QueuedWork>> = workQueueReader.queue
 

@@ -146,7 +146,16 @@ interface DuplicateDao {
 
 @Dao
 interface OcrQueueDao {
-    @Query("SELECT * FROM ocr_queue WHERE state = 'pending' ORDER BY updatedAt LIMIT 1")
+    /**
+     * Oldest row still owed a pass.
+     *
+     * "Owed" is written as *not terminal* rather than `state = 'pending'` exactly, so the queue has
+     * one notion of unfinished work and any row that is neither done nor given up on gets drained.
+     * That also reclaims rows left behind by builds that wrote a `running` state: nothing clears
+     * one once its process is gone, and matching on `pending` alone would skip them forever (see
+     * [OcrQueueEntity]).
+     */
+    @Query("SELECT * FROM ocr_queue WHERE state NOT IN ('done', 'failed') ORDER BY updatedAt LIMIT 1")
     suspend fun nextPending(): OcrQueueEntity?
 
     @Upsert
@@ -166,8 +175,12 @@ interface OcrQueueDao {
     @Query("SELECT * FROM ocr_queue WHERE docId = :docId")
     suspend fun getByDocId(docId: String): OcrQueueEntity?
 
-    /** Count of queue rows still to process (pending or running), for [dev.npn.core.app.OcrStatus]. */
-    @Query("SELECT COUNT(*) FROM ocr_queue WHERE state IN ('pending', 'running')")
+    /**
+     * Count of rows still owed a pass, for [dev.npn.core.app.OcrStatus]. Counts exactly what
+     * [nextPending] would eventually take, so the number the user sees drains to zero; rows given
+     * up on are reported separately, as failures rather than as work outstanding.
+     */
+    @Query("SELECT COUNT(*) FROM ocr_queue WHERE state NOT IN ('done', 'failed')")
     fun countActive(): Flow<Int>
 
     @Query("DELETE FROM ocr_queue WHERE docId = :docId")

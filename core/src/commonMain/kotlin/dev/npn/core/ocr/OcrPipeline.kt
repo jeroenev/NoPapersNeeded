@@ -12,6 +12,9 @@ import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.pdf.PdfEngine
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlin.time.Clock
 
 /**
@@ -75,7 +78,6 @@ class OcrPipeline(
 
     companion object {
         const val STATE_PENDING = "pending"
-        const val STATE_RUNNING = "running"
         const val STATE_DONE = "done"
         const val STATE_FAILED = "failed"
 
@@ -109,14 +111,37 @@ class OcrPipeline(
     /** Engine label per `<hash>.<writerKey>`, so legacy sidecars are decoded at most once. */
     private val engineCache = HashMap<String, String>()
 
+    private val _inFlight = MutableStateFlow<String?>(null)
+
     /**
-     * Pop the next pending queue entry, process it, and return whether something was
-     * processed. Drives the state machine pending -> running -> done/failed with attempts.
+     * The document this device's drain is working on right now, null when it is idle. For anything
+     * that reports background work to the user ([dev.npn.core.app.OcrStatus],
+     * [dev.npn.core.app.WorkFacade.queue]).
+     *
+     * Deliberately in-process rather than a `running` state on the queue row: a stored one could
+     * only be cleared by the pass that wrote it, so an interrupted pass stranded the row for good
+     * (see [dev.npn.core.db.OcrQueueEntity]). Held here, "running" cannot outlive the process that
+     * is doing the running, and so cannot be wrong after a restart.
+     */
+    val inFlight: StateFlow<String?> = _inFlight.asStateFlow()
+
+    /**
+     * Pop the next queue entry owed a pass, process it, and return whether something was
+     * processed. Drives the state machine pending -> done/failed with attempts.
+     *
+     * The row is left `pending` throughout and moved only by [processDoc]'s own terminal write, so
+     * an interrupted pass is indistinguishable from one that never started and the next drain
+     * simply takes it again. Safe because the drain is single-flight in-process
+     * ([dev.npn.core.work.QueueDrainer]): no second worker can pop the same row meanwhile.
      */
     suspend fun processNext(): Boolean {
         val entry = ocrQueueDao.nextPending() ?: return false
-        ocrQueueDao.upsert(entry.copy(state = STATE_RUNNING, updatedAt = now()))
-        processDoc(entry.docId)
+        _inFlight.value = entry.docId
+        try {
+            processDoc(entry.docId)
+        } finally {
+            _inFlight.value = null
+        }
         return true
     }
 
@@ -212,20 +237,23 @@ class OcrPipeline(
      * result distinguishes from [OwnOcr.PUBLISHED] because adopting text that was already on disk
      * is not the arrival of new text. The caller re-reads the versions either way, so the key
      * itself is not returned.
+     *
+     * Every failure here is charged to the document, so each catch hands its cause to [fail] rather
+     * than deciding for itself what the cause meant.
      */
     private suspend fun runOwnOcr(doc: DocumentEntity): OwnOcr {
         val bytes =
             try {
                 fs.readBytes(doc.relPath)
             } catch (t: Throwable) {
-                fail(doc.docId, "read failed: ${t.message}")
+                fail(doc.docId, "read failed", t)
                 return OwnOcr.FAILED
             }
         val result =
             try {
                 extractOrOcr(bytes, doc)
             } catch (t: Throwable) {
-                fail(doc.docId, "ocr failed: ${t.message}")
+                fail(doc.docId, "ocr failed", t)
                 return OwnOcr.FAILED
             }
         val writerKey = NpnPaths.ocrWriterKey(deviceId, result.engine)
@@ -241,10 +269,10 @@ class OcrPipeline(
         return try {
             sidecars.writeOnce(doc.docId, writerKey, OcrSidecarCodec.encode(sidecar))
             OwnOcr.PUBLISHED
-        } catch (_: Throwable) {
+        } catch (t: Throwable) {
             // Already exists for this device+engine: keep the published file.
             if (decode(doc.docId, writerKey) == null) {
-                fail(doc.docId, "sidecar write/read failed for $writerKey")
+                fail(doc.docId, "sidecar write/read failed for $writerKey", t)
                 OwnOcr.FAILED
             } else {
                 OwnOcr.ADOPTED
@@ -521,10 +549,25 @@ class OcrPipeline(
         documentDao.updateOcrState(docId, state, pageCount, engine)
     }
 
+    /**
+     * Charge a failed pass to [docId]: spend an attempt, leave the row pending for a retry or
+     * failed once the cap is reached, and record [what] — plus [cause]'s message, when there is
+     * one — as the diagnostic.
+     *
+     * A [CancellationException] cause is rethrown rather than recorded. It says the drain is being
+     * torn down — a closing app, a session ending — not that this document cannot be read, and
+     * charging it an attempt would let three interrupted app sessions mark a perfectly good scan
+     * permanently failed. The write could not land anyway: everything below suspends against a
+     * database this scope is already done with. Callers therefore hand their caught cause over
+     * rather than deciding for themselves what it meant.
+     */
     private suspend fun fail(
         docId: String,
-        error: String,
+        what: String,
+        cause: Throwable? = null,
     ) {
+        if (cause is CancellationException) throw cause
+        val error = cause?.message?.let { "$what: $it" } ?: what
         val attempts = (ocrQueueDao.getByDocId(docId)?.attempts ?: 0) + 1
         val state = if (attempts >= config.maxAttempts) STATE_FAILED else STATE_PENDING
         ocrQueueDao.upsert(

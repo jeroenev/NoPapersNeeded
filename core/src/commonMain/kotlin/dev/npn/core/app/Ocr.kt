@@ -56,6 +56,17 @@ interface OcrFacade {
     )
 }
 
+/**
+ * How much text recognition this device still owes, for the library's progress indicator.
+ *
+ * [running] is not derivable from [pending]: work can be owed with nothing draining it — before
+ * the first kick, or while a document is being retried after a backoff — and a queue that claimed
+ * to be running whenever it was non-empty could never show a stall.
+ *
+ * @param pending documents owed a pass, including the one being worked on. Excludes documents
+ *  given up on after the attempt cap; those are failures, not outstanding work.
+ * @param running whether a document is actually being processed right now.
+ */
 data class OcrStatus(
     val pending: Int,
     val running: Boolean,
