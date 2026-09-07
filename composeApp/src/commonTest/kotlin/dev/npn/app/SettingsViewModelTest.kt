@@ -4,8 +4,13 @@ import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.app.ui.settings.StoragePathErrorKind
 import dev.npn.app.ui.settings.evaluateStoragePath
+import dev.npn.core.ai.AiCheck
+import dev.npn.core.ai.AiCheckOutcome
+import dev.npn.core.ai.AiCheckStatus
+import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
+import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.ReviewMode
@@ -23,7 +28,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
     private fun vm(
         settings: FakeSettingsRepository = FakeSettingsRepository(),
         session: FakeLibrarySession = FakeLibrarySession(),
-    ) = SettingsViewModel(settings, session)
+        selfTest: suspend (AiConfig) -> AiSelfTestReport = { error("no self-test expected") },
+    ) = SettingsViewModel(settings, session.content, session.reviewConfig, selfTest)
 
     // ---- state combine ----
 
@@ -242,6 +248,75 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             session.reviewConfig.migrations shouldBe emptyList()
             session.reviewConfig.reviewModeSets shouldContainExactly listOf(ReviewMode.INBOX_WORKFLOW)
+        }
+
+    // ---- AI self-test ----
+
+    private fun aiSettings() =
+        FakeSettingsRepository().apply {
+            updateSettings {
+                it.copy(
+                    aiEnabled = true,
+                    aiProvider = AiProvider.OLLAMA,
+                    aiModel = "qwen3:8b",
+                    aiOcrAuto = true,
+                )
+            }
+        }
+
+    private fun report(vision: AiCheckStatus) =
+        AiSelfTestReport(
+            listOf(
+                AiCheckOutcome(AiCheck.API, AiCheckStatus.PASSED),
+                AiCheckOutcome(AiCheck.MESSAGES, AiCheckStatus.PASSED),
+                AiCheckOutcome(AiCheck.VISION, vision),
+            ),
+        )
+
+    @Test
+    fun aFailedVisionCheckSwitchesAiPageReadingOff() =
+        runTest(dispatcher) {
+            // The one setting this test is allowed to change on the user's behalf: page reading on
+            // a model that cannot read images is a paid request per page that returns nothing.
+            val settings = aiSettings()
+            val model = vm(settings = settings, selfTest = { report(AiCheckStatus.FAILED) })
+
+            model.runAiSelfTest()
+            advanceUntilIdle()
+
+            settings.settingsFlow.value?.aiOcrAuto shouldBe false
+            model.aiSelfTest.value.aiOcrTurnedOff shouldBe true
+            model.aiSelfTest.value.running shouldBe false
+        }
+
+    @Test
+    fun aPassingOrSkippedVisionCheckLeavesAiPageReadingAlone() =
+        runTest(dispatcher) {
+            listOf(AiCheckStatus.PASSED, AiCheckStatus.SKIPPED).forEach { status ->
+                val settings = aiSettings()
+                val model = vm(settings = settings, selfTest = { report(status) })
+
+                model.runAiSelfTest()
+                advanceUntilIdle()
+
+                settings.settingsFlow.value?.aiOcrAuto shouldBe true
+                model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
+            }
+        }
+
+    @Test
+    fun aFailedVisionCheckReportsNoChangeWhenPageReadingWasAlreadyOff() =
+        runTest(dispatcher) {
+            // Nothing was switched off, so the screen must not claim it was.
+            val settings = aiSettings().apply { updateSettings { it.copy(aiOcrAuto = false) } }
+            val model = vm(settings = settings, selfTest = { report(AiCheckStatus.FAILED) })
+
+            model.runAiSelfTest()
+            advanceUntilIdle()
+
+            model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
+            model.aiSelfTest.value.report
+                ?.statusOf(AiCheck.VISION) shouldBe AiCheckStatus.FAILED
         }
 
     private companion object {

@@ -101,6 +101,18 @@
     <string name="common_settings_ai_ocr_auto">Tekst uitlezen met de assistent in plaats van met OCR op het toestel</string>
     <string name="common_settings_ai_ocr_auto_help">Laat het model elke gescande pagina uitlezen. Dat gaat veel beter om met handschrift, tabellen en vage scans dan OCR op het toestel. Dit kost één aanvraag per pagina, niet per document, en documenten die al met OCR op het toestel zijn uitgelezen worden opnieuw gelezen. Documenten van meer dan %1$d pagina's blijven hier OCR op het toestel gebruiken; je kunt ze nog wel één voor één laten uitlezen. Laat dit uit om tekst op het toestel uit te lezen en gebruik "Tekst uitlezen met assistent" op losse documenten.</string>
 
+    <string name="common_settings_ai_test">Deze instellingen testen</string>
+    <string name="common_settings_ai_test_help">Controleert drie dingen op een rij: of de server antwoordt, of het model een vraag beantwoordt, en of het tekst van een pagina-afbeelding kan lezen. Kost twee heel kleine aanvragen. De test stopt bij de eerste fout, omdat alles daarna om dezelfde reden zou mislukken.</string>
+    <string name="common_settings_ai_test_running">Bezig met testen…</string>
+    <string name="common_settings_ai_test_again">Opnieuw testen</string>
+    <string name="common_settings_ai_check_api">Server bereikbaar</string>
+    <string name="common_settings_ai_check_messages">Model beantwoordt vragen</string>
+    <string name="common_settings_ai_check_vision">Model leest pagina-afbeeldingen</string>
+    <string name="common_settings_ai_check_passed">Werkt</string>
+    <string name="common_settings_ai_check_failed">Werkt niet</string>
+    <string name="common_settings_ai_check_skipped">Niet getest</string>
+    <string name="common_settings_ai_test_ocr_disabled">"%1$s" is uitgezet: dit model kan geen pagina-afbeeldingen lezen, dus het zou een aanvraag per pagina kosten en niets opleveren.</string>
+
     <string name="common_settings_default_view">Standaardweergave: %1$s</string>
     <string name="common_settings_landscape_columns">Lijst met meerdere kolommen in liggende stand</string>
     <string name="common_settings_landscape_columns_help">Toon de lijstweergave in twee kolommen als het venster breder dan hoog is.</string>

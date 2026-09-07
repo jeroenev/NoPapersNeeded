@@ -1,14 +1,23 @@
 package dev.npn.app.ui.settings
 
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.outlined.CheckCircle
+import androidx.compose.material.icons.outlined.ErrorOutline
+import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -16,9 +25,14 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.NumericField
+import dev.npn.core.ai.AiCheck
+import dev.npn.core.ai.AiCheckOutcome
+import dev.npn.core.ai.AiCheckStatus
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.app.AiTagging
@@ -26,12 +40,23 @@ import dev.npn.core.ocr.OcrEngineSelector
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_api
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_messages
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_passed
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_skipped
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_check_vision
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_ocr_auto
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_ocr_auto_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_request_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_test
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_again
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_ocr_disabled
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_test_running
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key_help
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key_help_provider
@@ -57,9 +82,13 @@ import no_papers_needed.composeapp.generated.resources.common_settings_reasoning
 import no_papers_needed.composeapp.generated.resources.common_settings_server_url
 import no_papers_needed.composeapp.generated.resources.common_settings_server_url_help
 import no_papers_needed.composeapp.generated.resources.common_settings_server_url_ollama_help
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
 private const val TAG_CAP_MAX_DIGITS = 2
+
+private val SelfTestSpacing = 8.dp
+private val CheckIconSize = 20.dp
 
 /**
  * The AI assistant pane: a provider picker (Koog-backed providers first, the fully manual
@@ -84,6 +113,8 @@ internal fun AiSettingsPane(context: SettingsPaneContext) {
         if (state.aiEnabled) {
             AiEndpointSettings(state = state, models = context.aiModels, vm = vm)
             AiBehaviourSettings(state = state, vm = vm)
+            // Last, because it is a verdict on everything above it.
+            AiSelfTestSection(state = state, selfTest = context.aiSelfTest, onRun = vm::runAiSelfTest)
         }
     }
 }
@@ -176,6 +207,94 @@ private fun AiBehaviourSettings(
     )
     SettingsHelpText(stringResource(Res.string.common_settings_ai_request_help))
 }
+
+/**
+ * Diagnosis of the setup above: one button, and one line per check once a run has finished.
+ *
+ * Three lines rather than one verdict because the three failures have three different fixes (wrong
+ * key, wrong model id, model without vision), and a single "AI is not working" would leave the user
+ * guessing which. Disabled until the endpoint is complete, since there is nothing to test yet.
+ */
+@Composable
+private fun AiSelfTestSection(
+    state: SettingsUiState,
+    selfTest: AiSelfTestState,
+    onRun: () -> Unit,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(SelfTestSpacing)) {
+        OutlinedButton(onClick = onRun, enabled = state.aiConfigured && !selfTest.running) {
+            Text(
+                text =
+                    stringResource(
+                        when {
+                            selfTest.running -> Res.string.common_settings_ai_test_running
+                            selfTest.report != null -> Res.string.common_settings_ai_test_again
+                            else -> Res.string.common_settings_ai_test
+                        },
+                    ),
+            )
+        }
+        if (selfTest.running) LinearProgressIndicator(Modifier.fillMaxWidth())
+        selfTest.report?.outcomes?.forEach { AiCheckRow(it) }
+        if (selfTest.aiOcrTurnedOff) {
+            Text(
+                text =
+                    stringResource(
+                        Res.string.common_settings_ai_test_ocr_disabled,
+                        stringResource(Res.string.common_settings_ai_ocr_auto),
+                    ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        SettingsHelpText(stringResource(Res.string.common_settings_ai_test_help))
+    }
+}
+
+/**
+ * One check's verdict. [AiCheckOutcome.detail] is quoted from the endpoint (an error message, or
+ * the answer that was wrong), so it is shown verbatim and untranslated — it is evidence, not copy.
+ */
+@Composable
+private fun AiCheckRow(outcome: AiCheckOutcome) {
+    val (icon, tint) =
+        when (outcome.status) {
+            AiCheckStatus.PASSED -> Icons.Outlined.CheckCircle to MaterialTheme.colorScheme.primary
+            AiCheckStatus.FAILED -> Icons.Outlined.ErrorOutline to MaterialTheme.colorScheme.error
+            AiCheckStatus.SKIPPED -> Icons.Outlined.RemoveCircleOutline to MaterialTheme.colorScheme.outline
+        }
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Icon(
+            imageVector = icon,
+            contentDescription = stringResource(checkStatusLabel(outcome.status)),
+            tint = tint,
+            modifier = Modifier.padding(end = SelfTestSpacing).size(CheckIconSize),
+        )
+        Column(Modifier.weight(1f)) {
+            Text(text = stringResource(checkLabel(outcome.check)), style = MaterialTheme.typography.bodyMedium)
+            SettingsHelpText(
+                buildString {
+                    append(stringResource(checkStatusLabel(outcome.status)))
+                    outcome.detail?.let { append(" — $it") }
+                },
+            )
+        }
+    }
+}
+
+private fun checkLabel(check: AiCheck): StringResource =
+    when (check) {
+        AiCheck.API -> Res.string.common_settings_ai_check_api
+        AiCheck.MESSAGES -> Res.string.common_settings_ai_check_messages
+        AiCheck.VISION -> Res.string.common_settings_ai_check_vision
+    }
+
+private fun checkStatusLabel(status: AiCheckStatus): StringResource =
+    when (status) {
+        AiCheckStatus.PASSED -> Res.string.common_settings_ai_check_passed
+        AiCheckStatus.FAILED -> Res.string.common_settings_ai_check_failed
+        AiCheckStatus.SKIPPED -> Res.string.common_settings_ai_check_skipped
+    }
 
 @Composable
 private fun AiBaseUrlField(

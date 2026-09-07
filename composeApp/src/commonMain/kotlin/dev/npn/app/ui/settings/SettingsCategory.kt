@@ -19,6 +19,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_about_hel
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_assistant
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider_help
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_test
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_rules
 import no_papers_needed.composeapp.generated.resources.common_settings_category_appearance
@@ -87,6 +88,7 @@ internal class SettingsPaneContext(
     val vm: SettingsViewModel,
     val state: SettingsUiState,
     val aiModels: AiModelListState,
+    val aiSelfTest: AiSelfTestState,
     val reviewMode: ReviewMode,
     val standardFields: Set<StandardField>,
     val onChangeLibrary: () -> Unit,
@@ -177,6 +179,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_max_suggested_tags,
                     Res.string.common_settings_max_new_tags,
                     Res.string.common_settings_ai_auto_on_ocr,
+                    Res.string.common_settings_ai_test,
                 ),
             content = { AiSettingsPane(it) },
         ),

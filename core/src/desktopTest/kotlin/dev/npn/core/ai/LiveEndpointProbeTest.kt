@@ -110,6 +110,19 @@ class LiveEndpointProbeTest {
         }
     }
 
+    @Test
+    fun selfTestPassesAgainstAWorkingEndpoint() {
+        val config = liveConfig()
+        val report = runBlocking { AiSelfTest.run(config) }
+        report.outcomes.forEach { println("PROBE selftest ${it.check}=${it.status} ${it.detail.orEmpty()}") }
+
+        // The self-test is what the settings screen shows, and a failing vision check switches AI
+        // page reading off — so a false negative here would turn off a working feature. The probe
+        // above already proved this endpoint transcribes a page, so all three must pass.
+        AiCheck.entries.forEach { report.statusOf(it) shouldBe AiCheckStatus.PASSED }
+        report.provesAiOcrCannotWork shouldBe false
+    }
+
     /**
      * This device's configured endpoint, with per-field env overrides. Fails loudly rather than
      * skipping when the endpoint is half-configured: the probe was explicitly asked for, so silence

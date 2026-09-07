@@ -101,6 +101,18 @@
     <string name="common_settings_ai_ocr_auto">Read text with the assistant instead of on-device OCR</string>
     <string name="common_settings_ai_ocr_auto_help">Uses the model to read every scanned page, which handles handwriting, tables and faint scans far better than on-device OCR. This costs one request per page, not per document, and it also re-reads documents that on-device OCR already handled. Documents longer than %1$d pages keep using on-device OCR here; you can still ask for those one at a time. Leave this off to read text on-device and use "Read text with assistant" on individual documents instead.</string>
 
+    <string name="common_settings_ai_test">Test this setup</string>
+    <string name="common_settings_ai_test_help">Checks three things in turn: that the server answers, that the model replies to a question, and that it can read text off a page image. Costs two very small requests. Checking stops at the first failure, since everything after it would fail for the same reason.</string>
+    <string name="common_settings_ai_test_running">Testing…</string>
+    <string name="common_settings_ai_test_again">Test again</string>
+    <string name="common_settings_ai_check_api">Server reachable</string>
+    <string name="common_settings_ai_check_messages">Model answers questions</string>
+    <string name="common_settings_ai_check_vision">Model reads page images</string>
+    <string name="common_settings_ai_check_passed">Works</string>
+    <string name="common_settings_ai_check_failed">Not working</string>
+    <string name="common_settings_ai_check_skipped">Not tested</string>
+    <string name="common_settings_ai_test_ocr_disabled">"%1$s" has been switched off: this model cannot read page images, so it would spend a request per page and return nothing.</string>
+
     <string name="common_settings_default_view">Default view: %1$s</string>
     <string name="common_settings_landscape_columns">Multi-column list in landscape</string>
     <string name="common_settings_landscape_columns_help">Show the list view in two columns when the window is wider than it is tall.</string>

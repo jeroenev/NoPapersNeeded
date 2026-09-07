@@ -90,6 +90,7 @@ fun SettingsScreen(
     val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }
     val state by vm.state.collectAsStateWithLifecycle()
     val aiModels by vm.aiModels.collectAsStateWithLifecycle()
+    val aiSelfTest by vm.aiSelfTest.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
     val standardFields by vm.standardFields.collectAsStateWithLifecycle()
 
@@ -104,6 +105,7 @@ fun SettingsScreen(
             vm = vm,
             state = state,
             aiModels = aiModels,
+            aiSelfTest = aiSelfTest,
             reviewMode = reviewMode,
             standardFields = standardFields,
             onChangeLibrary = onChangeLibrary,

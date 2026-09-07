@@ -4,9 +4,12 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
+import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiModelCatalog
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
+import dev.npn.core.ai.AiSelfTest
+import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.LibrarySession
@@ -54,6 +57,19 @@ data class SettingsUiState(
     val aiMaxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
     val aiAutoOnOcr: Boolean = false,
     val aiOcrAuto: Boolean = false,
+    /** Whether the endpoint is complete enough to call — what gates the self-test button. */
+    val aiConfigured: Boolean = false,
+)
+
+/**
+ * Transient state of the AI self-test: [report] is the last run's verdicts (null until one has
+ * been run), and [aiOcrTurnedOff] records that this run switched page reading off, so the screen
+ * can say so instead of the setting silently flipping under the user.
+ */
+data class AiSelfTestState(
+    val running: Boolean = false,
+    val report: AiSelfTestReport? = null,
+    val aiOcrTurnedOff: Boolean = false,
 )
 
 /**
@@ -105,6 +121,11 @@ class SettingsViewModel(
     private val settings: SettingsRepository,
     private val content: DocContentFacade,
     private val reviewConfig: ReviewConfigFacade,
+    /**
+     * How the AI self-test is run. Injectable so [runAiSelfTest]'s consequence — switching AI page
+     * reading off — is testable without an endpoint; production always uses [AiSelfTest.run].
+     */
+    private val selfTest: suspend (AiConfig) -> AiSelfTestReport = AiSelfTest::run,
 ) : MessagesViewModel() {
     constructor(settings: SettingsRepository, session: LibrarySession) :
         this(settings, session.content, session.reviewConfig)
@@ -135,6 +156,7 @@ class SettingsViewModel(
                     aiMaxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc,
                     aiAutoOnOcr = snapshot.aiAutoOnOcr,
                     aiOcrAuto = snapshot.aiOcrAuto,
+                    aiConfigured = snapshot.toAiConfig().configured,
                 )
             }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
@@ -147,6 +169,13 @@ class SettingsViewModel(
     val aiModels: StateFlow<AiModelListState> = _aiModels.asStateFlow()
 
     private var aiModelsJob: Job? = null
+
+    private val _aiSelfTest = MutableStateFlow(AiSelfTestState())
+
+    /** Verdicts of the last AI self-test, run on demand via [runAiSelfTest]. */
+    val aiSelfTest: StateFlow<AiSelfTestState> = _aiSelfTest.asStateFlow()
+
+    private var aiSelfTestJob: Job? = null
 
     /** Library-wide visible standard fields (synced via the journal, like [reviewMode]). */
     val standardFields: StateFlow<Set<StandardField>> =
@@ -208,6 +237,29 @@ class SettingsViewModel(
                 } catch (e: Exception) {
                     _aiModels.value = AiModelListState(error = e.message ?: e::class.simpleName ?: "error")
                 }
+            }
+    }
+
+    /**
+     * Diagnose the configured endpoint: reachability, then an answer, then reading an image
+     * ([AiSelfTest]). Runs against the live settings values, like [loadAiModels], so it can be run
+     * straight after typing a key.
+     *
+     * A vision check that ran and failed switches AI page reading off, because that setting spends
+     * a request per page on a model that cannot produce text — an unattended, paid no-op. It is
+     * only ever switched OFF here, never back on: a model proving it can read images is not a
+     * reason to start paying per page.
+     */
+    fun runAiSelfTest() {
+        aiSelfTestJob?.cancel()
+        aiSelfTestJob =
+            viewModelScope.launch {
+                _aiSelfTest.value = AiSelfTestState(running = true)
+                val config = settings.settings.first().toAiConfig()
+                val report = selfTest(config)
+                val turnOffAiOcr = report.provesAiOcrCannotWork && config.ocrAuto
+                if (turnOffAiOcr) settings.edit { it.copy(aiOcrAuto = false) }
+                _aiSelfTest.value = AiSelfTestState(report = report, aiOcrTurnedOff = turnOffAiOcr)
             }
     }
 
