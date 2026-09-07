@@ -91,7 +91,7 @@ class SearchFieldsToolsTest {
         runTest {
             seed()
             val out = LibraryAiTools.ListFieldsTool(db.documentFieldDao()).execute(LibraryAiTools.ListFieldsTool.Args())
-            out shouldContain "Default fields: title, correspondent, docType, docDate, notes, fileName"
+            out shouldContain "Default fields: title, correspondent, docType, docDate, notes, fileName, ocrEngine"
             out shouldContain "amount (2 docs)"
             out shouldContain "ref (1 docs)"
         }
@@ -182,7 +182,7 @@ class SearchFieldsToolsTest {
             seed()
             val tool = LibraryAiTools.SearchFieldsTool(db.documentDao(), db.documentFieldDao())
             val out = tool.execute(LibraryAiTools.SearchFieldsTool.Args(field = "nonexistent", value = "x"))
-            out shouldContain "Default fields: title, correspondent, docType, docDate, notes, fileName"
+            out shouldContain "Default fields: title, correspondent, docType, docDate, notes, fileName, ocrEngine"
         }
 
     @Test

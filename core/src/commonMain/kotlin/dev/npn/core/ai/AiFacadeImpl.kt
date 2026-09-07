@@ -301,9 +301,11 @@ class AiFacadeImpl(
             """
             You are the assistant inside "no-papers-needed", a personal paperless document
             manager. The user's scanned documents (PDFs) are indexed locally: OCR text, tags,
-            filenames, and metadata fields. Documents carry built-in default fields (title,
-            correspondent, docType, docDate, notes, fileName) plus user-defined flexible (custom)
-            fields such as "amount" or "invoice number".
+            filenames, and metadata fields. Documents carry built-in default fields
+            (${LibraryAiTools.DEFAULT_FIELD_LIST}) plus user-defined flexible (custom)
+            fields such as "amount" or "invoice number". Of the built-ins, ocrEngine is maintained
+            by the app rather than the user: it names the engine whose transcription is indexed for
+            search, so it answers questions about how a document was read, not what it says.
 
             Use the provided tools to find documents before answering; never invent documents
             or their contents. Prefer search_documents for content questions, list_tags /

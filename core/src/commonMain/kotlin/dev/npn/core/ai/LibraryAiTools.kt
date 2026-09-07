@@ -12,6 +12,7 @@ import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TagDao
+import dev.npn.core.ocr.OcrEngineId
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -127,11 +128,41 @@ object LibraryAiTools {
     private fun DocumentEntity.isLive(): Boolean = !trashed && !deleted && !missing
 
     /**
-     * Canonical names of the built-in single-value document fields the model can search with
-     * [SearchFieldsTool], as advertised to the model (list_fields / tool descriptions).
+     * Built-in fields holding what a person wrote about a document. These are what an unqualified
+     * ("any") field search scans, because they are the only ones a user phrases a search against.
      */
-    internal val DEFAULT_FIELD_NAMES: Set<String> =
-        setOf("title", "correspondent", "docType", "docDate", "notes", "fileName")
+    private const val USER_FIELD_LIST = "title, correspondent, docType, docDate, notes, fileName"
+
+    /**
+     * Built-in fields the app maintains rather than the user. Searchable by name — "which documents
+     * did the vision model read?" is a real question — but deliberately kept out of "any" searches:
+     * their vocabularies are short common words, so `ocrEngine` would answer a search for "ai" with
+     * every AI-transcribed document.
+     */
+    private const val SYSTEM_FIELD_LIST = "ocrEngine"
+
+    /**
+     * The default fields exactly as the model is told them. This literal is the source of truth for
+     * the vocabulary — the sets below are parsed from it — because it has to be a compile-time
+     * constant to appear in an [LLMDescription], and a field the tools accept but never advertise
+     * is a field the model will not use.
+     */
+    internal const val DEFAULT_FIELD_LIST = "$USER_FIELD_LIST, $SYSTEM_FIELD_LIST"
+
+    private fun fieldNames(list: String): Set<String> = list.split(", ").toSet()
+
+    private val USER_FIELD_NAMES: Set<String> = fieldNames(USER_FIELD_LIST)
+
+    private val SYSTEM_FIELD_NAMES: Set<String> = fieldNames(SYSTEM_FIELD_LIST)
+
+    /**
+     * Canonical names of the built-in single-value document fields the model can search with
+     * [SearchFieldsTool].
+     */
+    internal val DEFAULT_FIELD_NAMES: Set<String> = USER_FIELD_NAMES + SYSTEM_FIELD_NAMES
+
+    /** The engine labels [DocumentEntity.ocrEngine] can carry, as told to the model. */
+    private val OCR_ENGINE_LABELS: String = OcrEngineId.entries.joinToString(" | ") { it.column }
 
     private val FIELD_ALIASES: Map<String, String> =
         mapOf(
@@ -144,6 +175,8 @@ object LibraryAiTools {
             "date" to "docDate",
             "documentdate" to "docDate",
             "note" to "notes",
+            "engine" to "ocrEngine",
+            "ocr" to "ocrEngine",
         )
 
     /** Map a model-supplied field name (any casing) to its canonical default-field name. */
@@ -275,7 +308,7 @@ object LibraryAiTools {
             name = "list_fields",
             description =
                 "List the metadata fields available for field search: the built-in default " +
-                    "fields (title, correspondent, docType, docDate, notes, fileName) plus every custom " +
+                    "fields ($DEFAULT_FIELD_LIST) plus every custom " +
                     "(flexible) field key in use across the library, with document counts. Call this to " +
                     "discover flexible field keys before using search_fields.",
         ) {
@@ -285,8 +318,10 @@ object LibraryAiTools {
         override suspend fun execute(args: Args): String {
             val keys = fieldDao.keysWithCounts()
             return buildString {
+                appendLine("Default fields: $DEFAULT_FIELD_LIST")
                 appendLine(
-                    "Default fields: title, correspondent, docType, docDate, notes, fileName",
+                    "ocrEngine is the engine whose text is indexed for search ($OCR_ENGINE_LABELS); " +
+                        "it is set by the app, not the user.",
                 )
                 if (keys.isEmpty()) {
                     append("No custom (flexible) fields are in use yet.")
@@ -308,16 +343,19 @@ object LibraryAiTools {
             name = "search_fields",
             description =
                 "Find documents by one metadata field. The field may be a " +
-                    "default field (title, correspondent, docType, docDate, notes, fileName) or a custom " +
-                    "(flexible) field key discovered via list_fields. Omit field or pass \"any\" to search " +
-                    "every field at once. Leave value empty to find documents that simply have the field; " +
+                    "default field ($DEFAULT_FIELD_LIST) or a custom " +
+                    "(flexible) field key discovered via list_fields. ocrEngine is set by the app, not " +
+                    "the user: it names the engine whose transcription is indexed for search " +
+                    "($OCR_ENGINE_LABELS). Omit field or pass \"any\" to search " +
+                    "every user-authored field at once (\"any\" does not scan ocrEngine, which must be " +
+                    "asked for by name). Leave value empty to find documents that simply have the field; " +
                     "otherwise the value is matched as a case-insensitive substring.",
         ) {
         @Serializable
         data class Args(
             @property:LLMDescription(
-                "Field to search: title | correspondent | docType | docDate | notes | fileName, " +
-                    "a custom field key from list_fields, or \"any\" for every field.",
+                "Field to search: $DEFAULT_FIELD_LIST, " +
+                    "a custom field key from list_fields, or \"any\" for every user-authored field.",
             )
             val field: String = "any",
             @property:LLMDescription(
@@ -349,11 +387,11 @@ object LibraryAiTools {
                     }
                 } else if (value.isEmpty()) {
                     "No documents have a custom field \"${args.field}\"." +
-                        " Default fields: ${DEFAULT_FIELD_NAMES.joinToString(", ")}." +
+                        " Default fields: $DEFAULT_FIELD_LIST." +
                         " Call list_fields to see the custom field keys in use."
                 } else {
                     "No documents have a custom field \"${args.field}\" containing \"$value\"." +
-                        " Default fields: ${DEFAULT_FIELD_NAMES.joinToString(", ")}." +
+                        " Default fields: $DEFAULT_FIELD_LIST." +
                         " Call list_fields to see the custom field keys in use."
                 }
             }
@@ -375,7 +413,7 @@ object LibraryAiTools {
             val matches = LinkedHashMap<String, Pair<String, String>>()
             for (doc in documentDao.getAllLive()) {
                 defaultFieldValues(doc)
-                    .firstOrNull { it.second.contains(value, ignoreCase = true) }
+                    .firstOrNull { it.first !in SYSTEM_FIELD_NAMES && it.second.contains(value, ignoreCase = true) }
                     ?.let { matches.putIfAbsent(doc.docId, it) }
             }
             for (f in fieldDao.all()) {
@@ -421,6 +459,7 @@ object LibraryAiTools {
                 doc.docDate?.takeIf { it.isNotBlank() }?.let { add("docDate" to it) }
                 doc.notes?.takeIf { it.isNotBlank() }?.let { add("notes" to it) }
                 add("fileName" to doc.fileName)
+                doc.ocrEngine?.takeIf { it.isNotBlank() }?.let { add("ocrEngine" to it) }
             }
 
         companion object {
@@ -437,7 +476,8 @@ object LibraryAiTools {
             name = "get_document",
             description =
                 "Full metadata of one document by docId: file name, path, title, tags, " +
-                    "correspondent, document type, date, notes, custom (flexible) fields, page count.",
+                    "correspondent, document type, date, notes, custom (flexible) fields, page count, " +
+                    "and which OCR engine's text is indexed for it.",
         ) {
         @Serializable
         data class Args(
@@ -466,6 +506,10 @@ object LibraryAiTools {
                     appendLine("customFields:")
                     for (f in fields) appendLine("  ${f.fieldKey}: ${f.fieldValue}")
                 }
+                // Both halves, because they answer different questions: which text search actually
+                // reads, and whether the user pinned that choice by hand.
+                appendLine("ocrEngine: ${doc.ocrEngine ?: "(no text indexed yet)"}")
+                doc.ocrEngineOverride?.let { appendLine("ocrEnginePinnedByUser: $it") }
                 if (doc.trashed) appendLine("status: in trash")
                 if (doc.missing) appendLine("status: file missing")
             }.trimEnd()
