@@ -20,6 +20,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Tests: `./gradlew :core:desktopTest` and `./gradlew :composeApp:desktopTest`
   (viewmodel tests). `mise test-fast` runs both; `mise test` runs only core.
 - Single test class: `./gradlew :core:desktopTest --tests 'dev.npn.core.journal.FoldTest'`.
+- Live AI endpoint checks are opt-in and skipped by default (they cost money):
+  `NPN_LIVE_AI=1 ./gradlew :core:desktopTest --tests 'dev.npn.core.ai.LiveEndpointProbeTest'`.
+  Never add a live-endpoint call to a normal test — CI has no credentials.
 - Formatting and lint: `./gradlew spotlessCheck detekt`.
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
