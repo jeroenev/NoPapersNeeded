@@ -119,4 +119,8 @@
     <string name="library_to">To</string>
     <string name="library_date_from">From %1$s</string>
     <string name="library_date_to">To %1$s</string>
+    <plurals name="library_doc_ids_filter">
+        <item quantity="one">Limited to %1$d document</item>
+        <item quantity="other">Limited to %1$d documents</item>
+    </plurals>
 </resources>

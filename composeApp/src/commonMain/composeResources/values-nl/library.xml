@@ -119,4 +119,8 @@
     <string name="library_to">Tot</string>
     <string name="library_date_from">Vanaf %1$s</string>
     <string name="library_date_to">Tot %1$s</string>
+    <plurals name="library_doc_ids_filter">
+        <item quantity="one">Beperkt tot %1$d document</item>
+        <item quantity="other">Beperkt tot %1$d documenten</item>
+    </plurals>
 </resources>

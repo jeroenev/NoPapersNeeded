@@ -20,12 +20,14 @@ import no_papers_needed.composeapp.generated.resources.common_needs_review
 import no_papers_needed.composeapp.generated.resources.common_reviewed
 import no_papers_needed.composeapp.generated.resources.library_date_from
 import no_papers_needed.composeapp.generated.resources.library_date_to
+import no_papers_needed.composeapp.generated.resources.library_doc_ids_filter
 import no_papers_needed.composeapp.generated.resources.library_remove_filter
 import no_papers_needed.composeapp.generated.resources.library_review_queue
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_all
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_any
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_none
 import no_papers_needed.composeapp.generated.resources.library_untagged
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -66,6 +68,10 @@ fun ActiveFilters(
 @Composable
 private fun chipLabel(chip: ActiveFilterChip): String =
     when (chip) {
+        is ActiveFilterChip.DocIds -> {
+            pluralStringResource(Res.plurals.library_doc_ids_filter, chip.count, chip.count)
+        }
+
         is ActiveFilterChip.TagAll -> {
             stringResource(Res.string.library_tag_filter_all, chip.tag)
         }

@@ -70,6 +70,19 @@ fun cycleTag(
  * variant purely to pick a `stringResource`.
  */
 sealed interface ActiveFilterChip {
+    /**
+     * A restriction to an explicit set of documents ([LibraryFilter.docIds]), as handed over by the
+     * AI assistant's "open all documents".
+     *
+     * Carries only the [count], because the ids themselves are not something a label can say and
+     * removal clears the whole set anyway. Unlike every other facet this one cannot be re-created
+     * from the filter sheet, so without a chip it is an invisible restriction the user cannot
+     * undo — which is exactly the bug this variant exists to prevent.
+     */
+    data class DocIds(
+        val count: Int,
+    ) : ActiveFilterChip
+
     /** A tag in the AND bucket ([LibraryFilter.tagsAll]). */
     data class TagAll(
         val tag: String,
@@ -120,14 +133,16 @@ sealed interface ActiveFilterChip {
 /**
  * The ordered list of removable chips for [filter]'s active facets.
  *
- * This is the single definition of WHICH facets surface as chips and IN WHAT ORDER — tags first
- * (AND, then OR, then NOT, each in the filter's own list order), then reviewed, correspondent, doc
- * type, the date bounds, and finally the two review-scope toggles. It re-uses [TagBucket] semantics
- * so the chip list can never disagree with what [cycleTag] produced. Empty facets contribute no
- * chip, so an empty filter yields an empty list.
+ * This is the single definition of WHICH facets surface as chips and IN WHAT ORDER — the document-set
+ * restriction first (it scopes everything else), then tags (AND, then OR, then NOT, each in the
+ * filter's own list order), then reviewed, correspondent, doc type, the date bounds, and finally the
+ * two review-scope toggles. It re-uses [TagBucket] semantics so the chip list can never disagree
+ * with what [cycleTag] produced. Empty facets contribute no chip, so an empty filter yields an empty
+ * list.
  */
 fun LibraryFilter.activeChips(): List<ActiveFilterChip> =
     buildList {
+        if (docIds.isNotEmpty()) add(ActiveFilterChip.DocIds(docIds.size))
         tagsAll.forEach { add(ActiveFilterChip.TagAll(it)) }
         tagsAny.forEach { add(ActiveFilterChip.TagAny(it)) }
         tagsNone.forEach { add(ActiveFilterChip.TagNone(it)) }
@@ -150,6 +165,7 @@ fun LibraryFilter.activeChips(): List<ActiveFilterChip> =
  */
 fun LibraryFilter.removeChip(chip: ActiveFilterChip): LibraryFilter =
     when (chip) {
+        is ActiveFilterChip.DocIds -> copy(docIds = emptyList())
         is ActiveFilterChip.TagAll -> copy(tagsAll = tagsAll - chip.tag)
         is ActiveFilterChip.TagAny -> copy(tagsAny = tagsAny - chip.tag)
         is ActiveFilterChip.TagNone -> copy(tagsNone = tagsNone - chip.tag)

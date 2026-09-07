@@ -108,9 +108,10 @@ class LibraryFilterEditsTest {
     }
 
     @Test
-    fun chipsAreOrderedTagsFirstThenSingleValueFacetsThenToggles() {
+    fun chipsAreOrderedDocIdsFirstThenTagsThenSingleValueFacetsThenToggles() {
         val filter =
             LibraryFilter(
+                docIds = listOf("d1", "d2", "d3"),
                 tagsAll = listOf("a1", "a2"),
                 tagsAny = listOf("o1"),
                 tagsNone = listOf("n1"),
@@ -124,6 +125,7 @@ class LibraryFilterEditsTest {
             )
         filter.activeChips() shouldContainExactly
             listOf(
+                ActiveFilterChip.DocIds(3),
                 ActiveFilterChip.TagAll("a1"),
                 ActiveFilterChip.TagAll("a2"),
                 ActiveFilterChip.TagAny("o1"),
@@ -142,6 +144,16 @@ class LibraryFilterEditsTest {
     fun reviewedChipCarriesTheFilteredValue() {
         LibraryFilter(reviewed = false).activeChips() shouldContainExactly
             listOf(ActiveFilterChip.Reviewed(false))
+    }
+
+    @Test
+    fun aDocumentSetRestrictionIsVisibleAsOneRemovableChip() {
+        // The AI assistant's "open all documents" is the only way to get here, and it is the only
+        // facet the filter sheet cannot re-create -- so without this chip the restriction is
+        // invisible and the user cannot get back to the full library.
+        val filter = LibraryFilter(docIds = listOf("d1", "d2"))
+        filter.activeChips() shouldContainExactly listOf(ActiveFilterChip.DocIds(2))
+        filter.removeChip(ActiveFilterChip.DocIds(2)) shouldBe LibraryFilter()
     }
 
     @Test
@@ -202,6 +214,7 @@ class LibraryFilterEditsTest {
         // Removing every chip in turn from a fully-populated filter empties it completely.
         val full =
             LibraryFilter(
+                docIds = listOf("d"),
                 tagsAll = listOf("a"),
                 tagsAny = listOf("o"),
                 tagsNone = listOf("n"),
