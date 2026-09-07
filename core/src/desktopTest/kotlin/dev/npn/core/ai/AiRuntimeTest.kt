@@ -4,6 +4,7 @@ import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
 import ai.koog.prompt.executor.clients.anthropic.models.AnthropicThinking
 import ai.koog.prompt.executor.clients.google.GoogleParams
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
+import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.ollama.client.OllamaParams
 import io.kotest.matchers.shouldBe
@@ -63,24 +64,30 @@ class AiRuntimeTest {
     @Test
     fun defaultReasoningMapsToNoOverrideForEveryProvider() {
         AiProvider.entries.forEach { provider ->
-            AiRuntime.reasoningParams(provider, AiReasoningLevel.DEFAULT, toolLoop = false) shouldBe null
-            AiRuntime.reasoningParams(provider, AiReasoningLevel.DEFAULT, toolLoop = true) shouldBe null
+            AiRuntime.reasoningParams(provider, "some-model", AiReasoningLevel.DEFAULT, toolLoop = false) shouldBe null
+            AiRuntime.reasoningParams(provider, "some-model", AiReasoningLevel.DEFAULT, toolLoop = true) shouldBe null
         }
     }
 
     @Test
     fun openAiFamilyMapsToReasoningEffort() {
         listOf(AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO).forEach { provider ->
-            val params = AiRuntime.reasoningParams(provider, AiReasoningLevel.LOW, toolLoop = true)
+            val params = AiRuntime.reasoningParams(provider, "some-model", AiReasoningLevel.LOW, toolLoop = true)
             params.shouldBeInstanceOf<OpenAIChatParams>().reasoningEffort shouldBe ReasoningEffort.LOW
-            val none = AiRuntime.reasoningParams(provider, AiReasoningLevel.NONE, toolLoop = false)
+            val none = AiRuntime.reasoningParams(provider, "some-model", AiReasoningLevel.NONE, toolLoop = false)
             none.shouldBeInstanceOf<OpenAIChatParams>().reasoningEffort shouldBe ReasoningEffort.NONE
         }
     }
 
     @Test
     fun anthropicSuggestionReasoningEnablesThinkingWithHeadroom() {
-        val params = AiRuntime.reasoningParams(AiProvider.ANTHROPIC, AiReasoningLevel.HIGH, toolLoop = false)
+        val params =
+            AiRuntime.reasoningParams(
+                AiProvider.ANTHROPIC,
+                "some-model",
+                AiReasoningLevel.HIGH,
+                toolLoop = false,
+            )
         val anthropic = params.shouldBeInstanceOf<AnthropicParams>()
         anthropic.thinking.shouldBeInstanceOf<AnthropicThinking.Enabled>().budgetTokens shouldBe 16_384
         anthropic.maxTokens shouldBe 16_384 + 4_096
@@ -90,27 +97,34 @@ class AiRuntimeTest {
     fun anthropicChatSkipsEnablingThinkingButCanDisableIt() {
         // Enabling thinking in the tool loop is unsupported: Anthropic requires emitted thinking
         // blocks to be replayed verbatim with tool results, and the chat loop replays plain text.
-        AiRuntime.reasoningParams(AiProvider.ANTHROPIC, AiReasoningLevel.MEDIUM, toolLoop = true) shouldBe null
-        val none = AiRuntime.reasoningParams(AiProvider.ANTHROPIC, AiReasoningLevel.NONE, toolLoop = true)
+        AiRuntime.reasoningParams(AiProvider.ANTHROPIC, "some-model", AiReasoningLevel.MEDIUM, toolLoop = true) shouldBe
+            null
+        val none = AiRuntime.reasoningParams(AiProvider.ANTHROPIC, "some-model", AiReasoningLevel.NONE, toolLoop = true)
         none.shouldBeInstanceOf<AnthropicParams>().thinking.shouldBeInstanceOf<AnthropicThinking.Disabled>()
     }
 
     @Test
     fun googleMapsToThinkingBudget() {
-        val medium = AiRuntime.reasoningParams(AiProvider.GOOGLE, AiReasoningLevel.MEDIUM, toolLoop = true)
+        val medium =
+            AiRuntime.reasoningParams(
+                AiProvider.GOOGLE,
+                "some-model",
+                AiReasoningLevel.MEDIUM,
+                toolLoop = true,
+            )
         medium.shouldBeInstanceOf<GoogleParams>().thinkingConfig?.thinkingBudget shouldBe 8_192
-        val none = AiRuntime.reasoningParams(AiProvider.GOOGLE, AiReasoningLevel.NONE, toolLoop = false)
+        val none = AiRuntime.reasoningParams(AiProvider.GOOGLE, "some-model", AiReasoningLevel.NONE, toolLoop = false)
         none.shouldBeInstanceOf<GoogleParams>().thinkingConfig?.thinkingBudget shouldBe 0
     }
 
     @Test
     fun ollamaMapsToThinkFlag() {
         AiRuntime
-            .reasoningParams(AiProvider.OLLAMA, AiReasoningLevel.NONE, toolLoop = false)
+            .reasoningParams(AiProvider.OLLAMA, "some-model", AiReasoningLevel.NONE, toolLoop = false)
             .shouldBeInstanceOf<OllamaParams>()
             .think shouldBe false
         AiRuntime
-            .reasoningParams(AiProvider.OLLAMA, AiReasoningLevel.HIGH, toolLoop = true)
+            .reasoningParams(AiProvider.OLLAMA, "some-model", AiReasoningLevel.HIGH, toolLoop = true)
             .shouldBeInstanceOf<OllamaParams>()
             .think shouldBe true
     }
@@ -118,7 +132,7 @@ class AiRuntimeTest {
     @Test
     fun providersWithoutReasoningKnobIgnoreTheLevel() {
         listOf(AiProvider.OPENROUTER, AiProvider.DEEPSEEK, AiProvider.MISTRAL).forEach { provider ->
-            AiRuntime.reasoningParams(provider, AiReasoningLevel.HIGH, toolLoop = false) shouldBe null
+            AiRuntime.reasoningParams(provider, "some-model", AiReasoningLevel.HIGH, toolLoop = false) shouldBe null
         }
     }
 

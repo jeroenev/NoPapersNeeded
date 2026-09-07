@@ -1,9 +1,18 @@
 package dev.npn.core.ai
 
+import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.http.client.KoogHttpClient
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.models.OpenAIChatCompletionStreamResponse
+import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.streaming.StreamFrame
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.catch
+import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.onEach
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
@@ -38,9 +47,44 @@ internal class TolerantOpenAILLMClient(
     settings: OpenAIClientSettings,
     httpClientFactory: KoogHttpClient.Factory,
 ) : OpenAILLMClient(apiKey, settings, httpClientFactory) {
-
     override fun decodeStreamingResponse(data: String): OpenAIChatCompletionStreamResponse =
         decodeStreamingResponseTolerant(data)
+
+    /**
+     * The same tolerance for the Responses API, where the gateway appends its trailer as an SSE
+     * `event: ping` carrying a cost (`{"type":"ping","cost":"0"}`) AFTER `response.completed`.
+     *
+     * The [decodeStreamingResponse] seam above does not reach it: Koog 1.1.1 decodes Responses
+     * events in a `private` `executeResponsesStreaming`, against a `protected final` `json` and a
+     * closed `OpenAIStreamEvent` polymorphic scope with no unknown-event fallback (unchanged in
+     * 1.2.0), so there is nothing to override per-chunk. What *is* overridable is the whole flow.
+     *
+     * Once Koog has emitted its terminal [StreamFrame.End] the turn is complete — every text delta
+     * and tool call has already been handed to the caller (verified against a captured gateway
+     * stream in `ZenGoResponsesStreamTest`), so a failure to parse whatever the gateway says next
+     * describes nothing the caller still needs. Before End, a failure is real and still propagates:
+     * a truncated turn must not be mistaken for a finished one.
+     */
+    override fun executeStreaming(
+        prompt: Prompt,
+        model: LLModel,
+        tools: List<ToolDescriptor>,
+    ): Flow<StreamFrame> = super.executeStreaming(prompt, model, tools).endingAtTerminalFrame()
+
+    /**
+     * Swallow an upstream failure that happens after [StreamFrame.End]. State lives inside the
+     * [flow] builder so it is per-collection rather than per-client, and cancellation is always
+     * re-thrown so a cancelled turn is never reported as a completed one.
+     */
+    private fun Flow<StreamFrame>.endingAtTerminalFrame(): Flow<StreamFrame> =
+        flow {
+            var ended = false
+            this@endingAtTerminalFrame
+                .onEach { if (it is StreamFrame.End) ended = true }
+                .catch { cause ->
+                    if (cause is CancellationException || !ended) throw cause
+                }.collect { emit(it) }
+        }
 
     /**
      * Testable core of [decodeStreamingResponse] (the override is `protected`, so tests exercise
@@ -58,27 +102,34 @@ internal class TolerantOpenAILLMClient(
         }
     }
 
-    private fun hasNoChoices(data: String): Boolean = runCatching {
-        val choices = LENIENT_JSON.parseToJsonElement(data).jsonObject["choices"]
-        choices == null || (choices as? JsonArray)?.isEmpty() == true
-    }.getOrDefault(false)
+    private fun hasNoChoices(data: String): Boolean =
+        runCatching {
+            val choices = LENIENT_JSON.parseToJsonElement(data).jsonObject["choices"]
+            choices == null || (choices as? JsonArray)?.isEmpty() == true
+        }.getOrDefault(false)
 
     private companion object {
-        val LENIENT_JSON = Json { ignoreUnknownKeys = true; isLenient = true }
+        val LENIENT_JSON =
+            Json {
+                ignoreUnknownKeys = true
+                isLenient = true
+            }
 
-        val EMPTY_STREAM_RESPONSE = OpenAIChatCompletionStreamResponse(
-            choices = emptyList(),
-            created = 0L,
-            id = "",
-            model = "",
-            serviceTier = null,
-            systemFingerprint = null,
-            objectType = "chat.completion.chunk",
-            usage = null,
-        )
+        val EMPTY_STREAM_RESPONSE =
+            OpenAIChatCompletionStreamResponse(
+                choices = emptyList(),
+                created = 0L,
+                id = "",
+                model = "",
+                serviceTier = null,
+                systemFingerprint = null,
+                objectType = "chat.completion.chunk",
+                usage = null,
+            )
     }
 }
 
 /** Signals a streaming chunk that could not be decoded and did carry (malformed) choices. */
-internal class ChunkDecodeException(chunk: String) :
-    IllegalStateException("Failed to decode streaming chunk: ${chunk.take(200)}")
+internal class ChunkDecodeException(
+    chunk: String,
+) : IllegalStateException("Failed to decode streaming chunk: ${chunk.take(200)}")

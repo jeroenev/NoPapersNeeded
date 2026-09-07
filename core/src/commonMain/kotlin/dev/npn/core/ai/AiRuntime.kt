@@ -17,7 +17,9 @@ import ai.koog.prompt.executor.clients.mistralai.MistralAIClientSettings
 import ai.koog.prompt.executor.clients.mistralai.MistralAILLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
 import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
+import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
+import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
 import ai.koog.prompt.executor.clients.openrouter.OpenRouterClientSettings
 import ai.koog.prompt.executor.clients.openrouter.OpenRouterLLMClient
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
@@ -136,11 +138,45 @@ internal class AiRuntime(
         }
 
         /**
+         * Whether this model must be called through OpenAI's Responses API rather than
+         * `chat/completions`.
+         *
+         * The OpenCode Go gateway does not serve one API for everything: it routes the OpenAI-family
+         * models to the native OpenAI SDK (Responses API) and everything else to an
+         * OpenAI-compatible chat/completions backend. Calling the wrong one is not a graceful
+         * degradation — the gateway answers HTTP 500 (verified live: `gpt-5.6-luna` 500s on
+         * chat/completions and answers on `/v1/responses`; `kimi-k2.6`, `glm-5.1`, `hy3` do the
+         * exact opposite). The same split is what models.dev encodes for the `opencode-go` provider,
+         * where only the `gpt-*` entries carry `provider.npm = "@ai-sdk/openai"`.
+         *
+         * Deliberately scoped to [AiProvider.OPENCODE_GO]. [AiProvider.OPENAI] serves both APIs for
+         * these ids, so there is no bug to fix there and switching would be an unverified change to
+         * a working path; [AiProvider.CUSTOM] points at self-hosted servers (llama.cpp, LiteLLM)
+         * that implement chat/completions and often *name* their model `gpt-...`, so the same
+         * inference would break them.
+         *
+         * A model id is free text, so this is a heuristic, not a lookup. It errs towards
+         * chat/completions: an unrecognised id keeps today's behaviour.
+         */
+        internal fun usesResponsesApi(
+            provider: AiProvider,
+            model: String,
+        ): Boolean {
+            if (provider != AiProvider.OPENCODE_GO) return false
+            // Gateways sometimes qualify ids with the upstream vendor ("openai/gpt-5.1").
+            val id = model.trim().lowercase().substringAfterLast('/')
+            return OPENAI_FAMILY_MODEL_ID.containsMatchIn(id)
+        }
+
+        /** `gpt-4o`, `gpt-5.6-luna`, `o3-mini`, `gpt-5.1-codex-max`, ... */
+        private val OPENAI_FAMILY_MODEL_ID = Regex("^(gpt-|o[134](-|$))|codex")
+
+        /**
          * Params for the one-shot AI-edit/suggestion prompts, from [AiConfig.reasoningEdit].
          * These run without tools, so every provider mapping is safe to apply.
          */
         fun suggestionParams(config: AiConfig): LLMParams =
-            reasoningParams(config.provider, config.reasoningEdit, toolLoop = false) ?: LLMParams()
+            reasoningParams(config.provider, config.model, config.reasoningEdit, toolLoop = false) ?: LLMParams()
 
         /**
          * Params for one page transcription ([AiOcr]).
@@ -179,7 +215,7 @@ internal class AiRuntime(
          * [reasoningParams]).
          */
         fun chatParams(config: AiConfig): LLMParams? =
-            reasoningParams(config.provider, config.reasoningAssistant, toolLoop = true)
+            reasoningParams(config.provider, config.model, config.reasoningAssistant, toolLoop = true)
 
         /**
          * Map one user-facing [AiReasoningLevel] onto provider-specific Koog params; null means
@@ -188,7 +224,10 @@ internal class AiRuntime(
          * Provider notes:
          * - OpenAI/custom/OpenCode Go: `reasoning_effort` label. Ignored by non-reasoning models;
          *   unsupported labels (e.g. `none` on older models) surface as an endpoint error the user
-         *   can fix by picking Default.
+         *   can fix by picking Default. The params TYPE has to agree with the endpoint the model is
+         *   called on ([usesResponsesApi]): Koog's `determineParams` treats explicit
+         *   `OpenAIChatParams` as a demand for chat/completions and fails the call when the model
+         *   does not declare that endpoint, so a Responses-API model needs `OpenAIResponsesParams`.
          * - Anthropic: a thinking budget, plus a raised `max_tokens` (the API requires
          *   `max_tokens > budget_tokens`). ENABLING thinking is skipped in the tool loop
          *   ([toolLoop]): Anthropic requires the emitted thinking blocks to be replayed verbatim
@@ -201,13 +240,18 @@ internal class AiRuntime(
          */
         internal fun reasoningParams(
             provider: AiProvider,
+            model: String,
             level: AiReasoningLevel,
             toolLoop: Boolean,
         ): LLMParams? {
             if (level == AiReasoningLevel.DEFAULT) return null
             return when (provider) {
                 AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> {
-                    OpenAIChatParams(reasoningEffort = level.toReasoningEffort())
+                    if (usesResponsesApi(provider, model)) {
+                        OpenAIResponsesParams(reasoning = ReasoningConfig(effort = level.toReasoningEffort()))
+                    } else {
+                        OpenAIChatParams(reasoningEffort = level.toReasoningEffort())
+                    }
                 }
 
                 AiProvider.ANTHROPIC -> {
@@ -281,9 +325,17 @@ internal class AiRuntime(
                     capabilities =
                         listOf(
                             // Without an OpenAIEndpoint capability the client cannot pick a request
-                            // shape and fails with "Cannot determine proper LLM params". Compatible
-                            // third-party servers implement chat/completions, not the Responses API.
-                            LLMCapability.OpenAIEndpoint.Completions,
+                            // shape and fails with "Cannot determine proper LLM params". Exactly one
+                            // is declared, never both: given a choice Koog's `determineParams`
+                            // always prefers chat/completions, which is the wrong half of the
+                            // OpenCode Go split (see usesResponsesApi). Compatible third-party
+                            // servers implement chat/completions, not the Responses API, so that
+                            // stays the default.
+                            if (usesResponsesApi(config.provider, config.model)) {
+                                LLMCapability.OpenAIEndpoint.Responses
+                            } else {
+                                LLMCapability.OpenAIEndpoint.Completions
+                            },
                             LLMCapability.Completion,
                             LLMCapability.Temperature,
                             LLMCapability.Tools,
