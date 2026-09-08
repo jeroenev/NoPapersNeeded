@@ -16,6 +16,7 @@ import dev.npn.core.watch.SafWatchedFolder
 import dev.npn.core.xmp.PdfBoxAndroidXmpIO
 import kotlinx.coroutines.flow.first
 import java.io.File
+import java.util.Locale
 
 /**
  * Android [AppEnvironment] factory. Builds a [DefaultAppEnvironment] with a SharedPreferences
@@ -56,7 +57,10 @@ fun createAppEnvironment(context: Context): AppEnvironment {
                 },
                 autoMatchRulesJson = { settings.settings.first().autoMatchRulesJson },
                 persistAutoMatchRulesJson = { json -> settings.edit { it.copy(autoMatchRulesJson = json) } },
-                aiConfig = { settings.settings.first().toAiConfig() },
+                // Locale.getDefault() is what LocalAppLocale sets when the user picks a UI
+                // language, so it doubles as the effective app language here; read per call
+                // because it changes while the app runs.
+                aiConfig = { settings.settings.first().toAiConfig(Locale.getDefault().language) },
             )
         OpenedLibrary(deps) { deps.closeDb() }
     }

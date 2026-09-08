@@ -117,7 +117,7 @@ internal class AiRuntime(
          * Requests without one (one-shot edit suggestions, the settings model list) share the
          * per-client [fallbackSessionId]. That sharing is deliberate rather than a shortcut:
          * those runs are not conversations, and they send a batch-constant system prompt (see
-         * `AiFacadeImpl.editSystemPrompt`), so keeping a whole batch on one id helps the
+         * `AiPrompts.editSystem`), so keeping a whole batch on one id helps the
          * gateway's prefix caching instead of fragmenting it.
          *
          * Koog derives its own client off this one (`HttpClient.config {}` layers its SSE,

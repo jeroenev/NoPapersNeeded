@@ -36,8 +36,16 @@ data class SettingsSnapshot(
     val aiOcrAuto: Boolean = false,
 )
 
-/** Project the AI-related settings into the domain [AiConfig] the facade consumes. */
-fun SettingsSnapshot.toAiConfig(): AiConfig =
+/**
+ * Project the AI-related settings into the domain [AiConfig] the facade consumes.
+ *
+ * [systemLanguage] is the platform's current language, which only the caller can read. It is the
+ * fallback for [AiConfig.appLanguage] because [SettingsSnapshot.appLanguage] is null when the user
+ * has not overridden the UI language — and "follow the system" is a real language for a prompt, not
+ * an absent one. The explicit setting still wins, so a background job that runs without the UI
+ * (and so without the locale the composition applies) still prompts in the language the user chose.
+ */
+fun SettingsSnapshot.toAiConfig(systemLanguage: String? = null): AiConfig =
     AiConfig(
         enabled = aiEnabled,
         provider = aiProvider,
@@ -50,6 +58,7 @@ fun SettingsSnapshot.toAiConfig(): AiConfig =
         maxNewTagsPerDoc = aiMaxNewTagsPerDoc,
         autoOnOcr = aiAutoOnOcr,
         ocrAuto = aiOcrAuto,
+        appLanguage = appLanguage ?: systemLanguage,
     )
 
 /**

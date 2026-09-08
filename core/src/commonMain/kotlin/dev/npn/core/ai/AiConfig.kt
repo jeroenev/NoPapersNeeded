@@ -93,6 +93,14 @@ data class AiConfig(
      * with AI" request still runs (`OcrFacade.ocrWithAi`); it means nothing starts one unattended.
      */
     val ocrAuto: Boolean = false,
+    /**
+     * The language the app UI is running in, as a language tag (`nl`), or null when it could not be
+     * determined. Not an endpoint knob: it is here because prompts need it (see [AiPromptContext])
+     * and this is already the live, device-local projection of settings that every AI call reads.
+     * Deliberately absent from `AiFacadeImpl`'s runtime cache key — changing the app's language
+     * must not tear down an HTTP client or abort in-flight requests.
+     */
+    val appLanguage: String? = null,
 ) {
     /** The effective server root: the explicit override, or the provider default. */
     val effectiveBaseUrl: String

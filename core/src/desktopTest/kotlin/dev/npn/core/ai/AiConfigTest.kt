@@ -1,5 +1,7 @@
 package dev.npn.core.ai
 
+import dev.npn.core.app.SettingsSnapshot
+import dev.npn.core.app.toAiConfig
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -51,6 +53,25 @@ class AiConfigTest {
         // remain the final option.
         AiProvider.entries.last() shouldBe AiProvider.CUSTOM
     }
+
+    @Test
+    fun appLanguageFallsBackToTheSystemLanguageOnlyWhenUnset() {
+        // Null in settings means "follow the system", which is still a language a prompt can use.
+        snapshot(appLanguage = null).toAiConfig(systemLanguage = "fr").appLanguage shouldBe "fr"
+        // An explicit choice wins, so a background job without the UI still prompts in it.
+        snapshot(appLanguage = "nl").toAiConfig(systemLanguage = "fr").appLanguage shouldBe "nl"
+        snapshot(appLanguage = null).toAiConfig().appLanguage shouldBe null
+    }
+
+    private fun snapshot(appLanguage: String?) =
+        SettingsSnapshot(
+            installationId = "i",
+            appLanguage = appLanguage,
+            aiEnabled = true,
+            aiProvider = AiProvider.CUSTOM,
+            aiBaseUrl = "https://x",
+            aiModel = "m",
+        )
 
     private fun custom(
         enabled: Boolean = true,
