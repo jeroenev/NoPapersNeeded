@@ -19,7 +19,9 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.LabelOff
@@ -91,9 +93,12 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.CompactTopBarBreakpoint
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.ScrollToTopOnNewResults
+import dev.npn.app.ui.common.ScrollbarWidth
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TooltipIconButton
+import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.platformFileToExternalSource
@@ -179,7 +184,8 @@ fun LibraryScreen(
 ) {
     val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
-    val docs by vm.documents.collectAsStateWithLifecycle()
+    val results by vm.documents.collectAsStateWithLifecycle()
+    val docs = results?.items
 
     LaunchedEffect(Unit) {
         filterHandoff?.consume()?.let(vm::setFilter)
@@ -260,7 +266,7 @@ fun LibraryScreen(
                 vm = vm,
                 ui = ui,
                 session = session,
-                docs = docs,
+                results = results,
                 tagColors = tagColors,
                 reviewMode = reviewMode,
                 compactActions = compactActions,
@@ -415,7 +421,7 @@ private fun LibraryContent(
     vm: LibraryViewModel,
     ui: LibraryUiState,
     session: LibrarySession,
-    docs: List<dev.npn.core.app.DocListItem>?,
+    results: DocumentResults?,
     tagColors: Map<String, String?>,
     reviewMode: ReviewMode,
     scanProgress: dev.npn.core.app.ScanProgressUi?,
@@ -441,7 +447,7 @@ private fun LibraryContent(
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
     val landscapeListColumns by vm.landscapeListColumns.collectAsStateWithLifecycle()
-    val allDocIds = docs.orEmpty().map { it.doc.docId }
+    val allDocIds = results?.items.orEmpty().map { it.doc.docId }
     val searchFocus = remember { FocusRequester() }
     val contentFocus = remember { FocusRequester() }
     var searchFocused by remember { mutableStateOf(false) }
@@ -567,11 +573,11 @@ private fun LibraryContent(
                 onRefresh = vm::refresh,
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (docs == null) {
+                if (results == null) {
                     Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
                         CircularProgressIndicator()
                     }
-                } else if (docs.isEmpty()) {
+                } else if (results.items.isEmpty()) {
                     if (ui.filter.isEmpty) {
                         EmptyState(
                             icon = Icons.Filled.Description,
@@ -593,7 +599,7 @@ private fun LibraryContent(
                     when (ui.viewType) {
                         ViewType.GRID -> {
                             DocGrid(
-                                docs = docs,
+                                results = results,
                                 content = session.content,
                                 tagColors = tagColors,
                                 ui = ui,
@@ -608,7 +614,7 @@ private fun LibraryContent(
 
                         ViewType.LIST -> {
                             DocList(
-                                docs = docs,
+                                results = results,
                                 content = session.content,
                                 tagColors = tagColors,
                                 reviewMode = reviewMode,
@@ -646,7 +652,7 @@ private fun LibraryContent(
 
 @Composable
 private fun DocList(
-    docs: List<dev.npn.core.app.DocListItem>,
+    results: DocumentResults,
     content: dev.npn.core.app.DocContentFacade,
     tagColors: Map<String, String?>,
     reviewMode: ReviewMode,
@@ -680,26 +686,37 @@ private fun DocList(
 
     // Multi-column list when the option is on and the content area is landscape; otherwise the
     // classic single-column list. Two columns keeps each row wide enough to stay readable.
+    // Rows keep an end gutter clear so their content never sits under the scrollbar.
     BoxWithConstraints(Modifier.fillMaxSize()) {
         if (landscapeColumns && isLandscape) {
+            val gridState = rememberLazyGridState()
+            ScrollToTopOnNewResults(results.query, gridState)
             LazyVerticalGrid(
                 columns = GridCells.Fixed(2),
-                modifier = Modifier.fillMaxSize(),
+                state = gridState,
+                modifier = Modifier.fillMaxSize().padding(end = ScrollbarWidth),
             ) {
-                items(docs, key = { it.doc.docId }) { item ->
+                items(results.items, key = { it.doc.docId }) { item ->
                     Column {
                         row(item)
                         HorizontalDivider()
                     }
                 }
             }
+            VerticalScrollbar(gridState)
         } else {
-            LazyColumn(Modifier.fillMaxSize()) {
-                items(docs, key = { it.doc.docId }) { item ->
+            val listState = rememberLazyListState()
+            ScrollToTopOnNewResults(results.query, listState)
+            LazyColumn(
+                state = listState,
+                modifier = Modifier.fillMaxSize().padding(end = ScrollbarWidth),
+            ) {
+                items(results.items, key = { it.doc.docId }) { item ->
                     row(item)
                     HorizontalDivider()
                 }
             }
+            VerticalScrollbar(listState)
         }
     }
 }

@@ -7,8 +7,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ZoomIn
 import androidx.compose.material.icons.filled.ZoomOut
@@ -27,6 +29,9 @@ import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ScrollToTopOnNewResults
+import dev.npn.app.ui.common.ScrollbarWidth
+import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.ctrlScrollZoom
 import dev.npn.app.ui.common.pinchToZoom
 import dev.npn.core.app.GridSizing
@@ -77,7 +82,7 @@ internal fun gridWidthForColumns(
 @OptIn(FlowPreview::class)
 @Composable
 internal fun DocGrid(
-    docs: List<dev.npn.core.app.DocListItem>,
+    results: DocumentResults,
     content: dev.npn.core.app.DocContentFacade,
     tagColors: Map<String, String?>,
     ui: LibraryUiState,
@@ -104,11 +109,15 @@ internal fun DocGrid(
     val maxWidth = GridSizing.MAX_COLUMN_WIDTH.toFloat()
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        // Width the adaptive cells actually divide: the grid area minus its content padding.
+        // Width the adaptive cells actually divide: the grid area minus its content padding and
+        // the gutter reserved for the scrollbar (zero where no scrollbar is drawn).
         // NOTE: the gesture lambdas below are captured once by pointerInput and never refreshed,
         // so everything they touch must be backed by State (or read state at call time), never by
         // plain composition-time locals.
-        val available by rememberUpdatedState(this.maxWidth.value - 2 * GRID_H_PADDING_DP)
+        val available by
+            rememberUpdatedState(
+                this.maxWidth.value - 2 * GRID_H_PADDING_DP - ScrollbarWidth.value,
+            )
         val columns = gridColumnsFor(available, width)
         // The width bounds cap how far the count can step in either direction.
         val fewestColumns = gridColumnsFor(available, maxWidth)
@@ -153,32 +162,22 @@ internal fun DocGrid(
                     }
                 },
         ) {
-            LazyVerticalGrid(
-                columns = GridCells.Adaptive(width.roundToInt().dp),
-                modifier = Modifier.fillMaxSize().padding(horizontal = GRID_H_PADDING_DP.dp),
-                horizontalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
-                verticalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
-            ) {
-                items(docs, key = { it.doc.docId }) { item ->
-                    DocGridCard(
-                        item = item,
-                        content = content,
-                        tagColors = tagColors,
-                        selectionMode = ui.selectionMode,
-                        selected = item.doc.docId in ui.selected,
-                        onClick = {
-                            if (ui.selectionMode) {
-                                onToggleSelect(item.doc.docId)
-                            } else {
-                                onOpen(item.doc.docId)
-                            }
-                        },
-                        onLongClick = { onStartSelection(item.doc.docId) },
-                        onToggleSelect = { onToggleSelect(item.doc.docId) },
-                        contextActions = contextActionsFor?.invoke(item.doc.docId),
-                    )
-                }
-            }
+            val gridState = rememberLazyGridState()
+            ScrollToTopOnNewResults(results.query, gridState)
+            DocGridCards(
+                docs = results.items,
+                content = content,
+                tagColors = tagColors,
+                ui = ui,
+                cellWidth = width.roundToInt(),
+                state = gridState,
+                onOpen = onOpen,
+                onToggleSelect = onToggleSelect,
+                onStartSelection = onStartSelection,
+                contextActionsFor = contextActionsFor,
+            )
+
+            VerticalScrollbar(gridState)
 
             // On-screen equivalent of the gestures (discoverability + accessibility).
             // Bottom-start so it doesn't collide with the FAB.
@@ -188,6 +187,56 @@ internal fun DocGrid(
                 onZoomOut = { stepColumns(1) },
                 onZoomIn = { stepColumns(-1) },
                 modifier = Modifier.align(Alignment.BottomStart).padding(12.dp),
+            )
+        }
+    }
+}
+
+/**
+ * The scrolling card grid itself, with [cellWidth] as the adaptive minimum cell width in dp.
+ * Sizing decisions and zoom gestures stay in [DocGrid]; this only lays the cards out, keeping an
+ * end gutter clear for the scrollbar.
+ */
+@Composable
+private fun DocGridCards(
+    docs: List<dev.npn.core.app.DocListItem>,
+    content: dev.npn.core.app.DocContentFacade,
+    tagColors: Map<String, String?>,
+    ui: LibraryUiState,
+    cellWidth: Int,
+    state: LazyGridState,
+    onOpen: (String) -> Unit,
+    onToggleSelect: (String) -> Unit,
+    onStartSelection: (String) -> Unit,
+    contextActionsFor: ((String) -> DocContextMenuActions)? = null,
+) {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(cellWidth.dp),
+        state = state,
+        modifier =
+            Modifier
+                .fillMaxSize()
+                .padding(start = GRID_H_PADDING_DP.dp, end = GRID_H_PADDING_DP.dp + ScrollbarWidth),
+        horizontalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
+        verticalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
+    ) {
+        items(docs, key = { it.doc.docId }) { item ->
+            DocGridCard(
+                item = item,
+                content = content,
+                tagColors = tagColors,
+                selectionMode = ui.selectionMode,
+                selected = item.doc.docId in ui.selected,
+                onClick = {
+                    if (ui.selectionMode) {
+                        onToggleSelect(item.doc.docId)
+                    } else {
+                        onOpen(item.doc.docId)
+                    }
+                },
+                onLongClick = { onStartSelection(item.doc.docId) },
+                onToggleSelect = { onToggleSelect(item.doc.docId) },
+                contextActions = contextActionsFor?.invoke(item.doc.docId),
             )
         }
     }

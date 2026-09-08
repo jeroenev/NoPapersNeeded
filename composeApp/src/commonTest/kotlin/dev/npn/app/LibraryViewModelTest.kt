@@ -1,6 +1,7 @@
 package dev.npn.app
 
 import dev.npn.app.ui.library.ImportSummary
+import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibraryFilter
@@ -566,14 +567,61 @@ class LibraryViewModelTest : MainDispatcherTest() {
                 }
             val model = vm(session = session)
             val emitted = mutableListOf<Int>()
-            val job = launch { model.documents.collect { emitted += it?.size ?: 0 } }
+            val job = launch { model.documents.collect { emitted += it?.items?.size ?: 0 } }
             advanceUntilIdle()
             model.documents.value
+                ?.items
                 .orEmpty()
                 .map { it.doc.docId } shouldBe listOf("d1", "d2")
             session.documents.observedFilters
                 .first()
                 .first shouldBe LibraryFilter()
+            job.cancel()
+        }
+
+    // ---- results carry the query that produced them ----
+    // The library screen resets the scroll position when this query changes, so it may only
+    // change together with the items: never before the new ones arrive, and never on an update
+    // of the current result set.
+
+    @Test
+    fun resultsCarryTheFilterAndSortTheyWereQueriedWith() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(listItem("d1"), listItem("d2"))
+                }
+            val model = vm(session = session)
+            val job = launch { model.documents.collect {} }
+            advanceUntilIdle()
+            model.documents.value?.query shouldBe LibraryQuery(LibraryFilter(), LibrarySort())
+
+            model.setSort(SortField.DOC_DATE, ascending = false)
+            advanceUntilIdle()
+            model.documents.value?.query shouldBe
+                LibraryQuery(LibraryFilter(), LibrarySort(SortField.DOC_DATE, ascending = false))
+            job.cancel()
+        }
+
+    @Test
+    fun updatingTheCurrentResultSetKeepsItsQuery() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(listItem("d1"))
+                }
+            val model = vm(session = session)
+            val queries = mutableListOf<LibraryQuery?>()
+            val job = launch { model.documents.collect { queries += it?.query } }
+            advanceUntilIdle()
+
+            // A document arriving under the same filter/sort (import, rescan) is not a new query.
+            session.documents.documents.value = listOf(listItem("d1"), listItem("d2"))
+            advanceUntilIdle()
+            model.documents.value
+                ?.items
+                ?.size shouldBe 2
+            queries.filterNotNull().distinct() shouldBe listOf(LibraryQuery(LibraryFilter(), LibrarySort()))
             job.cancel()
         }
 }

@@ -61,6 +61,25 @@ data class ImportSummary(
     fun asUiText(): UiText = uiText(UiTextKey.IMPORT_SUMMARY, imported, duplicate, failed)
 }
 
+/** The filter and sort a result set was queried with. */
+data class LibraryQuery(
+    val filter: LibraryFilter,
+    val sort: LibrarySort,
+)
+
+/**
+ * A result set together with the [query] that produced it.
+ *
+ * The query travels with the items so the list can tell the two kinds of update apart: a new
+ * query (different filter or sort) means these are different results and the list belongs back
+ * at the top, while the same query re-emitting means the current results changed underneath the
+ * user (import, tag edit, rescan) and the scroll position must stay put.
+ */
+data class DocumentResults(
+    val query: LibraryQuery,
+    val items: List<DocListItem>,
+)
+
 data class LibraryUiState(
     val filter: LibraryFilter = LibraryFilter(),
     val sort: LibrarySort = LibrarySort(),
@@ -165,14 +184,19 @@ class LibraryViewModel(
     }
 
     // null until the first query result arrives from Room, so the screen can show a loading
-    // indicator instead of flashing the empty state on a slow initial load.
-    val documents: StateFlow<List<DocListItem>?> =
+    // indicator instead of flashing the empty state on a slow initial load. Results keep carrying
+    // the query they came from until the new one delivers, so a filter/sort change and the items
+    // it produces reach the UI as one value (see [DocumentResults]).
+    val documents: StateFlow<DocumentResults?> =
         combine(
             _ui.map { it.filter }.distinctUntilChanged(),
             _ui.map { it.sort }.distinctUntilChanged(),
-        ) { f, s -> f to s }
-            .flatMapLatest { (f, s) -> documentRepository.observeDocuments(f, s) }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, null)
+        ) { f, s -> LibraryQuery(f, s) }
+            .flatMapLatest { query ->
+                documentRepository
+                    .observeDocuments(query.filter, query.sort)
+                    .map { DocumentResults(query, it) }
+            }.stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /**
      * Autocomplete suggestions for the current query. Debounced separately from the filter
