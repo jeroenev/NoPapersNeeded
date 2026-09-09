@@ -5,6 +5,7 @@ import androidx.room3.Delete
 import androidx.room3.Entity
 import androidx.room3.PrimaryKey
 import androidx.room3.Query
+import androidx.room3.Transaction
 import androidx.room3.Upsert
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
@@ -40,6 +41,19 @@ interface AutoMatchRuleDao {
 
     @Upsert
     suspend fun upsert(rule: AutoMatchRuleEntity)
+
+    @Upsert
+    suspend fun upsertAll(rules: List<AutoMatchRuleEntity>)
+
+    /**
+     * Replace this mirror of the persisted rule list in one transaction, so the rules Room flow
+     * sees a single invalidation rather than one per rule.
+     */
+    @Transaction
+    suspend fun replaceAll(rules: List<AutoMatchRuleEntity>) {
+        clearAll()
+        if (rules.isNotEmpty()) upsertAll(rules)
+    }
 
     @Delete
     suspend fun delete(rule: AutoMatchRuleEntity)

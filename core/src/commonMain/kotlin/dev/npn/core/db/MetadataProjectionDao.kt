@@ -7,7 +7,9 @@ import androidx.room3.Query
 import androidx.room3.Transaction
 import androidx.room3.Upsert
 
-class MetadataIdentityCollision(message: String) : IllegalStateException(message)
+class MetadataIdentityCollision(
+    message: String,
+) : IllegalStateException(message)
 
 private fun validateActor(
     existing: MetadataTransactionActorEntity?,
@@ -18,7 +20,10 @@ private fun validateActor(
     }
 }
 
-private fun validateIdentity(existing: MetadataEventEntity?, incoming: MetadataEventEntity) {
+private fun validateIdentity(
+    existing: MetadataEventEntity?,
+    incoming: MetadataEventEntity,
+) {
     if (existing != null && existing.canonicalJson != incoming.canonicalJson) {
         throw MetadataIdentityCollision(
             "Event identity ${incoming.deviceId}:${incoming.sequence} has conflicting content",
@@ -26,9 +31,13 @@ private fun validateIdentity(existing: MetadataEventEntity?, incoming: MetadataE
     }
 }
 
-private fun validateHlc(existing: MetadataEventEntity?, incoming: MetadataEventEntity) {
-    val sameIdentity = existing != null &&
-        existing.deviceId == incoming.deviceId && existing.sequence == incoming.sequence
+private fun validateHlc(
+    existing: MetadataEventEntity?,
+    incoming: MetadataEventEntity,
+) {
+    val sameIdentity =
+        existing != null &&
+            existing.deviceId == incoming.deviceId && existing.sequence == incoming.sequence
     if (existing != null && !sameIdentity) {
         throw MetadataIdentityCollision(
             "Distinct events share HLC ${incoming.hlcPhysical}:${incoming.hlcCounter}:${incoming.hlcDevice}",
@@ -40,16 +49,34 @@ private fun validateHlc(existing: MetadataEventEntity?, incoming: MetadataEventE
 @Suppress("TooManyFunctions")
 interface MetadataProjectionDao {
     @Query("SELECT * FROM metadata_events WHERE deviceId = :deviceId AND sequence = :sequence")
-    suspend fun event(deviceId: String, sequence: Long): MetadataEventEntity?
+    suspend fun event(
+        deviceId: String,
+        sequence: Long,
+    ): MetadataEventEntity?
 
     @Query(
         "SELECT * FROM metadata_events WHERE hlcPhysical = :physical AND hlcCounter = :counter " +
             "AND hlcDevice = :device LIMIT 1",
     )
-    suspend fun eventAtHlc(physical: Long, counter: Int, device: String): MetadataEventEntity?
+    suspend fun eventAtHlc(
+        physical: Long,
+        counter: Int,
+        device: String,
+    ): MetadataEventEntity?
 
     @Query("SELECT * FROM metadata_events ORDER BY hlcPhysical, hlcCounter, hlcDevice")
     suspend fun allEvents(): List<MetadataEventEntity>
+
+    /**
+     * Events carrying one operation kind, ordered by HLC (causal order). The open path uses this
+     * to fold just the library settings — the only slice of the folded state the read path needs —
+     * without replaying every event ever recorded. Pass [JournalOp.SettingSet.WIRE] et al.
+     */
+    @Query(
+        "SELECT * FROM metadata_events WHERE operation = :operation " +
+            "ORDER BY hlcPhysical, hlcCounter, hlcDevice",
+    )
+    suspend fun eventsForOperation(operation: String): List<MetadataEventEntity>
 
     /** All events scoped to [documentId], ordered by HLC (causal order). */
     @Query(

@@ -24,7 +24,9 @@ import androidx.room3.migration.AutoMigrationSpec
     // v10: indexes documents.addedAt for the default library sort.
     // v11: adds documents.aiEnrichedAt (post-OCR AI enrichment marker) + its ai_enrich_queue.
     // v12: adds ai_edit_jobs + ai_edit_job_docs (AI edit runs handed to the background).
-    version = 12,
+    // v13: indexes metadata_events.documentId + adds the source-set fingerprint the open path
+    //      uses to skip a whole-journal refold when nothing changed.
+    version = 13,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -36,6 +38,7 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 9, to = 10),
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
+        AutoMigration(from = 12, to = 13),
     ],
     entities = [
         DocumentEntity::class,

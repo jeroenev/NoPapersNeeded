@@ -4,9 +4,11 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MetadataAccumulator
+import dev.npn.core.index.OpenReconciliation
 import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.FoldedState
+import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.PendingOp
@@ -16,12 +18,53 @@ import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.StandardField
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+
+/**
+ * The library-wide synced settings a reader can observe, kept as a snapshot of their effective
+ * values rather than re-derived per read.
+ *
+ * These are `setting-set` events in the journal, so their effective values come out the same from a
+ * settings-only fold as from the whole state — which is what lets [JournalCoordinator.refreshState]
+ * seed them at open without replaying the journal (see [MetadataAccumulator.loadSettingsState]).
+ */
+private class SyncedSettings {
+    private val values = MutableStateFlow<Map<String, String?>>(emptyMap())
+
+    fun flow(key: String): kotlinx.coroutines.flow.Flow<String?> = values.map { it[key] }
+
+    /** Replace every seeded key's value from [source]. */
+    fun seed(source: FoldedState) {
+        values.value = SEEDED_KEYS.associateWith { key -> source.effectiveSetting(key) }
+    }
+
+    /** Refresh only the keys [events] actually wrote. */
+    fun update(
+        current: FoldedState,
+        events: List<JournalEvent>,
+    ) {
+        val changed = events.mapNotNull { (it.op as? JournalOp.SettingSet)?.key }.toSet()
+        if (changed.isEmpty()) return
+        values.value =
+            values.value.toMutableMap().apply {
+                changed.forEach { key -> put(key, current.effectiveSetting(key)) }
+            }
+    }
+
+    companion object {
+        /**
+         * Every synced setting published on open. A key left out of this list reads as null until
+         * something writes it in the running session, so a new synced setting belongs here.
+         */
+        private val SEEDED_KEYS = listOf(ReviewMode.WIRE_KEY, StandardField.WIRE_KEY)
+    }
+}
 
 /**
  * Single point of serialization for all journal writes and the live [FoldedState] they depend on.
@@ -34,6 +77,11 @@ import kotlinx.coroutines.withContext
  *
  * Normal commits apply their frozen events directly to the persisted accumulator and bounded DB
  * projection.
+ *
+ * The [FoldedState] is folded on DEMAND, not at boot (see [folded]). Folding it replays every
+ * event the library has ever recorded, and only writers and rescans need it — readers go to the
+ * Room projection, which [refreshState] can usually reuse wholesale. Anything here that needs the
+ * state must therefore go through [foldedState] rather than assume it already exists.
  *
  * This is the ONLY sanctioned journal write path (see AGENTS.md). The invariant is enforced at
  * the type level rather than by convention: [SegmentWriter] and [ContentAddressedJournalWriter]
@@ -55,24 +103,50 @@ class JournalCoordinator internal constructor(
     private var objectWriter = objectWriter
     private var writeBlockReason: String? = null
 
-    private var state = FoldedState()
+    /**
+     * The folded journal state, or null when this session has not needed it yet.
+     *
+     * Materializing it means replaying every event ever recorded for this library, so it is folded
+     * on demand by [foldedState] rather than at boot. Nothing on the READ path wants it — readers
+     * go to the Room projection — so a session that only browses may never fold at all. Writes
+     * (which need live OR-set dots) and rescans (which project metadata onto document rows) do,
+     * and they pay for it at the point of use.
+     */
+    private var folded: FoldedState? = null
 
-    private val mutableSettings = MutableStateFlow<Map<String, String?>>(emptyMap())
+    private val syncedSettings = SyncedSettings()
 
-    fun settingFlow(key: String): kotlinx.coroutines.flow.Flow<String?> = mutableSettings.map { it[key] }
+    fun settingFlow(key: String): kotlinx.coroutines.flow.Flow<String?> = syncedSettings.flow(key)
+
+    /** The folded state, replaying it from the accumulator the first time it is actually needed. */
+    private suspend fun foldedState(): FoldedState = folded ?: accumulator.loadState().also { folded = it }
 
     /**
-     * Refresh the in-memory [FoldedState] from the store. Called at boot and after any external
-     * rescan so that dot lookups reflect other devices' segments too. Does not touch the DB.
+     * Bring this session in step with the store at open time.
+     *
+     * The usual outcome is that nothing changed since the last close, in which case the stored Room
+     * projection is already the fold of exactly the sources on disk and there is nothing to do but
+     * seed the write clock and the settings a reader needs. Only a moved journal (or an unusable
+     * projection) costs a refold and a whole-DB reprojection here.
      */
     suspend fun refreshState(preserveLifecycleDocs: Set<String> = emptySet()) =
         mutex.withLock {
             try {
-                state = accumulator.reconcile().state
-                observeSourceHlc()
-                seedSettings()
-                indexer.refreshState(state, preserveLifecycleDocs)
-                accumulator.markReady(state.maxHlc)
+                when (val outcome = accumulator.reconcileOnOpen()) {
+                    is OpenReconciliation.ProjectionCurrent -> {
+                        folded = null
+                        observeSourceHlc(outcome.maxHlc)
+                        syncedSettings.seed(accumulator.loadSettingsState())
+                    }
+
+                    is OpenReconciliation.Refolded -> {
+                        folded = outcome.state
+                        observeSourceHlc(outcome.state.maxHlc)
+                        syncedSettings.seed(outcome.state)
+                        indexer.refreshState(outcome.state, preserveLifecycleDocs)
+                        accumulator.markReady(outcome.state.maxHlc)
+                    }
+                }
                 writeBlockReason = null
             } catch (failure: Throwable) {
                 blockWrites(failure)
@@ -80,23 +154,26 @@ class JournalCoordinator internal constructor(
             }
         }
 
-    /** The current folded state. Safe to read for dot lookups; treat as a snapshot. */
-    val currentState: FoldedState get() = state
-
     suspend fun ingestObject(relPath: String) =
         mutex.withLock {
             withDurableProjectionRecovery {
+                // Fold before opening the transaction: loadState reads the events as they stand
+                // BEFORE this object is ingested, which is exactly the base its events apply onto.
+                val current = foldedState()
                 var events: List<JournalEvent> = emptyList()
                 indexer.withFtsWriteGate {
                     accumulator.withProjectionTransaction {
                         events = accumulator.ingestObject(relPath)
                         if (events.isEmpty()) return@withProjectionTransaction
-                        events.forEach(state::apply)
-                        observeSourceHlc()
-                        indexer.refreshEvents(state, events, ftsGateHeld = true)
+                        events.forEach(current::apply)
+                        observeSourceHlc(current.maxHlc)
+                        indexer.refreshEvents(current, events, ftsGateHeld = true)
                     }
                 }
-                updateSettings(events)
+                syncedSettings.update(current, events)
+                // The projection now matches the enlarged source set; record that so the next open
+                // can reuse it instead of refolding.
+                accumulator.markReady(current.maxHlc)
             }
         }
 
@@ -104,11 +181,13 @@ class JournalCoordinator internal constructor(
     suspend fun rescan(): ScanReport =
         mutex.withLock {
             try {
-                state = accumulator.reconcile(state).state
-                observeSourceHlc()
-                seedSettings()
-                val report = indexer.rescan(metadataState = state)
-                accumulator.markReady(state.maxHlc)
+                val current = foldedState()
+                val reconciled = accumulator.reconcile(current).state ?: current
+                folded = reconciled
+                observeSourceHlc(reconciled.maxHlc)
+                syncedSettings.seed(reconciled)
+                val report = indexer.rescan(metadataState = reconciled)
+                accumulator.markReady(reconciled.maxHlc)
                 writeBlockReason = null
                 report
             } catch (failure: Throwable) {
@@ -120,18 +199,26 @@ class JournalCoordinator internal constructor(
     suspend fun reconcileMetadata() =
         mutex.withLock {
             try {
-                val reconciliation = accumulator.reconcile(state)
-                state = reconciliation.state
-                observeSourceHlc()
-                seedSettings()
+                val reconciliation = accumulator.reconcile(folded)
+                val current = reconciliation.state
+                if (current == null) {
+                    // Nothing on disk changed and this session has never needed the fold. There is
+                    // nothing to project, and replaying the journal just to prove that is what made
+                    // the periodic tick as expensive as a boot.
+                    writeBlockReason = null
+                    return@withLock
+                }
+                folded = current
+                observeSourceHlc(current.maxHlc)
+                syncedSettings.seed(current)
                 // Bounded projection when reconcile only ADDED events onto the prior state; otherwise
                 // full reproject (source removed/invalidated, mutation, full refold, first load).
                 if (reconciliation.incremental) {
-                    indexer.refreshEvents(state, reconciliation.newEvents)
+                    indexer.refreshEvents(current, reconciliation.newEvents)
                 } else if (reconciliation.sourcesRead > 0) {
-                    indexer.refreshState(state)
+                    indexer.refreshState(current)
                 }
-                accumulator.markReady(state.maxHlc)
+                accumulator.markReady(current.maxHlc)
                 writeBlockReason = null
             } catch (failure: Throwable) {
                 blockWrites(failure)
@@ -188,13 +275,14 @@ class JournalCoordinator internal constructor(
     suspend fun commitBuilt(block: (FoldedState) -> List<PendingOp>): Boolean =
         mutex.withLock {
             ensureWritable()
-            val ops = block(state)
+            val current = foldedState()
+            val ops = block(current)
             if (ops.isEmpty()) return@withLock false
             // Once the write-once segment exists, cancellation must not leave the disposable DB
             // projection stale until the next rescan or edit.
             withContext(NonCancellable) {
                 val (published, written) = writeTransaction(ops)
-                projectWrittenTransaction(published, written)
+                projectWrittenTransaction(current, published, written)
             }
             true
         }
@@ -206,6 +294,7 @@ class JournalCoordinator internal constructor(
      * then update synced settings. Callers own the enclosing mutex + [NonCancellable] scope.
      */
     private suspend fun projectWrittenTransaction(
+        current: FoldedState,
         published: PublishedTransaction?,
         written: List<JournalEvent>,
         preserveLifecycleDocs: Set<String> = emptySet(),
@@ -215,17 +304,21 @@ class JournalCoordinator internal constructor(
             indexer.withFtsWriteGate {
                 accumulator.withProjectionTransaction {
                     accumulator.recordLocalSource(path, version, published?.contentHash, written)
-                    written.forEach(state::apply)
-                    observeSourceHlc()
+                    written.forEach(current::apply)
+                    observeSourceHlc(current.maxHlc)
                     indexer.refreshEvents(
-                        state,
+                        current,
                         written,
                         ftsGateHeld = true,
                         preserveLifecycleDocs = preserveLifecycleDocs,
                     )
                 }
             }
-            updateSettings(written)
+            syncedSettings.update(current, written)
+            // This commit added a source and projected it incrementally, so the projection matches
+            // the new source set. Recording that is what lets the next open skip the refold; without
+            // it, any edit in one session would cost a full replay in the next.
+            accumulator.markReady(current.maxHlc)
         }
     }
 
@@ -252,11 +345,12 @@ class JournalCoordinator internal constructor(
     ): Boolean =
         mutex.withLock {
             ensureWritable()
+            val current = foldedState()
             optimisticWrite()
             if (ops.isEmpty()) return@withLock false
             withContext(NonCancellable) {
                 val (published, written) = writeTransaction(ops)
-                projectWrittenTransaction(published, written, preserveLifecycleDocs = lifecycleDocs)
+                projectWrittenTransaction(current, published, written, preserveLifecycleDocs = lifecycleDocs)
             }
             true
         }
@@ -269,11 +363,13 @@ class JournalCoordinator internal constructor(
      * this against every other write preserves the single-writer invariant: the shared, non
      * concurrency-safe [SegmentWriter] is never touched by two callers at once.
      *
-     * Returns the resulting [ScanReport]. Refreshes [currentState] from the store after the rescan.
+     * Returns the resulting [ScanReport]. Refreshes the folded state from the store after the
+     * rescan.
      */
     suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport =
         mutex.withLock {
             ensureWritable()
+            val current = foldedState()
             withContext(NonCancellable) {
                 val (published, written) = writeTransaction(ops)
                 if (written.isNotEmpty()) {
@@ -282,29 +378,17 @@ class JournalCoordinator internal constructor(
                     // Fold the freshly-written events into the live state up front. reconcile()'s
                     // fast path returns currentState unchanged when it read no new sources (the events
                     // were just recorded directly), so the projection rescan below must see them here.
-                    written.forEach(state::apply)
+                    written.forEach(current::apply)
                 }
-                state = accumulator.reconcile(state).state
-                observeSourceHlc()
-                seedSettings()
-                val report = indexer.rescan(metadataState = state)
-                accumulator.markReady(state.maxHlc)
+                val reconciled = accumulator.reconcile(current).state ?: current
+                folded = reconciled
+                observeSourceHlc(reconciled.maxHlc)
+                syncedSettings.seed(reconciled)
+                val report = indexer.rescan(metadataState = reconciled)
+                accumulator.markReady(reconciled.maxHlc)
                 report
             }
         }
-
-    private fun seedSettings() {
-        mutableSettings.value = mapOf(ReviewMode.WIRE_KEY to state.effectiveSetting(ReviewMode.WIRE_KEY))
-    }
-
-    private fun updateSettings(events: List<JournalEvent>) {
-        val changed = events.mapNotNull { (it.op as? JournalOp.SettingSet)?.key }.toSet()
-        if (changed.isEmpty()) return
-        mutableSettings.value =
-            mutableSettings.value.toMutableMap().apply {
-                changed.forEach { key -> put(key, state.effectiveSetting(key)) }
-            }
-    }
 
     /**
      * Storage-relative path and version for a just-written transaction: a published
@@ -344,10 +428,15 @@ class JournalCoordinator internal constructor(
         writeBlockReason = failure.message ?: failure::class.simpleName ?: "metadata reconciliation failed"
     }
 
-    private suspend fun observeSourceHlc() {
-        writer.observeHlc(state.maxHlc)
+    /**
+     * Seed both write clocks past [maxHlc]. Takes the watermark explicitly rather than reading it
+     * off the folded state, so the open path can pass the value its stored projection recorded
+     * without folding anything.
+     */
+    private suspend fun observeSourceHlc(maxHlc: Hlc) {
+        writer.observeHlc(maxHlc)
         val contentWriter = objectWriter ?: return
-        contentWriter.observeHlc(state.maxHlc)
+        contentWriter.observeHlc(maxHlc)
         val (physical, counter) = contentWriter.watermark
         accumulator.persistAllocator(physical, counter)
     }
@@ -383,11 +472,14 @@ class JournalCoordinator internal constructor(
 
     /** Rebuild the in-memory state + DB projection from the durable store; clears the write block. */
     private suspend fun recoverDurableProjection() {
-        state = accumulator.reconcile().state
-        observeSourceHlc()
-        indexer.refreshState(state)
-        accumulator.markReady(state.maxHlc)
-        seedSettings()
+        // Recovery must reproject unconditionally, so it always needs a materialized fold even
+        // when the reconcile itself read nothing.
+        val current = accumulator.reconcile().state ?: accumulator.loadState()
+        folded = current
+        observeSourceHlc(current.maxHlc)
+        indexer.refreshState(current)
+        accumulator.markReady(current.maxHlc)
+        syncedSettings.seed(current)
         writeBlockReason = null
     }
 

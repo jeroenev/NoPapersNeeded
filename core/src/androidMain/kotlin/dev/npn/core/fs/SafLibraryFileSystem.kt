@@ -20,7 +20,9 @@ import java.security.MessageDigest
  * Performance: [listAll] walks the tree with direct [android.content.ContentResolver] queries
  * against [DocumentsContract] child-document uris (COLUMN_DOCUMENT_ID/DISPLAY_NAME/MIME_TYPE/
  * SIZE/LAST_MODIFIED), recursing into directories. This is dramatically faster than
- * [DocumentFile.listFiles], which does one binder round-trip per child.
+ * [DocumentFile.listFiles], which does one binder round-trip per child. Path-to-docId resolution
+ * is memoized per directory (see [SafDirectoryCache]), because SAF has no path lookup and every
+ * operation would otherwise re-list all of its ancestors.
  *
  * Write-once discipline: nothing here ever appends or overwrites. [writeBytesOnce] pre-checks
  * existence and guards against SAF's silent rename dedup (e.g. "file (1).pdf").
@@ -40,6 +42,14 @@ class SafLibraryFileSystem(
 
     private val treeDocId: String = DocumentsContract.getTreeDocumentId(treeUri)
 
+    /**
+     * Path-to-docId memoization for directories; see [SafDirectoryCache]. SAF has no path lookup,
+     * so without this every operation re-lists all of its ancestors. Our own destructive
+     * operations ([delete], [move]) invalidate the affected subtree eagerly; staleness caused from
+     * outside the app is detected and recovered inside the cache.
+     */
+    private val dirCache = SafDirectoryCache(treeDocId) { queryChildren(it) }
+
     private fun childrenUri(parentDocId: String): Uri =
         DocumentsContract.buildChildDocumentsUriUsingTree(treeUri, parentDocId)
 
@@ -47,17 +57,6 @@ class SafLibraryFileSystem(
 
     private fun splitSegments(relPath: String): List<String> =
         NpnPaths.normalize(relPath).split('/').filter { it.isNotEmpty() }
-
-    /** Internal representation of a resolved document. */
-    private data class Entry(
-        val docId: String,
-        val name: String,
-        val mime: String,
-        val size: Long,
-        val mtime: Long,
-    ) {
-        val isDir: Boolean get() = mime == DocumentsContract.Document.MIME_TYPE_DIR
-    }
 
     private val projection =
         arrayOf(
@@ -96,19 +95,10 @@ class SafLibraryFileSystem(
             // The root itself; synthesize a directory entry.
             return Entry(treeDocId, "", DocumentsContract.Document.MIME_TYPE_DIR, 0L, 0L)
         }
-        var parentId = treeDocId
-        var found: Entry? = null
-        for ((i, seg) in segments.withIndex()) {
-            val children = queryChildren(parentId)
-            val match = children.firstOrNull { it.name == seg } ?: return null
-            if (i == segments.lastIndex) {
-                found = match
-            } else {
-                if (!match.isDir) return null
-                parentId = match.docId
-            }
-        }
-        return found
+        val children = dirCache.childrenOfDir(segments.subList(0, segments.size - 1)) ?: return null
+        val match = children.firstOrNull { it.name == segments.last() } ?: return null
+        if (match.isDir) dirCache.remember(segments.joinToString("/"), match.docId)
+        return match
     }
 
     /** Resolve the parent directory docId of [relPath], creating dirs if [create]. */
@@ -118,11 +108,33 @@ class SafLibraryFileSystem(
     ): String {
         val segments = splitSegments(relPath)
         if (segments.size <= 1) return treeDocId
+        val dirSegments = segments.subList(0, segments.size - 1)
+        if (create) return createDirPath(dirSegments, relPath)
+        return dirCache.resolveDir(dirSegments).docId
+            ?: throw IOException("Parent directory missing for: $relPath")
+    }
+
+    /**
+     * Resolve [dirSegments] as a directory chain, creating any level that does not exist yet, and
+     * return the deepest docId. Shared by [mkdirs] and the creating half of [resolveParentDir].
+     *
+     * Unlike the read paths this does not retry past a stale cache entry: creating under a docId
+     * whose directory was deleted outside the app fails loudly here, which is the right outcome for
+     * a write-once filesystem — better a clear error than a file quietly landing somewhere else.
+     */
+    private fun createDirPath(
+        dirSegments: List<String>,
+        relForError: String,
+    ): String {
         var parentId = treeDocId
-        for (i in 0 until segments.size - 1) {
-            val seg = segments[i]
-            val children = queryChildren(parentId)
-            val existing = children.firstOrNull { it.name == seg }
+        for ((index, seg) in dirSegments.withIndex()) {
+            val key = dirSegments.subList(0, index + 1).joinToString("/")
+            val cached = dirCache.cached(key)
+            if (cached != null) {
+                parentId = cached
+                continue
+            }
+            val existing = queryChildren(parentId).firstOrNull { it.name == seg }
             parentId =
                 when {
                     existing != null && existing.isDir -> {
@@ -130,24 +142,21 @@ class SafLibraryFileSystem(
                     }
 
                     existing != null -> {
-                        throw IOException("Path segment '$seg' is a file, not a directory: $relPath")
+                        throw IOException("Path segment '$seg' is a file, not a directory: $relForError")
                     }
 
-                    create -> {
+                    else -> {
                         val created =
                             DocumentsContract.createDocument(
                                 resolver,
                                 docUri(parentId),
                                 DocumentsContract.Document.MIME_TYPE_DIR,
                                 seg,
-                            ) ?: throw IOException("Failed to create directory '$seg' in: $relPath")
+                            ) ?: throw IOException("Failed to create directory '$seg' in: $relForError")
                         DocumentsContract.getDocumentId(created)
                     }
-
-                    else -> {
-                        throw IOException("Parent directory missing for: $relPath")
-                    }
                 }
+            dirCache.remember(key, parentId)
         }
         return parentId
     }
@@ -196,7 +205,12 @@ class SafLibraryFileSystem(
                         isDirectory = entry.isDir,
                     ),
                 )
-                if (entry.isDir) stack.addLast(entry.docId to rel)
+                if (entry.isDir) {
+                    // Free cache fill: the walk already holds every directory's docId, so a later
+                    // per-file operation under one of them needs no ancestor lookups at all.
+                    dirCache.remember(rel, entry.docId)
+                    stack.addLast(entry.docId to rel)
+                }
             }
         }
         return out
@@ -355,6 +369,11 @@ class SafLibraryFileSystem(
             error("Target already exists: $toRelPath")
         }
         val source = resolveEntry(fromRelPath) ?: throw IOException("Not found: $fromRelPath")
+        // Moving a directory relocates every descendant path, so the cached docIds keyed under the
+        // OLD path are about to be wrong. Nothing above it moves, so only that subtree goes.
+        // Document moves (the hot path: import, rename, storage-path rules) move files, which are
+        // never cached, and so leave the cache untouched.
+        if (source.isDir) dirCache.invalidateSubtree(splitSegments(fromRelPath).joinToString("/"))
         val fromSegments = splitSegments(fromRelPath)
         val toSegments = splitSegments(toRelPath)
         val sameDir = fromSegments.dropLast(1) == toSegments.dropLast(1)
@@ -489,6 +508,9 @@ class SafLibraryFileSystem(
             val entry = resolveEntry(relPath) ?: return@withContext
             // DocumentsContract.deleteDocument removes directories recursively.
             DocumentsContract.deleteDocument(resolver, docUri(entry.docId))
+            // Deleting a directory invalidates its own cached docId and every descendant's, but
+            // nothing above it. Files are never cached, so deleting one needs no invalidation.
+            if (entry.isDir) dirCache.invalidateSubtree(splitSegments(relPath).joinToString("/"))
             Unit
         }
 
@@ -496,32 +518,7 @@ class SafLibraryFileSystem(
         withContext(Dispatchers.IO) {
             val segments = splitSegments(relPath)
             if (segments.isEmpty()) return@withContext
-            var parentId = treeDocId
-            for (seg in segments) {
-                val children = queryChildren(parentId)
-                val existing = children.firstOrNull { it.name == seg }
-                parentId =
-                    when {
-                        existing != null && existing.isDir -> {
-                            existing.docId
-                        }
-
-                        existing != null -> {
-                            throw IOException("Path segment '$seg' is a file: $relPath")
-                        }
-
-                        else -> {
-                            val created =
-                                DocumentsContract.createDocument(
-                                    resolver,
-                                    docUri(parentId),
-                                    DocumentsContract.Document.MIME_TYPE_DIR,
-                                    seg,
-                                ) ?: throw IOException("Failed to create directory '$seg': $relPath")
-                            DocumentsContract.getDocumentId(created)
-                        }
-                    }
-            }
+            createDirPath(segments, relPath)
             Unit
         }
 

@@ -289,7 +289,12 @@ data class MetadataSourceEntity(
 @Entity(
     tableName = "metadata_events",
     primaryKeys = ["deviceId", "sequence"],
-    indices = [Index(value = ["hlcPhysical", "hlcCounter", "hlcDevice"], unique = true)],
+    indices = [
+        Index(value = ["hlcPhysical", "hlcCounter", "hlcDevice"], unique = true),
+        // MetadataProjectionDao.eventsForDocument filters on this; without the index it is a full
+        // scan of a table that grows with every metadata edit ever made.
+        Index(value = ["documentId"]),
+    ],
 )
 data class MetadataEventEntity(
     val deviceId: String,
@@ -347,6 +352,14 @@ data class MetadataProjectionStateEntity(
     val allocatorPhysical: Long,
     val allocatorCounter: Int,
     val diagnostic: String? = null,
+    /**
+     * Digest of the applied source set at the moment this projection was last marked ready — see
+     * `MetadataAccumulator.sourceSetFingerprint`. When a fresh reconcile recomputes the same value
+     * the journal has not changed since, so the stored projection is already the fold of exactly
+     * these sources and the open path can skip refolding and reprojecting it. Null means unknown
+     * (pre-upgrade row, or a projection that never reached ready), which always forces the refold.
+     */
+    val sourceSetFingerprint: String? = null,
 ) {
     companion object {
         const val SINGLETON_ID = 1

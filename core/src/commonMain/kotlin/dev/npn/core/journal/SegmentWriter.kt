@@ -117,6 +117,21 @@ internal class SegmentWriter(
     private var recoveryComplete = false
 
     /**
+     * This device's own segments, cached across the boot sequence. [recover] and
+     * [checkSingleWriter] are called back to back when a session opens and both need the same
+     * listing, and listing means walking the whole journal directory — on Android that is one SAF
+     * query per directory, so resolving it twice doubles a measurable slice of startup.
+     *
+     * Safe because the fork check runs exactly once, at boot (`DeviceIdentity.ensureSingleWriter`),
+     * and [recover] is idempotent after [recoveryComplete]. Note this is NOT the same as "only
+     * [commit] can add an own segment": a second installation writing under the same deviceId into
+     * the same folder can too, and catching that is precisely what [checkSingleWriter] is for. So
+     * a future caller that re-runs the fork check mid-session must drop this cache first, or it
+     * will be answered from a listing taken at boot.
+     */
+    private var ownSegmentsCache: List<SegmentRef>? = null
+
+    /**
      * Ensure [localState] knows the last seq. If it is empty (fresh install or lost local
      * state), recover lastSeq as the max seq present across this device's own segments.
      * Returns the recovered/known last seq (null if the device has never written).
@@ -189,10 +204,15 @@ internal class SegmentWriter(
             }
         val fileName = SegmentRef.plainName(firstSeq)
         store.writeSegment(deviceId, fileName, JournalCodec.encodeLines(built))
+        ownSegmentsCache = null
         localState.setLastSeq(seq)
         localState.setKnownOwnSegments(localState.getKnownOwnSegments() + fileName)
         return built
     }
 
-    private suspend fun ownSegments(): List<SegmentRef> = store.listSegments().filter { it.deviceId == deviceId }
+    private suspend fun ownSegments(): List<SegmentRef> =
+        ownSegmentsCache ?: store
+            .listSegments()
+            .filter { it.deviceId == deviceId }
+            .also { ownSegmentsCache = it }
 }

@@ -74,6 +74,19 @@ interface FtsDao {
         chunkedQuery(docIds) { contentsForDocsChunk(it) }
 
     /**
+     * Which of [docIds] already have an FTS row. Presence only: the fold needs to know whether a
+     * document has been indexed yet (a brand-new one has no row), NOT what its text says. Reading
+     * the `content` column here instead would pull every document's entire extracted text into
+     * memory on every whole-library fold — and [replaceDocuments]' caller re-reads the content it
+     * carries forward under the write gate anyway (see Indexer.flushChanges).
+     */
+    @Query("SELECT docId FROM fts_documents WHERE docId IN (:docIds)")
+    suspend fun indexedDocIdsChunk(docIds: List<String>): List<String>
+
+    /** Chunked [indexedDocIdsChunk] so large id sets stay under SQLite's bind-variable limit. */
+    suspend fun indexedDocIds(docIds: List<String>): List<String> = chunkedQuery(docIds) { indexedDocIdsChunk(it) }
+
+    /**
      * Replace several documents' FTS rows atomically, exact-match delete + reinsert keyed on
      * docId, matching [replaceDocument] per row.
      */

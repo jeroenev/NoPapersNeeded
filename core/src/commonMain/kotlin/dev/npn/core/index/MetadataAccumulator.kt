@@ -2,13 +2,13 @@ package dev.npn.core.index
 
 import androidx.room3.withWriteTransaction
 import dev.npn.core.db.MetadataEventEntity
-import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataProjectionStateEntity
 import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.MetadataTransactionActorEntity
-import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.CanonicalJournalEvent
@@ -22,13 +22,17 @@ import dev.npn.core.journal.StorageV1Reader
 import dev.npn.core.journal.StorageV2Reader
 import dev.npn.core.journal.systemNowMillis
 
-class MetadataWriteBlocked(message: String) : IllegalStateException(message)
+class MetadataWriteBlocked(
+    message: String,
+) : IllegalStateException(message)
 
 /**
  * Outcome of a [MetadataAccumulator.reconcile] pass.
  *
  * @property state the folded state to project (either the caller's in-memory state with
- *   [newEvents] already applied, or a full refold from the DB).
+ *   [newEvents] already applied, or a full refold from the DB). Null only when this pass read
+ *   nothing AND the caller had no materialized state to begin with: there is then nothing to
+ *   project, so replaying the journal purely to hand back a value would be wasted work.
  * @property sourcesRead number of source files that were (re)ingested this pass.
  * @property newEvents the journal events newly applied to [state] this pass, in the order they
  *   were ingested. Only meaningful when [incremental] is true.
@@ -38,11 +42,41 @@ class MetadataWriteBlocked(message: String) : IllegalStateException(message)
  *   reproject: [state] was rebuilt from the DB and may differ arbitrarily from its prior value.
  */
 data class MetadataReconciliation(
-    val state: FoldedState,
+    val state: FoldedState?,
     val sourcesRead: Int,
     val newEvents: List<dev.npn.core.journal.JournalEvent> = emptyList(),
     val incremental: Boolean = false,
 )
+
+/**
+ * Outcome of the open-time reconcile ([MetadataAccumulator.reconcileOnOpen]).
+ *
+ * Opening a library asks a different question from every other reconcile. The running paths ask
+ * "what changed, and what must I fold in"; the open path can also ask "did anything change at
+ * all", because the answer is usually no and the stored projection is then already the fold of
+ * exactly the sources on disk. That case is worth a distinct outcome: the projection is a pure
+ * function of the applied source set, so an unchanged source set means neither the whole-journal
+ * refold nor the whole-DB reprojection can produce a different result, and both can be skipped.
+ */
+sealed interface OpenReconciliation {
+    /**
+     * The applied source set is byte-identical to the one the stored, ready projection was built
+     * from. Nothing to refold and nothing to reproject; [maxHlc] is the watermark that projection
+     * recorded, which is all the write clock needs to be seeded with.
+     *
+     * The [FoldedState] deliberately stays unmaterialized: only writes and rescans need it, and
+     * paying for it here is what made opening a library scale with a library's entire edit
+     * history rather than with its current contents.
+     */
+    data class ProjectionCurrent(
+        val maxHlc: Hlc,
+    ) : OpenReconciliation
+
+    /** The journal moved, or the stored projection is unusable. [state] must be projected. */
+    data class Refolded(
+        val state: FoldedState,
+    ) : OpenReconciliation
+}
 
 /** Persisted source/event accumulator. Synced files remain authoritative; this cache is rebuildable. */
 class MetadataAccumulator(
@@ -53,19 +87,10 @@ class MetadataAccumulator(
     private val dao = db.metadataProjectionDao()
     private var stagingCleaned = false
 
-    /**
-     * Pending-supersession bookkeeping: a previously-applied source whose file disappeared and
-     * whose content hash is NOT yet covered by an applied snapshot. Its events are still in the DB
-     * (they were applied), so a deletion arriving before its justifying snapshot must NOT hard-block
-     * writes. We count how many consecutive reconciles each such path stays unexplained and only
-     * escalate to the hard block past [PENDING_SUPERSESSION_LIMIT] (a deletion that never gets a
-     * snapshot is real damage). The counter is device-local and rebuildable; a fresh session
-     * legitimately restarts it.
-     */
-    private val pendingSupersession = HashMap<String, Int>()
+    /** Judges whether the source set is safe to fold; see [SourceSetValidator]. */
+    private val validator = SourceSetValidator(dao)
 
-    suspend fun <T> withProjectionTransaction(block: suspend () -> T): T =
-        db.withWriteTransaction { block() }
+    suspend fun <T> withProjectionTransaction(block: suspend () -> T): T = db.withWriteTransaction { block() }
 
     /**
      * Shared stat/read/hash/fingerprint core for the two ingest paths ([ingestObject] and
@@ -76,7 +101,12 @@ class MetadataAccumulator(
      */
     private sealed interface PreparedSource {
         data object Unchanged : PreparedSource
-        data class Loaded(val bytes: ByteArray, val contentHash: String, val fingerprint: String) : PreparedSource
+
+        data class Loaded(
+            val bytes: ByteArray,
+            val contentHash: String,
+            val fingerprint: String,
+        ) : PreparedSource
     }
 
     private suspend fun prepareSource(
@@ -84,8 +114,9 @@ class MetadataAccumulator(
         meta: FileMeta,
         existingSource: MetadataSourceEntity?,
     ): PreparedSource {
-        val alreadyApplied = existingSource != null &&
-            existingSource.status == MetadataProjectionDao.STATUS_APPLIED
+        val alreadyApplied =
+            existingSource != null &&
+                existingSource.status == MetadataProjectionDao.STATUS_APPLIED
         // Cheap gate: an already-applied source whose size+mtime are byte-for-byte unchanged is
         // treated as unchanged without reading/hashing. Only an exact match on BOTH fields
         // short-circuits (mtime granularity means an approximate match could hide a mutation), so
@@ -111,10 +142,11 @@ class MetadataAccumulator(
         require(path is NpnPaths.JournalPath.ObjectV2) { "Not a storage-v2 object: $relPath" }
         val meta = fs.stat(relPath) ?: return emptyList()
         val existingSource = dao.source(relPath)
-        val loaded = when (val prepared = prepareSource(relPath, meta, existingSource)) {
-            PreparedSource.Unchanged -> return emptyList()
-            is PreparedSource.Loaded -> prepared
-        }
+        val loaded =
+            when (val prepared = prepareSource(relPath, meta, existingSource)) {
+                PreparedSource.Unchanged -> return emptyList()
+                is PreparedSource.Loaded -> prepared
+            }
         return when (val result = StorageV2Reader.read(relPath, loaded.bytes)) {
             is JournalSourceRead.Accepted -> {
                 val unseen = result.events.filter { dao.event(it.event.dev, it.event.seq) == null }
@@ -127,10 +159,16 @@ class MetadataAccumulator(
                         MetadataProjectionDao.STATUS_APPLIED,
                     ),
                     result.events.map(::eventEntity),
-                    MetadataTransactionActorEntity(result.events.first().event.dev, loaded.contentHash),
+                    MetadataTransactionActorEntity(
+                        result.events
+                            .first()
+                            .event.dev,
+                        loaded.contentHash,
+                    ),
                 )
                 unseen.map { it.event }
             }
+
             is JournalSourceRead.Retryable -> {
                 if (existingSource?.status == MetadataProjectionDao.STATUS_APPLIED) {
                     fail("Previously applied object is no longer valid: $relPath (${result.message})")
@@ -147,55 +185,167 @@ class MetadataAccumulator(
                 )
                 fail(result.message)
             }
-            is JournalSourceRead.Unsupported -> fail(result.message)
+
+            is JournalSourceRead.Unsupported -> {
+                fail(result.message)
+            }
         }
     }
 
-    suspend fun reconcile(currentState: FoldedState? = null): MetadataReconciliation {
+    /** What one [runReconcilePass] observed, before any decision about how to fold it. */
+    private class ReconcilePass(
+        val projectionCleared: Boolean,
+        val ingest: IngestBatch,
+        val sourceRemoved: Boolean,
+    )
+
+    /**
+     * Read the metadata directory and bring the persisted source/event tables up to date with it.
+     * Shared by [reconcile] and [reconcileOnOpen]; decides nothing about the fold itself.
+     */
+    private suspend fun runReconcilePass(): ReconcilePass {
         val projectionCleared = dao.state()?.projectionVersion != PROJECTION_VERSION
         if (projectionCleared) {
             dao.clearAccumulator()
         }
         val entries = fs.listAllUnder(NpnPaths.JOURNAL_DIR)
         cleanOwnedStaging(entries)
-        validateStorageVersions(entries)
+        validator.unsupportedStorage(entries)?.let { fail(it) }
         val files = entries.filter { !it.isDirectory }.associateBy { it.relPath }
         val previous = dao.allSources()
 
         val ingest = ingestFiles(files.values)
-        validatePublishedObjects(previous, files)
+        validator.unexplainedSourceLoss(previous, files)?.let { fail(it) }
 
         // A source present before but gone now (even with a validated replacement above) means the
-        // event graph may have shrunk relative to the caller's in-memory state, so it must be
-        // rebuilt from the DB. Likewise a wiped projection, a re-ingested (mutated) existing
-        // source, or a first load with no prior state force a full refold. Only when every read
-        // this pass purely ADDED events onto an intact prior state is incremental projection sound.
-        val sourceRemoved = previous.any { it.path !in files }
-        val incremental = currentState != null && !projectionCleared &&
-            !ingest.reingestedExisting && !sourceRemoved
+        // event graph may have shrunk relative to a caller's in-memory state.
+        return ReconcilePass(projectionCleared, ingest, previous.any { it.path !in files })
+    }
 
-        val state = when {
-            ingest.read == 0 && currentState != null -> currentState
-            incremental -> currentState.also { current -> ingest.newEvents.forEach(current::apply) }
-            else -> loadState()
-        }
+    suspend fun reconcile(currentState: FoldedState? = null): MetadataReconciliation {
+        val pass = runReconcilePass()
+
+        // A shrunken event graph, a wiped projection, a re-ingested (mutated) existing source, or
+        // a first load with no prior state all force a full refold. Only when every read this pass
+        // purely ADDED events onto an intact prior state is incremental projection sound.
+        val incremental =
+            currentState != null && !pass.projectionCleared &&
+                !pass.ingest.reingestedExisting && !pass.sourceRemoved
+
+        val state =
+            when {
+                // Nothing read: hand back whatever the caller already had, INCLUDING null. A caller
+                // with no fold and nothing to fold in has nothing to project.
+                pass.ingest.read == 0 -> {
+                    currentState
+                }
+
+                currentState != null && incremental -> {
+                    currentState.also { current -> pass.ingest.newEvents.forEach(current::apply) }
+                }
+
+                else -> {
+                    loadState()
+                }
+            }
         // Persist the projection version + observed maxHlc mid-pass so a crash before the
         // coordinator's markReady() still records progress. Terminal states (ready/failed) are
         // written by markReady()/fail(); this transient marker is not observed by any caller.
-        dao.upsertState(projectionState(MIGRATION_RECONCILING, state.maxHlc))
+        // Skipped entirely on a no-op pass: it would otherwise overwrite the ready marker (and the
+        // source-set fingerprint that lets the next open reuse the projection) for no change.
+        if (state != null) {
+            dao.upsertState(projectionState(MIGRATION_RECONCILING, state.maxHlc))
+        }
         return MetadataReconciliation(
             state = state,
-            sourcesRead = ingest.read,
-            newEvents = if (incremental) ingest.newEvents else emptyList(),
-            incremental = incremental && ingest.read > 0,
+            sourcesRead = pass.ingest.read,
+            newEvents = if (incremental) pass.ingest.newEvents else emptyList(),
+            incremental = incremental && pass.ingest.read > 0,
         )
     }
 
-    suspend fun markReady(maxHlc: Hlc) {
-        dao.upsertState(projectionState(MIGRATION_READY, maxHlc))
+    /**
+     * Reconcile at session open, reporting whether the stored projection can be reused as-is.
+     *
+     * Reuse needs three things to hold together: the projection was left in the ready terminal
+     * state (so no earlier pass died half-applied), its version matches this build, and the
+     * fingerprint it recorded for its source set still matches the set now on disk. A null stored
+     * fingerprint — a row written before this optimization existed, or one that never reached
+     * ready — always refolds, so the first open after an upgrade pays once and later opens do not.
+     */
+    suspend fun reconcileOnOpen(): OpenReconciliation {
+        val stored = dao.state()
+        val pass = runReconcilePass()
+        val reusable =
+            !pass.projectionCleared &&
+                stored != null &&
+                stored.migrationState == MIGRATION_READY &&
+                stored.sourceSetFingerprint != null &&
+                stored.sourceSetFingerprint == sourceSetFingerprint()
+        if (reusable) {
+            return OpenReconciliation.ProjectionCurrent(
+                Hlc(stored.sourceMaxPhysical, stored.sourceMaxCounter, stored.sourceMaxDevice),
+            )
+        }
+        val state = loadState()
+        dao.upsertState(projectionState(MIGRATION_RECONCILING, state.maxHlc))
+        return OpenReconciliation.Refolded(state)
     }
 
-    suspend fun persistAllocator(physicalMillis: Long, counter: Int) {
+    suspend fun markReady(maxHlc: Hlc) {
+        dao.upsertState(
+            projectionState(MIGRATION_READY, maxHlc, sourceSetFingerprint = sourceSetFingerprint()),
+        )
+    }
+
+    /**
+     * Digest of the currently APPLIED source set: every path paired with its content fingerprint,
+     * in path order. The folded state is a pure function of the events these sources carry, so two
+     * passes that compute the same digest must fold to the same state.
+     *
+     * Restricting it to applied sources is what makes status changes visible: a source promoted
+     * from retryable to applied (or demoted) enters or leaves the set and so moves the digest. A
+     * source whose mtime changed but whose bytes did not also moves it, because the per-source
+     * fingerprint embeds size and mtime — conservative in the safe direction, and self-correcting
+     * on the next open once the new mtime is stored.
+     */
+    private suspend fun sourceSetFingerprint(): String {
+        val applied =
+            dao
+                .allSources()
+                .filter { it.status == MetadataProjectionDao.STATUS_APPLIED }
+                .sortedBy { it.path }
+        val payload =
+            buildString {
+                for (source in applied) {
+                    append(source.path)
+                    append('\u0000')
+                    append(source.fingerprint)
+                    append('\n')
+                }
+            }
+        return sha256Bytes(payload.encodeToByteArray())
+    }
+
+    /**
+     * Fold ONLY the library settings.
+     *
+     * Settings are the one slice of the folded state a reader needs at open time (the review mode
+     * and standard-field choices drive the UI), and there are a handful of setting events against
+     * a table holding every event ever recorded. Folding just those keeps the reuse path from
+     * having to materialize the whole state for two strings.
+     */
+    suspend fun loadSettingsState(): FoldedState =
+        FoldedState().also { state ->
+            dao.eventsForOperation(dev.npn.core.journal.JournalOp.SettingSet.WIRE).forEach { stored ->
+                state.apply(EventDecoderRegistry.decode(stored.canonicalJson, allowMissingV1 = false).event)
+            }
+        }
+
+    suspend fun persistAllocator(
+        physicalMillis: Long,
+        counter: Int,
+    ) {
         val current = dao.state() ?: projectionState(MIGRATION_RECONCILING, Hlc.ZERO)
         dao.upsertState(current.copy(allocatorPhysical = physicalMillis, allocatorCounter = counter))
     }
@@ -205,97 +355,19 @@ class MetadataAccumulator(
         stagingCleaned = true
         val marker = installationId?.let { ".$it." } ?: return
         val cutoff = systemNowMillis() - STAGING_MAX_AGE_MS
-        entries.asSequence()
+        entries
+            .asSequence()
             .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.Staging }
             .filter { it.name.contains(marker) }
             .filter { it.mtimeMillis in 1 until cutoff }
             .forEach { runCatching { fs.delete(it.relPath) } }
     }
 
-    private suspend fun validateStorageVersions(entries: List<FileMeta>) {
-        val supportedStoreVersions = setOf(NpnPaths.STORAGE_V2, NpnPaths.SNAPSHOT_V2)
-        val unsupported = entries.asSequence()
-            .mapNotNull { NpnPaths.objectStoreVersion(it.relPath) }
-            .firstOrNull { it !in supportedStoreVersions }
-        if (unsupported != null) fail("Unsupported metadata object store version $unsupported")
-        val invalidObject = entries.firstOrNull { entry ->
-            !entry.isDirectory && NpnPaths.objectStoreVersion(entry.relPath) in supportedStoreVersions &&
-                NpnPaths.journalPath(entry.relPath) is NpnPaths.JournalPath.Unknown
-        }
-        if (invalidObject != null) fail("Invalid metadata object path: ${invalidObject.relPath}")
-    }
-
-    private suspend fun validatePublishedObjects(
-        previous: List<MetadataSourceEntity>,
-        files: Map<String, FileMeta>,
-    ) {
-        val current = dao.allSources()
-        val supersededHashes = dao.appliedSupersededHashes().toHashSet()
-        val stillMissing = HashSet<String>()
-        val hardMissing = previous.firstOrNull { source ->
-            if (source.path in files) return@firstOrNull false
-            when (source.storageVersion) {
-                NpnPaths.STORAGE_V2, NpnPaths.STORAGE_SNAPSHOT ->
-                    isUnexplainedObjectLoss(source, current, files, supersededHashes, stillMissing)
-                else -> !hasLegacyReplacement(source, current, files)
-            }
-        }
-        // Drop pending counters for paths that reappeared or got explained this pass.
-        pendingSupersession.keys.retainAll(stillMissing)
-        if (hardMissing != null) {
-            fail("Metadata source disappeared without a validated replacement: ${hardMissing.path}")
-        }
-    }
-
-    /**
-     * True when a missing content-addressed source is UNEXPLAINED and its grace window is spent.
-     *
-     * A loss is explained (returns false) when either a hash-identical replacement path is present,
-     * or an applied snapshot lists the source's content hash as superseded. When neither holds yet
-     * — a deletion that raced ahead of its snapshot — the source becomes "pending supersession":
-     * its events are still applied locally, so we tolerate it for [PENDING_SUPERSESSION_LIMIT]
-     * reconciles and only then treat it as real damage.
-     */
-    private fun isUnexplainedObjectLoss(
-        source: MetadataSourceEntity,
-        current: List<MetadataSourceEntity>,
-        files: Map<String, FileMeta>,
-        supersededHashes: Set<String>,
-        stillMissing: MutableSet<String>,
-    ): Boolean {
-        val hasReplacement = current.any { candidate ->
-            candidate.path in files && candidate.status == MetadataProjectionDao.STATUS_APPLIED &&
-                candidate.contentHash == source.contentHash
-        }
-        if (hasReplacement) return false
-        if (source.contentHash != null && source.contentHash in supersededHashes) return false
-        // Pending supersession: not yet explained. Withhold the hard block for a grace window.
-        stillMissing.add(source.path)
-        val count = (pendingSupersession[source.path] ?: 0) + 1
-        pendingSupersession[source.path] = count
-        return count > PENDING_SUPERSESSION_LIMIT
-    }
-
-    private suspend fun hasLegacyReplacement(
-        missing: MetadataSourceEntity,
-        current: List<MetadataSourceEntity>,
-        files: Map<String, FileMeta>,
-    ): Boolean {
-        val deviceDir = missing.path.substringBeforeLast('/')
-        val required = dao.sourceEvents(missing.path).map { it.eventDeviceId to it.eventSequence }.toSet()
-        val replacements = current.filter { source ->
-            source.path in files && source.path.substringBeforeLast('/') == deviceDir &&
-                source.status == MetadataProjectionDao.STATUS_APPLIED
-        }
-        val covered = replacements.flatMap { dao.sourceEvents(it.path) }
-            .mapTo(HashSet()) { it.eventDeviceId to it.eventSequence }
-        return required.isNotEmpty() && covered.containsAll(required)
-    }
-
     /** Running result of an [ingestFiles] pass. */
     private class IngestBatch {
         var read = 0
         val newEvents = ArrayList<dev.npn.core.journal.JournalEvent>()
+
         // True if any source that was already APPLIED got re-ingested (mutated in place). Such a
         // rewrite can drop events (deleteUnreferencedEvents), so the in-memory state may no longer
         // be a strict superset -> the caller must fully refold rather than apply new events.
@@ -304,15 +376,19 @@ class MetadataAccumulator(
 
     private suspend fun ingestFiles(files: Collection<FileMeta>): IngestBatch {
         val batch = IngestBatch()
-        val sources = files.sortedBy { it.relPath }.filter { meta ->
-            val path = NpnPaths.journalPath(meta.relPath)
-            path !is NpnPaths.JournalPath.Staging && path !is NpnPaths.JournalPath.Unknown
-        }
+        val sources =
+            files.sortedBy { it.relPath }.filter { meta ->
+                val path = NpnPaths.journalPath(meta.relPath)
+                path !is NpnPaths.JournalPath.Staging && path !is NpnPaths.JournalPath.Unknown
+            }
         for (meta in sources) ingestFile(meta, batch)
         return batch
     }
 
-    private suspend fun ingestFile(meta: FileMeta, batch: IngestBatch) {
+    private suspend fun ingestFile(
+        meta: FileMeta,
+        batch: IngestBatch,
+    ) {
         val path = NpnPaths.journalPath(meta.relPath)
         if (path is NpnPaths.JournalPath.UnsupportedObjectStore) {
             fail("Unsupported metadata object store version ${path.version}")
@@ -330,29 +406,40 @@ class MetadataAccumulator(
         }
         // Shared stat/read/hash/fingerprint core + cheap gates. v1 mutation semantics are
         // preserved: a changed size/mtime still falls through to the read + rewrite logic below.
-        val loaded = when (val prepared = prepareSource(meta.relPath, meta, existing)) {
-            PreparedSource.Unchanged -> return
-            is PreparedSource.Loaded -> prepared
-        }
-        val storageVersion = when (path) {
-            is NpnPaths.JournalPath.SnapshotV2 -> NpnPaths.STORAGE_SNAPSHOT
-            is NpnPaths.JournalPath.ObjectV2 -> NpnPaths.STORAGE_V2
-            else -> NpnPaths.STORAGE_V1
-        }
+        val loaded =
+            when (val prepared = prepareSource(meta.relPath, meta, existing)) {
+                PreparedSource.Unchanged -> return
+                is PreparedSource.Loaded -> prepared
+            }
+        val storageVersion =
+            when (path) {
+                is NpnPaths.JournalPath.SnapshotV2 -> NpnPaths.STORAGE_SNAPSHOT
+                is NpnPaths.JournalPath.ObjectV2 -> NpnPaths.STORAGE_V2
+                else -> NpnPaths.STORAGE_V1
+            }
         val result = readSource(meta.relPath, path, loaded.bytes)
         if (result is JournalSourceRead.Retryable && alreadyApplied) {
             fail("Previously applied metadata source is no longer valid: ${meta.relPath} (${result.message})")
         }
         if (alreadyApplied) batch.reingestedExisting = true
-        val supersedes = if (path is NpnPaths.JournalPath.SnapshotV2 && result is JournalSourceRead.Accepted) {
-            SnapshotV2Reader.readSnapshot(meta.relPath, loaded.bytes)?.manifest?.supersedes.orEmpty()
-        } else {
-            null
-        }
+        val supersedes =
+            if (path is NpnPaths.JournalPath.SnapshotV2 && result is JournalSourceRead.Accepted) {
+                SnapshotV2Reader
+                    .readSnapshot(meta.relPath, loaded.bytes)
+                    ?.manifest
+                    ?.supersedes
+                    .orEmpty()
+            } else {
+                null
+            }
         applyReadResult(meta.relPath, storageVersion, loaded.fingerprint, loaded.contentHash, result, batch, supersedes)
     }
 
-    private fun readSource(relPath: String, path: NpnPaths.JournalPath, bytes: ByteArray): JournalSourceRead =
+    private fun readSource(
+        relPath: String,
+        path: NpnPaths.JournalPath,
+        bytes: ByteArray,
+    ): JournalSourceRead =
         when (path) {
             is NpnPaths.JournalPath.SnapshotV2 -> SnapshotV2Reader.read(relPath, bytes)
             is NpnPaths.JournalPath.ObjectV2 -> StorageV2Reader.read(relPath, bytes)
@@ -370,36 +457,55 @@ class MetadataAccumulator(
     ) {
         when (result) {
             is JournalSourceRead.Accepted -> {
-                val diagnostic = result.diagnostics.joinToString("\n") { item ->
-                    item.line?.let { "line $it: ${item.message}" } ?: item.message
-                }.ifEmpty { null }
+                val diagnostic =
+                    result.diagnostics
+                        .joinToString("\n") { item ->
+                            item.line?.let { "line $it: ${item.message}" } ?: item.message
+                        }.ifEmpty { null }
                 val hashCol = contentHash.takeIf { storageVersion != NpnPaths.STORAGE_V1 }
-                val source = MetadataSourceEntity(
-                    path, storageVersion, fingerprint, hashCol,
-                    MetadataProjectionDao.STATUS_APPLIED, diagnostic,
-                )
+                val source =
+                    MetadataSourceEntity(
+                        path,
+                        storageVersion,
+                        fingerprint,
+                        hashCol,
+                        MetadataProjectionDao.STATUS_APPLIED,
+                        diagnostic,
+                    )
                 val unseen = result.events.filter { dao.event(it.event.dev, it.event.seq) == null }
                 if (snapshotSupersedes != null) {
                     dao.ingestSnapshot(source, result.events.map(::eventEntity), snapshotSupersedes)
                 } else {
-                    val actor = result.events.firstOrNull()?.event?.dev
-                        ?.takeIf { storageVersion == NpnPaths.STORAGE_V2 }
-                        ?.let { MetadataTransactionActorEntity(it, contentHash) }
+                    val actor =
+                        result.events
+                            .firstOrNull()
+                            ?.event
+                            ?.dev
+                            ?.takeIf { storageVersion == NpnPaths.STORAGE_V2 }
+                            ?.let { MetadataTransactionActorEntity(it, contentHash) }
                     dao.ingestSource(source, result.events.map(::eventEntity), actor)
                 }
                 batch.read++
                 batch.newEvents.addAll(unseen.map { it.event })
             }
+
             is JournalSourceRead.Retryable -> {
                 dao.upsertSource(
                     MetadataSourceEntity(
-                        path, storageVersion, fingerprint, contentHash,
-                        MetadataProjectionDao.STATUS_RETRYABLE, result.message,
+                        path,
+                        storageVersion,
+                        fingerprint,
+                        contentHash,
+                        MetadataProjectionDao.STATUS_RETRYABLE,
+                        result.message,
                     ),
                 )
                 fail(result.message)
             }
-            is JournalSourceRead.Unsupported -> fail(result.message)
+
+            is JournalSourceRead.Unsupported -> {
+                fail(result.message)
+            }
         }
     }
 
@@ -409,32 +515,36 @@ class MetadataAccumulator(
         contentHash: String?,
         events: List<dev.npn.core.journal.JournalEvent>,
     ) {
-        val canonical = events.map { event ->
-            EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false)
-        }
+        val canonical =
+            events.map { event ->
+                EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false)
+            }
         val bytes = JournalCodec.encodeLines(events).encodeToByteArray()
         val hash = contentHash ?: sha256Bytes(bytes)
         val meta = fs.stat(path)
-        val source = MetadataSourceEntity(
-            path = path,
-            storageVersion = storageVersion,
-            fingerprint = "${meta?.size ?: bytes.size.toLong()},${meta?.mtimeMillis ?: 0L}:$hash",
-            contentHash = contentHash,
-            status = MetadataProjectionDao.STATUS_APPLIED,
-        )
-        val actor = if (storageVersion == NpnPaths.STORAGE_V2) {
-            MetadataTransactionActorEntity(events.first().dev, checkNotNull(contentHash))
-        } else {
-            null
-        }
+        val source =
+            MetadataSourceEntity(
+                path = path,
+                storageVersion = storageVersion,
+                fingerprint = "${meta?.size ?: bytes.size.toLong()},${meta?.mtimeMillis ?: 0L}:$hash",
+                contentHash = contentHash,
+                status = MetadataProjectionDao.STATUS_APPLIED,
+            )
+        val actor =
+            if (storageVersion == NpnPaths.STORAGE_V2) {
+                MetadataTransactionActorEntity(events.first().dev, checkNotNull(contentHash))
+            } else {
+                null
+            }
         dao.ingestSource(source, canonical.map(::eventEntity), actor)
     }
 
-    suspend fun loadState(): FoldedState = FoldedState().also { state ->
-        dao.allEvents().forEach { stored ->
-            state.apply(EventDecoderRegistry.decode(stored.canonicalJson, allowMissingV1 = false).event)
+    suspend fun loadState(): FoldedState =
+        FoldedState().also { state ->
+            dao.allEvents().forEach { stored ->
+                state.apply(EventDecoderRegistry.decode(stored.canonicalJson, allowMissingV1 = false).event)
+            }
         }
-    }
 
     /** Compaction bookkeeping (snapshot record/plan/delete) lives in [SnapshotSupport]. */
     val snapshotSupport: SnapshotSupport by lazy { SnapshotSupport(fs, dao, ::eventEntity) }
@@ -444,8 +554,12 @@ class MetadataAccumulator(
         throw MetadataWriteBlocked(message)
     }
 
-    private suspend fun projectionState(status: String, maxHlc: Hlc, diagnostic: String? = null):
-        MetadataProjectionStateEntity {
+    private suspend fun projectionState(
+        status: String,
+        maxHlc: Hlc,
+        diagnostic: String? = null,
+        sourceSetFingerprint: String? = null,
+    ): MetadataProjectionStateEntity {
         val previous = dao.state()
         return MetadataProjectionStateEntity(
             projectionVersion = PROJECTION_VERSION,
@@ -456,6 +570,9 @@ class MetadataAccumulator(
             allocatorPhysical = previous?.allocatorPhysical ?: maxHlc.physicalMillis,
             allocatorCounter = previous?.allocatorCounter ?: maxHlc.counter,
             diagnostic = diagnostic,
+            // Only a ready projection may advertise a reusable source set; every transient or
+            // failed state clears it so the next open refolds rather than trusting a half-pass.
+            sourceSetFingerprint = sourceSetFingerprint,
         )
     }
 
@@ -474,16 +591,22 @@ class MetadataAccumulator(
     }
 
     companion object {
+        /**
+         * Version of the accumulator + projection contract. A stored projection whose version does
+         * not match this build is wiped and rebuilt from the journal.
+         *
+         * BUMP THIS whenever a change alters what a fold produces from the same events — a new or
+         * differently-derived column in `Indexer.applyFold`, a changed OR-set/LWW rule, a fix to
+         * how an op projects. It is no longer optional: [reconcileOnOpen] reuses a stored
+         * projection whenever the source set is unchanged, so without a bump an existing install
+         * keeps serving rows built by the OLD fold and never notices. (Before that reuse existed
+         * every launch reprojected, and such changes healed themselves on the next open.)
+         *
+         * Not needed for changes that only affect ingestion/validation, or for Room schema changes
+         * that already drop the affected tables.
+         */
         const val PROJECTION_VERSION = 1
         private const val STAGING_MAX_AGE_MS = 60L * 60L * 1000L
-
-        /**
-         * How many consecutive reconciles a deleted-but-still-applied content-addressed source may
-         * stay unexplained (no hash replacement, no applied snapshot superseding it) before it is
-         * treated as real damage and hard-blocks writes. The 15-minute reconcile cadence makes this
-         * roughly a two-hour grace window for a snapshot to arrive after its deletions.
-         */
-        const val PENDING_SUPERSESSION_LIMIT = 8
 
         /** Transient marker while a reconcile is in flight; not observed by any caller. */
         const val MIGRATION_RECONCILING = "reconciling"

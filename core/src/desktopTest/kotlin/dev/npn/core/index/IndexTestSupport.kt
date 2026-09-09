@@ -44,7 +44,9 @@ class IndexRig private constructor(
      * what [JournalCoordinator.rescan] does in production, so tests keep calling a single method.
      */
     suspend fun rescan(): ScanReport {
-        val state = accumulator.reconcile().state
+        // A rescan always projects, so it always needs a fold — reconcile returns null when it
+        // read nothing and had nothing handed in, which is a no-op only the metadata paths can use.
+        val state = accumulator.reconcile().state ?: accumulator.loadState()
         val report = indexer.rescan(metadataState = state)
         accumulator.markReady(state.maxHlc)
         return report

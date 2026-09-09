@@ -4,7 +4,10 @@ import dev.npn.core.model.DocProperty
 import kotlinx.serialization.json.JsonObject
 
 /** A dot uniquely identifies a single event by its author device and per-device sequence. */
-data class Dot(val deviceId: String, val seq: Long)
+data class Dot(
+    val deviceId: String,
+    val seq: Long,
+)
 
 /**
  * The operation carried by a journal event. Serialized on disk as an `op` string plus a
@@ -18,17 +21,25 @@ sealed class JournalOp {
     abstract val wire: String
 
     /** {"tag": String}; doc required. */
-    data class TagAdd(val tag: String) : JournalOp() {
+    data class TagAdd(
+        val tag: String,
+    ) : JournalOp() {
         override val wire get() = "tag-add"
     }
 
     /** {"tag": String, "dots": [[deviceId, seq], ...]}; observed-remove. doc required. */
-    data class TagRemove(val tag: String, val dots: List<Dot>) : JournalOp() {
+    data class TagRemove(
+        val tag: String,
+        val dots: List<Dot>,
+    ) : JournalOp() {
         override val wire get() = "tag-remove"
     }
 
     /** {"key": DocProperty.wire, "value": String?}; null clears. doc required. */
-    data class PropSet(val key: DocProperty, val value: String?) : JournalOp() {
+    data class PropSet(
+        val key: DocProperty,
+        val value: String?,
+    ) : JournalOp() {
         override val wire get() = "prop-set"
     }
 
@@ -37,12 +48,17 @@ sealed class JournalOp {
      * field with a free-form string key (unlike [PropSet], whose key is the closed [DocProperty]
      * enum). Last-writer-wins by HLC, same as [PropSet].
      */
-    data class FieldSet(val key: String, val value: String?) : JournalOp() {
+    data class FieldSet(
+        val key: String,
+        val value: String?,
+    ) : JournalOp() {
         override val wire get() = "field-set"
     }
 
     /** {"origPath": String}; doc required. */
-    data class DocTrash(val origPath: String) : JournalOp() {
+    data class DocTrash(
+        val origPath: String,
+    ) : JournalOp() {
         override val wire get() = "doc-trash"
     }
 
@@ -57,28 +73,51 @@ sealed class JournalOp {
     }
 
     /** {"newDoc": sha256}; doc = old id. */
-    data class Relink(val newDoc: String) : JournalOp() {
+    data class Relink(
+        val newDoc: String,
+    ) : JournalOp() {
         override val wire get() = "relink"
     }
 
     /** {"from": String, "to": String}; doc null, library-wide. */
-    data class TagRename(val from: String, val to: String) : JournalOp() {
+    data class TagRename(
+        val from: String,
+        val to: String,
+    ) : JournalOp() {
         override val wire get() = "tag-rename"
     }
 
     /** {"from": String, "to": String}; doc null. Same folding as rename, kept distinct for UI/history. */
-    data class TagMerge(val from: String, val to: String) : JournalOp() {
+    data class TagMerge(
+        val from: String,
+        val to: String,
+    ) : JournalOp() {
         override val wire get() = "tag-merge"
     }
 
     /** {"tag": String, "color": String?, "icon": String?}; doc null. */
-    data class TagStyle(val tag: String, val color: String?, val icon: String?) : JournalOp() {
+    data class TagStyle(
+        val tag: String,
+        val color: String?,
+        val icon: String?,
+    ) : JournalOp() {
         override val wire get() = "tag-style"
     }
 
     /** {"key": String, "value": String?}; doc null, library-wide. LWW synced setting. */
-    data class SettingSet(val key: String, val value: String?) : JournalOp() {
-        override val wire get() = "setting-set"
+    data class SettingSet(
+        val key: String,
+        val value: String?,
+    ) : JournalOp() {
+        override val wire get() = WIRE
+
+        companion object {
+            /**
+             * Shared with `MetadataProjectionDao.eventsForOperation`, which selects setting events
+             * by this value so the open path can fold settings without folding the whole journal.
+             */
+            const val WIRE = "setting-set"
+        }
     }
 
     /** An op this build does not understand. Its payload is retained for migration and diagnostics. */

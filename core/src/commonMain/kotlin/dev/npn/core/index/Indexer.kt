@@ -16,6 +16,7 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.DocProperty
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -92,10 +93,26 @@ class Indexer(
                 val hashes = HashMap<String, String>() // relPath -> sha256
                 val progressMutex = Mutex()
                 var hashedCount = 0
+                // A fixed pool of workers pulling from a shared queue. Chunking the input instead
+                // would size the CHUNKS at HASH_CONCURRENCY and launch one coroutine per chunk —
+                // a thousand files to hash meant 250 coroutines all hopping to Dispatchers.IO,
+                // which is unbounded read concurrency against the storage provider rather than
+                // the intended cap. A queue also balances the work, which matters because file
+                // sizes (and so hash costs) vary by orders of magnitude.
                 coroutineScope {
-                    for (slice in toHash.chunked(HASH_CONCURRENCY)) {
+                    val pending = Channel<FileMeta>(Channel.UNLIMITED)
+                    // Unlimited and not yet closed, so every offer succeeds. Checked rather than
+                    // discarded because a capacity change here would otherwise silently drop
+                    // files from the scan instead of failing.
+                    for (meta in toHash) {
+                        check(
+                            pending.trySend(meta).isSuccess,
+                        ) { "hash queue rejected ${meta.relPath}" }
+                    }
+                    pending.close()
+                    repeat(minOf(HASH_CONCURRENCY, toHash.size)) {
                         launch(Dispatchers.Default) {
-                            for (meta in slice) {
+                            for (meta in pending) {
                                 val hash = fs.sha256(meta.relPath)
                                 progressMutex.withLock {
                                     hashes[meta.relPath] = hash
@@ -199,8 +216,10 @@ class Indexer(
     ): Reconciliation {
         val recon = Reconciliation()
         val existingByPath = HashMap<String, DocumentEntity>()
-        for (pm in dbProjection) {
-            val row = documentDao.getByDocId(pm.docId) ?: continue
+        // One bulk read (chunked under SQLite's bind limit) rather than a query per document:
+        // this runs over the whole projection on every rescan, so a per-row read here was an
+        // N+1 across the entire library.
+        for (row in documentDao.getByDocIds(dbProjection.map { it.docId })) {
             recon.existingByDocId[row.docId] = row
             existingByPath[row.relPath] = row
         }
@@ -289,19 +308,20 @@ class Indexer(
     ): MissingResult {
         var missingCount = 0
         val missingDocs = ArrayList<DocumentEntity>()
+        val nowMissing = ArrayList<DocumentEntity>()
         for (pm in dbProjection) {
-            existingByDocId[pm.docId] ?: continue
-            // Re-read: it may have been updated (moved) above.
-            val current = documentDao.getByDocId(pm.docId) ?: continue
+            // [Reconciliation.existingByDocId] is kept current for every row the reconcile pass
+            // upserted, so it already holds the post-reconcile row. Re-reading each one from the
+            // DB here was a second N+1 over the whole library for no extra information.
+            val current = existingByDocId[pm.docId] ?: continue
             if (current.deleted || current.trashed) continue
             if (current.relPath !in diskPaths) {
-                if (!current.missing) {
-                    documentDao.upsert(current.copy(missing = true))
-                }
+                if (!current.missing) nowMissing.add(current.copy(missing = true))
                 missingDocs.add(current)
                 missingCount++
             }
         }
+        if (nowMissing.isNotEmpty()) documentDao.upsertAll(nowMissing)
         return MissingResult(missingCount, missingDocs)
     }
 
@@ -539,7 +559,12 @@ class Indexer(
         val rows: HashMap<String, DocumentEntity>,
         val tags: Map<String, List<String>>,
         val fields: Map<String, Map<String, String>>,
-        val ftsContent: Map<String, String?>,
+        /**
+         * Docs that already have an FTS row. Presence only, never the text: the projection just
+         * needs to know whether a doc has been indexed yet, and [flushChanges] re-reads the
+         * content it carries forward under the write gate.
+         */
+        val ftsIndexed: Set<String>,
     )
 
     /**
@@ -569,8 +594,8 @@ class Indexer(
             fields[docId] = fieldRows.associate { it.fieldKey to it.fieldValue }
         }
 
-        val ftsContent = ftsDao.contentsForDocs(docIds).associate { it.docId to it.content }
-        return PreloadedRows(rows, tags, fields, ftsContent)
+        val ftsIndexed = ftsDao.indexedDocIds(docIds).toHashSet()
+        return PreloadedRows(rows, tags, fields, ftsIndexed)
     }
 
     /**
@@ -839,22 +864,22 @@ class Indexer(
         val rowChanged = newRow != row
         if (rowChanged) changes.docRows.add(newRow)
 
-        // FTS: preserve the existing extracted-text content (OCR/embedded text written by the
-        // OCR pipeline), preloaded before the pass. The fold only owns the metadata-derived
-        // columns; carry content forward so a metadata change (tag add, prop set) never wipes
-        // full-text search. A brand-new doc has no fts row yet -> null -> empty content until
-        // OCR fills it. All fts metadata columns derive from the doc row + tags, so when
-        // neither changed and a row already exists there is nothing to write. The row is
-        // flushed in bulk under the shared FtsWriteGate (see [flushChanges]).
-        val existingContent = preloaded.ftsContent[doc]
-        if (rowChanged || tagsChanged || existingContent == null) {
+        // FTS: the fold only owns the metadata-derived columns; the extracted-text content
+        // (OCR/embedded text written by the OCR pipeline) must be carried forward so a metadata
+        // change (tag add, prop set) never wipes full-text search. That carry-forward happens in
+        // [flushChanges], which re-reads the content under the write gate and fills it in — the
+        // empty string here is a placeholder it always replaces. A brand-new doc has no fts row
+        // yet, so it must be written even when nothing else changed; all other fts metadata
+        // columns derive from the doc row + tags, so when neither changed and a row already
+        // exists there is nothing to write.
+        if (rowChanged || tagsChanged || doc !in preloaded.ftsIndexed) {
             changes.ftsRows.add(
                 FtsDocumentEntity(
                     docId = doc,
                     fileName = lifecycle.fileName,
                     title = meta.title,
                     notes = meta.notes,
-                    content = existingContent ?: "",
+                    content = "",
                     tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
                     correspondent = meta.correspondent,
                     docType = meta.docType,

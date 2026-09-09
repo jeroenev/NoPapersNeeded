@@ -172,8 +172,7 @@ class LibrarySessionImpl private constructor(
         val dao = db.documentDao()
         val live =
             dao
-                .allPathsAndMeta()
-                .mapNotNull { dao.getByDocId(it.docId) }
+                .getByDocIds(dao.allPathsAndMeta().map { it.docId })
                 .filter { !it.trashed && !it.deleted && !it.missing }
         val targets =
             if (!onlyTagged) {
@@ -565,8 +564,11 @@ class LibrarySessionImpl private constructor(
 
     /** Queue OCR for any live doc that has not been processed yet. */
     private suspend fun queuePendingOcr() {
-        for (pm in db.documentDao().allPathsAndMeta()) {
-            val doc = db.documentDao().getByDocId(pm.docId) ?: continue
+        val dao = db.documentDao()
+        // One bulk read for the whole projection instead of a query per document; this runs after
+        // every rescan, so the per-row read was an N+1 across the library.
+        val docs = dao.getByDocIds(dao.allPathsAndMeta().map { it.docId })
+        for (doc in docs) {
             if (doc.trashed || doc.deleted || doc.missing) continue
             if (doc.ocrState == OcrPipeline.OCR_NONE) {
                 enqueuePendingOcr(doc.docId)
@@ -705,10 +707,19 @@ class LibrarySessionImpl private constructor(
                     coordinator = coordinator,
                     onMetadataApplied = pathRuleApplicator::applyFor,
                 )
-            db.autoMatchRuleDao().clearAll()
-            runCatching {
-                Json.decodeFromString<List<dev.npn.core.rules.AutoMatchRule>>(deps.autoMatchRulesJson())
-            }.getOrDefault(emptyList()).forEach { db.autoMatchRuleDao().upsert(it.toEntity()) }
+            // The settings JSON is the source of truth; this table is its disposable mirror. Only
+            // reconcile it when it actually differs — an unconditional clear + per-rule upsert on
+            // every open is a write burst on the awaited open path that invalidates the rules Room
+            // flow for no change.
+            val storedRules =
+                runCatching {
+                    Json.decodeFromString<List<dev.npn.core.rules.AutoMatchRule>>(deps.autoMatchRulesJson())
+                }.getOrDefault(emptyList())
+                    .map { it.toEntity() }
+                    .sortedWith(compareBy({ it.position }, { it.id }))
+            if (db.autoMatchRuleDao().getAll() != storedRules) {
+                db.autoMatchRuleDao().replaceAll(storedRules)
+            }
             val rules =
                 AutoMatchRuleRepositoryImpl(
                     dao = db.autoMatchRuleDao(),

@@ -92,6 +92,14 @@ via `mise hot`.
 3. **Index is a cache**: `Indexer` folds journal state (OR-set tags, HLC LWW) into
    the Room database (`FoldedState`, `MetadataAccumulator`). The db lives
    device-local, outside the library folder, and is rebuildable from the folder.
+   The projection is a pure function of the applied source set, so
+   `MetadataAccumulator` fingerprints that set and records it alongside the ready
+   marker: opening a library whose fingerprint still matches reuses the stored
+   projection instead of refolding, and `JournalCoordinator` leaves the
+   `FoldedState` unmaterialized until a write or rescan actually needs it.
+   Because of that reuse, **changing what a fold produces from the same events
+   requires bumping `MetadataAccumulator.PROJECTION_VERSION`** — otherwise
+   existing installs keep serving rows built by the old fold. See the KDoc there.
 4. **UI reads the cache**: viewmodels subscribe to Room DAO Flows (with the named
    `WhileSubscribed(5_000)` constant) and map rows into UI models via the
    `core.app` facet interfaces; the Compose layer is a pure renderer of those.
@@ -104,6 +112,10 @@ via `mise hot`.
 
 ## Where to look for common tasks
 
+- A new library-wide synced setting → a `setting-set` op plus its key in
+  `JournalCoordinator.SEEDED_SETTING_KEYS`. A key left out of that list reads as
+  null on open (the open path folds only the seeded settings, not the whole
+  journal) and only appears once something writes it in the running session.
 - Add a new property to a document → journal event + `FoldedState` + `Projections`
   + the matching `core.app` contract file (`Metadata.kt` for a write, `Documents.kt`
   for a read) + UI model.
