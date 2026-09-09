@@ -56,12 +56,9 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshots.SnapshotStateMap
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -80,7 +77,6 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.app.LibrarySession
-import kotlinx.coroutines.flow.first
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -135,19 +131,19 @@ fun AiChatScreen(
     val listState = rememberLazyListState()
     val items = ui.transcript.items
     val lastLen = (items.lastOrNull() as? TranscriptItem.AssistantTurn)?.text?.length ?: 0
-    val docTitles = remember { mutableStateMapOf<String, String>() }
     val historySessions = ui.sessions.filterNot { it.id == ui.currentSessionId && items.isEmpty() }
 
-    var restored by rememberSaveable { mutableStateOf(false) }
-
-    // Keep new output visible without overriding the position restored by navigation.
+    // Keep new output visible by following the bottom — but only while the user is already there,
+    // so a position they scrolled to (or one restored by navigation/process death, which shows up
+    // as a non-zero first visible index before the transcript loads) is never yanked away.
     LaunchedEffect(items.size, lastLen) {
-        if (!restored) {
-            if (items.isNotEmpty()) listState.animateScrollToItem(items.size - 1)
-            restored = true
-        } else if (items.isNotEmpty()) {
-            listState.animateScrollToItem(items.size - 1)
-        }
+        if (items.isEmpty()) return@LaunchedEffect
+        val lastVisible =
+            listState.layoutInfo.visibleItemsInfo
+                .lastOrNull()
+                ?.index
+        val atBottom = lastVisible?.let { it >= items.size - 2 } ?: (listState.firstVisibleItemIndex == 0)
+        if (atBottom) listState.animateScrollToItem(items.size - 1)
     }
 
     Scaffold(
@@ -191,8 +187,7 @@ fun AiChatScreen(
                             // still-streaming turn may legitimately be empty before the first token
                             // and keeps rendering so the in-progress bubble is visible.
                             if (item.text.isNotEmpty() || item.streaming) {
-                                LoadDocTitles(item.docRefs, docTitles, session)
-                                AssistantBubble(item, onOpenDoc, onOpenFiltered, onAiEditDocs, docTitles)
+                                AssistantBubble(item, onOpenDoc, onOpenFiltered, onAiEditDocs, ui.docTitles)
                             }
                         }
 
@@ -335,33 +330,13 @@ private fun UserBubble(item: TranscriptItem.UserTurn) {
     }
 }
 
-/** Resolve missing docRefs to their display titles into [docTitles] (one-shot, keyed by docId). */
-@Composable
-private fun LoadDocTitles(
-    docRefs: List<String>,
-    docTitles: SnapshotStateMap<String, String>,
-    session: LibrarySession,
-) {
-    LaunchedEffect(docRefs) {
-        docRefs.forEach { docId ->
-            if (docId !in docTitles) {
-                runCatching { session.documents.observeDoc(docId).first() }
-                    .getOrNull()
-                    ?.let { item ->
-                        docTitles[docId] = item.doc.displayTitle
-                    }
-            }
-        }
-    }
-}
-
 @Composable
 private fun AssistantBubble(
     item: TranscriptItem.AssistantTurn,
     onOpenDoc: (String) -> Unit,
     onOpenFiltered: (List<String>) -> Unit,
     onAiEditDocs: (List<String>) -> Unit,
-    docTitles: SnapshotStateMap<String, String>,
+    docTitles: Map<String, String>,
 ) {
     Column(Modifier.fillMaxWidth(), horizontalAlignment = Alignment.Start) {
         Bubble(fromUser = false) {

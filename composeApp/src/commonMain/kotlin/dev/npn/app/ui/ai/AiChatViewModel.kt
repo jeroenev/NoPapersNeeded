@@ -8,19 +8,24 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatSession
+import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibrarySession
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 /**
  * Chat UI state. [configured] is null until the initial config probe completes, then true/false so
  * the screen can show a "configure in settings" hint instead of the input row. [busy] is true while
- * a request is streaming.
+ * a request is streaming. [docTitles] resolves cited docRefs to display titles as they appear in
+ * the transcript; an unresolved ref falls back to a shortened id at the render site.
  */
 data class AiChatUiState(
     val transcript: ChatTranscript = ChatTranscript.EMPTY,
@@ -28,6 +33,7 @@ data class AiChatUiState(
     val currentSessionId: String? = null,
     val busy: Boolean = false,
     val configured: Boolean? = null,
+    val docTitles: Map<String, String> = emptyMap(),
 )
 
 /**
@@ -40,8 +46,9 @@ data class AiChatUiState(
  */
 class AiChatViewModel(
     private val ai: AiChat,
+    private val documents: DocumentRepository,
 ) : MessagesViewModel() {
-    constructor(session: LibrarySession) : this(session.aiChat)
+    constructor(session: LibrarySession) : this(session.aiChat, session.documents)
 
     private val _ui = MutableStateFlow(AiChatUiState())
     val ui: StateFlow<AiChatUiState> = _ui.asStateFlow()
@@ -70,6 +77,32 @@ class AiChatViewModel(
             }
             loadSession(session.id)
         }
+        // Resolve display titles for cited documents as they appear in the transcript, so the
+        // bubbles can label their doc chips. Title lookup is data access and belongs here, not in
+        // a leaf composable (where it would also re-fire as rows scroll in and out).
+        viewModelScope.launch {
+            _ui
+                .map { state ->
+                    state.transcript.items
+                        .filterIsInstance<TranscriptItem.AssistantTurn>()
+                        .flatMap { it.docRefs }
+                        .distinct()
+                }.distinctUntilChanged()
+                .collect { refs -> resolveDocTitles(refs) }
+        }
+    }
+
+    /** Look up the display title of each not-yet-resolved [docRefs] entry (unknown ids stay absent). */
+    private suspend fun resolveDocTitles(docRefs: List<String>) {
+        docRefs
+            .filterNot { it in _ui.value.docTitles }
+            .forEach { docId ->
+                runCatching { documents.observeDoc(docId).first() }
+                    .getOrNull()
+                    ?.let { item ->
+                        _ui.update { it.copy(docTitles = it.docTitles + (docId to item.doc.displayTitle)) }
+                    }
+            }
     }
 
     /** Send [question]; ignored when blank or while a request is in flight. */

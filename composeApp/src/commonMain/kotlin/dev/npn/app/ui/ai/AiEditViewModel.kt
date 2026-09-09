@@ -137,9 +137,10 @@ data class AiEditUiState(
 
 /**
  * Whether a run over [count] documents goes to the background queue: the user's choice when they
- * made one, otherwise [AiTagging.BACKGROUND_THRESHOLD_DOCS].
+ * made one, otherwise [AiTagging.BACKGROUND_THRESHOLD_DOCS]. Private so the threshold policy stays
+ * in the viewmodel; the UI reads [AiEditViewModel.runsInBackground] instead.
  */
-fun AiEditUiState.runsInBackground(count: Int): Boolean =
+private fun AiEditUiState.runsInBackground(count: Int): Boolean =
     backgroundOverride ?: (count > AiTagging.BACKGROUND_THRESHOLD_DOCS)
 
 /** Whether the configured run asks the model for anything at all (drives the Start affordance). */
@@ -244,6 +245,15 @@ class AiEditViewModel(
                     ScopePreview(remaining.size, remaining.take(key.batchSize))
                 }
             }.stateIn(viewModelScope, WhileSubscribedTimeout, ScopePreview.EMPTY)
+
+    /**
+     * Whether the currently configured run would go to the background queue, given the live scope
+     * size. Derived here (not in the composables) so the size threshold stays a viewmodel/domain
+     * policy; [start] re-resolves the decision against a fresh count when the run actually begins.
+     */
+    val runsInBackground: StateFlow<Boolean> =
+        combine(_ui, preview) { state, p -> state.runsInBackground(p.total) }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, false)
 
     private var run: Job? = null
 

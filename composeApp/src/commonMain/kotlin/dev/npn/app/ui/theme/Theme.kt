@@ -44,6 +44,12 @@ private val LightColors =
         onSecondary = Color.White,
         secondaryContainer = PaperField,
         onSecondaryContainer = Color(0xFF2C2A25),
+        // Warm amber "attention" tint (e.g. the needs-review badge). Defined explicitly so the
+        // stock M3 teal tertiary never leaks into the warm-neutral palette.
+        tertiary = Color(0xFF7C5800),
+        onTertiary = Color.White,
+        tertiaryContainer = Color(0xFFF7E3C2),
+        onTertiaryContainer = Color(0xFF5C4200),
         background = PaperBg,
         onBackground = PaperInk,
         surface = PaperSurface,
@@ -71,6 +77,11 @@ private val DarkColors =
         onSecondary = Color(0xFF32302B),
         secondaryContainer = Color(0xFF3C3A34),
         onSecondaryContainer = Color(0xFFE4E1D9),
+        // Dark counterpart of the warm amber tertiary; see LightColors.
+        tertiary = Color(0xFFEEC06C),
+        onTertiary = Color(0xFF3F2E00),
+        tertiaryContainer = Color(0xFF5C4200),
+        onTertiaryContainer = Color(0xFFF7E3C2),
         background = InkBg,
         onBackground = InkText,
         surface = InkSurface,

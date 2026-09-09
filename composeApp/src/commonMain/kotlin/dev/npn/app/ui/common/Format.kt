@@ -1,23 +1,8 @@
 package dev.npn.app.ui.common
 
-import dev.npn.core.app.ViewType
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
-
-/** Display label for a library [ViewType]. */
-fun viewTypeLabel(v: ViewType): String =
-    when (v) {
-        ViewType.LIST -> "List"
-        ViewType.GRID -> "Grid"
-    }
-
-/** Pick [singular] or [plural] (default: [singular] + "s") based on [count]. */
-fun plural(
-    count: Int,
-    singular: String,
-    plural: String = singular + "s",
-): String = if (count == 1) singular else plural
 
 /**
  * Maximum entries shown in an inline autocomplete list (tag / correspondent / doc-type / field-key

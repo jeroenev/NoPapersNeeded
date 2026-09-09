@@ -40,6 +40,7 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -297,15 +298,15 @@ class DocDetailViewModel(
     init {
         viewModelScope.launch {
             val count = runCatching { content.pageCount(docId) }.getOrNull() ?: 0
-            _ui.value = _ui.value.copy(pageCount = count)
+            _ui.update { it.copy(pageCount = count) }
         }
         viewModelScope.launch {
             val configured = ai.isConfiguredOrFalse()
-            aiTags.value = aiTags.value.copy(available = configured)
+            aiTags.update { it.copy(available = configured) }
         }
         viewModelScope.launch {
             val offer = runCatching { ocr.aiOcrOffer(docId) }.getOrDefault(AiOcrOffer.Unavailable)
-            _ui.value = _ui.value.copy(aiOcr = offer)
+            _ui.update { it.copy(aiOcr = offer) }
         }
         // Sync the note editor's persisted value from the already-shared [doc] StateFlow instead of
         // subscribing to observeDoc a second time (that would double the Room invalidation wiring).
@@ -314,20 +315,21 @@ class DocDetailViewModel(
                 .map { it?.doc?.notes.orEmpty() }
                 .distinctUntilChanged()
                 .collect { persisted ->
-                    val current = noteEditor.value
-                    noteEditor.value =
+                    noteEditor.update { current ->
                         if (current.dirty) {
                             current.copy(persisted = persisted)
                         } else {
                             current.copy(draft = persisted, persisted = persisted)
                         }
+                    }
                 }
         }
     }
 
     fun goToPage(index: Int) {
-        val cur = _ui.value
-        if (index in 0 until cur.pageCount.coerceAtLeast(1)) _ui.value = cur.copy(pageIndex = index)
+        _ui.update { cur ->
+            if (index in 0 until cur.pageCount.coerceAtLeast(1)) cur.copy(pageIndex = index) else cur
+        }
     }
 
     /** Load once when opened. Pass [refresh] only for an explicit retry or refresh request. */
@@ -354,30 +356,29 @@ class DocDetailViewModel(
         launchMetadata(UiAction.SAVE_TITLE) { meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
 
     fun updateNoteDraft(value: String) {
-        noteEditor.value = noteEditor.value.copy(draft = value, saveState = NoteSaveState.Idle)
+        noteEditor.update { it.copy(draft = value, saveState = NoteSaveState.Idle) }
     }
 
     fun saveNote() {
         val current = noteEditor.value
         if (!current.dirty || current.saveState == NoteSaveState.Saving) return
-        noteEditor.value = current.copy(saveState = NoteSaveState.Saving)
+        noteEditor.update { it.copy(saveState = NoteSaveState.Saving) }
         viewModelScope.launch {
             runCatching {
                 metadataMutex.withLock { meta.setNotes(docId, current.draft) }
             }.fold(
                 onSuccess = {
-                    val latest = noteEditor.value
-                    noteEditor.value =
+                    noteEditor.update { latest ->
                         latest.copy(
                             persisted = current.draft.takeUnless { it.isBlank() }.orEmpty(),
                             saveState = NoteSaveState.Saved,
                         )
+                    }
                 },
                 onFailure = { error ->
-                    noteEditor.value =
-                        noteEditor.value.copy(
-                            saveState = NoteSaveState.Error(error.message.orEmpty()),
-                        )
+                    noteEditor.update {
+                        it.copy(saveState = NoteSaveState.Error(error.message.orEmpty()))
+                    }
                 },
             )
         }
@@ -416,18 +417,18 @@ class DocDetailViewModel(
      */
     fun suggestAiTags() {
         if (aiTags.value.suggesting) return
-        aiTags.value = aiTags.value.copy(suggesting = true)
+        aiTags.update { it.copy(suggesting = true) }
         viewModelScope.launch {
             runCatching { ai.suggestEdits(docId, AiEditRequest(tags = true)).addTags }.fold(
                 onSuccess = { suggestions ->
                     if (suggestions.isEmpty()) {
                         message(uiText(UiTextKey.NO_AI_TAG_SUGGESTIONS))
                     }
-                    aiTags.value = aiTags.value.copy(suggesting = false, suggestions = suggestions)
+                    aiTags.update { it.copy(suggesting = false, suggestions = suggestions) }
                 },
                 onFailure = { error ->
                     message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_TAGS, reasonOf(error)))
-                    aiTags.value = aiTags.value.copy(suggesting = false, suggestions = emptyList())
+                    aiTags.update { it.copy(suggesting = false, suggestions = emptyList()) }
                 },
             )
         }
@@ -441,14 +442,13 @@ class DocDetailViewModel(
         }
 
     fun dismissAiTag(tag: String) {
-        aiTags.value =
-            aiTags.value.copy(
-                suggestions = aiTags.value.suggestions.filterNot { it.tag == tag },
-            )
+        aiTags.update { state ->
+            state.copy(suggestions = state.suggestions.filterNot { it.tag == tag })
+        }
     }
 
     fun clearAiTagSuggestions() {
-        aiTags.value = aiTags.value.copy(suggestions = emptyList())
+        aiTags.update { it.copy(suggestions = emptyList()) }
     }
 
     /**
@@ -458,7 +458,7 @@ class DocDetailViewModel(
      */
     fun suggestAiMetadata() {
         if (aiMetadata.value.suggesting) return
-        aiMetadata.value = aiMetadata.value.copy(suggesting = true)
+        aiMetadata.update { it.copy(suggesting = true) }
         viewModelScope.launch {
             val request =
                 AiEditRequest(
@@ -491,7 +491,7 @@ class DocDetailViewModel(
     }
 
     fun dismissAiMetadata(field: AiField) {
-        aiMetadata.value = aiMetadata.value.let { it.copy(suggestion = it.suggestion.without(field)) }
+        aiMetadata.update { it.copy(suggestion = it.suggestion.without(field)) }
     }
 
     fun setField(
@@ -521,11 +521,11 @@ class DocDetailViewModel(
 
     fun reOcr() =
         launchReporting(UiAction.RERUN_OCR) {
-            _ui.value = _ui.value.copy(reindexing = true)
+            _ui.update { it.copy(reindexing = true) }
             try {
                 ocr.reOcr(docId)
             } finally {
-                _ui.value = _ui.value.copy(reindexing = false)
+                _ui.update { it.copy(reindexing = false) }
             }
         }
 
@@ -541,11 +541,11 @@ class DocDetailViewModel(
      */
     fun ocrWithAi() =
         launchReporting(UiAction.AI_OCR) {
-            _ui.value = _ui.value.copy(reindexing = true)
+            _ui.update { it.copy(reindexing = true) }
             try {
                 ocr.ocrWithAi(docId)
             } finally {
-                _ui.value = _ui.value.copy(reindexing = false)
+                _ui.update { it.copy(reindexing = false) }
             }
         }
 
@@ -561,11 +561,11 @@ class DocDetailViewModel(
         onResult: (SplitOutcome) -> Unit,
     ) {
         viewModelScope.launch {
-            _ui.value = _ui.value.copy(splitting = true)
+            _ui.update { it.copy(splitting = true) }
             val outcome =
                 runCatching { maintenance.splitPdf(docId, segments) }
                     .getOrElse { SplitOutcome.Failed(it.message.orEmpty()) }
-            _ui.value = _ui.value.copy(splitting = false)
+            _ui.update { it.copy(splitting = false) }
             onResult(outcome)
         }
     }
@@ -573,9 +573,9 @@ class DocDetailViewModel(
     // Failure is reported through onResult(false); the screen owns the message.
     fun bakeInPlace(onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
-            _ui.value = _ui.value.copy(baking = true)
+            _ui.update { it.copy(baking = true) }
             val ok = runCatching { content.bakeInPlace(docId) }.getOrDefault(false)
-            _ui.value = _ui.value.copy(baking = false)
+            _ui.update { it.copy(baking = false) }
             onResult(ok)
         }
     }

@@ -101,6 +101,7 @@ internal fun AiEditSetup(
     // Collected here rather than in AiEditScreen so the (possibly library-wide) scope query only
     // runs while this phase is on screen.
     val preview by vm.preview.collectAsStateWithLifecycle()
+    val background by vm.runsInBackground.collectAsStateWithLifecycle()
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > WideLayoutBreakpoint
         Column(
@@ -125,7 +126,7 @@ internal fun AiEditSetup(
                         SetupColumn(Modifier.weight(1f)) {
                             TagSection(ui, vm)
                             PromptField(ui, vm)
-                            RunSection(ui, preview.total, vm)
+                            RunSection(ui, background, vm)
                         }
                     }
                 } else {
@@ -133,9 +134,9 @@ internal fun AiEditSetup(
                     TagSection(ui, vm)
                     FieldSection(ui, vm)
                     PromptField(ui, vm)
-                    RunSection(ui, preview.total, vm)
+                    RunSection(ui, background, vm)
                 }
-                StartButton(ui, preview.total, vm)
+                StartButton(ui, background, preview.total, vm)
             }
         }
     }
@@ -317,10 +318,10 @@ private fun PromptField(
 @Composable
 private fun RunSection(
     ui: AiEditUiState,
-    count: Int,
+    /** Whether the run would go to the background queue; derived in the viewmodel. */
+    background: Boolean,
     vm: AiEditViewModel,
 ) {
-    val background = ui.runsInBackground(count)
     SetupSection(stringResource(Res.string.ai_edit_options)) {
         SwitchRow(
             label = stringResource(Res.string.ai_edit_background),
@@ -349,6 +350,8 @@ private fun RunSection(
 @Composable
 private fun StartButton(
     ui: AiEditUiState,
+    /** Whether the run would go to the background queue; derived in the viewmodel. */
+    background: Boolean,
     count: Int,
     vm: AiEditViewModel,
 ) {
@@ -357,7 +360,7 @@ private fun StartButton(
         Icon(Icons.Outlined.AutoAwesome, contentDescription = null, modifier = Modifier.size(18.dp))
         Text(
             stringResource(
-                if (ui.runsInBackground(count)) Res.string.ai_edit_start_background else Res.string.ai_edit_start,
+                if (background) Res.string.ai_edit_start_background else Res.string.ai_edit_start,
             ),
             Modifier.padding(start = 8.dp),
         )

@@ -214,7 +214,7 @@ fun LibraryScreen(
 
     val dialogs = rememberLibraryDialogState()
 
-    val tagColors = remember(tags) { tags.associate { it.name to it.color } }
+    val tagColors = remember(tags) { TagColors(tags.associate { it.name to it.color }) }
 
     val importPicker =
         rememberFilePickerLauncher(
@@ -422,7 +422,7 @@ private fun LibraryContent(
     ui: LibraryUiState,
     session: LibrarySession,
     results: DocumentResults?,
-    tagColors: Map<String, String?>,
+    tagColors: TagColors,
     reviewMode: ReviewMode,
     scanProgress: dev.npn.core.app.ScanProgressUi?,
     lastScan: dev.npn.core.index.ScanReport?,
@@ -454,26 +454,32 @@ private fun LibraryContent(
     var confirmTrash by remember { mutableStateOf(false) }
     // Right-click context menu actions. Tag/trash actions operate on the current selection, so the
     // clicked document is pulled into it first (replacing the selection when it was not part of it).
-    val ensureInSelection: (String) -> Unit = { docId ->
-        if (docId !in ui.selected) vm.startSelection(docId)
-    }
-    val contextActionsFor: (String) -> DocContextMenuActions = { docId ->
-        DocContextMenuActions(
-            onOpen = { onOpenDoc(docId) },
-            onAddTag = {
-                ensureInSelection(docId)
-                onAddTag()
-            },
-            onRemoveTag = {
-                ensureInSelection(docId)
-                onRemoveTag()
-            },
-            onTrash = {
-                ensureInSelection(docId)
-                confirmTrash = true
-            },
-        )
-    }
+    // The factory is remembered (reading the live selection through State) so the per-item actions
+    // it produces can be memoized too instead of invalidating every list item each recomposition.
+    val selectedNow by rememberUpdatedState(ui.selected)
+    val contextActionsFor: (String) -> DocContextMenuActions =
+        remember(vm, onOpenDoc, onAddTag, onRemoveTag) {
+            { docId ->
+                val ensureInSelection = {
+                    if (docId !in selectedNow) vm.startSelection(docId)
+                }
+                DocContextMenuActions(
+                    onOpen = { onOpenDoc(docId) },
+                    onAddTag = {
+                        ensureInSelection()
+                        onAddTag()
+                    },
+                    onRemoveTag = {
+                        ensureInSelection()
+                        onRemoveTag()
+                    },
+                    onTrash = {
+                        ensureInSelection()
+                        confirmTrash = true
+                    },
+                )
+            }
+        }
     // Give the shortcut host focus on entry; key events only reach it once something is focused.
     // Wait for the first frame so the requester node is attached to the focus owner before asking
     // (requesting during the first composition otherwise warns "FocusRequester is not initialized").
@@ -654,7 +660,7 @@ private fun LibraryContent(
 private fun DocList(
     results: DocumentResults,
     content: dev.npn.core.app.DocContentFacade,
-    tagColors: Map<String, String?>,
+    tagColors: TagColors,
     reviewMode: ReviewMode,
     ui: LibraryUiState,
     landscapeColumns: Boolean,
@@ -664,23 +670,28 @@ private fun DocList(
     contextActionsFor: ((String) -> DocContextMenuActions)? = null,
 ) {
     val row: @Composable (dev.npn.core.app.DocListItem) -> Unit = { item ->
+        // Memoized per item (this runs in the item's composition scope) so each row receives the
+        // same callback/action instances across recompositions and stays skippable while scrolling.
+        val id = item.doc.docId
+        val selectionMode = ui.selectionMode
+        val onClick =
+            remember(id, selectionMode, onToggleSelect, onOpen) {
+                { if (selectionMode) onToggleSelect(id) else onOpen(id) }
+            }
+        val onLongClick = remember(id, onStartSelection) { { onStartSelection(id) } }
+        val onToggle = remember(id, onToggleSelect) { { onToggleSelect(id) } }
+        val contextActions = remember(id, contextActionsFor) { contextActionsFor?.invoke(id) }
         DocListRow(
             item = item,
             content = content,
             tagColors = tagColors,
             reviewMode = reviewMode,
-            selectionMode = ui.selectionMode,
-            selected = item.doc.docId in ui.selected,
-            onClick = {
-                if (ui.selectionMode) {
-                    onToggleSelect(item.doc.docId)
-                } else {
-                    onOpen(item.doc.docId)
-                }
-            },
-            onLongClick = { onStartSelection(item.doc.docId) },
-            onToggleSelect = { onToggleSelect(item.doc.docId) },
-            contextActions = contextActionsFor?.invoke(item.doc.docId),
+            selectionMode = selectionMode,
+            selected = id in ui.selected,
+            onClick = onClick,
+            onLongClick = onLongClick,
+            onToggleSelect = onToggle,
+            contextActions = contextActions,
         )
     }
 

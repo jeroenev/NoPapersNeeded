@@ -48,6 +48,7 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -154,7 +155,7 @@ class LibraryViewModel(
         viewModelScope.launch {
             val saved = settings.settings.first().defaultViewType
             if (!viewOverridden) {
-                _ui.value = _ui.value.copy(viewType = saved)
+                _ui.update { it.copy(viewType = saved) }
             }
         }
 
@@ -163,7 +164,7 @@ class LibraryViewModel(
         viewModelScope.launch {
             val saved = settings.settings.first().librarySort
             if (!sortOverridden) {
-                _ui.value = _ui.value.copy(sort = saved)
+                _ui.update { it.copy(sort = saved) }
             }
         }
 
@@ -172,10 +173,7 @@ class LibraryViewModel(
                 .debounce(QUERY_DEBOUNCE_MS)
                 .distinctUntilChanged()
                 .collect { q ->
-                    _ui.value =
-                        _ui.value.copy(
-                            filter = _ui.value.filter.copy(query = q.ifBlank { null }),
-                        )
+                    _ui.update { it.copy(filter = it.filter.copy(query = q.ifBlank { null })) }
                 }
         }
     }
@@ -277,16 +275,16 @@ class LibraryViewModel(
     fun acceptSuggestion(text: String) {
         val completed = completeActiveSearchToken(queryInput.value, text)
         queryInput.value = completed
-        _ui.value = _ui.value.copy(filter = _ui.value.filter.copy(query = completed.ifBlank { null }))
+        _ui.update { it.copy(filter = it.filter.copy(query = completed.ifBlank { null })) }
     }
 
     fun setFilter(filter: LibraryFilter) {
-        _ui.value = _ui.value.copy(filter = filter, bannerDismissed = false)
+        _ui.update { it.copy(filter = filter, bannerDismissed = false) }
         queryInput.value = filter.query ?: ""
     }
 
     fun clearFilter() {
-        _ui.value = _ui.value.copy(filter = LibraryFilter())
+        _ui.update { it.copy(filter = LibraryFilter()) }
         queryInput.value = ""
     }
 
@@ -300,7 +298,7 @@ class LibraryViewModel(
                 ReviewMode.UNTAGGED_ONLY -> LibraryFilter(untaggedOnly = true)
                 ReviewMode.INBOX_WORKFLOW -> LibraryFilter(unreviewedOrUntagged = true)
             }
-        _ui.value = _ui.value.copy(filter = filter)
+        _ui.update { it.copy(filter = filter) }
         queryInput.value = ""
     }
 
@@ -310,14 +308,14 @@ class LibraryViewModel(
     ) {
         sortOverridden = true
         val sort = LibrarySort(field, ascending)
-        _ui.value = _ui.value.copy(sort = sort)
+        _ui.update { it.copy(sort = sort) }
         // Persist so the choice survives restart.
         viewModelScope.launch { settings.edit { it.copy(librarySort = sort) } }
     }
 
     fun setViewType(v: ViewType) {
         viewOverridden = true
-        _ui.value = _ui.value.copy(viewType = v)
+        _ui.update { it.copy(viewType = v) }
         // Persist so the choice becomes the default and survives restart (also keeps the settings
         // screen in sync with the top-bar switcher).
         viewModelScope.launch { settings.edit { it.copy(defaultViewType = v) } }
@@ -327,7 +325,7 @@ class LibraryViewModel(
         viewOverridden = true
         // Guards the seed only; a saved view's sort is part of the view, not a new default.
         sortOverridden = true
-        _ui.value = _ui.value.copy(filter = view.filter, sort = view.sort, viewType = view.viewType)
+        _ui.update { it.copy(filter = view.filter, sort = view.sort, viewType = view.viewType) }
         queryInput.value = view.filter.query ?: ""
     }
 
@@ -347,33 +345,34 @@ class LibraryViewModel(
     }
 
     fun toggleSelection(docId: String) {
-        val cur = _ui.value
-        val next = if (docId in cur.selected) cur.selected - docId else cur.selected + docId
-        _ui.value = cur.copy(selected = next, selectionMode = next.isNotEmpty())
+        _ui.update { cur ->
+            val next = if (docId in cur.selected) cur.selected - docId else cur.selected + docId
+            cur.copy(selected = next, selectionMode = next.isNotEmpty())
+        }
     }
 
     fun startSelection(docId: String) {
-        _ui.value = _ui.value.copy(selectionMode = true, selected = setOf(docId))
+        _ui.update { it.copy(selectionMode = true, selected = setOf(docId)) }
     }
 
     /** Enter selection mode with every visible document selected (desktop Ctrl+A / Select all). */
     fun selectAll(docIds: List<String>) {
-        _ui.value = _ui.value.copy(selectionMode = true, selected = docIds.toSet())
+        _ui.update { it.copy(selectionMode = true, selected = docIds.toSet()) }
     }
 
     fun clearSelection() {
-        _ui.value = _ui.value.copy(selectionMode = false, selected = emptySet())
+        _ui.update { it.copy(selectionMode = false, selected = emptySet()) }
     }
 
     fun dismissBanner() {
-        _ui.value = _ui.value.copy(bannerDismissed = true)
+        _ui.update { it.copy(bannerDismissed = true) }
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _ui.value = _ui.value.copy(refreshing = true)
+            _ui.update { it.copy(refreshing = true) }
             runCatching { ingest.rescan() }
-            _ui.value = _ui.value.copy(refreshing = false)
+            _ui.update { it.copy(refreshing = false) }
         }
     }
 
@@ -410,7 +409,7 @@ class LibraryViewModel(
                 if (failed.isEmpty()) {
                     clearSelection()
                 } else {
-                    _ui.value = _ui.value.copy(selected = failed.toSet(), selectionMode = true)
+                    _ui.update { it.copy(selected = failed.toSet(), selectionMode = true) }
                     message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, action, failed.size, ids.size))
                 }
             } else if (runCatching { block(ids) }.isSuccess) {

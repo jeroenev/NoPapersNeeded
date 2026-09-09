@@ -84,7 +84,7 @@ internal fun gridWidthForColumns(
 internal fun DocGrid(
     results: DocumentResults,
     content: dev.npn.core.app.DocContentFacade,
-    tagColors: Map<String, String?>,
+    tagColors: TagColors,
     ui: LibraryUiState,
     columnWidth: Int,
     onColumnWidthChange: (Int) -> Unit,
@@ -201,7 +201,7 @@ internal fun DocGrid(
 private fun DocGridCards(
     docs: List<dev.npn.core.app.DocListItem>,
     content: dev.npn.core.app.DocContentFacade,
-    tagColors: Map<String, String?>,
+    tagColors: TagColors,
     ui: LibraryUiState,
     cellWidth: Int,
     state: LazyGridState,
@@ -221,22 +221,27 @@ private fun DocGridCards(
         verticalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
     ) {
         items(docs, key = { it.doc.docId }) { item ->
+            // Memoized per item so each card receives the same callback/action instances across
+            // recompositions and stays skippable while the grid scrolls.
+            val id = item.doc.docId
+            val selectionMode = ui.selectionMode
+            val onClick =
+                remember(id, selectionMode, onToggleSelect, onOpen) {
+                    { if (selectionMode) onToggleSelect(id) else onOpen(id) }
+                }
+            val onLongClick = remember(id, onStartSelection) { { onStartSelection(id) } }
+            val onToggle = remember(id, onToggleSelect) { { onToggleSelect(id) } }
+            val contextActions = remember(id, contextActionsFor) { contextActionsFor?.invoke(id) }
             DocGridCard(
                 item = item,
                 content = content,
                 tagColors = tagColors,
-                selectionMode = ui.selectionMode,
-                selected = item.doc.docId in ui.selected,
-                onClick = {
-                    if (ui.selectionMode) {
-                        onToggleSelect(item.doc.docId)
-                    } else {
-                        onOpen(item.doc.docId)
-                    }
-                },
-                onLongClick = { onStartSelection(item.doc.docId) },
-                onToggleSelect = { onToggleSelect(item.doc.docId) },
-                contextActions = contextActionsFor?.invoke(item.doc.docId),
+                selectionMode = selectionMode,
+                selected = id in ui.selected,
+                onClick = onClick,
+                onLongClick = onLongClick,
+                onToggleSelect = onToggle,
+                contextActions = contextActions,
             )
         }
     }

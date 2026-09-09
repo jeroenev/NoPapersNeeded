@@ -86,6 +86,22 @@ private fun Modifier.ctrlClickToggle(onToggleSelect: () -> Unit): Modifier {
 }
 
 /**
+ * Tag-name → color lookup for the document items, wrapped so Compose treats it as a stable
+ * parameter (a bare `Map` is not stability-inferred, which would make every list/grid item
+ * non-skippable while scrolling).
+ */
+@Immutable
+data class TagColors(
+    private val colors: Map<String, String?>,
+) {
+    operator fun get(name: String): String? = colors[name]
+
+    companion object {
+        val EMPTY = TagColors(emptyMap())
+    }
+}
+
+/**
  * Actions of the desktop right-click context menu of a document item. Select/deselect is not in
  * here because the item already receives it; the rest routes back to the library screen (dialogs,
  * trash confirmation), acting on the whole selection after making sure the clicked document is
@@ -219,7 +235,7 @@ private fun SelectableDocItem(
 fun DocListRow(
     item: DocListItem,
     content: DocContentFacade,
-    tagColors: Map<String, String?>,
+    tagColors: TagColors,
     reviewMode: ReviewMode,
     selectionMode: Boolean,
     selected: Boolean,
@@ -264,7 +280,7 @@ fun DocListRow(
 @Composable
 private fun DocListRowDetails(
     item: DocListItem,
-    tagColors: Map<String, String?>,
+    tagColors: TagColors,
     reviewMode: ReviewMode,
     modifier: Modifier = Modifier,
 ) {
@@ -319,7 +335,7 @@ private fun DocListRowDetails(
 fun DocGridCard(
     item: DocListItem,
     content: DocContentFacade,
-    tagColors: Map<String, String?>,
+    tagColors: TagColors,
     selectionMode: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
