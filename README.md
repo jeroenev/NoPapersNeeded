@@ -84,9 +84,10 @@ below if you prefer to run them directly.
 | `mise devices` | `adb devices -l` |
 | `mise hot` | `./gradlew :desktopApp:hotRun --auto` (Compose Hot Reload) |
 | `mise desktop` | `./gradlew :desktopApp:run` |
-| `mise package-deb` | `./gradlew :desktopApp:packageDistributionForCurrentOS` |
+| `mise package-deb` | `./gradlew :desktopApp:packageDeb` |
 | `mise package-appimage` | `./gradlew :desktopApp:packageAppImage` |
 | `mise package-jar` | `./gradlew :desktopApp:packageUberJarForCurrentOS` |
+| `mise icons` | Re-renders the desktop icon bitmaps from `design/branding/icon.svg` |
 | `mise test` | `./gradlew :core:desktopTest` |
 | `mise test-fast` | Core and shared UI desktop tests |
 | `mise test-all` | `./gradlew allTests :core:desktopTest` |
@@ -143,20 +144,27 @@ Desktop, run from source:
 ./gradlew :desktopApp:run
 ```
 
-Desktop, build a native distribution for the current OS:
+Desktop, build a Linux `.deb`:
 
 ```
-./gradlew :desktopApp:packageDistributionForCurrentOS
+./gradlew :desktopApp:packageDeb
 # output: desktopApp/build/compose/binaries/main/deb/no-papers-needed_<version>_amd64.deb
 ```
 
-Note: only the `.deb` format is enabled by default because building `.rpm` requires
-the `rpmbuild` tooling, which is not present on Debian/Ubuntu build hosts. To also
-build an `.rpm`, install the rpm-build tooling and add `TargetFormat.Rpm` to the
-`nativeDistributions` block in `desktopApp/build.gradle.kts`. On Windows the same
-task produces `.msi` and `.exe` installers (via WiX, downloaded automatically at
-build time, so network access is needed); the Windows installer currently uses the
-default Java icon until branding is wired.
+This task runs jpackage on the app image the Compose plugin builds, rather than
+letting the plugin produce the `.deb`. The reason is the desktop entry: jpackage
+generates it from a template that can be overridden with `--resource-dir`, but the
+plugin appends its own `--resource-dir` after any `freeArgs`, and jpackage keeps the
+last one ([#773](https://github.com/JetBrains/compose-multiplatform/issues/773),
+[CMP-9837](https://youtrack.jetbrains.com/projects/CMP/issues/CMP-9837/packageDeb-task-fails-to-include-custom-.desktop-files)).
+Without the override the entry has no `StartupWMClass`, so GNOME cannot match the
+running window to the installed app and shows a generic taskbar icon. `.rpm` is not
+built: it needs `rpmbuild`, which is not present on Debian/Ubuntu build hosts.
+
+On Windows, `./gradlew :desktopApp:packageDistributionForCurrentOS` produces `.msi`
+and `.exe` installers (via WiX, downloaded automatically at build time, so network
+access is needed) and uses `icon.ico`; that Windows path has not been built and
+verified yet.
 
 Desktop, build a Linux AppImage:
 
@@ -171,8 +179,15 @@ automatically into `desktopApp/build/appimage/` on first run, so this task needs
 network access. It builds with `--appimage-extract-and-run` and therefore does not
 need FUSE on the build host; running the resulting AppImage still needs FUSE, or the
 end user can run it with `--appimage-extract-and-run`. The AppImage is x86_64 only.
-The bundled icon is a placeholder; wire `nativeDistributions.linux.iconFile` to ship
-real branding.
+
+### App icon
+
+The artwork lives in `design/branding/icon.svg` (see `design/branding/README.md`).
+Android reads it as an adaptive icon built from vector drawables in
+`androidApp/src/main/res/`, so nothing needs rendering there. The desktop
+distributions need bitmaps, so `desktopApp/src/main/resources/icon.png` (window icon
+plus the Linux/AppImage icon) and `icon.ico` (Windows) are committed and regenerated
+from the SVG with `mise icons`.
 
 Run the tests:
 

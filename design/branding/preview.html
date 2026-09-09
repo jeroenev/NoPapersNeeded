@@ -1,0 +1,65 @@
+<!doctype html>
+<html lang="en">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Folnook — identity concept</title>
+<style>
+  * { box-sizing: border-box; }
+  body { margin: 0; background: #f6f2e9; color: #123f43; font-family: system-ui, sans-serif; }
+  main { max-width: 1120px; margin: auto; padding: 56px 32px; }
+  .eyebrow { font-size: 12px; font-weight: 700; letter-spacing: .16em; text-transform: uppercase; }
+  .hero { display: flex; align-items: center; gap: 72px; padding: 56px 0 72px; }
+  .hero .icon { width: 280px; height: 280px; filter: drop-shadow(0 20px 24px #123f4318); }
+  h1 { font-size: clamp(48px, 8vw, 88px); letter-spacing: -.065em; margin: 0 0 12px; line-height: 1; }
+  .tagline { font-size: 26px; margin: 0 0 20px; letter-spacing: -.025em; }
+  .body { max-width: 420px; color: #536564; line-height: 1.65; }
+  .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+  section { border: 1px solid #123f431c; border-radius: 24px; padding: 28px; }
+  h2 { margin: 0 0 24px; font-size: 12px; text-transform: uppercase; letter-spacing: .12em; }
+  .sizes { display: flex; align-items: end; gap: 28px; min-height: 115px; }
+  figure { margin: 0; text-align: center; }
+  figcaption { margin-top: 12px; font-size: 11px; color: #536564; }
+  .dark { background: #102e31; color: #fff7e8; }
+  .dark .sizes { align-items: center; }
+  .circle { border-radius: 50%; }
+  #full-icon > path, #mono-icon { transform: translate(256px, 256px) scale(1.35) translate(-256px, -256px); }
+  .mono { background: #fff7e8; border-radius: 22px; }
+  .swatches { display: flex; flex-wrap: wrap; gap: 16px; }
+  .swatch { width: 56px; height: 40px; border-radius: 10px; margin-bottom: 10px; border: 1px solid #123f4310; }
+  .names p { margin: 12px 0; color: #536564; font-size: 14px; line-height: 1.5; }
+  .names strong { display: inline-block; min-width: 88px; color: #123f43; }
+  footer { margin-top: 30px; color: #536564; font-size: 12px; line-height: 1.6; }
+  @media(max-width: 720px) { .hero { flex-direction: column; align-items: start; gap: 36px; } .hero .icon { width: 200px; height: 200px; } .grid { grid-template-columns: 1fr; } main { padding: 32px 24px; } }
+</style>
+<svg xmlns="http://www.w3.org/2000/svg" width="0" height="0" style="position:absolute"><defs>
+  <g id="full-icon"><rect width="512" height="512" rx="116" fill="#123F43"/><path d="M128 214a24 24 0 0 1 24-24h62l28 28h118a24 24 0 0 1 24 24v112a30 30 0 0 1-30 30H158a30 30 0 0 1-30-30Z" fill="#78AAA3"/><path d="M184 128h96l56 56v148H160V152a24 24 0 0 1 24-24Z" fill="#FFF7E8"/><path d="M280 128v40a16 16 0 0 0 16 16h40Z" fill="#BBD4CB"/><path d="M196 216h68m-68 32h104" fill="none" stroke="#123F43" stroke-width="14" stroke-linecap="round"/><path d="M128 276h82a32 32 0 0 1 23 10l17 18h134v50a30 30 0 0 1-30 30H158a30 30 0 0 1-30-30Z" fill="#FFB77E"/></g>
+  <g id="mono-icon" fill="#123F43"><path d="M184 128h88v48a16 16 0 0 0 16 16h48v96h-79l-12-13a46 46 0 0 0-35-15h-50V152a24 24 0 0 1 24-24Zm12 81a7 7 0 0 0 0 14h68a7 7 0 0 0 0-14Zm0 32a7 7 0 0 0 0 14h104a7 7 0 0 0 0-14Z" fill-rule="evenodd"/><path d="m288 128 48 48h-48ZM128 276h82a32 32 0 0 1 23 10l17 18h134v50a30 30 0 0 1-30 30H158a30 30 0 0 1-30-30Z"/></g>
+</defs></svg>
+<main>
+  <div class="eyebrow">No papers needed / identity study 01</div>
+  <div class="hero">
+    <svg class="icon" viewBox="0 0 512 512" role="img" aria-label="Ivory document in an apricot folder on teal"><use href="#full-icon"/></svg>
+    <div><h1>Folnook</h1><p class="tagline">Your documents. At home.</p><p class="body">A calm home for the paperwork of everyday life. Scan, find, and organise your documents in a folder you own.</p></div>
+  </div>
+  <div class="grid">
+    <section><h2>Small-size readability</h2><div class="sizes">
+      <figure><svg viewBox="0 0 512 512" width="96" height="96" aria-label="96 pixel icon"><use href="#full-icon"/></svg><figcaption>96 px</figcaption></figure>
+      <figure><svg viewBox="0 0 512 512" width="48" height="48" aria-label="48 pixel icon"><use href="#full-icon"/></svg><figcaption>48 px</figcaption></figure>
+      <figure><svg viewBox="0 0 512 512" width="32" height="32" aria-label="32 pixel icon"><use href="#full-icon"/></svg><figcaption>32 px</figcaption></figure>
+      <figure><svg viewBox="0 0 512 512" width="24" height="24" aria-label="24 pixel icon"><use href="#full-icon"/></svg><figcaption>24 px</figcaption></figure>
+    </div></section>
+    <section class="dark"><h2>Mask &amp; single-colour studies</h2><div class="sizes">
+      <svg class="circle" viewBox="0 0 512 512" width="96" height="96" aria-label="Circular icon mask"><use href="#full-icon"/></svg>
+      <svg class="mono" viewBox="0 0 512 512" width="96" height="96" aria-label="Single-colour mark"><use href="#mono-icon"/></svg>
+    </div></section>
+    <section><h2>Warm utility</h2><div class="swatches">
+      <figure><div class="swatch" style="background:#123f43"></div><figcaption>#123F43</figcaption></figure>
+      <figure><div class="swatch" style="background:#fff7e8"></div><figcaption>#FFF7E8</figcaption></figure>
+      <figure><div class="swatch" style="background:#ffb77e"></div><figcaption>#FFB77E</figcaption></figure>
+      <figure><div class="swatch" style="background:#78aaa3"></div><figcaption>#78AAA3</figcaption></figure>
+    </div></section>
+    <section class="names"><h2>Name shortlist</h2><p><strong>Folnook</strong> Folder + nook. Friendly, personal, memorable.</p><p><strong>Folnora</strong> An invented, softer folio-inspired name.</p><p><strong>Folvika</strong> Folder-inspired, with a Nordic feel.</p></section>
+  </div>
+  <footer>Design proposal · 9 September 2026 · Names screened through public web searches; no indexed app matches found for the shortlist. This is not proof of worldwide availability. See README.md for search scope and existing non-app uses.</footer>
+</main>
+</html>

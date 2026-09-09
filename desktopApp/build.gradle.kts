@@ -3,7 +3,6 @@ import org.gradle.process.ExecOperations
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import java.io.File
 import java.net.URI
-import java.util.Base64
 import javax.inject.Inject
 
 plugins {
@@ -33,10 +32,29 @@ kotlin {
 
 val npnAppName = "no-papers-needed"
 val npnAppVersion = "1.0.0"
+val npnDisplayName = "No papers needed"
+val npnDescription = "Personal paperless document library"
+val npnMainClass = "dev.npn.desktop.MainKt"
+
+// Becomes Categories= in the Linux desktop entry, which jpackage otherwise sets to
+// "Unknown".
+val npnLinuxMenuGroup = "Office"
+
+// GNOME (and other Wayland/X11 shells) identify a window by its WM_CLASS and look up the
+// matching .desktop entry to decide which taskbar icon to show; the window's own icon is
+// not used for that. AWT derives WM_CLASS from the main class with dots turned into
+// dashes, so every desktop entry we ship has to advertise that exact string as
+// StartupWMClass, or the taskbar falls back to a generic icon.
+val npnWmClass = npnMainClass.replace('.', '-')
+
+// Rendered from design/branding/icon.svg by `mise icons`. They live in the resource
+// dir so the same PNG is both the jpackage icon and the runtime window icon.
+val npnIconPng = layout.projectDirectory.file("src/main/resources/icon.png")
+val npnIconIco = layout.projectDirectory.file("src/main/resources/icon.ico")
 
 compose.desktop {
     application {
-        mainClass = "dev.npn.desktop.MainKt"
+        mainClass = npnMainClass
 
         // Use the toolchain JDK 17 (foojay-provisioned) for jlink/jpackage.
         javaHome =
@@ -51,31 +69,196 @@ compose.desktop {
             // java.sql and jdk.unsupported are commonly needed by JVM libraries too.
             modules("jdk.security.auth", "java.sql", "jdk.unsupported")
 
-            // The Compose plugin filters formats per current OS, so on Linux only Deb is
-            // produced while Windows builds produce Msi + Exe. Deb only: building Rpm requires
-            // rpmbuild, which is not present on Debian/Ubuntu build hosts. Add TargetFormat.Rpm
-            // on a host with the rpm-build tooling installed.
-            targetFormats(TargetFormat.Deb, TargetFormat.Msi, TargetFormat.Exe)
+            // Windows formats only. The Linux .deb is built by the packageDeb task below
+            // instead of by the plugin: the plugin appends its own --resource-dir after
+            // freeArgs, so a custom .desktop template can never win, and without one the
+            // installed entry has no StartupWMClass. See the task for details.
+            targetFormats(TargetFormat.Msi, TargetFormat.Exe)
             packageName = npnAppName
             packageVersion = npnAppVersion
-            description = "Personal paperless document library"
+            description = npnDescription
             licenseFile.set(rootProject.file("LICENSE"))
             linux {
                 shortcut = true
+                iconFile.set(npnIconPng)
+                menuGroup = npnLinuxMenuGroup
             }
             windows {
                 menuGroup = "No Papers Needed"
                 shortcut = true
                 // Fixed per-app GUID so MSI upgrades replace prior installs instead of stacking.
                 upgradeUuid = "8757e6c9-527e-412d-99a5-548042266c22"
-                // Icon not wired yet, so jpackage falls back to the default Java icon; ship
-                // real branding via nativeDistributions.windows.iconFile. Building the MSI
-                // downloads WiX tooling at build time (needs network), like appimagetool for
-                // AppImage.
+                // Multi-resolution .ico (16-256 px). Building the MSI downloads WiX tooling at
+                // build time (needs network), like appimagetool for AppImage.
+                iconFile.set(npnIconIco)
             }
         }
     }
 }
+
+// --- Linux .deb packaging -------------------------------------------------
+// jpackage builds the installed .desktop entry from a template, and its built-in one has
+// no StartupWMClass, so the shell cannot match the running window to the installed entry
+// and shows a generic taskbar icon. Overriding that template is a supported jpackage
+// feature (--resource-dir), but not through the Compose plugin: the plugin appends its
+// own --resource-dir (which it uses for the macOS Info.plist) after the task's freeArgs,
+// and jpackage keeps the last one. See JetBrains/compose-multiplatform#773 and CMP-9837.
+//
+// So the .deb is built here instead, by calling jpackage on the app image the plugin
+// produces - the same approach the AppImage task below already uses. Nothing is
+// post-processed: jpackage generates the entry from our template.
+
+// jpackage picks overrides out of the resource dir by file name: "<app name>.desktop" for
+// the menu entry template (caps tokens are substituted by jpackage) and "<app name>.png"
+// for its icon. Packaging from an app image does not reuse the icon inside it, so the
+// icon has to be here too or the entry falls back to the default Java coffee cup.
+abstract class PrepareJPackageResourcesTask : DefaultTask() {
+    @get:Input
+    abstract val appName: Property<String>
+
+    @get:Input
+    abstract val displayName: Property<String>
+
+    @get:Input
+    abstract val wmClass: Property<String>
+
+    @get:InputFile
+    abstract val iconFile: RegularFileProperty
+
+    @get:OutputDirectory
+    abstract val outDir: DirectoryProperty
+
+    @TaskAction
+    fun prepare() {
+        val dir = outDir.get().asFile
+        dir.mkdirs()
+        File(dir, "${appName.get()}.desktop").writeText(
+            """
+            [Desktop Entry]
+            Name=${displayName.get()}
+            Comment=APPLICATION_DESCRIPTION
+            Exec=APPLICATION_LAUNCHER
+            Icon=APPLICATION_ICON
+            Terminal=false
+            Type=Application
+            Categories=DEPLOY_BUNDLE_CATEGORY
+            DESKTOP_MIMES
+            StartupWMClass=${wmClass.get()}
+            """.trimIndent() + "\n",
+        )
+        iconFile.get().asFile.copyTo(File(dir, "${appName.get()}.png"), overwrite = true)
+    }
+}
+
+val jpackageResourceDir = layout.buildDirectory.dir("jpackage-resources")
+
+val prepareJPackageResources =
+    tasks.register<PrepareJPackageResourcesTask>("prepareJPackageResources") {
+        group = "compose desktop"
+        description = "Writes the jpackage overrides for the Linux desktop entry and its icon."
+        appName.set(npnAppName)
+        displayName.set(npnDisplayName)
+        wmClass.set(npnWmClass)
+        iconFile.set(npnIconPng)
+        outDir.set(jpackageResourceDir)
+    }
+
+abstract class PackageDebTask
+    @Inject
+    constructor(
+        private val execOps: ExecOperations,
+    ) : DefaultTask() {
+        @get:InputDirectory
+        abstract val appImageSrc: DirectoryProperty
+
+        @get:InputDirectory
+        abstract val resourceDir: DirectoryProperty
+
+        @get:InputFile
+        abstract val licenseFile: RegularFileProperty
+
+        @get:Input
+        abstract val jpackageTool: Property<String>
+
+        @get:Input
+        abstract val appName: Property<String>
+
+        @get:Input
+        abstract val appVersion: Property<String>
+
+        @get:Input
+        abstract val appDescription: Property<String>
+
+        @get:Input
+        abstract val menuGroup: Property<String>
+
+        @get:OutputDirectory
+        abstract val destinationDir: DirectoryProperty
+
+        @TaskAction
+        fun build() {
+            val src = appImageSrc.get().asFile
+            require(src.isDirectory) { "jpackage app-image not found at $src" }
+            val dest = destinationDir.get().asFile
+            dest.mkdirs()
+
+            execOps
+                .exec {
+                    executable = jpackageTool.get()
+                    args =
+                        listOf(
+                            "--type",
+                            "deb",
+                            // Packages the already-built app image, which carries the bundled
+                            // runtime, the launcher and the icon.
+                            "--app-image",
+                            src.absolutePath,
+                            "--name",
+                            appName.get(),
+                            "--app-version",
+                            appVersion.get(),
+                            "--description",
+                            appDescription.get(),
+                            "--license-file",
+                            licenseFile.get().asFile.absolutePath,
+                            "--linux-shortcut",
+                            "--linux-menu-group",
+                            menuGroup.get(),
+                            "--resource-dir",
+                            resourceDir.get().asFile.absolutePath,
+                            "--dest",
+                            dest.absolutePath,
+                        )
+                }.assertNormalExitValue()
+            logger.lifecycle("The distribution is written to ${dest.absolutePath}")
+        }
+    }
+
+tasks.register<PackageDebTask>("packageDeb") {
+    group = "compose desktop"
+    description = "Builds a Linux .deb from the jpackage app-image output."
+    dependsOn("createDistributable", prepareJPackageResources)
+
+    appImageSrc.set(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName"))
+    resourceDir.set(jpackageResourceDir)
+    licenseFile.set(rootProject.layout.projectDirectory.file("LICENSE"))
+    jpackageTool.set(
+        jdk17
+            .get()
+            .metadata.installationPath
+            .file("bin/jpackage")
+            .asFile.absolutePath,
+    )
+    appName.set(npnAppName)
+    appVersion.set(npnAppVersion)
+    appDescription.set(npnDescription)
+    menuGroup.set(npnLinuxMenuGroup)
+    destinationDir.set(layout.buildDirectory.dir("compose/binaries/main/deb"))
+}
+
+// The plugin has no Linux target format of its own now, so it does not register
+// `packageDistributionForCurrentOS` there; on Linux, build the .deb with `packageDeb`.
+// On Windows the plugin still owns that task and produces the .msi/.exe.
 
 // --- AppImage packaging ---------------------------------------------------
 // jpackage (used by the Compose plugin) cannot emit AppImage, so this task wraps
@@ -124,8 +307,17 @@ abstract class PackageAppImageTask
         @get:InputFile
         abstract val appImageTool: RegularFileProperty
 
+        @get:InputFile
+        abstract val iconFile: RegularFileProperty
+
         @get:Input
         abstract val appName: Property<String>
+
+        @get:Input
+        abstract val displayName: Property<String>
+
+        @get:Input
+        abstract val wmClass: Property<String>
 
         @get:Input
         abstract val arch: Property<String>
@@ -179,36 +371,25 @@ abstract class PackageAppImageTask
             )
             appRun.setExecutable(true)
 
-            // Minimal .desktop entry (required by appimagetool).
+            // Minimal .desktop entry (required by appimagetool). StartupWMClass lets the
+            // shell match the running window to this entry and show the app icon in the
+            // taskbar; see npnWmClass above.
             File(dir, "$name.desktop").writeText(
                 """
                 [Desktop Entry]
                 Type=Application
-                Name=no papers needed
+                Name=${displayName.get()}
                 Exec=$name
                 Icon=$name
                 Categories=Office;Utility;
                 Terminal=false
+                StartupWMClass=${wmClass.get()}
                 """.trimIndent() + "\n",
             )
 
-            // Icon: reuse a packaged PNG if present, else write a 1x1 placeholder so
-            // appimagetool is satisfied. Ship real branding via
-            // nativeDistributions.linux.iconFile.
-            val iconTarget = File(dir, "$name.png")
-            val shippedIcon =
-                usrDir.walkTopDown().firstOrNull {
-                    it.isFile && it.extension.equals("png", ignoreCase = true)
-                }
-            if (shippedIcon != null) {
-                shippedIcon.copyTo(iconTarget, overwrite = true)
-            } else {
-                iconTarget.writeBytes(
-                    Base64.getDecoder().decode(
-                        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==",
-                    ),
-                )
-            }
+            // Icon: the .desktop entry above points at "$name", which appimagetool resolves
+            // to this PNG at the AppDir root. Same file jpackage uses for the .deb.
+            iconFile.get().asFile.copyTo(File(dir, "$name.png"), overwrite = true)
 
             val out = outFile.get().asFile
             out.parentFile.mkdirs()
@@ -232,9 +413,12 @@ val packageAppImage =
         dependsOn("createDistributable", downloadAppImageTool)
 
         appName.set(npnAppName)
+        displayName.set(npnDisplayName)
+        wmClass.set(npnWmClass)
         arch.set(appImageArch)
         appImageSrc.set(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName"))
         appImageTool.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
+        iconFile.set(npnIconPng)
         appDir.set(layout.buildDirectory.dir("appimage/AppDir"))
         outFile.set(layout.buildDirectory.file("appimage/$npnAppName-$npnAppVersion-$appImageArch.AppImage"))
     }

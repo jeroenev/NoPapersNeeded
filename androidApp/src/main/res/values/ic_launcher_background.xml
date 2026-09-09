@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Adaptive-icon background: the deep teal from design/branding/icon.svg. -->
+    <color name="ic_launcher_background">#123F43</color>
+</resources>

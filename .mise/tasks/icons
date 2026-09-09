@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+#MISE description="Render the packaged desktop icons from design/branding/icon.svg"
+set -euo pipefail
+
+# jpackage needs raster icons (PNG for Linux/AppImage, ICO for Windows), so the
+# rendered files are committed under desktopApp/src/main/resources. Re-run this
+# after editing the SVG. resvg and uv come from the [tools] block in mise.toml.
+
+svg="design/branding/icon.svg"
+resources="desktopApp/src/main/resources"
+ico_sizes=(16 24 32 48 64 128 256)
+
+tmp="$(mktemp -d)"
+trap 'rm -rf "$tmp"' EXIT
+
+mkdir -p "$resources"
+
+resvg --width 512 --height 512 "$svg" "$resources/icon.png"
+echo ">> wrote $resources/icon.png (512x512)"
+
+# Render each ICO size from the vector rather than downscaling one bitmap, so the
+# small sizes stay crisp.
+for size in "${ico_sizes[@]}"; do
+    resvg --width "$size" --height "$size" "$svg" "$tmp/icon-$size.png"
+done
+
+uv run --quiet --with pillow python - "$tmp" "$resources/icon.ico" <<'PY'
+import sys
+from pathlib import Path
+
+from PIL import Image
+
+scratch, target = Path(sys.argv[1]), Path(sys.argv[2])
+frames = sorted(
+    (Image.open(png) for png in scratch.glob("icon-*.png")),
+    key=lambda image: image.width,
+)
+largest = frames[-1]
+largest.save(target, format="ICO", append_images=frames[:-1])
+PY
+echo ">> wrote $resources/icon.ico (${ico_sizes[*]})"

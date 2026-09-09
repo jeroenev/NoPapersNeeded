@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512" role="img" aria-labelledby="title">
+  <title id="title">Open folder monochrome mark</title>
+  <g fill="#123F43" transform="translate(256 256) scale(1.35) translate(-256 -256)">
+    <path d="M184 128h88v48a16 16 0 0 0 16 16h48v96h-79l-12-13a46 46 0 0 0-35-15h-50V152a24 24 0 0 1 24-24Zm12 81a7 7 0 0 0 0 14h68a7 7 0 0 0 0-14Zm0 32a7 7 0 0 0 0 14h104a7 7 0 0 0 0-14Z" fill-rule="evenodd"/>
+    <path d="m288 128 48 48h-48ZM128 276h82a32 32 0 0 1 23 10l17 18h134v50a30 30 0 0 1-30 30H158a30 30 0 0 1-30-30Z"/>
+  </g>
+</svg>

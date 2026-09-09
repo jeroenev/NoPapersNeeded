@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Adaptive-icon foreground. Source artwork: design/branding/icon.svg (512 units).
+  The group maps that 512-unit art into the 108dp adaptive canvas so the mark stays
+  inside the 72dp safe circle on every launcher mask.
+-->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+
+    <group
+        android:scaleX="0.2103"
+        android:scaleY="0.2103"
+        android:translateX="0.16"
+        android:translateY="3.11">
+
+        <!-- Folder back -->
+        <path
+            android:fillColor="#78AAA3"
+            android:pathData="M128 214a24 24 0 0 1 24 -24h62l28 28h118a24 24 0 0 1 24 24v112a30 30 0 0 1 -30 30H158a30 30 0 0 1 -30 -30Z" />
+
+        <!-- Document -->
+        <path
+            android:fillColor="#FFF7E8"
+            android:pathData="M184 128h96l56 56v148H160V152a24 24 0 0 1 24 -24Z" />
+
+        <!-- Folded corner -->
+        <path
+            android:fillColor="#BBD4CB"
+            android:pathData="M280 128v40a16 16 0 0 0 16 16h40Z" />
+
+        <!-- Text lines -->
+        <path
+            android:pathData="M196 216h68m-68 32h104"
+            android:strokeColor="#123F43"
+            android:strokeWidth="14"
+            android:strokeLineCap="round" />
+
+        <!-- Folder front -->
+        <path
+            android:fillColor="#FFB77E"
+            android:pathData="M128 276h82a32 32 0 0 1 23 10l17 18h134v50a30 30 0 0 1 -30 30H158a30 30 0 0 1 -30 -30Z" />
+    </group>
+</vector>

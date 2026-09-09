@@ -7,6 +7,12 @@
 ANDROID_APP_ID = "dev.npn"
 ANDROID_LAUNCHER = "dev.npn/.MainActivity"
 
+# Only needed by `mise icons`, which re-renders the committed desktop icons from
+# design/branding/icon.svg. Nothing in the Gradle build depends on these.
+[tools]
+resvg = "0.48"
+uv = "latest"
+
 # --- Android build ---------------------------------------------------------
 
 [tasks.apk]
@@ -54,7 +60,7 @@ run = "./gradlew :desktopApp:run"
 
 [tasks.package-deb]
 description = "Build a Linux .deb native distribution"
-run = "./gradlew :desktopApp:packageDistributionForCurrentOS"
+run = "./gradlew :desktopApp:packageDeb"
 
 [tasks.package-appimage]
 description = "Build a Linux AppImage (downloads appimagetool on first run)"
@@ -63,6 +69,9 @@ run = "./gradlew :desktopApp:packageAppImage"
 [tasks.package-jar]
 description = "Build a self-contained runnable uber JAR"
 run = "./gradlew :desktopApp:packageUberJarForCurrentOS"
+
+# `mise icons` re-renders the committed desktop icon bitmaps from the branding SVG
+# (file task in .mise/tasks/icons).
 
 # --- Tests & checks --------------------------------------------------------
 

@@ -12,6 +12,7 @@ import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
 import androidx.compose.ui.draganddrop.DragData
 import androidx.compose.ui.draganddrop.dragData
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
@@ -36,6 +37,7 @@ private const val EXT_PDF = ".pdf"
 private const val FILE_URI_PREFIX = "file:"
 private const val FALLBACK_DROPPED_PDF = "dropped.pdf"
 private const val LOG_PREFIX = "[npn] "
+private const val WINDOW_ICON = "icon.png"
 
 private fun log(message: String) = println(LOG_PREFIX + message)
 
@@ -55,6 +57,8 @@ fun main() =
         Window(
             onCloseRequest = ::exitApplication,
             title = appName,
+            // Same PNG jpackage installs as the desktop-entry icon; see .mise/tasks/icons.
+            icon = painterResource(WINDOW_ICON),
             state = rememberWindowState(width = 1200.dp, height = 800.dp),
         ) {
             // Enforce a sensible minimum window size (jpackage/AWT window).
