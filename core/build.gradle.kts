@@ -27,6 +27,11 @@ kotlin {
         compilerOptions {
             jvmTarget = JvmTarget.JVM_17
         }
+
+        // Runs commonTest against the Android target on a host JVM, and gives androidMain code
+        // (SAF, MLKit wrappers) a test source set it never had. Without it, everything in
+        // commonTest is only ever verified through the `desktop` target.
+        withHostTest {}
     }
 
     sourceSets {
@@ -52,6 +57,9 @@ kotlin {
         commonTest.dependencies {
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
+            // commonTest asserts through kotest matchers, so they belong to every test target that
+            // compiles it, not just `desktopTest`.
+            implementation(libs.kotest.assertions)
         }
         androidMain.dependencies {
             implementation(libs.androidx.core.ktx)
@@ -70,7 +78,6 @@ kotlin {
         getByName("desktopTest") {
             dependencies {
                 implementation(libs.kotest.property)
-                implementation(libs.kotest.assertions)
                 implementation(libs.pdfbox)
             }
         }

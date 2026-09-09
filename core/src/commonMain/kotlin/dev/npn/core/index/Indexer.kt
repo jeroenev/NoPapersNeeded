@@ -394,9 +394,7 @@ class Indexer(
                             documents += op.newDoc
                         }
 
-                        else -> {
-                            Unit
-                        }
+                        else -> {}
                     }
                 }
                 documents.toList().forEach { documents += state.resolveDocId(it) }

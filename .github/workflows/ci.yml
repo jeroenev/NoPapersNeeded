@@ -50,6 +50,11 @@ jobs:
           :composeApp:koverHtmlReportDesktop
           :composeApp:koverXmlReportDesktop
 
+      # The same commonTest suites against the Android target, plus whatever only exists there
+      # (androidHostTest). Coverage stays on the desktop run; this is about target-specific breakage.
+      - name: Tests (Android target, host JVM)
+        run: ./gradlew :core:testAndroidHostTest :composeApp:testAndroidHostTest
+
       - name: Compile core (Android)
         run: ./gradlew :core:compileAndroidMain
 

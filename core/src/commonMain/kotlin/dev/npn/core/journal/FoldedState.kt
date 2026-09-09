@@ -159,9 +159,8 @@ class FoldedState {
                 settings.putIfNewerHlc(op.key, event.hlc) { PropVal(op.value, event.hlc) }
             }
 
-            is JournalOp.Unknown -> {
-                Unit
-            } // tolerant skip
+            // Tolerant skip: an op from a newer build folds to nothing here.
+            is JournalOp.Unknown -> {}
         }
     }
 

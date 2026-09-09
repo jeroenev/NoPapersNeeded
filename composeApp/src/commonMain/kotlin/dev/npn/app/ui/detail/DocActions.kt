@@ -367,9 +367,7 @@ private fun DocActionDialogs(
             )
         }
 
-        null -> {
-            Unit
-        }
+        null -> {}
     }
 }
 

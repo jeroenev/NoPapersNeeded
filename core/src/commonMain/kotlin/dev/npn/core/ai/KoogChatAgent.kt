@@ -68,7 +68,6 @@ class KoogChatAgent(
                                     else -> {
                                         if (frame is StreamFrame.TextComplete) textFlushed = true
                                         responseFrames += frame
-                                        Unit
                                     }
                                 }
                             }

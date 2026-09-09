@@ -163,7 +163,7 @@ class SegmentWriterTest {
             // local state knows nothing about the segment in the store
             val check = w.checkSingleWriter()
             assertTrue(check is ForkCheck.ForkNeeded)
-            assertEquals(listOf(SegmentRef.plainName(1)), (check as ForkCheck.ForkNeeded).unknownSegments)
+            assertEquals(listOf(SegmentRef.plainName(1)), check.unknownSegments)
         }
 
     @Test

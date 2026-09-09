@@ -30,6 +30,15 @@ kotlin {
         androidResources {
             enable = true
         }
+
+        // Runs commonTest (the viewmodel suite) against the Android target on a host JVM, so the
+        // shared UI logic is verified on both targets rather than only through `desktop`.
+        withHostTest {
+            // Compose's resource reader probes for an instrumentation context and logs when there
+            // is none; android.util.Log throws on a host JVM unless unmocked framework calls
+            // return defaults. Nothing under test calls the framework itself.
+            isReturnDefaultValues = true
+        }
     }
 
     sourceSets {
@@ -82,6 +91,20 @@ kotlin {
                 implementation(compose.desktop.currentOs)
             }
         }
+        getByName("androidHostTest") {
+            // Those same wording assertions, on the Android target. On a device Compose reads
+            // composeResources out of the app's assets through a Context; a host test JVM has no
+            // Context, and the reader falls back to the classpath. So put the directory the Compose
+            // plugin stages for the Android assets on it — it already has the classpath-relative
+            // layout the reader looks for — as java resources, which is the one route AGP does not
+            // rebuild from scratch for this variant.
+            resources.srcDir(
+                files(
+                    layout.buildDirectory
+                        .dir("generated/assets/copyAndroidMainComposeResourcesToAndroidAssets"),
+                ) { builtBy("copyAndroidMainComposeResourcesToAndroidAssets") },
+            )
+        }
     }
 
     compilerOptions {
@@ -92,14 +115,6 @@ kotlin {
 dependencies {
     androidRuntimeClasspath(libs.compose.uiTooling)
     kover(project(":core"))
-}
-
-// ViewModel tests assert real user-facing wording read from `values/common.xml`. Compose resources
-// pick a locale from the JVM default, so pin the test JVM to English: without this the suite passes
-// on an English machine and fails on a Dutch one by resolving `values-nl` instead.
-tasks.withType<Test>().configureEach {
-    systemProperty("user.language", "en")
-    systemProperty("user.country", "US")
 }
 
 compose.resources {

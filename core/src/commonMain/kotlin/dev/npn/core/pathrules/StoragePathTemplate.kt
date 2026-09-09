@@ -6,6 +6,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.uniquifyPath
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
+import kotlinx.datetime.number
 
 /**
  * Parser and evaluator for user-defined storage path templates.
@@ -222,12 +223,16 @@ object StoragePathTemplate {
                 }
 
                 char == 'M' && remaining >= 2 && pattern.startsWith("MM", index) -> {
-                    out.append(date.monthNumber.toString().padStart(2, '0'))
+                    out.append(
+                        date.month.number
+                            .toString()
+                            .padStart(2, '0'),
+                    )
                     index += 2
                 }
 
                 char == 'M' -> {
-                    out.append(date.monthNumber)
+                    out.append(date.month.number)
                     index++
                 }
 

@@ -145,7 +145,6 @@ class JvmLibraryFileSystem(
             } catch (e: java.nio.file.FileAlreadyExistsException) {
                 error("Target already exists: $relPath")
             }
-            Unit
         } finally {
             // Clean up the temp file if it survived (move failed).
             try {

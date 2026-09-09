@@ -512,9 +512,9 @@ class LibrarySessionImpl private constructor(
                 runCatching { ocrPipeline.reconcileSidecars() }
             }
 
-            NpnPaths.JournalPath.Staging, null -> {
-                Unit
-            }
+            // A staging file is a write in progress, and a null path means the event was not a
+            // change under `.npn/` at all. Neither has anything to ingest.
+            NpnPaths.JournalPath.Staging, null -> {}
 
             else -> {
                 runCatching { coordinator.reconcileMetadata() }

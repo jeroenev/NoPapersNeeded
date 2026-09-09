@@ -12,6 +12,10 @@ README covers the design, user-facing build/packaging details, and the library f
 - `desktopApp` — desktop entrypoint + packaging (deb/AppImage/uber-jar).
 - KMP JVM target is named `desktop` (not `jvm`); source sets are
   `desktopMain`/`desktopTest`, tasks are `:core:desktopTest`, `:composeApp:compileKotlinDesktop`, etc.
+- `core` and `composeApp` also run tests against the Android target on a host JVM
+  (`withHostTest {}`): `commonTest` compiles for both targets, and `androidHostTest` is where
+  tests for `androidMain`-only code go. Anything touching real framework classes needs a device
+  test instead — the host JVM has `android.jar` stubs, not an implementation.
 
 ## Commands
 
@@ -19,6 +23,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 
 - Tests: `./gradlew :core:desktopTest` and `./gradlew :composeApp:desktopTest`
   (viewmodel tests). `mise test-fast` runs both; `mise test` runs only core.
+- Same suites on the Android target: `./gradlew :core:testAndroidHostTest
+  :composeApp:testAndroidHostTest`. Both are in `check`/`allTests`, so `mise test-all` and
+  `mise check` cover them; `mise test-fast` deliberately does not.
 - Single test class: `./gradlew :core:desktopTest --tests 'dev.npn.core.journal.FoldTest'`.
 - Live AI endpoint checks are opt-in and skipped by default (they cost money):
   `NPN_LIVE_AI=1 ./gradlew :core:desktopTest --tests 'dev.npn.core.ai.LiveEndpointProbeTest'`.
@@ -27,9 +34,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
 - CI (`.github/workflows/ci.yml`) runs: spotlessCheck → shellcheck → checkLocalization →
-  detekt → tests+coverage (kover drives both desktop test suites) → compile android+desktop →
-  assembleDebug → desktopApp build → packageAppImage. Match that order when verifying larger
-  changes.
+  detekt → tests+coverage (kover drives both desktop test suites) → Android-target host tests →
+  compile android+desktop → assembleDebug → desktopApp build → packageAppImage. Match that order
+  when verifying larger changes.
 
 ## Detekt
 

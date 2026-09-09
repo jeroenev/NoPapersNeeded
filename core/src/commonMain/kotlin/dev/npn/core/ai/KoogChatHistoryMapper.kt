@@ -17,7 +17,7 @@ internal object KoogChatHistoryMapper {
                     message.parts.filterIsInstance<MessagePart.Tool.Result>().forEach { result ->
                         val index = toolIndexes[result.id] ?: return@forEach
                         val tool = items[index] as AiChatHistoryItem.ToolUse
-                        items[index] = tool.copy(result = result.output ?: "")
+                        items[index] = tool.copy(result = result.output)
                     }
                 }
 
@@ -27,13 +27,11 @@ internal object KoogChatHistoryMapper {
                     }
                     message.parts.filterIsInstance<MessagePart.Tool.Call>().forEach { call ->
                         toolIndexes[call.id ?: "tool-${items.size}"] = items.size
-                        items += AiChatHistoryItem.ToolUse(call.tool, call.args ?: "{}", result = "")
+                        items += AiChatHistoryItem.ToolUse(call.tool, call.args, result = "")
                     }
                 }
 
-                else -> {
-                    Unit
-                }
+                else -> {}
             }
         }
 
