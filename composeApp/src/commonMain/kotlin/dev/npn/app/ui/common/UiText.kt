@@ -23,6 +23,7 @@ import no_papers_needed.composeapp.generated.resources.common_action_save_corres
 import no_papers_needed.composeapp.generated.resources.common_action_save_date
 import no_papers_needed.composeapp.generated.resources.common_action_save_document_type
 import no_papers_needed.composeapp.generated.resources.common_action_save_field
+import no_papers_needed.composeapp.generated.resources.common_action_save_note
 import no_papers_needed.composeapp.generated.resources.common_action_save_rule
 import no_papers_needed.composeapp.generated.resources.common_action_save_title
 import no_papers_needed.composeapp.generated.resources.common_action_suggest_metadata
@@ -109,6 +110,7 @@ enum class UiAction {
     SAVE_CORRESPONDENT,
     SAVE_DOCUMENT_TYPE,
     SAVE_DATE,
+    SAVE_NOTE,
     ADD_TAG,
     REMOVE_TAG,
     SAVE_FIELD,
@@ -346,6 +348,7 @@ private val UiAction.stringResource: StringResource
             UiAction.SAVE_CORRESPONDENT -> Res.string.common_action_save_correspondent
             UiAction.SAVE_DOCUMENT_TYPE -> Res.string.common_action_save_document_type
             UiAction.SAVE_DATE -> Res.string.common_action_save_date
+            UiAction.SAVE_NOTE -> Res.string.common_action_save_note
             UiAction.ADD_TAG -> Res.string.common_action_add_tag
             UiAction.REMOVE_TAG -> Res.string.common_action_remove_tag
             UiAction.SAVE_FIELD -> Res.string.common_action_save_field

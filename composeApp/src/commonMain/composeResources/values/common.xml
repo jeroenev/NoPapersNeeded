@@ -29,9 +29,9 @@
     <string name="common_open_library_title">Could not open your library</string>
     <string name="common_pick_folder_again">Pick folder again</string>
 
-    <string name="common_onboarding_intro">Your documents live in a plain folder of PDFs. That folder is the source of truth: every device with it has everything.</string>
-    <string name="common_onboarding_sync">Point Syncthing (or any sync tool) at the folder to keep devices in sync. Tags, dates and status are stored inside the folder too, so nothing is lost and sync conflicts on app data cannot happen.</string>
-    <string name="common_choose_library_folder">Choose library folder</string>
+    <string name="common_onboarding_intro">Keep your PDFs, tags and details together in a folder you own. Choose where to store your library to get started.</string>
+    <string name="common_onboarding_sync">Use a sync tool such as Syncthing to sync the entire library folder, then open that folder on each device. Sync is managed by your chosen tool.</string>
+    <string name="common_choose_library_folder">Open an existing library</string>
 
     <string name="common_could_not_action">Could not %1$s: %2$s</string>
     <string name="common_no_ai_tag_suggestions">No suggestions - document may not be OCRed yet</string>
@@ -50,6 +50,7 @@
     <string name="common_action_save_correspondent">save correspondent</string>
     <string name="common_action_save_document_type">save document type</string>
     <string name="common_action_save_date">save date</string>
+    <string name="common_action_save_note">save note</string>
     <string name="common_action_add_tag">add tag</string>
     <string name="common_action_remove_tag">remove tag</string>
     <string name="common_action_save_field">save field</string>
@@ -129,7 +130,7 @@
         <item quantity="other">Permanently delete %1$d documents? This cannot be undone.</item>
     </plurals>
 
-    <string name="common_create_new_library">Create new library folder</string>
+    <string name="common_create_new_library">Create a library</string>
     <string name="common_new_library_folder_name">New folder name</string>
 
 </resources>

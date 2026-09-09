@@ -8,16 +8,16 @@ import dev.npn.core.app.LibraryFilter
  * A [LibraryFilter] keeps three parallel tag lists — [LibraryFilter.tagsAll] (AND),
  * [LibraryFilter.tagsAny] (OR) and [LibraryFilter.tagsNone] (NOT). A single tag must live in at
  * most ONE of them: a filter that asks for "AND foo" and "NOT foo" at once is contradictory. This
- * enum names the four resting states a tag can be in so both the edit side (cycling a chip) and the
- * display side (the removable chips) speak the same vocabulary instead of re-deriving it from the
- * raw lists.
+ * enum names the four resting states a tag can be in so both the edit side (picking a chip in the
+ * include or exclude group) and the display side (the removable chips) speak the same vocabulary
+ * instead of re-deriving it from the raw lists.
  */
 enum class TagBucket { OFF, ALL, ANY, NONE }
 
 /**
  * The bucket [tag] currently sits in within [filter].
  *
- * The lists are checked in a fixed order (ALL, then ANY, then NONE); because [cycleTag] guarantees
+ * The lists are checked in a fixed order (ALL, then ANY, then NONE); because [withTag] guarantees
  * a tag is only ever in one bucket, the order only matters for a hand-corrupted filter, where the
  * first match wins deterministically.
  */
@@ -33,31 +33,34 @@ fun tagBucket(
     }
 
 /**
- * Advance [tag] one step around the bucket cycle OFF -> ALL -> ANY -> NONE -> OFF and return the
- * updated filter.
+ * Place [tag] in [bucket], and only that bucket.
  *
- * Load-bearing invariant: the tag is stripped from ALL THREE buckets first, then re-added to its
- * next bucket (or, on the NONE -> OFF step, left out entirely). Without the strip-first step a tag
- * could end up in two buckets at once — e.g. cycling from ALL would append to ANY while the ALL
- * entry lingered — producing a contradictory filter. The strip is unconditional (cheap list
- * subtractions that no-op when the tag is absent) so the single move is always "clear, then place".
+ * Load-bearing invariant: the tag is stripped from ALL THREE lists first, then re-added to its
+ * chosen bucket (or, for [TagBucket.OFF], left out entirely). Without the strip-first step a tag
+ * could end up in two buckets at once — including and excluding the same tag — producing a
+ * contradictory filter. The strip is unconditional (cheap list subtractions that no-op when the
+ * tag is absent) so the single move is always "clear, then place".
  */
-fun cycleTag(
-    filter: LibraryFilter,
+fun LibraryFilter.withTag(
     tag: String,
+    bucket: TagBucket,
 ): LibraryFilter {
-    val stripped =
-        filter.copy(
-            tagsAll = filter.tagsAll - tag,
-            tagsAny = filter.tagsAny - tag,
-            tagsNone = filter.tagsNone - tag,
-        )
-    return when (tagBucket(filter, tag)) {
-        TagBucket.OFF -> stripped.copy(tagsAll = stripped.tagsAll + tag)
-        TagBucket.ALL -> stripped.copy(tagsAny = stripped.tagsAny + tag)
-        TagBucket.ANY -> stripped.copy(tagsNone = stripped.tagsNone + tag)
-        TagBucket.NONE -> stripped
+    val cleared = copy(tagsAll = tagsAll - tag, tagsAny = tagsAny - tag, tagsNone = tagsNone - tag)
+    return when (bucket) {
+        TagBucket.ALL -> cleared.copy(tagsAll = cleared.tagsAll + tag)
+        TagBucket.ANY -> cleared.copy(tagsAny = cleared.tagsAny + tag)
+        TagBucket.NONE -> cleared.copy(tagsNone = cleared.tagsNone + tag)
+        TagBucket.OFF -> cleared
     }
+}
+
+/**
+ * Move every included tag into one match mode, so "match all" and "match any" are a property of
+ * the whole include group rather than of each individual tag.
+ */
+fun LibraryFilter.matchIncludedTags(matchAll: Boolean): LibraryFilter {
+    val included = (tagsAll + tagsAny).distinct()
+    return copy(tagsAll = if (matchAll) included else emptyList(), tagsAny = if (matchAll) emptyList() else included)
 }
 
 /**
@@ -137,7 +140,7 @@ sealed interface ActiveFilterChip {
  * restriction first (it scopes everything else), then tags (AND, then OR, then NOT, each in the
  * filter's own list order), then reviewed, correspondent, doc type, the date bounds, and finally the
  * two review-scope toggles. It re-uses [TagBucket] semantics so the chip list can never disagree
- * with what [cycleTag] produced. Empty facets contribute no chip, so an empty filter yields an empty
+ * with what [withTag] produced. Empty facets contribute no chip, so an empty filter yields an empty
  * list.
  */
 fun LibraryFilter.activeChips(): List<ActiveFilterChip> =

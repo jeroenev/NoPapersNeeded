@@ -3,9 +3,9 @@
     <string name="detail_document">Document</string>
     <string name="detail_document_unavailable">Document unavailable</string>
     <string name="detail_document_unavailable_hint">It may have been trashed or moved.</string>
-    <string name="detail_exported_baked_copy">Exported baked copy</string>
+    <string name="detail_exported_baked_copy">PDF exported with tags and details</string>
     <string name="detail_export_failed">Export failed: %1$s</string>
-    <string name="detail_could_not_bake_copy">Could not bake a copy</string>
+    <string name="detail_could_not_bake_copy">Could not prepare PDF for export</string>
     <string name="detail_rename_file">Rename file</string>
     <string name="detail_new_file_name">New file name</string>
     <string name="detail_rename">Rename</string>
@@ -13,19 +13,19 @@
     <string name="detail_trash_prompt">Move this document to trash? You can restore it later.</string>
     <string name="detail_trash">Trash</string>
     <string name="detail_split_failed">Split failed: %1$s</string>
-    <string name="detail_bake_metadata_in_place">Bake metadata in place</string>
+    <string name="detail_bake_metadata_in_place">Embed tags and details in original PDF</string>
     <string name="detail_bake_prompt">This rewrites the library file itself to embed tags and properties as XMP. The file's content hash changes and the rewrite syncs to other devices. Prefer Export for a portable copy that leaves the library untouched. Continue?</string>
-    <string name="detail_bake_in_place">Bake in place</string>
-    <string name="detail_baked_in_place">Baked in place</string>
+    <string name="detail_bake_in_place">Update original PDF</string>
+    <string name="detail_baked_in_place">Original PDF updated</string>
     <string name="detail_bake_failed">Bake failed</string>
     <string name="detail_document_position">%1$d of %2$d</string>
     <string name="detail_previous_document">Previous document</string>
     <string name="detail_next_document">Next document</string>
     <string name="detail_mark_unreviewed">Mark unreviewed</string>
     <string name="detail_mark_reviewed">Mark reviewed</string>
-    <string name="detail_export_baked_copy">Export baked copy</string>
-    <string name="detail_share_baked_copy">Share baked copy</string>
-    <string name="detail_shared_baked_copy">Shared baked copy</string>
+    <string name="detail_export_baked_copy">Export PDF with tags and details</string>
+    <string name="detail_share_baked_copy">Share PDF with tags and details</string>
+    <string name="detail_shared_baked_copy">PDF shared with tags and details</string>
     <string name="detail_share_failed">Share failed: %1$s</string>
     <string name="detail_more_actions">More actions</string>
     <string name="detail_rerunning_ocr">Re-running OCR...</string>
@@ -36,7 +36,7 @@
     <string name="detail_ai_ocr_confirm">Read anyway</string>
     <string name="detail_splitting">Splitting...</string>
     <string name="detail_split_document">Split document</string>
-    <string name="detail_baking">Baking...</string>
+    <string name="detail_baking">Updating PDF…</string>
 
     <string name="detail_tab_preview">Preview</string>
     <string name="detail_tab_details">Details</string>
@@ -48,8 +48,6 @@
     <string name="detail_unsaved_changes">Unsaved changes</string>
     <string name="detail_saving">Saving...</string>
     <string name="detail_saved">Saved</string>
-    <string name="detail_save_note">Save note</string>
-    <string name="detail_note_save_failed">Could not save note: %1$s</string>
     <string name="detail_correspondent">Correspondent</string>
     <string name="detail_document_type">Document type</string>
     <string name="detail_document_date">Document date (yyyy-MM-dd)</string>
@@ -66,13 +64,12 @@
     <string name="detail_use_suggestion">Use suggested %1$s</string>
     <string name="detail_dismiss_suggestion">Dismiss suggested %1$s</string>
     <string name="detail_dismiss_all">Dismiss all</string>
-    <string name="detail_add_tag">Add %1$s</string>
     <string name="detail_dismiss_tag">Dismiss %1$s</string>
-    <string name="detail_engine">Engine</string>
+    <string name="detail_engine">Text source</string>
     <string name="detail_not_available" translatable="false">—</string>
-    <string name="detail_pinned_engine">Pinned engine</string>
-    <string name="detail_choose_ocr_engine">Choose OCR engine</string>
-    <string name="detail_search_text_engine">Search text engine</string>
+    <string name="detail_pinned_engine">Selected text source</string>
+    <string name="detail_choose_ocr_engine">Choose text source</string>
+    <string name="detail_search_text_engine">Text source for search</string>
     <string name="detail_automatic_engine">Automatic (best available)</string>
     <string name="detail_engine_source">%1$s · %2$s</string>
     <string name="detail_fields">Fields</string>

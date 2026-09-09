@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ux_sync_help">Use on multiple devices</string>
+    <string name="ux_library_name">My documents</string>
+    <string name="ux_match_all">Match all</string>
+    <string name="ux_match_any">Match any</string>
+    <string name="ux_include_tags">Include tags</string>
+    <string name="ux_exclude_tags">Exclude tags</string>
+    <string name="ux_mixed_tags">This view needs every tag from the Match all group and at least one from the Match any group. Pick a single match mode to merge them into one group.</string>
+    <string name="ux_no_matching_tags">No tags match your search.</string>
+    <string name="ux_refine_tag_search">Refine your search to see the remaining tags.</string>
+    <string name="ux_review_count">Needs review · %1$d</string>
+    <string name="ux_review_next">Mark reviewed &amp; next</string>
+    <string name="ux_review_finish">Mark reviewed &amp; finish</string>
+    <string name="ux_expand_document">Expand document workspace</string>
+    <string name="ux_resize_panes">Resize document and details</string>
+    <string name="ux_save_changes">Save changes</string>
+    <string name="ux_save_failed">Could not save changes: %1$s</string>
+    <string name="ux_drafts_count">Unsaved documents: %1$d</string>
+    <string name="ux_resume_draft">Continue editing</string>
+    <string name="ux_draft_hint">Your draft is kept when you switch documents. Save to apply your changes.</string>
+    <string name="ux_discard">Discard changes</string>
+    <string name="ux_discard_prompt">Discard the unsaved changes to this document?</string>
+    <string name="ux_tags_saved">Tags and accepted assistant suggestions are saved immediately.</string>
+    <string name="ux_date_invalid">Enter a valid date as yyyy-MM-dd.</string>
+    <string name="ux_show_suggestions">Show suggestions</string>
+    <string name="ux_discard_short">Discard</string>
+    <string name="ux_library_draft_warning">Save or discard your document drafts before opening another library.</string>
+</resources>

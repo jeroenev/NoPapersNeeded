@@ -24,36 +24,28 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.LabelOff
 import androidx.compose.material.icons.automirrored.filled.Sort
-import androidx.compose.material.icons.automirrored.filled.ViewList
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDownward
-import androidx.compose.material.icons.filled.ArrowUpward
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.NewLabel
 import androidx.compose.material.icons.filled.Refresh
-import androidx.compose.material.icons.filled.SelectAll
-import androidx.compose.material.icons.filled.Unpublished
 import androidx.compose.material.icons.filled.Warning
-import androidx.compose.material.icons.filled.ZoomIn
-import androidx.compose.material.icons.filled.ZoomOut
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.ExtendedFloatingActionButton
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
@@ -72,7 +64,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
-import androidx.compose.runtime.snapshotFlow
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -87,11 +78,11 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
-import dev.npn.app.ui.common.CompactTopBarBreakpoint
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.ScrollToTopOnNewResults
 import dev.npn.app.ui.common.ScrollbarWidth
@@ -147,7 +138,6 @@ import no_papers_needed.composeapp.generated.resources.library_selected_count
 import no_papers_needed.composeapp.generated.resources.library_sort
 import no_papers_needed.composeapp.generated.resources.library_sort_added
 import no_papers_needed.composeapp.generated.resources.library_sort_ascending
-import no_papers_needed.composeapp.generated.resources.library_sort_by
 import no_papers_needed.composeapp.generated.resources.library_sort_descending
 import no_papers_needed.composeapp.generated.resources.library_sort_doc_date
 import no_papers_needed.composeapp.generated.resources.library_sort_name
@@ -156,6 +146,7 @@ import no_papers_needed.composeapp.generated.resources.library_switch_view
 import no_papers_needed.composeapp.generated.resources.library_trash
 import no_papers_needed.composeapp.generated.resources.library_trash_documents
 import no_papers_needed.composeapp.generated.resources.queue_ai_pending
+import no_papers_needed.composeapp.generated.resources.ux_review_count
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -241,7 +232,6 @@ fun LibraryScreen(
         // The navigation rail already carries the AI entries on wide layouts, so the top bar only
         // needs them below the wide breakpoint; they stay as direct icons until the window is too
         // tight for them, collapsing into the overflow menu only then.
-        val compactActions = !wide && maxWidth < CompactTopBarBreakpoint
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
         var previewDocId by remember { mutableStateOf<String?>(null) }
         val onDocClick: (String) -> Unit = { docId -> if (wide) previewDocId = docId else openDoc(docId) }
@@ -269,7 +259,6 @@ fun LibraryScreen(
                 results = results,
                 tagColors = tagColors,
                 reviewMode = reviewMode,
-                compactActions = compactActions,
                 scanProgress = scanProgress,
                 lastScan = lastScan,
                 ocr = ocr,
@@ -333,11 +322,17 @@ fun LibraryScreen(
                     }
 
                     previewItem != null -> {
+                        // By id, not by value: indexOf would run a full structural comparison per
+                        // row on every recomposition of this branch.
+                        val nextId = docs.getOrNull(docs.indexOfFirst { it.doc.docId == previewDocId } + 1)?.doc?.docId
                         DocPreviewPanel(
                             item = previewItem,
                             session = session,
                             snackbar = snackbar,
                             onClose = { previewDocId = null },
+                            onExpand = { openDoc(previewItem.doc.docId) },
+                            onReviewed = { if (previewDocId == previewItem.doc.docId) previewDocId = nextId },
+                            hasNext = nextId != null,
                             modifier = Modifier.width(sidePanelWidth).fillMaxHeight(),
                         )
                     }
@@ -440,9 +435,8 @@ private fun LibraryContent(
     onAiEdit: (() -> Unit)?,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
-    /** Collapse the less frequent actions into the overflow menu (very narrow windows). */
-    compactActions: Boolean = false,
 ) {
+    val reviewCount by vm.needsReviewCount.collectAsStateWithLifecycle()
     val queryText by vm.queryText.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
@@ -494,7 +488,6 @@ private fun LibraryContent(
                     count = ui.selected.size,
                     total = allDocIds.size,
                     reviewMode = reviewMode,
-                    compact = compactActions,
                     onClose = vm::clearSelection,
                     onSelectAll = { vm.selectAll(allDocIds) },
                     onAddTag = onAddTag,
@@ -558,6 +551,37 @@ private fun LibraryContent(
                 focusRequester = searchFocus,
                 onFocusChange = { searchFocused = it },
             )
+            // A visible way into the review queue, as a selectable filter affordance rather than a
+            // plain counter. It sits below the search field, in the same band as ActiveFilters (which
+            // already grows and shrinks), so appearing/disappearing never shifts the search box. It
+            // only appears when there is something to review, so a cleared inbox does not leave a
+            // permanent "0" in the way. The chip's selected state mirrors whether the INBOX_WORKFLOW
+            // preset (unreviewedOrUntagged) is the active filter, so it reads as a filter, not a count.
+            if (reviewMode == ReviewMode.INBOX_WORKFLOW && !ui.selectionMode && reviewCount > 0) {
+                val reviewFilterActive = ui.filter.unreviewedOrUntagged
+                FilterChip(
+                    selected = reviewFilterActive,
+                    // Re-tapping drops only this facet, the normal behaviour of a selected filter
+                    // chip. Not clearFilter(): that also wipes the search box and every other
+                    // facet the user narrowed the queue with after applying the preset.
+                    onClick = {
+                        if (reviewFilterActive) {
+                            vm.setFilter(ui.filter.copy(unreviewedOrUntagged = false))
+                        } else {
+                            vm.applyReviewPreset()
+                        }
+                    },
+                    label = { Text(stringResource(Res.string.ux_review_count, reviewCount)) },
+                    leadingIcon = {
+                        Icon(
+                            Icons.Filled.CheckCircle,
+                            contentDescription = null,
+                            modifier = Modifier.size(FilterChipDefaults.IconSize),
+                        )
+                    },
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                )
+            }
             ActiveFilters(
                 filter = ui.filter,
                 onFilterChange = vm::setFilter,
@@ -743,32 +767,42 @@ private fun LibraryTopBar(
     onRefresh: () -> Unit,
 ) {
     TopAppBar(
-        title = { Text(stringResource(Res.string.library_documents)) },
+        title = { Text(stringResource(Res.string.library_documents), maxLines = 1, overflow = TextOverflow.Ellipsis) },
         actions = {
             extras()
-            IconButton(onClick = onRefresh) {
-                Icon(Icons.Filled.Refresh, contentDescription = stringResource(Res.string.library_refresh))
-            }
-            IconButton(onClick = onOpenFilter) {
-                Icon(Icons.Filled.FilterList, contentDescription = stringResource(Res.string.library_filters))
-            }
-            // View switcher: one tap toggles list/grid; the icon shows the view it switches TO.
-            val nextView = if (viewType == ViewType.LIST) ViewType.GRID else ViewType.LIST
-            IconButton(onClick = { onSetView(nextView) }) {
-                Icon(
-                    imageVector =
-                        when (nextView) {
-                            ViewType.GRID -> Icons.Filled.GridView
-                            ViewType.LIST -> Icons.AutoMirrored.Filled.ViewList
-                        },
-                    contentDescription =
-                        stringResource(
-                            Res.string.library_switch_view,
-                            viewTypeLabel(nextView).lowercase(),
-                        ),
+            TooltipIconButton(Icons.Filled.FilterList, stringResource(Res.string.library_filters), onOpenFilter)
+            SortMenuButton(sort, onSetSort)
+            var expanded by remember { mutableStateOf(false) }
+            Box {
+                TooltipIconButton(
+                    Icons.Filled.MoreVert,
+                    stringResource(Res.string.library_more_actions),
+                    { expanded = true },
                 )
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    val next = if (viewType == ViewType.LIST) ViewType.GRID else ViewType.LIST
+                    DropdownMenuItem(
+                        // Lowercased: the label is interpolated mid-sentence ("Switch to list
+                        // view"), and Dutch compounds it into one word.
+                        text = {
+                            Text(
+                                stringResource(Res.string.library_switch_view, viewTypeLabel(next).lowercase()),
+                            )
+                        },
+                        onClick = {
+                            expanded = false
+                            onSetView(next)
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(Res.string.library_refresh)) },
+                        onClick = {
+                            expanded = false
+                            onRefresh()
+                        },
+                    )
+                }
             }
-            SortMenuButton(sort = sort, onSetSort = onSetSort)
         },
     )
 }
@@ -778,51 +812,36 @@ private fun SortMenuButton(
     sort: dev.npn.core.app.LibrarySort,
     onSetSort: (SortField, Boolean) -> Unit,
 ) {
-    var sortMenu by remember { mutableStateOf(false) }
+    var expanded by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { sortMenu = true }) {
-            Icon(Icons.AutoMirrored.Filled.Sort, contentDescription = stringResource(Res.string.library_sort))
-        }
-        DropdownMenu(expanded = sortMenu, onDismissRequest = { sortMenu = false }) {
-            Text(
-                stringResource(Res.string.library_sort_by),
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+        TooltipIconButton(Icons.AutoMirrored.Filled.Sort, stringResource(Res.string.library_sort), { expanded = true })
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             SortField.entries.forEach { field ->
-                val active = sort.field == field
                 DropdownMenuItem(
                     text = { Text(sortLabel(field)) },
-                    leadingIcon = { RadioButton(selected = active, onClick = null) },
-                    trailingIcon = {
-                        if (active) {
-                            Icon(
-                                imageVector =
-                                    if (sort.ascending) {
-                                        Icons.Filled.ArrowUpward
-                                    } else {
-                                        Icons.Filled.ArrowDownward
-                                    },
-                                contentDescription =
-                                    if (sort.ascending) {
-                                        stringResource(Res.string.library_sort_ascending)
-                                    } else {
-                                        stringResource(Res.string.library_sort_descending)
-                                    },
-                            )
-                        }
-                    },
+                    leadingIcon = { RadioButton(selected = sort.field == field, onClick = null) },
                     onClick = {
-                        if (active) {
-                            // Tapping the active field flips the direction; keep the menu
-                            // open so the arrow flip is visible.
-                            onSetSort(field, !sort.ascending)
-                        } else {
-                            // Switching field keeps the current direction.
-                            onSetSort(field, sort.ascending)
-                            sortMenu = false
-                        }
+                        onSetSort(field, sort.ascending)
+                        expanded = false
+                    },
+                )
+            }
+            HorizontalDivider()
+            listOf(true, false).forEach { ascending ->
+                DropdownMenuItem(
+                    text = {
+                        val label =
+                            if (ascending) {
+                                Res.string.library_sort_ascending
+                            } else {
+                                Res.string.library_sort_descending
+                            }
+                        Text(stringResource(label))
+                    },
+                    leadingIcon = { RadioButton(selected = sort.ascending == ascending, onClick = null) },
+                    onClick = {
+                        onSetSort(sort.field, ascending)
+                        expanded = false
                     },
                 )
             }
@@ -835,102 +854,83 @@ private fun SelectionTopBar(
     count: Int,
     total: Int,
     reviewMode: ReviewMode,
-    /** True on narrow windows: collapse the review marks into the overflow menu. */
-    compact: Boolean,
     onClose: () -> Unit,
     onSelectAll: () -> Unit,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
-    /** Null when the AI assistant is not configured; hides the AI-edit hand-off. */
     onAiEdit: (() -> Unit)?,
     onSetReviewed: (Boolean) -> Unit,
     onRequestTrash: () -> Unit,
 ) {
     TopAppBar(
-        title = { Text(pluralStringResource(Res.plurals.library_selected_count, count, count)) },
-        navigationIcon = {
-            IconButton(onClick = onClose) {
-                Icon(Icons.Filled.Clear, contentDescription = stringResource(Res.string.common_cancel))
-            }
+        title = {
+            Text(
+                pluralStringResource(Res.plurals.library_selected_count, count, count),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
         },
+        navigationIcon = { TooltipIconButton(Icons.Filled.Clear, stringResource(Res.string.common_cancel), onClose) },
         actions = {
-            // The tag and trash actions stay as direct icons at every width; only the review
-            // marks collapse into the overflow menu when the window is too tight for them all.
-            TooltipIconButton(
-                icon = Icons.Filled.SelectAll,
-                label = stringResource(Res.string.common_select_all),
-                onClick = onSelectAll,
-                enabled = total > 0,
-            )
-            TooltipIconButton(
-                icon = Icons.Filled.NewLabel,
-                label = stringResource(Res.string.common_add_tag),
-                onClick = onAddTag,
-            )
-            TooltipIconButton(
-                icon = Icons.AutoMirrored.Filled.LabelOff,
-                label = stringResource(Res.string.library_remove_tag),
-                onClick = onRemoveTag,
-            )
-            onAiEdit?.let { aiEdit ->
+            TooltipIconButton(Icons.Filled.NewLabel, stringResource(Res.string.common_add_tag), onAddTag)
+            TooltipIconButton(Icons.Filled.Delete, stringResource(Res.string.library_trash), onRequestTrash)
+            var expanded by remember { mutableStateOf(false) }
+            Box {
                 TooltipIconButton(
-                    icon = Icons.Filled.AutoAwesome,
-                    label = stringResource(Res.string.library_ai_edit),
-                    onClick = aiEdit,
+                    Icons.Filled.MoreVert,
+                    stringResource(Res.string.library_more_actions),
+                    { expanded = true },
                 )
-            }
-            // Manual reviewed marker only applies in the inbox-workflow mode.
-            if (!compact && reviewMode == ReviewMode.INBOX_WORKFLOW) {
-                TooltipIconButton(
-                    icon = Icons.Filled.CheckCircle,
-                    label = stringResource(Res.string.library_mark_reviewed),
-                    onClick = { onSetReviewed(true) },
-                )
-                TooltipIconButton(
-                    icon = Icons.Filled.Unpublished,
-                    label = stringResource(Res.string.library_mark_needs_review),
-                    onClick = { onSetReviewed(false) },
-                )
-            }
-            TooltipIconButton(
-                icon = Icons.Filled.Delete,
-                label = stringResource(Res.string.library_trash),
-                onClick = onRequestTrash,
-            )
-            if (compact && reviewMode == ReviewMode.INBOX_WORKFLOW) {
-                SelectionOverflowMenu(onSetReviewed = onSetReviewed)
+                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                    DropdownMenuItem(
+                        text = { Text(stringResource(Res.string.common_select_all)) },
+                        enabled = total > 0,
+                        onClick = {
+                            expanded = false
+                            onSelectAll()
+                        },
+                    )
+                    DropdownMenuItem(
+                        text = { Text(stringResource(Res.string.library_remove_tag)) },
+                        onClick = {
+                            expanded = false
+                            onRemoveTag()
+                        },
+                    )
+                    onAiEdit?.let { edit ->
+                        DropdownMenuItem(
+                            text = { Text(stringResource(Res.string.library_ai_edit)) },
+                            onClick = {
+                                expanded = false
+                                edit()
+                            },
+                        )
+                    }
+                    if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                        listOf(true, false).forEach { reviewed ->
+                            DropdownMenuItem(
+                                text = {
+                                    Text(
+                                        stringResource(
+                                            if (reviewed) {
+                                                Res.string.library_mark_reviewed
+                                            } else {
+                                                Res.string.library_mark_needs_review
+                                            },
+                                        ),
+                                    )
+                                },
+                                onClick = {
+                                    expanded = false
+                                    onSetReviewed(reviewed)
+                                },
+                            )
+                        }
+                    }
+                }
             }
         },
     )
-}
-
-/** Overflow menu for narrow windows: holds the review marks when they did not fit as icons. */
-@Composable
-private fun SelectionOverflowMenu(onSetReviewed: (Boolean) -> Unit) {
-    var open by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { open = true }) {
-            Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.library_more_actions))
-        }
-        DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_mark_reviewed)) },
-                leadingIcon = { Icon(Icons.Filled.CheckCircle, contentDescription = null) },
-                onClick = {
-                    open = false
-                    onSetReviewed(true)
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.library_mark_needs_review)) },
-                leadingIcon = { Icon(Icons.Filled.Unpublished, contentDescription = null) },
-                onClick = {
-                    open = false
-                    onSetReviewed(false)
-                },
-            )
-        }
-    }
 }
 
 @Composable

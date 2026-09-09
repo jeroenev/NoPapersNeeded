@@ -402,13 +402,13 @@ private fun QueueBadge(badge: QueueStatus) {
         modifier = Modifier.semantics { contentDescription = spoken },
         containerColor =
             if (review) {
-                MaterialTheme.colorScheme.error
+                MaterialTheme.colorScheme.tertiaryContainer
             } else {
                 MaterialTheme.colorScheme.secondaryContainer
             },
         contentColor =
             if (review) {
-                MaterialTheme.colorScheme.onError
+                MaterialTheme.colorScheme.onTertiaryContainer
             } else {
                 MaterialTheme.colorScheme.onSecondaryContainer
             },

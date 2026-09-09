@@ -2,6 +2,7 @@
 
 package dev.npn.app.ui.common
 
+import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -24,6 +25,7 @@ fun TooltipIconButton(
     label: String,
     onClick: () -> Unit,
     enabled: Boolean = true,
+    badge: (@Composable () -> Unit)? = null,
 ) {
     TooltipBox(
         positionProvider = TooltipDefaults.rememberTooltipPositionProvider(TooltipAnchorPosition.Below),
@@ -31,7 +33,11 @@ fun TooltipIconButton(
         state = rememberTooltipState(),
     ) {
         IconButton(onClick = onClick, enabled = enabled) {
-            Icon(icon, contentDescription = label)
+            if (badge == null) {
+                Icon(icon, contentDescription = label)
+            } else {
+                BadgedBox(badge = { badge() }) { Icon(icon, contentDescription = label) }
+            }
         }
     }
 }

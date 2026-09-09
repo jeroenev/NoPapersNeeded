@@ -12,15 +12,6 @@ import androidx.compose.ui.unit.dp
 val WideLayoutBreakpoint: Dp = 840.dp
 
 /**
- * Width below which the selection top bar collapses its least frequent actions (the review
- * marks) into an overflow menu. The tag/trash actions stay as direct icons at every width.
- * Deliberately far below [WideLayoutBreakpoint]: a landscape phone is too narrow for the rail
- * yet easily fits every icon, so the actions only overflow once the window is genuinely
- * phone-portrait tight.
- */
-val CompactTopBarBreakpoint: Dp = 480.dp
-
-/**
  * True when the available area is wider than it is tall. Derived from BoxWithConstraints rather
  * than platform orientation APIs so it works cross-platform (desktop windows have no orientation)
  * and reflects the actual space given to the content, not just the device.

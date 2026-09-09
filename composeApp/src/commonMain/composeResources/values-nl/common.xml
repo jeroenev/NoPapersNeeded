@@ -28,9 +28,9 @@
     <string name="common_open_library_title">Je bibliotheek kon niet worden geopend</string>
     <string name="common_pick_folder_again">Map opnieuw kiezen</string>
 
-    <string name="common_onboarding_intro">Je documenten staan als pdf-bestanden in een gewone map. Die map is de bron van waarheid: elk apparaat met die map heeft alles.</string>
-    <string name="common_onboarding_sync">Laat Syncthing (of een ander synchronisatieprogramma) de map synchroniseren tussen apparaten. Tags, datums en statussen worden ook in de map opgeslagen. Zo gaat er niets verloren en kunnen er geen synchronisatieconflicten in appgegevens ontstaan.</string>
-    <string name="common_choose_library_folder">Bibliotheekmap kiezen</string>
+    <string name="common_onboarding_intro">Bewaar je pdf-bestanden, tags en details samen in je eigen map. Kies waar je bibliotheek komt te staan.</string>
+    <string name="common_onboarding_sync">Synchroniseer de volledige bibliotheekmap met een programma zoals Syncthing en open die map op elk apparaat. Je gekozen programma beheert de synchronisatie.</string>
+    <string name="common_choose_library_folder">Bestaande bibliotheek openen</string>
 
     <string name="common_could_not_action">%1$s mislukt: %2$s</string>
     <string name="common_no_ai_tag_suggestions">Geen suggesties - het document is mogelijk nog niet met OCR verwerkt.</string>
@@ -49,6 +49,7 @@
     <string name="common_action_save_correspondent">correspondent opslaan</string>
     <string name="common_action_save_document_type">documenttype opslaan</string>
     <string name="common_action_save_date">datum opslaan</string>
+    <string name="common_action_save_note">notitie opslaan</string>
     <string name="common_action_add_tag">tag toevoegen</string>
     <string name="common_action_remove_tag">tag verwijderen</string>
     <string name="common_action_save_field">veld opslaan</string>
@@ -128,7 +129,7 @@
         <item quantity="other">%1$d documenten definitief verwijderen? Dit kan niet ongedaan worden gemaakt.</item>
     </plurals>
 
-    <string name="common_create_new_library">Nieuwe bibliotheekmap aanmaken</string>
+    <string name="common_create_new_library">Bibliotheek aanmaken</string>
     <string name="common_new_library_folder_name">Naam van nieuwe map</string>
 
 </resources>

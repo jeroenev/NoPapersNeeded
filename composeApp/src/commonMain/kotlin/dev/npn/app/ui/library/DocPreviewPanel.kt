@@ -4,12 +4,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.OpenInFull
 import androidx.compose.material3.HorizontalDivider
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
@@ -30,15 +30,17 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.detail.DocActions
 import dev.npn.app.ui.detail.DocDetailViewModel
-import dev.npn.app.ui.detail.MetadataPanel
+import dev.npn.app.ui.detail.DocumentEditor
 import dev.npn.app.ui.detail.PageViewer
 import dev.npn.app.ui.detail.rememberMetadataActions
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_preview_close
+import no_papers_needed.composeapp.generated.resources.ux_expand_document
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -58,11 +60,22 @@ internal fun DocPreviewPanel(
     session: LibrarySession,
     snackbar: SnackbarHostState,
     onClose: () -> Unit,
+    onExpand: () -> Unit,
+    onReviewed: () -> Unit,
+    hasNext: Boolean,
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier, tonalElevation = 3.dp) {
         ScopedToDoc(docId = item.doc.docId) {
-            PreviewBody(item = item, session = session, snackbar = snackbar, onClose = onClose)
+            PreviewBody(
+                item = item,
+                session = session,
+                snackbar = snackbar,
+                onClose = onClose,
+                onExpand = onExpand,
+                onReviewed = onReviewed,
+                hasNext = hasNext,
+            )
         }
     }
 }
@@ -92,6 +105,9 @@ private fun PreviewBody(
     session: LibrarySession,
     snackbar: SnackbarHostState,
     onClose: () -> Unit,
+    onExpand: () -> Unit,
+    onReviewed: () -> Unit,
+    hasNext: Boolean,
 ) {
     val docId = item.doc.docId
     // Seeded with the row the library list already loaded: this viewmodel is rebuilt for every
@@ -104,20 +120,26 @@ private fun PreviewBody(
     val metadata by vm.metadata.collectAsStateWithLifecycle()
     val actions = rememberMetadataActions(vm)
 
-    Column(Modifier.fillMaxSize()) {
+    // This panel is a sibling of the library's Scaffold, so nothing applies the bottom system-bar
+    // inset for it: without this the pinned save/discard/review row would draw under the Android
+    // navigation bar on wide edge-to-edge layouts. The inset is zero on desktop.
+    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
         PreviewHeader(
             item = item,
             actions = {
                 // Trash/split remove the document from the result set; close the panel with them.
+                TooltipIconButton(Icons.Filled.OpenInFull, stringResource(Res.string.ux_expand_document), onExpand)
                 DocActions(item = item, vm = vm, snackbar = snackbar, onGone = onClose)
             },
             onClose = onClose,
         )
         HorizontalDivider()
-        MetadataPanel(
+        DocumentEditor(
             state = metadata,
             actions = actions,
-            previewTab = { m ->
+            onReviewed = onReviewed,
+            hasNext = hasNext,
+            preview = { m ->
                 // Keyed on the document: the viewer's remembered state (page-bitmap cache, pager
                 // position, zoom) must not survive a document switch, or it would briefly show
                 // the previous document's rendered pages.
@@ -154,11 +176,6 @@ private fun PreviewHeader(
             modifier = Modifier.weight(1f),
         )
         actions()
-        IconButton(onClick = onClose) {
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = stringResource(Res.string.library_preview_close),
-            )
-        }
+        TooltipIconButton(Icons.Filled.Close, stringResource(Res.string.library_preview_close), onClose)
     }
 }

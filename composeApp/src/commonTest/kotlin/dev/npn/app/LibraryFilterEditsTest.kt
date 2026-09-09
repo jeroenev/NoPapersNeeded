@@ -3,21 +3,36 @@ package dev.npn.app
 import dev.npn.app.ui.library.ActiveFilterChip
 import dev.npn.app.ui.library.TagBucket
 import dev.npn.app.ui.library.activeChips
-import dev.npn.app.ui.library.cycleTag
+import dev.npn.app.ui.library.matchIncludedTags
 import dev.npn.app.ui.library.removeChip
 import dev.npn.app.ui.library.tagBucket
+import dev.npn.app.ui.library.withTag
 import dev.npn.core.app.LibraryFilter
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 /**
- * Pure tests for the tag-bucket cycle and the active-chip composition — value in, value out, no
- * Compose. These own the invariants that used to be untested private helpers in FilterSheet and
- * ActiveFilters: the OFF->ALL->ANY->NONE->OFF cycle, the strip-from-all-buckets-first rule, chip
- * ordering, and per-chip removal clearing exactly the right facet.
+ * Pure tests for tag-bucket placement and the active-chip composition — value in, value out, no
+ * Compose. These own the invariants that would otherwise live in untested private helpers in
+ * FilterSheet and ActiveFilters: the strip-from-all-buckets-first rule, the whole-group match
+ * mode, chip ordering, and per-chip removal clearing exactly the right facet.
  */
 class LibraryFilterEditsTest {
+    @Test
+    fun explicitExclusionRemovesTheTagFromIncludedGroups() {
+        val filter = LibraryFilter(tagsAll = listOf("a"), tagsAny = listOf("b"))
+        filter.withTag("a", TagBucket.NONE) shouldBe LibraryFilter(tagsAny = listOf("b"), tagsNone = listOf("a"))
+    }
+
+    @Test
+    fun changingMatchModePreservesExclusionsAndOtherFacets() {
+        val filter =
+            LibraryFilter(tagsAll = listOf("a"), tagsAny = listOf("b"), tagsNone = listOf("c"), query = "invoice")
+        filter.matchIncludedTags(false) shouldBe filter.copy(tagsAll = emptyList(), tagsAny = listOf("a", "b"))
+        filter.matchIncludedTags(true) shouldBe filter.copy(tagsAll = listOf("a", "b"), tagsAny = emptyList())
+    }
+
     @Test
     fun tagBucketReadsWhicheverBucketTheTagIsIn() {
         val filter =
@@ -33,67 +48,44 @@ class LibraryFilterEditsTest {
     }
 
     @Test
-    fun cyclingATagWalksAllFourBucketStatesAndReturnsToOff() {
+    fun everyBucketPlacementLeavesTheTagInExactlyThatBucket() {
         val tag = "finance"
-        val start = LibraryFilter()
-        tagBucket(start, tag) shouldBe TagBucket.OFF
-
-        val all = cycleTag(start, tag)
-        tagBucket(all, tag) shouldBe TagBucket.ALL
-        all.tagsAll shouldContainExactly listOf(tag)
-
-        val any = cycleTag(all, tag)
-        tagBucket(any, tag) shouldBe TagBucket.ANY
-        any.tagsAny shouldContainExactly listOf(tag)
-
-        val none = cycleTag(any, tag)
-        tagBucket(none, tag) shouldBe TagBucket.NONE
-        none.tagsNone shouldContainExactly listOf(tag)
-
-        val off = cycleTag(none, tag)
-        tagBucket(off, tag) shouldBe TagBucket.OFF
-        off shouldBe LibraryFilter()
-    }
-
-    @Test
-    fun eachCycleStepLeavesTheTagInExactlyOneBucket() {
         var filter = LibraryFilter()
-        val tag = "x"
-        // Walk the whole loop and assert the strip-first invariant at every step: the tag is never
-        // present in more than one of the three bucket lists at once.
-        repeat(4) {
-            filter = cycleTag(filter, tag)
-            val presentIn =
-                listOf(filter.tagsAll, filter.tagsAny, filter.tagsNone).count { tag in it }
-            presentIn shouldBe if (tagBucket(filter, tag) == TagBucket.OFF) 0 else 1
+        // Each placement must be absolute, whatever the tag's previous bucket was: the tag is
+        // never present in more than one of the three bucket lists at once.
+        listOf(TagBucket.ALL, TagBucket.ANY, TagBucket.NONE, TagBucket.OFF).forEach { bucket ->
+            filter = filter.withTag(tag, bucket)
+            tagBucket(filter, tag) shouldBe bucket
+            val presentIn = listOf(filter.tagsAll, filter.tagsAny, filter.tagsNone).count { tag in it }
+            presentIn shouldBe if (bucket == TagBucket.OFF) 0 else 1
         }
+        // Clearing a tag leaves nothing behind in any of the three lists.
+        filter shouldBe LibraryFilter()
     }
 
     @Test
-    fun cyclingStripsTheTagFromAllBucketsBeforeReplacingIt() {
-        // A hand-corrupted filter with the SAME tag in two buckets at once. Cycling must not leave a
-        // stale copy behind: after one cycle the tag lives in exactly one bucket.
+    fun placingATagStripsItFromAllBucketsFirst() {
+        // A hand-corrupted filter with the SAME tag in two buckets at once. Placing it must not
+        // leave a stale copy behind: afterwards the tag lives in exactly one bucket.
         val corrupt = LibraryFilter(tagsAll = listOf("dup"), tagsNone = listOf("dup"))
-        // tagBucket sees ALL first, so the next bucket is ANY; both the ALL and the stale NONE entry
-        // must be gone.
-        val cycled = cycleTag(corrupt, "dup")
-        cycled.tagsAll shouldContainExactly emptyList()
-        cycled.tagsNone shouldContainExactly emptyList()
-        cycled.tagsAny shouldContainExactly listOf("dup")
+        val placed = corrupt.withTag("dup", TagBucket.ANY)
+        placed.tagsAll shouldContainExactly emptyList()
+        placed.tagsNone shouldContainExactly emptyList()
+        placed.tagsAny shouldContainExactly listOf("dup")
     }
 
     @Test
-    fun cyclingOneTagLeavesOtherTagsInTheirBucketsUntouched() {
+    fun placingOneTagLeavesOtherTagsInTheirBucketsUntouched() {
         val filter =
             LibraryFilter(
                 tagsAll = listOf("keep-all"),
                 tagsAny = listOf("keep-any"),
                 tagsNone = listOf("keep-none"),
             )
-        val cycled = cycleTag(filter, "new")
-        cycled.tagsAll shouldContainExactly listOf("keep-all", "new")
-        cycled.tagsAny shouldContainExactly listOf("keep-any")
-        cycled.tagsNone shouldContainExactly listOf("keep-none")
+        val placed = filter.withTag("new", TagBucket.ALL)
+        placed.tagsAll shouldContainExactly listOf("keep-all", "new")
+        placed.tagsAny shouldContainExactly listOf("keep-any")
+        placed.tagsNone shouldContainExactly listOf("keep-none")
     }
 
     @Test

@@ -2,7 +2,6 @@
 
 package dev.npn.app.ui.detail
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,33 +12,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material.icons.filled.Cancel
 import androidx.compose.material.icons.filled.Check
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteForever
-import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.Help
-import androidx.compose.material.icons.filled.Label
-import androidx.compose.material.icons.filled.LabelOff
-import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.PushPin
-import androidx.compose.material.icons.filled.RestoreFromTrash
-import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Title
 import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.AssistChipDefaults
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
@@ -51,13 +32,13 @@ import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.PrimaryTabRow
-import androidx.compose.material3.RadioButton
+import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -65,9 +46,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.composed
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isCtrlPressed
@@ -76,33 +55,19 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.EmptyState
-import dev.npn.app.ui.common.HighlightText
 import dev.npn.app.ui.common.IsoDatePickerDialog
 import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.formatEpochDate
-import dev.npn.app.ui.common.formatEpochDateTime
-import dev.npn.app.ui.common.parseFtsSnippet
-import dev.npn.app.ui.common.parseQueryHighlight
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.TagSuggestion
-import dev.npn.core.app.DocListItem
-import dev.npn.core.app.OcrVersion
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_apply
-import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_choose_date
-import no_papers_needed.composeapp.generated.resources.common_retry
-import no_papers_needed.composeapp.generated.resources.common_unknown_error
-import no_papers_needed.composeapp.generated.resources.detail_add_field
-import no_papers_needed.composeapp.generated.resources.detail_add_tag
 import no_papers_needed.composeapp.generated.resources.detail_added
-import no_papers_needed.composeapp.generated.resources.detail_automatic_engine
-import no_papers_needed.composeapp.generated.resources.detail_choose_ocr_engine
 import no_papers_needed.composeapp.generated.resources.detail_correspondent
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_all
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_suggestion
@@ -112,38 +77,14 @@ import no_papers_needed.composeapp.generated.resources.detail_document_date_plai
 import no_papers_needed.composeapp.generated.resources.detail_document_type
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable_hint
-import no_papers_needed.composeapp.generated.resources.detail_engine
-import no_papers_needed.composeapp.generated.resources.detail_engine_ai
-import no_papers_needed.composeapp.generated.resources.detail_engine_embedded
-import no_papers_needed.composeapp.generated.resources.detail_engine_mlkit
-import no_papers_needed.composeapp.generated.resources.detail_engine_source
-import no_papers_needed.composeapp.generated.resources.detail_engine_tesseract
-import no_papers_needed.composeapp.generated.resources.detail_fields
 import no_papers_needed.composeapp.generated.resources.detail_file
-import no_papers_needed.composeapp.generated.resources.detail_history_load_failed
-import no_papers_needed.composeapp.generated.resources.detail_history_secondary
 import no_papers_needed.composeapp.generated.resources.detail_iso_date_template
 import no_papers_needed.composeapp.generated.resources.detail_location
 import no_papers_needed.composeapp.generated.resources.detail_mark_needs_review
 import no_papers_needed.composeapp.generated.resources.detail_mark_reviewed
-import no_papers_needed.composeapp.generated.resources.detail_new_field
-import no_papers_needed.composeapp.generated.resources.detail_no_history
-import no_papers_needed.composeapp.generated.resources.detail_not_available
 import no_papers_needed.composeapp.generated.resources.detail_note
-import no_papers_needed.composeapp.generated.resources.detail_note_save_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr
-import no_papers_needed.composeapp.generated.resources.detail_ocr_adopted
-import no_papers_needed.composeapp.generated.resources.detail_ocr_done
-import no_papers_needed.composeapp.generated.resources.detail_ocr_failed
-import no_papers_needed.composeapp.generated.resources.detail_ocr_not_processed
-import no_papers_needed.composeapp.generated.resources.detail_ocr_queued
 import no_papers_needed.composeapp.generated.resources.detail_pages
-import no_papers_needed.composeapp.generated.resources.detail_pinned_engine
-import no_papers_needed.composeapp.generated.resources.detail_remove_field
-import no_papers_needed.composeapp.generated.resources.detail_save_note
-import no_papers_needed.composeapp.generated.resources.detail_saved
-import no_papers_needed.composeapp.generated.resources.detail_saving
-import no_papers_needed.composeapp.generated.resources.detail_search_text_engine
 import no_papers_needed.composeapp.generated.resources.detail_suggest_metadata
 import no_papers_needed.composeapp.generated.resources.detail_suggest_tags
 import no_papers_needed.composeapp.generated.resources.detail_tab_details
@@ -151,22 +92,18 @@ import no_papers_needed.composeapp.generated.resources.detail_tab_history
 import no_papers_needed.composeapp.generated.resources.detail_tab_preview
 import no_papers_needed.composeapp.generated.resources.detail_tab_text
 import no_papers_needed.composeapp.generated.resources.detail_tags
-import no_papers_needed.composeapp.generated.resources.detail_text_failed
-import no_papers_needed.composeapp.generated.resources.detail_text_not_extracted
-import no_papers_needed.composeapp.generated.resources.detail_text_queued
-import no_papers_needed.composeapp.generated.resources.detail_text_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_title
 import no_papers_needed.composeapp.generated.resources.detail_title_hint
-import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
 import no_papers_needed.composeapp.generated.resources.detail_use_suggestion
-import no_papers_needed.composeapp.generated.resources.detail_value
+import no_papers_needed.composeapp.generated.resources.ux_show_suggestions
+import no_papers_needed.composeapp.generated.resources.ux_tags_saved
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * Side panel for one document with three tabs: **Details** (editable metadata — title,
  * correspondent, docType, docDate, custom fields, tags, and file/OCR facts), **Text** (the
  * extracted OCR/embedded full text), and **History** (immutable journal timeline). Text fields
- * commit on focus loss through [MetadataActions.edit]; correspondent/docType/field-keys offer
+ * update the shared draft through [MetadataActions.edit]; correspondent/docType/field-keys offer
  * existing values as suggestions.
  *
  * Everything shown comes from [state] (assembled by `DocDetailViewModel.metadata`) and everything
@@ -178,7 +115,7 @@ import org.jetbrains.compose.resources.stringResource
  * next to the panel there.
  */
 @Composable
-fun MetadataPanel(
+internal fun MetadataTabs(
     state: MetadataUiState,
     actions: MetadataActions,
     previewTab: (@Composable (Modifier) -> Unit)? = null,
@@ -219,7 +156,7 @@ fun MetadataPanel(
             }
         },
     ) {
-        PrimaryTabRow(selectedTabIndex = tabs.indexOf(tab)) {
+        PrimaryScrollableTabRow(selectedTabIndex = tabs.indexOf(tab), edgePadding = 0.dp) {
             tabs.forEach { t ->
                 Tab(
                     selected = tab == t,
@@ -232,6 +169,7 @@ fun MetadataPanel(
                                 PanelTab.TEXT -> stringResource(Res.string.detail_tab_text)
                                 PanelTab.HISTORY -> stringResource(Res.string.detail_tab_history)
                             },
+                            maxLines = 1,
                         )
                     },
                 )
@@ -273,7 +211,7 @@ fun MetadataPanel(
 }
 
 @Composable
-private fun DocumentUnavailable(modifier: Modifier = Modifier) {
+internal fun DocumentUnavailable(modifier: Modifier = Modifier) {
     Box(modifier.fillMaxWidth()) {
         EmptyState(
             icon = Icons.Filled.Delete,
@@ -305,9 +243,6 @@ private fun DetailsTab(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ReviewStatusSection(state.document.reviewMode, state.document.reviewed, edit.onSetReviewed)
-        if (StandardField.NOTES in visibleFields) {
-            NoteSection(state.note, edit.onNoteChange, edit.onSaveNote)
-        }
         DocumentPropertiesSection(
             title = doc.title,
             fileName = doc.fileName,
@@ -323,6 +258,9 @@ private fun DetailsTab(
             visibleFields = visibleFields,
         )
 
+        if (StandardField.NOTES in visibleFields) {
+            NoteSection(doc.notes.orEmpty(), edit.onNoteChange)
+        }
         AiMetadataSuggestions(
             available = state.ai.tags.available == true,
             state = state.ai.metadata,
@@ -345,6 +283,7 @@ private fun DetailsTab(
             style = MaterialTheme.typography.labelLarge,
             color = MaterialTheme.colorScheme.primary,
         )
+        Text(stringResource(Res.string.ux_tags_saved), style = MaterialTheme.typography.bodySmall)
         TagEditor(
             tags = item.tags,
             allTagNames = vocabulary.allTagNames,
@@ -391,7 +330,8 @@ private fun ReviewStatusSection(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         ReviewedBadge(reviewed)
-        OutlinedButton(onClick = { onSetReviewed(!reviewed) }) {
+        // Writes straight through (it also commits the draft), so it follows the save bar's rules.
+        OutlinedButton(onClick = { onSetReviewed(!reviewed) }, enabled = !LocalDocumentWriteBlocked.current) {
             Text(
                 stringResource(
                     if (reviewed) Res.string.detail_mark_needs_review else Res.string.detail_mark_reviewed,
@@ -403,68 +343,24 @@ private fun ReviewStatusSection(
 
 @Composable
 private fun NoteSection(
-    noteEditor: NoteEditorState,
+    note: String,
     onNoteChange: (String) -> Unit,
-    onSaveNote: () -> Unit,
 ) {
+    // Matters most here: a note is prose, so spaces at the end of what is typed so far are
+    // constant. See [rememberFieldText].
+    var text by rememberFieldText(note)
     OutlinedTextField(
-        value = noteEditor.draft,
-        onValueChange = onNoteChange,
+        value = text,
+        onValueChange = {
+            text = it
+            onNoteChange(it)
+        },
         label = { Text(stringResource(Res.string.detail_note)) },
         minLines = 4,
         maxLines = 10,
         modifier = Modifier.fillMaxWidth(),
     )
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(
-            noteSaveLabel(noteEditor),
-            style = MaterialTheme.typography.bodySmall,
-            color =
-                if (noteEditor.saveState is NoteSaveState.Error) {
-                    MaterialTheme.colorScheme.error
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
-        )
-        Button(
-            onClick = onSaveNote,
-            enabled = noteEditor.dirty && noteEditor.saveState != NoteSaveState.Saving,
-        ) {
-            if (noteEditor.saveState == NoteSaveState.Saving) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
-            } else {
-                Text(stringResource(Res.string.detail_save_note))
-            }
-        }
-    }
 }
-
-@Composable
-private fun noteSaveLabel(noteEditor: NoteEditorState): String =
-    when (val state = noteEditor.saveState) {
-        NoteSaveState.Idle -> {
-            if (noteEditor.dirty) stringResource(Res.string.detail_unsaved_changes) else ""
-        }
-
-        NoteSaveState.Saving -> {
-            stringResource(Res.string.detail_saving)
-        }
-
-        NoteSaveState.Saved -> {
-            stringResource(Res.string.detail_saved)
-        }
-
-        is NoteSaveState.Error -> {
-            stringResource(
-                Res.string.detail_note_save_failed,
-                state.message.ifBlank { stringResource(Res.string.common_unknown_error) },
-            )
-        }
-    }
 
 @Composable
 private fun DocumentPropertiesSection(
@@ -518,27 +414,24 @@ private fun DocumentPropertiesSection(
     }
 }
 
-/**
- * Document-date field: manual ISO entry via [CommitTextField] plus a trailing calendar action that
- * opens an [IsoDatePickerDialog]. Picking commits immediately and also seeds the field's text (keyed
- * on [docDate] so it resets when the doc changes) so the blur-commit never fires with stale text.
- */
+/** Date entry and calendar selection both update the same document draft. */
 @Composable
 private fun DocumentDateField(
     docDate: String?,
     onCommit: (String) -> Unit,
 ) {
     var showPicker by remember { mutableStateOf(false) }
-    var picked by remember(docDate) { mutableStateOf<String?>(null) }
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         CommitTextField(
-            label = stringResource(Res.string.detail_document_date),
-            initial = picked ?: docDate.orEmpty(),
+            label = stringResource(Res.string.detail_document_date_plain),
+            initial = docDate.orEmpty(),
             placeholder = stringResource(Res.string.detail_iso_date_template),
+            // Same rule the save bar enforces, so the field and the bar never disagree.
+            isError = !isWritableDate(docDate),
             modifier = Modifier.weight(1f),
             onCommit = onCommit,
         )
@@ -555,7 +448,6 @@ private fun DocumentDateField(
             title = stringResource(Res.string.detail_document_date),
             onSelect = { iso ->
                 showPicker = false
-                picked = iso.orEmpty()
                 onCommit(iso.orEmpty())
             },
             onDismiss = { showPicker = false },
@@ -618,28 +510,18 @@ private fun AiTagChip(
     onDismiss: (String) -> Unit,
 ) {
     val tag = suggestion.tag
-    InputChip(
-        selected = false,
-        onClick = { onAccept(tag) },
-        label = { TagSuggestionLabel(tag = tag, isNew = suggestion.isNew) },
-        leadingIcon = {
-            Icon(
-                Icons.Filled.Add,
-                contentDescription = stringResource(Res.string.detail_add_tag, tag),
-                modifier = Modifier.size(AssistChipDefaults.IconSize),
-            )
-        },
-        trailingIcon = {
-            Icon(
-                Icons.Filled.Close,
-                contentDescription = stringResource(Res.string.detail_dismiss_tag, tag),
-                modifier =
-                    Modifier
-                        .size(AssistChipDefaults.IconSize)
-                        .clickable { onDismiss(tag) },
-            )
-        },
-    )
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        InputChip(
+            modifier = Modifier.weight(1f, fill = false),
+            selected = false,
+            onClick = { onAccept(tag) },
+            label = { TagSuggestionLabel(tag = tag, isNew = suggestion.isNew) },
+            leadingIcon = { Icon(Icons.Filled.Add, contentDescription = null, modifier = Modifier.size(18.dp)) },
+        )
+        IconButton(onClick = { onDismiss(tag) }) {
+            Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.detail_dismiss_tag, tag))
+        }
+    }
 }
 
 /**
@@ -739,47 +621,50 @@ private fun AiMetadataSuggestionRow(
     }
 }
 
-/** Text field that commits its value when the user leaves the field (focus lost) or edits stop. */
+/**
+ * The text a field is showing: its own keystrokes, seeded and re-seeded from [external].
+ *
+ * A field cannot render [external] directly. It arrives through the draft overlay, and the draft
+ * store treats a value that only differs in surrounding whitespace as no change at all — so typing
+ * a space at the end of a value hands back the value without it, and the space is swallowed as the
+ * user types. Comparing trimmed forms makes that round trip a no-op here too, while an edit from
+ * anywhere else — switching document, discarding the draft, accepting a suggestion, picking a date
+ * — still replaces what is on screen.
+ */
+@Composable
+private fun rememberFieldText(external: String): MutableState<String> {
+    val text = remember { mutableStateOf(external) }
+    if (external.trim() != text.value.trim()) text.value = external
+    return text
+}
+
+/**
+ * Text field that reports every keystroke through [onCommit], which the document editor turns into
+ * a draft edit. The keystrokes themselves live in local state — see [rememberFieldText].
+ */
 @Composable
 internal fun CommitTextField(
     label: String,
     initial: String,
     placeholder: String? = null,
     modifier: Modifier = Modifier,
+    isError: Boolean = false,
     onCommit: (String) -> Unit,
 ) {
-    var text by remember(initial) { mutableStateOf(initial) }
+    var text by rememberFieldText(initial)
     OutlinedTextField(
         value = text,
-        onValueChange = { text = it },
+        onValueChange = {
+            text = it
+            onCommit(it)
+        },
+        isError = isError,
         label = { Text(label) },
         placeholder = placeholder?.let { { Text(it, maxLines = 1) } },
         singleLine = true,
-        modifier =
-            modifier
-                .fillMaxWidth()
-                .commitOnFocusLost(text, initial, onCommit),
+        modifier = modifier.fillMaxWidth(),
     )
 }
-
-/**
- * Fires [onCommit] with the current [value] when the field loses focus and the value changed from
- * [initial]. Keeps edits local while typing and writes a single journal event on blur.
- */
-private fun Modifier.commitOnFocusLost(
-    value: String,
-    initial: String,
-    onCommit: (String) -> Unit,
-): Modifier =
-    composed {
-        var wasFocused by remember { mutableStateOf(false) }
-        onFocusChanged { fs ->
-            if (wasFocused && !fs.isFocused) {
-                if (value.trim() != initial.trim()) onCommit(value.trim())
-            }
-            wasFocused = fs.isFocused
-        }
-    }
 
 @Composable
 private fun SuggestField(
@@ -788,39 +673,31 @@ private fun SuggestField(
     suggestions: List<String>,
     onCommit: (String) -> Unit,
 ) {
-    var text by remember(initial) { mutableStateOf(initial) }
+    var text by rememberFieldText(initial)
     var expanded by remember { mutableStateOf(false) }
-    val filtered =
-        remember(text, suggestions) {
-            val q = text.trim()
-            if (q.isEmpty()) {
-                suggestions.take(MAX_INLINE_SUGGESTIONS)
-            } else {
-                suggestions.filter { it.contains(q, ignoreCase = true) && it != q }.take(MAX_INLINE_SUGGESTIONS)
-            }
-        }
+    val filtered = remember(text, suggestions) { suggestionsFor(text, suggestions) }
     androidx.compose.foundation.layout.Box {
         OutlinedTextField(
             value = text,
             onValueChange = {
                 text = it
-                expanded = it.isNotBlank() && filtered.isNotEmpty()
+                onCommit(it)
+                // Match against the value just typed: [filtered] still describes the previous one.
+                expanded = it.isNotBlank() && suggestionsFor(it, suggestions).isNotEmpty()
             },
             label = { Text(label) },
             singleLine = true,
             trailingIcon = {
                 if (suggestions.isNotEmpty()) {
-                    Icon(
-                        Icons.Filled.ArrowDropDown,
-                        contentDescription = null,
-                        modifier = Modifier.clickable { expanded = !expanded },
-                    )
+                    IconButton(onClick = { expanded = !expanded }) {
+                        Icon(
+                            Icons.Filled.ArrowDropDown,
+                            contentDescription = stringResource(Res.string.ux_show_suggestions),
+                        )
+                    }
                 }
             },
-            modifier =
-                Modifier
-                    .fillMaxWidth()
-                    .commitOnFocusLost(text, initial, onCommit),
+            modifier = Modifier.fillMaxWidth(),
         )
         DropdownMenu(
             expanded = expanded && filtered.isNotEmpty(),
@@ -833,14 +710,24 @@ private fun SuggestField(
                 DropdownMenuItem(
                     text = { Text(s) },
                     onClick = {
-                        text = s
                         expanded = false
+                        text = s
                         onCommit(s)
                     },
                 )
             }
         }
     }
+}
+
+/** Existing values worth offering for [text]; an exact match offers nothing (it is already typed). */
+private fun suggestionsFor(
+    text: String,
+    suggestions: List<String>,
+): List<String> {
+    val query = text.trim()
+    if (query.isEmpty()) return suggestions.take(MAX_INLINE_SUGGESTIONS)
+    return suggestions.filter { it.contains(query, ignoreCase = true) && it != query }.take(MAX_INLINE_SUGGESTIONS)
 }
 
 @Composable

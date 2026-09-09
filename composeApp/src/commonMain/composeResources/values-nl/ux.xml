@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ux_sync_help">Op meerdere apparaten gebruiken</string>
+    <string name="ux_library_name">Mijn documenten</string>
+    <string name="ux_match_all">Alle geselecteerde tags</string>
+    <string name="ux_match_any">Een van de geselecteerde tags</string>
+    <string name="ux_include_tags">Tags opnemen</string>
+    <string name="ux_exclude_tags">Tags uitsluiten</string>
+    <string name="ux_mixed_tags">Deze weergave vereist elke tag uit de groep Alle geselecteerde tags en minstens één uit de groep Een van de geselecteerde tags. Kies één modus om ze samen te voegen tot één groep.</string>
+    <string name="ux_no_matching_tags">Geen tags gevonden voor deze zoekopdracht.</string>
+    <string name="ux_refine_tag_search">Verfijn je zoekopdracht om de overige tags te zien.</string>
+    <string name="ux_review_count">Te beoordelen · %1$d</string>
+    <string name="ux_review_next">Beoordelen en volgende</string>
+    <string name="ux_review_finish">Beoordelen en afronden</string>
+    <string name="ux_expand_document">Documentwerkruimte vergroten</string>
+    <string name="ux_resize_panes">Document en details anders verdelen</string>
+    <string name="ux_save_changes">Wijzigingen opslaan</string>
+    <string name="ux_save_failed">Kon wijzigingen niet opslaan: %1$s</string>
+    <string name="ux_drafts_count">Niet-opgeslagen documenten: %1$d</string>
+    <string name="ux_resume_draft">Verder bewerken</string>
+    <string name="ux_draft_hint">Je concept blijft bewaard wanneer je van document wisselt. Sla op om je wijzigingen toe te passen.</string>
+    <string name="ux_discard">Wijzigingen verwerpen</string>
+    <string name="ux_discard_prompt">Niet-opgeslagen wijzigingen aan dit document verwerpen?</string>
+    <string name="ux_tags_saved">Tags en geaccepteerde suggesties worden direct opgeslagen.</string>
+    <string name="ux_date_invalid">Voer een geldige datum in als jjjj-MM-dd.</string>
+    <string name="ux_show_suggestions">Suggesties tonen</string>
+    <string name="ux_discard_short">Verwerpen</string>
+    <string name="ux_library_draft_warning">Sla je documentconcepten op of verwerp ze voordat je een andere bibliotheek opent.</string>
+</resources>

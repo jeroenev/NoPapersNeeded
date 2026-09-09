@@ -63,26 +63,6 @@ data class DetailUiState(
     val aiOcr: AiOcrOffer = AiOcrOffer.Unavailable,
 )
 
-sealed interface NoteSaveState {
-    data object Idle : NoteSaveState
-
-    data object Saving : NoteSaveState
-
-    data object Saved : NoteSaveState
-
-    data class Error(
-        val message: String,
-    ) : NoteSaveState
-}
-
-data class NoteEditorState(
-    val draft: String = "",
-    val persisted: String = "",
-    val saveState: NoteSaveState = NoteSaveState.Idle,
-) {
-    val dirty: Boolean get() = draft != persisted
-}
-
 sealed interface HistoryUiState {
     data object NotLoaded : HistoryUiState
 
@@ -176,7 +156,6 @@ class DocDetailViewModel(
     private val _ui = MutableStateFlow(DetailUiState())
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
     private val metadataMutex = Mutex()
-    private val noteEditor = MutableStateFlow(NoteEditorState())
 
     /**
      * Search terms from the library query that opened this document, used to highlight matches
@@ -276,8 +255,8 @@ class DocDetailViewModel(
      * test.
      */
     val metadata: StateFlow<MetadataUiState> =
-        combine(document, vocabulary, noteEditor, aiPanel, history) { doc, vocab, note, ai, history ->
-            MetadataUiState(document = doc, vocabulary = vocab, note = note, ai = ai, history = history)
+        combine(document, vocabulary, aiPanel, history) { doc, vocab, ai, history ->
+            MetadataUiState(document = doc, vocabulary = vocab, ai = ai, history = history)
         }.stateIn(viewModelScope, WhileSubscribedTimeout, seedState(initialItem))
 
     /**
@@ -307,22 +286,6 @@ class DocDetailViewModel(
         viewModelScope.launch {
             val offer = runCatching { ocr.aiOcrOffer(docId) }.getOrDefault(AiOcrOffer.Unavailable)
             _ui.update { it.copy(aiOcr = offer) }
-        }
-        // Sync the note editor's persisted value from the already-shared [doc] StateFlow instead of
-        // subscribing to observeDoc a second time (that would double the Room invalidation wiring).
-        viewModelScope.launch {
-            doc
-                .map { it?.doc?.notes.orEmpty() }
-                .distinctUntilChanged()
-                .collect { persisted ->
-                    noteEditor.update { current ->
-                        if (current.dirty) {
-                            current.copy(persisted = persisted)
-                        } else {
-                            current.copy(draft = persisted, persisted = persisted)
-                        }
-                    }
-                }
         }
     }
 
@@ -355,34 +318,7 @@ class DocDetailViewModel(
     fun setTitle(title: String?) =
         launchMetadata(UiAction.SAVE_TITLE) { meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
 
-    fun updateNoteDraft(value: String) {
-        noteEditor.update { it.copy(draft = value, saveState = NoteSaveState.Idle) }
-    }
-
-    fun saveNote() {
-        val current = noteEditor.value
-        if (!current.dirty || current.saveState == NoteSaveState.Saving) return
-        noteEditor.update { it.copy(saveState = NoteSaveState.Saving) }
-        viewModelScope.launch {
-            runCatching {
-                metadataMutex.withLock { meta.setNotes(docId, current.draft) }
-            }.fold(
-                onSuccess = {
-                    noteEditor.update { latest ->
-                        latest.copy(
-                            persisted = current.draft.takeUnless { it.isBlank() }.orEmpty(),
-                            saveState = NoteSaveState.Saved,
-                        )
-                    }
-                },
-                onFailure = { error ->
-                    noteEditor.update {
-                        it.copy(saveState = NoteSaveState.Error(error.message.orEmpty()))
-                    }
-                },
-            )
-        }
-    }
+    fun setNotes(value: String) = launchMetadata(UiAction.SAVE_NOTE) { meta.setNotes(docId, value) }
 
     fun setCorrespondent(value: String?) =
         launchMetadata(UiAction.SAVE_CORRESPONDENT) {

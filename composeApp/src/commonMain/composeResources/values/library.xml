@@ -5,7 +5,6 @@
     <string name="library_filters">Filters</string>
     <string name="library_switch_view">Switch to %1$s view</string>
     <string name="library_sort">Sort</string>
-    <string name="library_sort_by">Sort by</string>
     <string name="library_sort_name">Name</string>
     <string name="library_sort_added">Added</string>
     <string name="library_sort_doc_date">Document date</string>
@@ -81,7 +80,6 @@
     <string name="library_preview_close">Close preview</string>
 
     <string name="library_clear_all">Clear all</string>
-    <string name="library_filter_tags_help">Tags (tap to cycle: all -> any -> none)</string>
     <string name="library_no_tags_yet">No tags yet</string>
     <string name="library_reviewed_filter">Reviewed</string>
     <string name="library_correspondent_filter">Correspondent</string>

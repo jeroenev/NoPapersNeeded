@@ -10,7 +10,9 @@ import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -40,6 +42,8 @@ import no_papers_needed.composeapp.generated.resources.common_onboarding_intro
 import no_papers_needed.composeapp.generated.resources.common_onboarding_sync
 import no_papers_needed.composeapp.generated.resources.common_opening_library
 import no_papers_needed.composeapp.generated.resources.common_try_again
+import no_papers_needed.composeapp.generated.resources.ux_library_name
+import no_papers_needed.composeapp.generated.resources.ux_sync_help
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -48,6 +52,7 @@ fun OnboardingScreen(env: AppEnvironment) {
     val opening by env.opening.collectAsStateWithLifecycle()
     val error by env.openError.collectAsStateWithLifecycle()
 
+    var showSyncHelp by remember { mutableStateOf(false) }
     var createParent by remember { mutableStateOf<String?>(null) }
     var createError by remember { mutableStateOf<String?>(null) }
 
@@ -93,12 +98,16 @@ fun OnboardingScreen(env: AppEnvironment) {
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
-            Text(
-                text = stringResource(Res.string.common_onboarding_sync),
-                style = MaterialTheme.typography.bodyMedium,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
+            TextButton(onClick = { showSyncHelp = !showSyncHelp }) {
+                Text(stringResource(Res.string.ux_sync_help))
+            }
+            if (showSyncHelp) {
+                Text(
+                    text = stringResource(Res.string.common_onboarding_sync),
+                    style = MaterialTheme.typography.bodyMedium,
+                    textAlign = TextAlign.Center,
+                )
+            }
 
             if (opening) {
                 CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
@@ -107,15 +116,16 @@ fun OnboardingScreen(env: AppEnvironment) {
                     style = MaterialTheme.typography.bodyMedium,
                 )
             } else {
-                Button(
-                    onClick = { picker.launch() },
-                    modifier = Modifier.padding(top = 16.dp),
-                ) {
-                    Text(stringResource(Res.string.common_choose_library_folder))
-                }
                 if (supportsLibraryFolderCreation()) {
                     Button(onClick = { createPicker.launch() }) {
                         Text(stringResource(Res.string.common_create_new_library))
+                    }
+                    OutlinedButton(onClick = { picker.launch() }) {
+                        Text(stringResource(Res.string.common_choose_library_folder))
+                    }
+                } else {
+                    Button(onClick = { picker.launch() }) {
+                        Text(stringResource(Res.string.common_choose_library_folder))
                     }
                 }
             }
@@ -146,7 +156,7 @@ fun OnboardingScreen(env: AppEnvironment) {
         TextInputDialog(
             title = stringResource(Res.string.common_create_new_library),
             label = stringResource(Res.string.common_new_library_folder_name),
-            initial = "My documents",
+            initial = stringResource(Res.string.ux_library_name),
             confirmLabel = stringResource(Res.string.common_create),
             onConfirm = { name ->
                 createParent = null

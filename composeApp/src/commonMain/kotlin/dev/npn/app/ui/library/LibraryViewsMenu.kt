@@ -10,7 +10,6 @@ import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.PushPin
 import androidx.compose.material.icons.outlined.Bookmarks
 import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.HorizontalDivider
@@ -25,6 +24,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.core.app.SavedView
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
@@ -64,13 +64,19 @@ internal fun LibraryViewsMenuButton(
     var open by remember { mutableStateOf(false) }
     val inbox = reviewMode == ReviewMode.INBOX_WORKFLOW
     Box {
-        IconButton(onClick = { open = true }) {
-            // A backlog of untagged documents is normal, so the attention badge only signals an
-            // inbox-workflow review queue that needs clearing (same rule as the old drawer).
-            BadgedBox(badge = { if (inbox && reviewBadge > 0) Badge { Text(reviewBadge.toString()) } }) {
-                Icon(Icons.Outlined.Bookmarks, contentDescription = stringResource(Res.string.library_views))
-            }
-        }
+        TooltipIconButton(
+            icon = Icons.Outlined.Bookmarks,
+            label = stringResource(Res.string.library_views),
+            onClick = { open = true },
+            badge = {
+                if (inbox && reviewBadge > 0) {
+                    Badge(
+                        containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                    ) { Text(reviewBadge.toString()) }
+                }
+            },
+        )
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
             fun dismissThen(action: () -> Unit) {
                 open = false
@@ -90,7 +96,14 @@ internal fun LibraryViewsMenuButton(
                     )
                 },
                 leadingIcon = { Icon(Icons.Filled.Inbox, contentDescription = null) },
-                trailingIcon = { if (inbox && reviewBadge > 0) Badge { Text(reviewBadge.toString()) } },
+                trailingIcon = {
+                    if (inbox && reviewBadge > 0) {
+                        Badge(
+                            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+                            contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+                        ) { Text(reviewBadge.toString()) }
+                    }
+                },
                 onClick = { dismissThen(onReviewQueue) },
             )
             HorizontalDivider(Modifier.padding(vertical = 4.dp))

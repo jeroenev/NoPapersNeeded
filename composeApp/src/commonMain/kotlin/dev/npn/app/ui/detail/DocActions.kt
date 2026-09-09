@@ -12,7 +12,6 @@ import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -24,6 +23,7 @@ import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TextInputDialog
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.sharePdfBytes
 import dev.npn.app.ui.common.supportsSharing
 import dev.npn.core.app.AiOcrOffer
@@ -156,34 +156,32 @@ private fun ShareOrExportButton(
         }
 
     if (supportsSharing()) {
-        IconButton(onClick = {
-            scope.launch {
-                val bytes = vm.bakedCopyBytes()
-                if (bytes != null) {
-                    runCatching { sharePdfBytes(exportName(item) + ".pdf", bytes) }
-                        .onSuccess { snackbar.showSnackbar(sharedBakedCopy) }
-                        .onFailure {
-                            snackbar.showSnackbar(
-                                getString(Res.string.detail_share_failed, it.message ?: unknownError),
-                            )
-                        }
-                } else {
-                    snackbar.showSnackbar(couldNotBakeCopy)
+        TooltipIconButton(
+            icon = Icons.Filled.Share,
+            label = stringResource(Res.string.detail_share_baked_copy),
+            onClick = {
+                scope.launch {
+                    val bytes = vm.bakedCopyBytes()
+                    if (bytes != null) {
+                        runCatching { sharePdfBytes(exportName(item) + ".pdf", bytes) }
+                            .onSuccess { snackbar.showSnackbar(sharedBakedCopy) }
+                            .onFailure {
+                                snackbar.showSnackbar(
+                                    getString(Res.string.detail_share_failed, it.message ?: unknownError),
+                                )
+                            }
+                    } else {
+                        snackbar.showSnackbar(couldNotBakeCopy)
+                    }
                 }
-            }
-        }) {
-            Icon(
-                Icons.Filled.Share,
-                contentDescription = stringResource(Res.string.detail_share_baked_copy),
-            )
-        }
+            },
+        )
     } else {
-        IconButton(onClick = { saver.launch(suggestedName = exportName(item), defaultExtension = "pdf") }) {
-            Icon(
-                Icons.Filled.Save,
-                contentDescription = stringResource(Res.string.detail_export_baked_copy),
-            )
-        }
+        TooltipIconButton(
+            icon = Icons.Filled.Save,
+            label = stringResource(Res.string.detail_export_baked_copy),
+            onClick = { saver.launch(suggestedName = exportName(item), defaultExtension = "pdf") },
+        )
     }
 }
 
@@ -204,12 +202,7 @@ private fun DocActionsMenu(
 ) {
     var menu by remember { mutableStateOf(false) }
     Box {
-        IconButton(onClick = { menu = true }) {
-            Icon(
-                Icons.Filled.MoreVert,
-                contentDescription = stringResource(Res.string.detail_more_actions),
-            )
-        }
+        TooltipIconButton(Icons.Filled.MoreVert, stringResource(Res.string.detail_more_actions), { menu = true })
         DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
             DropdownMenuItem(
                 text = { Text(stringResource(Res.string.detail_rename_file)) },

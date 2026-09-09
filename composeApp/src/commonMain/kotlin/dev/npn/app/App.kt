@@ -8,6 +8,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Warning
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -15,6 +16,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,6 +47,9 @@ import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.detail.DocDetailScreen
+import dev.npn.app.ui.detail.DocumentDraftHost
+import dev.npn.app.ui.detail.LocalDocumentDrafts
+import dev.npn.app.ui.detail.WithDraftResumeBanner
 import dev.npn.app.ui.library.LibraryFilterHandoff
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.AiDestination
@@ -65,14 +70,18 @@ import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLaunche
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
+import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_open_library_title
 import no_papers_needed.composeapp.generated.resources.common_open_saved_library_failed
 import no_papers_needed.composeapp.generated.resources.common_opening_library
 import no_papers_needed.composeapp.generated.resources.common_pick_folder_again
 import no_papers_needed.composeapp.generated.resources.common_retry
+import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
 import no_papers_needed.composeapp.generated.resources.library_settings
 import no_papers_needed.composeapp.generated.resources.library_tags
 import no_papers_needed.composeapp.generated.resources.library_trash
+import no_papers_needed.composeapp.generated.resources.ux_library_draft_warning
+import no_papers_needed.composeapp.generated.resources.ux_resume_draft
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -131,7 +140,7 @@ private fun AppRoot(env: AppEnvironment) {
         }
 
         else -> {
-            MainNav(env = env, session = current)
+            DocumentDraftHost(current, env.appScope) { MainNav(env = env, session = current) }
         }
     }
 }
@@ -168,30 +177,40 @@ private fun MainNav(
     val libraryFilterHandoff = remember { LibraryFilterHandoff() }
 
     DriveWindowTitle(nav)
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val aiEditInSidebar = maxWidth > WideLayoutBreakpoint
-        NavigationShell(
-            current = nav.currentTopLevelDestination(),
-            aiCurrent = nav.currentAiDestination(),
-            aiConfigured = aiConfigured,
-            queue = queue,
-            onNavigate = { dest -> nav.navigateTopLevel(dest) },
-            onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
-            onAiEdit = {
-                aiSelection.set(emptyList())
-                nav.navigateAi(Route.AiEdit)
-            },
-        ) {
-            MainNavHost(
-                nav = nav,
-                env = env,
-                session = session,
-                browse = browse,
+    WithDraftResumeBanner(
+        onOpen = { docId ->
+            browse.setOrder(listOf(docId), null)
+            nav.navigate(Route.DocDetail(docId)) {
+                popUpTo(Route.Library)
+                launchSingleTop = true
+            }
+        },
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val aiEditInSidebar = maxWidth > WideLayoutBreakpoint
+            NavigationShell(
+                current = nav.currentTopLevelDestination(),
+                aiCurrent = nav.currentAiDestination(),
                 aiConfigured = aiConfigured,
-                aiSelection = aiSelection,
-                libraryFilterHandoff = libraryFilterHandoff,
-                showAiEditTopBar = !aiEditInSidebar,
-            )
+                queue = queue,
+                onNavigate = { dest -> nav.navigateTopLevel(dest) },
+                onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
+                onAiEdit = {
+                    aiSelection.set(emptyList())
+                    nav.navigateAi(Route.AiEdit)
+                },
+            ) {
+                MainNavHost(
+                    nav = nav,
+                    env = env,
+                    session = session,
+                    browse = browse,
+                    aiConfigured = aiConfigured,
+                    aiSelection = aiSelection,
+                    libraryFilterHandoff = libraryFilterHandoff,
+                    showAiEditTopBar = !aiEditInSidebar,
+                )
+            }
         }
     }
 }
@@ -232,8 +251,9 @@ private fun MainNavHost(
                 docId = route.docId,
                 session = session,
                 browse = browse,
-                onBack = { nav.popBackStack() },
+                onBack = { if (nav.currentBackStackEntry == entry) nav.popBackStack() },
                 onNavigateToDoc = { targetId ->
+                    if (nav.currentBackStackEntry != entry) return@DocDetailScreen
                     // Replace the current detail route so the back stack stays "library -> detail".
                     nav.navigate(Route.DocDetail(targetId)) {
                         popUpTo(Route.DocDetail(route.docId)) { inclusive = true }
@@ -261,7 +281,7 @@ private fun MainNavHost(
                 onOpenEditRun = { jobId -> nav.navigate(Route.AiEditReview(jobId)) },
             )
         }
-        settingsRoutes(nav, env, session)
+        settingsRoutes(nav, env, session, browse)
         aiRoutes(nav, session, env.settings, aiSelection, libraryFilterHandoff, showAiEditTopBar)
     }
 }
@@ -271,8 +291,14 @@ private fun NavGraphBuilder.settingsRoutes(
     nav: NavHostController,
     env: AppEnvironment,
     session: dev.npn.core.app.LibrarySession,
+    browse: dev.npn.app.ui.detail.BrowseContext,
 ) {
     composable<Route.Settings> { entry ->
+        val draftStore = LocalDocumentDrafts.current
+        // Holds the document id to resume, resolved when the dialog opens with the same predicate
+        // the confirm button uses — so "Resume draft" always has somewhere to go, even when the
+        // only unsaved work is an in-flight save with no dirty entry.
+        var draftWarning by remember { mutableStateOf<String?>(null) }
         val changePicker =
             rememberDirectoryPickerLauncher { dir ->
                 if (dir != null) {
@@ -288,9 +314,40 @@ private fun NavGraphBuilder.settingsRoutes(
             category = SettingsCategoryId.fromRouteKey(entry.toRoute<Route.Settings>().category),
             onOpenCategory = { id -> nav.navigate(Route.Settings(id.routeKey)) },
             onBack = { nav.popBackStack() },
-            onChangeLibrary = { changePicker.launch() },
+            onChangeLibrary = {
+                val pending = draftStore.state.entries.firstOrNull { it.value.dirty || it.value.saving }
+                if (pending != null) {
+                    draftWarning = pending.key
+                } else {
+                    changePicker.launch()
+                }
+            },
             onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
         )
+        draftWarning?.let { docId ->
+            AlertDialog(
+                onDismissRequest = { draftWarning = null },
+                title = { Text(stringResource(Res.string.detail_unsaved_changes)) },
+                text = { Text(stringResource(Res.string.ux_library_draft_warning)) },
+                confirmButton = {
+                    TextButton(onClick = {
+                        draftWarning = null
+                        // Mirror the resume banner: land back on Library with the detail on top,
+                        // so Back returns to the library rather than the settings stack.
+                        browse.setOrder(listOf(docId), null)
+                        nav.navigate(Route.DocDetail(docId)) {
+                            popUpTo(Route.Library)
+                            launchSingleTop = true
+                        }
+                    }) { Text(stringResource(Res.string.ux_resume_draft)) }
+                },
+                dismissButton = {
+                    TextButton(
+                        onClick = { draftWarning = null },
+                    ) { Text(stringResource(Res.string.common_cancel)) }
+                },
+            )
+        }
     }
     composable<Route.AutoMatchRules> {
         AutoMatchRulesScreen(

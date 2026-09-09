@@ -9,7 +9,6 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
@@ -55,7 +54,6 @@ import no_papers_needed.composeapp.generated.resources.library_clear_all
 import no_papers_needed.composeapp.generated.resources.library_correspondent_filter
 import no_papers_needed.composeapp.generated.resources.library_document_date_filter
 import no_papers_needed.composeapp.generated.resources.library_document_type_filter
-import no_papers_needed.composeapp.generated.resources.library_filter_tags_help
 import no_papers_needed.composeapp.generated.resources.library_filters
 import no_papers_needed.composeapp.generated.resources.library_from
 import no_papers_needed.composeapp.generated.resources.library_no_tags_yet
@@ -63,19 +61,29 @@ import no_papers_needed.composeapp.generated.resources.library_reviewed_filter
 import no_papers_needed.composeapp.generated.resources.library_search_correspondent
 import no_papers_needed.composeapp.generated.resources.library_search_document_type
 import no_papers_needed.composeapp.generated.resources.library_search_tags
-import no_papers_needed.composeapp.generated.resources.library_tag_filter_all
-import no_papers_needed.composeapp.generated.resources.library_tag_filter_any
-import no_papers_needed.composeapp.generated.resources.library_tag_filter_none
 import no_papers_needed.composeapp.generated.resources.library_to
 import no_papers_needed.composeapp.generated.resources.library_untagged_only
+import no_papers_needed.composeapp.generated.resources.ux_exclude_tags
+import no_papers_needed.composeapp.generated.resources.ux_include_tags
+import no_papers_needed.composeapp.generated.resources.ux_match_all
+import no_papers_needed.composeapp.generated.resources.ux_match_any
+import no_papers_needed.composeapp.generated.resources.ux_mixed_tags
+import no_papers_needed.composeapp.generated.resources.ux_no_matching_tags
+import no_papers_needed.composeapp.generated.resources.ux_refine_tag_search
 import org.jetbrains.compose.resources.stringResource
 
-/** Max height of the tag multi-select list before it becomes internally scrollable. */
-private val TagListMaxHeight = 200.dp
+/**
+ * How many tag chips one include/exclude group renders before it stops and points the user at the
+ * search box instead. The whole panel scrolls as a single axis, so this bound keeps a large tag
+ * vocabulary from pushing the rest of the filter form far off-screen without nesting a second
+ * scroll region. Currently-selected tags are always shown (they are ordered first), so the cap only
+ * ever hides *unselected* tags the user can still reach by searching. ~30 comfortably fills a couple
+ * of screens of chips while staying well short of a wall of hundreds.
+ */
+private const val MAX_TAG_CHIPS_PER_GROUP = 30
 
 /**
- * Filter panel. Tag multi-select is split into three sections (AND/OR/NOT); cycling a tag
- * chip moves it OFF -> ALL -> ANY -> NONE -> OFF so each tag lands in exactly one bucket.
+ * Explicit inclusion and exclusion controls, with a draft applied by the confirmation button.
  */
 @Composable
 fun FilterSheet(
@@ -116,7 +124,7 @@ fun FilterPanel(
     fillHeight: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    var draft by remember { mutableStateOf(filter) }
+    var draft by remember(filter) { mutableStateOf(filter) }
 
     Surface(modifier = modifier, tonalElevation = 3.dp) {
         Column(if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
@@ -266,7 +274,36 @@ private fun TagFilterSection(
     filter: LibraryFilter,
     onFilterChange: (LibraryFilter) -> Unit,
 ) {
-    SectionLabel(stringResource(Res.string.library_filter_tags_help))
+    SectionLabel(stringResource(Res.string.ux_include_tags))
+    val mixed = filter.tagsAll.isNotEmpty() && filter.tagsAny.isNotEmpty()
+    var matchAll by remember { mutableStateOf(filter.tagsAny.isEmpty()) }
+    val effectiveAll =
+        when {
+            filter.tagsAll.isNotEmpty() -> true
+            filter.tagsAny.isNotEmpty() -> false
+            else -> matchAll
+        }
+    FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        FilterChip(
+            selected = !mixed && effectiveAll,
+            onClick = {
+                matchAll = true
+                onFilterChange(filter.matchIncludedTags(true))
+            },
+            label = { Text(stringResource(Res.string.ux_match_all)) },
+        )
+        FilterChip(
+            selected = !mixed && !effectiveAll,
+            onClick = {
+                matchAll = false
+                onFilterChange(filter.matchIncludedTags(false))
+            },
+            label = { Text(stringResource(Res.string.ux_match_any)) },
+        )
+    }
+    if (mixed) {
+        Text(stringResource(Res.string.ux_mixed_tags), style = MaterialTheme.typography.bodySmall)
+    }
     var tagQuery by remember { mutableStateOf("") }
     OutlinedTextField(
         value = tagQuery,
@@ -275,32 +312,68 @@ private fun TagFilterSection(
         singleLine = true,
         modifier = Modifier.fillMaxWidth(),
     )
-    val visibleTags = tags.filter { tagQuery.isBlank() || it.name.contains(tagQuery.trim(), ignoreCase = true) }
-    // Cap the list so a large tag set cannot push the rest of the sheet out of view; the search box
-    // above narrows the list when the cap clips it.
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .heightIn(max = TagListMaxHeight)
-            .verticalScroll(rememberScrollState())
-            .padding(bottom = 4.dp),
-    ) {
+    // Include saved-view tags even if the current vocabulary no longer contains them.
+    val allTags =
+        (tags.map { it.name } + filter.tagsAll + filter.tagsAny + filter.tagsNone).distinct()
+    val visibleTags = allTags.filter { it.contains(tagQuery.trim(), ignoreCase = true) }
+    // The empty state is decided once for the whole section, not per group: showing "no tags" under
+    // each of the two or three chip groups would repeat the message, and — worse — a search that
+    // simply matches nothing is a different situation from an empty vocabulary and must say so.
+    when {
+        allTags.isEmpty() -> {
+            Text(stringResource(Res.string.library_no_tags_yet))
+        }
+
+        visibleTags.isEmpty() -> {
+            Text(stringResource(Res.string.ux_no_matching_tags))
+        }
+
+        else -> {
+            // Only render the include/exclude chip groups (and the "Exclude tags" heading) when
+            // there is actually something to put in them.
+            if (mixed) {
+                SectionLabel(stringResource(Res.string.ux_match_all))
+                TagChoices(visibleTags, filter, TagBucket.ALL, onFilterChange)
+                SectionLabel(stringResource(Res.string.ux_match_any))
+                TagChoices(visibleTags, filter, TagBucket.ANY, onFilterChange)
+            } else {
+                TagChoices(visibleTags, filter, if (effectiveAll) TagBucket.ALL else TagBucket.ANY, onFilterChange)
+            }
+            SectionLabel(stringResource(Res.string.ux_exclude_tags))
+            TagChoices(visibleTags, filter, TagBucket.NONE, onFilterChange)
+        }
+    }
+}
+
+@Composable
+private fun TagChoices(
+    tags: List<String>,
+    filter: LibraryFilter,
+    bucket: TagBucket,
+    onFilterChange: (LibraryFilter) -> Unit,
+) {
+    // Tags already in this bucket come first so the cap below can never hide a selected chip:
+    // a selected tag that scrolled past the limit would read as deselected and be unreachable.
+    val ordered = tags.sortedByDescending { tagBucket(filter, it) == bucket }
+    val shown = ordered.take(MAX_TAG_CHIPS_PER_GROUP)
+    Column(Modifier.fillMaxWidth()) {
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            visibleTags.forEach { tag ->
-                val bucket = tagBucket(filter, tag.name)
+            shown.forEach { tag ->
+                val selected = tagBucket(filter, tag) == bucket
                 FilterChip(
-                    selected = bucket != TagBucket.OFF,
-                    onClick = { onFilterChange(cycleTag(filter, tag.name)) },
-                    label = { Text(tagFilterLabel(bucket, tag.name)) },
+                    selected = selected,
+                    onClick = { onFilterChange(filter.withTag(tag, if (selected) TagBucket.OFF else bucket)) },
+                    label = { Text(tag) },
                 )
             }
-            if (tags.isEmpty()) {
-                Text(
-                    stringResource(Res.string.library_no_tags_yet),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+        }
+        // The group as a whole no longer scrolls, so a truncated list points at the search box
+        // rather than silently dropping the overflow.
+        if (ordered.size > shown.size) {
+            Text(
+                stringResource(Res.string.ux_refine_tag_search),
+                style = MaterialTheme.typography.bodySmall,
+            )
         }
     }
 }
@@ -323,10 +396,9 @@ private fun FilterFieldRow(
     label: String,
     selector: @Composable () -> Unit,
 ) {
-    Row(
+    Column(
         Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
         Text(
             text = label,
@@ -434,16 +506,4 @@ private fun OptionalFilterValue.valueOrNull(): String? =
     when (this) {
         OptionalFilterValue.Any -> null
         is OptionalFilterValue.Value -> value
-    }
-
-@Composable
-private fun tagFilterLabel(
-    bucket: TagBucket,
-    tag: String,
-): String =
-    when (bucket) {
-        TagBucket.OFF -> tag
-        TagBucket.ALL -> stringResource(Res.string.library_tag_filter_all, tag)
-        TagBucket.ANY -> stringResource(Res.string.library_tag_filter_any, tag)
-        TagBucket.NONE -> stringResource(Res.string.library_tag_filter_none, tag)
     }

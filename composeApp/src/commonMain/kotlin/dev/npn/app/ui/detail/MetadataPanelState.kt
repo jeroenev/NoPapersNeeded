@@ -10,15 +10,17 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 
 /**
- * Everything [MetadataPanel] renders, in five groups assembled by
+ * Everything [MetadataPanel] renders, in four groups assembled by
  * [DocDetailViewModel.metadata]. The panel takes this one value plus [MetadataActions]; only the
  * genuinely per-call-site pieces (the optional preview tab and the modifier) stay parameters.
+ *
+ * The note is not a group of its own: it is one of the document's own values, so it travels with
+ * the rest of them in [DocumentSection.item] and picks up the same draft overlay.
  */
 @Immutable
 data class MetadataUiState(
     val document: DocumentSection = DocumentSection(),
     val vocabulary: VocabularyState = VocabularyState(),
-    val note: NoteEditorState = NoteEditorState(),
     val ai: AiPanelState = AiPanelState(),
     val history: HistoryUiState = HistoryUiState.NotLoaded,
 )
@@ -73,12 +75,11 @@ data class MetadataActions(
     val history: HistoryActions,
 )
 
-/** Edits to the document's own values. Text fields commit on focus loss. */
+/** Edits to the document values; DocumentEditor redirects text edits into a retained draft. */
 @Immutable
 data class MetadataEditActions(
     val onCommitTitle: (String) -> Unit,
     val onNoteChange: (String) -> Unit,
-    val onSaveNote: () -> Unit,
     val onCommitCorrespondent: (String) -> Unit,
     val onCommitDocType: (String) -> Unit,
     val onCommitDocDate: (String) -> Unit,
@@ -127,8 +128,7 @@ fun rememberMetadataActions(vm: DocDetailViewModel): MetadataActions =
             edit =
                 MetadataEditActions(
                     onCommitTitle = vm::setTitle,
-                    onNoteChange = vm::updateNoteDraft,
-                    onSaveNote = vm::saveNote,
+                    onNoteChange = vm::setNotes,
                     onCommitCorrespondent = vm::setCorrespondent,
                     onCommitDocType = vm::setDocType,
                     onCommitDocDate = vm::setDocDate,

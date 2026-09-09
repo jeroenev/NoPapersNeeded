@@ -5,13 +5,13 @@ package dev.npn.app.ui.detail
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
@@ -41,16 +41,14 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.detail_document
 import no_papers_needed.composeapp.generated.resources.detail_document_position
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable_hint
-import no_papers_needed.composeapp.generated.resources.detail_mark_reviewed
-import no_papers_needed.composeapp.generated.resources.detail_mark_unreviewed
 import no_papers_needed.composeapp.generated.resources.detail_next_document
 import no_papers_needed.composeapp.generated.resources.detail_previous_document
 import org.jetbrains.compose.resources.stringResource
@@ -106,10 +104,6 @@ fun DocDetailScreen(
         return
     }
 
-    val reviewed = metadata.document.reviewed
-    // Manual reviewed toggle only makes sense in inbox-workflow mode (derived otherwise).
-    val canToggleReviewed = metadata.document.reviewMode == ReviewMode.INBOX_WORKFLOW
-
     // Reflect the open document in the native window title (desktop); inert elsewhere.
     val displayTitle = current.doc.displayTitle
     LaunchedEffect(displayTitle) { DesktopBridge.windowTitle.value = displayTitle }
@@ -145,10 +139,7 @@ fun DocDetailScreen(
                 browsePosition = browsePosition,
                 onPrevDoc = goPrevDoc,
                 onNextDoc = goNextDoc,
-                reviewed = reviewed,
-                canToggleReviewed = canToggleReviewed,
                 onBack = onBack,
-                onToggleReviewed = { vm.setReviewed(!reviewed) },
                 actions = {
                     DocActions(item = current, vm = vm, snackbar = snackbar, onGone = onBack)
                 },
@@ -156,10 +147,12 @@ fun DocDetailScreen(
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
-        MetadataPanel(
+        DocumentEditor(
             state = metadata,
             actions = actions,
-            previewTab = { m ->
+            onReviewed = { nextDocId?.let(onNavigateToDoc) ?: onBack() },
+            hasNext = nextDocId != null,
+            preview = { m ->
                 PageViewer(
                     pageIndex = ui.pageIndex,
                     pageCount = ui.pageCount,
@@ -171,7 +164,10 @@ fun DocDetailScreen(
                             .focusable(),
                 )
             },
-            modifier = Modifier.fillMaxSize().padding(padding),
+            // With no bottomBar, [padding]'s bottom is the navigation-bar inset. Consuming it here
+            // stops DocumentEditor's imePadding() — which spans that same region — from adding it a
+            // second time, which would leave a nav-bar-height gap under the save bar with the IME up.
+            modifier = Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding),
         )
     }
 }
@@ -209,16 +205,13 @@ private fun DetailTopBar(
     browsePosition: Pair<Int, Int>?,
     onPrevDoc: (() -> Unit)?,
     onNextDoc: (() -> Unit)?,
-    reviewed: Boolean,
-    canToggleReviewed: Boolean,
     onBack: () -> Unit,
-    onToggleReviewed: () -> Unit,
     actions: @Composable () -> Unit,
 ) {
     TopAppBar(
         title = {
             Column {
-                Text(title, maxLines = 1)
+                Text(title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
                 if (browsePosition != null && browsePosition.second > 1) {
                     Text(
                         stringResource(
@@ -243,39 +236,18 @@ private fun DetailTopBar(
         actions = {
             // Prev/next document within the browse order.
             if (browsePosition != null && browsePosition.second > 1) {
-                IconButton(onClick = { onPrevDoc?.invoke() }, enabled = onPrevDoc != null) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                        contentDescription = stringResource(Res.string.detail_previous_document),
-                    )
-                }
-                IconButton(onClick = { onNextDoc?.invoke() }, enabled = onNextDoc != null) {
-                    Icon(
-                        Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                        contentDescription = stringResource(Res.string.detail_next_document),
-                    )
-                }
-            }
-            if (canToggleReviewed) {
-                IconButton(onClick = onToggleReviewed) {
-                    Icon(
-                        Icons.Filled.CheckCircle,
-                        contentDescription =
-                            stringResource(
-                                if (reviewed) {
-                                    Res.string.detail_mark_unreviewed
-                                } else {
-                                    Res.string.detail_mark_reviewed
-                                },
-                            ),
-                        tint =
-                            if (reviewed) {
-                                MaterialTheme.colorScheme.primary
-                            } else {
-                                MaterialTheme.colorScheme.onSurfaceVariant
-                            },
-                    )
-                }
+                TooltipIconButton(
+                    icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+                    label = stringResource(Res.string.detail_previous_document),
+                    onClick = { onPrevDoc?.invoke() },
+                    enabled = onPrevDoc != null,
+                )
+                TooltipIconButton(
+                    icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+                    label = stringResource(Res.string.detail_next_document),
+                    onClick = { onNextDoc?.invoke() },
+                    enabled = onNextDoc != null,
+                )
             }
             actions()
         },

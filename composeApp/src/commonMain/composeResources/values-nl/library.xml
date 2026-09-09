@@ -5,7 +5,6 @@
     <string name="library_filters">Filters</string>
     <string name="library_switch_view">Overschakelen naar %1$sweergave</string>
     <string name="library_sort">Sorteren</string>
-    <string name="library_sort_by">Sorteren op</string>
     <string name="library_sort_name">Naam</string>
     <string name="library_sort_added">Toegevoegd</string>
     <string name="library_sort_doc_date">Documentdatum</string>
@@ -81,7 +80,6 @@
     <string name="library_preview_close">Voorbeeld sluiten</string>
 
     <string name="library_clear_all">Alles wissen</string>
-    <string name="library_filter_tags_help">Tags (tik: alle -> een of meer -> geen)</string>
     <string name="library_no_tags_yet">Nog geen tags</string>
     <string name="library_reviewed_filter">Beoordeeld</string>
     <string name="library_correspondent_filter">Correspondent</string>
