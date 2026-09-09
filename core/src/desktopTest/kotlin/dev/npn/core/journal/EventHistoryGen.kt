@@ -27,13 +27,15 @@ class EventHistoryGen(
     private val clocks = devices.associateWith { HlcClock(it, VirtualClock(rng)) }
     private val seqs = HashMap<String, Long>().apply { devices.forEach { this[it] = 0L } }
 
-    private val docs = (0 until (2 + rng.nextInt(3))).map { d ->
-        // valid 64-hex doc id
-        d.toString().padStart(64, ('a' + d).coerceAtMost('f'))
-    }
+    private val docs =
+        (0 until (2 + rng.nextInt(3))).map { d ->
+            // valid 64-hex doc id
+            d.toString().padStart(64, ('a' + d).coerceAtMost('f'))
+        }
     private val tagVocab = listOf("invoice", "tax", "receipt", "medical", "contract")
 
     private val produced = ArrayList<JournalEvent>()
+
     // live tag-add dots per (doc, tag) for building plausible removes
     private val liveDots = HashMap<Pair<String, String>, MutableList<Dot>>()
 
@@ -64,64 +66,93 @@ class EventHistoryGen(
         val hlc = clock.next()
         val doc = docs[rng.nextInt(docs.size)]
         val choice = rng.nextInt(100)
-        val op: JournalOp = when {
-            choice < 30 -> { // tag-add
-                val tag = tagVocab[rng.nextInt(tagVocab.size)]
-                liveDots.getOrPut(doc to tag) { ArrayList() }.add(Dot(dev, seq))
-                JournalOp.TagAdd(tag)
+        val op: JournalOp =
+            when {
+                choice < 30 -> { // tag-add
+                    val tag = tagVocab[rng.nextInt(tagVocab.size)]
+                    liveDots.getOrPut(doc to tag) { ArrayList() }.add(Dot(dev, seq))
+                    JournalOp.TagAdd(tag)
+                }
+
+                choice < 45 -> { // tag-remove of existing dots
+                    val tag = tagVocab[rng.nextInt(tagVocab.size)]
+                    val existing = liveDots[doc to tag]?.toList().orEmpty()
+                    val chosen = existing.filter { rng.nextBoolean() }
+                    chosen.forEach { liveDots[doc to tag]?.remove(it) }
+                    JournalOp.TagRemove(tag, chosen)
+                }
+
+                choice < 60 -> { // prop-set
+                    val key = DocProperty.entries[rng.nextInt(DocProperty.entries.size)]
+                    val value = if (rng.nextInt(5) == 0) null else "v${rng.nextInt(1000)}"
+                    JournalOp.PropSet(key, value)
+                }
+
+                choice < 68 -> {
+                    JournalOp.DocTrash("/path/${rng.nextInt(100)}.pdf")
+                }
+
+                choice < 74 -> {
+                    JournalOp.DocRestore
+                }
+
+                choice < 77 -> {
+                    JournalOp.DocDelete
+                }
+
+                choice < 82 -> { // relink to another doc id
+                    val target = docs[rng.nextInt(docs.size)]
+                    return@produceOne addEvent(dev, seq, hlc, doc, JournalOp.Relink(target))
+                }
+
+                choice < 88 -> { // library-wide rename
+                    val from = tagVocab[rng.nextInt(tagVocab.size)]
+                    val to = tagVocab[rng.nextInt(tagVocab.size)]
+                    return@produceOne addEvent(dev, seq, hlc, null, JournalOp.TagRename(from, to))
+                }
+
+                choice < 92 -> {
+                    val from = tagVocab[rng.nextInt(tagVocab.size)]
+                    val to = tagVocab[rng.nextInt(tagVocab.size)]
+                    return@produceOne addEvent(dev, seq, hlc, null, JournalOp.TagMerge(from, to))
+                }
+
+                choice < 96 -> {
+                    // library-wide synced setting (reviewMode) LWW
+                    val value = if (rng.nextBoolean()) "inbox-workflow" else "untagged-only"
+                    return@produceOne addEvent(dev, seq, hlc, null, JournalOp.SettingSet("reviewMode", value))
+                }
+
+                else -> {
+                    val tag = tagVocab[rng.nextInt(tagVocab.size)]
+                    return@produceOne addEvent(
+                        dev,
+                        seq,
+                        hlc,
+                        null,
+                        JournalOp.TagStyle(tag, if (rng.nextBoolean()) "#abc" else null, null),
+                    )
+                }
             }
-            choice < 45 -> { // tag-remove of existing dots
-                val tag = tagVocab[rng.nextInt(tagVocab.size)]
-                val existing = liveDots[doc to tag]?.toList().orEmpty()
-                val chosen = existing.filter { rng.nextBoolean() }
-                chosen.forEach { liveDots[doc to tag]?.remove(it) }
-                JournalOp.TagRemove(tag, chosen)
-            }
-            choice < 60 -> { // prop-set
-                val key = DocProperty.entries[rng.nextInt(DocProperty.entries.size)]
-                val value = if (rng.nextInt(5) == 0) null else "v${rng.nextInt(1000)}"
-                JournalOp.PropSet(key, value)
-            }
-            choice < 68 -> JournalOp.DocTrash("/path/${rng.nextInt(100)}.pdf")
-            choice < 74 -> JournalOp.DocRestore
-            choice < 77 -> JournalOp.DocDelete
-            choice < 82 -> { // relink to another doc id
-                val target = docs[rng.nextInt(docs.size)]
-                return@produceOne addEvent(dev, seq, hlc, doc, JournalOp.Relink(target))
-            }
-            choice < 88 -> { // library-wide rename
-                val from = tagVocab[rng.nextInt(tagVocab.size)]
-                val to = tagVocab[rng.nextInt(tagVocab.size)]
-                return@produceOne addEvent(dev, seq, hlc, null, JournalOp.TagRename(from, to))
-            }
-            choice < 92 -> {
-                val from = tagVocab[rng.nextInt(tagVocab.size)]
-                val to = tagVocab[rng.nextInt(tagVocab.size)]
-                return@produceOne addEvent(dev, seq, hlc, null, JournalOp.TagMerge(from, to))
-            }
-            choice < 96 -> {
-                // library-wide synced setting (reviewMode) LWW
-                val value = if (rng.nextBoolean()) "inbox-workflow" else "untagged-only"
-                return@produceOne addEvent(dev, seq, hlc, null, JournalOp.SettingSet("reviewMode", value))
-            }
-            else -> {
-                val tag = tagVocab[rng.nextInt(tagVocab.size)]
-                return@produceOne addEvent(
-                    dev, seq, hlc, null,
-                    JournalOp.TagStyle(tag, if (rng.nextBoolean()) "#abc" else null, null),
-                )
-            }
-        }
         addEvent(dev, seq, hlc, doc, op)
     }
 
-    private fun addEvent(dev: String, seq: Long, hlc: Hlc, doc: String?, op: JournalOp) {
+    private fun addEvent(
+        dev: String,
+        seq: Long,
+        hlc: Hlc,
+        doc: String?,
+        op: JournalOp,
+    ) {
         produced.add(JournalEvent(1, seq, hlc, dev, doc, op))
     }
 
     /** Wall clock that mostly advances but occasionally jumps, to exercise HLC merge/clamp. */
-    private class VirtualClock(private val rng: Random) : EpochClock {
+    private class VirtualClock(
+        private val rng: Random,
+    ) : EpochClock {
         private var now = 1_700_000_000_000L
+
         override fun nowMillis(): Long {
             now += rng.nextInt(0, 5).toLong()
             if (rng.nextInt(20) == 0) now += rng.nextLong(1, 10_000)
@@ -135,7 +166,12 @@ class EventHistoryGen(
  * standalone helper so both the shuffle and compaction properties reuse it.
  */
 object FoldedStateEquivalence {
-    fun assertEquivalent(a: FoldedState, b: FoldedState, allDocs: Collection<String>, allTags: Collection<String>) {
+    fun assertEquivalent(
+        a: FoldedState,
+        b: FoldedState,
+        allDocs: Collection<String>,
+        allTags: Collection<String>,
+    ) {
         for (doc in allDocs) {
             require(a.effectiveTags(doc) == b.effectiveTags(doc)) {
                 "tags differ for $doc: ${a.effectiveTags(doc)} vs ${b.effectiveTags(doc)}"

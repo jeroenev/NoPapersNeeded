@@ -17,7 +17,6 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 class ViewerTransformTest {
-
     private val container = Size(1000f, 800f)
 
     @Test
@@ -53,13 +52,14 @@ class ViewerTransformTest {
     fun zoomTowardCornerKeepsThatPointFixed() {
         val fitted = Size(1000f, 800f)
         val corner = Offset(1000f, 800f) // bottom-right corner of the container
-        val t = ViewerTransform().applyGesture(
-            zoomChange = 2f,
-            pan = Offset.Zero,
-            centroid = corner,
-            fittedSize = fitted,
-            container = container,
-        )
+        val t =
+            ViewerTransform().applyGesture(
+                zoomChange = 2f,
+                pan = Offset.Zero,
+                centroid = corner,
+                fittedSize = fitted,
+                container = container,
+            )
         t.zoom shouldBe 2f
         // The bottom-right must remain pinned: at 2x that means panning content up-left by the
         // full overflow limit on each axis.
@@ -97,9 +97,11 @@ class ViewerTransformTest {
         val fitted = Size(1000f, 800f)
         // Zoomed 2x, centered: mid-pan, pager must not steal the swipe.
         ViewerTransform(zoom = 2f, offset = Offset.Zero)
-            .canPagerConsumeHorizontal(fitted, container).shouldBeFalse()
+            .canPagerConsumeHorizontal(fitted, container)
+            .shouldBeFalse()
         // Panned to the right edge (offset x at +limit): pager may take over.
         ViewerTransform(zoom = 2f, offset = Offset(500f, 0f))
-            .canPagerConsumeHorizontal(fitted, container).shouldBeTrue()
+            .canPagerConsumeHorizontal(fitted, container)
+            .shouldBeTrue()
     }
 }

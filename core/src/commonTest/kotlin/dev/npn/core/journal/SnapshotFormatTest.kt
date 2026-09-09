@@ -11,7 +11,11 @@ import kotlin.test.assertTrue
 class SnapshotFormatTest {
     private val doc = "a".repeat(64)
 
-    private fun event(dev: String, seq: Long, physical: Long) = JournalEvent(
+    private fun event(
+        dev: String,
+        seq: Long,
+        physical: Long,
+    ) = JournalEvent(
         version = JournalEventVersions.V1,
         seq = seq,
         hlc = Hlc(physical, 0, dev),
@@ -20,7 +24,10 @@ class SnapshotFormatTest {
         op = JournalOp.TagAdd("t$seq"),
     )
 
-    private fun snapshotBytes(supersedes: List<String>, events: List<JournalEvent>): ByteArray =
+    private fun snapshotBytes(
+        supersedes: List<String>,
+        events: List<JournalEvent>,
+    ): ByteArray =
         SnapshotCodec.encodeSnapshot(SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, supersedes), events)
 
     @Test

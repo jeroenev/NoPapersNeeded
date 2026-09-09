@@ -11,7 +11,6 @@ import kotlin.test.Test
  * scale would give, while normal pages are unaffected.
  */
 class PageRenderScaleTest {
-
     @Test
     fun normalPagesScaleByLongerSide() {
         // US Letter 612x792pt at maxDim 1200 -> 1200/792.
