@@ -27,8 +27,6 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
-// ---------- harness ----------
-
 private class Harness(
     selection: List<String> = emptyList(),
 ) {

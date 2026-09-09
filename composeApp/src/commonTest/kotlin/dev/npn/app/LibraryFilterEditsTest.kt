@@ -18,8 +18,6 @@ import kotlin.test.Test
  * ordering, and per-chip removal clearing exactly the right facet.
  */
 class LibraryFilterEditsTest {
-    // ---- tagBucket ----
-
     @Test
     fun tagBucketReadsWhicheverBucketTheTagIsIn() {
         val filter =
@@ -33,8 +31,6 @@ class LibraryFilterEditsTest {
         tagBucket(filter, "c") shouldBe TagBucket.NONE
         tagBucket(filter, "absent") shouldBe TagBucket.OFF
     }
-
-    // ---- cycleTag: the full OFF -> ALL -> ANY -> NONE -> OFF loop ----
 
     @Test
     fun cyclingATagWalksAllFourBucketStatesAndReturnsToOff() {
@@ -100,8 +96,6 @@ class LibraryFilterEditsTest {
         cycled.tagsNone shouldContainExactly listOf("keep-none")
     }
 
-    // ---- activeChips: which facets show, in what order ----
-
     @Test
     fun emptyFilterProducesNoChips() {
         LibraryFilter().activeChips() shouldBe emptyList()
@@ -161,8 +155,6 @@ class LibraryFilterEditsTest {
         LibraryFilter(correspondent = "ACME", untaggedOnly = true).activeChips() shouldContainExactly
             listOf(ActiveFilterChip.Correspondent("ACME"), ActiveFilterChip.UntaggedOnly)
     }
-
-    // ---- removeChip: each chip clears exactly the right facet ----
 
     @Test
     fun removingATagChipClearsOnlyThatTagFromOnlyItsBucket() {

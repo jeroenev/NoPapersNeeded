@@ -59,8 +59,6 @@ class AiRuntimeTest {
         AiRuntime.normalizeBaseUrl("https://opencode.ai/zen/go") shouldBe "https://opencode.ai/zen/go"
     }
 
-    // ---- reasoning level -> provider params ----
-
     @Test
     fun defaultReasoningMapsToNoOverrideForEveryProvider() {
         AiProvider.entries.forEach { provider ->
@@ -135,8 +133,6 @@ class AiRuntimeTest {
             AiRuntime.reasoningParams(provider, "some-model", AiReasoningLevel.HIGH, toolLoop = false) shouldBe null
         }
     }
-
-    // ---- runtime factory ----
 
     @Test
     fun buildWiresEveryProviderToItsOwnKoogClient() {

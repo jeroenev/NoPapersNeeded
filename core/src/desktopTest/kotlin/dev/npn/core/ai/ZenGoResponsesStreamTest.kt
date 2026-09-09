@@ -21,8 +21,6 @@ import kotlin.test.Test
  * no API key.
  */
 class ZenGoResponsesStreamTest {
-    // ---- which endpoint a model is routed to ----
-
     @Test
     fun openAiFamilyModelsOnOpenCodeGoUseTheResponsesApi() {
         listOf(
@@ -76,8 +74,6 @@ class ZenGoResponsesStreamTest {
             )
         params.shouldBeInstanceOf<OpenAIResponsesParams>().reasoning?.effort shouldBe ReasoningEffort.LOW
     }
-
-    // ---- streaming against a captured gateway stream ----
 
     private fun zenGoConfig(
         model: String,

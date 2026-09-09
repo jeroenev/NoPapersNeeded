@@ -231,7 +231,6 @@ class DocumentFilterTest {
 
                 // Run the real OCR pipeline (embedded text) to populate FTS content.
                 rig.session.rescan() // ensures docs queued
-                // Directly index via FtsDao path: the OCR pipeline populates content; drive it.
                 drainOcr(rig)
 
                 val results =
@@ -248,8 +247,7 @@ class DocumentFilterTest {
         }
 
     private suspend fun drainOcr(rig: AppSessionRig) {
-        // Process each pending queue entry through the pipeline via processNext by kicking the
-        // worker synchronously. The session exposes ocrStatus; here we drive the pipeline directly.
+        // Drive the pipeline synchronously through each pending queue entry.
         val pipeline = buildPipeline(rig)
         @Suppress("ControlFlowWithEmptyBody")
         while (pipeline.processNext()) {}

@@ -14,8 +14,6 @@ import kotlin.test.Test
 class TrashViewModelTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = TrashViewModel(session)
 
-    // ---- relinkCandidates derived from last scan report ----
-
     @Test
     fun relinkCandidatesEmptyWhenNoReport() =
         runTest(dispatcher) {
@@ -39,8 +37,6 @@ class TrashViewModelTest : MainDispatcherTest() {
             job.cancel()
         }
 
-    // ---- observed lists pass through ----
-
     @Test
     fun trashedDuplicatesMissingPassThrough() =
         runTest(dispatcher) {
@@ -62,8 +58,6 @@ class TrashViewModelTest : MainDispatcherTest() {
             jobs.forEach { it.cancel() }
         }
 
-    // ---- write ops delegate ----
-
     @Test
     fun restoreAndDeleteForeverDelegate() =
         runTest(dispatcher) {
@@ -75,8 +69,6 @@ class TrashViewModelTest : MainDispatcherTest() {
             session.docLifecycle.restoredDocs shouldContainExactly listOf("d1")
             session.docLifecycle.deletedDocs shouldContainExactly listOf("d2")
         }
-
-    // ---- failed writes surface a user-facing message ----
 
     @Test
     fun restoreFailureEmitsMessage() =

@@ -546,8 +546,6 @@ class LibrarySessionImpl private constructor(
         // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
     }
 
-    // --- helpers ---
-
     private fun trashOps() = TrashOps(fs)
 
     private fun map(result: ImportResult): ImportOutcome =

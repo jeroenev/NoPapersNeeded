@@ -198,8 +198,6 @@ class NpnDatabaseTest {
             metas.first().size shouldBe 100L
         }
 
-    // --- FTS5: the key spike ---
-
     @Test
     fun ftsMatchReturnsRightDocIds() =
         runTest {
@@ -343,8 +341,6 @@ class NpnDatabaseTest {
             fts.searchDocIds("letter") shouldContainExactly listOf("a".repeat(64))
         }
 
-    // --- RawQuery path ---
-
     @Test
     fun rawQueryFilterByReviewedAndTagJoin() =
         runTest {
@@ -381,8 +377,6 @@ class NpnDatabaseTest {
                 .first()
                 .map { it.docId } shouldContainExactly listOf(a)
         }
-
-    // --- kv + folded segments ---
 
     @Test
     fun keyValueRoundtrip() =

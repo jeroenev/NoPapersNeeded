@@ -6,8 +6,7 @@ import kotlinx.serialization.json.Json
 
 /**
  * OCR sidecar payload serialized to `.npn/ocr/<sha256>.<deviceId>.json`, single-writer and
- * write-once. Compact by design
- * (text only). Field names are the exact wire keys.
+ * write-once. Compact by design (text only). Field names are the exact wire keys.
  *
  * Example:
  * {"v":1,"doc":"<sha256>","dev":"<deviceId>","engine":"embedded",

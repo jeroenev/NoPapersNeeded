@@ -31,8 +31,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
         selfTest: suspend (AiConfig) -> AiSelfTestReport = { error("no self-test expected") },
     ) = SettingsViewModel(settings, session.content, session.reviewConfig, selfTest)
 
-    // ---- state combine ----
-
     @Test
     fun stateAggregatesAllSettingsFlows() =
         runTest(dispatcher) {
@@ -110,8 +108,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
         result.preview shouldBe
             "Factuur/Voorbeeld Energie/nutsvoorzieningen, thuis/Elektriciteitsrekening.pdf"
     }
-
-    // ---- writes go through the single edit mutation ----
 
     @Test
     fun editPersistsPlainSettingsThroughRepository() =
@@ -203,8 +199,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.aiModels.value.loading shouldBe false
         }
 
-    // ---- review mode switching ----
-
     @Test
     fun untaggedOnlyModeSetsModeWithoutMigration() =
         runTest(dispatcher) {
@@ -249,8 +243,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             session.reviewConfig.migrations shouldBe emptyList()
             session.reviewConfig.reviewModeSets shouldContainExactly listOf(ReviewMode.INBOX_WORKFLOW)
         }
-
-    // ---- AI self-test ----
 
     private fun aiSettings() =
         FakeSettingsRepository().apply {

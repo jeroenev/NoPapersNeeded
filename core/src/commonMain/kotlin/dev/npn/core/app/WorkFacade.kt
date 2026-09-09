@@ -2,8 +2,6 @@ package dev.npn.core.app
 
 import kotlinx.coroutines.flow.Flow
 
-// ---------- background queues: run them to a standstill on demand ----------
-
 /**
  * The session's persisted background queues, for a caller that must keep a process alive while
  * they run — Android's maintenance job holds a wakelock and needs to know when to let go.

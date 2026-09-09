@@ -23,8 +23,6 @@ class SettingsCategoryTest {
         keywords = keywords.toList(),
     )
 
-    // ---- registry ----
-
     @Test
     fun registryCoversEveryCategoryExactlyOnce() {
         SettingsCategories.map { it.id } shouldContainExactly SettingsCategoryId.entries.toList()
@@ -34,8 +32,6 @@ class SettingsCategoryTest {
     fun everyCategoryOffersSearchKeywords() {
         SettingsCategories.filter { it.keywords.isEmpty() }.map { it.id } shouldContainExactly emptyList()
     }
-
-    // ---- route keys ----
 
     @Test
     fun routeKeysRoundTrip() {
@@ -49,8 +45,6 @@ class SettingsCategoryTest {
         SettingsCategoryId.fromRouteKey("nope").shouldBeNull()
         SettingsCategoryId.fromRouteKey(null).shouldBeNull()
     }
-
-    // ---- search matching ----
 
     @Test
     fun blankQueryMatchesEveryCategory() {

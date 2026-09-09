@@ -12,8 +12,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
-// ---------- narrow fake: records the grouped writes AiEditApply issues; setters must not be used ----------
-
+// Records the grouped writes AiEditApply issues; setters must not be used.
 private class ApplyMeta : MetadataWriter {
     val addedTags = mutableListOf<Pair<List<String>, String>>()
     val removedTags = mutableListOf<Pair<List<String>, String>>()

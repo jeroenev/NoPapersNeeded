@@ -46,8 +46,6 @@ class AiAutoEnricherRetryTest {
             }
         }
 
-    // ---------- outages, retries and restarts ----------
-
     /** Queue rows are the whole point: work survives the process that queued it. */
     @Test
     fun `a restart resumes work queued by the previous run`() =

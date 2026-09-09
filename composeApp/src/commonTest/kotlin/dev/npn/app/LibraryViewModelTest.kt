@@ -37,8 +37,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
         return messages
     }
 
-    // ---- query debounce / filter sync ----
-
     @Test
     fun queryTextReflectsKeystrokesImmediately() =
         runTest(dispatcher) {
@@ -110,8 +108,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             job.cancel()
         }
 
-    // ---- viewOverridden race guard ----
-
     @Test
     fun defaultViewSeedAppliesWhenUserHasNotChosen() =
         runTest(dispatcher) {
@@ -145,8 +141,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             settings.settingsFlow.value?.defaultViewType shouldBe ViewType.GRID
         }
-
-    // ---- applyReviewPreset ----
 
     @Test
     fun reviewPresetUntaggedOnly() =
@@ -182,8 +176,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.applyReviewPreset()
             model.queryText.value shouldBe ""
         }
-
-    // ---- import tallying ----
 
     @Test
     fun importScannedPdfImportedMessage() =
@@ -246,8 +238,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             ImportSummary(2, 1, 3).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate, 3 failed"
         }
 
-    // ---- bulk batched op failure handling ----
-
     @Test
     fun bulkAddTagSuccessClearsSelection() =
         runTest(dispatcher) {
@@ -292,8 +282,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             session.meta.reviewedSets shouldBe emptyList()
         }
 
-    // ---- per-doc bulk trash ----
-
     @Test
     fun bulkTrashAllSucceedClearsSelection() =
         runTest(dispatcher) {
@@ -330,8 +318,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.ui.value.selected shouldBe setOf("d2")
             model.ui.value.selectionMode shouldBe true
         }
-
-    // ---- selection state machine ----
 
     @Test
     fun startSelectionEntersSelectionMode() =
@@ -375,8 +361,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.ui.value.selectionMode shouldBe false
             model.ui.value.selected shouldBe emptySet()
         }
-
-    // ---- filter/sort plumbing ----
 
     @Test
     fun setFilterSyncsQueryInput() =
@@ -475,8 +459,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             settings.settingsFlow.value?.gridColumnWidth shouldBe 220
         }
 
-    // ---- saved views ----
-
     @Test
     fun saveCurrentViewCapturesLiveFilterAndSort() =
         runTest(dispatcher) {
@@ -535,8 +517,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             messages shouldContainExactly listOf("Could not update: disk full")
         }
 
-    // ---- needsReviewCount switches source by review mode ----
-
     @Test
     fun needsReviewCountFollowsReviewMode() =
         runTest(dispatcher) {
@@ -555,8 +535,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.needsReviewCount.value shouldBe 9
             job.cancel()
         }
-
-    // ---- documents subscription passes filter/sort through ----
 
     @Test
     fun documentsObservesWithCurrentFilterAndSort() =
@@ -579,7 +557,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             job.cancel()
         }
 
-    // ---- results carry the query that produced them ----
     // The library screen resets the scroll position when this query changes, so it may only
     // change together with the items: never before the new ones arrive, and never on an update
     // of the current result set.

@@ -35,7 +35,6 @@ class IndexerTest {
         rig.indexer.scanState.value shouldBe null
     }
 
-    // 1. fresh library: N pdfs -> N documents, addedAt set, report.added == N
     @Test
     fun freshLibraryIndexesAll() = runTest {
         rig.writePdf("a.pdf", "alpha")
@@ -53,7 +52,6 @@ class IndexerTest {
         }
     }
 
-    // 2. rescan no-op: second rescan hashes nothing (fast path), zero changes
     @Test
     fun rescanNoOpHashesNothing() = runTest {
         rig.writePdf("a.pdf", "alpha")
@@ -68,7 +66,6 @@ class IndexerTest {
         second.missingCount shouldBe 0
     }
 
-    // 3. move detection: move file externally -> relPath updated, same docId
     @Test
     fun moveDetectionKeepsDocId() = runTest {
         rig.writePdf("a.pdf", "alpha")
@@ -86,8 +83,6 @@ class IndexerTest {
         moved.missing.shouldBeFalse()
     }
 
-    // 4. external duplicate: copy file to a second path -> DuplicateEntity recorded, canonical
-    //    untouched; resolveDuplicate removes extra
     @Test
     fun externalDuplicateRecordedAndResolved() = runTest {
         rig.writePdf("a.pdf", "alpha")
@@ -109,8 +104,6 @@ class IndexerTest {
         rig.db.duplicateDao().forDoc(docId) shouldHaveSize 0
     }
 
-    // 5. changed bytes at path -> old missing + new doc + relink candidate; applyRelink carries
-    //    tags (set via a real journal event) to the new doc and emits relink event
     @Test
     fun externalEditCreatesRelinkCandidateAndCarriesTags() = runTest {
         rig.writePdf("a.pdf", "original")
@@ -149,7 +142,6 @@ class IndexerTest {
         rig.db.documentDao().getByDocId(oldId)!!.deleted.shouldBeTrue()
     }
 
-    // 6. disappeared file -> missing; reappearing -> missing cleared
     @Test
     fun disappearAndReappear() = runTest {
         rig.writePdf("a.pdf", "alpha")
@@ -166,7 +158,6 @@ class IndexerTest {
         rig.db.documentDao().getByDocId(docId)!!.missing.shouldBeFalse()
     }
 
-    // 7. conflict file listed in report; resolveConflictFile Discard deletes; ImportAsNew imports
     @Test
     fun conflictFileReportedDiscardAndImport() = runTest {
         rig.writePdf("a.pdf", "alpha")
@@ -202,7 +193,6 @@ class IndexerTest {
         rig.exists("report.pdf").shouldBeTrue()
     }
 
-    // 8. journal fold applied: tag-add + prop-set + tag-rename
     @Test
     fun journalFoldAppliesTagsAndProps() = runTest {
         rig.writePdf("a.pdf", "alpha")
@@ -232,8 +222,6 @@ class IndexerTest {
         rig.db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("invoice")
     }
 
-    // 9. import: new pdf -> Imported + ocr queue row; identical bytes -> Duplicate; name
-    //    collision -> " (2)"; .npn/tmp left clean
     @Test
     fun importFlow() = runTest {
         val src = rig.externalFile("scan.pdf", "scanned-bytes")
@@ -272,7 +260,6 @@ class IndexerTest {
         rig.exists("inbox/converted.pdf").shouldBeTrue()
     }
 
-    // 10. two-device simulation: two writers, interleaved tag events, deterministic fold
     @Test
     fun twoDeviceInterleavedTagsFoldDeterministically() = runTest {
         rig.writePdf("a.pdf", "alpha")
@@ -297,8 +284,6 @@ class IndexerTest {
         rig.db.tagDao().tagsForDocument(docId).sorted() shouldContainExactly listOf("2026", "urgent", "work")
     }
 
-    // 11. deviceId fork: foreign segment in own dir -> DeviceIdentity yields a fresh id and
-    //     resets local journal state so the new id does not inherit the old seq/known segments.
     @Test
     fun deviceIdForkOnForeignSegment() = runTest {
         val kv = rig.db.keyValueDao()
@@ -339,8 +324,6 @@ class IndexerTest {
         localState.getKnownOwnSegments() shouldBe emptySet()
     }
 
-    // 12. FTS content preserved across a metadata fold: OCR writes content, a tag-add fold must
-    //     not wipe it, and the metadata columns must still be updated.
     @Test
     fun foldPreservesFtsContentAcrossMetadataChange() = runTest {
         rig.writePdf("a.pdf", "alpha")
@@ -380,7 +363,7 @@ class IndexerTest {
         rig.db.ftsDao().searchDocIds("acme") shouldContainExactly listOf(docId)
     }
 
-    // 13. Same guarantee via a full rescan (rescan reuses applyFold): content survives.
+    // Same guarantee as foldPreservesFtsContentAcrossMetadataChange, but via a full rescan.
     @Test
     fun rescanPreservesFtsContent() = runTest {
         rig.writePdf("a.pdf", "alpha")

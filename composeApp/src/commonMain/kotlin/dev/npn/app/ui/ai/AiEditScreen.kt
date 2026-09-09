@@ -104,8 +104,6 @@ fun AiEditScreen(
     }
 }
 
-// ---- Suggesting: progress ----
-
 @Composable
 private fun SuggestingPhase(
     progress: EditProgress,
@@ -133,8 +131,6 @@ private fun SuggestingPhase(
         OutlinedButton(onClick = onCancel) { Text(stringResource(Res.string.common_cancel)) }
     }
 }
-
-// ---- Queued: the run was handed to the background ----
 
 /**
  * Terminal state of a backgrounded run. Nothing was suggested yet and nothing will be written

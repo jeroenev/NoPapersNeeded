@@ -2,8 +2,6 @@ package dev.npn.core.app
 
 import kotlinx.coroutines.flow.Flow
 
-// ---------- OCR ops: text-recognition management per document ----------
-
 /** Per-document OCR management: re-runs, stored versions, and the engine pin. */
 interface OcrFacade {
     val ocrStatus: Flow<OcrStatus>

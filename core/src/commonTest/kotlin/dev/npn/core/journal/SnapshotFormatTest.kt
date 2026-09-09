@@ -25,16 +25,13 @@ class SnapshotFormatTest {
 
     @Test
     fun snapshot_bucket_is_ignored_by_old_object_classification() {
-        // A pre-snapshot reader only knows objects-v2-xx; the snapshot bucket must NOT be classified
-        // as ObjectV2 or UnsupportedObjectStore by that older shape — here we assert the CURRENT
-        // classifier routes it to a distinct SnapshotV2 kind, and that the raw bucket name would be
-        // Unknown to a classifier lacking snapshot support.
+        // The snapshot bucket must route to a distinct SnapshotV2 kind, not ObjectV2, so a
+        // pre-snapshot reader (which only knows objects-v2-xx) treats it as an unknown file.
         val hash = "ab" + "0".repeat(62)
         val snapPath = NpnPaths.journalObjectPath(hash, snapshot = true)
         assertEquals(".npn/journal/objects-snap-v2-ab/$hash.jsonl", snapPath)
         assertIs<NpnPaths.JournalPath.SnapshotV2>(NpnPaths.journalPath(snapPath))
-        // The snapshot bucket name does not match the objects-v<N>-<xx> pattern, so an old build
-        // (which only recognizes that pattern) treats it as a plain unknown file it ignores.
+        // The bucket name does not match the objects-v<N>-<xx> pattern an old build recognizes.
         assertTrue(!snapPath.substringAfterLast("journal/").startsWith("objects-v"))
     }
 

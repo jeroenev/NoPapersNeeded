@@ -37,8 +37,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
 
     private fun tagSuggestions(vararg tags: String): List<TagSuggestion> = tags.map { TagSuggestion(it, isNew = false) }
 
-    // ---- page count resolution ----
-
     @Test
     fun pageCountResolvedOnInit() =
         runTest(dispatcher) {
@@ -57,8 +55,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.ui.value.pageCount shouldBe 0
         }
 
-    // ---- paging bounds ----
-
     @Test
     fun goToPageIgnoresOutOfRange() =
         runTest(dispatcher) {
@@ -75,8 +71,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
 
     // Zoom/pan are no longer VM state; they live in the viewer's ViewerTransform (see
     // ViewerTransformTest for the zoom/pan math).
-
-    // ---- metadata edits (blank -> null normalization) ----
 
     @Test
     fun setTitleBlankBecomesNull() =
@@ -135,8 +129,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                 )
         }
 
-    // ---- error handling: failed writes surface a user-facing message ----
-
     @Test
     fun setTitleFailureEmitsMessage() =
         runTest(dispatcher) {
@@ -181,8 +173,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             job.cancel()
         }
 
-    // ---- trash invokes callback ----
-
     @Test
     fun trashCallsSessionAndCallback() =
         runTest(dispatcher) {
@@ -211,8 +201,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             job.cancel()
         }
 
-    // ---- reOcr toggles reindexing flag ----
-
     @Test
     fun reOcrTogglesReindexingFlag() =
         runTest(dispatcher) {
@@ -238,8 +226,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             messages shouldContainExactly listOf("Could not re-run OCR: ocr engine missing")
             job.cancel()
         }
-
-    // ---- AI (vision) OCR ----
 
     @Test
     fun aiOcrActionIsOfferedOnlyWithAConfiguredEndpoint() =
@@ -317,8 +303,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             job.cancel()
         }
 
-    // ---- OCR engine pin ----
-
     @Test
     fun setOcrEnginePinsAndClears() =
         runTest(dispatcher) {
@@ -348,8 +332,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             messages shouldContainExactly listOf("Could not change OCR engine: reindex failed")
             job.cancel()
         }
-
-    // ---- OCR versions load + reload on ocrState change ----
 
     @Test
     fun ocrVersionsLoadFromSession() =
@@ -382,8 +364,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.metadata.value.document.ocrVersions shouldContainExactly fresh
         }
-
-    // ---- assembled panel state ----
 
     @Test
     fun metadataCarriesTheDocumentVocabularyAndDerivedReviewFlag() =
@@ -442,8 +422,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.metadata.value.document.reviewed shouldBe true
         }
 
-    // ---- bake ----
-
     @Test
     fun bakeInPlaceReturnsResultAndClearsBusy() =
         runTest(dispatcher) {
@@ -467,8 +445,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             result shouldBe false
             model.ui.value.baking shouldBe false
         }
-
-    // ---- AI tag suggestions ----
 
     @Test
     fun suggestAiTagsStoresSuggestions() =
@@ -571,8 +547,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             disabledVm.metadata.value.ai.tags.available shouldBe false
         }
 
-    // ---- AI metadata suggestions ----
-
     @Test
     fun suggestAiMetadataStoresSuggestion() =
         runTest(dispatcher) {
@@ -655,8 +629,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.metadata.value.ai.metadata.suggesting shouldBe false
             job.cancel()
         }
-
-    // ---- tag colors transformation ----
 
     @Test
     fun tagColorsMapsNameToColor() =

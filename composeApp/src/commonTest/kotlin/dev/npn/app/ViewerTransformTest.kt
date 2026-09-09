@@ -20,8 +20,6 @@ class ViewerTransformTest {
 
     private val container = Size(1000f, 800f)
 
-    // ---- fit ----
-
     @Test
     fun fitLetterboxesToTighterAxis() {
         // A wide page in a less-wide container fits by width.
@@ -35,8 +33,6 @@ class ViewerTransformTest {
         fittedContentSize(Size(0f, 100f), container) shouldBe Size.Zero
         fittedContentSize(Size(100f, 100f), Size.Zero) shouldBe Size.Zero
     }
-
-    // ---- pan clamp ----
 
     @Test
     fun panPinnedCenteredWhenContentSmallerThanContainer() {
@@ -52,8 +48,6 @@ class ViewerTransformTest {
         clamped.x shouldBe 500f
         clamped.y shouldBe -400f
     }
-
-    // ---- centroid zoom ----
 
     @Test
     fun zoomTowardCornerKeepsThatPointFixed() {
@@ -84,8 +78,6 @@ class ViewerTransformTest {
         minned.offset shouldBe Offset.Zero // recenters when fully out
     }
 
-    // ---- double tap ----
-
     @Test
     fun doubleTapTogglesFitAndBack() {
         val fitted = Size(1000f, 800f)
@@ -94,8 +86,6 @@ class ViewerTransformTest {
         val back = tapped.toggleZoom(Offset(500f, 400f), fitted, container)
         back shouldBe ViewerTransform()
     }
-
-    // ---- pager hand-off ----
 
     @Test
     fun pagerFreeAtRestZoom() {

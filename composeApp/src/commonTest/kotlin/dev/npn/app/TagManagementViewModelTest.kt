@@ -21,8 +21,6 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         count: Int = 0,
     ) = TagInfo(name, null, null, count)
 
-    // ---- buildTree ----
-
     @Test
     fun buildTreeFlatTags() =
         runTest(dispatcher) {
@@ -73,8 +71,6 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             val tree = buildTree(listOf(tag("z"), tag("a"), tag("m")))
             tree.map { it.segment } shouldContainExactly listOf("a", "m", "z")
         }
-
-    // ---- write ops trim and delegate ----
 
     @Test
     fun mergeAllMergesEverythingIntoPrimaryExceptItself() =
@@ -134,8 +130,6 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             session.tagAdmin.tagStyles shouldContainExactly listOf(Triple("finance", "#abc", "star"))
         }
-
-    // ---- failed writes surface a user-facing message ----
 
     @Test
     fun failedTagWritesEmitMessages() =

@@ -2,8 +2,6 @@ package dev.npn.core.app
 
 import dev.npn.core.model.DocProperty
 
-// ---------- write side (journal-backed) ----------
-
 /**
  * Per-document (and bulk) metadata edits. Everything here is a journal-backed write to one or
  * more documents' own metadata; vocabulary-level tag operations live on [TagAdmin] and a

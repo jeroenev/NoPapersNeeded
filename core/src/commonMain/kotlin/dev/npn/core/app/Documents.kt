@@ -6,8 +6,6 @@ import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.flow.Flow
 
-// ---------- read side ----------
-
 /**
  * The stable view of one document across this read seam. `dev.npn.core.db.DocumentEntity` — the
  * disposable index row — never leaves `core.db`; [DocumentRepositoryImpl] maps it here exactly

@@ -27,7 +27,6 @@ class EventHistoryGen(
     private val clocks = devices.associateWith { HlcClock(it, VirtualClock(rng)) }
     private val seqs = HashMap<String, Long>().apply { devices.forEach { this[it] = 0L } }
 
-    // pool of doc ids
     private val docs = (0 until (2 + rng.nextInt(3))).map { d ->
         // valid 64-hex doc id
         d.toString().padStart(64, ('a' + d).coerceAtMost('f'))

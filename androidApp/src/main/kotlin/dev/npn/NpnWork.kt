@@ -44,18 +44,13 @@ class RescanOcrWorker(
 
             session.ingest.rescan()
 
-            // Hold the wakelock while the OCR queue drains and the documents it produced are
-            // enriched, bounded so this job never exceeds WorkManager's window. The bound is on
-            // how long we *wait*: on timeout the work carries on under the session until the
-            // process dies, and both queues are persistent, so whatever is left is picked up by
-            // the next run. That is also what happens to enrichment when a large import uses the
-            // whole window on OCR alone.
-            // Both drains rather than watching counts, so each returns as soon as no further
-            // progress is possible — queue empty, feature off, endpoint unconfigured, or a backlog
-            // waiting out a backoff — instead of holding the wakelock until the timeout.
-            // Edit runs drain last: they are work the user explicitly queued and will review, so
-            // unlike OCR and enrichment nothing downstream is waiting on them, and a finished run
-            // is just as useful an hour later.
+            // Drain OCR, then enrichment of the documents it produced, then queued edit runs.
+            // The timeout bounds only how long we *wait*: on timeout the work carries on under
+            // the session until the process dies, and all queues are persistent, so whatever is
+            // left is picked up by the next run. Each drain returns as soon as no further progress
+            // is possible (queue empty, feature off, endpoint unconfigured, or a backoff pending)
+            // rather than holding the wakelock to the timeout. Edit runs drain last: the user
+            // reviews them, so nothing downstream waits and a finished run is just as useful later.
             withTimeoutOrNull(DRAIN_TIMEOUT_MS) {
                 session.work.drainOcr()
                 session.work.drainEnrichment()

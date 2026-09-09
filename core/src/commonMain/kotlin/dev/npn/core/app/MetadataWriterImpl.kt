@@ -301,8 +301,6 @@ class MetadataWriterImpl(
     /** Trim a single-value metadata input, coercing null/blank to null (clears the property). */
     private fun String?.normalized(): String? = this?.trim()?.ifEmpty { null }
 
-    // --- trash helpers ---
-
     /** Locate the file currently in `.npn/trash/` that belongs to [docId] (hash-suffixed name). */
     private suspend fun findTrashEntry(docId: String): String? {
         val marker = "__${docId.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}"

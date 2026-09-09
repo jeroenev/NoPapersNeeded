@@ -120,9 +120,6 @@ class LibraryViewModel(
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
 
-    // One-shot user-facing messages (partial bulk-op failures) are surfaced via the inherited
-    // [MessagesViewModel.message] API and collected by the screen as snackbars.
-
     // True once the user picks a view or applies a saved view this session. Guards against the
     // async default-view seed clobbering an explicit choice made before it arrives.
     private var viewOverridden = false
@@ -269,8 +266,6 @@ class LibraryViewModel(
             .map { QueueCounts.of(it) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, QueueCounts())
 
-    // ---- filter/sort/view controls ----
-
     fun onQueryChange(text: String) {
         queryInput.value = text
     }
@@ -351,8 +346,6 @@ class LibraryViewModel(
         const val MIN_SUGGESTION_LENGTH = 2
     }
 
-    // ---- selection ----
-
     fun toggleSelection(docId: String) {
         val cur = _ui.value
         val next = if (docId in cur.selected) cur.selected - docId else cur.selected + docId
@@ -376,8 +369,6 @@ class LibraryViewModel(
         _ui.value = _ui.value.copy(bannerDismissed = true)
     }
 
-    // ---- scan / refresh ----
-
     fun refresh() {
         viewModelScope.launch {
             _ui.value = _ui.value.copy(refreshing = true)
@@ -385,8 +376,6 @@ class LibraryViewModel(
             _ui.value = _ui.value.copy(refreshing = false)
         }
     }
-
-    // ---- bulk metadata ops ----
 
     // Tag/reviewed writes are a single batched write call (perDoc = false); trash is per-doc so
     // one failure does not abort the rest (perDoc = true). See [runOnSelection].
@@ -432,8 +421,6 @@ class LibraryViewModel(
         }
     }
 
-    // ---- import ----
-
     /** Import PDFs from external sources, tallying the per-source outcome into a message. */
     fun import(sources: List<Pair<ExternalSource, String>>) {
         viewModelScope.launch {
@@ -471,7 +458,6 @@ class LibraryViewModel(
         }
     }
 
-    // ---- saved views ----
     // Names are trimmed here so the trimming rule lives in one place rather than in each dialog.
 
     /** Capture the live filter/sort/view UI state as a new [SavedView] named [name] and persist it. */

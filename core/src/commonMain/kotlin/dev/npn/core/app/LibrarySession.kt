@@ -4,8 +4,6 @@ import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiSuggest
 import kotlinx.coroutines.CoroutineScope
 
-// ---------- session ----------
-
 /**
  * Everything scoped to one opened library folder: a pure aggregate of narrow facets plus
  * lifecycle. Consumers should depend on the facets they use, never on this aggregate; only the

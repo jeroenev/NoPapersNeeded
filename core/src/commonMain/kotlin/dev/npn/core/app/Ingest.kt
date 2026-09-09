@@ -4,8 +4,6 @@ import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import kotlinx.coroutines.flow.Flow
 
-// ---------- ingest: getting documents into the library ----------
-
 /** Getting documents into the library: imports, rescans, and their progress/reporting. */
 interface IngestFacade {
     val scanProgress: Flow<ScanProgressUi?> // null when idle

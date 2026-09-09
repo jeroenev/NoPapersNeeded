@@ -30,8 +30,6 @@ class AiTextTest {
         AiText.extractDocRefs("[doc:abc] [see above] plain [brackets]") shouldContainExactly emptyList()
     }
 
-    // ---- parseTranscription: page OCR replies ----
-
     @Test
     fun parseTranscriptionReturnsThePageText() {
         AiText.parseTranscription("Invoice 42\nAcme Corporation") shouldBe "Invoice 42\nAcme Corporation"

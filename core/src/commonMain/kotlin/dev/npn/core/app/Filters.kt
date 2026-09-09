@@ -2,8 +2,6 @@ package dev.npn.core.app
 
 import kotlinx.serialization.Serializable
 
-// ---------- filtering / sorting ----------
-
 // Contract between the service layer (implemented in dev.npn.core.app) and the UI layer
 // (composeApp). UI code must depend only on these types plus the db entities they carry.
 

@@ -325,14 +325,10 @@ class DocDetailViewModel(
         }
     }
 
-    // ---- viewer controls ----
-
     fun goToPage(index: Int) {
         val cur = _ui.value
         if (index in 0 until cur.pageCount.coerceAtLeast(1)) _ui.value = cur.copy(pageIndex = index)
     }
-
-    // ---- history ----
 
     /** Load once when opened. Pass [refresh] only for an explicit retry or refresh request. */
     fun loadHistory(refresh: Boolean = false) {
@@ -353,8 +349,6 @@ class DocDetailViewModel(
                 )
         }
     }
-
-    // ---- metadata edits ----
 
     fun setTitle(title: String?) =
         launchMetadata(UiAction.SAVE_TITLE) { meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
@@ -415,8 +409,6 @@ class DocDetailViewModel(
 
     fun removeTag(tag: String) = launchMetadata(UiAction.REMOVE_TAG) { meta.removeTag(listOf(docId), tag) }
 
-    // ---- AI tag suggestions ----
-
     /**
      * Ask the AI endpoint for new-tag suggestions from this doc's indexed text. No-op while a
      * request is already in flight. Empty results surface an informational message (the document
@@ -458,8 +450,6 @@ class DocDetailViewModel(
     fun clearAiTagSuggestions() {
         aiTags.value = aiTags.value.copy(suggestions = emptyList())
     }
-
-    // ---- AI metadata suggestions ----
 
     /**
      * Ask the AI endpoint for title/correspondent/date suggestions from this doc's indexed text.

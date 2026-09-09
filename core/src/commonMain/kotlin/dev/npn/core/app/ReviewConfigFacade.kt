@@ -4,8 +4,6 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import kotlinx.coroutines.flow.Flow
 
-// ---------- review config: library-wide review settings ----------
-
 /** Library-wide review workflow and standard-field visibility, synced via the journal. */
 interface ReviewConfigFacade {
     /** Library-wide review workflow, synced across devices via the journal. */

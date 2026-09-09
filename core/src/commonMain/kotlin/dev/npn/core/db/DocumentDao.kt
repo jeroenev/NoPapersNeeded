@@ -112,8 +112,6 @@ interface DocumentDao {
     @RawQuery(observedEntities = [DocumentEntity::class, DocumentTagEntity::class])
     fun observeCount(query: RoomRawQuery): Flow<Int>
 
-    // --- Canned queries ---
-
     @Query(
         "SELECT * FROM documents WHERE trashed = 0 AND deleted = 0 AND missing = 0 " +
             "ORDER BY addedAt DESC",

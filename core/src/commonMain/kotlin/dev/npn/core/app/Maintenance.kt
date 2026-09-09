@@ -1,7 +1,5 @@
 package dev.npn.core.app
 
-// ---------- maintenance: repair and surgery on existing documents ----------
-
 /** Repair and surgery on existing documents: duplicates, relinks, and splitting. */
 interface MaintenanceFacade {
     suspend fun resolveDuplicate(

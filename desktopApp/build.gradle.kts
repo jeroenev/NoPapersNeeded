@@ -78,12 +78,11 @@ compose.desktop {
 }
 
 // --- AppImage packaging ---------------------------------------------------
-// jpackage (used by the Compose plugin) cannot emit AppImage: on Linux it only
-// produces app-image, deb, and rpm. This task wraps the app-image output with
-// appimagetool. appimagetool is downloaded automatically into build/ (requires
-// network at build time) and invoked with --appimage-extract-and-run so no host
-// FUSE is needed to build. The resulting AppImage still needs FUSE (or the same
-// extract-and-run flag) to run on the end-user machine.
+// jpackage (used by the Compose plugin) cannot emit AppImage, so this task wraps
+// its app-image output with appimagetool. appimagetool is downloaded into build/
+// (needs network) and run with --appimage-extract-and-run, so no host FUSE is
+// needed to build. The resulting AppImage still needs FUSE (or that same flag) to
+// run on the end-user machine.
 val appImageArch = "x86_64"
 val appImageToolUrl =
     "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$appImageArch.AppImage"

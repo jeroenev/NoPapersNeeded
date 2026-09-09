@@ -12,7 +12,6 @@ import kotlin.test.Test
  */
 class PageRenderScaleTest {
 
-    // Longer side put at maxDim for pages within the normal aspect range.
     @Test
     fun normalPagesScaleByLongerSide() {
         // US Letter 612x792pt at maxDim 1200 -> 1200/792.

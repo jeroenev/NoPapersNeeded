@@ -85,8 +85,6 @@ class AiAutoEnricherTest {
             }
         }
 
-    // ---------- what a drain does ----------
-
     /**
      * The return value is what wakes the drain, so it must be true exactly when a row was newly
      * written. A false positive costs a pointless drain; a false negative leaves a document waiting
