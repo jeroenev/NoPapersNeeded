@@ -38,6 +38,8 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -53,6 +55,8 @@ import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
 import dev.npn.core.model.ReviewMode
+import kotlinx.serialization.encodeToString
+import kotlinx.serialization.json.Json
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_needs_review
@@ -97,7 +101,6 @@ fun FilterSheet(
     fields: FieldFilterOptions,
     reviewMode: ReviewMode,
     onApply: (LibraryFilter) -> Unit,
-    onClearAll: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     ModalBottomSheet(onDismissRequest = onDismiss) {
@@ -107,7 +110,6 @@ fun FilterSheet(
             fields = fields,
             reviewMode = reviewMode,
             onApply = onApply,
-            onClearAll = onClearAll,
             onDismiss = onDismiss,
             modifier = Modifier.fillMaxWidth(),
         )
@@ -121,19 +123,17 @@ fun FilterPanel(
     fields: FieldFilterOptions,
     reviewMode: ReviewMode,
     onApply: (LibraryFilter) -> Unit,
-    onClearAll: () -> Unit,
     onDismiss: (() -> Unit)? = null,
     fillHeight: Boolean = false,
     modifier: Modifier = Modifier,
 ) {
-    var draft by remember(filter) { mutableStateOf(filter) }
+    var draft by rememberSaveable(filter, stateSaver = LibraryFilterSaver) { mutableStateOf(filter) }
 
     Surface(modifier = modifier, tonalElevation = 3.dp) {
         Column(if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
             FilterPanelHeader(
                 onClearAll = {
                     draft = LibraryFilter()
-                    onClearAll()
                 },
                 onDismiss = onDismiss,
             )
@@ -163,6 +163,13 @@ fun FilterPanel(
         }
     }
 }
+
+/** Filter edits are a user-authored draft and must survive destination recreation until applied. */
+private val LibraryFilterSaver =
+    Saver<LibraryFilter, String>(
+        save = { Json.encodeToString(it) },
+        restore = { Json.decodeFromString(it) },
+    )
 
 /** Title row of the filter panel: the "Filters" heading, the clear-all button and optional close. */
 @Composable
@@ -308,7 +315,7 @@ private fun FieldFilterRow(
         }
 
         FieldType.LONG_TEXT -> {
-            Unit
+            // Prose has no useful equality or range filter.
         }
     }
 }

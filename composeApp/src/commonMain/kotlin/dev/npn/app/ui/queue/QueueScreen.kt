@@ -25,11 +25,14 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -39,7 +42,9 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.StatusBadge
+import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
@@ -48,6 +53,7 @@ import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_back
+import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.queue_attempts
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_discard
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_documents
@@ -57,6 +63,7 @@ import no_papers_needed.composeapp.generated.resources.queue_edit_run_review
 import no_papers_needed.composeapp.generated.resources.queue_edit_runs
 import no_papers_needed.composeapp.generated.resources.queue_empty
 import no_papers_needed.composeapp.generated.resources.queue_empty_subtitle
+import no_papers_needed.composeapp.generated.resources.queue_failed_help
 import no_papers_needed.composeapp.generated.resources.queue_help
 import no_papers_needed.composeapp.generated.resources.queue_retry_after
 import no_papers_needed.composeapp.generated.resources.queue_stage_ai
@@ -66,6 +73,7 @@ import no_papers_needed.composeapp.generated.resources.queue_state_ready
 import no_papers_needed.composeapp.generated.resources.queue_state_retrying
 import no_papers_needed.composeapp.generated.resources.queue_state_running
 import no_papers_needed.composeapp.generated.resources.queue_state_waiting
+import no_papers_needed.composeapp.generated.resources.queue_temporary_failure
 import no_papers_needed.composeapp.generated.resources.queue_title
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
@@ -89,6 +97,8 @@ fun QueueScreen(
     val vm: QueueViewModel = viewModel { QueueViewModel(session) }
     val items by vm.items.collectAsStateWithLifecycle()
     val editRuns by vm.editRuns.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    SnackbarMessages(vm.messages, snackbar)
 
     Scaffold(
         topBar = {
@@ -104,12 +114,14 @@ fun QueueScreen(
                 },
             )
         },
+        snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         QueueList(
             items = items,
             editRuns = editRuns,
             onOpenEditRun = onOpenEditRun,
             onDiscardEditRun = vm::discardEditRun,
+            onRetry = vm::retry,
             modifier = Modifier.fillMaxSize().padding(padding),
         )
     }
@@ -121,6 +133,7 @@ private fun QueueList(
     editRuns: List<QueuedEditRun>,
     onOpenEditRun: (String) -> Unit,
     onDiscardEditRun: (String) -> Unit,
+    onRetry: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty() && editRuns.isEmpty()) {
@@ -151,7 +164,7 @@ private fun QueueList(
         }
         // One document can be owed both passes, so the stage is part of the identity.
         items(items, key = { "${it.stage}:${it.docId}" }) { entry ->
-            QueueRow(entry)
+            QueueRow(entry, onRetry)
             HorizontalDivider()
         }
     }
@@ -253,17 +266,19 @@ private fun EditRunTrouble(run: QueuedEditRun) {
     }
     run.lastError?.let {
         Text(
-            it,
+            stringResource(Res.string.queue_temporary_failure),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
         )
+        TechnicalDetails(it)
     }
 }
 
 @Composable
-private fun QueueRow(entry: QueuedWork) {
+private fun QueueRow(
+    entry: QueuedWork,
+    onRetry: (String) -> Unit,
+) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Top,
@@ -295,6 +310,11 @@ private fun QueueRow(entry: QueuedWork) {
             }
             QueueRowTrouble(entry)
         }
+        if (entry.state == WorkState.FAILED) {
+            TextButton(onClick = { onRetry(entry.docId) }) {
+                Text(stringResource(Res.string.common_retry))
+            }
+        }
     }
 }
 
@@ -316,12 +336,17 @@ private fun QueueRowTrouble(entry: QueuedWork) {
     }
     entry.lastError?.let {
         Text(
-            it,
+            stringResource(
+                if (entry.state == WorkState.FAILED) {
+                    Res.string.queue_failed_help
+                } else {
+                    Res.string.queue_temporary_failure
+                },
+            ),
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.error,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
         )
+        TechnicalDetails(it)
     }
 }
 

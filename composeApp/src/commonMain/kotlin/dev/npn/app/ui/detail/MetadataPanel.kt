@@ -43,6 +43,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -60,6 +61,7 @@ import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TagSuggestionLabel
+import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.model.FieldKeys
@@ -130,7 +132,8 @@ internal fun MetadataTabs(
         remember(previewTab != null) {
             if (previewTab != null) PanelTab.entries.toList() else PanelTab.entries.filter { it != PanelTab.PREVIEW }
         }
-    var tab by remember { mutableStateOf(tabs.first()) }
+    var savedTab by rememberSaveable(stateSaver = enumNameSaver()) { mutableStateOf(tabs.first()) }
+    val tab = savedTab.takeIf { it in tabs } ?: tabs.first()
     LaunchedEffect(tab) {
         if (tab == PanelTab.HISTORY) {
             actions.history.onLoad()
@@ -144,7 +147,7 @@ internal fun MetadataTabs(
         modifier.onKeyEvent { event ->
             // Ctrl+F jumps to the Text tab and focuses the find field (desktop).
             if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.F) {
-                tab = PanelTab.TEXT
+                savedTab = PanelTab.TEXT
                 findRequestCounter++
                 true
             } else {
@@ -156,7 +159,7 @@ internal fun MetadataTabs(
             tabs.forEach { t ->
                 Tab(
                     selected = tab == t,
-                    onClick = { tab = t },
+                    onClick = { savedTab = t },
                     text = {
                         Text(
                             when (t) {

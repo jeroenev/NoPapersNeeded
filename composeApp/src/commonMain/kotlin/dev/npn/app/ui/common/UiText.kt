@@ -46,6 +46,7 @@ import no_papers_needed.composeapp.generated.resources.common_join_items
 import no_papers_needed.composeapp.generated.resources.common_no_ai_metadata_suggestions
 import no_papers_needed.composeapp.generated.resources.common_no_ai_tag_suggestions
 import no_papers_needed.composeapp.generated.resources.common_scan_already_in_library
+import no_papers_needed.composeapp.generated.resources.common_scan_capture_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_import_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_imported
 import no_papers_needed.composeapp.generated.resources.common_suggestion_count
@@ -93,6 +94,7 @@ enum class UiTextKey {
     SCAN_IMPORTED,
     SCAN_ALREADY_IN_LIBRARY,
     SCAN_IMPORT_FAILED,
+    SCAN_CAPTURE_FAILED,
     TAGGING_SCOPE_COUNT,
     TAGGING_SCOPE_COUNT_BATCH,
     TAGGING_APPLY_SUMMARY,
@@ -235,6 +237,10 @@ private fun UiTextKey.spec(args: List<Any?>): TextSpec =
 
         UiTextKey.SCAN_IMPORT_FAILED -> {
             TextSpec.Str(Res.string.common_scan_import_failed, listOf(args[0].argumentSpec()))
+        }
+
+        UiTextKey.SCAN_CAPTURE_FAILED -> {
+            TextSpec.Str(Res.string.common_scan_capture_failed)
         }
 
         UiTextKey.TAGGING_SCOPE_COUNT -> {

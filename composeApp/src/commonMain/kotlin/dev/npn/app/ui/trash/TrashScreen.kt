@@ -32,6 +32,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -43,6 +44,7 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_back
@@ -119,7 +121,7 @@ fun TrashScreen(
     val missing by vm.missing.collectAsStateWithLifecycle()
     val relinks by vm.relinkCandidates.collectAsStateWithLifecycle()
 
-    var tab by remember { mutableStateOf(TrashTab.TRASH) }
+    var tab by rememberSaveable(stateSaver = enumNameSaver()) { mutableStateOf(TrashTab.TRASH) }
     var confirmDelete by remember { mutableStateOf<String?>(null) }
     var confirmBulk by remember { mutableStateOf<TrashBulkAction?>(null) }
 
@@ -178,6 +180,7 @@ fun TrashScreen(
                     title = stringResource(Res.string.common_empty_trash),
                     message = pluralStringResource(Res.plurals.common_empty_trash_question, count, count),
                     confirmLabel = stringResource(Res.string.common_empty_trash),
+                    destructive = true,
                     onConfirm = {
                         vm.emptyTrash()
                         confirmBulk = null
@@ -301,6 +304,7 @@ private fun DeleteForeverDialog(
         title = stringResource(Res.string.common_trash_delete_forever),
         message = stringResource(Res.string.common_trash_delete_forever_message),
         confirmLabel = stringResource(Res.string.common_trash_delete_forever),
+        destructive = true,
         onConfirm = onConfirm,
         onDismiss = onDismiss,
     )

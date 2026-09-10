@@ -217,14 +217,7 @@ fun LibraryScreen(
         }
 
     val scanner = dev.npn.app.platform.LocalDocumentScanner.current
-    val onScan: () -> Unit = {
-        scope.launch {
-            val bytes = runCatching { scanner.scanToPdf() }.getOrNull()
-            if (bytes != null) {
-                vm.importScannedPdf(bytes)
-            }
-        }
-    }
+    val onScan: () -> Unit = { vm.scan(scanner::scanToPdf) }
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > WideLayoutBreakpoint
@@ -312,7 +305,6 @@ fun LibraryScreen(
                                 vm.setFilter(it)
                                 dialogs.dismissFilter()
                             },
-                            onClearAll = vm::clearFilter,
                             onDismiss = dialogs::dismissFilter,
                             fillHeight = true,
                             modifier = Modifier.width(sidePanelWidth).fillMaxHeight(),
@@ -351,7 +343,6 @@ fun LibraryScreen(
                 vm.setFilter(applied)
                 dialogs.dismissFilter()
             },
-            onClearFilter = vm::clearFilter,
             onSaveView = vm::saveCurrentView,
             onRenameView = vm::renameSavedView,
             onAddTag = vm::bulkAddTag,
@@ -672,6 +663,7 @@ private fun LibraryContent(
                     ui.selected.size,
                 ),
             confirmLabel = stringResource(Res.string.library_trash),
+            destructive = true,
             onConfirm = {
                 vm.bulkTrash()
                 confirmTrash = false

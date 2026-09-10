@@ -3,7 +3,7 @@
     <string name="queue_title">Processing queue</string>
     <!-- Navigation rail item; kept short to fit beside the other rail labels. -->
     <string name="queue_nav_label">Queue</string>
-    <string name="queue_help">Documents still waiting on text recognition or AI enrichment. This list clears itself as the work finishes.</string>
+    <string name="queue_help">Documents still waiting on text recognition or AI enrichment. Finished work clears itself; stopped work remains so you can retry it.</string>
     <string name="queue_empty">Nothing left to process</string>
     <string name="queue_empty_subtitle">Every document has been read and enriched.</string>
 
@@ -33,6 +33,8 @@
     <string name="queue_state_ready">Ready to review</string>
 
     <string name="queue_retry_after">Next try after %1$s</string>
+    <string name="queue_temporary_failure">A processing attempt failed. The app will try again.</string>
+    <string name="queue_failed_help">Processing stopped after repeated failures. Check OCR setup, then retry.</string>
 
     <plurals name="queue_attempts">
         <item quantity="one">%1$d failed attempt</item>

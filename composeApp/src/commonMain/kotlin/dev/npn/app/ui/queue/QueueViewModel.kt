@@ -1,10 +1,12 @@
 package dev.npn.app.ui.queue
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.ui.common.MessagesViewModel
+import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.core.app.AiEditQueueFacade
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkFacade
@@ -26,8 +28,9 @@ import kotlinx.coroutines.launch
 class QueueViewModel(
     work: WorkFacade,
     private val editQueue: AiEditQueueFacade,
-) : ViewModel() {
-    constructor(session: LibrarySession) : this(session.work, session.aiEditQueue)
+    private val ocr: OcrFacade,
+) : MessagesViewModel() {
+    constructor(session: LibrarySession) : this(session.work, session.aiEditQueue, session.ocr)
 
     val items: StateFlow<List<QueuedWork>> =
         work.queue.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
@@ -46,6 +49,9 @@ class QueueViewModel(
     fun discardEditRun(jobId: String) {
         viewModelScope.launch { runCatching { editQueue.discardEditRun(jobId) } }
     }
+
+    /** Reset a terminal OCR failure to pending and kick its worker through the normal OCR seam. */
+    fun retry(docId: String) = launchReporting(UiAction.RERUN_OCR) { ocr.reOcr(docId) }
 }
 
 /** How much outstanding work each pass is carrying. */

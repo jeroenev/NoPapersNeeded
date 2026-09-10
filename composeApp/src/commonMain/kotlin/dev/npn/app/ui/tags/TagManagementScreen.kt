@@ -53,6 +53,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -93,6 +96,8 @@ import no_papers_needed.composeapp.generated.resources.common_tags_new_name
 import no_papers_needed.composeapp.generated.resources.common_tags_rename_title
 import no_papers_needed.composeapp.generated.resources.common_tags_style_title
 import no_papers_needed.composeapp.generated.resources.common_tags_title
+import no_papers_needed.composeapp.generated.resources.library_deselect
+import no_papers_needed.composeapp.generated.resources.library_select
 import no_papers_needed.composeapp.generated.resources.library_selected_count
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
@@ -250,6 +255,7 @@ private fun TagBulkDialogs(
             title = pluralStringResource(Res.plurals.common_tags_delete_many_title, names.size, names.size),
             message = pluralStringResource(Res.plurals.common_tags_delete_many_message, names.size, names.size),
             confirmLabel = stringResource(Res.string.common_delete),
+            destructive = true,
             onConfirm = {
                 vm.deleteAll(names)
                 state.delete = null
@@ -446,6 +452,7 @@ private fun TagMergeDeleteDialogs(
             title = stringResource(Res.string.common_tags_delete_title),
             message = stringResource(Res.string.common_tags_delete_message, name),
             confirmLabel = stringResource(Res.string.common_delete),
+            destructive = true,
             onConfirm = {
                 onDelete(name)
             },
@@ -472,6 +479,8 @@ private fun TagCard(
     val selectable = node.info != null
     val hoverInteraction = remember { MutableInteractionSource() }
     val hovered by hoverInteraction.collectIsHoveredAsState()
+    val selectionLabel =
+        stringResource(if (selected) Res.string.library_deselect else Res.string.library_select)
     OutlinedCard(
         Modifier
             .fillMaxWidth()
@@ -479,9 +488,21 @@ private fun TagCard(
             .onSecondaryClick {
                 onEnsureSelected()
                 menu = true
-            }.combinedClickable(
-                // Tap toggles in selection mode; long-press (touch) starts selecting this tag.
-                onClick = { if (selectionMode && selectable) onToggleSelect() },
+            }.semantics { if (selectable) this.selected = selected }
+            .combinedClickable(
+                role = Role.Button,
+                onClickLabel =
+                    if (selectionMode && selectable) selectionLabel else stringResource(Res.string.common_tags_actions),
+                onLongClickLabel = selectionLabel.takeIf { selectable },
+                // A normal tap opens the actions; once selection mode starts it toggles selection.
+                onClick = {
+                    if (selectionMode && selectable) {
+                        onToggleSelect()
+                    } else {
+                        onEnsureSelected()
+                        menu = true
+                    }
+                },
                 onLongClick = { if (selectable) onToggleSelect() },
             ),
     ) {
@@ -498,41 +519,7 @@ private fun TagCard(
             }
             val dot = parseHexColor(node.info?.color) ?: MaterialTheme.colorScheme.outline
             Box(Modifier.size(12.dp).clip(CircleShape).background(dot))
-            Column(Modifier.weight(1f)) {
-                val parentPath = node.path.substringBeforeLast('.', "")
-                if (parentPath.isNotEmpty()) {
-                    Text(
-                        parentPath,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                Text(
-                    node.segment,
-                    style = MaterialTheme.typography.bodyLarge,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-                val documentCount =
-                    pluralStringResource(
-                        Res.plurals.common_document_count,
-                        node.descendantCount,
-                        node.descendantCount,
-                    )
-                val subtitle =
-                    if (node.info == null) {
-                        stringResource(Res.string.common_tags_namespace_only, documentCount)
-                    } else {
-                        documentCount
-                    }
-                Text(
-                    subtitle,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            TagCardLabel(node, Modifier.weight(1f))
             TagCardMenu(
                 expanded = menu,
                 onExpand = {
@@ -547,6 +534,46 @@ private fun TagCard(
                 bulkCount = selectedCount.takeIf { selectionMode && selected && it > 1 },
             )
         }
+    }
+}
+
+@Composable
+private fun TagCardLabel(
+    node: TagNode,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier) {
+        val parentPath = node.path.substringBeforeLast('.', "")
+        if (parentPath.isNotEmpty()) {
+            Text(
+                parentPath,
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
+        Text(
+            node.segment,
+            style = MaterialTheme.typography.bodyLarge,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
+        val documentCount =
+            pluralStringResource(
+                Res.plurals.common_document_count,
+                node.descendantCount,
+                node.descendantCount,
+            )
+        Text(
+            if (node.info == null) {
+                stringResource(Res.string.common_tags_namespace_only, documentCount)
+            } else {
+                documentCount
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
     }
 }
 

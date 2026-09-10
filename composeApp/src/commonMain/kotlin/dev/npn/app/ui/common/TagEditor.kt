@@ -30,6 +30,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -64,8 +65,8 @@ fun TagEditor(
     modifier: Modifier = Modifier,
     onAddWithStyle: ((name: String, color: String?) -> Unit)? = null,
 ) {
-    var input by remember { mutableStateOf("") }
-    var styleFor by remember { mutableStateOf<String?>(null) }
+    var input by rememberSaveable { mutableStateOf("") }
+    var styleFor by rememberSaveable { mutableStateOf<String?>(null) }
     val addTagLabel = stringResource(Res.string.common_add_tag)
 
     val suggestions =

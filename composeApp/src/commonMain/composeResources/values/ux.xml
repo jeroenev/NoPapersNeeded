@@ -15,7 +15,7 @@
     <string name="ux_expand_document">Expand document workspace</string>
     <string name="ux_resize_panes">Resize document and details</string>
     <string name="ux_save_changes">Save changes</string>
-    <string name="ux_save_failed">Could not save changes: %1$s</string>
+    <string name="ux_save_failed_summary">Could not save changes. Check library access and try again.</string>
     <string name="ux_drafts_count">Unsaved documents: %1$d</string>
     <string name="ux_resume_draft">Continue editing</string>
     <string name="ux_draft_hint">Your draft is kept when you switch documents. Save to apply your changes.</string>

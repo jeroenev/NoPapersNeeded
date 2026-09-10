@@ -15,7 +15,7 @@
     <string name="ux_expand_document">Documentwerkruimte vergroten</string>
     <string name="ux_resize_panes">Document en details anders verdelen</string>
     <string name="ux_save_changes">Wijzigingen opslaan</string>
-    <string name="ux_save_failed">Kon wijzigingen niet opslaan: %1$s</string>
+    <string name="ux_save_failed_summary">Wijzigingen konden niet worden opgeslagen. Controleer de bibliotheektoegang en probeer het opnieuw.</string>
     <string name="ux_drafts_count">Niet-opgeslagen documenten: %1$d</string>
     <string name="ux_resume_draft">Verder bewerken</string>
     <string name="ux_draft_hint">Je concept blijft bewaard wanneer je van document wisselt. Sla op om je wijzigingen toe te passen.</string>

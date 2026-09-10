@@ -23,7 +23,9 @@ private val AccentDark = Color(0xFFAEB6FF)
 private val PaperBg = Color(0xFFFAF9F6)
 private val PaperSurface = Color(0xFFFFFFFF)
 private val PaperInk = Color(0xFF201E1B)
-private val PaperMuted = Color(0xFF7B766C)
+
+// 4.81:1 against PaperBg, keeping body-small secondary text above WCAG AA contrast.
+private val PaperMuted = Color(0xFF736E64)
 private val PaperLine = Color(0xFFECE8E0)
 private val PaperField = Color(0xFFF2F0EB)
 

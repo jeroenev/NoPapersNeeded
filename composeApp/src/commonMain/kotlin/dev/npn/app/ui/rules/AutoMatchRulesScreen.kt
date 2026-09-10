@@ -217,6 +217,7 @@ private fun DeleteRuleDialog(
         title = stringResource(Res.string.common_rules_delete_title),
         message = stringResource(Res.string.common_rules_delete_message),
         confirmLabel = stringResource(Res.string.common_delete),
+        destructive = true,
         onConfirm = onConfirm,
         onDismiss = onDismiss,
     )

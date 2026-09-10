@@ -232,6 +232,30 @@ class LibraryViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun scannerFailureSurfacesActionableMessage() =
+        runTest(dispatcher) {
+            val model = vm()
+            val messages = collectMessages(model)
+
+            model.scan { error("camera unavailable") }
+            advanceUntilIdle()
+
+            messages shouldBe listOf("Scanning failed. Check camera access and try again.")
+        }
+
+    @Test
+    fun scannerCancellationProducesNoError() =
+        runTest(dispatcher) {
+            val model = vm()
+            val messages = collectMessages(model)
+
+            model.scan { null }
+            advanceUntilIdle()
+
+            messages shouldBe emptyList()
+        }
+
+    @Test
     fun importSummaryMessageFormatsCounts() =
         runTest(dispatcher) {
             ImportSummary(3, 0, 0).asUiText().resolveEnglish() shouldBe "3 imported"

@@ -102,7 +102,6 @@ fun LibraryDialogHost(
     fields: FieldFilterOptions,
     reviewMode: ReviewMode,
     onApplyFilter: (LibraryFilter) -> Unit,
-    onClearFilter: () -> Unit,
     onSaveView: (String) -> Unit,
     onRenameView: (SavedView, String) -> Unit,
     onAddTag: (String) -> Unit,
@@ -119,7 +118,6 @@ fun LibraryDialogHost(
                 onApplyFilter(it)
                 state.dismissFilter()
             },
-            onClearAll = onClearFilter,
             onDismiss = state::dismissFilter,
         )
     }

@@ -2,7 +2,7 @@
 <resources>
     <string name="queue_title">Verwerkingswachtrij</string>
     <string name="queue_nav_label">Wachtrij</string>
-    <string name="queue_help">Documenten die nog wachten op tekstherkenning of AI-verrijking. Deze lijst loopt vanzelf leeg zodra het werk klaar is.</string>
+    <string name="queue_help">Documenten die nog wachten op tekstherkenning of AI-verrijking. Voltooid werk verdwijnt vanzelf; gestopt werk blijft staan zodat je het opnieuw kunt proberen.</string>
     <string name="queue_empty">Niets meer te verwerken</string>
     <string name="queue_empty_subtitle">Elk document is gelezen en verrijkt.</string>
 
@@ -31,6 +31,8 @@
     <string name="queue_state_ready">Klaar om na te kijken</string>
 
     <string name="queue_retry_after">Volgende poging na %1$s</string>
+    <string name="queue_temporary_failure">Een verwerkingspoging is mislukt. De app probeert het opnieuw.</string>
+    <string name="queue_failed_help">De verwerking is na meerdere fouten gestopt. Controleer de OCR-instellingen en probeer het opnieuw.</string>
 
     <plurals name="queue_attempts">
         <item quantity="one">%1$d mislukte poging</item>

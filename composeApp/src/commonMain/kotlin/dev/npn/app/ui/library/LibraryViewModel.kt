@@ -38,6 +38,7 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -448,21 +449,39 @@ class LibraryViewModel(
 
     /** Import a scanned PDF (raw bytes from the platform scanner) through the staging import path. */
     fun importScannedPdf(bytes: ByteArray) {
+        viewModelScope.launch { importScannedPdfNow(bytes) }
+    }
+
+    /** Launch a platform scan; cancellation stays quiet while an actual scanner failure is visible. */
+    fun scan(scanToPdf: suspend () -> ByteArray?) {
         viewModelScope.launch {
-            val name = "scan-${randomId()}.pdf"
-            val msg =
-                runCatching { ingest.importPdfBytes(bytes, name) }.fold(
-                    onSuccess = { outcome ->
-                        when (outcome) {
-                            is ImportOutcome.Imported -> uiText(UiTextKey.SCAN_IMPORTED)
-                            is ImportOutcome.Duplicate -> uiText(UiTextKey.SCAN_ALREADY_IN_LIBRARY)
-                            is ImportOutcome.Failed -> uiText(UiTextKey.SCAN_IMPORT_FAILED, outcome.message)
-                        }
-                    },
-                    onFailure = { uiText(UiTextKey.SCAN_IMPORT_FAILED, reasonOf(it)) },
-                )
-            message(msg)
+            val bytes =
+                try {
+                    scanToPdf()
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Throwable) {
+                    message(uiText(UiTextKey.SCAN_CAPTURE_FAILED))
+                    return@launch
+                }
+            if (bytes != null) importScannedPdfNow(bytes)
         }
+    }
+
+    private suspend fun importScannedPdfNow(bytes: ByteArray) {
+        val name = "scan-${randomId()}.pdf"
+        val msg =
+            runCatching { ingest.importPdfBytes(bytes, name) }.fold(
+                onSuccess = { outcome ->
+                    when (outcome) {
+                        is ImportOutcome.Imported -> uiText(UiTextKey.SCAN_IMPORTED)
+                        is ImportOutcome.Duplicate -> uiText(UiTextKey.SCAN_ALREADY_IN_LIBRARY)
+                        is ImportOutcome.Failed -> uiText(UiTextKey.SCAN_IMPORT_FAILED, outcome.message)
+                    }
+                },
+                onFailure = { uiText(UiTextKey.SCAN_IMPORT_FAILED, reasonOf(it)) },
+            )
+        message(msg)
     }
 
     // Names are trimmed here so the trimming rule lives in one place rather than in each dialog.

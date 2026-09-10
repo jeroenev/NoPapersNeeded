@@ -323,6 +323,7 @@ private fun DocActionDialogs(
                 title = stringResource(Res.string.detail_trash_document),
                 message = stringResource(Res.string.detail_trash_prompt),
                 confirmLabel = stringResource(Res.string.detail_trash),
+                destructive = true,
                 onConfirm = {
                     onDismiss()
                     vm.trash(onGone)

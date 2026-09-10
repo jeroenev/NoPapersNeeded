@@ -29,6 +29,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
+import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
@@ -42,7 +43,7 @@ import no_papers_needed.composeapp.generated.resources.ux_field_invalid
 import no_papers_needed.composeapp.generated.resources.ux_review_finish
 import no_papers_needed.composeapp.generated.resources.ux_review_next
 import no_papers_needed.composeapp.generated.resources.ux_save_changes
-import no_papers_needed.composeapp.generated.resources.ux_save_failed
+import no_papers_needed.composeapp.generated.resources.ux_save_failed_summary
 import org.jetbrains.compose.resources.stringResource
 
 /**
@@ -147,7 +148,7 @@ private fun EditorSaveBar(
         val status =
             when {
                 !draft.writable -> stringResource(Res.string.ux_field_invalid)
-                draft.error != null -> stringResource(Res.string.ux_save_failed, draft.error)
+                draft.error != null -> stringResource(Res.string.ux_save_failed_summary)
                 draft.saving -> stringResource(Res.string.detail_saving)
                 draft.dirty -> stringResource(Res.string.ux_draft_hint)
                 draft.saved -> stringResource(Res.string.detail_saved)
@@ -165,6 +166,7 @@ private fun EditorSaveBar(
                     },
             )
         }
+        if (draft.error != null) TechnicalDetails(draft.error)
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (draft.dirty || draft.saving) {
                 Button(onClick = onSave, enabled = !draft.saving && draft.writable) {

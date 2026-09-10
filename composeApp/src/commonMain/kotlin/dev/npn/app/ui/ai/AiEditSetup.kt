@@ -13,6 +13,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -37,6 +38,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.ui.common.NumericField
@@ -438,11 +440,17 @@ private fun FieldOption(
     onOverwriteChange: (Boolean) -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().selectable(selected = option.enabled) { onEnabledChange(!option.enabled) },
+        Modifier
+            .fillMaxWidth()
+            .toggleable(
+                value = option.enabled,
+                role = Role.Checkbox,
+                onValueChange = onEnabledChange,
+            ),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
-        Checkbox(checked = option.enabled, onCheckedChange = onEnabledChange)
+        Checkbox(checked = option.enabled, onCheckedChange = null)
         Text(label, Modifier.weight(1f), style = MaterialTheme.typography.bodyLarge)
         if (option.enabled) {
             Text(
@@ -464,7 +472,9 @@ private fun SwitchRow(
     onCheckedChange: (Boolean) -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth(),
+        Modifier
+            .fillMaxWidth()
+            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -478,7 +488,7 @@ private fun SwitchRow(
                 )
             }
         }
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
+        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

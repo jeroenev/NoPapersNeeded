@@ -3,6 +3,7 @@
 package dev.npn.app.ui.library
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.background
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.hoverable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -17,6 +18,7 @@ import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
@@ -32,11 +34,15 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.input.pointer.PointerEventPass
 import androidx.compose.ui.input.pointer.isCtrlPressed
 import androidx.compose.ui.input.pointer.isMetaPressed
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.IntOffset
@@ -55,6 +61,7 @@ import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_add_tag
 import no_papers_needed.composeapp.generated.resources.library_deselect
+import no_papers_needed.composeapp.generated.resources.library_more_tags
 import no_papers_needed.composeapp.generated.resources.library_open
 import no_papers_needed.composeapp.generated.resources.library_remove_tag
 import no_papers_needed.composeapp.generated.resources.library_select
@@ -199,6 +206,7 @@ private fun HoverSelectCheckbox(
  */
 @Composable
 private fun SelectableDocItem(
+    selectionMode: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
@@ -209,6 +217,9 @@ private fun SelectableDocItem(
     val hoverInteraction = remember { MutableInteractionSource() }
     val hovered by hoverInteraction.collectIsHoveredAsState()
     var menuAt by remember { mutableStateOf<Offset?>(null) }
+    val openLabel = stringResource(Res.string.library_open)
+    val selectionLabel =
+        stringResource(if (selected) Res.string.library_deselect else Res.string.library_select)
     Box {
         itemContent(
             Modifier
@@ -216,7 +227,14 @@ private fun SelectableDocItem(
                 .hoverable(hoverInteraction)
                 .ctrlClickToggle(onToggleSelect)
                 .onSecondaryClick { if (contextActions != null) menuAt = it }
-                .combinedClickable(onClick = onClick, onLongClick = onLongClick),
+                .semantics { this.selected = selected }
+                .combinedClickable(
+                    onClickLabel = if (selectionMode) selectionLabel else openLabel,
+                    role = Role.Button,
+                    onLongClickLabel = selectionLabel,
+                    onClick = onClick,
+                    onLongClick = onLongClick,
+                ),
             hovered,
         )
         contextActions?.let { actions ->
@@ -245,6 +263,7 @@ fun DocListRow(
     contextActions: DocContextMenuActions? = null,
 ) {
     SelectableDocItem(
+        selectionMode = selectionMode,
         selected = selected,
         onClick = onClick,
         onLongClick = onLongClick,
@@ -293,7 +312,8 @@ private fun DocListRowDetails(
         )
         if (item.tags.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                item.tags.forEach { t -> TagChip(name = t, color = tagColors[t]) }
+                item.tags.take(MAX_LIST_TAGS).forEach { t -> TagChip(name = t, color = tagColors[t]) }
+                TagOverflow(item.tags.size - MAX_LIST_TAGS)
             }
         }
         Row(
@@ -344,6 +364,7 @@ fun DocGridCard(
     contextActions: DocContextMenuActions? = null,
 ) {
     SelectableDocItem(
+        selectionMode = selectionMode,
         selected = selected,
         onClick = onClick,
         onLongClick = onLongClick,
@@ -376,10 +397,29 @@ fun DocGridCard(
                 )
                 if (item.tags.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        item.tags.take(3).forEach { t -> TagChip(name = t, color = tagColors[t]) }
+                        item.tags.take(MAX_GRID_TAGS).forEach { t -> TagChip(name = t, color = tagColors[t]) }
+                        TagOverflow(item.tags.size - MAX_GRID_TAGS)
                     }
                 }
             }
         }
     }
 }
+
+@Composable
+private fun TagOverflow(hidden: Int) {
+    if (hidden <= 0) return
+    Text(
+        text = stringResource(Res.string.library_more_tags, hidden),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        modifier =
+            Modifier
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
+    )
+}
+
+private const val MAX_LIST_TAGS = 5
+private const val MAX_GRID_TAGS = 3

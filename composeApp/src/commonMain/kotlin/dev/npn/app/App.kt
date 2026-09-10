@@ -44,6 +44,7 @@ import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.LocaleProvider
+import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.detail.DocDetailScreen
@@ -517,6 +518,7 @@ private fun RestoreErrorScreen(
     onRetry: () -> Unit,
     onRepickReturned: (String) -> Unit,
 ) {
+    val genericMessage = stringResource(Res.string.common_open_saved_library_failed)
     val picker =
         rememberDirectoryPickerLauncher { dir ->
             if (dir != null) {
@@ -534,10 +536,13 @@ private fun RestoreErrorScreen(
             Icon(Icons.Filled.Warning, contentDescription = null)
             Text(stringResource(Res.string.common_open_library_title), style = MaterialTheme.typography.titleMedium)
             Text(
-                message,
+                genericMessage,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
+            if (message != genericMessage) {
+                TechnicalDetails(message)
+            }
             Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
             OutlinedButton(onClick = { picker.launch() }) {
                 Text(stringResource(Res.string.common_pick_folder_again))

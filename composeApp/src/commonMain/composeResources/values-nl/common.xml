@@ -8,6 +8,8 @@
     <string name="common_retry">Opnieuw proberen</string>
     <string name="common_save">Opslaan</string>
     <string name="common_try_again">Probeer opnieuw</string>
+    <string name="common_show_technical_details">Technische details tonen</string>
+    <string name="common_hide_technical_details">Technische details verbergen</string>
     <string name="common_search_documents">Documenten zoeken</string>
     <string name="common_clear_search">Zoekopdracht wissen</string>
     <string name="common_add_tag">Tag toevoegen</string>
@@ -40,6 +42,7 @@
     <string name="common_scan_imported">Scan geïmporteerd</string>
     <string name="common_scan_already_in_library">Scan staat al in de bibliotheek</string>
     <string name="common_scan_import_failed">Importeren van scan mislukt: %1$s</string>
+    <string name="common_scan_capture_failed">Scannen mislukt. Controleer de cameratoegang en probeer het opnieuw.</string>
     <string name="common_tagging_done_empty">Geen documenten om te taggen</string>
     <string name="common_join_items">%1$s, %2$s</string>
     <string name="common_tagging_apply_summary">%1$s toepassen op %2$s</string>

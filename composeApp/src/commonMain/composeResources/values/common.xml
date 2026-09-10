@@ -9,6 +9,8 @@
     <string name="common_retry">Retry</string>
     <string name="common_save">Save</string>
     <string name="common_try_again">Try again</string>
+    <string name="common_show_technical_details">Show technical details</string>
+    <string name="common_hide_technical_details">Hide technical details</string>
     <string name="common_search_documents">Search documents</string>
     <string name="common_clear_search">Clear search</string>
     <string name="common_add_tag">Add tag</string>
@@ -41,6 +43,7 @@
     <string name="common_scan_imported">Scan imported</string>
     <string name="common_scan_already_in_library">Scan already in library</string>
     <string name="common_scan_import_failed">Scan import failed: %1$s</string>
+    <string name="common_scan_capture_failed">Scanning failed. Check camera access and try again.</string>
     <string name="common_tagging_done_empty">No documents to tag</string>
     <string name="common_join_items">%1$s, %2$s</string>
     <string name="common_tagging_apply_summary">Apply %1$s across %2$s</string>
