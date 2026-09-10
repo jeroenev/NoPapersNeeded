@@ -125,7 +125,7 @@ class DocDetailViewModel(
     private val ocr: OcrFacade,
     private val maintenance: MaintenanceFacade,
     reviewConfig: ReviewConfigFacade,
-    fieldRegistry: FieldRegistry,
+    private val fieldRegistry: FieldRegistry,
     searchQuery: String? = null,
     /**
      * The document row a caller already has in hand (the library list feeds its preview panel one).
@@ -307,7 +307,8 @@ class DocDetailViewModel(
         viewModelScope.launch {
             history.value =
                 runCatching {
-                    HistoryMapper.toHistoryItems(documents.history(docId))
+                    val labels = fieldRegistry.current().associate { it.key to it.label }
+                    HistoryMapper.toHistoryItems(documents.history(docId)) { key -> labels[key] ?: key }
                 }.fold(
                     onSuccess = { items ->
                         if (items.isEmpty()) HistoryUiState.Empty else HistoryUiState.Loaded(items)

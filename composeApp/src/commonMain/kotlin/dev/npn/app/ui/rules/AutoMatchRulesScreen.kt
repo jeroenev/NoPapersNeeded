@@ -51,6 +51,8 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldType
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
@@ -60,9 +62,8 @@ import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_edit
 import no_papers_needed.composeapp.generated.resources.common_name
-import no_papers_needed.composeapp.generated.resources.common_rules_actions_correspondent
+import no_papers_needed.composeapp.generated.resources.common_rules_actions_set
 import no_papers_needed.composeapp.generated.resources.common_rules_actions_tags
-import no_papers_needed.composeapp.generated.resources.common_rules_actions_type
 import no_papers_needed.composeapp.generated.resources.common_rules_add
 import no_papers_needed.composeapp.generated.resources.common_rules_algorithm
 import no_papers_needed.composeapp.generated.resources.common_rules_algorithm_all_words
@@ -77,15 +78,13 @@ import no_papers_needed.composeapp.generated.resources.common_rules_empty_subtit
 import no_papers_needed.composeapp.generated.resources.common_rules_empty_title
 import no_papers_needed.composeapp.generated.resources.common_rules_field_content
 import no_papers_needed.composeapp.generated.resources.common_rules_field_file_name
-import no_papers_needed.composeapp.generated.resources.common_rules_field_title
 import no_papers_needed.composeapp.generated.resources.common_rules_invalid_regex
 import no_papers_needed.composeapp.generated.resources.common_rules_join_parts
 import no_papers_needed.composeapp.generated.resources.common_rules_match_field
 import no_papers_needed.composeapp.generated.resources.common_rules_new_title
 import no_papers_needed.composeapp.generated.resources.common_rules_pattern
 import no_papers_needed.composeapp.generated.resources.common_rules_priority
-import no_papers_needed.composeapp.generated.resources.common_rules_set_correspondent
-import no_papers_needed.composeapp.generated.resources.common_rules_set_document_type
+import no_papers_needed.composeapp.generated.resources.common_rules_set_field
 import no_papers_needed.composeapp.generated.resources.common_rules_summary
 import no_papers_needed.composeapp.generated.resources.common_rules_tags_to_add
 import no_papers_needed.composeapp.generated.resources.common_rules_title
@@ -100,6 +99,7 @@ fun AutoMatchRulesScreen(
 ) {
     val vm: AutoMatchRulesViewModel = viewModel { AutoMatchRulesViewModel(session) }
     val rules by vm.rules.collectAsStateWithLifecycle()
+    val fields by vm.fields.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
@@ -109,6 +109,7 @@ fun AutoMatchRulesScreen(
 
     AutoMatchRulesScaffold(
         rules = rules,
+        fields = fields,
         snackbar = snackbar,
         onBack = onBack,
         onAdd = {
@@ -126,6 +127,7 @@ fun AutoMatchRulesScreen(
     if (showForm) {
         RuleFormDialog(
             rule = editing,
+            fields = fields,
             onConfirm = { rule ->
                 vm.save(rule)
                 showForm = false
@@ -152,6 +154,7 @@ fun AutoMatchRulesScreen(
 @Composable
 private fun AutoMatchRulesScaffold(
     rules: List<AutoMatchRule>,
+    fields: List<FieldDef>,
     snackbar: SnackbarHostState,
     onBack: () -> Unit,
     onAdd: () -> Unit,
@@ -193,6 +196,7 @@ private fun AutoMatchRulesScaffold(
                 items(rules, key = { it.id }) { rule ->
                     RuleCard(
                         rule = rule,
+                        fields = fields,
                         onEdit = onEdit,
                         onDelete = onDelete,
                         onToggle = onToggle,
@@ -221,6 +225,7 @@ private fun DeleteRuleDialog(
 @Composable
 private fun RuleCard(
     rule: AutoMatchRule,
+    fields: List<FieldDef>,
     onEdit: (AutoMatchRule) -> Unit,
     onDelete: (AutoMatchRule) -> Unit,
     onToggle: (String, Boolean) -> Unit,
@@ -234,7 +239,7 @@ private fun RuleCard(
                 Column(Modifier.weight(1f)) {
                     Text(rule.name, style = MaterialTheme.typography.titleMedium)
                     Text(
-                        buildRuleSummary(rule),
+                        buildRuleSummary(rule, fields),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -244,9 +249,9 @@ private fun RuleCard(
                     onCheckedChange = { onToggle(rule.id, it) },
                 )
             }
-            if (rule.tags.isNotEmpty() || rule.correspondent != null || rule.docType != null) {
+            if (rule.tags.isNotEmpty() || rule.sets.isNotEmpty()) {
                 Text(
-                    buildActionsLabel(rule),
+                    buildActionsLabel(rule, fields),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -264,33 +269,42 @@ private fun RuleCard(
 }
 
 @Composable
-private fun buildActionsLabel(rule: AutoMatchRule): String {
+private fun buildActionsLabel(
+    rule: AutoMatchRule,
+    fields: List<FieldDef>,
+): String {
     val parts =
         buildList {
             if (rule.tags.isNotEmpty()) {
                 add(stringResource(Res.string.common_rules_actions_tags, rule.tags.joinToString(", ")))
             }
-            rule.correspondent?.let {
-                add(stringResource(Res.string.common_rules_actions_correspondent, it))
+            for ((key, value) in rule.sets) {
+                add(stringResource(Res.string.common_rules_actions_set, fields.labelFor(key), value))
             }
-            rule.docType?.let { add(stringResource(Res.string.common_rules_actions_type, it)) }
         }
     return parts.reduce { summary, part -> stringResource(Res.string.common_rules_join_parts, summary, part) }
 }
 
 @Composable
-private fun buildRuleSummary(rule: AutoMatchRule): String =
+private fun buildRuleSummary(
+    rule: AutoMatchRule,
+    fields: List<FieldDef>,
+): String =
     stringResource(
         Res.string.common_rules_summary,
-        fieldLabel(rule.field),
+        fieldLabel(rule.field, fields),
         algorithmLabel(rule.algorithm),
         rule.pattern,
         rule.position,
     )
 
+/** The registry label for [key]; a key the registry no longer lists shows as itself. */
+private fun List<FieldDef>.labelFor(key: String): String = firstOrNull { it.key == key }?.label ?: key
+
 @Composable
 private fun RuleFormDialog(
     rule: AutoMatchRule?,
+    fields: List<FieldDef>,
     onConfirm: (AutoMatchRule) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -308,7 +322,7 @@ private fun RuleFormDialog(
             )
         },
         text = {
-            RuleFormFields(state, regexValid) { state = it }
+            RuleFormFields(state, fields, regexValid) { state = it }
         },
         confirmButton = {
             TextButton(
@@ -326,8 +340,7 @@ private fun RuleFormDialog(
                                     .split(',')
                                     .map { it.trim() }
                                     .filter { it.isNotEmpty() },
-                            correspondent = state.correspondent.trim().ifEmpty { null },
-                            docType = state.docType.trim().ifEmpty { null },
+                            sets = state.sets.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() },
                             position = state.position.toIntOrNull() ?: 0,
                         ),
                     )
@@ -341,12 +354,12 @@ private fun RuleFormDialog(
 
 private data class RuleFormState(
     val name: String = "",
-    val field: RuleField = RuleField.CONTENT,
+    val field: RuleField = RuleField.Content,
     val algorithm: MatchAlgorithm = MatchAlgorithm.ANY_WORD,
     val pattern: String = "",
     val tags: String = "",
-    val correspondent: String = "",
-    val docType: String = "",
+    /** Field key -> value the rule sets; blank values are dropped on save. */
+    val sets: Map<String, String> = emptyMap(),
     val position: String = "0",
 )
 
@@ -360,8 +373,7 @@ private fun AutoMatchRule?.toFormState(): RuleFormState =
             algorithm = algorithm,
             pattern = pattern,
             tags = tags.joinToString(", "),
-            correspondent = correspondent ?: "",
-            docType = docType ?: "",
+            sets = sets,
             position = position.toString(),
         )
     }
@@ -369,6 +381,7 @@ private fun AutoMatchRule?.toFormState(): RuleFormState =
 @Composable
 private fun RuleFormFields(
     state: RuleFormState,
+    fields: List<FieldDef>,
     regexValid: Boolean,
     onChange: (RuleFormState) -> Unit,
 ) {
@@ -382,7 +395,7 @@ private fun RuleFormFields(
             label = { Text(stringResource(Res.string.common_name)) },
             singleLine = true,
         )
-        FieldDropdown(state.field) { onChange(state.copy(field = it)) }
+        FieldDropdown(state.field, fields) { onChange(state.copy(field = it)) }
         AlgorithmDropdown(state.algorithm) { onChange(state.copy(algorithm = it)) }
         OutlinedTextField(
             state.pattern,
@@ -407,11 +420,12 @@ private fun RuleFormFields(
         FormTextField(state.tags, stringResource(Res.string.common_rules_tags_to_add)) {
             onChange(state.copy(tags = it))
         }
-        FormTextField(state.correspondent, stringResource(Res.string.common_rules_set_correspondent)) {
-            onChange(state.copy(correspondent = it))
-        }
-        FormTextField(state.docType, stringResource(Res.string.common_rules_set_document_type)) {
-            onChange(state.copy(docType = it))
+        // One "set" row per single-line registry field, in registry order. Prose fields are left
+        // out: a rule stamping the same paragraph onto every match is not a use case worth a row.
+        for (def in fields.filter { it.type != FieldType.LONG_TEXT }) {
+            FormTextField(state.sets[def.key].orEmpty(), stringResource(Res.string.common_rules_set_field, def.label)) {
+                onChange(state.copy(sets = state.sets + (def.key to it)))
+            }
         }
     }
 }
@@ -428,13 +442,14 @@ private fun FormTextField(
 @Composable
 private fun FieldDropdown(
     current: RuleField,
+    fields: List<FieldDef>,
     onSelect: (RuleField) -> Unit,
 ) {
     SimpleDropdown(
         label = stringResource(Res.string.common_rules_match_field),
-        current = fieldLabel(current),
-        options = RuleField.entries,
-        labelOf = ::fieldLabel,
+        current = fieldLabel(current, fields),
+        options = listOf(RuleField.Content, RuleField.FileName) + fields.map { RuleField.Field(it.key) },
+        labelOf = { fieldLabel(it, fields) },
         onSelect = onSelect,
     )
 }
@@ -482,15 +497,15 @@ private fun <T> SimpleDropdown(
 }
 
 @Composable
-private fun fieldLabel(field: RuleField): String = stringResource(field.labelResource)
-
-private val RuleField.labelResource: StringResource
-    get() =
-        when (this) {
-            RuleField.CONTENT -> Res.string.common_rules_field_content
-            RuleField.TITLE -> Res.string.common_rules_field_title
-            RuleField.FILE_NAME -> Res.string.common_rules_field_file_name
-        }
+private fun fieldLabel(
+    field: RuleField,
+    fields: List<FieldDef>,
+): String =
+    when (field) {
+        RuleField.Content -> stringResource(Res.string.common_rules_field_content)
+        RuleField.FileName -> stringResource(Res.string.common_rules_field_file_name)
+        is RuleField.Field -> fields.labelFor(field.key)
+    }
 
 @Composable
 private fun algorithmLabel(algorithm: MatchAlgorithm): String = stringResource(algorithm.labelResource)

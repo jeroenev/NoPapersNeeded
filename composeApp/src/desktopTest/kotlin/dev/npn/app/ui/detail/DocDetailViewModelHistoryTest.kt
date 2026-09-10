@@ -56,7 +56,7 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
             (model.metadata.value.history as HistoryUiState.Loaded).items.map { it.description } shouldContainExactly
                 listOf(
                     HistoryDescription(HistoryTextKey.TAG_ADDED, listOf("invoice")),
-                    HistoryDescription(HistoryTextKey.TITLE_CHANGED, listOf("X")),
+                    HistoryDescription(HistoryTextKey.FIELD_SET, listOf("Title", "X")),
                 )
             job.cancel()
         }

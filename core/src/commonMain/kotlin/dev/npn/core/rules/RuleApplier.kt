@@ -5,9 +5,11 @@ import dev.npn.core.db.AutoMatchRuleDao
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.toRule
-import dev.npn.core.journal.JournalOp
+import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldParse
+import dev.npn.core.model.FieldType
+import dev.npn.core.model.FieldValues
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -59,59 +61,72 @@ class RuleApplier(
         organize: Boolean,
     ) {
         val rules = enabledRules()
-        val ops = buildOps(doc.docId, rules, content, doc.title, doc.fileName)
-        if (ops.isEmpty()) return
+        if (rules.isEmpty()) return
         val changed =
             coordinator.commitBuilt { state ->
-                ops.filter { op ->
-                    when (val journalOp = op.op) {
-                        is JournalOp.TagAdd -> journalOp.tag !in state.effectiveTags(doc.docId)
-
-                        // Write when the effective value DIFFERS (not only when empty): idempotent, so a
-                        // rule fires once and then goes quiet, yet still corrects a non-matching value.
-                        is JournalOp.FieldSet -> state.effectiveFields(doc.docId)[journalOp.key] != journalOp.value
-
-                        else -> true
+                // Matching reads the folded state, not the projection, so a rule on a field sees
+                // the value the journal holds even before the index has caught up.
+                val fields = state.effectiveFields(doc.docId)
+                val tags = state.effectiveTags(doc.docId)
+                val matched = matchRules(rules, content, fields, doc.fileName)
+                buildList {
+                    // Write when the effective value DIFFERS (not only when empty): idempotent, so a
+                    // rule fires once and then goes quiet, yet still corrects a non-matching value.
+                    for ((key, raw) in matched.sets) {
+                        val value = canonicalOrNull(state, key, raw) ?: continue
+                        if (fields[key] != value) add(PendingOp.fieldSet(doc.docId, key, value))
                     }
+                    for (tag in matched.tags) if (tag !in tags) add(PendingOp.tagAdd(doc.docId, tag))
                 }
             }
         if (changed && organize) onMetadataApplied(doc.docId)
     }
 
-    private fun buildOps(
-        docId: String,
+    /**
+     * A rule value goes through the same canonical form the metadata writer enforces; a value
+     * the field's type refuses (e.g. "soon" for a DATE) is skipped rather than written off-type.
+     */
+    private fun canonicalOrNull(
+        state: FoldedState,
+        key: String,
+        raw: String,
+    ): String? {
+        val type = state.effectiveFieldDef(key)?.type ?: FieldType.TEXT
+        return (FieldValues.canonicalize(type, raw) as? FieldParse.Ok)?.canonical
+    }
+
+    private class Matched(
+        val tags: Set<String>,
+        val sets: Map<String, String>,
+    )
+
+    /** Every enabled rule's actions, in priority order; a later rule's value for a key wins. */
+    private fun matchRules(
         rules: List<AutoMatchRule>,
         content: String?,
-        title: String?,
+        fields: Map<String, String>,
         fileName: String,
-    ): List<PendingOp> {
-        val ops = mutableListOf<PendingOp>()
-        val matchedTags = LinkedHashSet<String>()
-
+    ): Matched {
+        val tags = LinkedHashSet<String>()
+        val sets = LinkedHashMap<String, String>()
         for (rule in rules) {
             val value =
-                when (rule.field) {
-                    RuleField.CONTENT -> content
-                    RuleField.TITLE -> title
-                    RuleField.FILE_NAME -> fileName
+                when (val field = rule.field) {
+                    RuleField.Content -> content
+                    RuleField.FileName -> fileName
+                    is RuleField.Field -> fields[field.key]
                 }
             if (!RuleMatcher.matches(rule, value)) continue
             rule.tags
                 .asSequence()
                 .map { it.trim() }
                 .filter { it.isNotEmpty() }
-                .forEach { matchedTags += it }
-            rule.correspondent?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                ops.removeAll { op -> (op.op as? JournalOp.FieldSet)?.key == FieldKeys.CORRESPONDENT }
-                ops += PendingOp.fieldSet(docId, FieldKeys.CORRESPONDENT, it)
-            }
-            rule.docType?.trim()?.takeIf { it.isNotEmpty() }?.let {
-                ops.removeAll { op -> (op.op as? JournalOp.FieldSet)?.key == FieldKeys.DOC_TYPE }
-                ops += PendingOp.fieldSet(docId, FieldKeys.DOC_TYPE, it)
+                .forEach { tags += it }
+            for ((key, raw) in rule.sets) {
+                val trimmed = raw.trim()
+                if (trimmed.isNotEmpty()) sets[key] = trimmed
             }
         }
-
-        matchedTags.forEach { ops += PendingOp.tagAdd(docId, it) }
-        return ops
+        return Matched(tags, sets)
     }
 }

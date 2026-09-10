@@ -4,6 +4,8 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.uniquifyPath
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
 import kotlinx.datetime.number
@@ -12,11 +14,14 @@ import kotlinx.datetime.number
  * Parser and evaluator for user-defined storage path templates.
  *
  * Supported placeholders:
- * - `{title}` / `{title:.3}` (format currently ignored; title is always sanitized as a segment)
- * - `{docDate}` (ISO-8601 date) / `{docDate:yyyy}` / `{docDate:yyyy-MM}` etc.
- * - `{docType}`
- * - `{correspondent}` — optional; missing values produce an empty directory segment that is
- *   collapsed when the path is normalized.
+ * - `{field:key}` — any registry field by key, sanitized as a segment; a missing value produces
+ *   an empty segment that is collapsed when the path is normalized.
+ * - `{field:key:pattern}` — a DATE field formatted with a date pattern (`yyyy`, `yyyy-MM`, ...).
+ *   Formatting any other type is an error.
+ * - `{title}` — alias for `{field:title}` that falls back to the original file name, then to
+ *   "document", so a template never yields an empty file name.
+ * - `{docDate}` / `{doc_date}` (+ `:pattern`), `{docType}`, `{correspondent}` — aliases for the
+ *   corresponding `{field:...}`.
  * - `{tags}` — sorted, sanitized tags joined by ", ".
  *
  * Literal braces can be escaped as `{{` and `}}`.
@@ -92,37 +97,46 @@ object StoragePathTemplate {
         context: StoragePathContext,
     ): String =
         when (name) {
-            "title" -> {
-                require(format.isNullOrBlank()) { "Formatting is only supported for doc_date" }
-                resolveTitle(context)
-            }
-
-            "docDate", "doc_date" -> {
-                sanitizeSegment(resolveDate(context.docDate, format))
-            }
-
-            "docType" -> {
-                formatless(format) { sanitizeSegment(context.docType ?: "") }
-            }
-
-            "correspondent" -> {
-                formatless(format) { sanitizeSegment(context.correspondent ?: "") }
-            }
-
-            "tags" -> {
-                formatless(format) { resolveTags(context.tags) }
-            }
-
-            else -> {
-                error("Unknown template variable '$name'")
-            }
+            "title" -> formatless(format, name) { resolveTitle(context) }
+            "docDate", "doc_date" -> resolveField(FieldKeys.DOC_DATE, format, context)
+            "docType" -> resolveField(FieldKeys.DOC_TYPE, format, context)
+            "correspondent" -> resolveField(FieldKeys.CORRESPONDENT, format, context)
+            "tags" -> formatless(format, name) { resolveTags(context.tags) }
+            "field" -> resolveGenericField(format, context)
+            else -> error("Unknown template variable '$name'")
         }
+
+    /** `{field:key}` or `{field:key:pattern}`: the part after the first colon is `key[:pattern]`. */
+    private fun resolveGenericField(
+        spec: String?,
+        context: StoragePathContext,
+    ): String {
+        require(!spec.isNullOrBlank()) { "{field} needs a key: {field:key}" }
+        val colon = spec.indexOf(FORMAT_SEPARATOR)
+        val key = FieldKeys.normalize(if (colon == -1) spec else spec.substring(0, colon))
+        val pattern = if (colon == -1) null else spec.substring(colon + 1).trim()
+        requireNotNull(key) { "{field} needs a key: {field:key}" }
+        return resolveField(key, pattern, context)
+    }
+
+    /** One field's value as a segment; a pattern is honoured for DATE fields and refused otherwise. */
+    private fun resolveField(
+        key: String,
+        format: String?,
+        context: StoragePathContext,
+    ): String {
+        val value = context.fields[key]
+        if (format.isNullOrBlank()) return sanitizeSegment(value ?: "")
+        require(context.fieldTypes[key] == FieldType.DATE) { "Formatting is only supported for date fields" }
+        return sanitizeSegment(resolveDate(value, format))
+    }
 
     private inline fun formatless(
         format: String?,
+        name: String,
         value: () -> String,
     ): String {
-        require(format.isNullOrBlank()) { "Formatting is only supported for doc_date" }
+        require(format.isNullOrBlank()) { "{$name} does not take a format" }
         return value()
     }
 

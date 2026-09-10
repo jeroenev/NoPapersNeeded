@@ -51,6 +51,7 @@ import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.pdf.ThumbnailStore
+import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.RuleApplier
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.xmp.BakeService
@@ -717,9 +718,8 @@ class LibrarySessionImpl private constructor(
             // every open is a write burst on the awaited open path that invalidates the rules Room
             // flow for no change.
             val storedRules =
-                runCatching {
-                    Json.decodeFromString<List<dev.npn.core.rules.AutoMatchRule>>(deps.autoMatchRulesJson())
-                }.getOrDefault(emptyList())
+                runCatching { AutoMatchRuleJson.decodeList(deps.autoMatchRulesJson()) }
+                    .getOrDefault(emptyList())
                     .map { it.toEntity() }
                     .sortedWith(compareBy({ it.position }, { it.id }))
             if (db.autoMatchRuleDao().getAll() != storedRules) {

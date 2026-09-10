@@ -130,4 +130,23 @@ class XmpParserTest {
             """.trimIndent()
         XmpParser.parse(xml).fields shouldBe mapOf("amount" to "42.50", "ref" to "INV-1")
     }
+
+    @Test
+    fun dedicatedPropertyWinsOverADuplicateBagEntry() {
+        val xml =
+            """
+            <rdf:Description xmlns:npn="https://npn.dev/xmp/1.0/">
+              <npn:correspondent>Dedicated</npn:correspondent>
+              <npn:fields><rdf:Bag>
+                <rdf:li rdf:parseType="Resource">
+                  <npn:fieldKey>correspondent</npn:fieldKey><npn:fieldValue>Bagged</npn:fieldValue>
+                </rdf:li>
+                <rdf:li rdf:parseType="Resource">
+                  <npn:fieldKey>amount</npn:fieldKey><npn:fieldValue>9</npn:fieldValue>
+                </rdf:li>
+              </rdf:Bag></npn:fields>
+            </rdf:Description>
+            """.trimIndent()
+        XmpParser.parse(xml).fields shouldBe mapOf("correspondent" to "Dedicated", "amount" to "9")
+    }
 }

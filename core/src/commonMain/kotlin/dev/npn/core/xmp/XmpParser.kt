@@ -1,5 +1,7 @@
 package dev.npn.core.xmp
 
+import dev.npn.core.model.FieldKeys
+
 /**
  * Tolerant, hand-rolled XMP reader. No XML library is used (none is available in commonMain and
  * we want identical behaviour on every platform).
@@ -25,17 +27,27 @@ object XmpParser {
             NpnXmpData(
                 documentId = readNpn(xml, "documentId"),
                 tags = readBag(xml, "dc:subject"),
-                title = readAlt(xml, "dc:title"),
-                correspondent = readNpn(xml, "correspondent"),
-                docType = readNpn(xml, "documentType"),
-                docDate = readNpn(xml, "documentDate"),
                 reviewed = readNpn(xml, "reviewed"),
-                fields = readFields(xml),
+                fields = readAllFields(xml),
             )
         } catch (_: Throwable) {
             // Never propagate parse failures; a partial/empty result is the contract.
             NpnXmpData.EMPTY
         }
+    }
+
+    /**
+     * One field map from both homes: the `npn:fields` bag first, then the dedicated interop
+     * properties on top. A packet we wrote never has a key in both, so the precedence only matters
+     * for foreign or hand-edited packets, where the dedicated property is the one other tools read.
+     */
+    private fun readAllFields(xml: String): Map<String, String> {
+        val out = LinkedHashMap(readFields(xml))
+        readAlt(xml, "dc:title")?.let { out[FieldKeys.TITLE] = it }
+        readNpn(xml, "correspondent")?.let { out[FieldKeys.CORRESPONDENT] = it }
+        readNpn(xml, "documentType")?.let { out[FieldKeys.DOC_TYPE] = it }
+        readNpn(xml, "documentDate")?.let { out[FieldKeys.DOC_DATE] = it }
+        return out
     }
 
     /** Read an `npn:<local>` value from element form first, then attribute shorthand. */

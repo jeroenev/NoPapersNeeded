@@ -42,17 +42,19 @@ class HistoryMapperTest {
                 event(JournalOp.Unknown("future-op")),
             )
 
-        val items = HistoryMapper.toHistoryItems(events.map(::record))
+        // Registry labels stand in for keys; a key the registry does not know shows as itself.
+        val labels = FieldKeys.SEED_LABELS
+        val items = HistoryMapper.toHistoryItems(events.map(::record)) { labels[it] ?: it }
 
         items.map { it.description } shouldContainExactly
             listOf(
                 history(HistoryTextKey.TAG_ADDED, "invoice"),
                 history(HistoryTextKey.TAG_REMOVED, "draft"),
-                history(HistoryTextKey.TITLE_CHANGED, "New title"),
-                history(HistoryTextKey.NOTE_UPDATED),
-                history(HistoryTextKey.CORRESPONDENT_CHANGED, "Acme"),
-                history(HistoryTextKey.DOCUMENT_TYPE_CHANGED, "Invoice"),
-                history(HistoryTextKey.DOCUMENT_DATE_CHANGED, "2026-07-20"),
+                history(HistoryTextKey.FIELD_SET, "Title", "New title"),
+                history(HistoryTextKey.FIELD_SET, "Notes", "Remember this"),
+                history(HistoryTextKey.FIELD_SET, "Correspondent", "Acme"),
+                history(HistoryTextKey.FIELD_SET, "Document type", "Invoice"),
+                history(HistoryTextKey.FIELD_SET, "Document date", "2026-07-20"),
                 history(HistoryTextKey.MARKED_REVIEWED),
                 history(HistoryTextKey.OCR_ENGINE_PINNED, "tesseract"),
                 history(HistoryTextKey.FIELD_SET, "amount", "42"),
@@ -67,11 +69,11 @@ class HistoryMapperTest {
             listOf(
                 HistoryEventKind.TAG_ADD,
                 HistoryEventKind.TAG_REMOVE,
-                HistoryEventKind.PROP_TITLE,
-                HistoryEventKind.PROP_NOTES,
-                HistoryEventKind.PROP_CORRESPONDENT,
-                HistoryEventKind.PROP_DOC_TYPE,
-                HistoryEventKind.PROP_DOC_DATE,
+                HistoryEventKind.FIELD_SET,
+                HistoryEventKind.FIELD_SET,
+                HistoryEventKind.FIELD_SET,
+                HistoryEventKind.FIELD_SET,
+                HistoryEventKind.FIELD_SET,
                 HistoryEventKind.PROP_REVIEWED,
                 HistoryEventKind.PROP_OCR_ENGINE,
                 HistoryEventKind.FIELD_SET,
@@ -110,7 +112,7 @@ class HistoryMapperTest {
         val items = HistoryMapper.toHistoryItems(events.map(::record))
         items.map { it.description } shouldContainExactly
             listOf(
-                history(HistoryTextKey.TITLE_CLEARED),
+                history(HistoryTextKey.FIELD_REMOVED, FieldKeys.TITLE),
                 history(HistoryTextKey.MARKED_NEEDS_REVIEW),
                 history(HistoryTextKey.OCR_ENGINE_CLEARED),
             )
@@ -132,4 +134,13 @@ class HistoryMapperTest {
         key: HistoryTextKey,
         vararg arguments: String,
     ) = HistoryDescription(key, arguments.toList())
+
+    @Test
+    fun clipsLongFieldValues() {
+        val long = "x".repeat(200)
+        val items = HistoryMapper.toHistoryItems(listOf(record(event(JournalOp.FieldSet(FieldKeys.NOTES, long)))))
+        val shown = items.single().description.arguments[1]
+        shown.length shouldBe 80
+        shown.endsWith("\u2026") shouldBe true
+    }
 }

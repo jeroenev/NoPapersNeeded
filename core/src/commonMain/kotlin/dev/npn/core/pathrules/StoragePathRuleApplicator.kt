@@ -2,6 +2,7 @@ package dev.npn.core.pathrules
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.toFieldDef
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.FtsRows
@@ -38,12 +39,15 @@ class StoragePathRuleApplicator(
         val tags = documentDao.tagsForDocs(listOf(docId)).map { it.tag }.distinct()
         val context =
             StoragePathContext(
-                title = doc.title,
-                docDate = doc.docDate,
-                docType = doc.docType,
-                correspondent = doc.correspondent,
+                fields = db.documentFieldDao().fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue },
                 tags = tags,
                 originalFileName = doc.fileName,
+                fieldTypes =
+                    db
+                        .fieldDefDao()
+                        .all()
+                        .mapNotNull { it.toFieldDef() }
+                        .associate { it.key to it.type },
             )
         val expanded = StoragePathTemplate.expand(rule.template, context).getOrNull() ?: return false
         val target = resolveUniqueTarget(fs, documentDao, docId, expanded)

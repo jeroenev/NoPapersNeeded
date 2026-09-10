@@ -1,5 +1,6 @@
 package dev.npn.core.db
 
+import androidx.room3.ColumnInfo
 import androidx.room3.Dao
 import androidx.room3.Delete
 import androidx.room3.Entity
@@ -11,6 +12,7 @@ import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
 import kotlinx.coroutines.flow.Flow
+import kotlinx.serialization.json.Json
 
 /**
  * Local-only rule storage. Rules are not part of the journal; they live in the disposable index
@@ -21,13 +23,14 @@ data class AutoMatchRuleEntity(
     @PrimaryKey val id: String,
     val name: String,
     val enabled: Boolean,
+    /** [RuleField.wire]. */
     val field: String,
     val algorithm: String,
     val pattern: String,
     /** Comma-separated tag names to add when the rule matches. */
     val tags: String?,
-    val correspondent: String?,
-    val docType: String?,
+    /** JSON object of field key -> value to set when the rule matches. */
+    @ColumnInfo(defaultValue = "{}") val sets: String,
     val position: Int,
 )
 
@@ -76,12 +79,11 @@ internal fun AutoMatchRuleEntity.toRule(): AutoMatchRule =
         id = id,
         name = name,
         enabled = enabled,
-        field = RuleField.entries.firstOrNull { it.name == field } ?: RuleField.CONTENT,
+        field = RuleField.fromWire(field) ?: RuleField.Content,
         algorithm = MatchAlgorithm.entries.firstOrNull { it.name == algorithm } ?: MatchAlgorithm.ANY_WORD,
         pattern = pattern,
         tags = tags?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList(),
-        correspondent = correspondent,
-        docType = docType,
+        sets = runCatching { setsJson.decodeFromString<Map<String, String>>(sets) }.getOrDefault(emptyMap()),
         position = position,
     )
 
@@ -90,7 +92,7 @@ internal fun AutoMatchRule.toEntity(): AutoMatchRuleEntity =
         id = id,
         name = name.trim(),
         enabled = enabled,
-        field = field.name,
+        field = field.wire,
         algorithm = algorithm.name,
         pattern = pattern.trim(),
         tags =
@@ -99,7 +101,8 @@ internal fun AutoMatchRule.toEntity(): AutoMatchRuleEntity =
                 .filter { it.isNotEmpty() }
                 .joinToString(",")
                 .takeIf { it.isNotEmpty() },
-        correspondent = correspondent?.trim()?.ifEmpty { null },
-        docType = docType?.trim()?.ifEmpty { null },
+        sets = setsJson.encodeToString(sets.mapValues { it.value.trim() }.filterValues { it.isNotEmpty() }),
         position = position,
     )
+
+private val setsJson = Json

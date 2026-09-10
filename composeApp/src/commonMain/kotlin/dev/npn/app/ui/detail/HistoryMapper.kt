@@ -4,7 +4,6 @@ import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 
 /**
@@ -15,11 +14,6 @@ import dev.npn.core.model.SystemProperty
 enum class HistoryEventKind {
     TAG_ADD,
     TAG_REMOVE,
-    PROP_TITLE,
-    PROP_NOTES,
-    PROP_CORRESPONDENT,
-    PROP_DOC_TYPE,
-    PROP_DOC_DATE,
     PROP_REVIEWED,
     PROP_OCR_ENGINE,
     FIELD_SET,
@@ -55,16 +49,6 @@ enum class HistoryTextKey {
     UNDECODABLE,
     TAG_ADDED,
     TAG_REMOVED,
-    TITLE_CLEARED,
-    TITLE_CHANGED,
-    NOTE_CLEARED,
-    NOTE_UPDATED,
-    CORRESPONDENT_CLEARED,
-    CORRESPONDENT_CHANGED,
-    DOCUMENT_TYPE_CLEARED,
-    DOCUMENT_TYPE_CHANGED,
-    DOCUMENT_DATE_CLEARED,
-    DOCUMENT_DATE_CHANGED,
     MARKED_REVIEWED,
     MARKED_NEEDS_REVIEW,
     REVIEW_STATE_CLEARED,
@@ -87,12 +71,19 @@ enum class HistoryTextKey {
 
 /**
  * Maps decoded journal events into human-readable timeline items. The input is already ordered by
- * HLC; the output preserves that order.
+ * HLC; the output preserves that order. [fieldLabel] resolves a field key to the registry label
+ * the user knows it by; a key the registry no longer lists is shown as itself.
  */
 object HistoryMapper {
-    fun toHistoryItems(records: List<DocumentHistoryRecord>): List<HistoryItem> =
+    /** Longer field values are cut in the timeline; the field itself still holds the whole text. */
+    private const val MAX_VALUE_CHARS = 80
+
+    fun toHistoryItems(
+        records: List<DocumentHistoryRecord>,
+        fieldLabel: (String) -> String = { it },
+    ): List<HistoryItem> =
         records.map { record ->
-            record.event?.let(::toHistoryItem) ?: HistoryItem(
+            record.event?.let { toHistoryItem(it, fieldLabel) } ?: HistoryItem(
                 hlc = record.hlc,
                 kind = HistoryEventKind.UNKNOWN,
                 description = historyText(HistoryTextKey.UNDECODABLE, record.operation),
@@ -100,7 +91,10 @@ object HistoryMapper {
             )
         }
 
-    private fun toHistoryItem(event: JournalEvent): HistoryItem {
+    private fun toHistoryItem(
+        event: JournalEvent,
+        fieldLabel: (String) -> String,
+    ): HistoryItem {
         val op = event.op
         val kind = opKind(op)
         val description =
@@ -118,7 +112,7 @@ object HistoryMapper {
                 }
 
                 is JournalOp.FieldSet -> {
-                    fieldDescription(op.key, op.value)
+                    fieldDescription(fieldLabel(op.key), op.value)
                 }
 
                 is JournalOp.DocTrash -> {
@@ -192,14 +186,7 @@ object HistoryMapper {
             }
 
             is JournalOp.FieldSet -> {
-                when (op.key) {
-                    FieldKeys.TITLE -> HistoryEventKind.PROP_TITLE
-                    FieldKeys.NOTES -> HistoryEventKind.PROP_NOTES
-                    FieldKeys.CORRESPONDENT -> HistoryEventKind.PROP_CORRESPONDENT
-                    FieldKeys.DOC_TYPE -> HistoryEventKind.PROP_DOC_TYPE
-                    FieldKeys.DOC_DATE -> HistoryEventKind.PROP_DOC_DATE
-                    else -> if (op.value == null) HistoryEventKind.FIELD_REMOVE else HistoryEventKind.FIELD_SET
-                }
+                if (op.value == null) HistoryEventKind.FIELD_REMOVE else HistoryEventKind.FIELD_SET
             }
 
             is JournalOp.DocTrash -> {
@@ -246,54 +233,18 @@ object HistoryMapper {
             }
         }
 
-    /** Well-known fields keep their dedicated wording; every other field reads `key: value`. */
+    /** One wording for every field: `label` cleared, or `label` set to a (possibly cut) value. */
     private fun fieldDescription(
-        key: String,
+        label: String,
         value: String?,
     ): HistoryDescription =
-        when (key) {
-            FieldKeys.TITLE -> {
-                clearedOrChanged(value, HistoryTextKey.TITLE_CLEARED, HistoryTextKey.TITLE_CHANGED)
-            }
-
-            FieldKeys.NOTES -> {
-                if (value ==
-                    null
-                ) {
-                    historyText(HistoryTextKey.NOTE_CLEARED)
-                } else {
-                    historyText(HistoryTextKey.NOTE_UPDATED)
-                }
-            }
-
-            FieldKeys.CORRESPONDENT -> {
-                clearedOrChanged(value, HistoryTextKey.CORRESPONDENT_CLEARED, HistoryTextKey.CORRESPONDENT_CHANGED)
-            }
-
-            FieldKeys.DOC_TYPE -> {
-                clearedOrChanged(value, HistoryTextKey.DOCUMENT_TYPE_CLEARED, HistoryTextKey.DOCUMENT_TYPE_CHANGED)
-            }
-
-            FieldKeys.DOC_DATE -> {
-                clearedOrChanged(value, HistoryTextKey.DOCUMENT_DATE_CLEARED, HistoryTextKey.DOCUMENT_DATE_CHANGED)
-            }
-
-            else -> {
-                if (value ==
-                    null
-                ) {
-                    historyText(HistoryTextKey.FIELD_REMOVED, key)
-                } else {
-                    historyText(HistoryTextKey.FIELD_SET, key, value)
-                }
-            }
+        if (value == null) {
+            historyText(HistoryTextKey.FIELD_REMOVED, label)
+        } else {
+            historyText(HistoryTextKey.FIELD_SET, label, value.clipped())
         }
 
-    private fun clearedOrChanged(
-        value: String?,
-        cleared: HistoryTextKey,
-        changed: HistoryTextKey,
-    ): HistoryDescription = if (value == null) historyText(cleared) else historyText(changed, value)
+    private fun String.clipped(): String = if (length > MAX_VALUE_CHARS) take(MAX_VALUE_CHARS - 1) + "\u2026" else this
 
     private fun shortId(id: String): String = if (id.length > 8) "${id.take(8)}..." else id
 }

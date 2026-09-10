@@ -6,6 +6,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.pathrules.StoragePathContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_change_library
@@ -26,7 +27,8 @@ import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail
 import org.jetbrains.compose.resources.stringResource
 
 /** Variables accepted by the storage-path template, echoed in the field's help copy. */
-private const val STORAGE_PATH_VARIABLES = "{title}, {doc_date}, {doc_date:yyyy-MM}, {docType}, {correspondent}, {tags}"
+private const val STORAGE_PATH_VARIABLES =
+    "{title}, {doc_date}, {doc_date:yyyy-MM}, {docType}, {correspondent}, {tags}, {field:key}, {field:key:yyyy}"
 
 /**
  * Where documents live: which folder is the library, how PDFs are laid out inside it, and the
@@ -102,10 +104,13 @@ private fun StoragePathRuleEditor(
 @Composable
 private fun sampleStoragePathContext(): StoragePathContext =
     StoragePathContext(
-        title = stringResource(Res.string.common_settings_storage_sample_title),
-        docDate = "2026-07-20",
-        docType = stringResource(Res.string.common_settings_storage_sample_type),
-        correspondent = stringResource(Res.string.common_settings_storage_sample_correspondent),
+        fields =
+            mapOf(
+                FieldKeys.TITLE to stringResource(Res.string.common_settings_storage_sample_title),
+                FieldKeys.DOC_DATE to "2026-07-20",
+                FieldKeys.DOC_TYPE to stringResource(Res.string.common_settings_storage_sample_type),
+                FieldKeys.CORRESPONDENT to stringResource(Res.string.common_settings_storage_sample_correspondent),
+            ),
         tags =
             listOf(
                 stringResource(Res.string.common_settings_storage_sample_tag_home),

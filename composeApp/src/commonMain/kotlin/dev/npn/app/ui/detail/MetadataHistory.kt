@@ -12,17 +12,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.LabelOff
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
-import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Link
-import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TextFields
-import androidx.compose.material.icons.filled.Title
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -114,11 +110,6 @@ private fun HistoryEventKind.icon() =
     when (this) {
         HistoryEventKind.TAG_ADD -> Icons.AutoMirrored.Filled.Label
         HistoryEventKind.TAG_REMOVE -> Icons.AutoMirrored.Filled.LabelOff
-        HistoryEventKind.PROP_TITLE -> Icons.Filled.Title
-        HistoryEventKind.PROP_NOTES -> Icons.Filled.Description
-        HistoryEventKind.PROP_CORRESPONDENT -> Icons.Filled.Person
-        HistoryEventKind.PROP_DOC_TYPE -> Icons.Filled.Description
-        HistoryEventKind.PROP_DOC_DATE -> Icons.Filled.CalendarToday
         HistoryEventKind.PROP_REVIEWED -> Icons.Filled.CheckCircle
         HistoryEventKind.PROP_OCR_ENGINE -> Icons.Filled.Settings
         HistoryEventKind.FIELD_SET -> Icons.Filled.TextFields

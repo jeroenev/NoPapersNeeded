@@ -19,6 +19,7 @@ import dev.npn.core.app.SettingsSnapshot
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.toAiConfig
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import dev.npn.core.pathrules.StoragePathContext
@@ -293,10 +294,13 @@ class SettingsViewModel(
     private companion object {
         val VALIDATION_CONTEXT =
             StoragePathContext(
-                title = "sample-title",
-                docDate = "2026-07-20",
-                docType = "sample-type",
-                correspondent = "sample-correspondent",
+                fields =
+                    mapOf(
+                        FieldKeys.TITLE to "sample-title",
+                        FieldKeys.DOC_DATE to "2026-07-20",
+                        FieldKeys.DOC_TYPE to "sample-type",
+                        FieldKeys.CORRESPONDENT to "sample-correspondent",
+                    ),
                 tags = listOf("sample-tag"),
                 originalFileName = "scan.pdf",
             )

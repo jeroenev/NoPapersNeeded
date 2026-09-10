@@ -4,11 +4,10 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 class RuleMatcherTest {
-
     private fun rule(
         algorithm: MatchAlgorithm,
         pattern: String,
-        field: RuleField = RuleField.CONTENT,
+        field: RuleField = RuleField.Content,
     ) = AutoMatchRule(
         id = "r1",
         name = "test",

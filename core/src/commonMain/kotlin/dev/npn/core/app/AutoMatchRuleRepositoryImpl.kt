@@ -4,11 +4,10 @@ import dev.npn.core.db.AutoMatchRuleDao
 import dev.npn.core.db.toEntity
 import dev.npn.core.db.toRule
 import dev.npn.core.rules.AutoMatchRule
+import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.RuleApplier
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -17,7 +16,6 @@ class AutoMatchRuleRepositoryImpl(
     private val applier: RuleApplier,
     private val persist: suspend (String) -> Unit = {},
 ) : AutoMatchRuleRepository {
-
     override fun observeRules(): Flow<List<AutoMatchRule>> =
         dao.observeAll().map { list ->
             list.map { it.toRule() }.sortedWith(compareBy(AutoMatchRule::position, AutoMatchRule::id))
@@ -37,13 +35,16 @@ class AutoMatchRuleRepositoryImpl(
         persistRules()
     }
 
-    override suspend fun setEnabled(id: String, enabled: Boolean) {
+    override suspend fun setEnabled(
+        id: String,
+        enabled: Boolean,
+    ) {
         dao.setEnabled(id, enabled)
         persistRules()
         if (enabled) applier.applyToExistingDocs()
     }
 
     private suspend fun persistRules() {
-        persist(Json.encodeToString(dao.getAll().map { it.toRule() }))
+        persist(AutoMatchRuleJson.encodeList(dao.getAll().map { it.toRule() }))
     }
 }

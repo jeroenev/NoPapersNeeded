@@ -34,7 +34,6 @@ class DocContentFacadeImpl(
         println("$message: ${failure.message}")
     },
 ) : DocContentFacade {
-
     private val documentDao get() = db.documentDao()
 
     override suspend fun thumbnailPath(docId: String): String? {
@@ -58,14 +57,21 @@ class DocContentFacadeImpl(
         }
     }
 
-    override suspend fun renderPage(docId: String, pageIndex: Int, maxDim: Int): ByteArray? {
+    override suspend fun renderPage(
+        docId: String,
+        pageIndex: Int,
+        maxDim: Int,
+    ): ByteArray? {
         val doc = documentDao.getByDocId(docId) ?: return null
         return try {
             val bytes = fs.readBytes(doc.relPath)
             renderGate.render {
                 pdfEngine.open(bytes).use { handle ->
-                    if (pageIndex < 0 || pageIndex >= handle.pageCount) null
-                    else handle.renderPagePng(pageIndex, maxDim)
+                    if (pageIndex < 0 || pageIndex >= handle.pageCount) {
+                        null
+                    } else {
+                        handle.renderPagePng(pageIndex, maxDim)
+                    }
                 }
             }
         } catch (t: Throwable) {
@@ -74,8 +80,7 @@ class DocContentFacadeImpl(
         }
     }
 
-    override suspend fun clearThumbnailCache(): Int =
-        runCatching { thumbnailService.clearCache() }.getOrDefault(0)
+    override suspend fun clearThumbnailCache(): Int = runCatching { thumbnailService.clearCache() }.getOrDefault(0)
 
     override suspend fun extractedText(docId: String): String? =
         runCatching { db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } }.getOrNull()
@@ -103,9 +108,10 @@ class DocContentFacadeImpl(
     override suspend fun bakeInPlace(docId: String): Boolean {
         val doc = documentDao.getByDocId(docId) ?: return false
         return try {
-            val result = bakeService.bakeInPlace(doc.relPath, buildXmpData(docId)) { oldSha, newSha ->
-                coordinator.commitAndApply(listOf(PendingOp.relink(oldSha, newSha)))
-            }
+            val result =
+                bakeService.bakeInPlace(doc.relPath, buildXmpData(docId)) { oldSha, newSha ->
+                    coordinator.commitAndApply(listOf(PendingOp.relink(oldSha, newSha)))
+                }
             // Update the documents row to the new identity, carrying metadata over. The relink
             // fold already resolves old->new; here we materialize the new canonical row now so the
             // UI reflects the new docId immediately.
@@ -138,19 +144,18 @@ class DocContentFacadeImpl(
         }
     }
 
-    /** Assemble the XMP payload from the current DB row + tags + custom fields. */
+    /** Assemble the XMP payload from the current DB row, its tags and its field rows. */
     private suspend fun buildXmpData(docId: String): NpnXmpData {
         val doc = documentDao.getByDocId(docId)
         val tags = db.tagDao().tagsForDocument(docId)
-        val fields = db.documentFieldDao().fieldsForDocs(listOf(docId))
-            .associate { it.fieldKey to it.fieldValue }
+        val fields =
+            db
+                .documentFieldDao()
+                .fieldsForDocs(listOf(docId))
+                .associate { it.fieldKey to it.fieldValue }
         return NpnXmpData(
             documentId = docId,
             tags = tags,
-            title = doc?.title,
-            correspondent = doc?.correspondent,
-            docType = doc?.docType,
-            docDate = doc?.docDate,
             reviewed = if (doc?.reviewed == true) "true" else "false",
             fields = fields,
         )

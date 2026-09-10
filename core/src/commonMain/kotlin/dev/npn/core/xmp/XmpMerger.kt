@@ -1,5 +1,7 @@
 package dev.npn.core.xmp
 
+import dev.npn.core.model.FieldKeys
+
 /**
  * Merge policy for producing the XMP packet to bake.
  *
@@ -13,14 +15,17 @@ package dev.npn.core.xmp
  * documented and acceptable per PLAN section 2.
  */
 object XmpMerger {
-
-    fun merge(existingXmp: String?, data: NpnXmpData): String {
-        val effective = if (data.title == null && existingXmp != null) {
-            val existingTitle = XmpParser.parse(existingXmp).title
-            if (existingTitle != null) data.copy(title = existingTitle) else data
-        } else {
-            data
-        }
+    fun merge(
+        existingXmp: String?,
+        data: NpnXmpData,
+    ): String {
+        val effective =
+            if (data.title == null && existingXmp != null) {
+                val existingTitle = XmpParser.parse(existingXmp).title
+                if (existingTitle != null) data.withField(FieldKeys.TITLE, existingTitle) else data
+            } else {
+                data
+            }
         return XmpSerializer.serialize(effective)
     }
 }

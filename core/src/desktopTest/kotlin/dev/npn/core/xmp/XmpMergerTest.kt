@@ -4,18 +4,17 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 class XmpMergerTest {
-
     @Test
     fun noExistingProducesFreshPacket() {
-        val data = NpnXmpData(tags = listOf("t"), reviewed = "false")
+        val data = xmp(tags = listOf("t"), reviewed = "false")
         val merged = XmpMerger.merge(null, data)
         XmpParser.parse(merged) shouldBe data
     }
 
     @Test
     fun carriesExistingTitleWhenDataTitleNull() {
-        val existing = XmpSerializer.serialize(NpnXmpData(title = "Old Title", tags = listOf("x")))
-        val data = NpnXmpData(tags = listOf("new"), reviewed = "true")
+        val existing = XmpSerializer.serialize(xmp(title = "Old Title", tags = listOf("x")))
+        val data = xmp(tags = listOf("new"), reviewed = "true")
         val merged = XmpMerger.merge(existing, data)
         val parsed = XmpParser.parse(merged)
         parsed.title shouldBe "Old Title"
@@ -25,22 +24,23 @@ class XmpMergerTest {
 
     @Test
     fun dataTitleWinsOverExisting() {
-        val existing = XmpSerializer.serialize(NpnXmpData(title = "Old Title"))
-        val data = NpnXmpData(title = "New Title")
+        val existing = XmpSerializer.serialize(xmp(title = "Old Title"))
+        val data = xmp(title = "New Title")
         XmpParser.parse(XmpMerger.merge(existing, data)).title shouldBe "New Title"
     }
 
     @Test
     fun foreignPropsDropped() {
-        val foreign = """
+        val foreign =
+            """
             <rdf:Description rdf:about=""
                 xmlns:dc="http://purl.org/dc/elements/1.1/"
                 xmlns:pdf="http://ns.adobe.com/pdf/1.3/">
               <pdf:Producer>Other Tool</pdf:Producer>
               <dc:title><rdf:Alt><rdf:li xml:lang="x-default">Carried</rdf:li></rdf:Alt></dc:title>
             </rdf:Description>
-        """.trimIndent()
-        val merged = XmpMerger.merge(foreign, NpnXmpData(tags = listOf("k")))
+            """.trimIndent()
+        val merged = XmpMerger.merge(foreign, xmp(tags = listOf("k")))
         // Foreign producer dropped, title carried.
         (merged.contains("pdf:Producer")) shouldBe false
         (merged.contains("Carried")) shouldBe true

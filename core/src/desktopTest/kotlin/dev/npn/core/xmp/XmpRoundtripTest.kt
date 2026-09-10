@@ -4,7 +4,6 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 class XmpRoundtripTest {
-
     private fun roundtrip(data: NpnXmpData) {
         val xml = XmpSerializer.serialize(data)
         XmpParser.parse(xml) shouldBe data
@@ -13,7 +12,7 @@ class XmpRoundtripTest {
     @Test
     fun fullData() {
         roundtrip(
-            NpnXmpData(
+            xmp(
                 documentId = "b".repeat(64),
                 tags = listOf("alpha", "beta", "gamma"),
                 title = "A title",
@@ -29,19 +28,20 @@ class XmpRoundtripTest {
     @Test
     fun customFieldsWithSpecialCharacters() {
         roundtrip(
-            NpnXmpData(
-                fields = mapOf(
-                    "total & tax" to "€1.234,56",
-                    "note" to "<b>bold</b> & \"quoted\"",
-                    "発票番号" to "Ünïcödé-42",
-                ),
+            xmp(
+                fields =
+                    mapOf(
+                        "total & tax" to "€1.234,56",
+                        "note" to "<b>bold</b> & \"quoted\"",
+                        "発票番号" to "Ünïcödé-42",
+                    ),
             ),
         )
     }
 
     @Test
     fun customFieldsOnly() {
-        roundtrip(NpnXmpData(fields = mapOf("amount" to "9.99")))
+        roundtrip(xmp(fields = mapOf("amount" to "9.99")))
     }
 
     @Test
@@ -51,13 +51,13 @@ class XmpRoundtripTest {
 
     @Test
     fun emptyTagsButOtherProps() {
-        roundtrip(NpnXmpData(documentId = "c".repeat(64), tags = emptyList(), reviewed = "false"))
+        roundtrip(xmp(documentId = "c".repeat(64), tags = emptyList(), reviewed = "false"))
     }
 
     @Test
     fun unicodeContent() {
         roundtrip(
-            NpnXmpData(
+            xmp(
                 tags = listOf("Räkning", "ökonomi", "発票"),
                 title = "Räkning ökonomi 発票",
                 correspondent = "Ünïcödé Ltd 発",
@@ -68,7 +68,7 @@ class XmpRoundtripTest {
     @Test
     fun xmlSpecialCharactersInTags() {
         roundtrip(
-            NpnXmpData(
+            xmp(
                 tags = listOf("<>&\"'", "a & b", "less < than", "greater > than"),
                 title = "T<i>t&le\"'",
             ),
@@ -77,16 +77,16 @@ class XmpRoundtripTest {
 
     @Test
     fun onlyTitle() {
-        roundtrip(NpnXmpData(title = "solo"))
+        roundtrip(xmp(title = "solo"))
     }
 
     @Test
     fun singleTag() {
-        roundtrip(NpnXmpData(tags = listOf("only")))
+        roundtrip(xmp(tags = listOf("only")))
     }
 
     @Test
     fun whitespaceAndAmpersandHeavy() {
-        roundtrip(NpnXmpData(tags = listOf("a&amp;b", "x&#65;y"), title = "&&&<<<"))
+        roundtrip(xmp(tags = listOf("a&amp;b", "x&#65;y"), title = "&&&<<<"))
     }
 }

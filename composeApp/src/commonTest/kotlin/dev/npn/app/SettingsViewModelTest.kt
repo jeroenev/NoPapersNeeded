@@ -13,6 +13,7 @@ import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.ViewType
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
 import io.kotest.matchers.collections.shouldContainExactly
@@ -314,10 +315,13 @@ class SettingsViewModelTest : MainDispatcherTest() {
     private companion object {
         val PREVIEW_CONTEXT =
             StoragePathContext(
-                title = "Elektriciteitsrekening",
-                docDate = "2026-07-20",
-                docType = "Factuur",
-                correspondent = "Voorbeeld Energie",
+                fields =
+                    mapOf(
+                        FieldKeys.TITLE to "Elektriciteitsrekening",
+                        FieldKeys.DOC_DATE to "2026-07-20",
+                        FieldKeys.DOC_TYPE to "Factuur",
+                        FieldKeys.CORRESPONDENT to "Voorbeeld Energie",
+                    ),
                 tags = listOf("thuis", "nutsvoorzieningen"),
                 originalFileName = "scan.pdf",
             )

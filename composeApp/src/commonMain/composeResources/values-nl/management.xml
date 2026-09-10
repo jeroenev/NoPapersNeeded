@@ -13,8 +13,7 @@
     <string name="common_rules_delete_title">Regel verwijderen</string>
     <string name="common_rules_delete_message">Deze regel verwijderen? Tags die al zijn toegepast, worden niet ongedaan gemaakt.</string>
     <string name="common_rules_actions_tags">Tags: %1$s</string>
-    <string name="common_rules_actions_correspondent">Correspondent: %1$s</string>
-    <string name="common_rules_actions_type">Type: %1$s</string>
+    <string name="common_rules_actions_set">%1$s: %2$s</string>
     <string name="common_rules_join_parts">%1$s · %2$s</string>
     <string name="common_rules_summary">%1$s · %2$s · %3$s · prioriteit %4$d</string>
     <string name="common_rules_new_title">Nieuwe regel</string>
@@ -23,12 +22,10 @@
     <string name="common_rules_invalid_regex">Ongeldige reguliere expressie</string>
     <string name="common_rules_priority">Prioriteit</string>
     <string name="common_rules_tags_to_add">Toe te voegen tags (gescheiden door komma's)</string>
-    <string name="common_rules_set_correspondent">Correspondent instellen (optioneel)</string>
-    <string name="common_rules_set_document_type">Documenttype instellen (optioneel)</string>
+    <string name="common_rules_set_field">%1$s instellen (optioneel)</string>
     <string name="common_rules_match_field">Vergelijkingsveld</string>
     <string name="common_rules_algorithm">Algoritme</string>
     <string name="common_rules_field_content">Geëxtraheerde tekst</string>
-    <string name="common_rules_field_title">Titel</string>
     <string name="common_rules_field_file_name">Bestandsnaam</string>
     <string name="common_rules_algorithm_exact">Exact</string>
     <string name="common_rules_algorithm_any_word">Een willekeurig woord</string>

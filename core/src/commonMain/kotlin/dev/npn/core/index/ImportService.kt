@@ -134,14 +134,7 @@ class ImportService(
             return uniqueTargetPath(toDir, cleanName)
         }
         val context =
-            StoragePathContext(
-                title = null,
-                docDate = null,
-                docType = null,
-                correspondent = null,
-                tags = emptyList(),
-                originalFileName = cleanName,
-            )
+            StoragePathContext(fields = emptyMap(), tags = emptyList(), originalFileName = cleanName)
         val expanded = StoragePathTemplate.expand(rule.template, context).getOrNull()
         return if (expanded.isNullOrBlank()) {
             uniqueTargetPath(toDir, cleanName)

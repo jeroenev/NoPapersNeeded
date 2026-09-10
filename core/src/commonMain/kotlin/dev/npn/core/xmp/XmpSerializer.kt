@@ -16,7 +16,6 @@ package dev.npn.core.xmp
  * processing instructions so external tools (exiftool, Zotero) recognize it.
  */
 object XmpSerializer {
-
     const val NPN_NAMESPACE = "https://npn.dev/xmp/1.0/"
     const val DC_NAMESPACE = "http://purl.org/dc/elements/1.1/"
 
@@ -31,15 +30,22 @@ object XmpSerializer {
         sb.append("  <rdf:RDF xmlns:rdf=\"http://www.w3.org/1999/02/22-rdf-syntax-ns#\">").append('\n')
         sb.append("    <rdf:Description rdf:about=\"\"")
         sb.append(" xmlns:dc=\"").append(DC_NAMESPACE).append('"')
-        sb.append(" xmlns:npn=\"").append(NPN_NAMESPACE).append("\">").append('\n')
+        sb
+            .append(" xmlns:npn=\"")
+            .append(NPN_NAMESPACE)
+            .append("\">")
+            .append('\n')
 
         // dc:title as an rdf:Alt with a single x-default entry.
-        if (data.title != null) {
+        val title = data.title
+        if (title != null) {
             sb.append("      <dc:title>").append('\n')
             sb.append("        <rdf:Alt>").append('\n')
-            sb.append("          <rdf:li xml:lang=\"x-default\">")
-                .append(escape(data.title))
-                .append("</rdf:li>").append('\n')
+            sb
+                .append("          <rdf:li xml:lang=\"x-default\">")
+                .append(escape(title))
+                .append("</rdf:li>")
+                .append('\n')
             sb.append("        </rdf:Alt>").append('\n')
             sb.append("      </dc:title>").append('\n')
         }
@@ -49,7 +55,11 @@ object XmpSerializer {
             sb.append("      <dc:subject>").append('\n')
             sb.append("        <rdf:Bag>").append('\n')
             for (tag in data.tags) {
-                sb.append("          <rdf:li>").append(escape(tag)).append("</rdf:li>").append('\n')
+                sb
+                    .append("          <rdf:li>")
+                    .append(escape(tag))
+                    .append("</rdf:li>")
+                    .append('\n')
             }
             sb.append("        </rdf:Bag>").append('\n')
             sb.append("      </dc:subject>").append('\n')
@@ -62,16 +72,26 @@ object XmpSerializer {
         appendSimple(sb, "npn:documentDate", data.docDate)
         appendSimple(sb, "npn:reviewed", data.reviewed)
 
-        // npn:fields as an rdf:Bag of key/value structs (arbitrary user keys, sorted for
-        // determinism). Wrapping keys in a value element avoids emitting user text as XML names.
-        if (data.fields.isNotEmpty()) {
+        // npn:fields as an rdf:Bag of key/value structs (sorted for determinism). The keys that
+        // already went out as dedicated properties above are skipped, so no value is written twice.
+        // Wrapping keys in a value element avoids emitting user text as XML names.
+        val bagged = data.fields.filterKeys { it !in NpnXmpData.DEDICATED_KEYS }
+        if (bagged.isNotEmpty()) {
             sb.append("      <npn:fields>").append('\n')
             sb.append("        <rdf:Bag>").append('\n')
-            for (key in data.fields.keys.sorted()) {
-                val value = data.fields.getValue(key)
+            for (key in bagged.keys.sorted()) {
+                val value = bagged.getValue(key)
                 sb.append("          <rdf:li rdf:parseType=\"Resource\">").append('\n')
-                sb.append("            <npn:fieldKey>").append(escape(key)).append("</npn:fieldKey>").append('\n')
-                sb.append("            <npn:fieldValue>").append(escape(value)).append("</npn:fieldValue>").append('\n')
+                sb
+                    .append("            <npn:fieldKey>")
+                    .append(escape(key))
+                    .append("</npn:fieldKey>")
+                    .append('\n')
+                sb
+                    .append("            <npn:fieldValue>")
+                    .append(escape(value))
+                    .append("</npn:fieldValue>")
+                    .append('\n')
                 sb.append("          </rdf:li>").append('\n')
             }
             sb.append("        </rdf:Bag>").append('\n')
@@ -85,11 +105,21 @@ object XmpSerializer {
         return sb.toString()
     }
 
-    private fun appendSimple(sb: StringBuilder, qName: String, value: String?) {
+    private fun appendSimple(
+        sb: StringBuilder,
+        qName: String,
+        value: String?,
+    ) {
         if (value == null) return
-        sb.append("      <").append(qName).append('>')
+        sb
+            .append("      <")
+            .append(qName)
+            .append('>')
             .append(escape(value))
-            .append("</").append(qName).append('>').append('\n')
+            .append("</")
+            .append(qName)
+            .append('>')
+            .append('\n')
     }
 
     /** XML text/attribute escaping for the five predefined entities. */
