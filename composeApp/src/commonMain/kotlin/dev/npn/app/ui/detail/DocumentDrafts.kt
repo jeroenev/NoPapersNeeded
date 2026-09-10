@@ -4,7 +4,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.MetadataWriter
-import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldParse
+import dev.npn.core.model.FieldType
+import dev.npn.core.model.FieldValues
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -12,7 +14,6 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
-import kotlinx.datetime.LocalDate
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -22,16 +23,20 @@ import kotlin.time.Duration.Companion.seconds
 internal val SavedNoticeDuration = 3.seconds
 
 /**
- * True when [value] can be written as a document date. Blank counts: it clears the date. Shared by
- * the save bar's guard and the date field's error state so the two can never disagree.
+ * True when [value] can be written to a field of [type]. Blank counts: it clears the field. Shared
+ * by the save bar's guard and each editor's error state so the two can never disagree.
  */
-internal fun isWritableDate(value: String?): Boolean =
-    value.isNullOrBlank() || runCatching { LocalDate.parse(value) }.isSuccess
+internal fun isWritable(
+    type: FieldType,
+    value: String?,
+): Boolean = FieldValues.canonicalize(type, value) is FieldParse.Ok
 
 @Serializable
 internal data class DocumentDraft(
     /** Edited field values by registry key; null clears the field. */
     val fields: Map<String, String?> = emptyMap(),
+    /** The type each edited key was edited as, so validity can be judged without the registry. */
+    val types: Map<String, FieldType> = emptyMap(),
     val saving: Boolean = false,
     val saved: Boolean = false,
     val error: String? = null,
@@ -43,7 +48,12 @@ internal data class DocumentDraft(
      * so a document the user merely visited never counts as one with unsaved changes.
      */
     val settled: Boolean get() = !dirty && !saving && error == null
-    val validDate: Boolean get() = !fields.containsKey(FieldKeys.DOC_DATE) || isWritableDate(fields[FieldKeys.DOC_DATE])
+
+    /** Edited keys whose value the field's type refuses; a save is blocked while any remain. */
+    val invalidKeys: Set<String>
+        get() = fields.keys.filterTo(LinkedHashSet()) { !isWritable(types[it] ?: FieldType.TEXT, fields[it]) }
+
+    val writable: Boolean get() = invalidKeys.isEmpty()
 
     /** The item as it will read once saved: draft values over persisted ones, cleared keys absent. */
     fun overlay(item: DocListItem): DocListItem {
@@ -134,12 +144,13 @@ internal class DocumentDrafts(
         key: String,
         value: String?,
         persisted: String?,
+        type: FieldType = FieldType.TEXT,
     ) {
         edit(docId) { draft ->
             if (value.normalized() == persisted.normalized()) {
-                draft.copy(fields = draft.fields - key)
+                draft.copy(fields = draft.fields - key, types = draft.types - key)
             } else {
-                draft.copy(fields = draft.fields + (key to value))
+                draft.copy(fields = draft.fields + (key to value), types = draft.types + (key to type))
             }
         }
     }
@@ -154,7 +165,7 @@ internal class DocumentDrafts(
         docId: String,
         key: String,
     ) {
-        edit(docId) { it.copy(fields = it.fields - key) }
+        edit(docId) { it.copy(fields = it.fields - key, types = it.types - key) }
     }
 
     fun discard(docId: String) {
@@ -198,7 +209,8 @@ internal class DocumentDrafts(
         mutate { all ->
             val latest = all.getValue(docId)
             val unwritten = latest.fields.filter { (key, value) -> key !in written || written[key] != value }
-            all + (docId to latest.copy(fields = unwritten, saving = false, saved = true))
+            val types = latest.types.filterKeys { it in unwritten }
+            all + (docId to latest.copy(fields = unwritten, types = types, saving = false, saved = true))
         }
     }
 
@@ -208,7 +220,7 @@ internal class DocumentDrafts(
         onSaved: () -> Unit = {},
     ) {
         val captured = drafts.value[docId] ?: DocumentDraft()
-        if (captured.saving || !captured.validDate) return
+        if (captured.saving || !captured.writable) return
         edit(docId) { it.copy(saving = true) }
         scope.launch {
             // The writer calls stay off the main thread: [scope] is the app scope on

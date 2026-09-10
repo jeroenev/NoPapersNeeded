@@ -8,6 +8,7 @@ import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.completeActiveSearchToken
+import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.DocLifecycle
@@ -35,7 +36,6 @@ import dev.npn.core.app.WorkFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
-import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -221,15 +221,11 @@ class LibraryViewModel(
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    val correspondents: StateFlow<List<String>> =
-        fieldRegistry
-            .distinctValues(FieldKeys.CORRESPONDENT)
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
-
-    val docTypes: StateFlow<List<String>> =
-        fieldRegistry
-            .distinctValues(FieldKeys.DOC_TYPE)
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+    /** The filter sheet's field rows: the registry plus each text field's values. */
+    val fieldFilters: StateFlow<FieldFilterOptions> =
+        combine(fieldRegistry.fields, fieldRegistry.textFieldValues()) { defs, values ->
+            FieldFilterOptions(fields = defs, values = values)
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, FieldFilterOptions())
 
     /** Registry fields the sort menu offers: everything but prose, which has no useful order. */
     val sortableFields: StateFlow<List<FieldDef>> =

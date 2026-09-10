@@ -82,8 +82,6 @@
     <string name="library_clear_all">Clear all</string>
     <string name="library_no_tags_yet">No tags yet</string>
     <string name="library_reviewed_filter">Reviewed</string>
-    <string name="library_correspondent_filter">Correspondent</string>
-    <string name="library_document_type_filter">Document type</string>
     <string name="library_untagged_only">Untagged only</string>
     <string name="library_untagged">Untagged</string>
     <string name="library_apply_filters">Apply filters</string>
@@ -110,13 +108,12 @@
     <string name="library_larger_grid_items">Larger grid items</string>
 
     <string name="library_search_tags">Search tags</string>
-    <string name="library_search_correspondent">Search correspondent</string>
-    <string name="library_search_document_type">Search document type</string>
-    <string name="library_document_date_filter">Document date</string>
     <string name="library_from">From</string>
     <string name="library_to">To</string>
-    <string name="library_date_from">From %1$s</string>
-    <string name="library_date_to">To %1$s</string>
+    <string name="library_field_equals">%1$s: %2$s</string>
+    <string name="library_field_from">%1$s from %2$s</string>
+    <string name="library_field_to">%1$s to %2$s</string>
+    <string name="library_search_field">Search %1$s</string>
     <plurals name="library_doc_ids_filter">
         <item quantity="one">Limited to %1$d document</item>
         <item quantity="other">Limited to %1$d documents</item>

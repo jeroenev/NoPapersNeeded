@@ -7,6 +7,7 @@ import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.queryTerms
+import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.ai.AiEditRequest
@@ -31,9 +32,9 @@ import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.TagAdmin
 import dev.npn.core.app.TagRepository
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -176,20 +177,16 @@ class DocDetailViewModel(
         reviewConfig.reviewMode
             .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
-    /** Library-wide visible standard fields (synced setting); title is always shown. */
-    private val standardFields: StateFlow<Set<StandardField>> =
-        reviewConfig.standardFields
-            .stateIn(viewModelScope, WhileSubscribedTimeout, StandardField.DEFAULT)
-
-    private val correspondents: StateFlow<List<String>> =
-        fieldRegistry
-            .distinctValues(FieldKeys.CORRESPONDENT)
+    /** The registry in display order; the panel renders and edits fields from it. */
+    private val fieldDefs: StateFlow<List<FieldDef>> =
+        fieldRegistry.fields
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    private val docTypes: StateFlow<List<String>> =
+    /** Existing values of every TEXT field, for autocomplete. */
+    private val fieldValues: StateFlow<Map<String, List<String>>> =
         fieldRegistry
-            .distinctValues(FieldKeys.DOC_TYPE)
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+            .textFieldValues()
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
     private val tagColors: StateFlow<Map<String, String?>> =
         tagRepository
@@ -197,10 +194,11 @@ class DocDetailViewModel(
             .map { tags -> tags.associate { it.name to it.color } }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
-    /** Distinct custom-field keys in the library, for add-field key autocomplete. */
-    private val fieldKeys: StateFlow<List<String>> =
-        documents
-            .observeFieldKeys()
+    /** Keys documents carry without a definition, offered when the user defines a new field. */
+    private val orphanKeys: StateFlow<List<String>> =
+        fieldRegistry
+            .orphanKeys()
+            .map { keys -> keys.map { it.fieldKey } }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /**
@@ -232,12 +230,12 @@ class DocDetailViewModel(
     private val aiMetadata = MutableStateFlow(AiMetadataState())
 
     private val document: Flow<DocumentSection> =
-        combine(doc, reviewMode, standardFields, ocrText, ocrVersions) { item, mode, fields, text, versions ->
+        combine(doc, reviewMode, fieldDefs, ocrText, ocrVersions) { item, mode, defs, text, versions ->
             DocumentSection(
                 item = item,
                 reviewed = item?.effectiveReviewed(mode) == true,
                 reviewMode = mode,
-                visibleFields = fields,
+                fieldDefs = defs,
                 ocrText = text,
                 ocrVersions = versions,
                 highlightTerms = highlightTerms,
@@ -245,8 +243,8 @@ class DocDetailViewModel(
         }
 
     private val vocabulary: Flow<VocabularyState> =
-        combine(tagColors, correspondents, docTypes, fieldKeys) { colors, senders, types, keys ->
-            VocabularyState(tagColors = colors, correspondents = senders, docTypes = types, fieldKeys = keys)
+        combine(tagColors, fieldValues, orphanKeys) { colors, values, orphans ->
+            VocabularyState(tagColors = colors, fieldValues = values, orphanKeys = orphans)
         }
 
     private val aiPanel: Flow<AiPanelState> =
@@ -319,21 +317,6 @@ class DocDetailViewModel(
                 )
         }
     }
-
-    fun setTitle(title: String?) = launchMetadata(UiAction.SAVE_TITLE) { meta.setField(docId, FieldKeys.TITLE, title) }
-
-    fun setNotes(value: String) = launchMetadata(UiAction.SAVE_NOTE) { meta.setField(docId, FieldKeys.NOTES, value) }
-
-    fun setCorrespondent(value: String?) =
-        launchMetadata(UiAction.SAVE_CORRESPONDENT) { meta.setField(docId, FieldKeys.CORRESPONDENT, value) }
-
-    fun setDocType(value: String?) =
-        launchMetadata(UiAction.SAVE_DOCUMENT_TYPE) { meta.setField(docId, FieldKeys.DOC_TYPE, value) }
-
-    fun setDocDate(isoDate: String?) =
-        launchMetadata(UiAction.SAVE_DATE) {
-            meta.setField(docId, FieldKeys.DOC_DATE, isoDate)
-        }
 
     fun addTag(tag: String) = launchMetadata(UiAction.ADD_TAG) { meta.addTag(listOf(docId), tag) }
 
@@ -421,9 +404,9 @@ class DocDetailViewModel(
     fun acceptAiMetadata(field: AiField) {
         val suggestion = aiMetadata.value.suggestion
         when (field) {
-            AiField.TITLE -> suggestion.title?.let(::setTitle)
-            AiField.CORRESPONDENT -> suggestion.correspondent?.let(::setCorrespondent)
-            AiField.DOC_DATE -> suggestion.docDate?.let(::setDocDate)
+            AiField.TITLE -> suggestion.title?.let { setField(FieldKeys.TITLE, it) }
+            AiField.CORRESPONDENT -> suggestion.correspondent?.let { setField(FieldKeys.CORRESPONDENT, it) }
+            AiField.DOC_DATE -> suggestion.docDate?.let { setField(FieldKeys.DOC_DATE, it) }
         }
         dismissAiMetadata(field)
     }
@@ -438,6 +421,18 @@ class DocDetailViewModel(
     ) = launchMetadata(UiAction.SAVE_FIELD) { meta.setField(docId, key, value) }
 
     fun removeField(key: String) = launchMetadata(UiAction.REMOVE_FIELD) { meta.setField(docId, key, null) }
+
+    /**
+     * Register [def] and, when [value] is non-blank, set it on this document. The definition goes
+     * first so the value is canonicalized against the new type rather than as plain text.
+     */
+    fun defineField(
+        def: FieldDef,
+        value: String?,
+    ) = launchMetadata(UiAction.DEFINE_FIELD) {
+        fieldRegistry.upsert(def)
+        if (!value.isNullOrBlank()) meta.setField(docId, def.key, value)
+    }
 
     fun setReviewed(reviewed: Boolean) =
         launchMetadata(UiAction.UPDATE_REVIEW_STATE) { meta.setReviewed(listOf(docId), reviewed) }

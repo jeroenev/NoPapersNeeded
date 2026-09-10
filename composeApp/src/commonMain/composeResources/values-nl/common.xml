@@ -45,15 +45,11 @@
     <string name="common_tagging_apply_summary">%1$s toepassen op %2$s</string>
     <string name="common_tagging_done_summary">%1$s toegepast op %2$s</string>
 
-    <string name="common_action_save_title">titel opslaan</string>
-    <string name="common_action_save_correspondent">correspondent opslaan</string>
-    <string name="common_action_save_document_type">documenttype opslaan</string>
-    <string name="common_action_save_date">datum opslaan</string>
-    <string name="common_action_save_note">notitie opslaan</string>
     <string name="common_action_add_tag">tag toevoegen</string>
     <string name="common_action_remove_tag">tag verwijderen</string>
     <string name="common_action_save_field">veld opslaan</string>
     <string name="common_action_remove_field">veld verwijderen</string>
+    <string name="common_action_define_field">veld definiëren</string>
     <string name="common_action_update_review_state">beoordelingsstatus bijwerken</string>
     <string name="common_action_move_to_trash">naar de prullenbak verplaatsen</string>
     <string name="common_action_rename_file">bestand hernoemen</string>
@@ -116,6 +112,14 @@
     </plurals>
 
     <string name="common_choose_date">Datum kiezen</string>
+    <string name="common_field_invalid_number">Voer een geheel getal in</string>
+    <string name="common_field_invalid_decimal">Voer een getal in</string>
+    <string name="common_field_invalid_date">Voer een datum in als jjjj-MM-dd</string>
+    <string name="common_field_type_text">Tekst</string>
+    <string name="common_field_type_long_text">Lange tekst</string>
+    <string name="common_field_type_number">Geheel getal</string>
+    <string name="common_field_type_decimal">Decimaal getal</string>
+    <string name="common_field_type_date">Datum</string>
     <string name="common_clear_date">Datum wissen</string>
     <string name="common_select_all">Alles selecteren</string>
     <string name="common_restore_all">Alles herstellen</string>

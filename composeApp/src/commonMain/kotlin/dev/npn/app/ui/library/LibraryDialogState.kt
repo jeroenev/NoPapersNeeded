@@ -99,8 +99,7 @@ fun LibraryDialogHost(
     filter: LibraryFilter,
     selectedCount: Int,
     tags: List<TagInfo>,
-    correspondents: List<String>,
-    docTypes: List<String>,
+    fields: FieldFilterOptions,
     reviewMode: ReviewMode,
     onApplyFilter: (LibraryFilter) -> Unit,
     onClearFilter: () -> Unit,
@@ -114,8 +113,7 @@ fun LibraryDialogHost(
         FilterSheet(
             filter = filter,
             tags = tags,
-            correspondents = correspondents,
-            docTypes = docTypes,
+            fields = fields,
             reviewMode = reviewMode,
             onApply = {
                 onApplyFilter(it)

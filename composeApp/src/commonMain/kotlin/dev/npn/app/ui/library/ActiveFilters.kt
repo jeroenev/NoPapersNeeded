@@ -18,9 +18,10 @@ import dev.npn.core.app.LibraryFilter
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_needs_review
 import no_papers_needed.composeapp.generated.resources.common_reviewed
-import no_papers_needed.composeapp.generated.resources.library_date_from
-import no_papers_needed.composeapp.generated.resources.library_date_to
 import no_papers_needed.composeapp.generated.resources.library_doc_ids_filter
+import no_papers_needed.composeapp.generated.resources.library_field_equals
+import no_papers_needed.composeapp.generated.resources.library_field_from
+import no_papers_needed.composeapp.generated.resources.library_field_to
 import no_papers_needed.composeapp.generated.resources.library_remove_filter
 import no_papers_needed.composeapp.generated.resources.library_review_queue
 import no_papers_needed.composeapp.generated.resources.library_tag_filter_all
@@ -38,6 +39,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun ActiveFilters(
     filter: LibraryFilter,
+    fieldLabels: Map<String, String>,
     onFilterChange: (LibraryFilter) -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -52,7 +54,7 @@ fun ActiveFilters(
             InputChip(
                 selected = false,
                 onClick = { onFilterChange(filter.removeChip(chip)) },
-                label = { Text(chipLabel(chip)) },
+                label = { Text(chipLabel(chip, fieldLabels)) },
                 trailingIcon = {
                     Icon(
                         Icons.Filled.Clear,
@@ -66,7 +68,10 @@ fun ActiveFilters(
 
 /** Localized label for one active-filter chip. Presentation only; the chip's meaning is the type. */
 @Composable
-private fun chipLabel(chip: ActiveFilterChip): String =
+private fun chipLabel(
+    chip: ActiveFilterChip,
+    fieldLabels: Map<String, String>,
+): String =
     when (chip) {
         is ActiveFilterChip.DocIds -> {
             pluralStringResource(Res.plurals.library_doc_ids_filter, chip.count, chip.count)
@@ -89,15 +94,15 @@ private fun chipLabel(chip: ActiveFilterChip): String =
         }
 
         is ActiveFilterChip.FieldEquals -> {
-            chip.value
+            stringResource(Res.string.library_field_equals, fieldLabels[chip.key] ?: chip.key, chip.value)
         }
 
         is ActiveFilterChip.FieldFrom -> {
-            stringResource(Res.string.library_date_from, chip.value)
+            stringResource(Res.string.library_field_from, fieldLabels[chip.key] ?: chip.key, chip.value)
         }
 
         is ActiveFilterChip.FieldTo -> {
-            stringResource(Res.string.library_date_to, chip.value)
+            stringResource(Res.string.library_field_to, fieldLabels[chip.key] ?: chip.key, chip.value)
         }
 
         ActiveFilterChip.UntaggedOnly -> {

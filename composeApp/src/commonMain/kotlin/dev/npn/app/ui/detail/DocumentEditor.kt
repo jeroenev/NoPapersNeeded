@@ -31,15 +31,16 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.core.ai.AiField
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_saved
 import no_papers_needed.composeapp.generated.resources.detail_saving
-import no_papers_needed.composeapp.generated.resources.ux_date_invalid
 import no_papers_needed.composeapp.generated.resources.ux_discard
 import no_papers_needed.composeapp.generated.resources.ux_discard_prompt
 import no_papers_needed.composeapp.generated.resources.ux_discard_short
 import no_papers_needed.composeapp.generated.resources.ux_draft_hint
+import no_papers_needed.composeapp.generated.resources.ux_field_invalid
 import no_papers_needed.composeapp.generated.resources.ux_review_finish
 import no_papers_needed.composeapp.generated.resources.ux_review_next
 import no_papers_needed.composeapp.generated.resources.ux_save_changes
@@ -82,15 +83,14 @@ internal fun DocumentEditor(
         store.registerEditing(docId)
         onDispose { store.unregisterEditing(docId) }
     }
+    // The draft judges validity by the type each key was edited as; an unregistered key is text.
+    val types = state.document.fieldDefs.associate { it.key to it.type }
     val editActions =
         actions.edit.copy(
             onSetReviewed = { store.save(docId, reviewed = it) },
-            onCommitTitle = { store.field(docId, FieldKeys.TITLE, it, item.doc.title) },
-            onCommitCorrespondent = { store.field(docId, FieldKeys.CORRESPONDENT, it, item.doc.correspondent) },
-            onCommitDocType = { store.field(docId, FieldKeys.DOC_TYPE, it, item.doc.docType) },
-            onCommitDocDate = { store.field(docId, FieldKeys.DOC_DATE, it, item.doc.docDate) },
-            onNoteChange = { store.field(docId, FieldKeys.NOTES, it, item.doc.notes) },
-            onCommitField = { key, value -> store.field(docId, key, value, item.doc.fields[key]) },
+            onCommitField = { key, value ->
+                store.field(docId, key, value, item.doc.fields[key], types[key] ?: FieldType.TEXT)
+            },
             onRemoveField = { store.field(docId, it, null, item.doc.fields[it]) },
         )
     val aiActions =
@@ -113,7 +113,7 @@ internal fun DocumentEditor(
             }
         },
     ) {
-        CompositionLocalProvider(LocalDocumentWriteBlocked provides (draft.saving || !draft.validDate)) {
+        CompositionLocalProvider(LocalDocumentWriteBlocked provides (draft.saving || !draft.writable)) {
             MetadataPanel(
                 state = state.copy(document = state.document.copy(item = edited)),
                 actions = actions.copy(edit = editActions, ai = aiActions),
@@ -148,7 +148,7 @@ private fun EditorSaveBar(
     Column(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
         val status =
             when {
-                !draft.validDate -> stringResource(Res.string.ux_date_invalid)
+                !draft.writable -> stringResource(Res.string.ux_field_invalid)
                 draft.error != null -> stringResource(Res.string.ux_save_failed, draft.error)
                 draft.saving -> stringResource(Res.string.detail_saving)
                 draft.dirty -> stringResource(Res.string.ux_draft_hint)
@@ -160,9 +160,7 @@ private fun EditorSaveBar(
                 it,
                 style = MaterialTheme.typography.bodySmall,
                 color =
-                    if (draft.error != null ||
-                        !draft.validDate
-                    ) {
+                    if (draft.error != null || !draft.writable) {
                         MaterialTheme.colorScheme.error
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
@@ -171,7 +169,7 @@ private fun EditorSaveBar(
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             if (draft.dirty || draft.saving) {
-                Button(onClick = onSave, enabled = !draft.saving && draft.validDate) {
+                Button(onClick = onSave, enabled = !draft.saving && draft.writable) {
                     Text(stringResource(Res.string.ux_save_changes))
                 }
                 TextButton(onClick = { confirmDiscard = true }, enabled = !draft.saving) {
@@ -179,7 +177,7 @@ private fun EditorSaveBar(
                 }
             }
             onReviewed?.let {
-                Button(onClick = it, enabled = !draft.saving && draft.validDate) {
+                Button(onClick = it, enabled = !draft.saving && draft.writable) {
                     Text(stringResource(if (hasNext) Res.string.ux_review_next else Res.string.ux_review_finish))
                 }
             }

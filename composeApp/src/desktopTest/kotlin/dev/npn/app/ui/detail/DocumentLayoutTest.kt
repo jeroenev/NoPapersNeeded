@@ -152,6 +152,13 @@ class DocumentLayoutTest {
                                                     listOf("Utilities"),
                                                 ),
                                             reviewMode = ReviewMode.INBOX_WORKFLOW,
+                                            // The panel renders fields from the registry; seed it as a library would.
+                                            fieldDefs =
+                                                FieldKeys.seedDefinitions {
+                                                    FieldKeys.SEED_LABELS.getValue(
+                                                        it,
+                                                    )
+                                                },
                                         ),
                                 ),
                             actions = actions(),
@@ -169,13 +176,9 @@ class DocumentLayoutTest {
         MetadataActions(
             edit =
                 MetadataEditActions(
-                    onCommitTitle = {},
-                    onNoteChange = {},
-                    onCommitCorrespondent = {},
-                    onCommitDocType = {},
-                    onCommitDocDate = {},
                     onCommitField = { _, _ -> },
                     onRemoveField = {},
+                    onDefineField = { _, _ -> },
                     onSetReviewed = {},
                     onSetOcrEngine = {},
                 ),

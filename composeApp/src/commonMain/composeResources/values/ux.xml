@@ -22,7 +22,7 @@
     <string name="ux_discard">Discard changes</string>
     <string name="ux_discard_prompt">Discard the unsaved changes to this document?</string>
     <string name="ux_tags_saved">Tags and accepted assistant suggestions are saved immediately.</string>
-    <string name="ux_date_invalid">Enter a valid date as yyyy-MM-dd.</string>
+    <string name="ux_field_invalid">A field value does not fit its type.</string>
     <string name="ux_show_suggestions">Show suggestions</string>
     <string name="ux_discard_short">Discard</string>
     <string name="ux_library_draft_warning">Save or discard your document drafts before opening another library.</string>

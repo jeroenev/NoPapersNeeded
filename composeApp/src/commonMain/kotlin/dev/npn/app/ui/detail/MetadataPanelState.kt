@@ -6,8 +6,8 @@ import androidx.compose.runtime.remember
 import dev.npn.core.ai.AiField
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
 
 /**
  * Everything [MetadataPanel] renders, in four groups assembled by
@@ -36,21 +36,23 @@ data class DocumentSection(
     val item: DocListItem? = null,
     val reviewed: Boolean = false,
     val reviewMode: ReviewMode = ReviewMode.DEFAULT,
-    /** Which built-in fields to show (library-wide synced setting); title is always shown. */
-    val visibleFields: Set<StandardField> = StandardField.DEFAULT,
+    /** The field registry in display order; decides which fields render and how each is edited. */
+    val fieldDefs: List<FieldDef> = emptyList(),
     val ocrText: String? = null,
     val ocrVersions: List<OcrVersion> = emptyList(),
     /** Terms from the search that opened this document, highlighted in the text tab. */
     val highlightTerms: List<String> = emptyList(),
 )
 
-/** Library-wide values offered as completions while editing: tags, correspondents, field keys. */
+/**
+ * Library-wide values offered as completions while editing: tags, each text field's existing
+ * values, and the unregistered keys other documents carry (offered when defining a new field).
+ */
 @Immutable
 data class VocabularyState(
     val tagColors: Map<String, String?> = emptyMap(),
-    val correspondents: List<String> = emptyList(),
-    val docTypes: List<String> = emptyList(),
-    val fieldKeys: List<String> = emptyList(),
+    val fieldValues: Map<String, List<String>> = emptyMap(),
+    val orphanKeys: List<String> = emptyList(),
 ) {
     /** Tag autocomplete list; [tagColors] already carries every tag name, ordered by name. */
     val allTagNames: List<String> = tagColors.keys.toList()
@@ -75,16 +77,14 @@ data class MetadataActions(
     val history: HistoryActions,
 )
 
-/** Edits to the document values; DocumentEditor redirects text edits into a retained draft. */
+/** Edits to the document values; DocumentEditor redirects field edits into a retained draft. */
 @Immutable
 data class MetadataEditActions(
-    val onCommitTitle: (String) -> Unit,
-    val onNoteChange: (String) -> Unit,
-    val onCommitCorrespondent: (String) -> Unit,
-    val onCommitDocType: (String) -> Unit,
-    val onCommitDocDate: (String) -> Unit,
+    /** A keystroke or pick for one field; the value is in the field's canonical form when it parses. */
     val onCommitField: (key: String, value: String) -> Unit,
     val onRemoveField: (key: String) -> Unit,
+    /** Register a new field and, when [value] is non-blank, set it on this document in one go. */
+    val onDefineField: (def: FieldDef, value: String?) -> Unit,
     val onSetReviewed: (Boolean) -> Unit,
     /** Pin the searchable OCR version, or null for automatic best-engine selection. */
     val onSetOcrEngine: (String?) -> Unit,
@@ -127,13 +127,9 @@ fun rememberMetadataActions(vm: DocDetailViewModel): MetadataActions =
         MetadataActions(
             edit =
                 MetadataEditActions(
-                    onCommitTitle = vm::setTitle,
-                    onNoteChange = vm::setNotes,
-                    onCommitCorrespondent = vm::setCorrespondent,
-                    onCommitDocType = vm::setDocType,
-                    onCommitDocDate = vm::setDocDate,
                     onCommitField = vm::setField,
                     onRemoveField = vm::removeField,
+                    onDefineField = vm::defineField,
                     onSetReviewed = vm::setReviewed,
                     onSetOcrEngine = vm::setOcrEngine,
                 ),

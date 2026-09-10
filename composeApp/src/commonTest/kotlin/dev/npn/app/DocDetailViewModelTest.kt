@@ -9,9 +9,11 @@ import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
+import dev.npn.core.db.FieldKeyCount
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
 import dev.npn.core.ocr.OcrState
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.maps.shouldContainExactly
@@ -74,34 +76,39 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     // ViewerTransformTest for the zoom/pan math).
 
     @Test
-    fun setTitleBlankBecomesNull() =
+    fun setFieldPassesBlankThroughForTheWriterToClear() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            model.setTitle("   ")
+            model.setField(FieldKeys.TITLE, "   ")
             advanceUntilIdle()
             // Blank reaches the writer as-is; canonicalization there turns it into a clear.
             session.meta.fieldSets shouldContainExactly listOf(Triple(listOf("doc-1"), FieldKeys.TITLE, "   "))
         }
 
     @Test
-    fun setTitleNonBlankPassesThrough() =
+    fun setFieldNonBlankPassesThrough() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            model.setTitle("Invoice 2026")
+            model.setField(FieldKeys.TITLE, "Invoice 2026")
             advanceUntilIdle()
             session.meta.fieldSets shouldContainExactly listOf(Triple(listOf("doc-1"), FieldKeys.TITLE, "Invoice 2026"))
         }
 
     @Test
-    fun setCorrespondentBlankBecomesNull() =
+    fun defineFieldRegistersThenWritesTheValue() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            model.setCorrespondent("")
+            val def =
+                FieldDef("amount", "Amount", FieldType.DECIMAL, showByDefault = false, aiEnabled = false, position = 5)
+            model.defineField(def, "12.50")
+            model.defineField(def.copy(key = "vendor", label = "Vendor", type = FieldType.TEXT), null)
             advanceUntilIdle()
-            session.meta.fieldSets shouldContainExactly listOf(Triple(listOf("doc-1"), FieldKeys.CORRESPONDENT, ""))
+            session.fieldRegistry.upserts.map { it.key } shouldContainExactly listOf("amount", "vendor")
+            // No value, no write: defining a field does not stamp an empty value on the document.
+            session.meta.fieldSets shouldContainExactly listOf(Triple(listOf("doc-1"), "amount", "12.50"))
         }
 
     @Test
@@ -129,21 +136,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     listOf("doc-1") to true,
                     listOf("doc-1") to false,
                 )
-        }
-
-    @Test
-    fun setTitleFailureEmitsMessage() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { meta.failSetField = { error("disk full") } }
-            val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
-            advanceUntilIdle()
-            model.setTitle("x")
-            advanceUntilIdle()
-            session.meta.fieldSets shouldBe emptyList()
-            messages shouldContainExactly listOf("Could not save title: disk full")
-            job.cancel()
         }
 
     @Test
@@ -375,10 +367,9 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     documents.singleDoc.value = DocListItem(doc("doc-1", reviewed = true), listOf("finance"))
                     fieldRegistry.values.value =
                         mapOf(FieldKeys.CORRESPONDENT to listOf("ACME"), FieldKeys.DOC_TYPE to listOf("invoice"))
-                    documents.fieldKeys.value = listOf("amount")
+                    fieldRegistry.orphans.value = listOf(FieldKeyCount("amount", 3))
                     tags.tags.value = listOf(TagInfo("finance", "#ff0000", null, 1))
                     reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
-                    reviewConfig.standardFieldsFlow.value = setOf(StandardField.NOTES)
                 }
             val model = vm(session = session)
             advanceUntilIdle()
@@ -390,10 +381,15 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             // The panel is handed the resolved flag, not the raw one plus a mode to re-derive from.
             state.document.reviewed shouldBe true
             state.document.reviewMode shouldBe ReviewMode.INBOX_WORKFLOW
-            state.document.visibleFields shouldBe setOf(StandardField.NOTES)
-            state.vocabulary.correspondents shouldContainExactly listOf("ACME")
-            state.vocabulary.docTypes shouldContainExactly listOf("invoice")
-            state.vocabulary.fieldKeys shouldContainExactly listOf("amount")
+            state.document.fieldDefs.map { it.key } shouldContainExactly FieldKeys.seedDefinitions().map { it.key }
+            // Only TEXT fields get a vocabulary; the date and prose fields have nothing useful to offer.
+            state.vocabulary.fieldValues shouldBe
+                mapOf(
+                    FieldKeys.TITLE to emptyList(),
+                    FieldKeys.CORRESPONDENT to listOf("ACME"),
+                    FieldKeys.DOC_TYPE to listOf("invoice"),
+                )
+            state.vocabulary.orphanKeys shouldContainExactly listOf("amount")
             state.vocabulary.allTagNames shouldContainExactly listOf("finance")
         }
 

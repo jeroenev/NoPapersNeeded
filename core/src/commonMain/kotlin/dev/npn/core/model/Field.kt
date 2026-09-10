@@ -1,5 +1,7 @@
 package dev.npn.core.model
 
+import kotlinx.serialization.Serializable
+
 /**
  * How a field's value is entered, validated, stored and asked for.
  *
@@ -7,6 +9,7 @@ package dev.npn.core.model
  * and the UI's `FieldEditor` (input control). Everything else branches on data looked up from the
  * [FieldDef] — that is what keeps adding a type a two-file change.
  */
+@Serializable
 enum class FieldType(
     val wire: String,
 ) {

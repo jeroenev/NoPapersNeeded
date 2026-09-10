@@ -32,18 +32,26 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.CommitTextField
 import dev.npn.app.ui.common.DatePickerField
+import dev.npn.app.ui.common.rememberFieldLocale
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.TagInfo
-import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldParse
+import dev.npn.core.model.FieldType
+import dev.npn.core.model.FieldValues
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
@@ -52,15 +60,11 @@ import no_papers_needed.composeapp.generated.resources.common_reviewed
 import no_papers_needed.composeapp.generated.resources.library_any
 import no_papers_needed.composeapp.generated.resources.library_apply_filters
 import no_papers_needed.composeapp.generated.resources.library_clear_all
-import no_papers_needed.composeapp.generated.resources.library_correspondent_filter
-import no_papers_needed.composeapp.generated.resources.library_document_date_filter
-import no_papers_needed.composeapp.generated.resources.library_document_type_filter
 import no_papers_needed.composeapp.generated.resources.library_filters
 import no_papers_needed.composeapp.generated.resources.library_from
 import no_papers_needed.composeapp.generated.resources.library_no_tags_yet
 import no_papers_needed.composeapp.generated.resources.library_reviewed_filter
-import no_papers_needed.composeapp.generated.resources.library_search_correspondent
-import no_papers_needed.composeapp.generated.resources.library_search_document_type
+import no_papers_needed.composeapp.generated.resources.library_search_field
 import no_papers_needed.composeapp.generated.resources.library_search_tags
 import no_papers_needed.composeapp.generated.resources.library_to
 import no_papers_needed.composeapp.generated.resources.library_untagged_only
@@ -90,8 +94,7 @@ private const val MAX_TAG_CHIPS_PER_GROUP = 30
 fun FilterSheet(
     filter: LibraryFilter,
     tags: List<TagInfo>,
-    correspondents: List<String>,
-    docTypes: List<String>,
+    fields: FieldFilterOptions,
     reviewMode: ReviewMode,
     onApply: (LibraryFilter) -> Unit,
     onClearAll: () -> Unit,
@@ -101,8 +104,7 @@ fun FilterSheet(
         FilterPanel(
             filter = filter,
             tags = tags,
-            correspondents = correspondents,
-            docTypes = docTypes,
+            fields = fields,
             reviewMode = reviewMode,
             onApply = onApply,
             onClearAll = onClearAll,
@@ -116,8 +118,7 @@ fun FilterSheet(
 fun FilterPanel(
     filter: LibraryFilter,
     tags: List<TagInfo>,
-    correspondents: List<String>,
-    docTypes: List<String>,
+    fields: FieldFilterOptions,
     reviewMode: ReviewMode,
     onApply: (LibraryFilter) -> Unit,
     onClearAll: () -> Unit,
@@ -148,8 +149,7 @@ fun FilterPanel(
                 FilterFields(
                     draft = draft,
                     tags = tags,
-                    correspondents = correspondents,
-                    docTypes = docTypes,
+                    fields = fields,
                     reviewMode = reviewMode,
                     onDraftChange = { draft = it },
                 )
@@ -188,15 +188,25 @@ private fun FilterPanelHeader(
 }
 
 /**
- * The editable filter fields (tags, reviewed, correspondent, doc type, date range, untagged-only).
- * Edits produce a new draft [LibraryFilter] via [onDraftChange]; the panel owns the draft state.
+ * The registry fields the filter sheet offers and the values each text field can be matched
+ * against. Only "show on every document" fields get a row: they are the ones every document is
+ * expected to carry, so filtering on them is meaningful library-wide.
+ */
+@Immutable
+data class FieldFilterOptions(
+    val fields: List<FieldDef> = emptyList(),
+    val values: Map<String, List<String>> = emptyMap(),
+)
+
+/**
+ * The editable filter fields (tags, reviewed, one row per default field, untagged-only). Edits
+ * produce a new draft [LibraryFilter] via [onDraftChange]; the panel owns the draft state.
  */
 @Composable
 private fun FilterFields(
     draft: LibraryFilter,
     tags: List<TagInfo>,
-    correspondents: List<String>,
-    docTypes: List<String>,
+    fields: FieldFilterOptions,
     reviewMode: ReviewMode,
     onDraftChange: (LibraryFilter) -> Unit,
 ) {
@@ -215,45 +225,10 @@ private fun FilterFields(
         }
     }
 
-    FilterFieldRow(stringResource(Res.string.library_correspondent_filter)) {
-        EnumDropdown(
-            current = optionalFilterValue(draft.fieldEquals[FieldKeys.CORRESPONDENT]),
-            options = optionalFilterOptions(correspondents),
-            label = ::optionalFilterLabel,
-            onSelect = { onDraftChange(draft.withFieldEquals(FieldKeys.CORRESPONDENT, it.valueOrNull())) },
-            searchLabel = stringResource(Res.string.library_search_correspondent),
-            searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
-        )
-    }
-
-    FilterFieldRow(stringResource(Res.string.library_document_type_filter)) {
-        EnumDropdown(
-            current = optionalFilterValue(draft.fieldEquals[FieldKeys.DOC_TYPE]),
-            options = optionalFilterOptions(docTypes),
-            label = ::optionalFilterLabel,
-            onSelect = { onDraftChange(draft.withFieldEquals(FieldKeys.DOC_TYPE, it.valueOrNull())) },
-            searchLabel = stringResource(Res.string.library_search_document_type),
-            searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
-        )
-    }
-
-    SectionLabel(stringResource(Res.string.library_document_date_filter))
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
-        DatePickerField(
-            value = draft.fieldRanges[FieldKeys.DOC_DATE]?.from,
-            label = stringResource(Res.string.library_from),
-            onCommit = { onDraftChange(draft.withFieldBounds(FieldKeys.DOC_DATE, from = it)) },
-            modifier = Modifier.weight(1f),
-        )
-        DatePickerField(
-            value = draft.fieldRanges[FieldKeys.DOC_DATE]?.to,
-            label = stringResource(Res.string.library_to),
-            onCommit = { onDraftChange(draft.withFieldBounds(FieldKeys.DOC_DATE, to = it)) },
-            modifier = Modifier.weight(1f),
-        )
+    for (def in fields.fields.filter { it.showByDefault }) {
+        key(def.key) {
+            FieldFilterRow(def, fields.values[def.key].orEmpty(), draft, onDraftChange)
+        }
     }
 
     Row(
@@ -267,6 +242,99 @@ private fun FilterFields(
             onCheckedChange = { onDraftChange(draft.copy(untaggedOnly = it)) },
         )
     }
+}
+
+/**
+ * The filter control for one field, by its type: text picks one existing value (equality), dates
+ * and numbers take a from/to range. Prose has no useful filter and gets no row.
+ */
+@Composable
+private fun FieldFilterRow(
+    def: FieldDef,
+    values: List<String>,
+    draft: LibraryFilter,
+    onDraftChange: (LibraryFilter) -> Unit,
+) {
+    when (def.type) {
+        FieldType.TEXT -> {
+            FilterFieldRow(def.label) {
+                EnumDropdown(
+                    current = optionalFilterValue(draft.fieldEquals[def.key]),
+                    options = optionalFilterOptions(values),
+                    label = ::optionalFilterLabel,
+                    onSelect = { onDraftChange(draft.withFieldEquals(def.key, it.valueOrNull())) },
+                    searchLabel = stringResource(Res.string.library_search_field, def.label),
+                    searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
+                )
+            }
+        }
+
+        FieldType.DATE -> {
+            SectionLabel(def.label)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                DatePickerField(
+                    value = draft.fieldRanges[def.key]?.from,
+                    label = stringResource(Res.string.library_from),
+                    onCommit = { onDraftChange(draft.withFieldBounds(def.key, from = it)) },
+                    modifier = Modifier.weight(1f),
+                )
+                DatePickerField(
+                    value = draft.fieldRanges[def.key]?.to,
+                    label = stringResource(Res.string.library_to),
+                    onCommit = { onDraftChange(draft.withFieldBounds(def.key, to = it)) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        FieldType.NUMBER, FieldType.DECIMAL -> {
+            SectionLabel(def.label)
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                NumberBound(
+                    def = def,
+                    value = draft.fieldRanges[def.key]?.from,
+                    label = stringResource(Res.string.library_from),
+                    onCommit = { onDraftChange(draft.withFieldBounds(def.key, from = it)) },
+                    modifier = Modifier.weight(1f),
+                )
+                NumberBound(
+                    def = def,
+                    value = draft.fieldRanges[def.key]?.to,
+                    label = stringResource(Res.string.library_to),
+                    onCommit = { onDraftChange(draft.withFieldBounds(def.key, to = it)) },
+                    modifier = Modifier.weight(1f),
+                )
+            }
+        }
+
+        FieldType.LONG_TEXT -> {
+            Unit
+        }
+    }
+}
+
+/** One numeric range bound: typed in locale form, stored canonical; a partial entry changes nothing. */
+@Composable
+private fun NumberBound(
+    def: FieldDef,
+    value: String?,
+    label: String,
+    onCommit: (String?) -> Unit,
+    modifier: Modifier,
+) {
+    val locale = rememberFieldLocale()
+    CommitTextField(
+        label = label,
+        initial = value?.let { FieldValues.display(def.type, it, locale) }.orEmpty(),
+        keyboardType = KeyboardType.Decimal,
+        modifier = modifier,
+        onCommit = { typed ->
+            when (val parsed = FieldValues.canonicalize(def.type, typed, locale)) {
+                is FieldParse.Ok -> onCommit(parsed.canonical)
+                is FieldParse.Invalid -> Unit
+            }
+        },
+    )
 }
 
 @Composable

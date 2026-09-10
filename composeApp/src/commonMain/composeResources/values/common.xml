@@ -46,15 +46,11 @@
     <string name="common_tagging_apply_summary">Apply %1$s across %2$s</string>
     <string name="common_tagging_done_summary">Applied %1$s across %2$s</string>
 
-    <string name="common_action_save_title">save title</string>
-    <string name="common_action_save_correspondent">save correspondent</string>
-    <string name="common_action_save_document_type">save document type</string>
-    <string name="common_action_save_date">save date</string>
-    <string name="common_action_save_note">save note</string>
     <string name="common_action_add_tag">add tag</string>
     <string name="common_action_remove_tag">remove tag</string>
     <string name="common_action_save_field">save field</string>
     <string name="common_action_remove_field">remove field</string>
+    <string name="common_action_define_field">define field</string>
     <string name="common_action_update_review_state">update review state</string>
     <string name="common_action_move_to_trash">move to trash</string>
     <string name="common_action_rename_file">rename file</string>
@@ -117,6 +113,14 @@
     </plurals>
 
     <string name="common_choose_date">Choose date</string>
+    <string name="common_field_invalid_number">Enter a whole number</string>
+    <string name="common_field_invalid_decimal">Enter a number</string>
+    <string name="common_field_invalid_date">Enter a date as yyyy-MM-dd</string>
+    <string name="common_field_type_text">Text</string>
+    <string name="common_field_type_long_text">Long text</string>
+    <string name="common_field_type_number">Whole number</string>
+    <string name="common_field_type_decimal">Decimal number</string>
+    <string name="common_field_type_date">Date</string>
     <string name="common_clear_date">Clear date</string>
     <string name="common_select_all">Select all</string>
     <string name="common_restore_all">Restore all</string>

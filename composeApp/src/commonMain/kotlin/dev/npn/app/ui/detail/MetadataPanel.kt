@@ -101,11 +101,10 @@ import no_papers_needed.composeapp.generated.resources.ux_tags_saved
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Side panel for one document with three tabs: **Details** (editable metadata — title,
- * correspondent, docType, docDate, custom fields, tags, and file/OCR facts), **Text** (the
- * extracted OCR/embedded full text), and **History** (immutable journal timeline). Text fields
- * update the shared draft through [MetadataActions.edit]; correspondent/docType/field-keys offer
- * existing values as suggestions.
+ * Side panel for one document with three tabs: **Details** (editable metadata — the registry's
+ * fields, tags, and file/OCR facts), **Text** (the extracted OCR/embedded full text), and
+ * **History** (immutable journal timeline). Field editors update the shared draft through
+ * [MetadataActions.edit]; text fields offer existing values as suggestions.
  *
  * Everything shown comes from [state] (assembled by `DocDetailViewModel.metadata`) and everything
  * it can do from [actions] (wired by [rememberMetadataActions]), so the two call sites — the
@@ -234,7 +233,6 @@ private fun DetailsTab(
     val doc = item.doc
     val vocabulary = state.vocabulary
     val edit = actions.edit
-    val visibleFields = state.document.visibleFields
 
     Column(
         modifier =
@@ -244,39 +242,16 @@ private fun DetailsTab(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         ReviewStatusSection(state.document.reviewMode, state.document.reviewed, edit.onSetReviewed)
-        DocumentPropertiesSection(
-            title = doc.title,
-            fileName = doc.fileName,
-            correspondent = doc.correspondent,
-            docType = doc.docType,
-            docDate = doc.docDate,
-            correspondents = vocabulary.correspondents,
-            docTypes = vocabulary.docTypes,
-            onCommitTitle = edit.onCommitTitle,
-            onCommitCorrespondent = edit.onCommitCorrespondent,
-            onCommitDocType = edit.onCommitDocType,
-            onCommitDocDate = edit.onCommitDocDate,
-            visibleFields = visibleFields,
+        FieldsSection(
+            doc = doc,
+            defs = state.document.fieldDefs,
+            vocabulary = vocabulary,
+            edit = edit,
         )
-
-        if (StandardField.NOTES in visibleFields) {
-            NoteSection(doc.notes.orEmpty(), edit.onNoteChange)
-        }
         AiMetadataSuggestions(
             available = state.ai.tags.available == true,
             state = state.ai.metadata,
             actions = actions.ai,
-        )
-
-        HorizontalDivider()
-
-        CustomFieldsSection(
-            // Until the registry-driven section lands, this list shows only the non-well-known keys;
-            // the well-known five have their own controls above.
-            fields = item.doc.fields.filterKeys { it !in FieldKeys.WELL_KNOWN },
-            fieldKeys = vocabulary.fieldKeys,
-            onCommitField = edit.onCommitField,
-            onRemoveField = edit.onRemoveField,
         )
 
         HorizontalDivider()
@@ -341,120 +316,6 @@ private fun ReviewStatusSection(
                 ),
             )
         }
-    }
-}
-
-@Composable
-private fun NoteSection(
-    note: String,
-    onNoteChange: (String) -> Unit,
-) {
-    // Matters most here: a note is prose, so spaces at the end of what is typed so far are
-    // constant. See [rememberFieldText].
-    var text by rememberFieldText(note)
-    OutlinedTextField(
-        value = text,
-        onValueChange = {
-            text = it
-            onNoteChange(it)
-        },
-        label = { Text(stringResource(Res.string.detail_note)) },
-        minLines = 4,
-        maxLines = 10,
-        modifier = Modifier.fillMaxWidth(),
-    )
-}
-
-@Composable
-private fun DocumentPropertiesSection(
-    title: String?,
-    fileName: String,
-    correspondent: String?,
-    docType: String?,
-    docDate: String?,
-    correspondents: List<String>,
-    docTypes: List<String>,
-    onCommitTitle: (String) -> Unit,
-    onCommitCorrespondent: (String) -> Unit,
-    onCommitDocType: (String) -> Unit,
-    onCommitDocDate: (String) -> Unit,
-    visibleFields: Set<StandardField> = StandardField.DEFAULT,
-) {
-    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        CommitTextField(
-            label = stringResource(Res.string.detail_title),
-            initial = title.orEmpty(),
-            placeholder = fileName,
-            onCommit = onCommitTitle,
-        )
-        Text(
-            stringResource(Res.string.detail_title_hint),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
-    }
-    if (StandardField.CORRESPONDENT in visibleFields) {
-        SuggestField(
-            label = stringResource(Res.string.detail_correspondent),
-            initial = correspondent.orEmpty(),
-            suggestions = correspondents,
-            onCommit = onCommitCorrespondent,
-        )
-    }
-    if (StandardField.DOC_TYPE in visibleFields) {
-        SuggestField(
-            label = stringResource(Res.string.detail_document_type),
-            initial = docType.orEmpty(),
-            suggestions = docTypes,
-            onCommit = onCommitDocType,
-        )
-    }
-    if (StandardField.DOC_DATE in visibleFields) {
-        DocumentDateField(
-            docDate = docDate,
-            onCommit = onCommitDocDate,
-        )
-    }
-}
-
-/** Date entry and calendar selection both update the same document draft. */
-@Composable
-private fun DocumentDateField(
-    docDate: String?,
-    onCommit: (String) -> Unit,
-) {
-    var showPicker by remember { mutableStateOf(false) }
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        CommitTextField(
-            label = stringResource(Res.string.detail_document_date_plain),
-            initial = docDate.orEmpty(),
-            placeholder = stringResource(Res.string.detail_iso_date_template),
-            // Same rule the save bar enforces, so the field and the bar never disagree.
-            isError = !isWritableDate(docDate),
-            modifier = Modifier.weight(1f),
-            onCommit = onCommit,
-        )
-        IconButton(onClick = { showPicker = true }) {
-            Icon(
-                Icons.Filled.CalendarToday,
-                contentDescription = stringResource(Res.string.common_choose_date),
-            )
-        }
-    }
-    if (showPicker) {
-        IsoDatePickerDialog(
-            initial = docDate,
-            title = stringResource(Res.string.detail_document_date),
-            onSelect = { iso ->
-                showPicker = false
-                onCommit(iso.orEmpty())
-            },
-            onDismiss = { showPicker = false },
-        )
     }
 }
 
@@ -622,115 +483,6 @@ private fun AiMetadataSuggestionRow(
             )
         }
     }
-}
-
-/**
- * The text a field is showing: its own keystrokes, seeded and re-seeded from [external].
- *
- * A field cannot render [external] directly. It arrives through the draft overlay, and the draft
- * store treats a value that only differs in surrounding whitespace as no change at all — so typing
- * a space at the end of a value hands back the value without it, and the space is swallowed as the
- * user types. Comparing trimmed forms makes that round trip a no-op here too, while an edit from
- * anywhere else — switching document, discarding the draft, accepting a suggestion, picking a date
- * — still replaces what is on screen.
- */
-@Composable
-private fun rememberFieldText(external: String): MutableState<String> {
-    val text = remember { mutableStateOf(external) }
-    if (external.trim() != text.value.trim()) text.value = external
-    return text
-}
-
-/**
- * Text field that reports every keystroke through [onCommit], which the document editor turns into
- * a draft edit. The keystrokes themselves live in local state — see [rememberFieldText].
- */
-@Composable
-internal fun CommitTextField(
-    label: String,
-    initial: String,
-    placeholder: String? = null,
-    modifier: Modifier = Modifier,
-    isError: Boolean = false,
-    onCommit: (String) -> Unit,
-) {
-    var text by rememberFieldText(initial)
-    OutlinedTextField(
-        value = text,
-        onValueChange = {
-            text = it
-            onCommit(it)
-        },
-        isError = isError,
-        label = { Text(label) },
-        placeholder = placeholder?.let { { Text(it, maxLines = 1) } },
-        singleLine = true,
-        modifier = modifier.fillMaxWidth(),
-    )
-}
-
-@Composable
-private fun SuggestField(
-    label: String,
-    initial: String,
-    suggestions: List<String>,
-    onCommit: (String) -> Unit,
-) {
-    var text by rememberFieldText(initial)
-    var expanded by remember { mutableStateOf(false) }
-    val filtered = remember(text, suggestions) { suggestionsFor(text, suggestions) }
-    androidx.compose.foundation.layout.Box {
-        OutlinedTextField(
-            value = text,
-            onValueChange = {
-                text = it
-                onCommit(it)
-                // Match against the value just typed: [filtered] still describes the previous one.
-                expanded = it.isNotBlank() && suggestionsFor(it, suggestions).isNotEmpty()
-            },
-            label = { Text(label) },
-            singleLine = true,
-            trailingIcon = {
-                if (suggestions.isNotEmpty()) {
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(
-                            Icons.Filled.ArrowDropDown,
-                            contentDescription = stringResource(Res.string.ux_show_suggestions),
-                        )
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        DropdownMenu(
-            expanded = expanded && filtered.isNotEmpty(),
-            onDismissRequest = { expanded = false },
-            properties =
-                androidx.compose.ui.window
-                    .PopupProperties(focusable = false),
-        ) {
-            filtered.forEach { s ->
-                DropdownMenuItem(
-                    text = { Text(s) },
-                    onClick = {
-                        expanded = false
-                        text = s
-                        onCommit(s)
-                    },
-                )
-            }
-        }
-    }
-}
-
-/** Existing values worth offering for [text]; an exact match offers nothing (it is already typed). */
-private fun suggestionsFor(
-    text: String,
-    suggestions: List<String>,
-): List<String> {
-    val query = text.trim()
-    if (query.isEmpty()) return suggestions.take(MAX_INLINE_SUGGESTIONS)
-    return suggestions.filter { it.contains(query, ignoreCase = true) && it != query }.take(MAX_INLINE_SUGGESTIONS)
 }
 
 @Composable

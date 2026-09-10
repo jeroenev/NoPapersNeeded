@@ -6,6 +6,7 @@ import no_papers_needed.composeapp.generated.resources.common_action_add_tag
 import no_papers_needed.composeapp.generated.resources.common_action_ai_ocr
 import no_papers_needed.composeapp.generated.resources.common_action_change_ocr_engine
 import no_papers_needed.composeapp.generated.resources.common_action_create_tag
+import no_papers_needed.composeapp.generated.resources.common_action_define_field
 import no_papers_needed.composeapp.generated.resources.common_action_delete_document
 import no_papers_needed.composeapp.generated.resources.common_action_delete_rule
 import no_papers_needed.composeapp.generated.resources.common_action_delete_tag
@@ -19,13 +20,8 @@ import no_papers_needed.composeapp.generated.resources.common_action_rename_file
 import no_papers_needed.composeapp.generated.resources.common_action_rename_tag
 import no_papers_needed.composeapp.generated.resources.common_action_rerun_ocr
 import no_papers_needed.composeapp.generated.resources.common_action_restore_document
-import no_papers_needed.composeapp.generated.resources.common_action_save_correspondent
-import no_papers_needed.composeapp.generated.resources.common_action_save_date
-import no_papers_needed.composeapp.generated.resources.common_action_save_document_type
 import no_papers_needed.composeapp.generated.resources.common_action_save_field
-import no_papers_needed.composeapp.generated.resources.common_action_save_note
 import no_papers_needed.composeapp.generated.resources.common_action_save_rule
-import no_papers_needed.composeapp.generated.resources.common_action_save_title
 import no_papers_needed.composeapp.generated.resources.common_action_suggest_metadata
 import no_papers_needed.composeapp.generated.resources.common_action_suggest_tags
 import no_papers_needed.composeapp.generated.resources.common_action_tag
@@ -106,15 +102,11 @@ enum class UiTextKey {
 
 /** Typed action used by the generic write-failure message. */
 enum class UiAction {
-    SAVE_TITLE,
-    SAVE_CORRESPONDENT,
-    SAVE_DOCUMENT_TYPE,
-    SAVE_DATE,
-    SAVE_NOTE,
     ADD_TAG,
     REMOVE_TAG,
     SAVE_FIELD,
     REMOVE_FIELD,
+    DEFINE_FIELD,
     UPDATE_REVIEW_STATE,
     MOVE_TO_TRASH,
     RENAME_FILE,
@@ -344,15 +336,11 @@ private fun Any?.argumentSpec(): Any? =
 private val UiAction.stringResource: StringResource
     get() =
         when (this) {
-            UiAction.SAVE_TITLE -> Res.string.common_action_save_title
-            UiAction.SAVE_CORRESPONDENT -> Res.string.common_action_save_correspondent
-            UiAction.SAVE_DOCUMENT_TYPE -> Res.string.common_action_save_document_type
-            UiAction.SAVE_DATE -> Res.string.common_action_save_date
-            UiAction.SAVE_NOTE -> Res.string.common_action_save_note
             UiAction.ADD_TAG -> Res.string.common_action_add_tag
             UiAction.REMOVE_TAG -> Res.string.common_action_remove_tag
             UiAction.SAVE_FIELD -> Res.string.common_action_save_field
             UiAction.REMOVE_FIELD -> Res.string.common_action_remove_field
+            UiAction.DEFINE_FIELD -> Res.string.common_action_define_field
             UiAction.UPDATE_REVIEW_STATE -> Res.string.common_action_update_review_state
             UiAction.MOVE_TO_TRASH -> Res.string.common_action_move_to_trash
             UiAction.RENAME_FILE -> Res.string.common_action_rename_file

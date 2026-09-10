@@ -3,6 +3,8 @@ package dev.npn.app
 import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.core.app.MetadataWriter
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
+import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -188,16 +190,16 @@ class DocumentDraftsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val writer = FakeMetadataWriter()
             val store = DocumentDrafts(writer, this)
-            store.field("one", FieldKeys.DOC_DATE, "2026-02-30", persisted = null)
+            store.field("one", FieldKeys.DOC_DATE, "2026-02-30", persisted = null, type = FieldType.DATE)
             var advanced = false
             store.save("one", reviewed = true) { advanced = true }
             runCurrent()
             assertFalse(advanced)
             assertTrue(writer.batchedEdits.isEmpty())
-            assertFalse(
-                store.state
-                    .getValue("one")
-                    .validDate,
-            )
+            assertFalse(store.state.getValue("one").writable)
+            store.state.getValue("one").invalidKeys shouldBe setOf(FieldKeys.DOC_DATE)
+            // The same text under a TEXT field is fine: validity follows the type the key was edited as.
+            store.field("two", "note", "2026-02-30", persisted = null)
+            assertTrue(store.state.getValue("two").writable)
         }
 }

@@ -189,8 +189,7 @@ fun LibraryScreen(
         onOpenDoc(docId, docs.orEmpty().map { it.doc.docId }, ui.filter.query)
     }
     val tags by vm.tags.collectAsStateWithLifecycle()
-    val correspondents by vm.correspondents.collectAsStateWithLifecycle()
-    val docTypes by vm.docTypes.collectAsStateWithLifecycle()
+    val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
     val needsReview by vm.needsReviewCount.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
     val savedViews by vm.savedViews.collectAsStateWithLifecycle()
@@ -307,8 +306,7 @@ fun LibraryScreen(
                         FilterPanel(
                             filter = ui.filter,
                             tags = tags,
-                            correspondents = correspondents,
-                            docTypes = docTypes,
+                            fields = fieldFilters,
                             reviewMode = reviewMode,
                             onApply = {
                                 vm.setFilter(it)
@@ -347,8 +345,7 @@ fun LibraryScreen(
             filter = ui.filter,
             selectedCount = ui.selected.size,
             tags = tags,
-            correspondents = correspondents,
-            docTypes = docTypes,
+            fields = fieldFilters,
             reviewMode = reviewMode,
             onApplyFilter = { applied ->
                 vm.setFilter(applied)
@@ -438,6 +435,7 @@ private fun LibraryContent(
 ) {
     val reviewCount by vm.needsReviewCount.collectAsStateWithLifecycle()
     val sortableFields by vm.sortableFields.collectAsStateWithLifecycle()
+    val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
     val queryText by vm.queryText.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
@@ -586,6 +584,7 @@ private fun LibraryContent(
             }
             ActiveFilters(
                 filter = ui.filter,
+                fieldLabels = fieldFilters.fields.associate { it.key to it.label },
                 onFilterChange = vm::setFilter,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )

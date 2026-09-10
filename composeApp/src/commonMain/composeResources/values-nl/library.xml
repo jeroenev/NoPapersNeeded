@@ -82,8 +82,6 @@
     <string name="library_clear_all">Alles wissen</string>
     <string name="library_no_tags_yet">Nog geen tags</string>
     <string name="library_reviewed_filter">Beoordeeld</string>
-    <string name="library_correspondent_filter">Correspondent</string>
-    <string name="library_document_type_filter">Documenttype</string>
     <string name="library_untagged_only">Alleen zonder tags</string>
     <string name="library_untagged">Zonder tags</string>
     <string name="library_apply_filters">Filters toepassen</string>
@@ -110,13 +108,12 @@
     <string name="library_larger_grid_items">Grotere rasteritems</string>
 
     <string name="library_search_tags">Tags zoeken</string>
-    <string name="library_search_correspondent">Correspondent zoeken</string>
-    <string name="library_search_document_type">Documenttype zoeken</string>
-    <string name="library_document_date_filter">Documentdatum</string>
     <string name="library_from">Van</string>
     <string name="library_to">Tot</string>
-    <string name="library_date_from">Vanaf %1$s</string>
-    <string name="library_date_to">Tot %1$s</string>
+    <string name="library_field_equals">%1$s: %2$s</string>
+    <string name="library_field_from">%1$s vanaf %2$s</string>
+    <string name="library_field_to">%1$s tot %2$s</string>
+    <string name="library_search_field">Zoek %1$s</string>
     <plurals name="library_doc_ids_filter">
         <item quantity="one">Beperkt tot %1$d document</item>
         <item quantity="other">Beperkt tot %1$d documenten</item>

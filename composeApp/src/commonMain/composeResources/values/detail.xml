@@ -77,6 +77,14 @@
     <string name="detail_new_field">New field</string>
     <string name="detail_value">Value</string>
     <string name="detail_add_field">Add field</string>
+    <string name="detail_orphan_fields">Not in the field list</string>
+    <string name="detail_add_to_fields">Add to fields</string>
+    <string name="detail_field_label">Label</string>
+    <string name="detail_field_key">Key</string>
+    <string name="detail_field_type">Type</string>
+    <string name="detail_field_hint">Hint (optional)</string>
+    <string name="detail_field_show_by_default">Show on every document</string>
+    <string name="detail_field_key_taken">A field with this key already exists</string>
     <string name="detail_text_queued">Text extraction is queued for this document.</string>
     <string name="detail_text_failed">Text extraction failed for this document.</string>
     <string name="detail_text_not_extracted">No text has been extracted from this document yet.</string>
