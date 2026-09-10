@@ -41,6 +41,11 @@
     <string name="common_settings_field_move_up">Move up</string>
     <string name="common_settings_field_move_down">Move down</string>
     <string name="common_settings_field_type_change_warning">Existing values stay as they are; values that do not fit the new type are shown with a warning.</string>
+    <string name="common_settings_field_type_change_title">Change field type?</string>
+    <plurals name="common_settings_field_type_change_message">
+        <item quantity="one">'%1$s' is used on %2$d document. Existing values are not converted and may no longer fit the new type.</item>
+        <item quantity="other">'%1$s' is used on %2$d documents. Existing values are not converted and may no longer fit the new type.</item>
+    </plurals>
     <string name="common_settings_auto_matching">Auto-matching</string>
     <string name="common_settings_auto_matching_rules">Auto-matching rules</string>
     <string name="common_settings_auto_matching_help">Automatically tag documents and set metadata when imported text matches a rule.</string>

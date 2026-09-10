@@ -111,6 +111,38 @@ class FieldRegistryTest {
         }
 
     @Test
+    fun changingAFieldTypeReprojectsTheNumericShadow() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                val registry = rig.session.fieldRegistry
+                registry.fields.first { it.isNotEmpty() }
+                registry.upsert(def("amount", type = FieldType.TEXT, position = 5))
+                rig.session.meta.setField(id, "amount", "9")
+                // A TEXT field carries no numeric shadow.
+                rig.db
+                    .documentFieldDao()
+                    .fieldsForDocs(listOf(id))
+                    .single { it.fieldKey == "amount" }
+                    .numValue shouldBe null
+
+                registry.upsert(def("amount", type = FieldType.NUMBER, position = 5))
+                // The type change reprojects the documents that carry the field, so sort and range
+                // filters compare numerically rather than lexicographically.
+                rig.db
+                    .documentFieldDao()
+                    .fieldsForDocs(listOf(id))
+                    .single { it.fieldKey == "amount" }
+                    .numValue shouldBe 9.0
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
     fun removeWithClearValuesDropsTheDocumentsRowsInOneTransaction() =
         runTest {
             val rig = AppSessionRig.create(backgroundScope)

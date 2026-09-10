@@ -41,6 +41,11 @@
     <string name="common_settings_field_move_up">Omhoog</string>
     <string name="common_settings_field_move_down">Omlaag</string>
     <string name="common_settings_field_type_change_warning">Bestaande waarden blijven zoals ze zijn; waarden die niet bij het nieuwe type passen, worden met een waarschuwing getoond.</string>
+    <string name="common_settings_field_type_change_title">Veldtype wijzigen?</string>
+    <plurals name="common_settings_field_type_change_message">
+        <item quantity="one">'%1$s' wordt gebruikt op %2$d document. Bestaande waarden worden niet omgezet en passen mogelijk niet meer bij het nieuwe type.</item>
+        <item quantity="other">'%1$s' wordt gebruikt op %2$d documenten. Bestaande waarden worden niet omgezet en passen mogelijk niet meer bij het nieuwe type.</item>
+    </plurals>
     <string name="common_settings_auto_matching">Automatisch taggen</string>
     <string name="common_settings_auto_matching_rules">Tagregels beheren</string>
     <string name="common_settings_auto_matching_help">Tag documenten en vul metadata in op basis van geïmporteerde tekst.</string>

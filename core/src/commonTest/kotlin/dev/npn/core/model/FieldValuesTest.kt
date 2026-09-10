@@ -60,6 +60,29 @@ class FieldValuesTest {
     }
 
     @Test
+    fun grouping_must_sit_on_a_group_boundary() {
+        // Valid grouping still works in both locales.
+        assertEquals("1234", ok(FieldType.NUMBER, "1,234"))
+        assertEquals("1234", ok(FieldType.NUMBER, "1.234", nl))
+        assertEquals("1234.56", ok(FieldType.DECIMAL, "1.234,56", nl))
+        assertEquals("1234.56", ok(FieldType.DECIMAL, "1,234.56"))
+        // A dot-decimal typed in a comma locale is refused, not silently re-read as 123456.
+        assertIs<FieldParse.Invalid>(FieldValues.canonicalize(FieldType.DECIMAL, "1234.56", nl))
+        assertIs<FieldParse.Invalid>(FieldValues.canonicalize(FieldType.NUMBER, "1234.56", nl))
+        // Groups of the wrong size, and a grouping separator in a dot locale, are refused too.
+        assertIs<FieldParse.Invalid>(FieldValues.canonicalize(FieldType.NUMBER, "12,34"))
+        assertIs<FieldParse.Invalid>(FieldValues.canonicalize(FieldType.DECIMAL, "1.234,56"))
+        assertIs<FieldParse.Invalid>(FieldValues.canonicalize(FieldType.DECIMAL, "1,234.5,6"))
+    }
+
+    @Test
+    fun the_same_number_stores_the_same_canonical_form_in_every_language() {
+        // Input language only decides how it is read; storage is always the canonical dot form.
+        assertEquals("1234.56", ok(FieldType.DECIMAL, "1.234,56", nl))
+        assertEquals("1234.56", ok(FieldType.DECIMAL, "1,234.56"))
+    }
+
+    @Test
     fun display_localizes_decimals_and_leaves_the_rest_alone() {
         assertEquals("12,5", FieldValues.display(FieldType.DECIMAL, "12.5", nl))
         assertEquals("12.5", FieldValues.display(FieldType.DECIMAL, "12.5"))

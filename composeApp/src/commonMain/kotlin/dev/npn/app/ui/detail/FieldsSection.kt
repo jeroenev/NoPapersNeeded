@@ -26,6 +26,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
@@ -40,7 +41,9 @@ import dev.npn.app.ui.common.FieldEditor
 import dev.npn.core.app.Doc
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
+import dev.npn.core.model.FieldValues
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_save
@@ -231,7 +234,8 @@ internal data class NewFieldSeed(
 /**
  * Define a field from the document panel: the shared [FieldDefForm] plus an optional first value
  * for this document, edited with the control of the chosen type so what gets saved is already
- * canonical. Confirming writes the definition and the value together through [onConfirm].
+ * canonical. Confirming writes the definition and the value together through [onConfirm], and is
+ * blocked while the value does not fit the chosen type (a type switch drops a value it refuses).
  */
 @Composable
 internal fun NewFieldDialog(
@@ -246,7 +250,16 @@ internal fun NewFieldDialog(
     }
     var value by remember { mutableStateOf(seed.value.orEmpty()) }
     val draftDef = form.toDef(position = (existing.maxOfOrNull { it.position } ?: -1) + 1)
-    val canSave = form.label.isNotBlank() && draftDef != null && !form.collides(existing)
+    val valueValid = value.isBlank() || FieldValues.canonicalize(form.type, value) is FieldParse.Ok
+    val canSave = form.label.isNotBlank() && draftDef != null && !form.collides(existing) && valueValid
+    // Switching type can strand the typed value: drop it when the new type refuses it, so the
+    // dialog never confirms a definition whose first value would fail to write (the definition is
+    // committed before the value, so a rejected value would otherwise leave the field half-applied).
+    LaunchedEffect(form.type) {
+        if (value.isNotBlank() && FieldValues.canonicalize(form.type, value) is FieldParse.Invalid) {
+            value = ""
+        }
+    }
 
     AlertDialog(
         onDismissRequest = onDismiss,

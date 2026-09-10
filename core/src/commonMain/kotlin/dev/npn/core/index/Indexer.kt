@@ -399,6 +399,13 @@ class Indexer(
                             documents += op.newDoc
                         }
 
+                        // A definition change is library-wide: every document's projection of that
+                        // field depends on its type (the numeric shadow), so all docs with metadata
+                        // are reprojected rather than only the event's own document (there is none).
+                        is JournalOp.FieldDefSet -> {
+                            documents.addAll(state.docsWithMetadata())
+                        }
+
                         else -> {}
                     }
                 }

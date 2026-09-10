@@ -74,13 +74,21 @@ object FieldValues {
             }
 
             FieldType.NUMBER -> {
-                val cleaned = stripGrouping(trimmed, locale).removePrefix("+")
-                if (integerPattern.matches(cleaned)) FieldParse.Ok(cleaned) else FieldParse.Invalid(trimmed)
+                val cleaned = stripGrouping(trimmed, locale)?.removePrefix("+")
+                if (cleaned != null && integerPattern.matches(cleaned)) {
+                    FieldParse.Ok(cleaned)
+                } else {
+                    FieldParse.Invalid(trimmed)
+                }
             }
 
             FieldType.DECIMAL -> {
-                val cleaned = stripGrouping(trimmed, locale).replace(locale.decimalSeparator, '.').removePrefix("+")
-                if (decimalPattern.matches(cleaned)) FieldParse.Ok(cleaned) else FieldParse.Invalid(trimmed)
+                val cleaned = stripGrouping(trimmed, locale)?.replace(locale.decimalSeparator, '.')?.removePrefix("+")
+                if (cleaned != null && decimalPattern.matches(cleaned)) {
+                    FieldParse.Ok(cleaned)
+                } else {
+                    FieldParse.Invalid(trimmed)
+                }
             }
         }
     }
@@ -125,10 +133,75 @@ object FieldValues {
     private fun canonicalDate(trimmed: String): FieldParse =
         if (isIsoDate(trimmed)) FieldParse.Ok(trimmed) else FieldParse.Invalid(trimmed)
 
+    /**
+     * Remove the locale's grouping from [value], and nothing else, refusing grouping that is not at
+     * a valid group boundary.
+     *
+     * A grouping separator is only legitimate between groups of three digits in the integer part;
+     * anywhere else — adjacent, leading, trailing, mis-sized, or inside the fraction — the input is
+     * ambiguous and is rejected rather than silently re-read. This is what stops a dot-decimal
+     * number typed in a comma locale (`1234.56`) from being accepted as `123456` (and vice versa).
+     *
+     * The locale's decimal separator is preserved for the caller to normalize, which is what keeps
+     * the stored form canonical no matter which language the value was entered in. Returns null when
+     * a separator sits at an invalid position or an unexpected character appears.
+     */
     private fun stripGrouping(
         value: String,
         locale: FieldLocale,
-    ): String = value.filterNot { it == locale.groupingSeparator || it in GROUPING_WHITESPACE }
+    ): String? {
+        val decimalIndex = value.indexOf(locale.decimalSeparator)
+        val integerPart = if (decimalIndex == -1) value else value.substring(0, decimalIndex)
+        val rest = if (decimalIndex == -1) "" else value.substring(decimalIndex)
+        // Grouping never belongs in the fraction: `1.234,567` is fine, `1,234. 567` is not.
+        if (rest.any { it == locale.groupingSeparator || it in GROUPING_WHITESPACE }) return null
+        val normalizedInteger = normalizeGroupedInteger(integerPart, locale.groupingSeparator) ?: return null
+        return normalizedInteger + rest
+    }
+
+    /**
+     * Drop [grouping] from an integer literal only when every separator divides groups of three.
+     * A sign is preserved; a value with no separator at all is a plain integer of any length.
+     */
+    private fun normalizeGroupedInteger(
+        part: String,
+        grouping: Char,
+    ): String? {
+        var body = part
+        val sign =
+            if (body.startsWith("+") || body.startsWith("-")) {
+                body.take(1).also { body = body.drop(1) }
+            } else {
+                ""
+            }
+        if (body.isEmpty()) return null
+        val groups = ArrayList<String>()
+        var current = StringBuilder()
+        for (ch in body) {
+            when {
+                ch.isDigit() -> {
+                    current.append(ch)
+                }
+
+                ch == grouping || ch in GROUPING_WHITESPACE -> {
+                    groups.add(current.toString())
+                    current = StringBuilder()
+                }
+
+                else -> {
+                    return null
+                }
+            }
+        }
+        groups.add(current.toString())
+        if (groups.any { it.isEmpty() }) return null
+        if (groups.size > 1 &&
+            (groups.first().length !in 1..3 || groups.drop(1).any { it.length != 3 })
+        ) {
+            return null
+        }
+        return sign + groups.joinToString("")
+    }
 
     /** Characters some locales use between digit groups besides the locale's own separator. */
     private const val GROUPING_WHITESPACE = " \u00A0'"

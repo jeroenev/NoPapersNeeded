@@ -30,6 +30,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.FieldDefForm
 import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.fieldTypeLabel
@@ -47,6 +48,8 @@ import no_papers_needed.composeapp.generated.resources.common_settings_field_edi
 import no_papers_needed.composeapp.generated.resources.common_settings_field_move_down
 import no_papers_needed.composeapp.generated.resources.common_settings_field_move_up
 import no_papers_needed.composeapp.generated.resources.common_settings_field_summary
+import no_papers_needed.composeapp.generated.resources.common_settings_field_type_change_message
+import no_papers_needed.composeapp.generated.resources.common_settings_field_type_change_title
 import no_papers_needed.composeapp.generated.resources.common_settings_field_type_change_warning
 import no_papers_needed.composeapp.generated.resources.common_settings_field_usage
 import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
@@ -178,7 +181,8 @@ private fun FieldRow(
 /**
  * Add or edit a definition. An existing field keeps its key (values are stored under it) and a
  * well-known field keeps its type (other subsystems read it as that type); changing the type of a
- * field with values in place is allowed but says what happens to them.
+ * field is allowed but warns, and when the field still carries values on documents it is held back
+ * behind a confirmation naming that usage.
  */
 @Composable
 private fun FieldDefDialog(
@@ -189,9 +193,14 @@ private fun FieldDefDialog(
     onDismiss: () -> Unit,
 ) {
     var form by remember { mutableStateOf(def?.let(FieldDefFormState::of) ?: FieldDefFormState()) }
+    // A type change on a field that still carries values is held back until the user confirms:
+    // existing values are not converted, so this is the one edit in the pane that can leave
+    // off-type data behind.
+    var pendingTypeChange by remember { mutableStateOf<FieldDef?>(null) }
     val position = def?.position ?: ((existing.maxOfOrNull { it.position } ?: -1) + 1)
     val result = form.toDef(position)
     val canSave = form.label.isNotBlank() && result != null && !form.collides(existing, own = def?.key)
+    val changesTypeOfUsedField = def != null && usage > 0 && result != null && result.type != def.type
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -227,12 +236,37 @@ private fun FieldDefDialog(
             }
         },
         confirmButton = {
-            TextButton(onClick = { result?.let(onConfirm) }, enabled = canSave) {
+            TextButton(
+                onClick = {
+                    val next = result ?: return@TextButton
+                    if (changesTypeOfUsedField) pendingTypeChange = next else onConfirm(next)
+                },
+                enabled = canSave,
+            ) {
                 Text(stringResource(Res.string.common_save))
             }
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
     )
+
+    val pending = pendingTypeChange
+    if (pending != null && def != null) {
+        ConfirmDialog(
+            title = stringResource(Res.string.common_settings_field_type_change_title),
+            message =
+                pluralStringResource(
+                    Res.plurals.common_settings_field_type_change_message,
+                    usage,
+                    def.label,
+                    usage,
+                ),
+            onConfirm = {
+                pendingTypeChange = null
+                onConfirm(pending)
+            },
+            onDismiss = { pendingTypeChange = null },
+        )
+    }
 }
 
 @Composable
