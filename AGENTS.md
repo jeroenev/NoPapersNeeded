@@ -61,9 +61,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   properties, settings and field definitions.
 - Document fields are registry data, not code. Title, correspondent, docType, docDate and notes
   are ordinary `field-set` fields whose definitions the library seeds; there is no per-field
-  Kotlin. Only two places may switch exhaustively on `FieldType`: `FieldValues` (canonical form)
-  and the UI's `FieldEditor` (input control) — everything else reads the `FieldDef`. Storage is
-  always the canonical form; a blank value clears the field and is never stored as `""`.
+  Kotlin. An exhaustive `when (FieldType)` belongs only in `FieldValues` (canonical form) and in
+  the UI, where the type picks a control: `FieldEditor.kt` (the editor and its type label) and the
+  filter sheet's per-type filter control. Every other branch reads the `FieldDef`'s data (type,
+  flags, hint), never switches on the type. Storage is always the canonical form; a blank value
+  clears the field and is never stored as `""`.
   The five typed `documents` columns are a read cache the fold writes from the field map, never
   a second source.
 

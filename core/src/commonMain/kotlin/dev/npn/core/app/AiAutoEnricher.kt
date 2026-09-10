@@ -247,13 +247,14 @@ class AiAutoEnricher(
      */
     private suspend fun request(): AiEditRequest =
         AiEditRequest(
+            // Registry order, capped (P11): an unattended pass must not grow the reply contract
+            // with every field the user marks for AI.
             fields =
-                fieldRegistry.current().filter { it.aiEnabled }.map {
-                    AiFieldConfig(
-                        it.key,
-                        AiFieldMode.UNFILLED,
-                    )
-                },
+                fieldRegistry
+                    .current()
+                    .filter { it.aiEnabled }
+                    .take(AiEditRequest.MAX_FIELDS_PER_RUN)
+                    .map { AiFieldConfig(it.key, AiFieldMode.UNFILLED) },
             tags = true,
             tagRemovals = false,
             maxNewTags = 0,

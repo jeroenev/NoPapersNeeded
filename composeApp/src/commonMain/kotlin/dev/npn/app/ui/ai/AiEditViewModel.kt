@@ -189,10 +189,8 @@ fun AiEditUiState.enabledFieldKeys(): List<String> {
 }
 
 /** True when the run asks about more fields than one reply can sensibly carry (see P11 in the plan). */
-val AiEditUiState.tooManyFields: Boolean get() = fieldOptions.count { it.value.enabled } > MAX_FIELDS_PER_RUN
-
-/** Upper bound on autofill fields per run: beyond this the JSON contract dwarfs the document text. */
-const val MAX_FIELDS_PER_RUN = 12
+val AiEditUiState.tooManyFields: Boolean
+    get() = fieldOptions.count { it.value.enabled } > AiEditRequest.MAX_FIELDS_PER_RUN
 
 private fun AiEditUiState.scopeKey(): ScopeKey =
     ScopeKey(

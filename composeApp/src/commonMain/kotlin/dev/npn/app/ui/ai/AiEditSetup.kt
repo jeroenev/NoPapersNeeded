@@ -44,6 +44,7 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.uiText
+import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
@@ -302,7 +303,7 @@ private fun FieldSection(
         }
         if (ui.tooManyFields) {
             Text(
-                stringResource(Res.string.ai_edit_too_many_fields, MAX_FIELDS_PER_RUN),
+                stringResource(Res.string.ai_edit_too_many_fields, AiEditRequest.MAX_FIELDS_PER_RUN),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.error,
             )

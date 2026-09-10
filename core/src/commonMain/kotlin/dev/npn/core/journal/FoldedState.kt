@@ -1,6 +1,7 @@
 package dev.npn.core.journal
 
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldType
 import dev.npn.core.model.SystemProperty
 
 /**
@@ -358,6 +359,14 @@ class FoldedState {
             addAll(fields.keys)
         }
 }
+
+/**
+ * The one rule for "what type is this field": the folded definition's, or TEXT for a key no
+ * definition covers. Callers that need a value's canonical form or numeric shadow go through this
+ * so the unregistered-is-text default lives in one place. An extension, not a member, so the
+ * class's function count stays within detekt's bound.
+ */
+fun FoldedState.effectiveFieldType(key: String): FieldType = effectiveFieldDef(key)?.type ?: FieldType.TEXT
 
 interface HlcStamped {
     val hlc: Hlc

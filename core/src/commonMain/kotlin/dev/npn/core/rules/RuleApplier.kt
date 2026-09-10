@@ -7,6 +7,7 @@ import dev.npn.core.db.FtsDao
 import dev.npn.core.db.toRule
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.effectiveFieldType
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
@@ -91,7 +92,7 @@ class RuleApplier(
         key: String,
         raw: String,
     ): String? {
-        val type = state.effectiveFieldDef(key)?.type ?: FieldType.TEXT
+        val type = state.effectiveFieldType(key)
         return (FieldValues.canonicalize(type, raw) as? FieldParse.Ok)?.canonical
     }
 
