@@ -71,16 +71,16 @@ enum class StandardField(
     }
 }
 
-/** Single-value document properties settable via prop-set journal events. */
-enum class DocProperty(
+/**
+ * Per-document system state settable via `prop-set` journal events. User-authored metadata (title,
+ * correspondent, date, notes, anything the user adds) is NOT here: it is a registry field
+ * ([FieldDef]) written as `field-set`. What remains are the two markers the app itself owns.
+ */
+enum class SystemProperty(
     val wire: String,
 ) {
-    REVIEWED("reviewed"), // "true"/"false"; per-doc marker for INBOX_WORKFLOW
-    CORRESPONDENT("correspondent"),
-    DOC_TYPE("docType"),
-    DOC_DATE("docDate"), // ISO-8601 local date, e.g. 2026-07-15
-    TITLE("title"),
-    NOTES("notes"),
+    /** "true"/"false"; per-doc marker for [ReviewMode.INBOX_WORKFLOW]. */
+    REVIEWED("reviewed"),
 
     /**
      * User override of the OCR version used for search: an engine name (e.g. "tesseract",
@@ -91,6 +91,6 @@ enum class DocProperty(
     ;
 
     companion object {
-        fun fromWire(value: String?): DocProperty? = entries.firstOrNull { it.wire == value }
+        fun fromWire(value: String?): SystemProperty? = entries.firstOrNull { it.wire == value }
     }
 }

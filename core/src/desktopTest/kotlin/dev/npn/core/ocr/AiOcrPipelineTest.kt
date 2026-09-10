@@ -226,7 +226,7 @@ class AiOcrPipelineTest {
         aiAuto = { auto },
     )
 
-    /** Simulate the journal fold projecting a DocProperty.OCR_ENGINE override onto the row. */
+    /** Simulate the journal fold projecting a SystemProperty.OCR_ENGINE override onto the row. */
     private suspend fun setOverride(
         docId: String,
         engine: String?,

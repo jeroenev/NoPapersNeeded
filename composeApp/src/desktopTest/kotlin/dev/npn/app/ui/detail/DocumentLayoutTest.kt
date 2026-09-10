@@ -20,7 +20,7 @@ import dev.npn.app.FakeMetadataWriter
 import dev.npn.app.doc
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.app.DocListItem
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -136,7 +136,7 @@ class DocumentLayoutTest {
             }
         val store = DocumentDrafts(FakeMetadataWriter(), CoroutineScope(Dispatchers.Unconfined))
         // An actual change, so the scene renders the save bar in its unsaved state.
-        store.property("invoice", DocProperty.TITLE, "Electricity invoice 2026", persisted = "Electricity invoice")
+        store.field("invoice", FieldKeys.TITLE, "Electricity invoice 2026", persisted = "Electricity invoice")
         return ImageComposeScene(width, height, density = Density(1f, fontScale)) {
             CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalDocumentDrafts provides store) {
                 NpnTheme(darkTheme = false) {

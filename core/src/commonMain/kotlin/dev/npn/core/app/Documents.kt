@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.flow.Flow
@@ -18,19 +19,17 @@ data class Doc(
     val docId: String,
     val relPath: String,
     val fileName: String,
-    /** [title] when it is non-blank, else [fileName]. Derived once here, never at a call site. */
+    /** The title field when it is non-blank, else [fileName]. Derived once here, never at a call site. */
     val displayTitle: String,
-    /** The raw stored title; null/blank means "untitled". The metadata panel edits this value. */
-    val title: String?,
     val size: Long,
     val pageCount: Int?,
     val addedAt: Long,
     val reviewed: Boolean,
-    val correspondent: String?,
-    val docType: String?,
-    /** ISO-8601 local date, e.g. 2026-07-15. */
-    val docDate: String?,
-    val notes: String?,
+    /**
+     * Every field value on this document, keyed by registry key ([dev.npn.core.model.FieldKeys]
+     * names the well-known ones), in canonical form. A cleared field is absent, never blank.
+     */
+    val fields: Map<String, String>,
     val trashed: Boolean,
     val trashedOrigPath: String?,
     val missing: Boolean,
@@ -39,7 +38,17 @@ data class Doc(
     val ocrEngine: OcrEngineRef?,
     /** User-pinned engine, or null for automatic best-engine selection. */
     val ocrEngineOverride: OcrEngineRef?,
-)
+) {
+    // Named accessors for the well-known fields. They are lookups into [fields], nothing more; the
+    // registry-driven UI reads the map directly, these exist for the seams that name a key.
+    val title: String? get() = fields[FieldKeys.TITLE]
+    val correspondent: String? get() = fields[FieldKeys.CORRESPONDENT]
+    val docType: String? get() = fields[FieldKeys.DOC_TYPE]
+
+    /** ISO-8601 local date, e.g. 2026-07-15. */
+    val docDate: String? get() = fields[FieldKeys.DOC_DATE]
+    val notes: String? get() = fields[FieldKeys.NOTES]
+}
 
 /**
  * The one rule for "what do we call this document": its title when it has one, else the file name.
@@ -55,7 +64,6 @@ data class DocListItem(
     val doc: Doc,
     val tags: List<String>,
     val snippet: String? = null, // only set for FTS query results
-    val fields: Map<String, String> = emptyMap(), // custom metadata fields (key -> value)
 )
 
 data class TagInfo(

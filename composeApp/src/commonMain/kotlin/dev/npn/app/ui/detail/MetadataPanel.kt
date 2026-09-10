@@ -63,6 +63,7 @@ import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.ai.AiField
 import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import no_papers_needed.composeapp.generated.resources.Res
@@ -270,7 +271,9 @@ private fun DetailsTab(
         HorizontalDivider()
 
         CustomFieldsSection(
-            fields = item.fields,
+            // Until the registry-driven section lands, this list shows only the non-well-known keys;
+            // the well-known five have their own controls above.
+            fields = item.doc.fields.filterKeys { it !in FieldKeys.WELL_KNOWN },
             fieldKeys = vocabulary.fieldKeys,
             onCommitField = edit.onCommitField,
             onRemoveField = edit.onRemoveField,

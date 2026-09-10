@@ -4,7 +4,7 @@ import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.DocumentEntity
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -40,7 +40,17 @@ internal fun item(
     title: String? = null,
     correspondent: String? = null,
     docDate: String? = null,
-): DocListItem = DocListItem(doc = doc(id, title, correspondent, docDate).toDoc(), tags = emptyList())
+): DocListItem {
+    // The run diffs suggestions against the document's current fields, so the derived Doc must
+    // carry them: the entity columns are a read cache, but Doc.title/correspondent read the map.
+    val fields =
+        buildMap {
+            title?.let { put(FieldKeys.TITLE, it) }
+            correspondent?.let { put(FieldKeys.CORRESPONDENT, it) }
+            docDate?.let { put(FieldKeys.DOC_DATE, it) }
+        }
+    return DocListItem(doc = doc(id, title, correspondent, docDate).toDoc(fields), tags = emptyList())
+}
 
 internal fun edit(
     addTags: List<TagSuggestion> = emptyList(),
@@ -93,7 +103,7 @@ internal class FakeMeta : MetadataWriter {
     val removedTags = mutableListOf<Pair<List<String>, String>>()
 
     /** Field writes, in the order applied: one entry per document, never one per field. */
-    val batchedEdits = mutableListOf<Pair<String, Map<DocProperty, String?>>>()
+    val batchedEdits = mutableListOf<Pair<String, Map<String, String?>>>()
 
     /** addTag throws when any of these ids is in the call's docIds (per-doc partial failure). */
     var failAddTagForDocs: Set<String> = emptySet()
@@ -123,52 +133,33 @@ internal class FakeMeta : MetadataWriter {
     override suspend fun applyEdits(
         docIds: List<String>,
         addTags: List<String>,
-        properties: Map<DocProperty, String?>,
+        fields: Map<String, String?>,
     ) {
         // Field values are per document, so an apply must never fold several into one call: that
         // would make one document's rejection lose the others' writes.
         val docId = docIds.single()
         if (docId in failEditsForDocs) error("applyEdits failed for $docId")
-        batchedEdits += docId to properties
+        batchedEdits += docId to fields
     }
-
-    // Field writes must go through applyEdits: a setter per field would re-run the storage path
-    // rules once per field and rename the document repeatedly for one apply.
-    override suspend fun setTitle(
-        docId: String,
-        title: String?,
-    ) = error("must batch through applyEdits")
-
-    override suspend fun setCorrespondent(
-        docIds: List<String>,
-        value: String?,
-    ) = error("must batch through applyEdits")
-
-    override suspend fun setDocDate(
-        docId: String,
-        isoDate: String?,
-    ) = error("must batch through applyEdits")
 
     override suspend fun setReviewed(
         docIds: List<String>,
         reviewed: Boolean,
     ) = error("unused")
 
-    override suspend fun setDocType(
-        docIds: List<String>,
-        value: String?,
-    ) = error("unused")
-
-    override suspend fun setNotes(
-        docId: String,
-        notes: String?,
-    ) = error("unused")
-
+    // Field writes must go through applyEdits: a setter per field would re-run the storage path
+    // rules once per field and rename the document repeatedly for one apply.
     override suspend fun setField(
         docId: String,
         key: String,
         value: String?,
-    ) = error("unused")
+    ) = error("must batch through applyEdits")
+
+    override suspend fun setField(
+        docIds: List<String>,
+        key: String,
+        value: String?,
+    ) = error("must batch through applyEdits")
 }
 
 internal class FakeContent : DocContentFacade {

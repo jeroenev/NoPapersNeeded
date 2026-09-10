@@ -1,6 +1,6 @@
 package dev.npn.core.journal
 
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.SystemProperty
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -36,7 +36,7 @@ class SegmentWriterTest {
                 )
             assertEquals(listOf(1L, 2L), batch1.map { it.seq })
 
-            val batch2 = w.commit(listOf(PendingOp.propSet(doc, DocProperty.REVIEWED, "true")))
+            val batch2 = w.commit(listOf(PendingOp.propSet(doc, SystemProperty.REVIEWED, "true")))
             assertEquals(listOf(3L), batch2.map { it.seq })
 
             val segs = store.listSegments()

@@ -2,6 +2,7 @@ package dev.npn.core.ocr
 
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.DocumentFieldDao
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
@@ -9,6 +10,7 @@ import dev.npn.core.db.TagDao
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.index.FtsRows
 import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.pdf.PdfEngine
 import kotlinx.coroutines.CancellationException
@@ -54,6 +56,7 @@ class OcrPipeline(
     private val ftsDao: FtsDao,
     private val ocrQueueDao: OcrQueueDao,
     private val tagDao: TagDao,
+    private val fieldDao: DocumentFieldDao,
     private val deviceId: String,
     private val config: OcrConfig = OcrConfig(),
     private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
@@ -521,15 +524,15 @@ class OcrPipeline(
             // read-then-replace for the same doc (see FtsWriteGate).
             val doc = documentDao.getByDocId(docId)
             val tags = tagDao.tagsForDocument(docId)
+            val fields = fieldDao.fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue }
             ftsDao.replaceDocument(
-                docId = docId,
-                fileName = doc?.fileName,
-                title = doc?.title,
-                notes = doc?.notes,
-                content = OcrSidecar.joinPages(sidecar.pages),
-                tags = tags.joinToString(" ").ifEmpty { null },
-                correspondent = doc?.correspondent,
-                docType = doc?.docType,
+                FtsRows.row(
+                    docId = docId,
+                    fileName = doc?.fileName,
+                    tags = tags,
+                    fields = fields,
+                    content = OcrSidecar.joinPages(sidecar.pages),
+                ),
             )
         }
         val state = if (desired.deviceId == deviceId) OCR_DONE else OCR_ADOPTED

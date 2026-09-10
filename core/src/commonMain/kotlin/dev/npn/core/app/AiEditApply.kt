@@ -1,18 +1,18 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiField
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 
 /**
- * The stored property an autofill field writes to. Kept here rather than on [AiField] so the AI
+ * The registry field an autofill field writes to. Kept here rather than on [AiField] so the AI
  * contract layer stays free of the storage model.
  */
-internal val AiField.property: DocProperty
+internal val AiField.fieldKey: String
     get() =
         when (this) {
-            AiField.TITLE -> DocProperty.TITLE
-            AiField.CORRESPONDENT -> DocProperty.CORRESPONDENT
-            AiField.DOC_DATE -> DocProperty.DOC_DATE
+            AiField.TITLE -> FieldKeys.TITLE
+            AiField.CORRESPONDENT -> FieldKeys.CORRESPONDENT
+            AiField.DOC_DATE -> FieldKeys.DOC_DATE
         }
 
 /**
@@ -24,10 +24,10 @@ internal val AiField.property: DocProperty
  * Edit is binary — a dropped item is simply absent — which is what separates it from Review
  * pre-selection's tri-state chips; the two must not be collapsed.
  *
- * [properties] is keyed by [AiField], not [DocProperty]: only the autofill fields are AI-writable,
- * so keying by the narrower type makes an unwritable property unrepresentable rather than a
- * runtime check, and lets [ApplyReport.fieldsWritten] be built without a partial inverse mapping.
- * The widening to [DocProperty] happens once, at the [MetadataWriter] boundary.
+ * [properties] is keyed by [AiField], not by field key: only the autofill fields are AI-writable,
+ * so keying by the narrower type makes an unwritable field unrepresentable rather than a runtime
+ * check, and lets [ApplyReport.fieldsWritten] be built without a partial inverse mapping. The
+ * widening to a registry key happens once, at the [MetadataWriter] boundary.
  */
 data class WritableEdit(
     val docId: String,
@@ -72,7 +72,7 @@ data class ApplyReport(
  * The single home of the suggestion-write mechanics, shared by the reviewed [AiEditRun] and by
  * automatic [AiAutoEnricher]. Its callers differ in how they decide *what* to write, in what
  * shape they want failure back, and — crucially — in the *grain* at which a write must be atomic.
- * Both grains live here so the accounting, the failure-cause map and the [AiField]/[DocProperty]
+ * Both grains live here so the accounting, the failure-cause map and the [AiField]/field-key
  * mapping stay shared; they are two entry points, not one policy toggle, because the reason they
  * differ is domain, not configuration, and a strategy object would only hide that.
  *
@@ -166,7 +166,7 @@ class AiEditApply(
         // single change (see the class doc for why this is load-bearing, not a style choice).
         for (edit in edits) {
             if (edit.properties.isEmpty()) continue
-            runCatching { meta.applyEdits(listOf(edit.docId), properties = edit.storageProperties()) }
+            runCatching { meta.applyEdits(listOf(edit.docId), fields = edit.storageFields()) }
                 .onSuccess {
                     edit.properties.keys.forEach { field -> fieldsWritten += edit.docId to field }
                     onDocWritten(edit.docId)
@@ -204,7 +204,7 @@ class AiEditApply(
         // The whole edit — tags and fields together — as one applyEdits so a failure writes none
         // of it and a retry re-asks the model about the state it was originally shown.
         runCatching {
-            meta.applyEdits(listOf(edit.docId), addTags = edit.addTags, properties = edit.storageProperties())
+            meta.applyEdits(listOf(edit.docId), addTags = edit.addTags, fields = edit.storageFields())
         }.onSuccess {
             edit.addTags.forEach { tag -> addsWritten += edit.docId to tag }
             edit.properties.keys.forEach { field -> fieldsWritten += edit.docId to field }
@@ -215,9 +215,9 @@ class AiEditApply(
 }
 
 /**
- * Widen the edit's [AiField] keys to the [DocProperty] keys [MetadataWriter.applyEdits] takes.
+ * Widen the edit's [AiField] keys to the registry keys [MetadataWriter.applyEdits] takes.
  *
- * This is the single conversion point, and it is total: every [AiField] has a [DocProperty], so
+ * This is the single conversion point, and it is total: every [AiField] has a registry key, so
  * unlike the inverse it needs no failure branch that could throw after a write has committed.
  */
-private fun WritableEdit.storageProperties(): Map<DocProperty, String?> = properties.mapKeys { it.key.property }
+private fun WritableEdit.storageFields(): Map<String, String?> = properties.mapKeys { it.key.fieldKey }

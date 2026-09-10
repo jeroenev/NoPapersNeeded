@@ -1,6 +1,7 @@
 package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.DocumentFieldEntity
 import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.NpnDatabase
@@ -14,7 +15,10 @@ import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.SystemEpochClock
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
+import dev.npn.core.model.FieldValues
+import dev.npn.core.model.SystemProperty
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -491,8 +495,9 @@ class Indexer(
      * - Tags: every tag with a known style gets a [TagEntity] upsert; every doc's document_tags is
      *   replaced with its effective tag set. Tags appearing only in adds (no explicit style) are
      *   upserted with null style so tag-management counts see them.
-     * - Props: reviewed/correspondent/docType/docDate/title columns are set from effective props;
-     *   absent -> defaults (reviewed false, others null).
+     * - Fields: every doc's document_fields is replaced with its effective field map (own values
+     *   over inherited predecessor values); the well-known five are additionally cached on the
+     *   doc row. reviewed/ocrEngineOverride come from the system props.
      * - Trash: the trashed flag + trashedOrigPath come from the fold's trash state. Resurrection:
      *   if the journal says trashed/deleted but the file exists at the original path, prefer the
      *   file (clear missing, do NOT set trashed) and report it. This keeps the file authoritative.
@@ -504,8 +509,8 @@ class Indexer(
      *   carries the metadata (fold exposes effective views on the resolved id).
      * - FTS: after tags/props, each affected doc's fts row is replaced. The fold has no content
      *   source of its own, so it reads the existing extracted-text content from the current fts
-     *   row and carries it forward, only updating the metadata-derived columns (fileName, title,
-     *   tags, correspondent, docType). This preserves OCR/embedded text (written by the OCR
+     *   row and carries it forward, only updating the metadata-derived columns (fileName, tags,
+     *   fields). This preserves OCR/embedded text (written by the OCR
      *   pipeline) across metadata-only folds and rescans. A brand-new doc with no fts row yet
      *   gets empty content, which the OCR pipeline fills later via its own path.
      */
@@ -523,7 +528,7 @@ class Indexer(
 
         // Bulk preload the current projection (rows, tags, fields, FTS content) so the per-doc
         // pass below issues no serial reads; diffed writes are collected and flushed once.
-        val preloaded = preloadRows(journalDocs)
+        val preloaded = preloadRows(state, journalDocs)
         upsertReferencedTags(state, journalDocs, request.styledTags)
         // The registry is library-wide and small; a diffed replace per fold keeps it in step
         // with the fold at negligible cost and needs no per-op scoping.
@@ -560,7 +565,9 @@ class Indexer(
     private class PreloadedRows(
         val rows: HashMap<String, DocumentEntity>,
         val tags: Map<String, List<String>>,
-        val fields: Map<String, Map<String, String>>,
+        val fields: Map<String, List<DocumentFieldEntity>>,
+        /** Registry types by key, for the numeric shadow on field rows. */
+        val fieldTypes: Map<String, FieldType>,
         /**
          * Docs that already have an FTS row. Presence only, never the text: the projection just
          * needs to know whether a doc has been indexed yet, and [flushChanges] re-reads the
@@ -577,11 +584,14 @@ class Indexer(
     private class ProjectionChanges {
         val docRows = ArrayList<DocumentEntity>()
         val tags = LinkedHashMap<String, List<String>>()
-        val fields = LinkedHashMap<String, Map<String, String>>()
+        val fields = LinkedHashMap<String, List<DocumentFieldEntity>>()
         val ftsRows = ArrayList<FtsDocumentEntity>()
     }
 
-    private suspend fun preloadRows(journalDocs: Set<String>): PreloadedRows {
+    private suspend fun preloadRows(
+        state: FoldedState,
+        journalDocs: Set<String>,
+    ): PreloadedRows {
         val docIds = journalDocs.toList()
         val rows = HashMap<String, DocumentEntity>(docIds.size)
         for (row in documentDao.getByDocIds(docIds)) rows[row.docId] = row
@@ -591,13 +601,11 @@ class Indexer(
             tags[docId] = tagRows.map { it.tag }.sorted()
         }
 
-        val fields = HashMap<String, Map<String, String>>(docIds.size)
-        for ((docId, fieldRows) in fieldDao.fieldsForDocs(docIds).groupBy { it.docId }) {
-            fields[docId] = fieldRows.associate { it.fieldKey to it.fieldValue }
-        }
+        val fields = fieldDao.fieldsForDocs(docIds).groupBy { it.docId }
+        val fieldTypes = state.effectiveFieldDefs().associate { it.key to it.type }
 
         val ftsIndexed = ftsDao.indexedDocIds(docIds).toHashSet()
-        return PreloadedRows(rows, tags, fields, ftsIndexed)
+        return PreloadedRows(rows, tags, fields, fieldTypes, ftsIndexed)
     }
 
     /**
@@ -688,14 +696,9 @@ class Indexer(
         return Supersession(superseded, predecessors)
     }
 
-    /** Effective metadata columns for a doc: own value wins, else inherit from a predecessor. */
+    /** Effective system properties for a doc: own value wins, else inherit from a predecessor. */
     private class ProjectedMeta(
         val reviewed: Boolean,
-        val correspondent: String?,
-        val docType: String?,
-        val docDate: String?,
-        val title: String?,
-        val notes: String?,
         val ocrEngineOverride: String?,
     )
 
@@ -704,19 +707,14 @@ class Indexer(
         doc: String,
         preds: List<String>,
     ): ProjectedMeta {
-        fun prop(key: DocProperty): String? {
+        fun prop(key: SystemProperty): String? {
             state.effectiveProp(doc, key)?.let { return it }
             for (p in preds) state.effectiveProp(p, key)?.let { return it }
             return null
         }
         return ProjectedMeta(
-            reviewed = prop(DocProperty.REVIEWED) == "true",
-            correspondent = prop(DocProperty.CORRESPONDENT),
-            docType = prop(DocProperty.DOC_TYPE),
-            docDate = prop(DocProperty.DOC_DATE),
-            title = prop(DocProperty.TITLE),
-            notes = prop(DocProperty.NOTES),
-            ocrEngineOverride = prop(DocProperty.OCR_ENGINE),
+            reviewed = prop(SystemProperty.REVIEWED) == "true",
+            ocrEngineOverride = prop(SystemProperty.OCR_ENGINE),
         )
     }
 
@@ -743,22 +741,31 @@ class Indexer(
     }
 
     /**
-     * Custom fields: own value wins; inherit predecessor keys this doc doesn't set. Diffed like
-     * tags so an unrelated edit does not rewrite this doc's field rows.
+     * Every field value for a doc: own value wins; inherit predecessor keys this doc doesn't set.
+     * Rows carry the numeric shadow for the registry's NUMBER/DECIMAL fields. Diffed like tags so
+     * an unrelated edit does not rewrite this doc's field rows. Returns the effective map, which
+     * also feeds the cached well-known columns and the FTS row.
      */
     private fun projectFields(
         state: FoldedState,
         doc: String,
         preds: List<String>,
-        existingFields: Map<String, Map<String, String>>,
+        types: Map<String, FieldType>,
+        existingFields: Map<String, List<DocumentFieldEntity>>,
         changes: ProjectionChanges,
-    ) {
+    ): Map<String, String> {
         val effFields = LinkedHashMap<String, String>()
         for (p in preds) effFields.putAll(state.effectiveFields(p))
         effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
-        if (existingFields[doc].orEmpty() != effFields) {
-            changes.fields[doc] = effFields
+        val rows =
+            effFields.map { (key, value) ->
+                val type = types[key]
+                DocumentFieldEntity(doc, key, value, numValue = type?.let { FieldValues.numeric(it, value) })
+            }
+        if (existingFields[doc].orEmpty().sortedBy { it.fieldKey } != rows.sortedBy { it.fieldKey }) {
+            changes.fields[doc] = rows
         }
+        return effFields
     }
 
     /** The trash/delete lifecycle for a doc, after applying the file-resurrection preference. */
@@ -831,7 +838,7 @@ class Indexer(
         val preds = supersession.predecessors[doc].orEmpty()
 
         val (effTags, tagsChanged) = projectTags(state, doc, preds, preloaded.tags, changes)
-        projectFields(state, doc, preds, preloaded.fields, changes)
+        val fields = projectFields(state, doc, preds, preloaded.fieldTypes, preloaded.fields, changes)
         val meta = projectMeta(state, doc, preds)
         val lifecycle =
             projectLifecycle(
@@ -852,11 +859,12 @@ class Indexer(
                 relPath = lifecycle.relPath,
                 fileName = lifecycle.fileName,
                 reviewed = meta.reviewed,
-                correspondent = meta.correspondent,
-                docType = meta.docType,
-                docDate = meta.docDate,
-                title = meta.title,
-                notes = meta.notes,
+                // Read cache of the well-known field rows; see DocumentEntity.correspondent.
+                correspondent = fields[FieldKeys.CORRESPONDENT],
+                docType = fields[FieldKeys.DOC_TYPE],
+                docDate = fields[FieldKeys.DOC_DATE],
+                title = fields[FieldKeys.TITLE],
+                notes = fields[FieldKeys.NOTES],
                 ocrEngineOverride = meta.ocrEngineOverride,
                 trashed = lifecycle.trashed,
                 trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
@@ -868,25 +876,15 @@ class Indexer(
 
         // FTS: the fold only owns the metadata-derived columns; the extracted-text content
         // (OCR/embedded text written by the OCR pipeline) must be carried forward so a metadata
-        // change (tag add, prop set) never wipes full-text search. That carry-forward happens in
+        // change (tag add, field set) never wipes full-text search. That carry-forward happens in
         // [flushChanges], which re-reads the content under the write gate and fills it in — the
         // empty string here is a placeholder it always replaces. A brand-new doc has no fts row
         // yet, so it must be written even when nothing else changed; all other fts metadata
-        // columns derive from the doc row + tags, so when neither changed and a row already
-        // exists there is nothing to write.
-        if (rowChanged || tagsChanged || doc !in preloaded.ftsIndexed) {
-            changes.ftsRows.add(
-                FtsDocumentEntity(
-                    docId = doc,
-                    fileName = lifecycle.fileName,
-                    title = meta.title,
-                    notes = meta.notes,
-                    content = "",
-                    tags = if (effTags.isEmpty()) null else effTags.joinToString(" "),
-                    correspondent = meta.correspondent,
-                    docType = meta.docType,
-                ),
-            )
+        // columns derive from the doc row, tags and fields, so when none changed and a row
+        // already exists there is nothing to write.
+        val searchableChanged = rowChanged || tagsChanged || doc in changes.fields
+        if (searchableChanged || doc !in preloaded.ftsIndexed) {
+            changes.ftsRows.add(FtsRows.row(doc, lifecycle.fileName, effTags, fields, content = ""))
         }
     }
 

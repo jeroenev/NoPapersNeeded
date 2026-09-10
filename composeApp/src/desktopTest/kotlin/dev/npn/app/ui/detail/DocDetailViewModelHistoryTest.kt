@@ -7,7 +7,7 @@ import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -40,7 +40,7 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
                                 Hlc(50, 0, "dev-a"),
                                 "dev-a",
                                 "doc-1",
-                                JournalOp.PropSet(DocProperty.TITLE, "X"),
+                                JournalOp.FieldSet(FieldKeys.TITLE, "X"),
                             ).asRecord(),
                         )
                 }

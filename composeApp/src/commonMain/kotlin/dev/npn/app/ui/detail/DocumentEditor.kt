@@ -30,7 +30,7 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.core.ai.AiField
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_saved
@@ -85,13 +85,13 @@ internal fun DocumentEditor(
     val editActions =
         actions.edit.copy(
             onSetReviewed = { store.save(docId, reviewed = it) },
-            onCommitTitle = { store.property(docId, DocProperty.TITLE, it, item.doc.title) },
-            onCommitCorrespondent = { store.property(docId, DocProperty.CORRESPONDENT, it, item.doc.correspondent) },
-            onCommitDocType = { store.property(docId, DocProperty.DOC_TYPE, it, item.doc.docType) },
-            onCommitDocDate = { store.property(docId, DocProperty.DOC_DATE, it, item.doc.docDate) },
-            onNoteChange = { store.property(docId, DocProperty.NOTES, it, item.doc.notes) },
-            onCommitField = { key, value -> store.field(docId, key, value, item.fields[key]) },
-            onRemoveField = { store.field(docId, it, null, item.fields[it]) },
+            onCommitTitle = { store.field(docId, FieldKeys.TITLE, it, item.doc.title) },
+            onCommitCorrespondent = { store.field(docId, FieldKeys.CORRESPONDENT, it, item.doc.correspondent) },
+            onCommitDocType = { store.field(docId, FieldKeys.DOC_TYPE, it, item.doc.docType) },
+            onCommitDocDate = { store.field(docId, FieldKeys.DOC_DATE, it, item.doc.docDate) },
+            onNoteChange = { store.field(docId, FieldKeys.NOTES, it, item.doc.notes) },
+            onCommitField = { key, value -> store.field(docId, key, value, item.doc.fields[key]) },
+            onRemoveField = { store.field(docId, it, null, item.doc.fields[it]) },
         )
     val aiActions =
         actions.ai.copy(
@@ -99,7 +99,7 @@ internal fun DocumentEditor(
             // the user typed for that field must be dropped first — otherwise overlay would keep
             // showing the typed value and the next save would overwrite the accepted suggestion.
             onAcceptMetadata = { field ->
-                store.clearProperty(docId, field.draftProperty())
+                store.clearField(docId, field.draftKey())
                 actions.ai.onAcceptMetadata(field)
             },
         )
@@ -200,9 +200,9 @@ private fun EditorSaveBar(
 }
 
 /** The draft property key an AI-suggestable field maps to. Total, so a new [AiField] must map here. */
-private fun AiField.draftProperty(): DocProperty =
+private fun AiField.draftKey(): String =
     when (this) {
-        AiField.TITLE -> DocProperty.TITLE
-        AiField.CORRESPONDENT -> DocProperty.CORRESPONDENT
-        AiField.DOC_DATE -> DocProperty.DOC_DATE
+        AiField.TITLE -> FieldKeys.TITLE
+        AiField.CORRESPONDENT -> FieldKeys.CORRESPONDENT
+        AiField.DOC_DATE -> FieldKeys.DOC_DATE
     }

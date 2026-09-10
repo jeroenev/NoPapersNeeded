@@ -1,6 +1,6 @@
 package dev.npn.core.journal
 
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.SystemProperty
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -61,8 +61,8 @@ class WireFormatTest {
             listOf(
                 event(sha, JournalOp.TagAdd("t")),
                 event(sha, JournalOp.TagRemove("t", listOf(Dot("d2", 7), Dot("d3", 9)))),
-                event(sha, JournalOp.PropSet(DocProperty.REVIEWED, "true")),
-                event(sha, JournalOp.PropSet(DocProperty.TITLE, null)),
+                event(sha, JournalOp.PropSet(SystemProperty.REVIEWED, "true")),
+                event(sha, JournalOp.PropSet(SystemProperty.OCR_ENGINE, null)),
                 event(sha, JournalOp.FieldSet("amount", "42.50")),
                 event(sha, JournalOp.FieldSet("amount", null)),
                 event(sha, JournalOp.DocTrash("/lib/x.pdf")),
@@ -94,7 +94,7 @@ class WireFormatTest {
 
     @Test
     fun prop_set_null_value_is_json_null() {
-        val e = event(sha, JournalOp.PropSet(DocProperty.CORRESPONDENT, null))
+        val e = event(sha, JournalOp.PropSet(SystemProperty.OCR_ENGINE, null))
         val p = fields(JournalCodec.encode(e))["p"]!!.jsonObject
         assertTrue(p["value"] is JsonNull)
         val parsed = JournalCodec.decodeLineOrNull(JournalCodec.encode(e))!!
@@ -145,6 +145,35 @@ class WireFormatTest {
                 """"op":"prop-set","p":{"key":"bogus","value":"z"}}"""
         val parsed = JournalCodec.decodeLineOrNull(line)!!
         assertTrue(parsed.op is JournalOp.Unknown)
+    }
+
+    private fun propSetLine(
+        key: String,
+        value: String,
+    ) = """{"v":1,"seq":1,"hlc":{"t":1,"c":0,"d":"x"},"dev":"x","doc":"$sha",""" +
+        """"op":"prop-set","p":{"key":"$key","value":"$value"}}"""
+
+    @Test
+    fun legacy_prop_set_for_well_known_field_decodes_as_field_set() {
+        // Libraries written before the field registry hold prop-set events for the well-known five.
+        // Those keys decode as the FieldSet they would be written as today, so metadata survives,
+        // while system-state keys stay PropSet and unknown keys degrade to Unknown.
+        val title = JournalCodec.decodeLineOrNull(propSetLine("title", "Invoice"))!!.op
+        assertTrue(title is JournalOp.FieldSet, "title prop-set should decode as FieldSet")
+        assertEquals("title", title.key)
+        assertEquals("Invoice", title.value)
+
+        val docDate = JournalCodec.decodeLineOrNull(propSetLine("docDate", "2024-01-02"))!!.op
+        assertTrue(docDate is JournalOp.FieldSet, "docDate prop-set should decode as FieldSet")
+        assertEquals("docDate", docDate.key)
+        assertEquals("2024-01-02", docDate.value)
+
+        val reviewed = JournalCodec.decodeLineOrNull(propSetLine("reviewed", "true"))!!.op
+        assertTrue(reviewed is JournalOp.PropSet, "reviewed prop-set should stay a PropSet")
+        assertEquals(SystemProperty.REVIEWED, reviewed.key)
+
+        val unknown = JournalCodec.decodeLineOrNull(propSetLine("bogus", "z"))!!.op
+        assertTrue(unknown is JournalOp.Unknown, "unknown prop-set key should decode as Unknown")
     }
 
     @Test

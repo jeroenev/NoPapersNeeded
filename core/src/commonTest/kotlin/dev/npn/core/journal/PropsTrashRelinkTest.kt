@@ -1,46 +1,55 @@
 package dev.npn.core.journal
 
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.SystemProperty
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 
 class PropsTrashRelinkTest {
-
     private val doc = "a".repeat(64)
     private val doc2 = "b".repeat(64)
     private val doc3 = "c".repeat(64)
 
-    private fun prop(seq: Long, key: DocProperty, value: String?, t: Long, dev: String = "d1") =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.PropSet(key, value))
+    private fun prop(
+        seq: Long,
+        key: SystemProperty,
+        value: String?,
+        t: Long,
+        dev: String = "d1",
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.PropSet(key, value))
 
     @Test
     fun prop_lww_by_hlc() {
-        val e1 = prop(1, DocProperty.CORRESPONDENT, "alice", 10)
-        val e2 = prop(2, DocProperty.CORRESPONDENT, "bob", 20)
-        assertEquals("bob", JournalFolder.fold(listOf(e1, e2)).effectiveProp(doc, DocProperty.CORRESPONDENT))
+        val e1 = prop(1, SystemProperty.OCR_ENGINE, "tesseract", 10)
+        val e2 = prop(2, SystemProperty.OCR_ENGINE, "mlkit", 20)
+        assertEquals("mlkit", JournalFolder.fold(listOf(e1, e2)).effectiveProp(doc, SystemProperty.OCR_ENGINE))
         // order independent
-        assertEquals("bob", JournalFolder.fold(listOf(e2, e1)).effectiveProp(doc, DocProperty.CORRESPONDENT))
+        assertEquals("mlkit", JournalFolder.fold(listOf(e2, e1)).effectiveProp(doc, SystemProperty.OCR_ENGINE))
     }
 
     @Test
     fun prop_null_clear_wins_when_later() {
-        val e1 = prop(1, DocProperty.TITLE, "hello", 10)
-        val e2 = prop(2, DocProperty.TITLE, null, 20)
-        assertEquals(null, JournalFolder.fold(listOf(e1, e2)).effectiveProp(doc, DocProperty.TITLE))
+        val e1 = prop(1, SystemProperty.OCR_ENGINE, "tesseract", 10)
+        val e2 = prop(2, SystemProperty.OCR_ENGINE, null, 20)
+        assertEquals(null, JournalFolder.fold(listOf(e1, e2)).effectiveProp(doc, SystemProperty.OCR_ENGINE))
     }
 
     @Test
     fun prop_tiebreak_by_device_id() {
         // same physical + counter, different device -> higher deviceId wins
-        val ea = JournalEvent(1, 1, Hlc(10, 0, "aaa"), "aaa", doc, JournalOp.PropSet(DocProperty.CORRESPONDENT, "a"))
-        val ez = JournalEvent(1, 1, Hlc(10, 0, "zzz"), "zzz", doc, JournalOp.PropSet(DocProperty.CORRESPONDENT, "z"))
-        assertEquals("z", JournalFolder.fold(listOf(ea, ez)).effectiveProp(doc, DocProperty.CORRESPONDENT))
+        val ea = JournalEvent(1, 1, Hlc(10, 0, "aaa"), "aaa", doc, JournalOp.PropSet(SystemProperty.OCR_ENGINE, "a"))
+        val ez = JournalEvent(1, 1, Hlc(10, 0, "zzz"), "zzz", doc, JournalOp.PropSet(SystemProperty.OCR_ENGINE, "z"))
+        assertEquals("z", JournalFolder.fold(listOf(ea, ez)).effectiveProp(doc, SystemProperty.OCR_ENGINE))
     }
 
-    private fun field(seq: Long, key: String, value: String?, t: Long, dev: String = "d1") =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.FieldSet(key, value))
+    private fun field(
+        seq: Long,
+        key: String,
+        value: String?,
+        t: Long,
+        dev: String = "d1",
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.FieldSet(key, value))
 
     @Test
     fun field_lww_and_clear() {
@@ -63,14 +72,24 @@ class PropsTrashRelinkTest {
         assertTrue(doc in folded.docsWithMetadata())
     }
 
-    private fun trash(seq: Long, path: String, t: Long, dev: String = "d1") =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocTrash(path))
+    private fun trash(
+        seq: Long,
+        path: String,
+        t: Long,
+        dev: String = "d1",
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocTrash(path))
 
-    private fun restore(seq: Long, t: Long, dev: String = "d1") =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocRestore)
+    private fun restore(
+        seq: Long,
+        t: Long,
+        dev: String = "d1",
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocRestore)
 
-    private fun delete(seq: Long, t: Long, dev: String = "d1") =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocDelete)
+    private fun delete(
+        seq: Long,
+        t: Long,
+        dev: String = "d1",
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocDelete)
 
     @Test
     fun trash_restore_lww() {
@@ -94,8 +113,13 @@ class PropsTrashRelinkTest {
         assertTrue(JournalFolder.fold(listOf(r, d)).isDeleted(doc))
     }
 
-    private fun relink(seq: Long, old: String, new: String, t: Long, dev: String) =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, old, JournalOp.Relink(new))
+    private fun relink(
+        seq: Long,
+        old: String,
+        new: String,
+        t: Long,
+        dev: String,
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, old, JournalOp.Relink(new))
 
     @Test
     fun relink_chain_resolution() {

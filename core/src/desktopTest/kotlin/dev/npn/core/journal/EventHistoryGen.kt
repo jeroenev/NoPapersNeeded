@@ -1,6 +1,6 @@
 package dev.npn.core.journal
 
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.SystemProperty
 import kotlin.random.Random
 
 /**
@@ -83,7 +83,7 @@ class EventHistoryGen(
                 }
 
                 choice < 60 -> { // prop-set
-                    val key = DocProperty.entries[rng.nextInt(DocProperty.entries.size)]
+                    val key = SystemProperty.entries[rng.nextInt(SystemProperty.entries.size)]
                     val value = if (rng.nextInt(5) == 0) null else "v${rng.nextInt(1000)}"
                     JournalOp.PropSet(key, value)
                 }

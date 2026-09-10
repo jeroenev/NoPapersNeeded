@@ -11,7 +11,7 @@ import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.StorageV2Reader
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
@@ -168,8 +168,8 @@ class MetadataWriterTest {
                 rig.session.rescan()
                 val id = rig.docId("a.pdf")
 
-                rig.session.meta.setCorrespondent(listOf(id), "ACME")
-                rig.session.meta.setDocType(listOf(id), "Invoice")
+                rig.session.meta.setField(listOf(id), "correspondent", "ACME")
+                rig.session.meta.setField(listOf(id), "docType", "Invoice")
                 val doc = rig.db.documentDao().getByDocId(id)!!
                 doc.correspondent shouldBe "ACME"
                 doc.docType shouldBe "Invoice"
@@ -202,7 +202,7 @@ class MetadataWriterTest {
                     rig.session.documents
                         .observeDoc(id)
                         .first()!!
-                item.fields shouldBe mapOf("amount" to "42.50", "vendor" to "ACME")
+                item.doc.fields shouldBe mapOf("amount" to "42.50", "vendor" to "ACME")
 
                 // Distinct keys available for autocomplete.
                 rig.session.documents
@@ -215,7 +215,45 @@ class MetadataWriterTest {
                 rig.session.documents
                     .observeDoc(id)
                     .first()!!
-                    .fields shouldBe mapOf("vendor" to "ACME")
+                    .doc.fields shouldBe mapOf("vendor" to "ACME")
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * A value that does not fit its registry type is rejected before anything is written: an
+     * off-type `docDate` throws [IllegalArgumentException] and commits no journal object. A blank
+     * value clears the field instead of storing an empty string — no `document_fields` row and the
+     * derived [Doc.title] reads null.
+     */
+    @Test
+    fun setFieldRejectsOffTypeDateAndBlankClears() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+
+                // An off-type docDate is rejected and writes nothing.
+                val before = rig.journalObjectCount()
+                assertFailsWith<IllegalArgumentException> {
+                    rig.session.meta.setField(id, "docDate", "not-a-date")
+                }
+                rig.journalObjectCount() shouldBe before
+
+                // A blank title clears the field: no document_fields row, derived title is null.
+                rig.session.meta.setField(id, "title", "Real title")
+                rig.session.meta.setField(id, "title", "  ")
+                rig.db
+                    .documentFieldDao()
+                    .fieldsForDocs(listOf(id))
+                    .map { it.fieldKey } shouldNotContain "title"
+                rig.session.documents
+                    .observeDoc(id)
+                    .first()!!
+                    .doc.title shouldBe null
             } finally {
                 rig.close()
             }
@@ -223,7 +261,7 @@ class MetadataWriterTest {
 
     /**
      * [MetadataWriter.setOcrEngine] pins the per-document OCR engine as a `prop-set` journal
-     * event for key `ocrEngine` (the [DocProperty.OCR_ENGINE] wire key), which the Indexer
+     * event for key `ocrEngine` (the [SystemProperty.OCR_ENGINE] wire key), which the Indexer
      * projects onto [DocumentEntity.ocrEngineOverride]. Clearing (null) removes the override.
      */
     @Test
@@ -358,7 +396,7 @@ class MetadataWriterTest {
                         .metadataProjectionDao()
                         .state()!!
                         .allocatorPhysical
-                rig.session.meta.setTitle(id, "second transaction")
+                rig.session.meta.setField(id, "title", "second transaction")
                 (
                     rig.db
                         .metadataProjectionDao()

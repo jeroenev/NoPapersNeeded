@@ -1,7 +1,7 @@
 package dev.npn.core.journal
 
-import dev.npn.core.model.DocProperty
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.SystemProperty
 import kotlinx.serialization.json.JsonObject
 
 /** A dot uniquely identifies a single event by its author device and per-device sequence. */
@@ -36,18 +36,23 @@ sealed class JournalOp {
         override val wire get() = "tag-remove"
     }
 
-    /** {"key": DocProperty.wire, "value": String?}; null clears. doc required. */
+    /**
+     * {"key": SystemProperty.wire, "value": String?}; null clears. doc required. System state only
+     * (reviewed marker, OCR engine pin); user metadata is [FieldSet]. Legacy `prop-set` events
+     * carrying a well-known field key decode as [FieldSet], see [JournalEventSerializer].
+     */
     data class PropSet(
-        val key: DocProperty,
+        val key: SystemProperty,
         val value: String?,
     ) : JournalOp() {
         override val wire get() = "prop-set"
     }
 
     /**
-     * {"key": String, "value": String?}; null clears. doc required. Per-document custom metadata
-     * field with a free-form string key (unlike [PropSet], whose key is the closed [DocProperty]
-     * enum). Last-writer-wins by HLC, same as [PropSet].
+     * {"key": String, "value": String?}; null clears. doc required. A document's value for one
+     * registry field ([FieldDefSet]) — title, correspondent and every user-added field alike. The
+     * key is a normalized free string; the value is in the field type's canonical form
+     * ([dev.npn.core.model.FieldValues]). Last-writer-wins by HLC, same as [PropSet].
      */
     data class FieldSet(
         val key: String,

@@ -3,6 +3,7 @@ package dev.npn.core.db
 import androidx.room3.AutoMigration
 import androidx.room3.ConstructedBy
 import androidx.room3.Database
+import androidx.room3.DeleteColumn
 import androidx.room3.DeleteTable
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
@@ -27,7 +28,9 @@ import androidx.room3.migration.AutoMigrationSpec
     // v13: indexes metadata_events.documentId + adds the source-set fingerprint the open path
     //      uses to skip a whole-journal refold when nothing changed.
     // v14: adds field_defs (the projected field registry).
-    version = 14,
+    // v15: document_fields becomes the authoritative projection of every user value (numValue +
+    //      composite indices); FTS indexes one `fields` column instead of per-property columns.
+    version = 15,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -41,6 +44,7 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 11, to = 12),
         AutoMigration(from = 12, to = 13),
         AutoMigration(from = 13, to = 14),
+        AutoMigration(from = 14, to = 15, spec = NpnDatabase.FtsFieldsColumn::class),
     ],
     entities = [
         DocumentEntity::class,
@@ -104,6 +108,19 @@ abstract class NpnDatabase : RoomDatabase() {
      */
     @DeleteTable(tableName = "folded_segments")
     class DropFoldedSegments : AutoMigrationSpec
+
+    /**
+     * v14 -> v15: the per-property FTS columns give way to one `fields` column. The index is
+     * rebuilt from the library on the next fold anyway; the explicit spec only keeps an existing
+     * install from falling into destructive migration and losing device-local state with it.
+     */
+    @DeleteColumn.Entries(
+        DeleteColumn(tableName = "fts_documents", columnName = "title"),
+        DeleteColumn(tableName = "fts_documents", columnName = "correspondent"),
+        DeleteColumn(tableName = "fts_documents", columnName = "docType"),
+        DeleteColumn(tableName = "fts_documents", columnName = "notes"),
+    )
+    class FtsFieldsColumn : AutoMigrationSpec
 }
 
 /**

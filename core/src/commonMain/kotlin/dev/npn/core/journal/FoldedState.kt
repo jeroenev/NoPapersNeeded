@@ -1,7 +1,7 @@
 package dev.npn.core.journal
 
-import dev.npn.core.model.DocProperty
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.SystemProperty
 
 /**
  * The result of folding a set of journal events. All raw data is stored so that [apply] is
@@ -44,7 +44,7 @@ class FoldedState {
     )
 
     // --- raw prop data: doc -> key -> winning (value, hlc) ---
-    private val props = HashMap<String, HashMap<DocProperty, PropVal>>()
+    private val props = HashMap<String, HashMap<SystemProperty, PropVal>>()
 
     data class PropVal(
         val value: String?,
@@ -225,10 +225,10 @@ class FoldedState {
     /** Effective value of a single-value property, or null if unset/cleared. */
     fun effectiveProp(
         doc: String,
-        key: DocProperty,
+        key: SystemProperty,
     ): String? = props[doc]?.get(key)?.value
 
-    fun allProps(doc: String): Map<DocProperty, String?> = props[doc]?.mapValues { it.value.value } ?: emptyMap()
+    fun allProps(doc: String): Map<SystemProperty, String?> = props[doc]?.mapValues { it.value.value } ?: emptyMap()
 
     /**
      * Effective custom fields for a document: only keys whose winning value is non-null (a null

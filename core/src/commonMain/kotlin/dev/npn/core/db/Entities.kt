@@ -41,12 +41,21 @@ data class DocumentEntity(
      * is ignored (reviewed is derived as "has any tag").
      */
     val reviewed: Boolean = false,
+    /**
+     * READ CACHE of the well-known field rows in `document_fields`, nothing more. `correspondent`,
+     * `docType`, `docDate`, `title` and `notes` are written only by the fold
+     * ([dev.npn.core.index.Indexer]) from the same effective field map that produces the
+     * `document_fields` rows, so the two never disagree after a fold. They exist so the list query
+     * stays a single `ORDER BY` on one table; `document_fields` is the authoritative projection of
+     * every user value, and no writer may set these columns directly.
+     */
     val correspondent: String? = null,
     val docType: String? = null,
-    /** ISO-8601 local date, e.g. 2026-07-15. */
+    /** ISO-8601 local date, e.g. 2026-07-15. Cache; see [correspondent]. */
     val docDate: String? = null,
+    /** Cache; see [correspondent]. */
     val title: String? = null,
-    /** User-authored free-text note, projected from the immutable journal. */
+    /** Cache; see [correspondent]. */
     val notes: String? = null,
     val trashed: Boolean = false,
     val trashedOrigPath: String? = null,
@@ -60,7 +69,7 @@ data class DocumentEntity(
     val ocrEngine: String? = null,
     /**
      * User override of the searchable OCR engine, projected from the journal's
-     * [dev.npn.core.model.DocProperty.OCR_ENGINE] LWW property. Null = automatic (best engine).
+     * [dev.npn.core.model.SystemProperty.OCR_ENGINE] LWW property. Null = automatic (best engine).
      */
     val ocrEngineOverride: String? = null,
     /**
@@ -97,9 +106,11 @@ data class DocumentTagEntity(
 )
 
 /**
- * Per-document custom metadata field: a free-form string key (e.g. "amount") and value. Projected
- * from the journal's [dev.npn.core.journal.JournalOp.FieldSet] LWW state; a cleared field has no
- * row. One row per (docId, key).
+ * One document's value for one registry field — title and correspondent as much as "amount".
+ * Projected from the journal's [dev.npn.core.journal.JournalOp.FieldSet] LWW state; a cleared
+ * field has no row, and a blank value is never stored. One row per (docId, key). This is the
+ * authoritative projection of every user value; the typed columns on [DocumentEntity] cache the
+ * well-known five.
  */
 @Entity(
     tableName = "document_fields",
@@ -107,12 +118,21 @@ data class DocumentTagEntity(
     indices = [
         Index(value = ["docId"]),
         Index(value = ["fieldKey"]),
+        Index(value = ["fieldKey", "fieldValue"]),
+        Index(value = ["fieldKey", "numValue"]),
     ],
 )
 data class DocumentFieldEntity(
     val docId: String,
     val fieldKey: String,
+    /** Canonical form for the field's type (see [dev.npn.core.model.FieldValues]). */
     val fieldValue: String,
+    /**
+     * NUMBER/DECIMAL values parsed for correct sort and range filters; null for other types and
+     * for off-type values, which therefore sort last. SQLite REAL loses precision above 2^53,
+     * which is acceptable for document metadata.
+     */
+    val numValue: Double? = null,
 )
 
 /**
@@ -136,9 +156,10 @@ data class FieldDefEntity(
 )
 
 /**
- * FTS5 full-text index over names, content, tags, correspondent, and document type. Plain
- * (regular) FTS5 table: docId lives as an indexed
- * column and updates are done as exact-match delete + reinsert (see [FtsDao.replaceDocument]).
+ * FTS5 full-text index over file name, extracted content, tags and every field value. Plain
+ * (regular) FTS5 table: docId lives as an indexed column and updates are done as exact-match
+ * delete + reinsert (see [FtsDao.replaceDocument]). Rows are built by
+ * [dev.npn.core.index.FtsRows] only, so every write site indexes the same columns.
  * The JVM integration test verifies that [Fts5] works with the bundled SQLite driver.
  */
 @Fts5
@@ -146,15 +167,12 @@ data class FieldDefEntity(
 data class FtsDocumentEntity(
     val docId: String,
     val fileName: String? = null,
-    val title: String? = null,
     /** Embedded text + OCR text. */
     val content: String? = null,
     /** Space-joined tag names. */
     val tags: String? = null,
-    val correspondent: String? = null,
-    val docType: String? = null,
-    /** User notes are indexed separately from extracted PDF/OCR content. */
-    val notes: String? = null,
+    /** Every field value the document carries (title, notes, custom fields alike), newline-joined. */
+    val fields: String? = null,
 )
 
 @Entity(tableName = "saved_views")

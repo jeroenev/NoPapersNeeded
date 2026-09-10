@@ -3,7 +3,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiField
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.maps.shouldBeEmpty
@@ -18,7 +18,7 @@ private class ApplyMeta : MetadataWriter {
     val removedTags = mutableListOf<Pair<List<String>, String>>()
 
     /** Field writes, in the order applied: one entry per document, never one per field. */
-    val batchedEdits = mutableListOf<Pair<String, Map<DocProperty, String?>>>()
+    val batchedEdits = mutableListOf<Pair<String, Map<String, String?>>>()
 
     override suspend fun addTag(
         docIds: List<String>,
@@ -37,50 +37,31 @@ private class ApplyMeta : MetadataWriter {
     override suspend fun applyEdits(
         docIds: List<String>,
         addTags: List<String>,
-        properties: Map<DocProperty, String?>,
+        fields: Map<String, String?>,
     ) {
         // Field values are per document, so an apply must never fold several into one call: that
         // would make one document's rejection lose the others' writes.
-        batchedEdits += docIds.single() to properties
+        batchedEdits += docIds.single() to fields
     }
-
-    // Field writes must go through applyEdits: a setter per field would re-run the storage path
-    // rules once per field and rename the document repeatedly for one apply.
-    override suspend fun setTitle(
-        docId: String,
-        title: String?,
-    ) = error("must batch through applyEdits")
-
-    override suspend fun setCorrespondent(
-        docIds: List<String>,
-        value: String?,
-    ) = error("must batch through applyEdits")
-
-    override suspend fun setDocDate(
-        docId: String,
-        isoDate: String?,
-    ) = error("must batch through applyEdits")
 
     override suspend fun setReviewed(
         docIds: List<String>,
         reviewed: Boolean,
     ) = error("unused")
 
-    override suspend fun setDocType(
-        docIds: List<String>,
-        value: String?,
-    ) = error("unused")
-
-    override suspend fun setNotes(
-        docId: String,
-        notes: String?,
-    ) = error("unused")
-
+    // Field writes must go through applyEdits: a setter per field would re-run the storage path
+    // rules once per field and rename the document repeatedly for one apply.
     override suspend fun setField(
         docId: String,
         key: String,
         value: String?,
-    ) = error("unused")
+    ) = error("must batch through applyEdits")
+
+    override suspend fun setField(
+        docIds: List<String>,
+        key: String,
+        value: String?,
+    ) = error("must batch through applyEdits")
 }
 
 private fun writableEdit(
@@ -170,8 +151,8 @@ class AiEditApplyTest {
                 listOf(
                     "a" to
                         mapOf(
-                            DocProperty.CORRESPONDENT to "Acme",
-                            DocProperty.DOC_DATE to "2024-01-15",
+                            FieldKeys.CORRESPONDENT to "Acme",
+                            FieldKeys.DOC_DATE to "2024-01-15",
                         ),
                 )
             // Both fields still count as applied; batching changes the write, not the tally.

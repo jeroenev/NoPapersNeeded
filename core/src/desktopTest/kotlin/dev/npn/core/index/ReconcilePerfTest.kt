@@ -14,8 +14,9 @@ import dev.npn.core.fs.VerifiedPublicationResult
 import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SegmentWriter
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
@@ -252,7 +253,7 @@ class ReconcilePerfTest {
             coordinator.commitAndApply(
                 listOf(
                     PendingOp.tagAdd(a, "receipt"),
-                    PendingOp.propSet(a, DocProperty.CORRESPONDENT, "acme"),
+                    PendingOp.fieldSet(a, FieldKeys.CORRESPONDENT, "acme"),
                 ),
             )
 
@@ -262,7 +263,7 @@ class ReconcilePerfTest {
             remote.commit(
                 listOf(
                     PendingOp.tagAdd(b, "urgent"),
-                    PendingOp.propSet(b, DocProperty.REVIEWED, "true"),
+                    PendingOp.propSet(b, SystemProperty.REVIEWED, "true"),
                 ),
             )
 

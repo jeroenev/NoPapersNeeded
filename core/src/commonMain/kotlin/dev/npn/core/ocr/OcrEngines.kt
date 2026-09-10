@@ -4,7 +4,7 @@ package dev.npn.core.ocr
  * Well-known OCR engine names and their search priority. Multiple OCR versions of the same
  * document co-exist as separate sidecars (one per device+engine); the highest-ranked version
  * is indexed for search unless the user overrides the engine per document
- * (see [dev.npn.core.model.DocProperty.OCR_ENGINE]).
+ * (see [dev.npn.core.model.SystemProperty.OCR_ENGINE]).
  *
  * Ranking: AI > MLKit > Tesseract > embedded text fallback > unknown. Legacy sidecars whose
  * engine label is "mixed" (or any future engine this build does not know) rank lowest, so any

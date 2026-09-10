@@ -12,6 +12,7 @@ import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TagDao
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineId
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.KSerializer
@@ -316,7 +317,9 @@ object LibraryAiTools {
         class Args
 
         override suspend fun execute(args: Args): String {
-            val keys = fieldDao.keysWithCounts()
+            // document_fields now also holds the default fields; until the tools speak the unified
+            // registry vocabulary (plan P5), keep them out of the "custom" list.
+            val keys = fieldDao.keysWithCounts().filter { it.fieldKey !in FieldKeys.WELL_KNOWN }
             return buildString {
                 appendLine("Default fields: $DEFAULT_FIELD_LIST")
                 appendLine(
@@ -417,6 +420,7 @@ object LibraryAiTools {
                     ?.let { matches.putIfAbsent(doc.docId, it) }
             }
             for (f in fieldDao.all()) {
+                if (f.fieldKey in FieldKeys.WELL_KNOWN) continue // already covered via the doc row above
                 if (f.fieldValue.contains(value, ignoreCase = true)) {
                     matches.putIfAbsent(f.docId, f.fieldKey to f.fieldValue)
                 }
@@ -490,7 +494,11 @@ object LibraryAiTools {
                 documentDao.getByDocId(args.docId)
                     ?: return "No document with docId ${args.docId}."
             val tags = tagDao.tagsForDocument(args.docId)
-            val fields = fieldDao.fieldsForDocs(listOf(args.docId)).sortedBy { it.fieldKey.lowercase() }
+            val fields =
+                fieldDao
+                    .fieldsForDocs(listOf(args.docId))
+                    .filter { it.fieldKey !in FieldKeys.WELL_KNOWN }
+                    .sortedBy { it.fieldKey.lowercase() }
             return buildString {
                 appendLine("docId: ${doc.docId}")
                 appendLine("file: ${doc.fileName}")

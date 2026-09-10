@@ -5,8 +5,13 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldParse
+import dev.npn.core.model.FieldType
+import dev.npn.core.model.FieldValues
+import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 
 /**
@@ -58,55 +63,7 @@ class MetadataWriterImpl(
     ) {
         if (docIds.isEmpty()) return
         val v = if (reviewed) "true" else "false"
-        coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.REVIEWED, v) })
-    }
-
-    override suspend fun setCorrespondent(
-        docIds: List<String>,
-        value: String?,
-    ) {
-        if (docIds.isEmpty()) return
-        val v = value.normalized()
-        coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.CORRESPONDENT, v) })
-        docIds.forEach { pathRuleApplicator.applyFor(it) }
-    }
-
-    override suspend fun setDocType(
-        docIds: List<String>,
-        value: String?,
-    ) {
-        if (docIds.isEmpty()) return
-        val v = value.normalized()
-        coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, DocProperty.DOC_TYPE, v) })
-        docIds.forEach { pathRuleApplicator.applyFor(it) }
-    }
-
-    override suspend fun setDocDate(
-        docId: String,
-        isoDate: String?,
-    ) {
-        val v = isoDate.normalized()
-        coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.DOC_DATE, v)))
-        pathRuleApplicator.applyFor(docId)
-    }
-
-    override suspend fun setTitle(
-        docId: String,
-        title: String?,
-    ) {
-        val v = title.normalized()
-        coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.TITLE, v)))
-        applyAutoMatch(docId)
-        pathRuleApplicator.applyFor(docId)
-    }
-
-    override suspend fun setNotes(
-        docId: String,
-        notes: String?,
-    ) {
-        val value = notes?.takeUnless { it.isBlank() }
-        if (documentDao.getByDocId(docId)?.notes == value) return
-        coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.NOTES, value)))
+        coordinator.commitAndApply(docIds.map { PendingOp.propSet(it, SystemProperty.REVIEWED, v) })
     }
 
     /**
@@ -119,24 +76,39 @@ class MetadataWriterImpl(
         engine: String?,
     ) {
         val v = engine.normalized()
-        coordinator.commitAndApply(listOf(PendingOp.propSet(docId, DocProperty.OCR_ENGINE, v)))
+        coordinator.commitAndApply(listOf(PendingOp.propSet(docId, SystemProperty.OCR_ENGINE, v)))
     }
 
     override suspend fun setField(
         docId: String,
         key: String,
         value: String?,
+    ) = setField(listOf(docId), key, value)
+
+    override suspend fun setField(
+        docIds: List<String>,
+        key: String,
+        value: String?,
     ) {
-        val k = key.trim()
-        if (k.isEmpty()) return
-        val v = value.normalized()
-        coordinator.commitAndApply(listOf(PendingOp.fieldSet(docId, k, v)))
+        val k = FieldKeys.normalize(key) ?: return
+        val ids = docIds.distinct()
+        if (ids.isEmpty()) return
+        val changed =
+            coordinator.commitBuilt { state ->
+                val v = canonical(state, k, value)
+                ids.filter { state.effectiveFields(it)[k] != v }.map { PendingOp.fieldSet(it, k, v) }
+            }
+        if (!changed) return
+        ids.forEach { docId ->
+            if (k == FieldKeys.TITLE) applyAutoMatch(docId)
+            pathRuleApplicator.applyFor(docId)
+        }
     }
 
     override suspend fun applyEdits(
         docIds: List<String>,
         addTags: List<String>,
-        properties: Map<DocProperty, String?>,
+        fields: Map<String, String?>,
     ) {
         if (docIds.isEmpty()) return
         val tags =
@@ -145,18 +117,40 @@ class MetadataWriterImpl(
                 .filter { it.isNotEmpty() }
                 .distinct()
         val ids = docIds.distinct()
-        val ops =
+        val keyed = fields.mapNotNull { (key, value) -> FieldKeys.normalize(key)?.let { it to value } }
+        if (tags.isEmpty() && keyed.isEmpty()) return
+        coordinator.commitBuilt { state ->
+            val values = keyed.map { (key, value) -> key to canonical(state, key, value) }
             ids.flatMap { docId ->
                 tags.map { PendingOp.tagAdd(docId, it) } +
-                    properties.map { (key, value) -> PendingOp.propSet(docId, key, value.normalized()) }
+                    values.map { (key, value) -> PendingOp.fieldSet(docId, key, value) }
             }
-        if (ops.isEmpty()) return
-        coordinator.commitAndApply(ops)
+        }
         // The same follow-ups the individual setters do, but once per document for the whole edit
-        // instead of once per value. Auto-match only reacts to a new title, matching setTitle.
+        // instead of once per value. Auto-match only reacts to a new title, matching setField.
         ids.forEach { docId ->
-            if (DocProperty.TITLE in properties) applyAutoMatch(docId)
+            if (keyed.any { it.first == FieldKeys.TITLE }) applyAutoMatch(docId)
             pathRuleApplicator.applyFor(docId)
+        }
+    }
+
+    /**
+     * The canonical stored form of [raw] for field [key], per the live registry: an unregistered
+     * key is TEXT. Runs under the coordinator mutex so the type it validates against is the one
+     * the write is folded with.
+     */
+    private fun canonical(
+        state: FoldedState,
+        key: String,
+        raw: String?,
+    ): String? {
+        val type = state.effectiveFieldDef(key)?.type ?: FieldType.TEXT
+        return when (val parsed = FieldValues.canonicalize(type, raw)) {
+            is FieldParse.Ok -> parsed.canonical
+
+            is FieldParse.Invalid -> throw IllegalArgumentException(
+                "'${parsed.raw}' is not a valid ${type.wire} for field '$key'",
+            )
         }
     }
 
@@ -298,7 +292,7 @@ class MetadataWriterImpl(
         // No journal event: path is file-level state, re-derived on rescan.
     }
 
-    /** Trim a single-value metadata input, coercing null/blank to null (clears the property). */
+    /** Trim a system-property input, coercing null/blank to null (clears the property). */
     private fun String?.normalized(): String? = this?.trim()?.ifEmpty { null }
 
     /** Locate the file currently in `.npn/trash/` that belongs to [docId] (hash-suffixed name). */

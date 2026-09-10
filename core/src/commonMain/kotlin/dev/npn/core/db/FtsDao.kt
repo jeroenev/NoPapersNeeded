@@ -9,33 +9,14 @@ import androidx.room3.Transaction
 @Dao
 interface FtsDao {
     /**
-     * Replace a document's FTS row(s). FTS5 external-content is not used here; this is a
-     * plain FTS5 table so updates are exact-match delete + reinsert keyed on docId.
+     * Replace a document's FTS row. FTS5 external-content is not used here; this is a plain FTS5
+     * table so updates are exact-match delete + reinsert keyed on docId. Build [row] with
+     * [dev.npn.core.index.FtsRows] so every write site indexes the same columns.
      */
     @Transaction
-    suspend fun replaceDocument(
-        docId: String,
-        fileName: String?,
-        title: String?,
-        content: String?,
-        tags: String?,
-        correspondent: String?,
-        docType: String?,
-        notes: String? = null,
-    ) {
-        deleteForDoc(docId)
-        insert(
-            FtsDocumentEntity(
-                docId = docId,
-                fileName = fileName,
-                title = title,
-                notes = notes,
-                content = content,
-                tags = tags,
-                correspondent = correspondent,
-                docType = docType,
-            ),
-        )
+    suspend fun replaceDocument(row: FtsDocumentEntity) {
+        deleteForDoc(row.docId)
+        insert(row)
     }
 
     @Insert(onConflict = OnConflictStrategy.REPLACE)

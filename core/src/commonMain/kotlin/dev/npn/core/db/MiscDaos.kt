@@ -100,16 +100,12 @@ interface DocumentFieldDao {
     @Upsert
     suspend fun upsertAll(fields: List<DocumentFieldEntity>)
 
-    /** Replace the custom-field sets of several documents atomically, keyed by docId. */
+    /** Replace the field rows of several documents atomically, keyed by docId. */
     @Transaction
-    suspend fun replaceForDocs(updates: Map<String, Map<String, String>>) {
+    suspend fun replaceForDocs(updates: Map<String, List<DocumentFieldEntity>>) {
         if (updates.isEmpty()) return
         chunkedDelete(updates.keys.toList()) { clearFieldsFor(it) }
-        val allRows =
-            updates.flatMap { (docId, fields) ->
-                fields.map { (key, value) -> DocumentFieldEntity(docId, key, value) }
-            }
-        upsertAll(allRows)
+        upsertAll(updates.values.flatten())
     }
 
     @Query("DELETE FROM document_fields WHERE docId = :docId")

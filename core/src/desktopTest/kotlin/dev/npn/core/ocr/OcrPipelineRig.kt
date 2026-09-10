@@ -36,6 +36,7 @@ internal class OcrPipelineRig {
         ftsDao = database.ftsDao(),
         ocrQueueDao = database.ocrQueueDao(),
         tagDao = database.tagDao(),
+        fieldDao = database.documentFieldDao(),
         deviceId = deviceId,
     )
 

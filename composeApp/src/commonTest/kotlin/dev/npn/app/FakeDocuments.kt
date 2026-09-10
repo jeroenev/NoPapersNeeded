@@ -11,6 +11,7 @@ import dev.npn.core.app.SavedView
 import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.TagRepository
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.rules.AutoMatchRule
 import kotlinx.coroutines.flow.Flow
@@ -31,6 +32,7 @@ fun doc(
     docType: String? = null,
     docDate: String? = null,
     title: String? = null,
+    notes: String? = null,
     trashed: Boolean = false,
     ocrState: OcrState = OcrState.NONE,
 ): Doc =
@@ -39,15 +41,18 @@ fun doc(
         relPath = relPath,
         fileName = fileName,
         displayTitle = title?.takeIf { it.isNotBlank() } ?: fileName,
-        title = title,
         size = 0L,
         pageCount = null,
         addedAt = 0L,
         reviewed = reviewed,
-        correspondent = correspondent,
-        docType = docType,
-        docDate = docDate,
-        notes = null,
+        fields =
+            buildMap {
+                title?.let { put(FieldKeys.TITLE, it) }
+                correspondent?.let { put(FieldKeys.CORRESPONDENT, it) }
+                docType?.let { put(FieldKeys.DOC_TYPE, it) }
+                docDate?.let { put(FieldKeys.DOC_DATE, it) }
+                notes?.let { put(FieldKeys.NOTES, it) }
+            },
         trashed = trashed,
         trashedOrigPath = null,
         missing = false,

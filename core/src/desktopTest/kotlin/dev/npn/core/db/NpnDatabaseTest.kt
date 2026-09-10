@@ -2,6 +2,8 @@ package dev.npn.core.db
 
 import androidx.room3.RoomRawQuery
 import dev.npn.core.app.DocumentRepositoryImpl
+import dev.npn.core.index.FtsRows
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
@@ -203,22 +205,31 @@ class NpnDatabaseTest {
         runTest {
             val fts = db.ftsDao()
             fts.replaceDocument(
-                "a".repeat(64),
-                "invoice.pdf",
-                "Electricity invoice",
-                "total amount due for electricity usage",
-                "utilities",
-                "acme",
-                "invoice",
+                FtsRows.row(
+                    "a".repeat(64),
+                    "invoice.pdf",
+                    tags = listOf("utilities"),
+                    fields =
+                        mapOf(
+                            FieldKeys.TITLE to "Electricity invoice",
+                            FieldKeys.CORRESPONDENT to "acme",
+                            FieldKeys.DOC_TYPE to "invoice",
+                        ),
+                    content = "total amount due for electricity usage",
+                ),
             )
             fts.replaceDocument(
-                "b".repeat(64),
-                "recipe.pdf",
-                "Pasta recipe",
-                "boil water add pasta and salt",
-                "cooking",
-                null,
-                "note",
+                FtsRows.row(
+                    "b".repeat(64),
+                    "recipe.pdf",
+                    tags = listOf("cooking"),
+                    fields =
+                        mapOf(
+                            FieldKeys.TITLE to "Pasta recipe",
+                            FieldKeys.DOC_TYPE to "note",
+                        ),
+                    content = "boil water add pasta and salt",
+                ),
             )
             fts.searchDocIds("electricity") shouldContainExactly listOf("a".repeat(64))
             fts.searchDocIds("pasta") shouldContainExactly listOf("b".repeat(64))
@@ -229,13 +240,29 @@ class NpnDatabaseTest {
         runTest {
             val fts = db.ftsDao()
             val id = "n".repeat(64)
-            fts.replaceDocument(id, "doc.pdf", null, "ocr aardvark", null, null, null, "note buffalo")
+            fts.replaceDocument(
+                FtsRows.row(
+                    id,
+                    "doc.pdf",
+                    tags = emptyList(),
+                    fields = mapOf(FieldKeys.NOTES to "note buffalo"),
+                    content = "ocr aardvark",
+                ),
+            )
 
             fts.searchDocIds("aardvark") shouldContainExactly listOf(id)
             fts.searchDocIds("buffalo") shouldContainExactly listOf(id)
             fts.contentForDoc(id) shouldBe "ocr aardvark"
 
-            fts.replaceDocument(id, "renamed.pdf", null, "ocr aardvark", null, null, null, "note condor")
+            fts.replaceDocument(
+                FtsRows.row(
+                    id,
+                    "renamed.pdf",
+                    tags = emptyList(),
+                    fields = mapOf(FieldKeys.NOTES to "note condor"),
+                    content = "ocr aardvark",
+                ),
+            )
             fts.searchDocIds("aardvark") shouldContainExactly listOf(id)
             fts.searchDocIds("buffalo") shouldBe emptyList()
             fts.searchDocIds("condor") shouldContainExactly listOf(id)
@@ -246,13 +273,18 @@ class NpnDatabaseTest {
         runTest {
             val fts = db.ftsDao()
             fts.replaceDocument(
-                "a".repeat(64),
-                "invoice.pdf",
-                "Electricity invoice",
-                "the total amount due for your electricity usage this month",
-                "utilities",
-                "acme",
-                "invoice",
+                FtsRows.row(
+                    "a".repeat(64),
+                    "invoice.pdf",
+                    tags = listOf("utilities"),
+                    fields =
+                        mapOf(
+                            FieldKeys.TITLE to "Electricity invoice",
+                            FieldKeys.CORRESPONDENT to "acme",
+                            FieldKeys.DOC_TYPE to "invoice",
+                        ),
+                    content = "the total amount due for your electricity usage this month",
+                ),
             )
             val hits = fts.search("electricity")
             hits.size shouldBe 1
@@ -265,13 +297,13 @@ class NpnDatabaseTest {
         runTest {
             val fts = db.ftsDao()
             fts.replaceDocument(
-                "a".repeat(64),
-                "doc.pdf",
-                "title",
-                "electrification of the grid",
-                null,
-                null,
-                null,
+                FtsRows.row(
+                    "a".repeat(64),
+                    "doc.pdf",
+                    tags = emptyList(),
+                    fields = mapOf(FieldKeys.TITLE to "title"),
+                    content = "electrification of the grid",
+                ),
             )
             fts.searchDocIds("electr*") shouldContainExactly listOf("a".repeat(64))
             fts.searchDocIds("electr").shouldBe(emptyList()) // no prefix operator, no exact token match
@@ -282,7 +314,15 @@ class NpnDatabaseTest {
         runTest {
             val fts = db.ftsDao()
             val id = "a".repeat(64)
-            fts.replaceDocument(id, "invoice.pdf", "Annual invoice", "electricity total", null, null, null)
+            fts.replaceDocument(
+                FtsRows.row(
+                    id,
+                    "invoice.pdf",
+                    tags = emptyList(),
+                    fields = mapOf(FieldKeys.TITLE to "Annual invoice"),
+                    content = "electricity total",
+                ),
+            )
             fts.rowsForPrefix("\"invo\"*", 5).map { it.docId } shouldContainExactly listOf(id)
             fts.rowsForPrefix("\"absent\"*", 5) shouldBe emptyList()
         }
@@ -295,7 +335,15 @@ class NpnDatabaseTest {
                 listOf(doc(id, correspondent = "Invoice Corp", docType = "Invoice type")),
             )
             db.tagDao().upsert(TagEntity("Invoice tag"))
-            db.ftsDao().replaceDocument(id, "document.pdf", "Invoice title", "invoiced amount", null, null, null)
+            db.ftsDao().replaceDocument(
+                FtsRows.row(
+                    id,
+                    "document.pdf",
+                    tags = emptyList(),
+                    fields = mapOf(FieldKeys.TITLE to "Invoice title"),
+                    content = "invoiced amount",
+                ),
+            )
 
             val suggestions = DocumentRepositoryImpl(db).searchSuggestions("invo", 8)
             suggestions shouldContainExactly
@@ -314,11 +362,27 @@ class NpnDatabaseTest {
         runTest {
             val fts = db.ftsDao()
             val id = "a".repeat(64)
-            fts.replaceDocument(id, "doc.pdf", "t", "aardvark content", null, null, null)
+            fts.replaceDocument(
+                FtsRows.row(
+                    id,
+                    "doc.pdf",
+                    tags = emptyList(),
+                    fields = mapOf(FieldKeys.TITLE to "t"),
+                    content = "aardvark content",
+                ),
+            )
             fts.searchDocIds("aardvark") shouldContainExactly listOf(id)
             // re-index same docId with new content; old term must no longer match, and there
             // must be no duplicate row for the new term.
-            fts.replaceDocument(id, "doc.pdf", "t", "buffalo content", null, null, null)
+            fts.replaceDocument(
+                FtsRows.row(
+                    id,
+                    "doc.pdf",
+                    tags = emptyList(),
+                    fields = mapOf(FieldKeys.TITLE to "t"),
+                    content = "buffalo content",
+                ),
+            )
             fts.searchDocIds("aardvark") shouldBe emptyList()
             fts.searchDocIds("buffalo") shouldContainExactly listOf(id)
         }
@@ -328,13 +392,18 @@ class NpnDatabaseTest {
         runTest {
             val fts = db.ftsDao()
             fts.replaceDocument(
-                "a".repeat(64),
-                "doc.pdf",
-                "title",
-                "body text",
-                tags = "taxes finance",
-                correspondent = "cityhall",
-                docType = "letter",
+                FtsRows.row(
+                    "a".repeat(64),
+                    "doc.pdf",
+                    tags = listOf("taxes", "finance"),
+                    fields =
+                        mapOf(
+                            FieldKeys.TITLE to "title",
+                            FieldKeys.CORRESPONDENT to "cityhall",
+                            FieldKeys.DOC_TYPE to "letter",
+                        ),
+                    content = "body text",
+                ),
             )
             fts.searchDocIds("taxes") shouldContainExactly listOf("a".repeat(64))
             fts.searchDocIds("cityhall") shouldContainExactly listOf("a".repeat(64))

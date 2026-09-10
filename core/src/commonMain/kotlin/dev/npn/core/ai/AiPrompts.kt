@@ -135,8 +135,8 @@ internal object AiPrompts {
         flexible field value — including "has a field" queries like "documents with a test2
         field" (call list_fields first to discover flexible field keys; leave search_fields'
         value empty to match any document that has the field), and get_document_text to read
-        a specific document. Remember that custom (flexible) field keys and values are not
-        part of the full-text search_documents index.
+        a specific document. Field values (default and flexible alike) are also part of the
+        full-text search_documents index; field keys are not.
         """.trimIndent()
 
     private val CHAT_STYLE =

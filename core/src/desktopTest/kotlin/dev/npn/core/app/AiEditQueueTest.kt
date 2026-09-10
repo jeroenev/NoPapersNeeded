@@ -13,7 +13,7 @@ import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.index.MutableClock
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -448,7 +448,7 @@ class AiEditQueueReviewTest {
                 outcome.result.moreRemain shouldBe false
                 rig.meta.addedTags shouldContainExactly listOf(listOf("a") to "invoice")
                 rig.meta.batchedEdits shouldContainExactly
-                    listOf("a" to mapOf(DocProperty.TITLE to "Electricity bill"))
+                    listOf("a" to mapOf(FieldKeys.TITLE to "Electricity bill"))
                 rig.job(jobId) shouldBe null
                 rig.rows(jobId) shouldBe emptyList()
             }

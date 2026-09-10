@@ -1,10 +1,10 @@
 package dev.npn.core.app
 
 import dev.npn.core.index.MutableClock
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.xmp.PdfBoxXmpIO
-import io.kotest.matchers.maps.shouldBeEmpty
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -36,13 +36,13 @@ class HlcSeedingTest {
                 val (session2, secondDb) = rig.secondSession(backgroundScope)
                 db2 = secondDb
                 session2.rescan()
-                session2.meta.setCorrespondent(listOf(id), "from-b")
+                session2.meta.setField(listOf(id), FieldKeys.CORRESPONDENT, "from-b")
                 session2.meta.setField(id, "amount", "1")
 
                 // Device 1 folds device 2's segments (seeding its clock), then edits: its writes
                 // are causally later and must win LWW despite the slower wall clock.
                 rig.session.rescan()
-                rig.session.meta.setCorrespondent(listOf(id), "from-a")
+                rig.session.meta.setField(listOf(id), FieldKeys.CORRESPONDENT, "from-a")
                 rig.session.meta.setField(id, "amount", null) // delete must stick
                 rig.session.meta.setField(id, "amount", "2") // re-add must stick
 
@@ -53,7 +53,7 @@ class HlcSeedingTest {
                 rig.session.documents
                     .observeDoc(id)
                     .first()!!
-                    .fields shouldBe mapOf("amount" to "2")
+                    .doc.fields shouldBe mapOf(FieldKeys.CORRESPONDENT to "from-a", "amount" to "2")
 
                 // Device 2 syncs back and converges to device 1's newer edits.
                 session2.rescan()
@@ -73,7 +73,7 @@ class HlcSeedingTest {
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
                 rig.session.rescan()
                 val id = rig.docId("a.pdf")
-                rig.session.meta.setTitle(id, "first")
+                rig.session.meta.setField(id, FieldKeys.TITLE, "first")
                 rig.session.meta.setField(id, "amount", "42")
                 rig.session.close()
 
@@ -94,7 +94,7 @@ class HlcSeedingTest {
                     )
                 val session2 = LibrarySessionImpl.openSession(deps)
 
-                session2.meta.setTitle(id, "second")
+                session2.meta.setField(id, FieldKeys.TITLE, "second")
                 rig.db
                     .documentDao()
                     .getByDocId(id)!!
@@ -105,14 +105,13 @@ class HlcSeedingTest {
                 session2.documents
                     .observeDoc(id)
                     .first()!!
-                    .fields
-                    .shouldBeEmpty()
+                    .doc.fields shouldBe mapOf(FieldKeys.TITLE to "second")
                 // ...and so must re-adding it.
                 session2.meta.setField(id, "amount", "43")
                 session2.documents
                     .observeDoc(id)
                     .first()!!
-                    .fields shouldBe mapOf("amount" to "43")
+                    .doc.fields shouldBe mapOf(FieldKeys.TITLE to "second", "amount" to "43")
 
                 session2.close()
             } finally {

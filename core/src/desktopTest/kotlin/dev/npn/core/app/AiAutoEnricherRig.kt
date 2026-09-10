@@ -10,7 +10,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.index.MutableClock
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.work.QueueDrainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.TestScope
@@ -45,9 +45,9 @@ internal class RecordingMeta : MetadataWriter {
      * `applyEdits` as the fields, so they arrive on the edit, never through [addTag].
      */
     val addedTags get() = edits.map { it.docId to it.addTags }
-    val titles get() = edits.mapNotNull { e -> e.properties[DocProperty.TITLE]?.let { e.docId to it } }
-    val correspondents get() = edits.mapNotNull { e -> e.properties[DocProperty.CORRESPONDENT]?.let { e.docId to it } }
-    val docDates get() = edits.mapNotNull { e -> e.properties[DocProperty.DOC_DATE]?.let { e.docId to it } }
+    val titles get() = edits.mapNotNull { e -> e.fields[FieldKeys.TITLE]?.let { e.docId to it } }
+    val correspondents get() = edits.mapNotNull { e -> e.fields[FieldKeys.CORRESPONDENT]?.let { e.docId to it } }
+    val docDates get() = edits.mapNotNull { e -> e.fields[FieldKeys.DOC_DATE]?.let { e.docId to it } }
 
     /**
      * When set, the atomic write (`applyEdits`) throws this instead of recording — so a test can
@@ -58,18 +58,18 @@ internal class RecordingMeta : MetadataWriter {
     class Edit(
         val docId: String,
         val addTags: List<String>,
-        val properties: Map<DocProperty, String?>,
+        val fields: Map<String, String?>,
     )
 
     override suspend fun applyEdits(
         docIds: List<String>,
         addTags: List<String>,
-        properties: Map<DocProperty, String?>,
+        fields: Map<String, String?>,
     ) {
         failEditsWith?.let { throw it() }
         // The enricher works a document at a time; a multi-doc call here would mean it had started
         // batching unrelated documents into one transaction.
-        edits += Edit(docIds.single(), addTags, properties)
+        edits += Edit(docIds.single(), addTags, fields)
     }
 
     override suspend fun addTag(
@@ -82,41 +82,22 @@ internal class RecordingMeta : MetadataWriter {
         tag: String,
     ) = error("removals are never requested by the automatic pass")
 
-    override suspend fun setTitle(
-        docId: String,
-        title: String?,
-    ) = error("must batch through applyEdits")
-
-    override suspend fun setCorrespondent(
-        docIds: List<String>,
-        value: String?,
-    ) = error("must batch through applyEdits")
-
-    override suspend fun setDocDate(
-        docId: String,
-        isoDate: String?,
-    ) = error("must batch through applyEdits")
-
     override suspend fun setReviewed(
         docIds: List<String>,
         reviewed: Boolean,
-    ) = error("unused")
-
-    override suspend fun setDocType(
-        docIds: List<String>,
-        value: String?,
-    ) = error("unused")
-
-    override suspend fun setNotes(
-        docId: String,
-        notes: String?,
     ) = error("unused")
 
     override suspend fun setField(
         docId: String,
         key: String,
         value: String?,
-    ) = error("unused")
+    ) = error("must batch through applyEdits")
+
+    override suspend fun setField(
+        docIds: List<String>,
+        key: String,
+        value: String?,
+    ) = error("must batch through applyEdits")
 }
 
 /** Real Room index (the enricher owns queue rows and document stamps) + fakes for AI and writes. */

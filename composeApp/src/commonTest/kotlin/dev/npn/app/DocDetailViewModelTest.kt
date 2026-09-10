@@ -9,6 +9,7 @@ import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import dev.npn.core.ocr.OcrState
@@ -79,7 +80,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val model = vm(session = session)
             model.setTitle("   ")
             advanceUntilIdle()
-            session.meta.titleSets shouldContainExactly listOf("doc-1" to null)
+            // Blank reaches the writer as-is; canonicalization there turns it into a clear.
+            session.meta.fieldSets shouldContainExactly listOf(Triple(listOf("doc-1"), FieldKeys.TITLE, "   "))
         }
 
     @Test
@@ -89,7 +91,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val model = vm(session = session)
             model.setTitle("Invoice 2026")
             advanceUntilIdle()
-            session.meta.titleSets shouldContainExactly listOf("doc-1" to "Invoice 2026")
+            session.meta.fieldSets shouldContainExactly listOf(Triple(listOf("doc-1"), FieldKeys.TITLE, "Invoice 2026"))
         }
 
     @Test
@@ -99,7 +101,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val model = vm(session = session)
             model.setCorrespondent("")
             advanceUntilIdle()
-            session.meta.correspondentSets shouldContainExactly listOf(listOf("doc-1") to null)
+            session.meta.fieldSets shouldContainExactly listOf(Triple(listOf("doc-1"), FieldKeys.CORRESPONDENT, ""))
         }
 
     @Test
@@ -132,14 +134,14 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun setTitleFailureEmitsMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { meta.failSetTitle = { error("disk full") } }
+            val session = FakeLibrarySession().apply { meta.failSetField = { error("disk full") } }
             val model = vm(session = session)
             val messages = mutableListOf<String>()
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
             advanceUntilIdle()
             model.setTitle("x")
             advanceUntilIdle()
-            session.meta.titleSets shouldBe emptyList()
+            session.meta.fieldSets shouldBe emptyList()
             messages shouldContainExactly listOf("Could not save title: disk full")
             job.cancel()
         }
@@ -576,9 +578,12 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.acceptAiMetadata(AiField.DOC_DATE)
             advanceUntilIdle()
 
-            session.meta.titleSets shouldContainExactly listOf("doc-1" to "Invoice Jan")
-            session.meta.correspondentSets shouldContainExactly listOf(listOf("doc-1") to "Acme")
-            session.meta.docDateSets shouldContainExactly listOf("doc-1" to "2024-01-15")
+            session.meta.fieldSets shouldContainExactly
+                listOf(
+                    Triple(listOf("doc-1"), FieldKeys.TITLE, "Invoice Jan"),
+                    Triple(listOf("doc-1"), FieldKeys.CORRESPONDENT, "Acme"),
+                    Triple(listOf("doc-1"), FieldKeys.DOC_DATE, "2024-01-15"),
+                )
             model.metadata.value.ai.metadata.suggestion shouldBe MetadataSuggestion.EMPTY
         }
 
@@ -596,7 +601,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.metadata.value.ai.metadata.suggestion shouldBe suggestion.copy(correspondent = null)
-            session.meta.correspondentSets shouldBe emptyList()
+            session.meta.fieldSets shouldBe emptyList()
         }
 
     @Test

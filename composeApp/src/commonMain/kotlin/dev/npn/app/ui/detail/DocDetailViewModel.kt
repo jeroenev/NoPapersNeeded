@@ -30,6 +30,7 @@ import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.TagAdmin
 import dev.npn.core.app.TagRepository
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import kotlinx.coroutines.flow.Flow
@@ -315,23 +316,20 @@ class DocDetailViewModel(
         }
     }
 
-    fun setTitle(title: String?) =
-        launchMetadata(UiAction.SAVE_TITLE) { meta.setTitle(docId, title?.takeIf { it.isNotBlank() }) }
+    fun setTitle(title: String?) = launchMetadata(UiAction.SAVE_TITLE) { meta.setField(docId, FieldKeys.TITLE, title) }
 
-    fun setNotes(value: String) = launchMetadata(UiAction.SAVE_NOTE) { meta.setNotes(docId, value) }
+    fun setNotes(value: String) = launchMetadata(UiAction.SAVE_NOTE) { meta.setField(docId, FieldKeys.NOTES, value) }
 
     fun setCorrespondent(value: String?) =
-        launchMetadata(UiAction.SAVE_CORRESPONDENT) {
-            meta.setCorrespondent(listOf(docId), value?.takeIf { it.isNotBlank() })
-        }
+        launchMetadata(UiAction.SAVE_CORRESPONDENT) { meta.setField(docId, FieldKeys.CORRESPONDENT, value) }
 
     fun setDocType(value: String?) =
-        launchMetadata(UiAction.SAVE_DOCUMENT_TYPE) {
-            meta.setDocType(listOf(docId), value?.takeIf { it.isNotBlank() })
-        }
+        launchMetadata(UiAction.SAVE_DOCUMENT_TYPE) { meta.setField(docId, FieldKeys.DOC_TYPE, value) }
 
     fun setDocDate(isoDate: String?) =
-        launchMetadata(UiAction.SAVE_DATE) { meta.setDocDate(docId, isoDate?.takeIf { it.isNotBlank() }) }
+        launchMetadata(UiAction.SAVE_DATE) {
+            meta.setField(docId, FieldKeys.DOC_DATE, isoDate)
+        }
 
     fun addTag(tag: String) = launchMetadata(UiAction.ADD_TAG) { meta.addTag(listOf(docId), tag) }
 

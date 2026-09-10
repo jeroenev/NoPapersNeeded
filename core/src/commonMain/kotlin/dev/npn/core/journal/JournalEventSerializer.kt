@@ -1,8 +1,9 @@
 package dev.npn.core.journal
 
-import dev.npn.core.model.DocProperty
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
+import dev.npn.core.model.SystemProperty
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
@@ -269,9 +270,17 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
     private fun JsonObject.nullableString(name: String): String? =
         this[name]?.let { if (it is JsonNull) null else it.jsonPrimitive.content }
 
-    private fun decodePropSet(p: JsonObject): JournalOp.PropSet? {
-        val key = DocProperty.fromWire(p.string("key")) ?: return null
-        return JournalOp.PropSet(key, p.nullableString("value"))
+    /**
+     * `prop-set` once carried user metadata too. Libraries written before the field registry hold
+     * `prop-set` events for the well-known five; they decode as the [JournalOp.FieldSet] they would
+     * be written as today, so those libraries keep their metadata. The stored bytes are untouched.
+     */
+    private fun decodePropSet(p: JsonObject): JournalOp? {
+        val wire = p.string("key")
+        val value = p.nullableString("value")
+        if (wire in FieldKeys.WELL_KNOWN) return JournalOp.FieldSet(wire, value)
+        val key = SystemProperty.fromWire(wire) ?: return null
+        return JournalOp.PropSet(key, value)
     }
 
     /** Null when the payload is malformed; the caller then keeps the op as [JournalOp.Unknown]. */

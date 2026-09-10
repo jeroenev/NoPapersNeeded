@@ -5,7 +5,7 @@ import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldBeSingleton
 import io.kotest.matchers.collections.shouldContainExactly
@@ -138,11 +138,11 @@ class AiAutoEnricherTest {
                         .single()
                 edit.docId shouldBe "d1"
                 edit.addTags shouldContainExactly listOf("invoice")
-                edit.properties shouldBe
+                edit.fields shouldBe
                     mapOf(
-                        DocProperty.TITLE to "Electricity invoice",
-                        DocProperty.CORRESPONDENT to "Acme",
-                        DocProperty.DOC_DATE to "2026-01-31",
+                        FieldKeys.TITLE to "Electricity invoice",
+                        FieldKeys.CORRESPONDENT to "Acme",
+                        FieldKeys.DOC_DATE to "2026-01-31",
                     )
                 rig.enrichedAt("d1") shouldBe 5_000L
                 rig.row("d1").shouldBeNull()
@@ -177,7 +177,7 @@ class AiAutoEnricherTest {
                         .shouldBeSingleton()
                         .single()
                 edit.addTags shouldContainExactly listOf("invoice")
-                edit.properties shouldBe mapOf(DocProperty.TITLE to "Electricity invoice")
+                edit.fields shouldBe mapOf(FieldKeys.TITLE to "Electricity invoice")
             }
         }
 

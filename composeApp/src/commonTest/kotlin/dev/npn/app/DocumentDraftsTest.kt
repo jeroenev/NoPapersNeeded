@@ -2,7 +2,7 @@ package dev.npn.app
 
 import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.core.app.MetadataWriter
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
@@ -24,8 +24,8 @@ class DocumentDraftsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val writer = FakeMetadataWriter()
             val store = DocumentDrafts(writer, backgroundScope)
-            store.property("one", DocProperty.TITLE, "Invoice", persisted = null)
-            store.property("one", DocProperty.NOTES, "Call the supplier", persisted = null)
+            store.field("one", FieldKeys.TITLE, "Invoice", persisted = null)
+            store.field("one", FieldKeys.NOTES, "Call the supplier", persisted = null)
             store.field("two", "amount", "25", persisted = null)
             val restored = DocumentDrafts(writer, backgroundScope, store.serialize())
             assertEquals(store.state, restored.state)
@@ -43,14 +43,14 @@ class DocumentDraftsTest : MainDispatcherTest() {
     fun editBackToTheStoredValueLeavesNoDraft() =
         runTest(dispatcher) {
             val store = DocumentDrafts(FakeMetadataWriter(), backgroundScope)
-            store.property("one", DocProperty.TITLE, "Invoic", persisted = "Invoice")
+            store.field("one", FieldKeys.TITLE, "Invoic", persisted = "Invoice")
             assertTrue(
                 store.state
                     .getValue("one")
                     .dirty,
             )
             // Trailing whitespace is not a change either: the writers normalize it away.
-            store.property("one", DocProperty.TITLE, "Invoice ", persisted = "Invoice")
+            store.field("one", FieldKeys.TITLE, "Invoice ", persisted = "Invoice")
             assertTrue(store.state.isEmpty())
 
             store.field("one", "amount", "25", persisted = null)
@@ -63,7 +63,7 @@ class DocumentDraftsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val writer = FakeMetadataWriter().apply { failBatchOps = { error("offline") } }
             val store = DocumentDrafts(writer, this)
-            store.property("one", DocProperty.TITLE, "Invoice", persisted = null)
+            store.field("one", FieldKeys.TITLE, "Invoice", persisted = null)
             var advanced = false
             store.save("one", reviewed = true) { advanced = true }
             advanceUntilIdle()
@@ -84,17 +84,19 @@ class DocumentDraftsTest : MainDispatcherTest() {
             assertTrue(advanced)
             // advanceUntilIdle runs past the post-save notice delay, so the settled entry is gone.
             assertFalse(store.state.containsKey("one"))
+            // The fields land in one applyEdits transaction; the reviewed marker is a separate call.
             assertEquals(
-                mapOf(DocProperty.TITLE to "Invoice", DocProperty.REVIEWED to "true"),
+                mapOf(FieldKeys.TITLE to "Invoice"),
                 writer.batchedEdits.single().third,
             )
+            assertEquals(listOf("one") to true, writer.reviewedSets.single())
         }
 
     @Test
     fun savedDraftIsDroppedOnceTheNoticeHasBeenRead() =
         runTest(dispatcher) {
             val store = DocumentDrafts(FakeMetadataWriter(), this)
-            store.property("one", DocProperty.TITLE, "Invoice", persisted = null)
+            store.field("one", FieldKeys.TITLE, "Invoice", persisted = null)
             store.save("one")
             // The save coroutine now owns the notice timer: run the write and its Main hops but
             // stop short of SavedNoticeDuration, so the "saved" notice is still up.
@@ -112,12 +114,13 @@ class DocumentDraftsTest : MainDispatcherTest() {
     @Test
     fun customFieldFailureDoesNotMarkDocumentReviewed() =
         runTest(dispatcher) {
-            val writer = FakeMetadataWriter().apply { failSetField = { error("disk full") } }
+            // The field write is the applyEdits transaction, so its failure is a batched-op failure.
+            val writer = FakeMetadataWriter().apply { failBatchOps = { error("disk full") } }
             val store = DocumentDrafts(writer, this)
             store.field("one", "amount", "25", persisted = null)
             store.save("one", reviewed = true)
             advanceUntilIdle()
-            assertTrue(writer.batchedEdits.isEmpty())
+            assertTrue(writer.reviewedSets.isEmpty())
             assertEquals(
                 "25",
                 store.state
@@ -137,28 +140,28 @@ class DocumentDraftsTest : MainDispatcherTest() {
                     override suspend fun applyEdits(
                         docIds: List<String>,
                         addTags: List<String>,
-                        properties: Map<DocProperty, String?>,
+                        fields: Map<String, String?>,
                     ) {
                         started.complete(Unit)
                         finish.await()
-                        fake.applyEdits(docIds, addTags, properties)
+                        fake.applyEdits(docIds, addTags, fields)
                     }
                 }
             val store = DocumentDrafts(writer, this)
-            store.property("one", DocProperty.TITLE, "First", persisted = null)
+            store.field("one", FieldKeys.TITLE, "First", persisted = null)
             store.save("one")
             started.await()
-            store.property("one", DocProperty.TITLE, "Second", persisted = null)
+            store.field("one", FieldKeys.TITLE, "Second", persisted = null)
             store.save("one")
             finish.complete(Unit)
             advanceUntilIdle()
             assertEquals(1, fake.batchedEdits.size)
-            assertEquals("First", fake.batchedEdits.single().third[DocProperty.TITLE])
+            assertEquals("First", fake.batchedEdits.single().third[FieldKeys.TITLE])
             assertEquals(
                 "Second",
                 store.state
                     .getValue("one")
-                    .properties[DocProperty.TITLE],
+                    .fields[FieldKeys.TITLE],
             )
         }
 
@@ -185,7 +188,7 @@ class DocumentDraftsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val writer = FakeMetadataWriter()
             val store = DocumentDrafts(writer, this)
-            store.property("one", DocProperty.DOC_DATE, "2026-02-30", persisted = null)
+            store.field("one", FieldKeys.DOC_DATE, "2026-02-30", persisted = null)
             var advanced = false
             store.save("one", reviewed = true) { advanced = true }
             runCurrent()

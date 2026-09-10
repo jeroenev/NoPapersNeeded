@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
@@ -52,15 +53,18 @@ class DocumentMappingTest {
                 relPath = "bank/statement.pdf",
                 fileName = "statement.pdf",
                 displayTitle = "July statement",
-                title = "July statement",
                 size = 1234L,
                 pageCount = 3,
                 addedAt = 42L,
                 reviewed = true,
-                correspondent = "Bank",
-                docType = "statement",
-                docDate = "2026-07-15",
-                notes = "a note",
+                fields =
+                    mapOf(
+                        FieldKeys.TITLE to "July statement",
+                        FieldKeys.CORRESPONDENT to "Bank",
+                        FieldKeys.DOC_TYPE to "statement",
+                        FieldKeys.DOC_DATE to "2026-07-15",
+                        FieldKeys.NOTES to "a note",
+                    ),
                 trashed = true,
                 trashedOrigPath = "inbox/statement.pdf",
                 missing = true,

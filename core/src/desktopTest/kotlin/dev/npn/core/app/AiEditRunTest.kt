@@ -10,7 +10,7 @@ import dev.npn.core.ai.FakeAiSuggest
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.DocumentEntity
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe

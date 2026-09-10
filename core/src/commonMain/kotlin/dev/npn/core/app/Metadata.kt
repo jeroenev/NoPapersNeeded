@@ -1,7 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.model.DocProperty
-
 /**
  * Per-document (and bulk) metadata edits. Everything here is a journal-backed write to one or
  * more documents' own metadata; vocabulary-level tag operations live on [TagAdmin] and a
@@ -23,35 +21,21 @@ interface MetadataWriter {
         reviewed: Boolean,
     )
 
-    suspend fun setCorrespondent(
-        docIds: List<String>,
-        value: String?,
-    )
-
-    suspend fun setDocType(
-        docIds: List<String>,
-        value: String?,
-    )
-
-    suspend fun setDocDate(
-        docId: String,
-        isoDate: String?,
-    )
-
-    suspend fun setTitle(
-        docId: String,
-        title: String?,
-    )
-
-    /** Set a free-text note; null or blank clears it. */
-    suspend fun setNotes(
-        docId: String,
-        notes: String?,
-    )
-
-    /** Set (or clear, when [value] is null/blank) a custom metadata field [key] on [docId]. */
+    /**
+     * Set (or clear, when [value] is null/blank) field [key] on [docId] — title, correspondent and
+     * every registered or ad-hoc field alike. The value is canonicalized for the field's registry
+     * type ([dev.npn.core.model.FieldValues]); an input that does not fit the type throws
+     * [IllegalArgumentException] and writes nothing. Unregistered keys are treated as TEXT.
+     */
     suspend fun setField(
         docId: String,
+        key: String,
+        value: String?,
+    )
+
+    /** [setField] for several documents at once, one journal transaction. */
+    suspend fun setField(
+        docIds: List<String>,
         key: String,
         value: String?,
     )
@@ -65,10 +49,10 @@ interface MetadataWriter {
      * date renames the file once per setter — the intermediate names are meaningless, and on a
      * synced library folder every device sees each of them.
      *
-     * Only keys present in [properties] are touched; a present key with a null or blank value
-     * clears that property, as in the individual setters. Blank and duplicate [addTags] are
-     * ignored. Unlike the setters, the commit is all-or-nothing: nothing is written for any
-     * document if it fails.
+     * Only keys present in [fields] are touched; a present key with a null or blank value clears
+     * that field, as in [setField]. Values are canonicalized per the registry type and an off-type
+     * value fails the whole edit. Blank and duplicate [addTags] are ignored. Unlike the setters,
+     * the commit is all-or-nothing: nothing is written for any document if it fails.
      *
      * Every document gets the same values, so this fits carrying one set of metadata onto many
      * documents (a split's parts, a bulk edit). Per-document *values* still need a call each —
@@ -77,7 +61,7 @@ interface MetadataWriter {
     suspend fun applyEdits(
         docIds: List<String>,
         addTags: List<String> = emptyList(),
-        properties: Map<DocProperty, String?> = emptyMap(),
+        fields: Map<String, String?> = emptyMap(),
     )
 }
 

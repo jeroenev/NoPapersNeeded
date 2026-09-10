@@ -1,7 +1,7 @@
 package dev.npn.core.journal
 
-import dev.npn.core.model.DocProperty
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.SystemProperty
 
 /**
  * A pending op the caller wants to commit. The writer assigns seq and HLC and fills in the
@@ -31,7 +31,7 @@ data class PendingOp(
 
         fun propSet(
             doc: String,
-            key: DocProperty,
+            key: SystemProperty,
             value: String?,
         ) = PendingOp(doc, JournalOp.PropSet(key, value))
 

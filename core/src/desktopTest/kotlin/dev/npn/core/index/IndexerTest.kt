@@ -3,7 +3,8 @@ package dev.npn.core.index
 import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SegmentWriter
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContain
@@ -266,8 +267,8 @@ class IndexerTest {
             writer.commit(
                 listOf(
                     PendingOp.tagAdd(docId, "receipt"),
-                    PendingOp.propSet(docId, DocProperty.REVIEWED, "true"),
-                    PendingOp.propSet(docId, DocProperty.CORRESPONDENT, "acme"),
+                    PendingOp.propSet(docId, SystemProperty.REVIEWED, "true"),
+                    PendingOp.fieldSet(docId, FieldKeys.CORRESPONDENT, "acme"),
                 ),
             )
             rig.rescan()
@@ -282,6 +283,46 @@ class IndexerTest {
             writer.commit(listOf(PendingOp.tagRename("receipt", "invoice")))
             rig.rescan()
             rig.db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("invoice")
+        }
+
+    @Test
+    fun foldKeepsCachedColumnsInSyncWithFieldRows() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
+            val docId =
+                rig.db
+                    .documentDao()
+                    .rowAtPath("a.pdf")!!
+                    .docId
+
+            val writer = rig.writer("dev-main")
+            rig.clock.advance()
+            writer.commit(
+                listOf(
+                    PendingOp.fieldSet(docId, FieldKeys.TITLE, "Annual report"),
+                    PendingOp.fieldSet(docId, FieldKeys.CORRESPONDENT, "acme"),
+                    PendingOp.fieldSet(docId, FieldKeys.DOC_TYPE, "report"),
+                    PendingOp.fieldSet(docId, FieldKeys.DOC_DATE, "2026-01-15"),
+                    PendingOp.fieldSet(docId, FieldKeys.NOTES, "keep for taxes"),
+                ),
+            )
+            rig.rescan()
+
+            // The `documents` cache columns are written by the Indexer from the field map, so each
+            // one must agree with the `document_fields` row for the same key.
+            val row = rig.db.documentDao().getByDocId(docId)!!
+            val fields =
+                rig.db
+                    .documentFieldDao()
+                    .fieldsForDocs(listOf(docId))
+                    .associate { it.fieldKey to it.fieldValue }
+
+            row.title shouldBe fields[FieldKeys.TITLE]
+            row.correspondent shouldBe fields[FieldKeys.CORRESPONDENT]
+            row.docType shouldBe fields[FieldKeys.DOC_TYPE]
+            row.docDate shouldBe fields[FieldKeys.DOC_DATE]
+            row.notes shouldBe fields[FieldKeys.NOTES]
         }
 
     @Test
@@ -425,13 +466,13 @@ class IndexerTest {
 
             // Simulate the OCR pipeline writing extracted text into the FTS content column.
             rig.db.ftsDao().replaceDocument(
-                docId = docId,
-                fileName = "a.pdf",
-                title = null,
-                content = "quarterly electricity invoice for acme corporation",
-                tags = null,
-                correspondent = null,
-                docType = null,
+                FtsRows.row(
+                    docId = docId,
+                    fileName = "a.pdf",
+                    tags = emptyList(),
+                    fields = emptyMap(),
+                    content = "quarterly electricity invoice for acme corporation",
+                ),
             )
             rig.db.ftsDao().searchDocIds("electricity") shouldContainExactly listOf(docId)
 
@@ -444,7 +485,7 @@ class IndexerTest {
             coordinator.commitAndApply(
                 listOf(
                     PendingOp.tagAdd(docId, "receipt"),
-                    PendingOp.propSet(docId, DocProperty.CORRESPONDENT, "acme"),
+                    PendingOp.fieldSet(docId, FieldKeys.CORRESPONDENT, "acme"),
                 ),
             )
 
@@ -469,13 +510,13 @@ class IndexerTest {
                     .docId
 
             rig.db.ftsDao().replaceDocument(
-                docId = docId,
-                fileName = "a.pdf",
-                title = null,
-                content = "boil water add pasta and salt",
-                tags = null,
-                correspondent = null,
-                docType = null,
+                FtsRows.row(
+                    docId = docId,
+                    fileName = "a.pdf",
+                    tags = emptyList(),
+                    fields = emptyMap(),
+                    content = "boil water add pasta and salt",
+                ),
             )
 
             val writer = rig.writer("dev-main")

@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -115,8 +116,8 @@ class DocumentFilterTest {
                 val a = rig.fs.sha256("a.pdf")
                 val b = rig.fs.sha256("b.pdf")
 
-                rig.session.meta.setDocDate(a, "2026-01-15")
-                rig.session.meta.setDocDate(b, "2026-06-20")
+                rig.session.meta.setField(a, FieldKeys.DOC_DATE, "2026-01-15")
+                rig.session.meta.setField(b, FieldKeys.DOC_DATE, "2026-06-20")
 
                 val repo = DocumentRepositoryImpl(rig.db)
                 ids(
@@ -145,9 +146,9 @@ class DocumentFilterTest {
                 val c = rig.fs.sha256("c.pdf")
 
                 // a: complete. b: has a date but no correspondent. c: has neither.
-                rig.session.meta.setCorrespondent(listOf(a), "Acme")
-                rig.session.meta.setDocDate(a, "2026-01-15")
-                rig.session.meta.setDocDate(b, "2026-02-20")
+                rig.session.meta.setField(listOf(a), FieldKeys.CORRESPONDENT, "Acme")
+                rig.session.meta.setField(a, FieldKeys.DOC_DATE, "2026-01-15")
+                rig.session.meta.setField(b, FieldKeys.DOC_DATE, "2026-02-20")
 
                 val repo = DocumentRepositoryImpl(rig.db)
                 ids(
@@ -269,6 +270,7 @@ class DocumentFilterTest {
             ftsDao = rig.db.ftsDao(),
             ocrQueueDao = rig.db.ocrQueueDao(),
             tagDao = rig.db.tagDao(),
+            fieldDao = rig.db.documentFieldDao(),
             deviceId = rig.session.deviceId,
         )
 }

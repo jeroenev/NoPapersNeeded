@@ -4,7 +4,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.staticCompositionLocalOf
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.MetadataWriter
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -30,44 +30,36 @@ internal fun isWritableDate(value: String?): Boolean =
 
 @Serializable
 internal data class DocumentDraft(
-    val properties: Map<DocProperty, String?> = emptyMap(),
+    /** Edited field values by registry key; null clears the field. */
     val fields: Map<String, String?> = emptyMap(),
     val saving: Boolean = false,
     val saved: Boolean = false,
     val error: String? = null,
 ) {
-    val dirty: Boolean get() = properties.isNotEmpty() || fields.isNotEmpty()
+    val dirty: Boolean get() = fields.isNotEmpty()
 
     /**
      * Nothing left to write, in flight or worth reporting. [DocumentDrafts] drops settled entries
      * so a document the user merely visited never counts as one with unsaved changes.
      */
     val settled: Boolean get() = !dirty && !saving && error == null
-    val validDate: Boolean get() = isWritableDate(properties[DocProperty.DOC_DATE])
+    val validDate: Boolean get() = !fields.containsKey(FieldKeys.DOC_DATE) || isWritableDate(fields[FieldKeys.DOC_DATE])
 
+    /** The item as it will read once saved: draft values over persisted ones, cleared keys absent. */
     fun overlay(item: DocListItem): DocListItem {
-        fun value(
-            property: DocProperty,
-            persisted: String?,
-        ): String? = if (properties.containsKey(property)) properties[property] else persisted
-        return item.copy(
-            doc =
-                item.doc.copy(
-                    title = value(DocProperty.TITLE, item.doc.title),
-                    correspondent = value(DocProperty.CORRESPONDENT, item.doc.correspondent),
-                    docType = value(DocProperty.DOC_TYPE, item.doc.docType),
-                    docDate = value(DocProperty.DOC_DATE, item.doc.docDate),
-                    notes = value(DocProperty.NOTES, item.doc.notes),
-                ),
-            fields = (item.fields + fields).mapNotNull { (key, value) -> value?.let { key to it } }.toMap(),
-        )
+        val merged = LinkedHashMap(item.doc.fields)
+        for ((key, value) in fields) {
+            val normalized = value?.trim()?.ifEmpty { null }
+            if (normalized == null) merged.remove(key) else merged[key] = normalized
+        }
+        return item.copy(doc = item.doc.copy(fields = merged))
     }
 }
 
 /**
  * Library-scoped drafts survive route and preview changes. The host saves their serialized form
  * through rememberSaveable on Android. Writes use the app scope so leaving a screen cannot cancel
- * an explicitly requested save. Only edited properties are written, preserving concurrent edits.
+ * an explicitly requested save. Only edited fields are written, preserving concurrent edits.
  *
  * The draft map lives in Compose snapshot state, not a flow: a text field is fully controlled off
  * it, so a keystroke has to be visible to the very next composition. A [MutableStateFlow] round
@@ -131,28 +123,12 @@ internal class DocumentDrafts(
         )
 
     /**
-     * Record an edit to one of the document's own values. [persisted] is what the library already
-     * holds: an edit that lands back on it — typing and undoing, or picking the value that was
-     * already there — leaves no draft behind. That keeps the save bar and the resume banner
-     * reporting real changes only, and stops a save from publishing a journal event that changes
-     * nothing (the journal is append-only and syncs to every device, so no-op events are not free).
+     * Record an edit to one field. [persisted] is what the library already holds: an edit that
+     * lands back on it — typing and undoing, or picking the value that was already there — leaves
+     * no draft behind. That keeps the save bar and the resume banner reporting real changes only,
+     * and stops a save from publishing a journal event that changes nothing (the journal is
+     * append-only and syncs to every device, so no-op events are not free). A null [value] clears.
      */
-    fun property(
-        docId: String,
-        property: DocProperty,
-        value: String,
-        persisted: String?,
-    ) {
-        edit(docId) { draft ->
-            if (value.normalized() == persisted.normalized()) {
-                draft.copy(properties = draft.properties - property)
-            } else {
-                draft.copy(properties = draft.properties + (property to value))
-            }
-        }
-    }
-
-    /** Set (or, with a null [value], remove) a custom field. Same no-op rule as [property]. */
     fun field(
         docId: String,
         key: String,
@@ -169,16 +145,16 @@ internal class DocumentDrafts(
     }
 
     /**
-     * Drop a single property from the draft. Accepting an AI suggestion for a field means
-     * abandoning whatever the user typed there, so its draft entry must go — otherwise
-     * [DocumentDraft.overlay] would keep showing the typed value and a later save would overwrite
-     * the accepted suggestion with it. Routes through [edit] so the prune-when-settled rule holds.
+     * Drop a single field from the draft. Accepting an AI suggestion for a field means abandoning
+     * whatever the user typed there, so its draft entry must go — otherwise [DocumentDraft.overlay]
+     * would keep showing the typed value and a later save would overwrite the accepted suggestion
+     * with it. Routes through [edit] so the prune-when-settled rule holds.
      */
-    fun clearProperty(
+    fun clearField(
         docId: String,
-        property: DocProperty,
+        key: String,
     ) {
-        edit(docId) { it.copy(properties = it.properties - property) }
+        edit(docId) { it.copy(fields = it.fields - key) }
     }
 
     fun discard(docId: String) {
@@ -211,18 +187,18 @@ internal class DocumentDrafts(
     }
 
     /**
-     * Mark the save done, keeping only the property edits made *while* it ran — comparing against
+     * Mark the save done, keeping only the field edits made *while* it ran — comparing against
      * [written] rather than clearing the map wholesale is what stops a keystroke landing mid-save
      * from being swallowed.
      */
     private fun settle(
         docId: String,
-        written: Map<DocProperty, String?>,
+        written: Map<String, String?>,
     ) {
         mutate { all ->
             val latest = all.getValue(docId)
-            val unwritten = latest.properties.filter { (key, value) -> key !in written || written[key] != value }
-            all + (docId to latest.copy(properties = unwritten, saving = false, saved = true))
+            val unwritten = latest.fields.filter { (key, value) -> key !in written || written[key] != value }
+            all + (docId to latest.copy(fields = unwritten, saving = false, saved = true))
         }
     }
 
@@ -241,22 +217,11 @@ internal class DocumentDrafts(
             // mutableStateOf relies on it), so every touch of [drafts] hops to Main.
             val saved =
                 try {
-                    // Custom fields have individual setters. A failure retains the remaining draft;
-                    // the reviewed marker is deliberately last, after every field has succeeded.
-                    for ((key, value) in captured.fields) {
-                        writer.setField(docId, key, value)
-                        withContext(Dispatchers.Main) {
-                            mutate { all ->
-                                val latest = all.getValue(docId)
-                                val remaining = if (latest.fields[key] == value) latest.fields - key else latest.fields
-                                all + (docId to latest.copy(fields = remaining))
-                            }
-                        }
-                    }
-                    val reviewProperty = reviewed?.let { mapOf(DocProperty.REVIEWED to it.toString()) }.orEmpty()
-                    val properties = captured.properties + reviewProperty
-                    if (properties.isNotEmpty()) writer.applyEdits(listOf(docId), properties = properties)
-                    withContext(Dispatchers.Main) { settle(docId, captured.properties) }
+                    // Every edited field in one transaction: a failure retains the whole draft. The
+                    // reviewed marker is deliberately last, after the fields have succeeded.
+                    if (captured.fields.isNotEmpty()) writer.applyEdits(listOf(docId), fields = captured.fields)
+                    if (reviewed != null) writer.setReviewed(listOf(docId), reviewed)
+                    withContext(Dispatchers.Main) { settle(docId, captured.fields) }
                     true
                 } catch (cancelled: CancellationException) {
                     // Clear the saving flag even while cancelling, so the draft is not stuck.

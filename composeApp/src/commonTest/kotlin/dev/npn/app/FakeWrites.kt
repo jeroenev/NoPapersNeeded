@@ -3,7 +3,6 @@ package dev.npn.app
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.TagAdmin
-import dev.npn.core.model.DocProperty
 
 // Write-side test doubles, one per write facet. Each records its calls so tests can assert what
 // was invoked, and each `fail*` hook makes the matching op throw.
@@ -13,13 +12,10 @@ class FakeMetadataWriter : MetadataWriter {
     val addedTags = mutableListOf<Pair<List<String>, String>>()
     val removedTags = mutableListOf<Pair<List<String>, String>>()
     val reviewedSets = mutableListOf<Pair<List<String>, Boolean>>()
-    val titleSets = mutableListOf<Pair<String, String?>>()
-    val notesSets = mutableListOf<Pair<String, String?>>()
-    val correspondentSets = mutableListOf<Pair<List<String>, String?>>()
-    val docTypeSets = mutableListOf<Pair<List<String>, String?>>()
-    val docDateSets = mutableListOf<Pair<String, String?>>()
-    val fieldSets = mutableListOf<Triple<String, String, String?>>()
-    val batchedEdits = mutableListOf<Triple<List<String>, List<String>, Map<DocProperty, String?>>>()
+
+    /** Every setField call (both single- and multi-doc overloads) as (docIds, key, value). */
+    val fieldSets = mutableListOf<Triple<List<String>, String, String?>>()
+    val batchedEdits = mutableListOf<Triple<List<String>, List<String>, Map<String, String?>>>()
 
     /** If set, every batched op (addTag/removeTag/setReviewed/applyEdits) throws this. */
     var failBatchOps: (() -> Nothing)? = null
@@ -29,9 +25,6 @@ class FakeMetadataWriter : MetadataWriter {
 
     /** removeTag throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
     var failRemoveTagForDocs: Set<String> = emptySet()
-
-    /** If set, setTitle throws. */
-    var failSetTitle: (() -> Nothing)? = null
 
     /** If set, setField throws. */
     var failSetField: (() -> Nothing)? = null
@@ -62,58 +55,31 @@ class FakeMetadataWriter : MetadataWriter {
         reviewedSets += docIds to reviewed
     }
 
-    override suspend fun setCorrespondent(
-        docIds: List<String>,
-        value: String?,
-    ) {
-        correspondentSets += docIds to value
-    }
-
-    override suspend fun setDocType(
-        docIds: List<String>,
-        value: String?,
-    ) {
-        docTypeSets += docIds to value
-    }
-
-    override suspend fun setDocDate(
-        docId: String,
-        isoDate: String?,
-    ) {
-        docDateSets += docId to isoDate
-    }
-
-    override suspend fun setTitle(
-        docId: String,
-        title: String?,
-    ) {
-        failSetTitle?.invoke()
-        titleSets += docId to title
-    }
-
-    override suspend fun setNotes(
-        docId: String,
-        notes: String?,
-    ) {
-        notesSets += docId to notes
-    }
-
     override suspend fun setField(
         docId: String,
         key: String,
         value: String?,
     ) {
         failSetField?.invoke()
-        fieldSets += Triple(docId, key, value)
+        fieldSets += Triple(listOf(docId), key, value)
+    }
+
+    override suspend fun setField(
+        docIds: List<String>,
+        key: String,
+        value: String?,
+    ) {
+        failSetField?.invoke()
+        fieldSets += Triple(docIds, key, value)
     }
 
     override suspend fun applyEdits(
         docIds: List<String>,
         addTags: List<String>,
-        properties: Map<DocProperty, String?>,
+        fields: Map<String, String?>,
     ) {
         failBatchOps?.invoke()
-        batchedEdits += Triple(docIds, addTags, properties)
+        batchedEdits += Triple(docIds, addTags, fields)
     }
 }
 

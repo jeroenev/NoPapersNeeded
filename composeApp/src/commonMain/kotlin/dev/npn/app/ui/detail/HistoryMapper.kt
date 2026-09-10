@@ -4,7 +4,8 @@ import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.SystemProperty
 
 /**
  * UI-facing kind of a document history event. Kept separate from the icon choice so tests can
@@ -185,18 +186,20 @@ object HistoryMapper {
 
             is JournalOp.PropSet -> {
                 when (op.key) {
-                    DocProperty.TITLE -> HistoryEventKind.PROP_TITLE
-                    DocProperty.NOTES -> HistoryEventKind.PROP_NOTES
-                    DocProperty.CORRESPONDENT -> HistoryEventKind.PROP_CORRESPONDENT
-                    DocProperty.DOC_TYPE -> HistoryEventKind.PROP_DOC_TYPE
-                    DocProperty.DOC_DATE -> HistoryEventKind.PROP_DOC_DATE
-                    DocProperty.REVIEWED -> HistoryEventKind.PROP_REVIEWED
-                    DocProperty.OCR_ENGINE -> HistoryEventKind.PROP_OCR_ENGINE
+                    SystemProperty.REVIEWED -> HistoryEventKind.PROP_REVIEWED
+                    SystemProperty.OCR_ENGINE -> HistoryEventKind.PROP_OCR_ENGINE
                 }
             }
 
             is JournalOp.FieldSet -> {
-                if (op.value == null) HistoryEventKind.FIELD_REMOVE else HistoryEventKind.FIELD_SET
+                when (op.key) {
+                    FieldKeys.TITLE -> HistoryEventKind.PROP_TITLE
+                    FieldKeys.NOTES -> HistoryEventKind.PROP_NOTES
+                    FieldKeys.CORRESPONDENT -> HistoryEventKind.PROP_CORRESPONDENT
+                    FieldKeys.DOC_TYPE -> HistoryEventKind.PROP_DOC_TYPE
+                    FieldKeys.DOC_DATE -> HistoryEventKind.PROP_DOC_DATE
+                    else -> if (op.value == null) HistoryEventKind.FIELD_REMOVE else HistoryEventKind.FIELD_SET
+                }
             }
 
             is JournalOp.DocTrash -> {
@@ -221,51 +224,11 @@ object HistoryMapper {
         }
 
     private fun propDescription(
-        key: DocProperty,
+        key: SystemProperty,
         value: String?,
     ): HistoryDescription =
         when (key) {
-            DocProperty.TITLE -> {
-                if (value == null) {
-                    historyText(HistoryTextKey.TITLE_CLEARED)
-                } else {
-                    historyText(HistoryTextKey.TITLE_CHANGED, value)
-                }
-            }
-
-            DocProperty.NOTES -> {
-                if (value == null) {
-                    historyText(HistoryTextKey.NOTE_CLEARED)
-                } else {
-                    historyText(HistoryTextKey.NOTE_UPDATED)
-                }
-            }
-
-            DocProperty.CORRESPONDENT -> {
-                if (value == null) {
-                    historyText(HistoryTextKey.CORRESPONDENT_CLEARED)
-                } else {
-                    historyText(HistoryTextKey.CORRESPONDENT_CHANGED, value)
-                }
-            }
-
-            DocProperty.DOC_TYPE -> {
-                if (value == null) {
-                    historyText(HistoryTextKey.DOCUMENT_TYPE_CLEARED)
-                } else {
-                    historyText(HistoryTextKey.DOCUMENT_TYPE_CHANGED, value)
-                }
-            }
-
-            DocProperty.DOC_DATE -> {
-                if (value == null) {
-                    historyText(HistoryTextKey.DOCUMENT_DATE_CLEARED)
-                } else {
-                    historyText(HistoryTextKey.DOCUMENT_DATE_CHANGED, value)
-                }
-            }
-
-            DocProperty.REVIEWED -> {
+            SystemProperty.REVIEWED -> {
                 when (value) {
                     "true" -> historyText(HistoryTextKey.MARKED_REVIEWED)
                     "false" -> historyText(HistoryTextKey.MARKED_NEEDS_REVIEW)
@@ -274,7 +237,7 @@ object HistoryMapper {
                 }
             }
 
-            DocProperty.OCR_ENGINE -> {
+            SystemProperty.OCR_ENGINE -> {
                 if (value == null) {
                     historyText(HistoryTextKey.OCR_ENGINE_CLEARED)
                 } else {
@@ -283,15 +246,54 @@ object HistoryMapper {
             }
         }
 
+    /** Well-known fields keep their dedicated wording; every other field reads `key: value`. */
     private fun fieldDescription(
         key: String,
         value: String?,
     ): HistoryDescription =
-        if (value == null) {
-            historyText(HistoryTextKey.FIELD_REMOVED, key)
-        } else {
-            historyText(HistoryTextKey.FIELD_SET, key, value)
+        when (key) {
+            FieldKeys.TITLE -> {
+                clearedOrChanged(value, HistoryTextKey.TITLE_CLEARED, HistoryTextKey.TITLE_CHANGED)
+            }
+
+            FieldKeys.NOTES -> {
+                if (value ==
+                    null
+                ) {
+                    historyText(HistoryTextKey.NOTE_CLEARED)
+                } else {
+                    historyText(HistoryTextKey.NOTE_UPDATED)
+                }
+            }
+
+            FieldKeys.CORRESPONDENT -> {
+                clearedOrChanged(value, HistoryTextKey.CORRESPONDENT_CLEARED, HistoryTextKey.CORRESPONDENT_CHANGED)
+            }
+
+            FieldKeys.DOC_TYPE -> {
+                clearedOrChanged(value, HistoryTextKey.DOCUMENT_TYPE_CLEARED, HistoryTextKey.DOCUMENT_TYPE_CHANGED)
+            }
+
+            FieldKeys.DOC_DATE -> {
+                clearedOrChanged(value, HistoryTextKey.DOCUMENT_DATE_CLEARED, HistoryTextKey.DOCUMENT_DATE_CHANGED)
+            }
+
+            else -> {
+                if (value ==
+                    null
+                ) {
+                    historyText(HistoryTextKey.FIELD_REMOVED, key)
+                } else {
+                    historyText(HistoryTextKey.FIELD_SET, key, value)
+                }
+            }
         }
+
+    private fun clearedOrChanged(
+        value: String?,
+        cleared: HistoryTextKey,
+        changed: HistoryTextKey,
+    ): HistoryDescription = if (value == null) historyText(cleared) else historyText(changed, value)
 
     private fun shortId(id: String): String = if (id.length > 8) "${id.take(8)}..." else id
 }

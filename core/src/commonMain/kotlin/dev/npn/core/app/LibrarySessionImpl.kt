@@ -36,10 +36,10 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
-import dev.npn.core.model.DocProperty
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
+import dev.npn.core.model.SystemProperty
 import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngineSelector
@@ -185,7 +185,7 @@ class LibrarySessionImpl private constructor(
             }
         val ops =
             targets.map {
-                PendingOp.propSet(it.docId, dev.npn.core.model.DocProperty.REVIEWED, "true")
+                PendingOp.propSet(it.docId, SystemProperty.REVIEWED, "true")
             }
         if (ops.isNotEmpty()) coordinator.commitAndApply(ops)
     }
@@ -375,13 +375,15 @@ class LibrarySessionImpl private constructor(
                 .tagsForDocs(listOf(docId))
                 .map { it.tag }
                 .distinct()
-        val properties =
-            buildMap {
-                doc.correspondent?.let { put(DocProperty.CORRESPONDENT, it) }
-                doc.docType?.let { put(DocProperty.DOC_TYPE, it) }
-                doc.docDate?.let { put(DocProperty.DOC_DATE, it) }
-            }
-        writer.applyEdits(partIds, addTags = tags, properties = properties)
+        // Every field carries onto the parts except the ones that describe the whole document
+        // (title, notes): a part is not "the" invoice, and its notes would be misleading.
+        val fields =
+            db
+                .documentFieldDao()
+                .fieldsForDocs(listOf(docId))
+                .filter { it.fieldKey !in FieldKeys.NOT_INHERITED_ON_SPLIT }
+                .associate<_, String, String?> { it.fieldKey to it.fieldValue }
+        writer.applyEdits(partIds, addTags = tags, fields = fields)
     }
 
     override fun start(scope: CoroutineScope) {
@@ -674,6 +676,7 @@ class LibrarySessionImpl private constructor(
                     ftsDao = db.ftsDao(),
                     ocrQueueDao = db.ocrQueueDao(),
                     tagDao = db.tagDao(),
+                    fieldDao = db.documentFieldDao(),
                     deviceId = effectiveDeviceId,
                     config = OcrConfig(lang = deps.ocrLanguage()),
                     ftsWriteGate = ftsWriteGate,

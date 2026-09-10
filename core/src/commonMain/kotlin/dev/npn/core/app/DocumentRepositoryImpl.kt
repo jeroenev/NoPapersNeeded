@@ -7,6 +7,7 @@ import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.Dispatchers
@@ -22,22 +23,22 @@ import kotlinx.coroutines.flow.mapLatest
  * Every read in [DocumentRepositoryImpl] goes through here, which is what keeps a `documents`
  * column change confined to this file. Stringly-typed columns are decoded to their closed
  * vocabularies ([OcrState], [OcrEngineRef]) and the display-title fallback is resolved once.
+ *
+ * [fields] are the document's `document_fields` rows when the caller loaded them. The well-known
+ * five are always present from the row's cache columns, so a read that skips the field join
+ * (trash, missing) still shows titles rather than file names.
  */
-internal fun DocumentEntity.toDoc(): Doc =
+internal fun DocumentEntity.toDoc(fields: Map<String, String> = emptyMap()): Doc =
     Doc(
         docId = docId,
         relPath = relPath,
         fileName = fileName,
         displayTitle = displayTitleOf(title, fileName),
-        title = title,
         size = size,
         pageCount = pageCount,
         addedAt = addedAt,
         reviewed = reviewed,
-        correspondent = correspondent,
-        docType = docType,
-        docDate = docDate,
-        notes = notes,
+        fields = cachedFields() + fields,
         trashed = trashed,
         trashedOrigPath = trashedOrigPath,
         missing = missing,
@@ -45,6 +46,16 @@ internal fun DocumentEntity.toDoc(): Doc =
         ocrEngine = OcrEngineRef.ofColumn(ocrEngine),
         ocrEngineOverride = OcrEngineRef.ofColumn(ocrEngineOverride),
     )
+
+/** The well-known field values the row caches; see [DocumentEntity.correspondent]. */
+private fun DocumentEntity.cachedFields(): Map<String, String> =
+    buildMap {
+        title?.let { put(FieldKeys.TITLE, it) }
+        correspondent?.let { put(FieldKeys.CORRESPONDENT, it) }
+        docType?.let { put(FieldKeys.DOC_TYPE, it) }
+        docDate?.let { put(FieldKeys.DOC_DATE, it) }
+        notes?.let { put(FieldKeys.NOTES, it) }
+    }
 
 /**
  * Read side of the library, built on [NpnDatabase]. Filtering/sorting SQL is assembled here and
@@ -81,7 +92,7 @@ class DocumentRepositoryImpl(
                     val tagsByDoc = tagsFor(ids)
                     val fieldsByDoc = fieldsFor(ids)
                     docs.map {
-                        DocListItem(it.toDoc(), tagsByDoc[it.docId].orEmpty(), fields = fieldsByDoc[it.docId].orEmpty())
+                        DocListItem(it.toDoc(fieldsByDoc[it.docId].orEmpty()), tagsByDoc[it.docId].orEmpty())
                     }
                 } else {
                     // FTS-first: the base flow stays authoritative for the WHERE clause (all filter
@@ -100,10 +111,9 @@ class DocumentRepositoryImpl(
                         .sortedBy { order[it.docId] ?: Int.MAX_VALUE }
                         .map {
                             DocListItem(
-                                it.toDoc(),
+                                it.toDoc(fieldsByDoc[it.docId].orEmpty()),
                                 tagsByDoc[it.docId].orEmpty(),
                                 snippetById[it.docId],
-                                fieldsByDoc[it.docId].orEmpty(),
                             )
                         }
                 }
@@ -140,15 +150,12 @@ class DocumentRepositoryImpl(
             if (doc == null) {
                 null
             } else {
-                DocListItem(
-                    doc.toDoc(),
-                    tags,
-                    fields = fields.associate { it.fieldKey to it.fieldValue },
-                )
+                DocListItem(doc.toDoc(fields.associate { it.fieldKey to it.fieldValue }), tags)
             }
         }
 
-    override fun observeFieldKeys(): Flow<List<String>> = fieldDao.observeDistinctKeys()
+    override fun observeFieldKeys(): Flow<List<String>> =
+        fieldDao.observeDistinctKeys().map { keys -> keys.filter { it !in FieldKeys.WELL_KNOWN } }
 
     override suspend fun searchSuggestions(
         query: String,
@@ -161,7 +168,7 @@ class DocumentRepositoryImpl(
         val contentTerms =
             rows
                 .asSequence()
-                .flatMap { row -> sequenceOf(row.fileName, row.title, row.content).filterNotNull() }
+                .flatMap { row -> sequenceOf(row.fileName, row.fields, row.content).filterNotNull() }
                 .flatMap { TOKEN_REGEX.findAll(it).map(MatchResult::value) }
                 .filter { it.startsWith(prefix, ignoreCase = true) }
                 .distinctBy { it.lowercase() }

@@ -287,7 +287,7 @@ class OcrPipelineTest {
             pipe.processDoc(docId)
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
 
-            // Simulate the folded override (the Indexer projects DocProperty.OCR_ENGINE here).
+            // Simulate the folded override (the Indexer projects SystemProperty.OCR_ENGINE here).
             setOverride(docId, "tesseract")
             pipe.reselect(docId)
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
@@ -396,7 +396,7 @@ class OcrPipelineTest {
         OcrSidecarFiles(fs).writeOnce(docId, dev, OcrSidecarCodec.encode(sidecar))
     }
 
-    /** Simulate the journal fold projecting a DocProperty.OCR_ENGINE override onto the row. */
+    /** Simulate the journal fold projecting a SystemProperty.OCR_ENGINE override onto the row. */
     private suspend fun setOverride(
         docId: String,
         engine: String?,

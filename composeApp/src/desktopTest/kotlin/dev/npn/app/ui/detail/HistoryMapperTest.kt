@@ -4,7 +4,8 @@ import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
@@ -25,13 +26,13 @@ class HistoryMapperTest {
             listOf(
                 event(JournalOp.TagAdd("invoice")),
                 event(JournalOp.TagRemove("draft", emptyList())),
-                event(JournalOp.PropSet(DocProperty.TITLE, "New title")),
-                event(JournalOp.PropSet(DocProperty.NOTES, "Remember this")),
-                event(JournalOp.PropSet(DocProperty.CORRESPONDENT, "Acme")),
-                event(JournalOp.PropSet(DocProperty.DOC_TYPE, "Invoice")),
-                event(JournalOp.PropSet(DocProperty.DOC_DATE, "2026-07-20")),
-                event(JournalOp.PropSet(DocProperty.REVIEWED, "true")),
-                event(JournalOp.PropSet(DocProperty.OCR_ENGINE, "tesseract")),
+                event(JournalOp.FieldSet(FieldKeys.TITLE, "New title")),
+                event(JournalOp.FieldSet(FieldKeys.NOTES, "Remember this")),
+                event(JournalOp.FieldSet(FieldKeys.CORRESPONDENT, "Acme")),
+                event(JournalOp.FieldSet(FieldKeys.DOC_TYPE, "Invoice")),
+                event(JournalOp.FieldSet(FieldKeys.DOC_DATE, "2026-07-20")),
+                event(JournalOp.PropSet(SystemProperty.REVIEWED, "true")),
+                event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, "tesseract")),
                 event(JournalOp.FieldSet("amount", "42")),
                 event(JournalOp.FieldSet("amount", null)),
                 event(JournalOp.DocTrash("orig.pdf")),
@@ -102,9 +103,9 @@ class HistoryMapperTest {
     fun clearedPropertiesAndReviewedFalse() {
         val events =
             listOf(
-                event(JournalOp.PropSet(DocProperty.TITLE, null)),
-                event(JournalOp.PropSet(DocProperty.REVIEWED, "false")),
-                event(JournalOp.PropSet(DocProperty.OCR_ENGINE, null)),
+                event(JournalOp.FieldSet(FieldKeys.TITLE, null)),
+                event(JournalOp.PropSet(SystemProperty.REVIEWED, "false")),
+                event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, null)),
             )
         val items = HistoryMapper.toHistoryItems(events.map(::record))
         items.map { it.description } shouldContainExactly

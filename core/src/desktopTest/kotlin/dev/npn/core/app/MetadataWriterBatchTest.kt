@@ -1,6 +1,6 @@
 package dev.npn.core.app
 
-import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -34,11 +34,11 @@ class MetadataWriterBatchTest {
                     docIds = listOf(id),
                     // Blank and duplicate tags are dropped rather than committed.
                     addTags = listOf("invoice", "invoice", "  "),
-                    properties =
+                    fields =
                         mapOf(
-                            DocProperty.TITLE to "Annual report",
-                            DocProperty.CORRESPONDENT to "Acme",
-                            DocProperty.DOC_DATE to "2026-01-31",
+                            FieldKeys.TITLE to "Annual report",
+                            FieldKeys.CORRESPONDENT to "Acme",
+                            FieldKeys.DOC_DATE to "2026-01-31",
                         ),
                 )
 
@@ -80,7 +80,7 @@ class MetadataWriterBatchTest {
                 rig.session.meta.applyEdits(
                     docIds = listOf(a, b),
                     addTags = listOf("scan"),
-                    properties = mapOf(DocProperty.CORRESPONDENT to "Acme"),
+                    fields = mapOf(FieldKeys.CORRESPONDENT to "Acme"),
                 )
 
                 // One object for both documents, not one each.
@@ -118,10 +118,10 @@ class MetadataWriterBatchTest {
                 val id = rig.docId("a.pdf")
                 rig.session.meta.applyEdits(
                     listOf(id),
-                    properties = mapOf(DocProperty.TITLE to "Keep me", DocProperty.CORRESPONDENT to "Acme"),
+                    fields = mapOf(FieldKeys.TITLE to "Keep me", FieldKeys.CORRESPONDENT to "Acme"),
                 )
 
-                rig.session.meta.applyEdits(listOf(id), properties = mapOf(DocProperty.CORRESPONDENT to null))
+                rig.session.meta.applyEdits(listOf(id), fields = mapOf(FieldKeys.CORRESPONDENT to null))
 
                 val doc = rig.db.documentDao().getByDocId(id)!!
                 doc.title shouldBe "Keep me"
