@@ -88,19 +88,15 @@ private fun chipLabel(chip: ActiveFilterChip): String =
             stringResource(if (chip.reviewed) Res.string.common_reviewed else Res.string.common_needs_review)
         }
 
-        is ActiveFilterChip.Correspondent -> {
+        is ActiveFilterChip.FieldEquals -> {
             chip.value
         }
 
-        is ActiveFilterChip.DocType -> {
-            chip.value
-        }
-
-        is ActiveFilterChip.DocDateFrom -> {
+        is ActiveFilterChip.FieldFrom -> {
             stringResource(Res.string.library_date_from, chip.value)
         }
 
-        is ActiveFilterChip.DocDateTo -> {
+        is ActiveFilterChip.FieldTo -> {
             stringResource(Res.string.library_date_to, chip.value)
         }
 

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DatePickerField
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.TagInfo
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
@@ -216,10 +217,10 @@ private fun FilterFields(
 
     FilterFieldRow(stringResource(Res.string.library_correspondent_filter)) {
         EnumDropdown(
-            current = optionalFilterValue(draft.correspondent),
+            current = optionalFilterValue(draft.fieldEquals[FieldKeys.CORRESPONDENT]),
             options = optionalFilterOptions(correspondents),
             label = ::optionalFilterLabel,
-            onSelect = { onDraftChange(draft.copy(correspondent = it.valueOrNull())) },
+            onSelect = { onDraftChange(draft.withFieldEquals(FieldKeys.CORRESPONDENT, it.valueOrNull())) },
             searchLabel = stringResource(Res.string.library_search_correspondent),
             searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
         )
@@ -227,10 +228,10 @@ private fun FilterFields(
 
     FilterFieldRow(stringResource(Res.string.library_document_type_filter)) {
         EnumDropdown(
-            current = optionalFilterValue(draft.docType),
+            current = optionalFilterValue(draft.fieldEquals[FieldKeys.DOC_TYPE]),
             options = optionalFilterOptions(docTypes),
             label = ::optionalFilterLabel,
-            onSelect = { onDraftChange(draft.copy(docType = it.valueOrNull())) },
+            onSelect = { onDraftChange(draft.withFieldEquals(FieldKeys.DOC_TYPE, it.valueOrNull())) },
             searchLabel = stringResource(Res.string.library_search_document_type),
             searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
         )
@@ -242,15 +243,15 @@ private fun FilterFields(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         DatePickerField(
-            value = draft.docDateFrom,
+            value = draft.fieldRanges[FieldKeys.DOC_DATE]?.from,
             label = stringResource(Res.string.library_from),
-            onCommit = { onDraftChange(draft.copy(docDateFrom = it)) },
+            onCommit = { onDraftChange(draft.withFieldBounds(FieldKeys.DOC_DATE, from = it)) },
             modifier = Modifier.weight(1f),
         )
         DatePickerField(
-            value = draft.docDateTo,
+            value = draft.fieldRanges[FieldKeys.DOC_DATE]?.to,
             label = stringResource(Res.string.library_to),
-            onCommit = { onDraftChange(draft.copy(docDateTo = it)) },
+            onCommit = { onDraftChange(draft.withFieldBounds(FieldKeys.DOC_DATE, to = it)) },
             modifier = Modifier.weight(1f),
         )
     }

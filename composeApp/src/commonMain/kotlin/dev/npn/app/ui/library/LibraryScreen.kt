@@ -97,6 +97,7 @@ import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import io.github.vinceglb.filekit.dialogs.FileKitMode
 import io.github.vinceglb.filekit.dialogs.FileKitType
@@ -139,7 +140,6 @@ import no_papers_needed.composeapp.generated.resources.library_sort
 import no_papers_needed.composeapp.generated.resources.library_sort_added
 import no_papers_needed.composeapp.generated.resources.library_sort_ascending
 import no_papers_needed.composeapp.generated.resources.library_sort_descending
-import no_papers_needed.composeapp.generated.resources.library_sort_doc_date
 import no_papers_needed.composeapp.generated.resources.library_sort_name
 import no_papers_needed.composeapp.generated.resources.library_sort_size
 import no_papers_needed.composeapp.generated.resources.library_switch_view
@@ -437,6 +437,7 @@ private fun LibraryContent(
     onRemoveTag: () -> Unit,
 ) {
     val reviewCount by vm.needsReviewCount.collectAsStateWithLifecycle()
+    val sortableFields by vm.sortableFields.collectAsStateWithLifecycle()
     val queryText by vm.queryText.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
@@ -500,6 +501,7 @@ private fun LibraryContent(
                 LibraryTopBar(
                     viewType = ui.viewType,
                     sort = ui.sort,
+                    sortableFields = sortableFields,
                     extras = topBarExtras,
                     onOpenFilter = onOpenFilter,
                     onSetSort = vm::setSort,
@@ -760,6 +762,7 @@ private fun DocList(
 private fun LibraryTopBar(
     viewType: ViewType,
     sort: dev.npn.core.app.LibrarySort,
+    sortableFields: List<FieldDef>,
     extras: @Composable () -> Unit,
     onOpenFilter: () -> Unit,
     onSetSort: (SortField, Boolean) -> Unit,
@@ -771,7 +774,7 @@ private fun LibraryTopBar(
         actions = {
             extras()
             TooltipIconButton(Icons.Filled.FilterList, stringResource(Res.string.library_filters), onOpenFilter)
-            SortMenuButton(sort, onSetSort)
+            SortMenuButton(sort, sortableFields, onSetSort)
             var expanded by remember { mutableStateOf(false) }
             Box {
                 TooltipIconButton(
@@ -810,15 +813,20 @@ private fun LibraryTopBar(
 @Composable
 private fun SortMenuButton(
     sort: dev.npn.core.app.LibrarySort,
+    sortableFields: List<FieldDef>,
     onSetSort: (SortField, Boolean) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(false) }
+    // Document columns first, then every sortable registry field in registry order.
+    val options =
+        listOf(SortField.Name to null, SortField.Added to null, SortField.Size to null) +
+            sortableFields.map { SortField.Field(it.key) to it }
     Box {
         TooltipIconButton(Icons.AutoMirrored.Filled.Sort, stringResource(Res.string.library_sort), { expanded = true })
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            SortField.entries.forEach { field ->
+            options.forEach { (field, def) ->
                 DropdownMenuItem(
-                    text = { Text(sortLabel(field)) },
+                    text = { Text(def?.label ?: sortLabel(field)) },
                     leadingIcon = { RadioButton(selected = sort.field == field, onClick = null) },
                     onClick = {
                         onSetSort(field, sort.ascending)
@@ -1118,10 +1126,14 @@ private fun LibraryFab(
 @Composable
 private fun sortLabel(field: SortField): String =
     when (field) {
-        SortField.NAME -> stringResource(Res.string.library_sort_name)
-        SortField.ADDED -> stringResource(Res.string.library_sort_added)
-        SortField.DOC_DATE -> stringResource(Res.string.library_sort_doc_date)
-        SortField.SIZE -> stringResource(Res.string.library_sort_size)
+        SortField.Name -> stringResource(Res.string.library_sort_name)
+
+        SortField.Added -> stringResource(Res.string.library_sort_added)
+
+        SortField.Size -> stringResource(Res.string.library_sort_size)
+
+        // A field the registry no longer lists (e.g. a saved sort on a deleted field): show the key.
+        is SortField.Field -> field.key
     }
 
 @Composable

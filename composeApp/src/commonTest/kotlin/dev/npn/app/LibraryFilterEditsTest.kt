@@ -7,8 +7,11 @@ import dev.npn.app.ui.library.matchIncludedTags
 import dev.npn.app.ui.library.removeChip
 import dev.npn.app.ui.library.tagBucket
 import dev.npn.app.ui.library.withTag
+import dev.npn.core.app.FieldRange
 import dev.npn.core.app.LibraryFilter
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
@@ -102,10 +105,12 @@ class LibraryFilterEditsTest {
                 tagsAny = listOf("o1"),
                 tagsNone = listOf("n1"),
                 reviewed = true,
-                correspondent = "ACME",
-                docType = "invoice",
-                docDateFrom = "2024-01-01",
-                docDateTo = "2024-12-31",
+                fieldEquals =
+                    mapOf(
+                        FieldKeys.CORRESPONDENT to "ACME",
+                        FieldKeys.DOC_TYPE to "invoice",
+                    ),
+                fieldRanges = mapOf(FieldKeys.DOC_DATE to FieldRange("2024-01-01", "2024-12-31")),
                 untaggedOnly = true,
                 unreviewedOrUntagged = true,
             )
@@ -117,10 +122,10 @@ class LibraryFilterEditsTest {
                 ActiveFilterChip.TagAny("o1"),
                 ActiveFilterChip.TagNone("n1"),
                 ActiveFilterChip.Reviewed(true),
-                ActiveFilterChip.Correspondent("ACME"),
-                ActiveFilterChip.DocType("invoice"),
-                ActiveFilterChip.DocDateFrom("2024-01-01"),
-                ActiveFilterChip.DocDateTo("2024-12-31"),
+                ActiveFilterChip.FieldEquals(FieldKeys.CORRESPONDENT, "ACME"),
+                ActiveFilterChip.FieldEquals(FieldKeys.DOC_TYPE, "invoice"),
+                ActiveFilterChip.FieldFrom(FieldKeys.DOC_DATE, "2024-01-01"),
+                ActiveFilterChip.FieldTo(FieldKeys.DOC_DATE, "2024-12-31"),
                 ActiveFilterChip.UntaggedOnly,
                 ActiveFilterChip.ReviewQueue,
             )
@@ -144,8 +149,11 @@ class LibraryFilterEditsTest {
 
     @Test
     fun onlyActiveFacetsProduceChips() {
-        LibraryFilter(correspondent = "ACME", untaggedOnly = true).activeChips() shouldContainExactly
-            listOf(ActiveFilterChip.Correspondent("ACME"), ActiveFilterChip.UntaggedOnly)
+        LibraryFilter(
+            fieldEquals = mapOf(FieldKeys.CORRESPONDENT to "ACME"),
+            untaggedOnly = true,
+        ).activeChips() shouldContainExactly
+            listOf(ActiveFilterChip.FieldEquals(FieldKeys.CORRESPONDENT, "ACME"), ActiveFilterChip.UntaggedOnly)
     }
 
     @Test
@@ -163,19 +171,33 @@ class LibraryFilterEditsTest {
             LibraryFilter(
                 tagsAny = listOf("t"),
                 reviewed = true,
-                correspondent = "ACME",
-                docType = "invoice",
-                docDateFrom = "2024-01-01",
-                docDateTo = "2024-12-31",
+                fieldEquals =
+                    mapOf(
+                        FieldKeys.CORRESPONDENT to "ACME",
+                        FieldKeys.DOC_TYPE to "invoice",
+                    ),
+                fieldRanges = mapOf(FieldKeys.DOC_DATE to FieldRange("2024-01-01", "2024-12-31")),
                 untaggedOnly = true,
                 unreviewedOrUntagged = true,
             )
         full.removeChip(ActiveFilterChip.TagAny("t")).tagsAny shouldBe emptyList()
         full.removeChip(ActiveFilterChip.Reviewed(true)).reviewed shouldBe null
-        full.removeChip(ActiveFilterChip.Correspondent("ACME")).correspondent shouldBe null
-        full.removeChip(ActiveFilterChip.DocType("invoice")).docType shouldBe null
-        full.removeChip(ActiveFilterChip.DocDateFrom("2024-01-01")).docDateFrom shouldBe null
-        full.removeChip(ActiveFilterChip.DocDateTo("2024-12-31")).docDateTo shouldBe null
+        full
+            .removeChip(
+                ActiveFilterChip.FieldEquals(FieldKeys.CORRESPONDENT, "ACME"),
+            ).fieldEquals[FieldKeys.CORRESPONDENT]
+            .shouldBeNull()
+        full
+            .removeChip(ActiveFilterChip.FieldEquals(FieldKeys.DOC_TYPE, "invoice"))
+            .fieldEquals[FieldKeys.DOC_TYPE]
+            .shouldBeNull()
+        // Clearing the lower bound keeps the upper one on the same range.
+        full
+            .removeChip(ActiveFilterChip.FieldFrom(FieldKeys.DOC_DATE, "2024-01-01"))
+            .fieldRanges[FieldKeys.DOC_DATE] shouldBe FieldRange(from = null, to = "2024-12-31")
+        full
+            .removeChip(ActiveFilterChip.FieldTo(FieldKeys.DOC_DATE, "2024-12-31"))
+            .fieldRanges[FieldKeys.DOC_DATE] shouldBe FieldRange(from = "2024-01-01", to = null)
         full.removeChip(ActiveFilterChip.UntaggedOnly).untaggedOnly shouldBe false
         full.removeChip(ActiveFilterChip.ReviewQueue).unreviewedOrUntagged shouldBe false
     }
@@ -186,7 +208,7 @@ class LibraryFilterEditsTest {
             LibraryFilter(
                 tagsAll = listOf("a"),
                 reviewed = true,
-                correspondent = "ACME",
+                fieldEquals = mapOf(FieldKeys.CORRESPONDENT to "ACME"),
                 untaggedOnly = true,
             )
         val afterReviewed = full.removeChip(ActiveFilterChip.Reviewed(true))
@@ -203,10 +225,12 @@ class LibraryFilterEditsTest {
                 tagsAny = listOf("o"),
                 tagsNone = listOf("n"),
                 reviewed = true,
-                correspondent = "ACME",
-                docType = "invoice",
-                docDateFrom = "2024-01-01",
-                docDateTo = "2024-12-31",
+                fieldEquals =
+                    mapOf(
+                        FieldKeys.CORRESPONDENT to "ACME",
+                        FieldKeys.DOC_TYPE to "invoice",
+                    ),
+                fieldRanges = mapOf(FieldKeys.DOC_DATE to FieldRange("2024-01-01", "2024-12-31")),
                 untaggedOnly = true,
                 unreviewedOrUntagged = true,
             )

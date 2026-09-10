@@ -11,6 +11,7 @@ import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.StorageV2Reader
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
@@ -174,12 +175,14 @@ class MetadataWriterTest {
                 doc.correspondent shouldBe "ACME"
                 doc.docType shouldBe "Invoice"
 
-                rig.session.documents
-                    .observeCorrespondents()
-                    .first() shouldContain "ACME"
-                rig.session.documents
-                    .observeDocTypes()
-                    .first() shouldContain "Invoice"
+                // Vocabulary now comes from the field registry's distinct values, not the
+                // removed observeCorrespondents()/observeDocTypes() repository accessors.
+                rig.session.fieldRegistry
+                    .distinctValues(FieldKeys.CORRESPONDENT)
+                    .first { it.isNotEmpty() } shouldContain "ACME"
+                rig.session.fieldRegistry
+                    .distinctValues(FieldKeys.DOC_TYPE)
+                    .first { it.isNotEmpty() } shouldContain "Invoice"
             } finally {
                 rig.close()
             }

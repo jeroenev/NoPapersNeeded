@@ -21,6 +21,7 @@ import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
+import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.MaintenanceFacade
 import dev.npn.core.app.MetadataWriter
@@ -124,6 +125,7 @@ class DocDetailViewModel(
     private val ocr: OcrFacade,
     private val maintenance: MaintenanceFacade,
     reviewConfig: ReviewConfigFacade,
+    fieldRegistry: FieldRegistry,
     searchQuery: String? = null,
     /**
      * The document row a caller already has in hand (the library list feeds its preview panel one).
@@ -150,6 +152,7 @@ class DocDetailViewModel(
         ocr = session.ocr,
         maintenance = session.maintenance,
         reviewConfig = session.reviewConfig,
+        fieldRegistry = session.fieldRegistry,
         searchQuery = searchQuery,
         initialItem = initialItem,
     )
@@ -179,13 +182,13 @@ class DocDetailViewModel(
             .stateIn(viewModelScope, WhileSubscribedTimeout, StandardField.DEFAULT)
 
     private val correspondents: StateFlow<List<String>> =
-        documents
-            .observeCorrespondents()
+        fieldRegistry
+            .distinctValues(FieldKeys.CORRESPONDENT)
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     private val docTypes: StateFlow<List<String>> =
-        documents
-            .observeDocTypes()
+        fieldRegistry
+            .distinctValues(FieldKeys.DOC_TYPE)
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     private val tagColors: StateFlow<Map<String, String?>> =

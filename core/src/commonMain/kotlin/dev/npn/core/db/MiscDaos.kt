@@ -52,10 +52,11 @@ interface DocumentFieldDao {
     @Query("SELECT * FROM document_fields")
     suspend fun all(): List<DocumentFieldEntity>
 
-    /** Distinct values of one field across the library, for autocomplete and AI vocabulary. */
+    /** Distinct values of one field on live documents, for autocomplete and AI vocabulary. */
     @Query(
-        "SELECT DISTINCT fieldValue FROM document_fields WHERE fieldKey = :key " +
-            "ORDER BY fieldValue COLLATE NOCASE LIMIT :limit",
+        "SELECT DISTINCT f.fieldValue FROM document_fields f JOIN documents d ON d.docId = f.docId " +
+            "WHERE f.fieldKey = :key AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "ORDER BY f.fieldValue COLLATE NOCASE LIMIT :limit",
     )
     fun observeDistinctValues(
         key: String,
@@ -63,22 +64,25 @@ interface DocumentFieldDao {
     ): Flow<List<String>>
 
     @Query(
-        "SELECT DISTINCT fieldValue FROM document_fields WHERE fieldKey = :key " +
-            "ORDER BY fieldValue COLLATE NOCASE LIMIT :limit",
+        "SELECT DISTINCT f.fieldValue FROM document_fields f JOIN documents d ON d.docId = f.docId " +
+            "WHERE f.fieldKey = :key AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "ORDER BY f.fieldValue COLLATE NOCASE LIMIT :limit",
     )
     suspend fun distinctValues(
         key: String,
         limit: Int,
     ): List<String>
 
-    /** Distinct values of one field starting with [prefix], case-insensitive. */
+    /** Distinct values of one field on live documents starting with [likePrefix] (LIKE-escaped, `\`). */
     @Query(
-        "SELECT DISTINCT fieldValue FROM document_fields WHERE fieldKey = :key " +
-            "AND fieldValue LIKE :prefix || '%' ORDER BY fieldValue COLLATE NOCASE LIMIT :limit",
+        "SELECT DISTINCT f.fieldValue FROM document_fields f JOIN documents d ON d.docId = f.docId " +
+            "WHERE f.fieldKey = :key AND f.fieldValue LIKE :likePrefix ESCAPE '\\' " +
+            "AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "ORDER BY f.fieldValue COLLATE NOCASE LIMIT :limit",
     )
     suspend fun valuesForPrefix(
         key: String,
-        prefix: String,
+        likePrefix: String,
         limit: Int,
     ): List<String>
 

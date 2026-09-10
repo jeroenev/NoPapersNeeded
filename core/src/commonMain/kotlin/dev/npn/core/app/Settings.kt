@@ -167,7 +167,9 @@ object SettingsCodec {
                 defaultViewType = enumOr(reader.string(SettingsKeys.DEFAULT_VIEW_TYPE), DEFAULTS.defaultViewType),
                 librarySort =
                     LibrarySort(
-                        field = enumOr(reader.string(SettingsKeys.LIBRARY_SORT_FIELD), DEFAULTS.librarySort.field),
+                        field =
+                            SortField.fromWire(reader.string(SettingsKeys.LIBRARY_SORT_FIELD))
+                                ?: DEFAULTS.librarySort.field,
                         ascending =
                             reader.boolean(SettingsKeys.LIBRARY_SORT_ASCENDING) ?: DEFAULTS.librarySort.ascending,
                     ),
@@ -218,7 +220,7 @@ object SettingsCodec {
         writer.putString(SettingsKeys.OCR_LANGUAGE, s.ocrLanguage)
         writer.putInt(SettingsKeys.TRASH_RETENTION_DAYS, s.trashRetentionDays)
         writer.putString(SettingsKeys.DEFAULT_VIEW_TYPE, s.defaultViewType.name)
-        writer.putString(SettingsKeys.LIBRARY_SORT_FIELD, s.librarySort.field.name)
+        writer.putString(SettingsKeys.LIBRARY_SORT_FIELD, s.librarySort.field.wire)
         writer.putBoolean(SettingsKeys.LIBRARY_SORT_ASCENDING, s.librarySort.ascending)
         writer.putInt(SettingsKeys.GRID_COLUMN_WIDTH, s.gridColumnWidth)
         writer.putBoolean(SettingsKeys.LANDSCAPE_LIST_COLUMNS, s.landscapeListColumns)

@@ -373,8 +373,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.singleDoc.value = DocListItem(doc("doc-1", reviewed = true), listOf("finance"))
-                    documents.correspondents.value = listOf("ACME")
-                    documents.docTypes.value = listOf("invoice")
+                    fieldRegistry.values.value =
+                        mapOf(FieldKeys.CORRESPONDENT to listOf("ACME"), FieldKeys.DOC_TYPE to listOf("invoice"))
                     documents.fieldKeys.value = listOf("amount")
                     tags.tags.value = listOf(TagInfo("finance", "#ff0000", null, 1))
                     reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW

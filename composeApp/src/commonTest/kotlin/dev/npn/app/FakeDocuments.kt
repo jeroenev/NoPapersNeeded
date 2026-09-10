@@ -75,8 +75,6 @@ class FakeDocumentRepository : DocumentRepository {
     val trashed = MutableStateFlow<List<DocListItem>>(emptyList())
     val missing = MutableStateFlow<List<Doc>>(emptyList())
     val duplicates = MutableStateFlow<List<Pair<String, String>>>(emptyList())
-    val correspondents = MutableStateFlow<List<String>>(emptyList())
-    val docTypes = MutableStateFlow<List<String>>(emptyList())
 
     /** Records every (filter, sort) the view model subscribed with. */
     val observedFilters = mutableListOf<Pair<LibraryFilter, LibrarySort>>()
@@ -105,10 +103,6 @@ class FakeDocumentRepository : DocumentRepository {
 
     /** Backing list returned by [history]; tests mutate it to drive the history panel. */
     var historyList: List<DocumentHistoryRecord> = emptyList()
-
-    override fun observeCorrespondents(): Flow<List<String>> = correspondents
-
-    override fun observeDocTypes(): Flow<List<String>> = docTypes
 
     override fun observeFieldKeys(): Flow<List<String>> = fieldKeys
 

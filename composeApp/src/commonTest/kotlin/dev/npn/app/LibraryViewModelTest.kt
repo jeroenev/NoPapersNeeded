@@ -9,6 +9,7 @@ import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -376,7 +377,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
     fun clearFilterResetsFilterAndQuery() =
         runTest(dispatcher) {
             val model = vm()
-            model.setFilter(LibraryFilter(query = "x", docType = "letter"))
+            model.setFilter(LibraryFilter(query = "x", fieldEquals = mapOf(FieldKeys.DOC_TYPE to "letter")))
             model.clearFilter()
             model.ui.value.filter shouldBe LibraryFilter()
             model.queryText.value shouldBe ""
@@ -391,7 +392,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
                 SavedView(
                     id = "v1",
                     name = "Taxes",
-                    filter = LibraryFilter(query = "tax", docType = "form"),
+                    filter = LibraryFilter(query = "tax", fieldEquals = mapOf(FieldKeys.DOC_TYPE to "form")),
                     viewType = ViewType.GRID,
                 )
             model.applySavedView(view)
@@ -408,8 +409,8 @@ class LibraryViewModelTest : MainDispatcherTest() {
     fun setSortUpdatesState() =
         runTest(dispatcher) {
             val model = vm()
-            model.setSort(SortField.NAME, ascending = true)
-            model.ui.value.sort.field shouldBe SortField.NAME
+            model.setSort(SortField.Name, ascending = true)
+            model.ui.value.sort.field shouldBe SortField.Name
             model.ui.value.sort.ascending shouldBe true
         }
 
@@ -418,9 +419,9 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
-            model.setSort(SortField.SIZE, ascending = true)
+            model.setSort(SortField.Size, ascending = true)
             advanceUntilIdle()
-            settings.settingsFlow.value?.librarySort shouldBe LibrarySort(SortField.SIZE, ascending = true)
+            settings.settingsFlow.value?.librarySort shouldBe LibrarySort(SortField.Size, ascending = true)
         }
 
     @Test
@@ -428,11 +429,11 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings =
                 FakeSettingsRepository().apply {
-                    updateSettings { it.copy(librarySort = LibrarySort(SortField.NAME, ascending = true)) }
+                    updateSettings { it.copy(librarySort = LibrarySort(SortField.Name, ascending = true)) }
                 }
             val model = vm(settings = settings)
             advanceUntilIdle()
-            model.ui.value.sort shouldBe LibrarySort(SortField.NAME, ascending = true)
+            model.ui.value.sort shouldBe LibrarySort(SortField.Name, ascending = true)
         }
 
     @Test
@@ -440,13 +441,13 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings =
                 FakeSettingsRepository().apply {
-                    updateSettings { it.copy(librarySort = LibrarySort(SortField.NAME, ascending = true)) }
+                    updateSettings { it.copy(librarySort = LibrarySort(SortField.Name, ascending = true)) }
                 }
             val model = vm(settings = settings)
             // User sorts before the async seed runs.
-            model.setSort(SortField.SIZE, ascending = false)
+            model.setSort(SortField.Size, ascending = false)
             advanceUntilIdle()
-            model.ui.value.sort shouldBe LibrarySort(SortField.SIZE, ascending = false)
+            model.ui.value.sort shouldBe LibrarySort(SortField.Size, ascending = false)
         }
 
     @Test
@@ -464,14 +465,14 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            model.setFilter(LibraryFilter(query = "tax", docType = "form"))
-            model.setSort(SortField.NAME, ascending = true)
+            model.setFilter(LibraryFilter(query = "tax", fieldEquals = mapOf(FieldKeys.DOC_TYPE to "form")))
+            model.setSort(SortField.Name, ascending = true)
             model.saveCurrentView("Taxes")
             advanceUntilIdle()
             val saved = session.savedViews.saved.single()
             saved.name shouldBe "Taxes"
-            saved.filter shouldBe LibraryFilter(query = "tax", docType = "form")
-            saved.sort shouldBe LibrarySort(SortField.NAME, ascending = true)
+            saved.filter shouldBe LibraryFilter(query = "tax", fieldEquals = mapOf(FieldKeys.DOC_TYPE to "form"))
+            saved.sort shouldBe LibrarySort(SortField.Name, ascending = true)
         }
 
     @Test
@@ -573,10 +574,10 @@ class LibraryViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.documents.value?.query shouldBe LibraryQuery(LibraryFilter(), LibrarySort())
 
-            model.setSort(SortField.DOC_DATE, ascending = false)
+            model.setSort(SortField.Field(FieldKeys.DOC_DATE), ascending = false)
             advanceUntilIdle()
             model.documents.value?.query shouldBe
-                LibraryQuery(LibraryFilter(), LibrarySort(SortField.DOC_DATE, ascending = false))
+                LibraryQuery(LibraryFilter(), LibrarySort(SortField.Field(FieldKeys.DOC_DATE), ascending = false))
             job.cancel()
         }
 

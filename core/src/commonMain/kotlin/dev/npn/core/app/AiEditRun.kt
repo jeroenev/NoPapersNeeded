@@ -33,7 +33,8 @@ enum class EditScope { SELECTION, UNTAGGED, REVIEW_QUEUE, MISSING_FIELDS, SAVED_
 data class ScopeKey(
     val scope: EditScope,
     val savedView: SavedView?,
-    val missing: List<DocField>,
+    /** Field keys whose absence selects a document for the MISSING_FIELDS scope. */
+    val missing: List<String>,
     val batchSize: Int,
 )
 
@@ -210,7 +211,7 @@ class AiEditRun(
                 if (key.missing.isEmpty()) {
                     flowOf(emptyList())
                 } else {
-                    documents.observeDocuments(LibraryFilter(missingAny = key.missing), SORT)
+                    documents.observeDocuments(LibraryFilter(missingFields = key.missing), SORT)
                 }
             }
 

@@ -48,7 +48,9 @@ class FieldRegistryImpl(
         key: String,
         prefix: String,
         limit: Int,
-    ): List<String> = fieldDao.valuesForPrefix(key, prefix, limit)
+    ): List<String> = fieldDao.valuesForPrefix(key, escapeLike(prefix) + "%", limit)
+
+    private fun escapeLike(s: String): String = s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     override suspend fun current(): List<FieldDef> = defDao.all().mapNotNull { it.toFieldDef() }
 

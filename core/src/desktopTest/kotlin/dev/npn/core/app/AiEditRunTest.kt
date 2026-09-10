@@ -9,8 +9,7 @@ import dev.npn.core.ai.AiField
 import dev.npn.core.ai.FakeAiSuggest
 import dev.npn.core.ai.MetadataSuggestion
 import dev.npn.core.ai.TagSuggestion
-import dev.npn.core.db.DocumentEntity
-import dev.npn.core.model.SystemProperty
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -42,7 +41,7 @@ private val REQUEST = AiEditRequest()
 private fun key(
     scope: EditScope = EditScope.ALL,
     savedView: SavedView? = null,
-    missing: List<DocField> = emptyList(),
+    missing: List<String> = emptyList(),
     batchSize: Int = 50,
 ): ScopeKey = ScopeKey(scope, savedView, missing, batchSize)
 
@@ -504,7 +503,7 @@ class AiEditRunScopeTest {
                     id = "v1",
                     name = "Invoices",
                     filter = LibraryFilter(tagsAll = listOf("invoice")),
-                    sort = LibrarySort(SortField.NAME, ascending = true),
+                    sort = LibrarySort(SortField.Name, ascending = true),
                 )
 
             h.run.docsFor(key(scope = EditScope.SAVED_VIEW, savedView = view))
@@ -533,13 +532,13 @@ class AiEditRunScopeTest {
     fun missingFieldsScopeFiltersOnTheChosenFields() =
         runTest {
             val h = Harness()
-            val missing = listOf(DocField.CORRESPONDENT, DocField.DOC_DATE)
+            val missing = listOf(FieldKeys.CORRESPONDENT, FieldKeys.DOC_DATE)
 
             h.run.docsFor(key(scope = EditScope.MISSING_FIELDS, missing = missing))
 
             h.documents.observedFilters
                 .single()
-                .first.missingAny shouldContainExactly missing
+                .first.missingFields shouldContainExactly missing
         }
 
     @Test

@@ -8,6 +8,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.Dispatchers
@@ -174,13 +175,15 @@ class DocumentRepositoryImpl(
                 .distinctBy { it.lowercase() }
                 .take(sourceLimit)
                 .toList()
-        val sources =
-            listOf(
-                contentTerms,
-                db.tagDao().tagsForPrefix(likePrefix, sourceLimit),
-                documentDao.docTypesForPrefix(likePrefix, sourceLimit),
-                documentDao.correspondentsForPrefix(likePrefix, sourceLimit),
-            )
+        // Every single-line text field contributes its values: what correspondent and docType got
+        // by name before, any registered TEXT field gets now.
+        val textFields =
+            db
+                .fieldDefDao()
+                .all()
+                .filter { it.type == FieldType.TEXT.wire && it.fieldKey != FieldKeys.TITLE }
+                .map { fieldDao.valuesForPrefix(it.fieldKey, likePrefix, sourceLimit) }
+        val sources = listOf(contentTerms, db.tagDao().tagsForPrefix(likePrefix, sourceLimit)) + textFields
         return buildList {
             var index = 0
             while (size < limit && sources.any { index < it.size }) {
@@ -217,10 +220,6 @@ class DocumentRepositoryImpl(
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> =
         db.duplicateDao().observeAll().map { rows -> rows.map { it.docId to it.relPath } }
 
-    override fun observeCorrespondents(): Flow<List<String>> = documentDao.observeCorrespondents()
-
-    override fun observeDocTypes(): Flow<List<String>> = documentDao.observeDocTypes()
-
     override suspend fun history(docId: String): List<DocumentHistoryRecord> {
         val dao = db.metadataProjectionDao()
         return dao
@@ -245,8 +244,9 @@ class DocumentRepositoryImpl(
 
     /**
      * Build the filtered library query. Base predicate excludes trashed/deleted/missing.
-     * Tag AND/ANY/NONE are done with EXISTS subqueries; folder is a relPath LIKE prefix;
-     * untaggedOnly uses NOT EXISTS; missingAny becomes one OR-ed "field is null/blank" group.
+     * Tag AND/ANY/NONE and field equals/range are EXISTS subqueries on their join tables; folder
+     * is a relPath LIKE prefix; untaggedOnly uses NOT EXISTS; missingFields becomes one OR-ed
+     * "no field row" group.
      * Query text (FTS) is handled by the two-step above, so it is not
      * part of this SQL beyond the id constraint being applied in memory.
      */
@@ -255,16 +255,22 @@ class DocumentRepositoryImpl(
         sort: LibrarySort,
     ): RoomRawQuery {
         val parts = buildWhere(filter)
+        val join = sortJoinSql(sort)
         val sql =
             buildString {
-                append("SELECT d.* FROM documents d WHERE ")
+                append("SELECT d.* FROM documents d")
+                join?.let(::append)
+                append(" WHERE ")
                 append(parts.where.joinToString(" AND "))
                 append(" ORDER BY ")
                 append(orderBySql(sort))
             }
-
+        // The join's bind precedes every WHERE bind in the statement, so it is bound first.
+        val sortKey = (sort.field as? SortField.Field)?.key
         return RoomRawQuery(sql = sql, onBindStatement = { st ->
-            parts.binds.forEachIndexed { idx, bind -> bind(st, idx + 1) }
+            var index = 1
+            if (sortKey != null) st.bindText(index++, sortKey)
+            parts.binds.forEach { bind -> bind(st, index++) }
         })
     }
 
@@ -317,22 +323,7 @@ class DocumentRepositoryImpl(
             where.add("d.reviewed = ?")
             bindLong(if (it) 1L else 0L)
         }
-        filter.correspondent?.let {
-            where.add("d.correspondent = ?")
-            bindText(it)
-        }
-        filter.docType?.let {
-            where.add("d.docType = ?")
-            bindText(it)
-        }
-        filter.docDateFrom?.let {
-            where.add("d.docDate IS NOT NULL AND d.docDate >= ?")
-            bindText(it)
-        }
-        filter.docDateTo?.let {
-            where.add("d.docDate IS NOT NULL AND d.docDate <= ?")
-            bindText(it)
-        }
+        addFieldPredicates(filter, where, ::bindText)
         filter.addedFrom?.let {
             where.add("d.addedAt >= ?")
             bindLong(it)
@@ -346,36 +337,85 @@ class DocumentRepositoryImpl(
             where.add("d.relPath LIKE ? ESCAPE '\\'")
             bindText(escapeLike(prefix) + "%")
         }
-        if (filter.missingAny.isNotEmpty()) {
-            where.add(
-                filter.missingAny
-                    .distinct()
-                    .joinToString(separator = " OR ", prefix = "(", postfix = ")", transform = ::missingSql),
-            )
-        }
-
         return QueryParts(where, binds)
     }
 
-    /** "Field is absent" predicate: NULL and empty string are both treated as missing. */
-    private fun missingSql(field: DocField): String =
-        when (field) {
-            DocField.TITLE -> "(d.title IS NULL OR d.title = '')"
-            DocField.CORRESPONDENT -> "(d.correspondent IS NULL OR d.correspondent = '')"
-            DocField.DOC_DATE -> "(d.docDate IS NULL OR d.docDate = '')"
+    /**
+     * The `document_fields` predicates: equality, ranges and "missing". Each is an EXISTS on the
+     * field table keyed by docId, the same shape as the tag predicates above.
+     */
+    private fun addFieldPredicates(
+        filter: LibraryFilter,
+        where: MutableList<String>,
+        bindText: (String) -> Unit,
+    ) {
+        for ((key, value) in filter.fieldEquals) {
+            where.add(
+                "EXISTS (SELECT 1 FROM document_fields f WHERE f.docId = d.docId " +
+                    "AND f.fieldKey = ? AND f.fieldValue = ?)",
+            )
+            bindText(key)
+            bindText(value)
+        }
+        for ((key, range) in filter.fieldRanges) {
+            // A NUMBER/DECIMAL row carries numValue, so it compares numerically; every other row
+            // (dates, text, off-type values) compares on the canonical string, which for ISO dates
+            // is chronological.
+            val bounds = ArrayList<String>()
+            range.from?.let { bounds.add(boundSql(">=")) }
+            range.to?.let { bounds.add(boundSql("<=")) }
+            if (bounds.isEmpty()) continue
+            where.add(
+                "EXISTS (SELECT 1 FROM document_fields f WHERE f.docId = d.docId AND f.fieldKey = ? AND " +
+                    bounds.joinToString(" AND ") + ")",
+            )
+            bindText(key)
+            range.from?.let {
+                bindText(it)
+                bindText(it)
+            }
+            range.to?.let {
+                bindText(it)
+                bindText(it)
+            }
+        }
+        val missing = filter.missingFields.distinct()
+        if (missing.isNotEmpty()) {
+            // A cleared field has no row, so "missing" is exactly "no row".
+            where.add(
+                missing.joinToString(separator = " OR ", prefix = "(", postfix = ")") {
+                    "NOT EXISTS (SELECT 1 FROM document_fields f WHERE f.docId = d.docId AND f.fieldKey = ?)"
+                },
+            )
+            missing.forEach(bindText)
+        }
+    }
+
+    private fun boundSql(op: String): String =
+        "(CASE WHEN f.numValue IS NOT NULL THEN f.numValue $op CAST(? AS REAL) ELSE f.fieldValue $op ? END)"
+
+    /**
+     * A field sort joins its rows once per document. A LEFT JOIN, not a correlated subquery in
+     * ORDER BY: the (fieldKey, fieldValue)/(fieldKey, numValue) indices serve it, and documents
+     * without the field sort last in either direction.
+     */
+    private fun sortJoinSql(sort: LibrarySort): String? =
+        (sort.field as? SortField.Field)?.let {
+            " LEFT JOIN document_fields sf ON sf.docId = d.docId AND sf.fieldKey = ?"
         }
 
     private fun orderBySql(sort: LibrarySort): String {
         val dir = if (sort.ascending) "ASC" else "DESC"
         return when (sort.field) {
-            SortField.NAME -> "d.fileName COLLATE NOCASE $dir"
+            SortField.Name -> "d.fileName COLLATE NOCASE $dir"
 
-            SortField.ADDED -> "d.addedAt $dir"
+            SortField.Added -> "d.addedAt $dir"
 
-            // nulls last
-            SortField.DOC_DATE -> "d.docDate IS NULL, d.docDate $dir"
+            SortField.Size -> "d.size $dir"
 
-            SortField.SIZE -> "d.size $dir"
+            // Nulls last; numeric shadow decides for NUMBER/DECIMAL fields, the canonical string
+            // (chronological for dates) for everything else.
+            is SortField.Field -> "sf.fieldValue IS NULL, sf.numValue $dir, sf.fieldValue COLLATE NOCASE $dir"
         }
     }
 

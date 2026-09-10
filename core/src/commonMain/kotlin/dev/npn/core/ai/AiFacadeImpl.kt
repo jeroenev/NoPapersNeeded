@@ -6,6 +6,7 @@ import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
 import dev.npn.core.app.AiTagging
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.model.FieldKeys
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -149,7 +150,7 @@ class AiFacadeImpl(
         if (text == null && request.fields.isNotEmpty()) return AiEditSuggestion.EMPTY
         val currentTags = db.tagDao().tagsForDocument(docId)
         val vocabulary = db.tagDao().all().map { it.name }
-        val correspondents = db.documentDao().correspondents()
+        val correspondents = db.documentFieldDao().distinctValues(FieldKeys.CORRESPONDENT, VOCABULARY_LIMIT)
         val maxTags = (request.maxTags ?: config.maxTagsPerDoc).coerceIn(AiTagging.RANGE)
         val maxNew = (request.maxNewTags ?: config.maxNewTagsPerDoc).coerceIn(AiTagging.NEW_TAGS_RANGE)
         val thePrompt =
@@ -241,6 +242,9 @@ class AiFacadeImpl(
 
     private companion object {
         const val MAX_AGENT_ITERATIONS = 15
+
+        /** Upper bound on the existing values handed to the model as vocabulary for one field. */
+        const val VOCABULARY_LIMIT = 200
         const val CHAT_CONVERSATION_ID = "main"
         const val NEW_SESSION_TITLE = "New chat"
         const val MAX_SESSION_TITLE_CHARS = 60

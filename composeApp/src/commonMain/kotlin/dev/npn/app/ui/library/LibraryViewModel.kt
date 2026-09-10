@@ -13,6 +13,7 @@ import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
+import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryFilter
@@ -33,6 +34,9 @@ import dev.npn.core.app.ViewType
 import dev.npn.core.app.WorkFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
@@ -104,11 +108,13 @@ class LibraryViewModel(
     work: WorkFacade,
     private val reviewConfig: ReviewConfigFacade,
     private val settings: SettingsRepository,
+    fieldRegistry: FieldRegistry,
 ) : MessagesViewModel() {
     constructor(session: LibrarySession, settings: SettingsRepository) : this(
         documentRepository = session.documents,
         tagRepository = session.tags,
         savedViewRepository = session.savedViews,
+        fieldRegistry = session.fieldRegistry,
         meta = session.meta,
         docLifecycle = session.docLifecycle,
         ingest = session.ingest,
@@ -216,13 +222,19 @@ class LibraryViewModel(
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val correspondents: StateFlow<List<String>> =
-        documentRepository
-            .observeCorrespondents()
+        fieldRegistry
+            .distinctValues(FieldKeys.CORRESPONDENT)
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val docTypes: StateFlow<List<String>> =
-        documentRepository
-            .observeDocTypes()
+        fieldRegistry
+            .distinctValues(FieldKeys.DOC_TYPE)
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+
+    /** Registry fields the sort menu offers: everything but prose, which has no useful order. */
+    val sortableFields: StateFlow<List<FieldDef>> =
+        fieldRegistry.fields
+            .map { defs -> defs.filter { it.type != FieldType.LONG_TEXT } }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val reviewMode: StateFlow<ReviewMode> =

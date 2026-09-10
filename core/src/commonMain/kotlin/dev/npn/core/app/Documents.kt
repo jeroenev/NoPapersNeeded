@@ -99,16 +99,12 @@ interface DocumentRepository {
 
     fun observeDuplicates(): Flow<List<Pair<String, String>>> // docId to extra relPath
 
-    fun observeCorrespondents(): Flow<List<String>>
-
-    fun observeDocTypes(): Flow<List<String>>
-
     /** Distinct custom-field keys in use across the library, for add-field autocomplete. */
     fun observeFieldKeys(): Flow<List<String>>
 
     /**
      * Autocomplete suggestions for a partial search query. Combines terms from the FTS5
-     * vocabulary with tag/correspondent/docType values starting with the query prefix.
+     * vocabulary with tag values and every TEXT field's values starting with the query prefix.
      */
     suspend fun searchSuggestions(
         query: String,

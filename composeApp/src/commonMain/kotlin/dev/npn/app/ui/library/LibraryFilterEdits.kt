@@ -106,23 +106,21 @@ sealed interface ActiveFilterChip {
         val reviewed: Boolean,
     ) : ActiveFilterChip
 
-    /** A correspondent equality filter. */
-    data class Correspondent(
+    /** A field equality filter (`fieldEquals[key] == value`). */
+    data class FieldEquals(
+        val key: String,
         val value: String,
     ) : ActiveFilterChip
 
-    /** A document-type equality filter. */
-    data class DocType(
+    /** Lower bound of a field range, in the field's canonical form. */
+    data class FieldFrom(
+        val key: String,
         val value: String,
     ) : ActiveFilterChip
 
-    /** Lower bound of the document-date range (ISO yyyy-MM-dd). */
-    data class DocDateFrom(
-        val value: String,
-    ) : ActiveFilterChip
-
-    /** Upper bound of the document-date range (ISO yyyy-MM-dd). */
-    data class DocDateTo(
+    /** Upper bound of a field range, in the field's canonical form. */
+    data class FieldTo(
+        val key: String,
         val value: String,
     ) : ActiveFilterChip
 
@@ -138,7 +136,7 @@ sealed interface ActiveFilterChip {
  *
  * This is the single definition of WHICH facets surface as chips and IN WHAT ORDER — the document-set
  * restriction first (it scopes everything else), then tags (AND, then OR, then NOT, each in the
- * filter's own list order), then reviewed, correspondent, doc type, the date bounds, and finally the
+ * filter's own list order), then reviewed, field equalities, field range bounds, and finally the
  * two review-scope toggles. It re-uses [TagBucket] semantics so the chip list can never disagree
  * with what [withTag] produced. Empty facets contribute no chip, so an empty filter yields an empty
  * list.
@@ -150,10 +148,11 @@ fun LibraryFilter.activeChips(): List<ActiveFilterChip> =
         tagsAny.forEach { add(ActiveFilterChip.TagAny(it)) }
         tagsNone.forEach { add(ActiveFilterChip.TagNone(it)) }
         reviewed?.let { add(ActiveFilterChip.Reviewed(it)) }
-        correspondent?.let { add(ActiveFilterChip.Correspondent(it)) }
-        docType?.let { add(ActiveFilterChip.DocType(it)) }
-        docDateFrom?.let { add(ActiveFilterChip.DocDateFrom(it)) }
-        docDateTo?.let { add(ActiveFilterChip.DocDateTo(it)) }
+        fieldEquals.forEach { (key, value) -> add(ActiveFilterChip.FieldEquals(key, value)) }
+        fieldRanges.forEach { (key, range) ->
+            range.from?.let { add(ActiveFilterChip.FieldFrom(key, it)) }
+            range.to?.let { add(ActiveFilterChip.FieldTo(key, it)) }
+        }
         if (untaggedOnly) add(ActiveFilterChip.UntaggedOnly)
         if (unreviewedOrUntagged) add(ActiveFilterChip.ReviewQueue)
     }
@@ -173,10 +172,9 @@ fun LibraryFilter.removeChip(chip: ActiveFilterChip): LibraryFilter =
         is ActiveFilterChip.TagAny -> copy(tagsAny = tagsAny - chip.tag)
         is ActiveFilterChip.TagNone -> copy(tagsNone = tagsNone - chip.tag)
         is ActiveFilterChip.Reviewed -> copy(reviewed = null)
-        is ActiveFilterChip.Correspondent -> copy(correspondent = null)
-        is ActiveFilterChip.DocType -> copy(docType = null)
-        is ActiveFilterChip.DocDateFrom -> copy(docDateFrom = null)
-        is ActiveFilterChip.DocDateTo -> copy(docDateTo = null)
+        is ActiveFilterChip.FieldEquals -> withFieldEquals(chip.key, null)
+        is ActiveFilterChip.FieldFrom -> withFieldBounds(chip.key, from = null)
+        is ActiveFilterChip.FieldTo -> withFieldBounds(chip.key, to = null)
         ActiveFilterChip.UntaggedOnly -> copy(untaggedOnly = false)
         ActiveFilterChip.ReviewQueue -> copy(unreviewedOrUntagged = false)
     }

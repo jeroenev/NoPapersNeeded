@@ -84,10 +84,6 @@ internal class FakeDocuments : DocumentRepository {
 
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> = error("unused")
 
-    override fun observeCorrespondents(): Flow<List<String>> = error("unused")
-
-    override fun observeDocTypes(): Flow<List<String>> = error("unused")
-
     override fun observeFieldKeys(): Flow<List<String>> = error("unused")
 
     override suspend fun searchSuggestions(

@@ -334,6 +334,17 @@ class NpnDatabaseTest {
             db.documentDao().upsertAll(
                 listOf(doc(id, correspondent = "Invoice Corp", docType = "Invoice type")),
             )
+            // Field suggestions come from every registered TEXT field's rows, not the cache columns.
+            db.fieldDefDao().replaceAll(FieldKeys.seedDefinitions())
+            db.documentFieldDao().replaceForDocs(
+                mapOf(
+                    id to
+                        listOf(
+                            DocumentFieldEntity(id, FieldKeys.CORRESPONDENT, "Invoice Corp"),
+                            DocumentFieldEntity(id, FieldKeys.DOC_TYPE, "Invoice type"),
+                        ),
+                ),
+            )
             db.tagDao().upsert(TagEntity("Invoice tag"))
             db.ftsDao().replaceDocument(
                 FtsRows.row(
@@ -350,8 +361,9 @@ class NpnDatabaseTest {
                 listOf(
                     "Invoice",
                     "Invoice tag",
-                    "Invoice type",
+                    // Field sources interleave in registry order: correspondent before docType.
                     "Invoice Corp",
+                    "Invoice type",
                     "invoiced",
                 )
             DocumentRepositoryImpl(db).searchSuggestions("%_", 8) shouldBe emptyList()

@@ -1,6 +1,8 @@
 package dev.npn.core.app
 
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -123,7 +125,10 @@ class DocumentFilterTest {
                 ids(
                     repo
                         .observeDocuments(
-                            LibraryFilter(docDateFrom = "2026-03-01", docDateTo = "2026-12-31"),
+                            LibraryFilter(
+                                fieldRanges =
+                                    mapOf(FieldKeys.DOC_DATE to FieldRange("2026-03-01", "2026-12-31")),
+                            ),
                             LibrarySort(),
                         ).first(),
                 ).shouldContainExactly(listOf(b))
@@ -154,14 +159,14 @@ class DocumentFilterTest {
                 ids(
                     repo
                         .observeDocuments(
-                            LibraryFilter(missingAny = listOf(DocField.CORRESPONDENT)),
+                            LibraryFilter(missingFields = listOf(FieldKeys.CORRESPONDENT)),
                             LibrarySort(),
                         ).first(),
                 ).shouldContainExactlyInAnyOrder(listOf(b, c))
                 ids(
                     repo
                         .observeDocuments(
-                            LibraryFilter(missingAny = listOf(DocField.DOC_DATE)),
+                            LibraryFilter(missingFields = listOf(FieldKeys.DOC_DATE)),
                             LibrarySort(),
                         ).first(),
                 ).shouldContainExactly(listOf(c))
@@ -169,15 +174,153 @@ class DocumentFilterTest {
                 ids(
                     repo
                         .observeDocuments(
-                            LibraryFilter(missingAny = listOf(DocField.CORRESPONDENT, DocField.DOC_DATE)),
+                            LibraryFilter(missingFields = listOf(FieldKeys.CORRESPONDENT, FieldKeys.DOC_DATE)),
                             LibrarySort(),
                         ).first(),
                 ).shouldContainExactlyInAnyOrder(listOf(b, c))
                 // Combines (AND) with the rest of the filter.
                 repo
                     .observeCount(
-                        LibraryFilter(missingAny = listOf(DocField.CORRESPONDENT), untaggedOnly = true),
+                        LibraryFilter(missingFields = listOf(FieldKeys.CORRESPONDENT), untaggedOnly = true),
                     ).first() shouldBe 2
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun fieldEqualsMatchesACustomFieldKey() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("a.pdf")
+                val b = rig.fs.sha256("b.pdf")
+
+                rig.session.meta.setField(a, "vendor", "Acme")
+                rig.session.meta.setField(b, "vendor", "Globex")
+
+                val repo = DocumentRepositoryImpl(rig.db)
+                ids(
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(fieldEquals = mapOf("vendor" to "Acme")),
+                            LibrarySort(),
+                        ).first(),
+                ).shouldContainExactly(listOf(a))
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun fieldRangeOnANumberFieldComparesNumericallyNotLexicographically() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("a.pdf")
+                val b = rig.fs.sha256("b.pdf")
+
+                // Register "amount" as a NUMBER so its values carry a numeric shadow (numValue).
+                rig.session.fieldRegistry.fields
+                    .first { it.isNotEmpty() }
+                rig.session.fieldRegistry.upsert(
+                    FieldDef(
+                        key = "amount",
+                        label = "Amount",
+                        type = FieldType.NUMBER,
+                        showByDefault = false,
+                        aiEnabled = false,
+                        position = -1,
+                    ),
+                )
+                rig.session.meta.setField(a, "amount", "9")
+                rig.session.meta.setField(b, "amount", "10")
+
+                val repo = DocumentRepositoryImpl(rig.db)
+                // A range from "10" upward must exclude "9". Lexicographically "9" > "10", so a
+                // string comparison would wrongly keep a; numeric comparison keeps only b.
+                ids(
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(fieldRanges = mapOf("amount" to FieldRange(from = "10"))),
+                            LibrarySort(),
+                        ).first(),
+                ).shouldContainExactly(listOf(b))
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun sortByNumberFieldOrdersNumericallyWithMissingLast() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.writePdf("c.pdf", PdfFixtures.embeddedTextPdf("charlie"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("a.pdf")
+                val b = rig.fs.sha256("b.pdf")
+                val c = rig.fs.sha256("c.pdf")
+
+                rig.session.fieldRegistry.fields
+                    .first { it.isNotEmpty() }
+                rig.session.fieldRegistry.upsert(
+                    FieldDef(
+                        key = "amount",
+                        label = "Amount",
+                        type = FieldType.NUMBER,
+                        showByDefault = false,
+                        aiEnabled = false,
+                        position = -1,
+                    ),
+                )
+                // a=9, b=10, c has no amount. Numeric asc order is 9, 10; c (missing) sorts last.
+                rig.session.meta.setField(a, "amount", "9")
+                rig.session.meta.setField(b, "amount", "10")
+
+                val repo = DocumentRepositoryImpl(rig.db)
+                ids(
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(),
+                            LibrarySort(SortField.Field("amount"), ascending = true),
+                        ).first(),
+                ).shouldContainExactly(listOf(a, b, c))
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun missingFieldsSelectsDocumentsLackingACustomKey() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("a.pdf")
+                val b = rig.fs.sha256("b.pdf")
+
+                // Only a carries the custom key; b lacks it.
+                rig.session.meta.setField(a, "vendor", "Acme")
+
+                val repo = DocumentRepositoryImpl(rig.db)
+                ids(
+                    repo
+                        .observeDocuments(
+                            LibraryFilter(missingFields = listOf("vendor")),
+                            LibrarySort(),
+                        ).first(),
+                ).shouldContainExactly(listOf(b))
             } finally {
                 rig.close()
             }
@@ -200,7 +343,7 @@ class DocumentFilterTest {
                     repo
                         .observeDocuments(
                             LibraryFilter(),
-                            LibrarySort(SortField.NAME, ascending = true),
+                            LibrarySort(SortField.Name, ascending = true),
                         ).first()
                         .map { it.doc.fileName }
                 byName shouldContainExactly listOf("alpha.pdf", "bravo.pdf", "charlie.pdf")
@@ -209,7 +352,7 @@ class DocumentFilterTest {
                     repo
                         .observeDocuments(
                             LibraryFilter(),
-                            LibrarySort(SortField.ADDED, ascending = false),
+                            LibrarySort(SortField.Added, ascending = false),
                         ).first()
                         .map { it.doc.fileName }
                 // charlie added first, bravo last -> desc = bravo, alpha, charlie

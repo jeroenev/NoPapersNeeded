@@ -18,7 +18,6 @@ import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.BatchResult
 import dev.npn.core.app.DocContentFacade
-import dev.npn.core.app.DocField
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.EditProgress
@@ -32,6 +31,7 @@ import dev.npn.core.app.SavedView
 import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.ScopeKey
 import dev.npn.core.app.SettingsRepository
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -160,16 +160,17 @@ fun AiEditUiState.scopeAvailable(scope: EditScope): Boolean =
         EditScope.UNTAGGED, EditScope.ALL -> true
     }
 
-/** The autofilled fields as library-filter fields; these define [EditScope.MISSING_FIELDS]. */
-fun AiEditUiState.missingFields(): List<DocField> =
-    AiField.entries.filter { fieldOptions[it]?.enabled == true }.map { it.docField() }
+/** The autofilled fields' registry keys; these define [EditScope.MISSING_FIELDS]. */
+fun AiEditUiState.missingFields(): List<String> =
+    AiField.entries.filter { fieldOptions[it]?.enabled == true }.map { it.fieldKey }
 
-private fun AiField.docField(): DocField =
-    when (this) {
-        AiField.TITLE -> DocField.TITLE
-        AiField.CORRESPONDENT -> DocField.CORRESPONDENT
-        AiField.DOC_DATE -> DocField.DOC_DATE
-    }
+private val AiField.fieldKey: String
+    get() =
+        when (this) {
+            AiField.TITLE -> FieldKeys.TITLE
+            AiField.CORRESPONDENT -> FieldKeys.CORRESPONDENT
+            AiField.DOC_DATE -> FieldKeys.DOC_DATE
+        }
 
 private fun AiEditUiState.scopeKey(): ScopeKey =
     ScopeKey(

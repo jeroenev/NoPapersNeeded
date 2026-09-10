@@ -151,59 +151,6 @@ interface DocumentDao {
     @Query("SELECT relPath, docId, size, mtime FROM documents WHERE deleted = 0")
     suspend fun allPathsAndMeta(): List<PathMeta>
 
-    /** Distinct non-null correspondents on live documents, for filter autocomplete. */
-    @Query(
-        "SELECT DISTINCT correspondent FROM documents " +
-            "WHERE correspondent IS NOT NULL AND correspondent != '' " +
-            "AND trashed = 0 AND deleted = 0 AND missing = 0 " +
-            "ORDER BY correspondent COLLATE NOCASE",
-    )
-    fun observeCorrespondents(): Flow<List<String>>
-
-    /** One-shot variant of [observeCorrespondents], for AI suggestion canonicalization. */
-    @Query(
-        "SELECT DISTINCT correspondent FROM documents " +
-            "WHERE correspondent IS NOT NULL AND correspondent != '' " +
-            "AND trashed = 0 AND deleted = 0 AND missing = 0 " +
-            "ORDER BY correspondent COLLATE NOCASE",
-    )
-    suspend fun correspondents(): List<String>
-
-    /** Distinct non-null document types on live documents, for filter autocomplete. */
-    @Query(
-        "SELECT DISTINCT docType FROM documents " +
-            "WHERE docType IS NOT NULL AND docType != '' " +
-            "AND trashed = 0 AND deleted = 0 AND missing = 0 " +
-            "ORDER BY docType COLLATE NOCASE",
-    )
-    fun observeDocTypes(): Flow<List<String>>
-
-    /** Distinct non-null correspondents starting with [prefix], for search autocomplete. */
-    @Query(
-        "SELECT DISTINCT correspondent FROM documents " +
-            "WHERE correspondent IS NOT NULL AND correspondent != '' " +
-            "AND correspondent LIKE :prefix ESCAPE '\\' " +
-            "AND trashed = 0 AND deleted = 0 AND missing = 0 " +
-            "ORDER BY correspondent COLLATE NOCASE LIMIT :limit",
-    )
-    suspend fun correspondentsForPrefix(
-        prefix: String,
-        limit: Int,
-    ): List<String>
-
-    /** Distinct non-null document types starting with [prefix], for search autocomplete. */
-    @Query(
-        "SELECT DISTINCT docType FROM documents " +
-            "WHERE docType IS NOT NULL AND docType != '' " +
-            "AND docType LIKE :prefix ESCAPE '\\' " +
-            "AND trashed = 0 AND deleted = 0 AND missing = 0 " +
-            "ORDER BY docType COLLATE NOCASE LIMIT :limit",
-    )
-    suspend fun docTypesForPrefix(
-        prefix: String,
-        limit: Int,
-    ): List<String>
-
     /** All document tags for a set of docIds, for grouping list items. */
     @Query("SELECT docId, tag FROM document_tags WHERE docId IN (:docIds)")
     suspend fun tagsForDocsChunk(docIds: List<String>): List<DocumentTagEntity>
