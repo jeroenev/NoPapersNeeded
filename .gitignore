@@ -7,3 +7,6 @@ local.properties
 captures/
 .DS_Store
 workmd/
+docs/
+.opencode/
+.codex/

@@ -29,7 +29,7 @@ object NpnPaths {
 
     // Snapshots use a DISTINCT bucket namespace so pre-snapshot readers classify them as Unknown
     // (ignored) rather than as an object they must fold or an unsupported store that blocks writes.
-    // See METADATA_STORAGE_PLAN.md "Compaction and Retention".
+    // See docs/METADATA_STORAGE_PLAN.md §5 "Compaction".
     private val snapshotBucketPattern = Regex("^objects-snap-v([1-9][0-9]*)-([0-9a-fA-F]{2})$")
 
     /** A canonical lowercase-hex SHA-256 digest (document/content identity), anchored. */
