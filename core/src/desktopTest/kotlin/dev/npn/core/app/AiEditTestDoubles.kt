@@ -1,7 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.MetadataSuggestion
+import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.model.FieldKeys
@@ -55,7 +55,7 @@ internal fun item(
 internal fun edit(
     addTags: List<TagSuggestion> = emptyList(),
     removeTags: List<String> = emptyList(),
-    metadata: MetadataSuggestion = MetadataSuggestion.EMPTY,
+    metadata: FieldSuggestion = FieldSuggestion.EMPTY,
 ) = AiEditSuggestion(addTags = addTags, removeTags = removeTags, metadata = metadata)
 
 internal class FakeDocuments : DocumentRepository {
@@ -83,8 +83,6 @@ internal class FakeDocuments : DocumentRepository {
     override fun observeMissing(): Flow<List<Doc>> = error("unused")
 
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> = error("unused")
-
-    override fun observeFieldKeys(): Flow<List<String>> = error("unused")
 
     override suspend fun searchSuggestions(
         query: String,

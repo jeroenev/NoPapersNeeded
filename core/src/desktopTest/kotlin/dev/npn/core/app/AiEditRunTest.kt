@@ -5,9 +5,8 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.FakeAiSuggest
-import dev.npn.core.ai.MetadataSuggestion
+import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
@@ -33,7 +32,8 @@ private class Harness(
     val meta = FakeMeta()
     val content = FakeContent()
     val ai = FakeAiSuggest()
-    val run = AiEditRun(documents, meta, content, ai, selection)
+    val fieldRegistry = FakeFieldRegistry()
+    val run = AiEditRun(documents, meta, content, ai, fieldRegistry, selection)
 }
 
 private val REQUEST = AiEditRequest()
@@ -135,25 +135,27 @@ class AiEditRunSuggestTest {
             h.ai.edit =
                 edit(
                     metadata =
-                        MetadataSuggestion(
-                            title = "New title",
-                            correspondent = "Acme",
-                            docDate = "2024-01-15",
+                        FieldSuggestion(
+                            mapOf(
+                                FieldKeys.TITLE to "New title",
+                                FieldKeys.CORRESPONDENT to "Acme",
+                                FieldKeys.DOC_DATE to "2024-01-15",
+                            ),
                         ),
                 )
 
             val review = h.run.suggest(key()).shouldBeInstanceOf<BatchResult.Review>()
 
             val fields = review.docs.single().fields
-            fields.map { it.field } shouldContainExactly
-                listOf(AiField.TITLE, AiField.CORRESPONDENT, AiField.DOC_DATE)
+            fields.map { it.key } shouldContainExactly
+                listOf(FieldKeys.TITLE, FieldKeys.CORRESPONDENT, FieldKeys.DOC_DATE)
             // Title overwrites an existing value -> pre-deselected, current value retained.
-            val title = fields.single { it.field == AiField.TITLE }
+            val title = fields.single { it.key == FieldKeys.TITLE }
             title.selected shouldBe false
             title.current shouldBe "Old title"
-            fields.single { it.field == AiField.CORRESPONDENT }.selected shouldBe true
-            fields.single { it.field == AiField.CORRESPONDENT }.current shouldBe null
-            fields.single { it.field == AiField.DOC_DATE }.selected shouldBe true
+            fields.single { it.key == FieldKeys.CORRESPONDENT }.selected shouldBe true
+            fields.single { it.key == FieldKeys.CORRESPONDENT }.current shouldBe null
+            fields.single { it.key == FieldKeys.DOC_DATE }.selected shouldBe true
         }
 
     @Test
@@ -180,7 +182,7 @@ class AiEditRunSuggestTest {
             h.documents.documents.value = listOf(item("a"), item("b"))
             h.ai.editByDoc =
                 mapOf(
-                    "a" to edit(metadata = MetadataSuggestion(docDate = "2024-01-15")),
+                    "a" to edit(metadata = FieldSuggestion(mapOf(FieldKeys.DOC_DATE to "2024-01-15"))),
                     "b" to AiEditSuggestion.EMPTY,
                 )
 
@@ -353,7 +355,10 @@ class AiEditRunApplyTest {
             h.documents.documents.value = listOf(item("a"))
             h.ai.edit =
                 edit(
-                    metadata = MetadataSuggestion(correspondent = "Acme", docDate = "2024-01-15"),
+                    metadata =
+                        FieldSuggestion(
+                            mapOf(FieldKeys.CORRESPONDENT to "Acme", FieldKeys.DOC_DATE to "2024-01-15"),
+                        ),
                 )
 
             val review = reviewOf(h)
@@ -435,7 +440,7 @@ class AiEditRunApplyTest {
             h.ai.edit =
                 edit(
                     addTags = listOf(TagSuggestion("bad", isNew = false)),
-                    metadata = MetadataSuggestion(correspondent = "Acme"),
+                    metadata = FieldSuggestion(mapOf(FieldKeys.CORRESPONDENT to "Acme")),
                 )
 
             val review = reviewOf(h)

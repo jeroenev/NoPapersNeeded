@@ -61,19 +61,16 @@ import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.formatEpochDate
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_choose_date
 import no_papers_needed.composeapp.generated.resources.detail_added
-import no_papers_needed.composeapp.generated.resources.detail_correspondent
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_all
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_suggestion
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_tag
 import no_papers_needed.composeapp.generated.resources.detail_document_date
-import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
 import no_papers_needed.composeapp.generated.resources.detail_document_type
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable_hint
@@ -250,6 +247,7 @@ private fun DetailsTab(
         AiMetadataSuggestions(
             available = state.ai.tags.available == true,
             state = state.ai.metadata,
+            labels = state.document.fieldDefs.associate { it.key to it.label },
             actions = actions.ai,
         )
 
@@ -388,19 +386,16 @@ private fun AiTagChip(
 }
 
 /**
- * AI suggestions for the single-value properties (title/correspondent/date). Hidden entirely
- * unless the AI endpoint is configured ([available], shared with the tag probe). Offers a
- * "Suggest details" button (spinner while running) and renders each suggested field as a row:
- * the check accepts it through the normal commit path, the × dismisses it.
- *
- * Rows are driven by [AiField.entries], so a new suggestable field renders here as soon as the
- * enum gains it — the only thing to add is its label in [aiFieldLabel], which the compiler
- * demands.
+ * AI suggestions for the document's fields. Hidden entirely unless the AI endpoint is configured
+ * ([available], shared with the tag probe). Offers a "Suggest details" button (spinner while
+ * running) and renders each suggested field as a row labelled from the registry: the check
+ * accepts it through the normal commit path, the × dismisses it.
  */
 @Composable
 private fun AiMetadataSuggestions(
     available: Boolean,
     state: AiMetadataState,
+    labels: Map<String, String>,
     actions: AiActions,
 ) {
     if (!available) return
@@ -422,39 +417,26 @@ private fun AiMetadataSuggestions(
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             }
         }
-        AiField.entries.forEach { field ->
-            state.suggestion[field]?.let { value ->
-                AiMetadataSuggestionRow(
-                    label = aiFieldLabel(field),
-                    value = value,
-                    field = field,
-                    onAccept = actions.onAcceptMetadata,
-                    onDismiss = actions.onDismissMetadata,
-                )
-            }
+        for ((key, value) in state.suggestion.values) {
+            AiMetadataSuggestionRow(
+                label = labels[key] ?: key,
+                value = value,
+                key = key,
+                onAccept = actions.onAcceptMetadata,
+                onDismiss = actions.onDismissMetadata,
+            )
         }
     }
 }
 
-/** Human label for a suggestable field; exhaustive, so a new [AiField] cannot ship unlabelled. */
-@Composable
-private fun aiFieldLabel(field: AiField): String =
-    stringResource(
-        when (field) {
-            AiField.TITLE -> Res.string.detail_title
-            AiField.CORRESPONDENT -> Res.string.detail_correspondent
-            AiField.DOC_DATE -> Res.string.detail_document_date_plain
-        },
-    )
-
-/** One suggested property value with accept (check) and dismiss (×) actions. */
+/** One suggested field value with accept (check) and dismiss (×) actions. */
 @Composable
 private fun AiMetadataSuggestionRow(
     label: String,
     value: String,
-    field: AiField,
-    onAccept: (AiField) -> Unit,
-    onDismiss: (AiField) -> Unit,
+    key: String,
+    onAccept: (String) -> Unit,
+    onDismiss: (String) -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth(),
@@ -469,13 +451,13 @@ private fun AiMetadataSuggestionRow(
             )
             Text(value, style = MaterialTheme.typography.bodyMedium)
         }
-        IconButton(onClick = { onAccept(field) }) {
+        IconButton(onClick = { onAccept(key) }) {
             Icon(
                 Icons.Filled.Check,
                 contentDescription = stringResource(Res.string.detail_use_suggestion, label),
             )
         }
-        IconButton(onClick = { onDismiss(field) }) {
+        IconButton(onClick = { onDismiss(key) }) {
             Icon(
                 Icons.Filled.Close,
                 contentDescription = stringResource(Res.string.detail_dismiss_suggestion, label),

@@ -14,44 +14,27 @@ data class TagSuggestion(
 )
 
 /**
- * AI proposals for a document's single-value properties. Each field is null when the model had no
- * (validated) suggestion or the suggestion matched the document's current value. [correspondent]
- * is canonicalized to the library's exact spelling when it matches an existing correspondent
- * case-insensitively; [docDate] is always a valid `yyyy-MM-dd` ISO date.
+ * AI proposals for a document's fields, by registry key. A key is present only when the model had
+ * a validated suggestion that differs from the document's current value; values are already in
+ * the field's canonical form (dates as `yyyy-MM-dd`, text canonicalized to the library's existing
+ * spelling when it matches one case-insensitively).
  */
 @Serializable
-data class MetadataSuggestion(
-    val title: String? = null,
-    val correspondent: String? = null,
-    val docDate: String? = null,
+data class FieldSuggestion(
+    val values: Map<String, String> = emptyMap(),
 ) {
-    val isEmpty: Boolean
-        get() = title == null && correspondent == null && docDate == null
+    val isEmpty: Boolean get() = values.isEmpty()
 
-    /** The proposed value for [field], or null when this run has nothing to propose for it. */
-    operator fun get(field: AiField): String? =
-        when (field) {
-            AiField.TITLE -> title
-            AiField.CORRESPONDENT -> correspondent
-            AiField.DOC_DATE -> docDate
-        }
+    /** The proposed value for [key], or null when this run has nothing to propose for it. */
+    operator fun get(key: String): String? = values[key]
 
-    /** This suggestion with [field] cleared (the user accepted or dismissed just that field). */
-    fun without(field: AiField): MetadataSuggestion =
-        when (field) {
-            AiField.TITLE -> copy(title = null)
-            AiField.CORRESPONDENT -> copy(correspondent = null)
-            AiField.DOC_DATE -> copy(docDate = null)
-        }
+    /** This suggestion with [key] cleared (the user accepted or dismissed just that field). */
+    fun without(key: String): FieldSuggestion = FieldSuggestion(values - key)
 
     companion object {
-        val EMPTY = MetadataSuggestion()
+        val EMPTY = FieldSuggestion()
     }
 }
-
-/** A single-value document property the AI can suggest a value for. */
-@Serializable
-enum class AiField { TITLE, CORRESPONDENT, DOC_DATE }
 
 /**
  * Whether a field suggestion should be produced for every document or only documents that are
@@ -66,10 +49,10 @@ enum class AiFieldMode {
     UNFILLED,
 }
 
-/** One field to ask about in an edit run, with the user's [mode]. */
+/** One registry field (by [key]) to ask about in an edit run, with the user's [mode]. */
 @Serializable
 data class AiFieldConfig(
-    val field: AiField,
+    val key: String,
     val mode: AiFieldMode = AiFieldMode.UNFILLED,
 )
 
@@ -95,8 +78,8 @@ data class AiEditRequest(
 /**
  * AI-proposed edits for one document. [addTags] carries canonicalized additions (see
  * [TagSuggestion]), [removeTags] are tags already on the document that the model proposes
- * removing (verbatim current spelling), and [metadata] carries the validated single-value field
- * suggestions (subject to the run's [AiFieldMode]).
+ * removing (verbatim current spelling), and [metadata] carries the validated field suggestions by
+ * key (subject to the run's [AiFieldMode]).
  *
  * Serializable because a background run persists it: the model call is what costs money and time,
  * so its answer is stored verbatim and only projected onto a Review when the user opens the run.
@@ -105,7 +88,7 @@ data class AiEditRequest(
 data class AiEditSuggestion(
     val addTags: List<TagSuggestion> = emptyList(),
     val removeTags: List<String> = emptyList(),
-    val metadata: MetadataSuggestion = MetadataSuggestion.EMPTY,
+    val metadata: FieldSuggestion = FieldSuggestion.EMPTY,
 ) {
     val isEmpty: Boolean
         get() = addTags.isEmpty() && removeTags.isEmpty() && metadata.isEmpty
@@ -132,9 +115,10 @@ interface AiSuggest : AiAvailability {
      * [TagSuggestion.isNew] marking genuinely-new tags (capped per doc via [AiEditRequest.maxTags]
      * / [AiEditRequest.maxNewTags], which override the configured defaults when non-null and are
      * clamped to `AiTagging.RANGE` / `AiTagging.NEW_TAGS_RANGE`). Tag removals are filtered to tags
-     * actually on the document. Field values ([AiEditSuggestion.metadata]) canonicalize
-     * correspondents to the library's existing spelling, validate dates as ISO `yyyy-MM-dd`, drop
-     * values matching the document's current ones, and honour each field's [AiFieldMode].
+     * actually on the document. Field values ([AiEditSuggestion.metadata]) are canonicalized for
+     * the field's registry type (text to the library's existing spelling, dates to ISO
+     * `yyyy-MM-dd`), dropped when off-type or equal to the document's current value, and honour
+     * each field's [AiFieldMode]. A requested key the registry does not know is treated as text.
      *
      * When the doc has no indexed text yet the result is empty for runs that requested any field
      * ([AiEditRequest.fields] non-empty); tag-only runs can still work off the tag list even

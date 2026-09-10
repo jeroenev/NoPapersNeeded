@@ -1,6 +1,8 @@
 package dev.npn.core.ai
 
-import dev.npn.core.db.DocumentEntity
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
 import kotlin.time.Clock
@@ -93,9 +95,12 @@ internal object AiPrompts {
      * The library assistant's system prompt: what the archive is, which tool answers which kind of
      * question, how to cite a document, and which language to write in.
      */
-    fun chatSystem(context: AiPromptContext): String =
+    fun chatSystem(
+        context: AiPromptContext,
+        fields: List<FieldDef>,
+    ): String =
         listOf(
-            CHAT_ROLE,
+            chatRole(fields),
             CHAT_TOOLS,
             CHAT_STYLE,
             "Today is ${context.today}; resolve relative dates like \"last month\" or \"this year\" against it.",
@@ -115,15 +120,15 @@ internal object AiPrompts {
                 "as stored; never translate them."
         } ?: "Answer in the language the user writes in."
 
-    private val CHAT_ROLE =
+    private fun chatRole(fields: List<FieldDef>): String =
         """
         You are the assistant inside "no-papers-needed", a personal paperless document
         manager. The user's scanned documents (PDFs) are indexed locally: OCR text, tags,
-        filenames, and metadata fields. Documents carry built-in default fields
-        (${LibraryAiTools.DEFAULT_FIELD_LIST}) plus user-defined flexible (custom)
-        fields such as "amount" or "invoice number". Of the built-ins, ocrEngine is maintained
-        by the app rather than the user: it names the engine whose transcription is indexed for
-        search, so it answers questions about how a document was read, not what it says.
+        filenames, and metadata fields. The fields in this library are:
+        ${LibraryAiTools.fieldVocabulary(fields)}. Documents may also carry field keys that
+        have no definition yet. ocrEngine is maintained by the app rather than the user: it
+        names the engine whose transcription is indexed for search, so it answers questions
+        about how a document was read, not what it says.
         """.trimIndent()
 
     private val CHAT_TOOLS =
@@ -131,12 +136,11 @@ internal object AiPrompts {
         Use the provided tools to find documents before answering; never invent documents
         or their contents. Prefer search_documents for content questions, list_tags /
         documents_with_tag for organisation questions, search_filenames when the user
-        remembers a file name, search_fields to look documents up by a specific default or
-        flexible field value — including "has a field" queries like "documents with a test2
-        field" (call list_fields first to discover flexible field keys; leave search_fields'
-        value empty to match any document that has the field), and get_document_text to read
-        a specific document. Field values (default and flexible alike) are also part of the
-        full-text search_documents index; field keys are not.
+        remembers a file name, search_fields to look documents up by a field value — including
+        "has a field" queries like "documents with a test2 field" (call list_fields when unsure
+        of a key; leave search_fields' value empty to match any document that has the field) and
+        date or number ranges via from/to — and get_document_text to read a specific document.
+        Field values are also part of the full-text search_documents index; field keys are not.
         """.trimIndent()
 
     private val CHAT_STYLE =
@@ -210,40 +214,46 @@ internal object AiPrompts {
      * the run actually asked for, so a tags-only run gets a tags-only contract and a custom-prompt
      * run still gets the same structured reply shape.
      *
-     * Library-wide context (tag vocabulary, correspondents) lives HERE, not in the per-doc user
-     * message: it is identical for every document of a batch, so keeping the whole system message
-     * batch-constant lets prefix/KV caches on the endpoint skip re-evaluating the (potentially
-     * large) vocabulary for every document. Only per-doc data goes in the user message — which is
-     * also why [AiPromptContext.today] is a date and not a timestamp.
+     * Library-wide context (tag vocabulary, each text field's existing values) lives HERE, not in
+     * the per-doc user message: it is identical for every document of a batch, so keeping the
+     * whole system message batch-constant lets prefix/KV caches on the endpoint skip re-evaluating
+     * the (potentially large) vocabulary for every document. Only per-doc data goes in the user
+     * message — which is also why [AiPromptContext.today] is a date and not a timestamp.
      */
     fun editSystem(
         request: AiEditRequest,
+        fields: List<AiFieldSpec>,
         max: Int,
         maxNew: Int,
         vocabulary: List<String>,
-        correspondents: List<String>,
         context: AiPromptContext,
     ): String =
         buildList {
             add(EDIT_INTRO)
-            add(editRules(request, max, maxNew, context).joinToString("\n"))
-            add(editContract(request))
-            if (request.fields.any { it.field == AiField.DOC_DATE }) add(dateGuidance(context))
-            editLibraryContext(request, vocabulary, correspondents)?.let { add(it) }
+            add(editRules(request, fields, max, maxNew, context).joinToString("\n"))
+            add(editContract(request, fields))
+            if (fields.any { it.def.type == FieldType.DATE }) add(dateGuidance(context))
+            editLibraryContext(request, fields, vocabulary)?.let { add(it) }
         }.joinToString("\n\n")
 
-    /** Per-doc data for one edit-suggestion request: current metadata, the OCR text, extra wishes. */
+    /**
+     * Per-doc data for one edit-suggestion request: the current value of every requested field,
+     * the OCR text, extra wishes.
+     */
     fun editUser(
-        doc: DocumentEntity,
+        fileName: String,
+        currentFields: Map<String, String>,
+        fields: List<AiFieldSpec>,
         request: AiEditRequest,
         currentTags: List<String>,
         text: String?,
     ): String =
         buildString {
-            appendLine("File name: ${doc.fileName}")
-            doc.title?.takeIf { it.isNotBlank() }?.let { appendLine("Current title: $it") }
-            doc.correspondent?.takeIf { it.isNotBlank() }?.let { appendLine("Current correspondent: $it") }
-            doc.docDate?.takeIf { it.isNotBlank() }?.let { appendLine("Current document date: $it") }
+            appendLine("File name: $fileName")
+            for (spec in fields) {
+                val current = currentFields[spec.key]?.takeIf { it.isNotBlank() } ?: continue
+                appendLine("Current ${spec.def.label}: $current")
+            }
             if (request.tags || request.tagRemovals) {
                 appendLine(
                     "Tags already on this document: ${currentTags.ifEmpty { listOf("(none)") }.joinToString(", ")}",
@@ -272,6 +282,7 @@ internal object AiPrompts {
 
     private fun editRules(
         request: AiEditRequest,
+        fields: List<AiFieldSpec>,
         max: Int,
         maxNew: Int,
         context: AiPromptContext,
@@ -279,9 +290,9 @@ internal object AiPrompts {
         buildList {
             if (request.tags) add(addTagsRule(max, maxNew, context))
             if (request.tagRemovals) add(REMOVE_TAGS_RULE)
-            for (cfg in request.fields) {
-                val (key, _) = fieldKey(cfg.field)
-                add("\"$key\": ${fieldDescription(cfg.field, context)}. ${modeRule(cfg.mode)}")
+            for (spec in fields) {
+                val description = fieldDescription(spec, context)
+                add("\"fields.${spec.key}\" (${spec.def.label}): $description. ${modeRule(spec.mode)}")
             }
         }
 
@@ -320,14 +331,20 @@ internal object AiPrompts {
             }
         }
 
-    private fun editContract(request: AiEditRequest): String {
+    /**
+     * Field answers sit under one `"fields"` object rather than beside `add_tags`/`remove_tags`, so
+     * a user field that happens to be called `add_tags` cannot collide with the tag contract.
+     */
+    private fun editContract(
+        request: AiEditRequest,
+        fields: List<AiFieldSpec>,
+    ): String {
         val contract =
             buildList {
                 if (request.tags) add("\"add_tags\": [\"tag\"]")
                 if (request.tagRemovals) add("\"remove_tags\": [\"tag\"]")
-                for (cfg in request.fields) {
-                    val (key, literal) = fieldKey(cfg.field)
-                    add("\"$key\": $literal")
+                if (fields.isNotEmpty()) {
+                    add("\"fields\": {" + fields.joinToString(", ") { "\"${it.key}\": ${it.def.type.aiLiteral}" } + "}")
                 }
             }
         return """
@@ -341,24 +358,25 @@ internal object AiPrompts {
 
     private fun editLibraryContext(
         request: AiEditRequest,
+        fields: List<AiFieldSpec>,
         vocabulary: List<String>,
-        correspondents: List<String>,
     ): String? =
         buildList {
             if (request.tags || request.tagRemovals) {
                 add("Existing tags in this library: " + vocabulary.ifEmpty { listOf("(none)") }.joinToString(", "))
             }
-            if (request.fields.isNotEmpty()) {
+            for (spec in fields) {
+                if (spec.vocabulary.isEmpty()) continue
                 add(
-                    "Existing correspondents in this library: " +
-                        correspondents.ifEmpty { listOf("(none)") }.joinToString(", "),
+                    "Existing values of ${spec.def.label} (\"${spec.key}\") in this library — copy one VERBATIM " +
+                        "when it fits: " + spec.vocabulary.joinToString(", "),
                 )
             }
         }.ifEmpty { null }?.joinToString("\n")
 
     /**
      * How to turn a date printed on a page into one ISO date, sent only when the run asks for
-     * [AiField.DOC_DATE].
+     * a DATE field.
      *
      * Two failure modes, one anchor. A model with no idea what day it is cannot tell a misread year
      * from a real one, so it will happily date a doctor's note to 2087. But clamping to the past
@@ -388,40 +406,70 @@ internal object AiPrompts {
         choose the reading closer to today.
         """.trimIndent()
 
-    /** JSON key a field is expected under, and its null-able literal in the reply contract. */
-    private fun fieldKey(field: AiField): Pair<String, String> =
-        when (field) {
-            AiField.TITLE -> "title" to "string|null"
-            AiField.CORRESPONDENT -> "correspondent" to "string|null"
-            AiField.DOC_DATE -> "date" to "\"YYYY-MM-DD\"|null"
-        }
-
+    /**
+     * What to say about one field. The well-known keys keep their tuned wording; every other field
+     * gets its type's generic instruction plus the user's hint, which is what makes the hint the
+     * quality lever for custom fields.
+     */
     private fun fieldDescription(
-        field: AiField,
+        spec: AiFieldSpec,
         context: AiPromptContext,
-    ): String =
-        when (field) {
-            AiField.TITLE -> {
-                // A title is the app's own label for the document, so it belongs in the language
-                // the user reads the app in. Only when that is unknown does the document's own
-                // language become the best available default.
-                val language = context.appLanguage?.let { "in $it" } ?: "in the document's own language"
-                "a short, human-readable title $language — what the document IS, never a file " +
-                    "name. The English example \"Electricity invoice January 2024\" shows the " +
-                    "shape, not the language to write in. Keep company names, reference numbers " +
-                    "and other proper nouns exactly as printed"
+    ): String {
+        val curated =
+            when (spec.key) {
+                FieldKeys.TITLE -> {
+                    // A title is the app's own label for the document, so it belongs in the language
+                    // the user reads the app in. Only when that is unknown does the document's own
+                    // language become the best available default.
+                    val language = context.appLanguage?.let { "in $it" } ?: "in the document's own language"
+                    "a short, human-readable title $language — what the document IS, never a file " +
+                        "name. The English example \"Electricity invoice January 2024\" shows the " +
+                        "shape, not the language to write in. Keep company names, reference numbers " +
+                        "and other proper nouns exactly as printed"
+                }
+
+                FieldKeys.CORRESPONDENT -> {
+                    "the other party — the company, institution or person that sent or issued the " +
+                        "document, never the archive owner. When an existing value from the " +
+                        "provided list matches, copy it VERBATIM (exact spelling and case); only " +
+                        "introduce a new name when none fits"
+                }
+
+                FieldKeys.DOC_DATE -> {
+                    "the document's own date (invoice date, letter date, issue date) as YYYY-MM-DD, " +
+                        "never the scan or import date"
+                }
+
+                else -> {
+                    null
+                }
+            }
+        val hint =
+            spec.def.hint
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+        return listOfNotNull(curated ?: typeInstruction(spec), hint).joinToString(". ")
+    }
+
+    private fun typeInstruction(spec: AiFieldSpec): String {
+        val reuse =
+            if (spec.vocabulary.isNotEmpty()) {
+                "; when an existing value from the provided list matches, copy it VERBATIM"
+            } else {
+                ""
+            }
+        return when {
+            spec.def.type == FieldType.DATE -> {
+                "the ${spec.def.label} as a date in YYYY-MM-DD, taken from the document text"
             }
 
-            AiField.CORRESPONDENT -> {
-                "the other party — the company, institution or person that sent or issued the " +
-                    "document, never the archive owner. When an existing correspondent from the " +
-                    "provided list matches, copy it VERBATIM (exact spelling and case); only " +
-                    "introduce a new name when none fits"
+            spec.def.type.isNumeric -> {
+                "the ${spec.def.label} as a plain number (no currency symbol, unit or grouping)"
             }
 
-            AiField.DOC_DATE -> {
-                "the document's own date (invoice date, letter date, issue date) as YYYY-MM-DD, " +
-                    "never the scan or import date"
+            else -> {
+                "the ${spec.def.label}, taken from the document text$reuse"
             }
         }
+    }
 }

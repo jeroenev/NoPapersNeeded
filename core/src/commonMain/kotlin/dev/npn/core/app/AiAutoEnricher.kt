@@ -3,7 +3,6 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.AiSuggest
@@ -27,7 +26,7 @@ import kotlinx.coroutines.CancellationException
  *   the deterministic auto-match rules run immediately before it, so a removal would let the model
  *   silently undo a rule — or a tag the user added while the document sat in the queue. Correcting
  *   tags is the reviewed [AiEditRun]'s job, where each removal is opt-in.
- * - **Fields** (title, correspondent, document date) use [AiFieldMode.UNFILLED]: only empty fields
+ * - **Fields** (every registry field marked aiEnabled) use [AiFieldMode.UNFILLED]: only empty fields
  *   are filled, so an automatic pass can never overwrite a value a human entered. Tags and fields
  *   are independent — fields are written even when no vocabulary tag matched.
  *
@@ -63,6 +62,7 @@ class AiAutoEnricher(
     private val queueDao: AiEnrichQueueDao,
     private val ai: AiSuggest,
     private val meta: MetadataWriter,
+    private val fieldRegistry: FieldRegistry,
     private val readConfig: suspend () -> AiConfig,
     private val clock: EpochClock,
 ) {
@@ -144,7 +144,7 @@ class AiAutoEnricher(
             return true
         }
         return try {
-            write(entry.docId, ai.suggestEdits(entry.docId, REQUEST))
+            write(entry.docId, ai.suggestEdits(entry.docId, request()))
             documentDao.markAiEnriched(entry.docId, clock.nowMillis())
             queueDao.delete(entry.docId)
             cooldownUntil = 0L
@@ -236,12 +236,27 @@ class AiAutoEnricher(
             docId = docId,
             addTags = suggestion.addTags.filterNot { it.isNew }.map { it.tag }, // closed vocabulary
             removeTags = emptyList(), // never removes unattended
-            properties =
-                buildMap {
-                    suggestion.metadata.title?.let { put(AiField.TITLE, it) }
-                    suggestion.metadata.correspondent?.let { put(AiField.CORRESPONDENT, it) }
-                    suggestion.metadata.docDate?.let { put(AiField.DOC_DATE, it) }
+            properties = suggestion.metadata.values,
+        )
+
+    /**
+     * The request every automatic pass uses, read from the registry at drain time: every field the
+     * user marked "let AI fill this in", UNFILLED so existing values are never touched.
+     * `maxNewTags = 0` turns the vocabulary into a closed set for this flow; `maxTags` stays on the
+     * user's configured default.
+     */
+    private suspend fun request(): AiEditRequest =
+        AiEditRequest(
+            fields =
+                fieldRegistry.current().filter { it.aiEnabled }.map {
+                    AiFieldConfig(
+                        it.key,
+                        AiFieldMode.UNFILLED,
+                    )
                 },
+            tags = true,
+            tagRemovals = false,
+            maxNewTags = 0,
         )
 
     companion object {
@@ -272,22 +287,5 @@ class AiAutoEnricher(
         fun backoffMs(attempts: Int): Long =
             (BACKOFF_BASE_MS shl (attempts - 1).coerceIn(0, BACKOFF_MAX_SHIFT))
                 .coerceAtMost(BACKOFF_CEILING_MS)
-
-        /**
-         * The fixed request every automatic pass uses. `maxNewTags = 0` turns the vocabulary into a
-         * closed set for this flow; `maxTags` stays on the user's configured default.
-         */
-        private val REQUEST =
-            AiEditRequest(
-                fields =
-                    listOf(
-                        AiFieldConfig(AiField.TITLE, AiFieldMode.UNFILLED),
-                        AiFieldConfig(AiField.CORRESPONDENT, AiFieldMode.UNFILLED),
-                        AiFieldConfig(AiField.DOC_DATE, AiFieldMode.UNFILLED),
-                    ),
-                tags = true,
-                tagRemovals = false,
-                maxNewTags = 0,
-            )
     }
 }

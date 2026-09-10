@@ -1,11 +1,12 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.ai.MetadataSuggestion
+import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldBeSingleton
 import io.kotest.matchers.collections.shouldContainExactly
@@ -120,10 +121,12 @@ class AiAutoEnricherTest {
                         addTags = listOf(TagSuggestion("invoice", isNew = false)),
                         removeTags = listOf("draft"),
                         metadata =
-                            MetadataSuggestion(
-                                title = "Electricity invoice",
-                                correspondent = "Acme",
-                                docDate = "2026-01-31",
+                            FieldSuggestion(
+                                mapOf(
+                                    FieldKeys.TITLE to "Electricity invoice",
+                                    FieldKeys.CORRESPONDENT to "Acme",
+                                    FieldKeys.DOC_DATE to "2026-01-31",
+                                ),
                             ),
                     )
                 rig.enricher.enqueue("d1")
@@ -164,7 +167,7 @@ class AiAutoEnricherTest {
                 rig.ai.edit =
                     AiEditSuggestion(
                         addTags = listOf(TagSuggestion("invoice", isNew = false)),
-                        metadata = MetadataSuggestion(title = "Electricity invoice"),
+                        metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "Electricity invoice")),
                     )
                 rig.enricher.enqueue("d1")
 
@@ -197,9 +200,46 @@ class AiAutoEnricherTest {
                 request.tagRemovals shouldBe false
                 // 0 makes the library vocabulary a closed set for this unattended flow.
                 request.maxNewTags shouldBe 0
-                request.fields.map { it.field } shouldContainExactly
-                    listOf(AiField.TITLE, AiField.CORRESPONDENT, AiField.DOC_DATE)
+                request.fields.map { it.key } shouldContainExactly
+                    listOf(FieldKeys.TITLE, FieldKeys.CORRESPONDENT, FieldKeys.DOC_TYPE, FieldKeys.DOC_DATE)
                 // UNFILLED throughout: an automatic pass must never overwrite a human's value.
+                request.fields.map { it.mode }.toSet() shouldBe setOf(AiFieldMode.UNFILLED)
+            }
+        }
+
+    /**
+     * The request is built at drain time from the registry, so a custom aiEnabled field joins it
+     * while a field left aiEnabled=false (notes) stays out. Every requested field is UNFILLED: an
+     * automatic pass must never overwrite a human's value, whatever its type.
+     */
+    @Test
+    fun `the request covers every aiEnabled registry field, including a custom one`() =
+        runTest {
+            withRig { rig ->
+                rig.fieldRegistry.upsert(
+                    FieldDef(
+                        key = "amount",
+                        label = "Amount",
+                        type = FieldType.DECIMAL,
+                        showByDefault = true,
+                        aiEnabled = true,
+                        position = 5,
+                    ),
+                )
+                rig.insert("d1")
+                rig.enricher.enqueue("d1")
+
+                rig.drain()
+
+                val request = rig.ai.suggestEditsRequests.single()
+                val aiKeys =
+                    rig.fieldRegistry
+                        .current()
+                        .filter { it.aiEnabled }
+                        .map { it.key }
+                aiKeys shouldContainExactly
+                    listOf(FieldKeys.TITLE, FieldKeys.CORRESPONDENT, FieldKeys.DOC_TYPE, FieldKeys.DOC_DATE, "amount")
+                request.fields.map { it.key } shouldContainExactly aiKeys
                 request.fields.map { it.mode }.toSet() shouldBe setOf(AiFieldMode.UNFILLED)
             }
         }

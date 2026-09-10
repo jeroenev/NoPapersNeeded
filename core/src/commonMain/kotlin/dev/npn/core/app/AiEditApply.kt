@@ -1,20 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.ai.AiField
-import dev.npn.core.model.FieldKeys
-
-/**
- * The registry field an autofill field writes to. Kept here rather than on [AiField] so the AI
- * contract layer stays free of the storage model.
- */
-internal val AiField.fieldKey: String
-    get() =
-        when (this) {
-            AiField.TITLE -> FieldKeys.TITLE
-            AiField.CORRESPONDENT -> FieldKeys.CORRESPONDENT
-            AiField.DOC_DATE -> FieldKeys.DOC_DATE
-        }
-
 /**
  * One document's writable edit — see CONTEXT.md, "Writable Edit".
  *
@@ -24,16 +9,14 @@ internal val AiField.fieldKey: String
  * Edit is binary — a dropped item is simply absent — which is what separates it from Review
  * pre-selection's tri-state chips; the two must not be collapsed.
  *
- * [properties] is keyed by [AiField], not by field key: only the autofill fields are AI-writable,
- * so keying by the narrower type makes an unwritable field unrepresentable rather than a runtime
- * check, and lets [ApplyReport.fieldsWritten] be built without a partial inverse mapping. The
- * widening to a registry key happens once, at the [MetadataWriter] boundary.
+ * [properties] is keyed by registry field key, exactly as [MetadataWriter.applyEdits] takes it;
+ * what the AI may write is decided upstream by the run's request, not by the type here.
  */
 data class WritableEdit(
     val docId: String,
     val addTags: List<String>,
     val removeTags: List<String>,
-    val properties: Map<AiField, String?>,
+    val properties: Map<String, String?>,
 ) {
     val isEmpty: Boolean get() = addTags.isEmpty() && removeTags.isEmpty() && properties.isEmpty()
 }
@@ -50,7 +33,7 @@ data class WritableEdit(
 data class ApplyReport(
     val addsWritten: Set<Pair<String, String>>, // (docId, tag)
     val removalsWritten: Set<Pair<String, String>>, // (docId, tag)
-    val fieldsWritten: Set<Pair<String, AiField>>, // (docId, field)
+    val fieldsWritten: Set<Pair<String, String>>, // (docId, field key)
     val failures: Map<String, Throwable>, // docId -> cause
 ) {
     val failedDocs: Set<String> get() = failures.keys
@@ -72,8 +55,8 @@ data class ApplyReport(
  * The single home of the suggestion-write mechanics, shared by the reviewed [AiEditRun] and by
  * automatic [AiAutoEnricher]. Its callers differ in how they decide *what* to write, in what
  * shape they want failure back, and — crucially — in the *grain* at which a write must be atomic.
- * Both grains live here so the accounting, the failure-cause map and the [AiField]/field-key
- * mapping stay shared; they are two entry points, not one policy toggle, because the reason they
+ * Both grains live here so the accounting and the failure-cause map stay shared; they are two
+ * entry points, not one policy toggle, because the reason they
  * differ is domain, not configuration, and a strategy object would only hide that.
  *
  * ## [apply] — the batched, cross-document grain (the Edit Run)
@@ -133,7 +116,7 @@ class AiEditApply(
     ): ApplyReport {
         val addsWritten = mutableSetOf<Pair<String, String>>()
         val removalsWritten = mutableSetOf<Pair<String, String>>()
-        val fieldsWritten = mutableSetOf<Pair<String, AiField>>()
+        val fieldsWritten = mutableSetOf<Pair<String, String>>()
         val failures = mutableMapOf<String, Throwable>()
 
         // Group by tag so each distinct tag is written once for all its docs in a single journal
@@ -166,7 +149,7 @@ class AiEditApply(
         // single change (see the class doc for why this is load-bearing, not a style choice).
         for (edit in edits) {
             if (edit.properties.isEmpty()) continue
-            runCatching { meta.applyEdits(listOf(edit.docId), fields = edit.storageFields()) }
+            runCatching { meta.applyEdits(listOf(edit.docId), fields = edit.properties) }
                 .onSuccess {
                     edit.properties.keys.forEach { field -> fieldsWritten += edit.docId to field }
                     onDocWritten(edit.docId)
@@ -198,13 +181,13 @@ class AiEditApply(
             "applyAtomically is for the additive enrichment grain and carries no removals"
         }
         val addsWritten = mutableSetOf<Pair<String, String>>()
-        val fieldsWritten = mutableSetOf<Pair<String, AiField>>()
+        val fieldsWritten = mutableSetOf<Pair<String, String>>()
         val failures = mutableMapOf<String, Throwable>()
 
         // The whole edit — tags and fields together — as one applyEdits so a failure writes none
         // of it and a retry re-asks the model about the state it was originally shown.
         runCatching {
-            meta.applyEdits(listOf(edit.docId), addTags = edit.addTags, fields = edit.storageFields())
+            meta.applyEdits(listOf(edit.docId), addTags = edit.addTags, fields = edit.properties)
         }.onSuccess {
             edit.addTags.forEach { tag -> addsWritten += edit.docId to tag }
             edit.properties.keys.forEach { field -> fieldsWritten += edit.docId to field }
@@ -213,11 +196,3 @@ class AiEditApply(
         return ApplyReport(addsWritten, removalsWritten = emptySet(), fieldsWritten, failures)
     }
 }
-
-/**
- * Widen the edit's [AiField] keys to the registry keys [MetadataWriter.applyEdits] takes.
- *
- * This is the single conversion point, and it is total: every [AiField] has a registry key, so
- * unlike the inverse it needs no failure branch that could throw after a write has committed.
- */
-private fun WritableEdit.storageFields(): Map<String, String?> = properties.mapKeys { it.key.fieldKey }

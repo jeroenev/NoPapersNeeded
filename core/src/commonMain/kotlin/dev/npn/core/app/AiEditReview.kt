@@ -1,7 +1,6 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiField
 
 /**
  * Turns one document's raw [AiEditSuggestion] into the [ReviewDoc] a human is shown, applying the
@@ -16,12 +15,15 @@ import dev.npn.core.ai.AiField
  */
 internal class ReviewProjector(
     private val content: DocContentFacade,
+    private val fieldRegistry: FieldRegistry,
 ) {
     suspend fun project(
         item: DocListItem,
         suggestion: AiEditSuggestion,
-    ): ReviewDoc =
-        ReviewDoc(
+    ): ReviewDoc {
+        // Labels are looked up at projection time so a renamed field reads by its current name.
+        val labels = fieldRegistry.current().associate { it.key to it.label }
+        return ReviewDoc(
             docId = item.doc.docId,
             title = item.doc.title,
             fileName = item.doc.fileName,
@@ -29,23 +31,22 @@ internal class ReviewProjector(
             chips = suggestion.addTags.map { ReviewChip(it.tag, it.isNew, selected = !it.isNew) },
             removals = suggestion.removeTags.map { ReviewChip(it, isNew = false, selected = false) },
             fields =
-                buildList {
-                    suggestion.metadata.title?.let { add(reviewField(AiField.TITLE, it, item.doc.title)) }
-                    suggestion.metadata.correspondent?.let {
-                        add(reviewField(AiField.CORRESPONDENT, it, item.doc.correspondent))
-                    }
-                    suggestion.metadata.docDate?.let { add(reviewField(AiField.DOC_DATE, it, item.doc.docDate)) }
+                suggestion.metadata.values.map { (key, value) ->
+                    reviewField(key, labels[key] ?: key, value, item.doc.fields[key])
                 },
         )
+    }
 
     /** Fill-ins (no current value) are pre-selected; overwrites require an explicit opt-in. */
     private fun reviewField(
-        field: AiField,
+        key: String,
+        label: String,
         value: String,
         current: String?,
     ): ReviewField =
         ReviewField(
-            field = field,
+            key = key,
+            label = label,
             value = value,
             current = current?.takeIf { it.isNotBlank() },
             selected = current.isNullOrBlank(),
@@ -132,7 +133,7 @@ internal class ReviewApply(
             docId = docId,
             addTags = chips.filter { it.selected }.map { it.tag },
             removeTags = removals.filter { it.selected }.map { it.tag },
-            properties = fields.filter { it.selected }.associate { it.field to it.value },
+            properties = fields.filter { it.selected }.associate { it.key to it.value },
         )
 
     /**
@@ -144,7 +145,7 @@ internal class ReviewApply(
         copy(
             chips = chips.map { it.deselectIf((docId to it.tag) in report.addsWritten) },
             removals = removals.map { it.deselectIf((docId to it.tag) in report.removalsWritten) },
-            fields = fields.map { it.deselectIf((docId to it.field) in report.fieldsWritten) },
+            fields = fields.map { it.deselectIf((docId to it.key) in report.fieldsWritten) },
         )
 
     private fun ReviewChip.deselectIf(written: Boolean): ReviewChip =

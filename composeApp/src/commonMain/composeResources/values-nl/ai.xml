@@ -35,6 +35,8 @@
     <string name="ai_edit_all_documents">Alle documenten</string>
     <string name="ai_edit_fields">Velden automatisch invullen</string>
     <string name="ai_edit_fields_help">Overschrijven vervangt ook waarden die al ingevuld zijn.</string>
+    <string name="ai_edit_add_field">Veld aan deze run toevoegen</string>
+    <string name="ai_edit_too_many_fields">Kies hoogstens %1$d velden per run; met meer weegt het antwoord zwaarder dan het document.</string>
     <string name="ai_edit_overwrite">Overschrijven</string>
     <string name="ai_edit_tags">Tags</string>
     <string name="ai_edit_suggest_tags">Tags voorstellen</string>

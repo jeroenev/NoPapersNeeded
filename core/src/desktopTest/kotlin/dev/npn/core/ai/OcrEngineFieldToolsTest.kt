@@ -3,6 +3,7 @@ package dev.npn.core.ai
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.coroutines.test.runTest
@@ -71,9 +72,16 @@ class OcrEngineFieldToolsTest {
         )
     }
 
-    private fun searchTool() = LibraryAiTools.SearchFieldsTool(db.documentDao(), db.documentFieldDao())
+    private fun searchTool() =
+        LibraryAiTools.SearchFieldsTool(db.documentDao(), db.documentFieldDao(), FieldKeys.seedDefinitions())
 
-    private fun getTool() = LibraryAiTools.GetDocumentTool(db.documentDao(), db.tagDao(), db.documentFieldDao())
+    private fun getTool() =
+        LibraryAiTools.GetDocumentTool(
+            db.documentDao(),
+            db.tagDao(),
+            db.documentFieldDao(),
+            FieldKeys.seedDefinitions(),
+        )
 
     @Test
     fun searchFindsDocumentsByTheEngineThatReadThem() =
@@ -119,7 +127,10 @@ class OcrEngineFieldToolsTest {
     @Test
     fun listFieldsAdvertisesTheEngineAsADefaultField() =
         runTest {
-            val out = LibraryAiTools.ListFieldsTool(db.documentFieldDao()).execute(LibraryAiTools.ListFieldsTool.Args())
+            val out =
+                LibraryAiTools
+                    .ListFieldsTool(db.documentFieldDao(), FieldKeys.seedDefinitions())
+                    .execute(LibraryAiTools.ListFieldsTool.Args())
             out shouldContain "ocrEngine"
             out shouldContain "set by the app, not the user"
         }

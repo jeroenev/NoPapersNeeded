@@ -5,7 +5,6 @@ import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.ai.AiField
 import dev.npn.core.app.AiEditQueueFacade
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
@@ -94,8 +93,8 @@ class AiEditReviewViewModel(
 
     fun toggleField(
         docId: String,
-        field: AiField,
-    ) = updateReview { it.toggleField(docId, field) }
+        key: String,
+    ) = updateReview { it.toggleField(docId, key) }
 
     fun setDocSelection(
         docId: String,

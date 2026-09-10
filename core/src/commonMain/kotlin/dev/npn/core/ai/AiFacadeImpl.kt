@@ -6,7 +6,7 @@ import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
 import dev.npn.core.app.AiTagging
 import dev.npn.core.db.NpnDatabase
-import dev.npn.core.model.FieldKeys
+import dev.npn.core.db.toFieldDef
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -62,12 +62,15 @@ class AiFacadeImpl(
             // Resolve the runtime lazily inside the cold flow so config errors surface on collection
             // (as flow exceptions), matching the "throws on endpoint errors" contract.
             val runtime = runtime()
+            // The field vocabulary is read per turn so a field defined a minute ago is already known.
+            val fields = db.fieldDefDao().all().mapNotNull { it.toFieldDef() }
             emitAll(
                 KoogChatAgent(
                     executor = runtime.executor,
                     model = runtime.model,
                     db = db,
-                    systemPrompt = AiPrompts.chatSystem(promptContext(configProvider())),
+                    toolSet = LibraryAiTools.toolSetFor(db, fields),
+                    systemPrompt = AiPrompts.chatSystem(promptContext(configProvider()), fields),
                     maxIterations = MAX_AGENT_ITERATIONS,
                     params = AiRuntime.chatParams(configProvider()),
                 ).run(question, sessionId),
@@ -150,7 +153,13 @@ class AiFacadeImpl(
         if (text == null && request.fields.isNotEmpty()) return AiEditSuggestion.EMPTY
         val currentTags = db.tagDao().tagsForDocument(docId)
         val vocabulary = db.tagDao().all().map { it.name }
-        val correspondents = db.documentFieldDao().distinctValues(FieldKeys.CORRESPONDENT, VOCABULARY_LIMIT)
+        val fields = fieldSpecs(request)
+        val currentFields =
+            db
+                .documentFieldDao()
+                .fieldsForDocs(
+                    listOf(docId),
+                ).associate { it.fieldKey to it.fieldValue }
         val maxTags = (request.maxTags ?: config.maxTagsPerDoc).coerceIn(AiTagging.RANGE)
         val maxNew = (request.maxNewTags ?: config.maxNewTagsPerDoc).coerceIn(AiTagging.NEW_TAGS_RANGE)
         val thePrompt =
@@ -158,28 +167,54 @@ class AiFacadeImpl(
                 system(
                     AiPrompts.editSystem(
                         request = request,
+                        fields = fields,
                         max = maxTags,
                         maxNew = maxNew,
                         vocabulary = vocabulary,
-                        correspondents = correspondents,
                         context = promptContext(config),
                     ),
                 )
-                user(AiPrompts.editUser(doc, request, currentTags, text))
+                user(AiPrompts.editUser(doc.fileName, currentFields, fields, request, currentTags, text))
             }
         val response = runtime.executor.execute(thePrompt, runtime.model)
         return AiText.parseEditSuggestion(
             response.textContent(),
-            currentTitle = doc.title,
-            currentCorrespondent = doc.correspondent,
-            currentDocDate = doc.docDate,
-            correspondents = correspondents,
+            currentFields = currentFields,
+            fields = fields,
             currentTags = currentTags,
             vocabulary = vocabulary,
-            fields = request.fields,
             maxTags = maxTags,
             maxNewTags = maxNew,
         )
+    }
+
+    /**
+     * The requested fields resolved against the registry, in request order. A TEXT field below the
+     * vocabulary threshold carries its existing values for verbatim reuse; a key the registry does
+     * not know is asked for as plain text rather than dropped, so a run configured before a field
+     * was deleted still gets an answer for it.
+     */
+    private suspend fun fieldSpecs(request: AiEditRequest): List<AiFieldSpec> {
+        val defs =
+            db
+                .fieldDefDao()
+                .all()
+                .mapNotNull { it.toFieldDef() }
+                .associateBy { it.key }
+        return request.fields.map { cfg ->
+            val def = defs[cfg.key] ?: AiFieldSpec.unregistered(cfg.key)
+            val vocabulary =
+                if (AiFieldSpec.wantsVocabulary(def)) {
+                    db
+                        .documentFieldDao()
+                        .distinctValues(def.key, AiFieldSpec.VOCABULARY_THRESHOLD + 1)
+                        .takeIf { it.size <= AiFieldSpec.VOCABULARY_THRESHOLD }
+                        .orEmpty()
+                } else {
+                    emptyList()
+                }
+            AiFieldSpec(def, cfg.mode, vocabulary)
+        }
     }
 
     override suspend fun ocrConfigured(): Boolean = configProvider().configured
@@ -243,8 +278,6 @@ class AiFacadeImpl(
     private companion object {
         const val MAX_AGENT_ITERATIONS = 15
 
-        /** Upper bound on the existing values handed to the model as vocabulary for one field. */
-        const val VOCABULARY_LIMIT = 200
         const val CHAT_CONVERSATION_ID = "main"
         const val NEW_SESSION_TITLE = "New chat"
         const val MAX_SESSION_TITLE_CHARS = 60

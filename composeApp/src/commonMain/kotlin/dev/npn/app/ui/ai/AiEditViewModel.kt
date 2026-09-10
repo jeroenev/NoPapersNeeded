@@ -7,7 +7,6 @@ import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.AiSuggest
@@ -22,6 +21,7 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.EditProgress
 import dev.npn.core.app.EditScope
+import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.ReviewChip
@@ -31,7 +31,7 @@ import dev.npn.core.app.SavedView
 import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.ScopeKey
 import dev.npn.core.app.SettingsRepository
-import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -121,7 +121,13 @@ data class AiEditUiState(
     val maxTags: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val maxNewTags: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
     val batchSize: Int = AiTagging.DEFAULT_BATCH_DOCS,
-    val fieldOptions: Map<AiField, AiFieldOption> = AiField.entries.associateWith { AiFieldOption() },
+    /** The registry, for labels and the "add a field to this run" picker. */
+    val fields: List<FieldDef> = emptyList(),
+    /**
+     * Per-field autofill configuration by key. Seeded from the registry's aiEnabled fields once it
+     * arrives; any other registered field can be added to the run from the picker.
+     */
+    val fieldOptions: Map<String, AiFieldOption> = emptyMap(),
     val includeTags: Boolean = true,
     val allowNewTags: Boolean = true,
     val includeTagRemovals: Boolean = false,
@@ -145,10 +151,13 @@ private fun AiEditUiState.runsInBackground(count: Int): Boolean =
 
 /** Whether the configured run asks the model for anything at all (drives the Start affordance). */
 fun AiEditUiState.hasEdits(): Boolean =
-    includeTags ||
-        includeTagRemovals ||
-        fieldOptions.values.any { it.enabled } ||
-        customPrompt.isNotBlank()
+    !tooManyFields &&
+        (
+            includeTags ||
+                includeTagRemovals ||
+                fieldOptions.values.any { it.enabled } ||
+                customPrompt.isNotBlank()
+        )
 
 /** Whether [scope] can be picked: the hand-off, review mode and saved views gate three of them. */
 fun AiEditUiState.scopeAvailable(scope: EditScope): Boolean =
@@ -160,17 +169,30 @@ fun AiEditUiState.scopeAvailable(scope: EditScope): Boolean =
         EditScope.UNTAGGED, EditScope.ALL -> true
     }
 
-/** The autofilled fields' registry keys; these define [EditScope.MISSING_FIELDS]. */
-fun AiEditUiState.missingFields(): List<String> =
-    AiField.entries.filter { fieldOptions[it]?.enabled == true }.map { it.fieldKey }
+/** The autofilled fields' registry keys, in registry order; these define [EditScope.MISSING_FIELDS]. */
+fun AiEditUiState.missingFields(): List<String> = enabledFieldKeys()
 
-private val AiField.fieldKey: String
-    get() =
-        when (this) {
-            AiField.TITLE -> FieldKeys.TITLE
-            AiField.CORRESPONDENT -> FieldKeys.CORRESPONDENT
-            AiField.DOC_DATE -> FieldKeys.DOC_DATE
+/** Enabled field keys in registry order (keys the registry no longer lists come last). */
+fun AiEditUiState.enabledFieldKeys(): List<String> {
+    val order = fields.map { it.key }
+    return fieldOptions.filterValues { it.enabled }.keys.sortedBy {
+        order.indexOf(it).let { i ->
+            if (i <
+                0
+            ) {
+                Int.MAX_VALUE
+            } else {
+                i
+            }
         }
+    }
+}
+
+/** True when the run asks about more fields than one reply can sensibly carry (see P11 in the plan). */
+val AiEditUiState.tooManyFields: Boolean get() = fieldOptions.count { it.value.enabled } > MAX_FIELDS_PER_RUN
+
+/** Upper bound on autofill fields per run: beyond this the JSON contract dwarfs the document text. */
+const val MAX_FIELDS_PER_RUN = 12
 
 private fun AiEditUiState.scopeKey(): ScopeKey =
     ScopeKey(
@@ -201,6 +223,7 @@ class AiEditViewModel(
     ai: AiSuggest,
     savedViewRepository: SavedViewRepository,
     reviewConfig: ReviewConfigFacade,
+    fieldRegistry: FieldRegistry,
     private val editQueue: AiEditQueueFacade,
     private val settings: SettingsRepository,
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
@@ -217,6 +240,7 @@ class AiEditViewModel(
         ai = session.aiSuggest,
         savedViewRepository = session.savedViews,
         reviewConfig = session.reviewConfig,
+        fieldRegistry = session.fieldRegistry,
         editQueue = session.aiEditQueue,
         settings = settings,
         selection = selection,
@@ -231,7 +255,24 @@ class AiEditViewModel(
         )
     val ui: StateFlow<AiEditUiState> = _ui.asStateFlow()
 
-    private val edit = AiEditRun(documents, meta, content, ai, selection)
+    private val edit = AiEditRun(documents, meta, content, ai, fieldRegistry, selection)
+
+    init {
+        // Seed the field options from the registry the first time it arrives: every aiEnabled field
+        // participates, others sit in the picker. Later registry changes only refresh the labels and
+        // the picker, never the user's choices for a run in progress.
+        viewModelScope.launch {
+            fieldRegistry.fields.collect { defs ->
+                _ui.update { state ->
+                    val seeded =
+                        state.fieldOptions.ifEmpty {
+                            defs.filter { it.aiEnabled }.associate { it.key to AiFieldOption() }
+                        }
+                    state.copy(fields = defs, fieldOptions = seeded)
+                }
+            }
+        }
+    }
 
     /**
      * The documents the next batch would process, refreshed as the scope, batch size, autofill
@@ -317,17 +358,31 @@ class AiEditViewModel(
         _ui.update { it.copy(batchSize = value.coerceIn(AiTagging.BATCH_RANGE)) }
     }
 
-    /** Toggle whether [field] participates in the run (Idle only). */
+    /** Toggle whether field [key] participates in the run (Idle only). */
     fun setFieldEnabled(
-        field: AiField,
+        key: String,
         enabled: Boolean,
-    ) = updateFieldOption(field) { it.copy(enabled = enabled) }
+    ) = updateFieldOption(key) { it.copy(enabled = enabled) }
 
-    /** Set the autofill [mode] for [field] (Idle only). */
+    /** Set the autofill [mode] for field [key] (Idle only). */
     fun setFieldMode(
-        field: AiField,
+        key: String,
         mode: AiFieldMode,
-    ) = updateFieldOption(field) { it.copy(mode = mode) }
+    ) = updateFieldOption(key) { it.copy(mode = mode) }
+
+    /** Add a registered field the seed left out to this run, enabled (Idle only). */
+    fun addField(key: String) {
+        if (_ui.value.phase != EditPhase.Idle) return
+        _ui.update {
+            if (key in
+                it.fieldOptions
+            ) {
+                it
+            } else {
+                it.copy(fieldOptions = it.fieldOptions + (key to AiFieldOption()))
+            }
+        }
+    }
 
     /** Toggle whether tag additions are suggested at all (Idle only). */
     fun setIncludeTags(value: Boolean) {
@@ -360,13 +415,13 @@ class AiEditViewModel(
     }
 
     private fun updateFieldOption(
-        field: AiField,
+        key: String,
         transform: (AiFieldOption) -> AiFieldOption,
     ) {
         if (_ui.value.phase != EditPhase.Idle) return
         _ui.update {
-            val option = it.fieldOptions[field] ?: return@update it
-            it.copy(fieldOptions = it.fieldOptions + (field to transform(option)))
+            val option = it.fieldOptions[key] ?: return@update it
+            it.copy(fieldOptions = it.fieldOptions + (key to transform(option)))
         }
     }
 
@@ -430,8 +485,8 @@ class AiEditViewModel(
     /** Toggle whether a doc's suggested field value is selected for Apply (Review phase only). */
     fun toggleField(
         docId: String,
-        field: AiField,
-    ) = updateReview { it.toggleField(docId, field) }
+        key: String,
+    ) = updateReview { it.toggleField(docId, key) }
 
     /** Select or deselect every suggestion of one document (Review phase only; no-op otherwise). */
     fun setDocSelection(
@@ -492,10 +547,7 @@ class AiEditViewModel(
     private fun buildRequest(): AiEditRequest {
         val state = _ui.value
         return AiEditRequest(
-            fields =
-                AiField.entries.mapNotNull { field ->
-                    state.fieldOptions[field]?.takeIf { it.enabled }?.let { AiFieldConfig(field, it.mode) }
-                },
+            fields = state.enabledFieldKeys().map { key -> AiFieldConfig(key, state.fieldOptions.getValue(key).mode) },
             tags = state.includeTags,
             tagRemovals = state.includeTagRemovals,
             maxTags = state.maxTags,

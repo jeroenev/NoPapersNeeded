@@ -35,6 +35,8 @@
     <string name="ai_edit_all_documents">All documents</string>
     <string name="ai_edit_fields">Autofill fields</string>
     <string name="ai_edit_fields_help">Overwrite also replaces values that are already filled in.</string>
+    <string name="ai_edit_add_field">Add a field to this run</string>
+    <string name="ai_edit_too_many_fields">Choose at most %1$d fields per run; more than that and the reply outweighs the document.</string>
     <string name="ai_edit_overwrite">Overwrite</string>
     <string name="ai_edit_tags">Tags</string>
     <string name="ai_edit_suggest_tags">Suggest tags</string>

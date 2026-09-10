@@ -3,7 +3,6 @@ package dev.npn.app.ui.detail
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.remember
-import dev.npn.core.ai.AiField
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.model.FieldDef
@@ -106,8 +105,8 @@ data class AiActions(
     val onDismissTag: (String) -> Unit,
     val onClearTagSuggestions: () -> Unit,
     val onSuggestMetadata: () -> Unit,
-    val onAcceptMetadata: (AiField) -> Unit,
-    val onDismissMetadata: (AiField) -> Unit,
+    val onAcceptMetadata: (key: String) -> Unit,
+    val onDismissMetadata: (key: String) -> Unit,
 )
 
 /** The history tab: a first load when it is opened, and an explicit refresh/retry. */

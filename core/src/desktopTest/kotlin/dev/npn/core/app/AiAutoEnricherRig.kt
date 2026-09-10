@@ -3,8 +3,6 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.FakeAiSuggest
-import dev.npn.core.ai.MetadataSuggestion
-import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
@@ -108,6 +106,7 @@ internal class Rig(
 ) {
     val ai = FakeAiSuggest()
     val meta = RecordingMeta()
+    val fieldRegistry = FakeFieldRegistry()
     val clock = MutableClock(start = 5_000L)
     var config: AiConfig = ACTIVE
 
@@ -123,6 +122,7 @@ internal class Rig(
             queueDao = db.aiEnrichQueueDao(),
             ai = ai,
             meta = meta,
+            fieldRegistry = fieldRegistry,
             readConfig = { config },
             clock = clock,
         )

@@ -1,6 +1,7 @@
 package dev.npn.app.ui.ai
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -14,6 +15,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.Button
@@ -27,6 +29,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -41,12 +44,13 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.EditScope
+import dev.npn.core.model.FieldDef
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_add_field
 import no_papers_needed.composeapp.generated.resources.ai_edit_all_documents
 import no_papers_needed.composeapp.generated.resources.ai_edit_allow_new_tags
 import no_papers_needed.composeapp.generated.resources.ai_edit_allow_new_tags_help
@@ -77,6 +81,7 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tags
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_tags_help
 import no_papers_needed.composeapp.generated.resources.ai_edit_tags
 import no_papers_needed.composeapp.generated.resources.ai_edit_tags_per_document
+import no_papers_needed.composeapp.generated.resources.ai_edit_too_many_fields
 import no_papers_needed.composeapp.generated.resources.ai_edit_untagged_documents
 import org.jetbrains.compose.resources.stringResource
 
@@ -282,13 +287,53 @@ private fun FieldSection(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        AiField.entries.forEach { field ->
+        val labels = ui.fields.associate { it.key to it.label }
+        // Registry order, so the run's rows read like the document panel; a key the registry no
+        // longer lists keeps its row (shown by key) so a configured run is never silently trimmed.
+        val order = ui.fields.map { it.key }
+        val keys = ui.fieldOptions.keys.sortedBy { order.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } }
+        for (key in keys) {
             FieldOption(
-                label = fieldLabel(field),
-                option = ui.fieldOptions[field] ?: AiFieldOption(),
-                onEnabledChange = { vm.setFieldEnabled(field, it) },
-                onOverwriteChange = { vm.setFieldMode(field, fieldMode(it)) },
+                label = labels[key] ?: key,
+                option = ui.fieldOptions.getValue(key),
+                onEnabledChange = { vm.setFieldEnabled(key, it) },
+                onOverwriteChange = { vm.setFieldMode(key, fieldMode(it)) },
             )
+        }
+        if (ui.tooManyFields) {
+            Text(
+                stringResource(Res.string.ai_edit_too_many_fields, MAX_FIELDS_PER_RUN),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.error,
+            )
+        }
+        AddFieldPicker(ui.fields.filter { it.key !in ui.fieldOptions }, vm::addField)
+    }
+}
+
+/** "Add a field to this run": every registered field the run does not list yet. */
+@Composable
+private fun AddFieldPicker(
+    available: List<FieldDef>,
+    onAdd: (String) -> Unit,
+) {
+    if (available.isEmpty()) return
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) {
+            Icon(Icons.Filled.Add, contentDescription = null)
+            Text(stringResource(Res.string.ai_edit_add_field), modifier = Modifier.padding(start = 8.dp))
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            available.forEach { def ->
+                DropdownMenuItem(
+                    text = { Text(def.label) },
+                    onClick = {
+                        expanded = false
+                        onAdd(def.key)
+                    },
+                )
+            }
         }
     }
 }

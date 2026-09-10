@@ -4,13 +4,13 @@ package dev.npn.app.ui.ai
 
 import dev.npn.app.FakeAiEditQueue
 import dev.npn.app.MainDispatcherTest
-import dev.npn.core.ai.AiField
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.EditRunReview
 import dev.npn.core.app.ReviewChip
 import dev.npn.core.app.ReviewDoc
 import dev.npn.core.app.ReviewField
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -32,7 +32,16 @@ private fun reviewDoc(
     snippet = null,
     chips = listOf(ReviewChip(tag, isNew = false, selected = tagSelected)),
     removals = emptyList(),
-    fields = listOf(ReviewField(AiField.TITLE, "Proposed", current = null, selected = fieldSelected)),
+    fields =
+        listOf(
+            ReviewField(
+                key = FieldKeys.TITLE,
+                label = "Title",
+                value = "Proposed",
+                current = null,
+                selected = fieldSelected,
+            ),
+        ),
 )
 
 /** Serves a scripted review and records what the viewmodel asked it to do. */
@@ -91,7 +100,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val job = launch { model.phase.collect {} }
             advanceUntilIdle()
 
-            model.toggleField("a", AiField.TITLE)
+            model.toggleField("a", FieldKeys.TITLE)
             model.apply()
             advanceUntilIdle()
 

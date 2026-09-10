@@ -1,7 +1,8 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.MetadataSuggestion
+import dev.npn.core.ai.FieldSuggestion
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
@@ -91,7 +92,7 @@ class AiAutoEnricherRetryTest {
             withRig { rig ->
                 rig.insert("d1")
                 rig.ai.edit =
-                    AiEditSuggestion(metadata = MetadataSuggestion(title = "Electricity invoice"))
+                    AiEditSuggestion(metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "Electricity invoice")))
                 rig.enricher.enqueue("d1")
                 rig.meta.failEditsWith = { IllegalStateException("journal rejected the write") }
 

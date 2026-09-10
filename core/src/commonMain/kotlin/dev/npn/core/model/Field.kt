@@ -12,21 +12,23 @@ import kotlinx.serialization.Serializable
 @Serializable
 enum class FieldType(
     val wire: String,
+    /** The nullable JSON literal a model is asked to answer with for a field of this type. */
+    val aiLiteral: String,
 ) {
     /** Single line, autocompleted from existing values. */
-    TEXT("text"),
+    TEXT("text", "string|null"),
 
     /** Multi-line prose (what `notes` is). */
-    LONG_TEXT("longText"),
+    LONG_TEXT("longText", "string|null"),
 
     /** Integer. */
-    NUMBER("number"),
+    NUMBER("number", "integer|null"),
 
     /** Fractional number; canonical form always uses `.`. */
-    DECIMAL("decimal"),
+    DECIMAL("decimal", "number|null"),
 
     /** ISO-8601 local date, `yyyy-MM-dd`. */
-    DATE("date"),
+    DATE("date", "\"YYYY-MM-DD\"|null"),
     ;
 
     /** True for types whose values belong in the full-text index. */

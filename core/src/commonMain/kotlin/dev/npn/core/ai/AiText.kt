@@ -1,5 +1,8 @@
 package dev.npn.core.ai
 
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldParse
+import dev.npn.core.model.FieldValues
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -15,7 +18,6 @@ object AiText {
             isLenient = true
         }
     private val docRefRegex = Regex("\\[doc:([0-9a-fA-F]{64})]")
-    private val isoDateRegex = Regex("(\\d{4})-(\\d{2})-(\\d{2})")
 
     /** Cap on accepted title suggestions; anything longer is model rambling, not a title. */
     const val MAX_TITLE_SUGGESTION_CHARS = 200
@@ -83,19 +85,15 @@ object AiText {
      *  - **add_tags** (alias "tags"): classified/capped via [classifyTags];
      *  - **remove_tags**: filtered to tags actually on the document, canonicalized to their current
      *    spelling;
-     *  - **title/correspondent/date**: validated like [parseMetadataSuggestion], then restricted to
-     *    the [fields] actually requested — UNFILLED-mode fields drop any value when the document
-     *    already has one (the model is told to return null, this is the defensive backstop).
+     *  - **fields**: one entry per requested [AiFieldSpec], read from the nested `"fields"` object
+     *    (or the top level, for models that flatten it) and validated by [parseFieldSuggestion].
      */
     fun parseEditSuggestion(
         response: String,
-        currentTitle: String?,
-        currentCorrespondent: String?,
-        currentDocDate: String?,
-        correspondents: List<String>,
+        currentFields: Map<String, String>,
+        fields: List<AiFieldSpec>,
         currentTags: List<String>,
         vocabulary: List<String>,
-        fields: List<AiFieldConfig>,
         maxTags: Int,
         maxNewTags: Int,
     ): AiEditSuggestion {
@@ -113,38 +111,67 @@ object AiText {
                 .stringArrayAt("remove_tags")
                 .mapNotNull { raw -> currentTags.firstOrNull { it.equals(raw, ignoreCase = true) } }
                 .distinct()
-        val parsed =
-            parseMetadataSuggestion(response, currentTitle, currentCorrespondent, currentDocDate, correspondents)
-        val modes = fields.associate { it.field to it.mode }
-        val metadata =
-            MetadataSuggestion(
-                title = parsed.title.takeIf { allows(modes, AiField.TITLE, currentTitle) },
-                correspondent =
-                    parsed.correspondent.takeIf {
-                        allows(
-                            modes,
-                            AiField.CORRESPONDENT,
-                            currentCorrespondent,
-                        )
-                    },
-                docDate = parsed.docDate.takeIf { allows(modes, AiField.DOC_DATE, currentDocDate) },
-            )
-        return AiEditSuggestion(addTags = addTags, removeTags = removeTags, metadata = metadata)
+        return AiEditSuggestion(
+            addTags = addTags,
+            removeTags = removeTags,
+            metadata = parseFieldSuggestion(obj, currentFields, fields),
+        )
     }
 
-    private fun allows(
-        modes: Map<AiField, AiFieldMode>,
-        field: AiField,
+    /**
+     * The field half of a reply. Each requested field is judged independently: the raw answer is
+     * canonicalized for the field's type ([FieldValues.canonicalize]) and dropped when it does not
+     * fit; a TEXT answer matching an existing vocabulary value case-insensitively takes that exact
+     * spelling; a value equal to the document's current one (case-insensitively for text) is
+     * dropped; an UNFILLED-mode field drops any value when the document already has one (the model
+     * is told to return null, this is the defensive backstop); a title longer than
+     * [MAX_TITLE_SUGGESTION_CHARS] is dropped. Nothing the run did not ask for is ever accepted.
+     */
+    fun parseFieldSuggestion(
+        obj: JsonObject,
+        currentFields: Map<String, String>,
+        fields: List<AiFieldSpec>,
+    ): FieldSuggestion {
+        val nested = obj["fields"] as? JsonObject
+        val values =
+            fields.mapNotNull { spec ->
+                val raw = nested?.valueAt(spec.key) ?: obj.valueAt(spec.key)
+                accepted(spec, raw, currentFields[spec.key]?.trim())?.let { spec.key to it }
+            }
+        return FieldSuggestion(values.toMap())
+    }
+
+    /** One field's accepted canonical value, or null when the answer is absent, off-type, redundant or not allowed. */
+    private fun accepted(
+        spec: AiFieldSpec,
+        raw: String?,
         current: String?,
-    ): Boolean =
-        when (val mode = modes[field]) {
-            // Not requested: never accepted, even though the model may have returned it.
-            null -> false
+    ): String? {
+        if (raw == null) return null
+        if (spec.mode == AiFieldMode.UNFILLED && !current.isNullOrBlank()) return null
+        val canonical = canonicalAnswer(spec, raw) ?: return null
+        return canonical.takeUnless { current != null && sameValue(spec, it, current) }
+    }
 
-            AiFieldMode.ALL -> true
+    private fun canonicalAnswer(
+        spec: AiFieldSpec,
+        raw: String,
+    ): String? {
+        val canonical = (FieldValues.canonicalize(spec.def.type, raw) as? FieldParse.Ok)?.canonical ?: return null
+        if (spec.key == FieldKeys.TITLE && canonical.length > MAX_TITLE_SUGGESTION_CHARS) return null
+        if (!spec.def.type.isTextual) return canonical
+        return spec.vocabulary.firstOrNull { it.equals(canonical, ignoreCase = true) } ?: canonical
+    }
 
-            AiFieldMode.UNFILLED -> current.isNullOrBlank()
-        }
+    private fun sameValue(
+        spec: AiFieldSpec,
+        proposed: String,
+        current: String,
+    ): Boolean = if (spec.def.type.isTextual) proposed.equals(current, ignoreCase = true) else proposed == current
+
+    /** A string, number or boolean answer as text; null, absent and blank read as "no answer". */
+    private fun JsonObject.valueAt(key: String): String? =
+        (this[key] as? JsonPrimitive)?.contentOrNull?.trim()?.takeIf { it.isNotEmpty() }
 
     /**
      * The shared tag-classification tail of [parseEditSuggestion]:
@@ -179,49 +206,6 @@ object AiText {
         val existing = classified.filter { !it.isNew }
         val fresh = classified.filter { it.isNew }.take(newCap)
         return (existing + fresh).take(perDocMax)
-    }
-
-    /**
-     * Parse a metadata-suggestion object out of a model [response]: the first JSON object found
-     * wins (models often wrap it in prose or code fences). Each field is validated independently:
-     *  - **title**: trimmed; dropped when blank, absurdly long (> [MAX_TITLE_SUGGESTION_CHARS])
-     *    or equal to [currentTitle];
-     *  - **correspondent**: trimmed, **canonicalized** to the existing [correspondents] entry's
-     *    exact spelling when it matches case-insensitively; dropped when blank or equal to
-     *    [currentCorrespondent] (case-insensitively);
-     *  - **date**: dropped unless a plausible ISO `yyyy-MM-dd` date differing from
-     *    [currentDocDate].
-     */
-    fun parseMetadataSuggestion(
-        response: String,
-        currentTitle: String?,
-        currentCorrespondent: String?,
-        currentDocDate: String?,
-        correspondents: List<String>,
-    ): MetadataSuggestion {
-        val obj = firstJsonObject(response) ?: return MetadataSuggestion.EMPTY
-        val title =
-            obj
-                .stringAt("title")
-                ?.takeIf { it.length <= MAX_TITLE_SUGGESTION_CHARS && it != currentTitle?.trim() }
-        val correspondent =
-            obj
-                .stringAt("correspondent")
-                ?.let { raw -> correspondents.firstOrNull { it.equals(raw, ignoreCase = true) } ?: raw }
-                ?.takeIf { !it.equals(currentCorrespondent?.trim(), ignoreCase = true) }
-        val docDate =
-            obj
-                .stringAt("date")
-                ?.takeIf { isPlausibleIsoDate(it) && it != currentDocDate?.trim() }
-        return MetadataSuggestion(title = title, correspondent = correspondent, docDate = docDate)
-    }
-
-    /** Structurally valid `yyyy-MM-dd` with a sane month/day range (no calendar-exact check). */
-    fun isPlausibleIsoDate(value: String): Boolean {
-        val match = isoDateRegex.matchEntire(value) ?: return false
-        val month = match.groupValues[2].toInt()
-        val day = match.groupValues[3].toInt()
-        return month in 1..12 && day in 1..31
     }
 
     private fun JsonObject.stringArrayAt(key: String): List<String> =

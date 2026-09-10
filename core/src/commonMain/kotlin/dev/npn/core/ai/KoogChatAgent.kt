@@ -24,12 +24,12 @@ class KoogChatAgent(
     private val executor: PromptExecutor,
     private val model: LLModel,
     private val db: NpnDatabase,
+    private val toolSet: LibraryToolSet,
     private val params: LLMParams?,
     private val systemPrompt: String,
     private val maxIterations: Int,
 ) {
     private val historyProvider = RoomChatHistoryProvider(db)
-    private val toolSet = LibraryAiTools.toolSetFor(db)
     private val toolRegistry = ToolRegistry { toolSet.tools.forEach(::tool) }
 
     fun run(

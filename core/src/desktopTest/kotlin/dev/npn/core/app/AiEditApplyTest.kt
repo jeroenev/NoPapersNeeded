@@ -2,7 +2,6 @@
 
 package dev.npn.core.app
 
-import dev.npn.core.ai.AiField
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -68,7 +67,7 @@ private fun writableEdit(
     docId: String,
     addTags: List<String> = emptyList(),
     removeTags: List<String> = emptyList(),
-    properties: Map<AiField, String?> = emptyMap(),
+    properties: Map<String, String?> = emptyMap(),
 ) = WritableEdit(docId, addTags, removeTags, properties)
 
 /**
@@ -140,8 +139,8 @@ class AiEditApplyTest {
                             "a",
                             properties =
                                 mapOf(
-                                    AiField.CORRESPONDENT to "Acme",
-                                    AiField.DOC_DATE to "2024-01-15",
+                                    FieldKeys.CORRESPONDENT to "Acme",
+                                    FieldKeys.DOC_DATE to "2024-01-15",
                                 ),
                         ),
                     ),
@@ -158,7 +157,7 @@ class AiEditApplyTest {
             // Both fields still count as applied; batching changes the write, not the tally.
             report.appliedCount shouldBe 2
             report.fieldsWritten shouldContainExactlyInAnyOrder
-                listOf("a" to AiField.CORRESPONDENT, "a" to AiField.DOC_DATE)
+                listOf("a" to FieldKeys.CORRESPONDENT, "a" to FieldKeys.DOC_DATE)
         }
 
     /** Documents are written one at a time, so one document's failure cannot cost another's. */
@@ -170,8 +169,8 @@ class AiEditApplyTest {
 
             apply.apply(
                 listOf(
-                    writableEdit("a", properties = mapOf(AiField.CORRESPONDENT to "Acme")),
-                    writableEdit("b", properties = mapOf(AiField.CORRESPONDENT to "Acme")),
+                    writableEdit("a", properties = mapOf(FieldKeys.CORRESPONDENT to "Acme")),
+                    writableEdit("b", properties = mapOf(FieldKeys.CORRESPONDENT to "Acme")),
                 ),
             )
 

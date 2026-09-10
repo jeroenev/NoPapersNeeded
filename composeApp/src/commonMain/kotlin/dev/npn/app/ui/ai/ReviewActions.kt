@@ -1,6 +1,5 @@
 package dev.npn.app.ui.ai
 
-import dev.npn.core.ai.AiField
 import dev.npn.core.app.ReviewChip
 import dev.npn.core.app.ReviewDoc
 
@@ -11,7 +10,7 @@ import dev.npn.core.app.ReviewDoc
  */
 internal data class ReviewActions(
     val onToggleChip: (String, String) -> Unit,
-    val onToggleField: (String, AiField) -> Unit,
+    val onToggleField: (docId: String, key: String) -> Unit,
     val onSetDoc: (String, Boolean) -> Unit,
     val onSetAll: (Boolean) -> Unit,
     val onApply: () -> Unit,
@@ -38,10 +37,10 @@ internal fun List<ReviewDoc>.toggleChip(
 
 internal fun List<ReviewDoc>.toggleField(
     docId: String,
-    field: AiField,
+    key: String,
 ): List<ReviewDoc> =
     mapDoc(docId) { doc ->
-        doc.copy(fields = doc.fields.map { if (it.field == field) it.copy(selected = !it.selected) else it })
+        doc.copy(fields = doc.fields.map { if (it.key == key) it.copy(selected = !it.selected) else it })
     }
 
 /** Select or deselect every suggestion of one document. */

@@ -99,12 +99,8 @@ class FakeDocumentRepository : DocumentRepository {
 
     override fun observeDuplicates(): Flow<List<Pair<String, String>>> = duplicates
 
-    val fieldKeys = MutableStateFlow<List<String>>(emptyList())
-
     /** Backing list returned by [history]; tests mutate it to drive the history panel. */
     var historyList: List<DocumentHistoryRecord> = emptyList()
-
-    override fun observeFieldKeys(): Flow<List<String>> = fieldKeys
 
     var historyError: Throwable? = null
     var historyCalls: Int = 0

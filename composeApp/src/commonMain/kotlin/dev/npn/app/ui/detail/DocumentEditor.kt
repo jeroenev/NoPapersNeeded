@@ -29,8 +29,6 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
-import dev.npn.core.ai.AiField
-import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
@@ -98,9 +96,9 @@ internal fun DocumentEditor(
             // Accepting a suggestion saves immediately (the "saved" notice says so), but any draft
             // the user typed for that field must be dropped first — otherwise overlay would keep
             // showing the typed value and the next save would overwrite the accepted suggestion.
-            onAcceptMetadata = { field ->
-                store.clearField(docId, field.draftKey())
-                actions.ai.onAcceptMetadata(field)
+            onAcceptMetadata = { key ->
+                store.clearField(docId, key)
+                actions.ai.onAcceptMetadata(key)
             },
         )
     Column(
@@ -196,11 +194,3 @@ private fun EditorSaveBar(
         )
     }
 }
-
-/** The draft property key an AI-suggestable field maps to. Total, so a new [AiField] must map here. */
-private fun AiField.draftKey(): String =
-    when (this) {
-        AiField.TITLE -> FieldKeys.TITLE
-        AiField.CORRESPONDENT -> FieldKeys.CORRESPONDENT
-        AiField.DOC_DATE -> FieldKeys.DOC_DATE
-    }

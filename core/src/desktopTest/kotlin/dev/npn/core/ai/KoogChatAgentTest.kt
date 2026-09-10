@@ -13,6 +13,7 @@ import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
+import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -59,7 +60,15 @@ class KoogChatAgentTest {
     private fun agent(
         executor: PromptExecutor,
         maxIterations: Int = 15,
-    ) = KoogChatAgent(executor, model, db, null, "system", maxIterations)
+    ) = KoogChatAgent(
+        executor,
+        model,
+        db,
+        LibraryAiTools.toolSetFor(db, FieldKeys.seedDefinitions()),
+        null,
+        "system",
+        maxIterations,
+    )
 
     /** [ScriptedExecutor] over plain frame lists (each turn replays its frames then completes). */
     private fun scriptedExecutor(turns: List<List<StreamFrame>>) = ScriptedExecutor(turns.map { it.asFlow() })

@@ -11,11 +11,10 @@ import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.AiSuggest
-import dev.npn.core.ai.MetadataSuggestion
+import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocContentFacade
@@ -100,7 +99,7 @@ data class AiTagState(
  */
 data class AiMetadataState(
     val suggesting: Boolean = false,
-    val suggestion: MetadataSuggestion = MetadataSuggestion.EMPTY,
+    val suggestion: FieldSuggestion = FieldSuggestion.EMPTY,
 )
 
 /**
@@ -373,7 +372,7 @@ class DocDetailViewModel(
     }
 
     /**
-     * Ask the AI endpoint for title/correspondent/date suggestions from this doc's indexed text.
+     * Ask the AI endpoint for a value for every aiEnabled field from this doc's indexed text.
      * No-op while a request is already in flight. Empty results surface an informational message
      * (no OCR text yet, or nothing beyond the current values); failures surface via [messages].
      */
@@ -381,9 +380,17 @@ class DocDetailViewModel(
         if (aiMetadata.value.suggesting) return
         aiMetadata.update { it.copy(suggesting = true) }
         viewModelScope.launch {
+            // Every field the user marked for AI, in ALL mode: this is an explicit request to
+            // second-guess what is there, unlike the automatic pass which only fills gaps.
             val request =
                 AiEditRequest(
-                    fields = AiField.entries.map { AiFieldConfig(it, AiFieldMode.ALL) },
+                    fields =
+                        fieldRegistry.current().filter { it.aiEnabled }.map {
+                            AiFieldConfig(
+                                it.key,
+                                AiFieldMode.ALL,
+                            )
+                        },
                 )
             runCatching { ai.suggestEdits(docId, request).metadata }.fold(
                 onSuccess = { suggestion ->
@@ -401,18 +408,13 @@ class DocDetailViewModel(
     }
 
     /** Accept one field's suggestion: write it via the normal journal path and drop it. */
-    fun acceptAiMetadata(field: AiField) {
-        val suggestion = aiMetadata.value.suggestion
-        when (field) {
-            AiField.TITLE -> suggestion.title?.let { setField(FieldKeys.TITLE, it) }
-            AiField.CORRESPONDENT -> suggestion.correspondent?.let { setField(FieldKeys.CORRESPONDENT, it) }
-            AiField.DOC_DATE -> suggestion.docDate?.let { setField(FieldKeys.DOC_DATE, it) }
-        }
-        dismissAiMetadata(field)
+    fun acceptAiMetadata(key: String) {
+        aiMetadata.value.suggestion[key]?.let { setField(key, it) }
+        dismissAiMetadata(key)
     }
 
-    fun dismissAiMetadata(field: AiField) {
-        aiMetadata.update { it.copy(suggestion = it.suggestion.without(field)) }
+    fun dismissAiMetadata(key: String) {
+        aiMetadata.update { it.copy(suggestion = it.suggestion.without(key)) }
     }
 
     fun setField(

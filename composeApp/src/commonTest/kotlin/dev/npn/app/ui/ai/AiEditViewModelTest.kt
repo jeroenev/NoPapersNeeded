@@ -8,9 +8,8 @@ import dev.npn.app.MainDispatcherTest
 import dev.npn.app.doc
 import dev.npn.app.resolveEnglish
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.ai.MetadataSuggestion
+import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocListItem
@@ -19,7 +18,9 @@ import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -33,6 +34,13 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+
+/**
+ * The registry keys the seed marks aiEnabled, in registry order — what the viewmodel seeds its
+ * fieldOptions with (title, correspondent, docType, docDate; notes is aiEnabled=false).
+ */
+private val seededAiFieldKeys: List<String> =
+    FieldKeys.seedDefinitions().filter { it.aiEnabled }.map { it.key }
 
 private fun item(
     id: String,
@@ -49,7 +57,7 @@ private fun item(
 private fun edit(
     addTags: List<TagSuggestion> = emptyList(),
     removeTags: List<String> = emptyList(),
-    metadata: MetadataSuggestion = MetadataSuggestion.EMPTY,
+    metadata: FieldSuggestion = FieldSuggestion.EMPTY,
 ) = AiEditSuggestion(addTags = addTags, removeTags = removeTags, metadata = metadata)
 
 /**
@@ -118,7 +126,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
                         edit(
                             addTags = listOf(TagSuggestion("t", isNew = false)),
                             removeTags = listOf("utility"),
-                            metadata = MetadataSuggestion(title = "New title"),
+                            metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "New title")),
                         )
                 }
             val model = vm(session)
@@ -166,7 +174,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"))
-                    aiSuggest.edit = edit(metadata = MetadataSuggestion(title = "New title"))
+                    aiSuggest.edit = edit(metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "New title")))
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
@@ -174,7 +182,7 @@ class AiEditSuggestionTest : MainDispatcherTest() {
             model.start()
             advanceUntilIdle()
 
-            model.toggleField("a", AiField.TITLE)
+            model.toggleField("a", FieldKeys.TITLE)
             model.ui.value.phase
                 .shouldBeInstanceOf<EditPhase.Review>()
                 .docs
@@ -241,7 +249,7 @@ class AiEditApplicationTest : MainDispatcherTest() {
                         edit(
                             addTags = listOf(TagSuggestion("t1", isNew = false)),
                             removeTags = listOf("utility"),
-                            metadata = MetadataSuggestion(title = "New title"),
+                            metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "New title")),
                         )
                 }
             val model = vm(session)
@@ -457,17 +465,18 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val jobs = listOf(launch { model.ui.collect {} }, launch { model.preview.collect {} })
             advanceUntilIdle()
 
-            model.setFieldEnabled(AiField.TITLE, false)
+            model.setFieldEnabled(FieldKeys.TITLE, false)
             model.setScope(EditScope.MISSING_FIELDS)
             advanceUntilIdle()
 
             model.ui.value.scope shouldBe EditScope.MISSING_FIELDS
             session.documents.observedFilters
                 .last()
-                .first.missingFields shouldContainExactly listOf(FieldKeys.CORRESPONDENT, FieldKeys.DOC_DATE)
+                .first.missingFields shouldContainExactly
+                listOf(FieldKeys.CORRESPONDENT, FieldKeys.DOC_TYPE, FieldKeys.DOC_DATE)
 
             // Disabling every field leaves nothing to look for, so the scope selects nothing.
-            AiField.entries.forEach { model.setFieldEnabled(it, false) }
+            seededAiFieldKeys.forEach { model.setFieldEnabled(it, false) }
             advanceUntilIdle()
             model.preview.value.total shouldBe 0
             jobs.forEach { it.cancel() }
@@ -632,11 +641,90 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             val request = session.aiSuggest.suggestEditsRequests.single()
-            request.fields.map { it.field } shouldContainExactly AiField.entries
+            request.fields.map { it.key } shouldContainExactly seededAiFieldKeys
             request.fields.all { it.mode == AiFieldMode.UNFILLED } shouldBe true
             request.tags shouldBe true
             request.tagRemovals shouldBe false
             request.customPrompt shouldBe null
+            job.cancel()
+        }
+
+    @Test
+    fun fieldOptionsAreSeededFromTheRegistrysAiEnabledFields() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { documents.documents.value = listOf(item("a")) }
+            val model = vm(session)
+            advanceUntilIdle()
+
+            // The seed marks title/correspondent/docType/docDate aiEnabled (notes is not), so those
+            // are exactly the fields the run starts with.
+            model.ui.value.fieldOptions.keys shouldContainExactlyInAnyOrder seededAiFieldKeys
+        }
+
+    @Test
+    fun addFieldPullsARegisteredFieldIntoTheRunAndItsRequest() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { documents.documents.value = listOf(item("a")) }
+            // A registered but not-aiEnabled field the seed left out of the run.
+            session.fieldRegistry.defs.value =
+                session.fieldRegistry.defs.value +
+                FieldDef(
+                    "amount",
+                    "Amount",
+                    FieldType.DECIMAL,
+                    showByDefault = false,
+                    aiEnabled = false,
+                    position = 5,
+                )
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            // Not in the run until explicitly added from the picker.
+            model.ui.value.fieldOptions.keys shouldContainExactlyInAnyOrder seededAiFieldKeys
+
+            model.addField("amount")
+            model.ui.value.fieldOptions
+                .getValue("amount")
+                .enabled shouldBe true
+
+            model.start()
+            advanceUntilIdle()
+
+            val request = session.aiSuggest.suggestEditsRequests.single()
+            request.fields.map { it.key } shouldContainExactly (seededAiFieldKeys + "amount")
+            job.cancel()
+        }
+
+    @Test
+    fun tooManyFieldsBlocksTheRun() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { documents.documents.value = listOf(item("a")) }
+            // Register enough extra fields that thirteen can be enabled at once (the cap is 12).
+            session.fieldRegistry.defs.value =
+                session.fieldRegistry.defs.value +
+                (1..13).map {
+                    FieldDef(
+                        "extra$it",
+                        "Extra $it",
+                        FieldType.TEXT,
+                        showByDefault = false,
+                        aiEnabled = false,
+                        position =
+                            10 + it,
+                    )
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            // Enable exactly thirteen fields, one over the MAX_FIELDS_PER_RUN cap of 12.
+            model.ui.value.fieldOptions.keys
+                .forEach { model.setFieldEnabled(it, false) }
+            (1..13).forEach { model.addField("extra$it") }
+
+            model.ui.value.tooManyFields shouldBe true
+            model.ui.value.hasEdits() shouldBe false
             job.cancel()
         }
 
@@ -652,16 +740,17 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val job = launch { model.ui.collect {} }
             advanceUntilIdle()
 
-            model.setFieldEnabled(AiField.TITLE, false)
-            model.setFieldMode(AiField.CORRESPONDENT, AiFieldMode.ALL)
+            model.setFieldEnabled(FieldKeys.TITLE, false)
+            model.setFieldMode(FieldKeys.CORRESPONDENT, AiFieldMode.ALL)
             model.setIncludeTagRemovals(true)
             model.setCustomPrompt("merge similar tags")
             model.start()
             advanceUntilIdle()
 
             val request = session.aiSuggest.suggestEditsRequests.single()
-            request.fields.map { it.field } shouldContainExactly listOf(AiField.CORRESPONDENT, AiField.DOC_DATE)
-            request.fields.single { it.field == AiField.CORRESPONDENT }.mode shouldBe AiFieldMode.ALL
+            request.fields.map { it.key } shouldContainExactly
+                listOf(FieldKeys.CORRESPONDENT, FieldKeys.DOC_TYPE, FieldKeys.DOC_DATE)
+            request.fields.single { it.key == FieldKeys.CORRESPONDENT }.mode shouldBe AiFieldMode.ALL
             request.tags shouldBe true
             request.tagRemovals shouldBe true
             request.customPrompt shouldBe "merge similar tags"
@@ -712,7 +801,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             session.aiSuggest.suggestEditsCalls shouldContainExactly listOf("a")
             val request = session.aiSuggest.suggestEditsRequests.single()
             request.tags shouldBe false
-            request.fields.map { it.field } shouldContainExactly AiField.entries
+            request.fields.map { it.key } shouldContainExactly seededAiFieldKeys
             job.cancel()
         }
 
@@ -730,7 +819,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
 
             model.setIncludeTags(false)
             model.setIncludeTagRemovals(false)
-            AiField.entries.forEach { model.setFieldEnabled(it, false) }
+            seededAiFieldKeys.forEach { model.setFieldEnabled(it, false) }
             model.ui.value.hasEdits() shouldBe false
 
             model.start()
@@ -765,14 +854,14 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             model.setBatchSize(2)
             model.setIncludeTags(false)
             model.setAllowNewTags(false)
-            model.setFieldEnabled(AiField.TITLE, false)
+            model.setFieldEnabled(FieldKeys.TITLE, false)
             model.setCustomPrompt("ignored")
             model.ui.value.maxTags shouldBe 11
             model.ui.value.batchSize shouldBe AiTagging.DEFAULT_BATCH_DOCS
             model.ui.value.includeTags shouldBe true
             model.ui.value.allowNewTags shouldBe true
             model.ui.value.fieldOptions
-                .getValue(AiField.TITLE)
+                .getValue(FieldKeys.TITLE)
                 .enabled shouldBe true
             model.ui.value.customPrompt shouldBe ""
             job.cancel()

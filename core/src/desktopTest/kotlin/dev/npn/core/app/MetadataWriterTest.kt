@@ -207,10 +207,11 @@ class MetadataWriterTest {
                         .first()!!
                 item.doc.fields shouldBe mapOf("amount" to "42.50", "vendor" to "ACME")
 
-                // Distinct keys available for autocomplete.
-                rig.session.documents
-                    .observeFieldKeys()
-                    .first() shouldContainExactlyInAnyOrder
+                // Unregistered keys surface as orphans, with usage counts.
+                rig.session.fieldRegistry
+                    .orphanKeys()
+                    .first()
+                    .map { it.fieldKey } shouldContainExactlyInAnyOrder
                     listOf("amount", "vendor")
 
                 // Clearing a field removes it.

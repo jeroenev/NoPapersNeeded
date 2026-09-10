@@ -155,9 +155,6 @@ class DocumentRepositoryImpl(
             }
         }
 
-    override fun observeFieldKeys(): Flow<List<String>> =
-        fieldDao.observeDistinctKeys().map { keys -> keys.filter { it !in FieldKeys.WELL_KNOWN } }
-
     override suspend fun searchSuggestions(
         query: String,
         limit: Int,

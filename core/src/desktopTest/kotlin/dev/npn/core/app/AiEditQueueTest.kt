@@ -5,9 +5,8 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.FakeAiSuggest
-import dev.npn.core.ai.MetadataSuggestion
+import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.NpnDatabase
@@ -41,6 +40,7 @@ private class QueueRig(
     val meta = FakeMeta()
     val content = FakeContent()
     val ai = FakeAiSuggest()
+    val fieldRegistry = FakeFieldRegistry()
     val clock = MutableClock(start = 1_000L)
     var config: AiConfig = ACTIVE
     private var ids = 0
@@ -58,6 +58,7 @@ private class QueueRig(
             content = content,
             meta = meta,
             ai = ai,
+            fieldRegistry = fieldRegistry,
             readConfig = { config },
             clock = clock,
             newJobId = { "job-${++ids}" },
@@ -116,7 +117,7 @@ private fun suggestion(
     title: String? = null,
 ) = edit(
     addTags = listOf(TagSuggestion(tag, isNew = false)),
-    metadata = MetadataSuggestion(title = title),
+    metadata = FieldSuggestion(title?.let { mapOf(FieldKeys.TITLE to it) } ?: emptyMap()),
 )
 
 class AiEditQueueSuggestionTest {
@@ -414,7 +415,7 @@ class AiEditQueueReviewTest {
                         .single()
                         .fields
                         .single()
-                field.field shouldBe AiField.TITLE
+                field.key shouldBe FieldKeys.TITLE
                 field.current shouldBe "Already named"
                 field.selected shouldBe false
             }

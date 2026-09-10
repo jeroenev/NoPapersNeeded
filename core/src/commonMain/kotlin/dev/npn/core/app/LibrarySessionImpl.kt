@@ -736,6 +736,7 @@ class LibrarySessionImpl private constructor(
                     queueDao = db.aiEnrichQueueDao(),
                     ai = ai,
                     meta = meta,
+                    fieldRegistry = fieldRegistry,
                     readConfig = deps.aiConfig,
                     clock = deps.clock,
                 )
@@ -747,6 +748,7 @@ class LibrarySessionImpl private constructor(
                     content = content,
                     meta = meta,
                     ai = ai,
+                    fieldRegistry = fieldRegistry,
                     readConfig = deps.aiConfig,
                     clock = deps.clock,
                 )

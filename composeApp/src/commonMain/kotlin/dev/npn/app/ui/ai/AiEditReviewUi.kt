@@ -50,7 +50,6 @@ import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.ai.AiField
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.ReviewDoc
@@ -68,9 +67,6 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_skip
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggestions_selected
 import no_papers_needed.composeapp.generated.resources.ai_expand
 import no_papers_needed.composeapp.generated.resources.common_apply
-import no_papers_needed.composeapp.generated.resources.detail_correspondent
-import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
-import no_papers_needed.composeapp.generated.resources.detail_title
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -175,7 +171,7 @@ private fun ReviewRow(
                 RemovalChipsRow(doc, actions.onToggleChip)
             }
             doc.fields.forEach { field ->
-                ReviewFieldRow(field, onToggle = { actions.onToggleField(doc.docId, field.field) })
+                ReviewFieldRow(field, onToggle = { actions.onToggleField(doc.docId, field.key) })
             }
         }
         TriStateCheckbox(
@@ -268,7 +264,7 @@ private fun ReviewFieldRow(
         Checkbox(checked = field.selected, onCheckedChange = { onToggle() })
         Column(Modifier.weight(1f).padding(start = 4.dp)) {
             Text(
-                fieldLabel(field.field),
+                field.label,
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
@@ -290,15 +286,6 @@ private fun ReviewFieldRow(
         }
     }
 }
-
-/** Localized label of a single-value document field; shared with the Idle-phase setup UI. */
-@Composable
-internal fun fieldLabel(field: AiField): String =
-    when (field) {
-        AiField.TITLE -> stringResource(Res.string.detail_title)
-        AiField.CORRESPONDENT -> stringResource(Res.string.detail_correspondent)
-        AiField.DOC_DATE -> stringResource(Res.string.detail_document_date_plain)
-    }
 
 @Composable
 private fun NoSuggestionsSection(docs: List<ReviewDoc>) {

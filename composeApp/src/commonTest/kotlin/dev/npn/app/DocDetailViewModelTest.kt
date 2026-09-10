@@ -2,8 +2,7 @@ package dev.npn.app
 
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.AiField
-import dev.npn.core.ai.MetadataSuggestion
+import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
@@ -548,7 +547,14 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun suggestAiMetadataStoresSuggestion() =
         runTest(dispatcher) {
-            val suggestion = MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
+            val suggestion =
+                FieldSuggestion(
+                    mapOf(
+                        FieldKeys.TITLE to "Invoice Jan",
+                        FieldKeys.CORRESPONDENT to "Acme",
+                        FieldKeys.DOC_DATE to "2024-01-15",
+                    ),
+                )
             val session = FakeLibrarySession().apply { aiSuggest.edit = AiEditSuggestion(metadata = suggestion) }
             val model = vm(session = session)
             advanceUntilIdle()
@@ -562,16 +568,23 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun acceptAiMetadataWritesFieldAndRemovesSuggestion() =
         runTest(dispatcher) {
-            val suggestion = MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
+            val suggestion =
+                FieldSuggestion(
+                    mapOf(
+                        FieldKeys.TITLE to "Invoice Jan",
+                        FieldKeys.CORRESPONDENT to "Acme",
+                        FieldKeys.DOC_DATE to "2024-01-15",
+                    ),
+                )
             val session = FakeLibrarySession().apply { aiSuggest.edit = AiEditSuggestion(metadata = suggestion) }
             val model = vm(session = session)
             advanceUntilIdle()
             model.suggestAiMetadata()
             advanceUntilIdle()
 
-            model.acceptAiMetadata(AiField.TITLE)
-            model.acceptAiMetadata(AiField.CORRESPONDENT)
-            model.acceptAiMetadata(AiField.DOC_DATE)
+            model.acceptAiMetadata(FieldKeys.TITLE)
+            model.acceptAiMetadata(FieldKeys.CORRESPONDENT)
+            model.acceptAiMetadata(FieldKeys.DOC_DATE)
             advanceUntilIdle()
 
             session.meta.fieldSets shouldContainExactly
@@ -580,23 +593,30 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     Triple(listOf("doc-1"), FieldKeys.CORRESPONDENT, "Acme"),
                     Triple(listOf("doc-1"), FieldKeys.DOC_DATE, "2024-01-15"),
                 )
-            model.metadata.value.ai.metadata.suggestion shouldBe MetadataSuggestion.EMPTY
+            model.metadata.value.ai.metadata.suggestion shouldBe FieldSuggestion.EMPTY
         }
 
     @Test
     fun dismissAiMetadataDropsOnlyThatField() =
         runTest(dispatcher) {
-            val suggestion = MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
+            val suggestion =
+                FieldSuggestion(
+                    mapOf(
+                        FieldKeys.TITLE to "Invoice Jan",
+                        FieldKeys.CORRESPONDENT to "Acme",
+                        FieldKeys.DOC_DATE to "2024-01-15",
+                    ),
+                )
             val session = FakeLibrarySession().apply { aiSuggest.edit = AiEditSuggestion(metadata = suggestion) }
             val model = vm(session = session)
             advanceUntilIdle()
             model.suggestAiMetadata()
             advanceUntilIdle()
 
-            model.dismissAiMetadata(AiField.CORRESPONDENT)
+            model.dismissAiMetadata(FieldKeys.CORRESPONDENT)
             advanceUntilIdle()
 
-            model.metadata.value.ai.metadata.suggestion shouldBe suggestion.copy(correspondent = null)
+            model.metadata.value.ai.metadata.suggestion shouldBe suggestion.without(FieldKeys.CORRESPONDENT)
             session.meta.fieldSets shouldBe emptyList()
         }
 
@@ -626,7 +646,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.suggestAiMetadata()
             advanceUntilIdle()
             messages shouldContainExactly listOf("Could not suggest details: network down")
-            model.metadata.value.ai.metadata.suggestion shouldBe MetadataSuggestion.EMPTY
+            model.metadata.value.ai.metadata.suggestion shouldBe FieldSuggestion.EMPTY
             model.metadata.value.ai.metadata.suggesting shouldBe false
             job.cancel()
         }

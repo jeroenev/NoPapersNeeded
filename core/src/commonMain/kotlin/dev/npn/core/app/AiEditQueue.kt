@@ -163,11 +163,12 @@ class AiEditQueue(
     private val content: DocContentFacade,
     private val meta: MetadataWriter,
     private val ai: AiSuggest,
+    private val fieldRegistry: FieldRegistry,
     private val readConfig: suspend () -> AiConfig,
     private val clock: EpochClock,
     private val newJobId: () -> String = ::randomJobId,
 ) : AiEditQueueFacade {
-    private val projector = ReviewProjector(content)
+    private val projector = ReviewProjector(content, fieldRegistry)
     private val reviewApply = ReviewApply(meta)
 
     /**

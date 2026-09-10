@@ -1,7 +1,6 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditRequest
-import dev.npn.core.ai.AiField
 import dev.npn.core.ai.AiSuggest
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -50,12 +49,13 @@ data class ReviewChip(
 )
 
 /**
- * One suggested data-field [value] in the review phase. [selected] drives whether Apply writes it;
- * pre-selected when it fills an empty field, pre-deselected when it would overwrite the [current]
- * value.
+ * One suggested field [value] in the review phase, for registry field [key] shown as [label].
+ * [selected] drives whether Apply writes it; pre-selected when it fills an empty field,
+ * pre-deselected when it would overwrite the [current] value.
  */
 data class ReviewField(
-    val field: AiField,
+    val key: String,
+    val label: String,
     val value: String,
     val current: String?,
     val selected: Boolean,
@@ -170,6 +170,7 @@ class AiEditRun(
     private val meta: MetadataWriter,
     private val content: DocContentFacade,
     private val ai: AiSuggest,
+    private val fieldRegistry: FieldRegistry,
     /** Documents handed over from the library's selection mode; empty when opened standalone. */
     private val selection: List<String> = emptyList(),
 ) {
@@ -177,7 +178,7 @@ class AiEditRun(
     private val reviewApply = ReviewApply(meta)
 
     /** The shared pre-select policy, applied to each answered document. */
-    private val projector = ReviewProjector(content)
+    private val projector = ReviewProjector(content, fieldRegistry)
 
     /** Documents already reviewed in this run; excluded from every later batch. */
     private val _processed = MutableStateFlow(emptySet<String>())

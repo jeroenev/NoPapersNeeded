@@ -1,7 +1,11 @@
 package dev.npn.core.ai
 
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import kotlinx.serialization.json.Json
 import kotlin.test.Test
 
 class AiTextTest {
@@ -118,118 +122,179 @@ class AiTextTest {
     }
 }
 
-/** Parsing/validation behavior for [AiText.parseMetadataSuggestion]. */
-class ParseMetadataSuggestionTest {
+/**
+ * Parsing/validation behavior for [AiText.parseFieldSuggestion]: the field half of a reply, judged
+ * per requested [AiFieldSpec]. Each case asks for exactly the fields it asserts on, since a run only
+ * ever accepts what it asked for. Values now key on the registry key (`docDate`, not `date`).
+ */
+class ParseFieldSuggestionTest {
+    private val seeds = FieldKeys.seedDefinitions().associateBy { it.key }
+
+    private fun spec(
+        key: String,
+        mode: AiFieldMode = AiFieldMode.ALL,
+        vocabulary: List<String> = emptyList(),
+    ) = AiFieldSpec(seeds.getValue(key), mode, vocabulary)
+
+    private fun numberField(key: String) =
+        AiFieldSpec(
+            FieldDef(key, key, FieldType.NUMBER, showByDefault = false, aiEnabled = false, position = 9),
+            AiFieldMode.ALL,
+        )
+
+    /** Parse [body] as a JSON object and run [AiText.parseFieldSuggestion] over it. */
     private fun parse(
-        response: String,
-        currentTitle: String? = null,
-        currentCorrespondent: String? = null,
-        currentDocDate: String? = null,
-        correspondents: List<String> = emptyList(),
-    ) = AiText.parseMetadataSuggestion(response, currentTitle, currentCorrespondent, currentDocDate, correspondents)
+        body: String,
+        fields: List<AiFieldSpec>,
+        currentFields: Map<String, String> = emptyMap(),
+    ): FieldSuggestion = AiText.parseFieldSuggestion(Json.decodeFromString(body), currentFields, fields)
+
+    private val allThree =
+        listOf(spec(FieldKeys.TITLE), spec(FieldKeys.CORRESPONDENT), spec(FieldKeys.DOC_DATE))
 
     @Test
-    fun parsesPlainJsonObject() {
-        val result = parse("""{"title": "Invoice Jan", "correspondent": "Acme", "date": "2024-01-15"}""")
-        result shouldBe MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
+    fun readsEveryRequestedField() {
+        val result =
+            parse(
+                """{"title": "Invoice Jan", "correspondent": "Acme", "docDate": "2024-01-15"}""",
+                fields = allThree,
+            )
+        result shouldBe
+            FieldSuggestion(
+                mapOf(
+                    FieldKeys.TITLE to "Invoice Jan",
+                    FieldKeys.CORRESPONDENT to "Acme",
+                    FieldKeys.DOC_DATE to "2024-01-15",
+                ),
+            )
     }
 
     @Test
-    fun parsesObjectWrappedInProseAndCodeFences() {
-        val response = "Sure!\n```json\n{\"title\": \"Invoice Jan\", \"correspondent\": null, \"date\": null}\n```"
-        parse(response) shouldBe MetadataSuggestion(title = "Invoice Jan")
-    }
-
-    @Test
-    fun nullAndMissingFieldsStayNull() {
-        parse("""{"title": null}""") shouldBe MetadataSuggestion.EMPTY
-    }
-
-    @Test
-    fun nonJsonReturnsEmpty() {
-        parse("no object here, sorry") shouldBe MetadataSuggestion.EMPTY
+    fun nullAndMissingFieldsStayEmpty() {
+        parse("""{"title": null}""", fields = listOf(spec(FieldKeys.TITLE))) shouldBe FieldSuggestion.EMPTY
     }
 
     @Test
     fun blankValuesAreDropped() {
-        parse("""{"title": "  ", "correspondent": "", "date": " "}""") shouldBe MetadataSuggestion.EMPTY
+        parse(
+            """{"title": "  ", "correspondent": "", "docDate": " "}""",
+            fields = allThree,
+        ) shouldBe FieldSuggestion.EMPTY
     }
 
     @Test
     fun valuesEqualToCurrentAreDropped() {
         val result =
             parse(
-                """{"title": "Invoice Jan", "correspondent": "acme", "date": "2024-01-15"}""",
-                currentTitle = "Invoice Jan",
-                currentCorrespondent = "Acme", // case-insensitive match
-                currentDocDate = "2024-01-15",
+                """{"title": "Invoice Jan", "correspondent": "acme", "docDate": "2024-01-15"}""",
+                fields = allThree,
+                currentFields =
+                    mapOf(
+                        FieldKeys.TITLE to "Invoice Jan",
+                        FieldKeys.CORRESPONDENT to "Acme", // case-insensitive match
+                        FieldKeys.DOC_DATE to "2024-01-15",
+                    ),
             )
-        result shouldBe MetadataSuggestion.EMPTY
+        result shouldBe FieldSuggestion.EMPTY
     }
 
     @Test
-    fun correspondentCanonicalizesToExistingSpelling() {
+    fun textFieldCanonicalizesToExistingVocabularySpelling() {
         val result =
             parse(
                 """{"correspondent": "acme corp"}""",
-                correspondents = listOf("Acme Corp", "Utility Co"),
+                fields = listOf(spec(FieldKeys.CORRESPONDENT, vocabulary = listOf("ACME Corp", "Utility Co"))),
             )
-        result.correspondent shouldBe "Acme Corp"
+        result[FieldKeys.CORRESPONDENT] shouldBe "ACME Corp"
     }
 
     @Test
-    fun newCorrespondentKeptVerbatim() {
-        parse("""{"correspondent": "Fresh Name"}""").correspondent shouldBe "Fresh Name"
+    fun newTextValueKeptVerbatimWhenNoVocabularyMatches() {
+        parse(
+            """{"correspondent": "Fresh Name"}""",
+            fields = listOf(spec(FieldKeys.CORRESPONDENT, vocabulary = listOf("ACME Corp"))),
+        )[FieldKeys.CORRESPONDENT] shouldBe "Fresh Name"
     }
 
     @Test
     fun invalidDatesAreDropped() {
-        parse("""{"date": "January 15, 2024"}""").docDate shouldBe null
-        parse("""{"date": "2024-13-01"}""").docDate shouldBe null
-        parse("""{"date": "2024-01-32"}""").docDate shouldBe null
-        parse("""{"date": "2024-1-5"}""").docDate shouldBe null
+        val date = listOf(spec(FieldKeys.DOC_DATE))
+        parse("""{"docDate": "not a date"}""", date)[FieldKeys.DOC_DATE] shouldBe null
+        parse("""{"docDate": "January 15, 2024"}""", date)[FieldKeys.DOC_DATE] shouldBe null
+        parse("""{"docDate": "2024-13-01"}""", date)[FieldKeys.DOC_DATE] shouldBe null
+        parse("""{"docDate": "2024-01-32"}""", date)[FieldKeys.DOC_DATE] shouldBe null
     }
 
     @Test
     fun overlongTitleIsDropped() {
         val longTitle = "x".repeat(AiText.MAX_TITLE_SUGGESTION_CHARS + 1)
-        parse("""{"title": "$longTitle"}""").title shouldBe null
+        parse("""{"title": "$longTitle"}""", listOf(spec(FieldKeys.TITLE)))[FieldKeys.TITLE] shouldBe null
     }
 
     @Test
-    fun nonStringPrimitiveValuesAreIgnored() {
-        parse("""{"title": 42, "correspondent": true, "date": 2024}""") shouldBe MetadataSuggestion.EMPTY
+    fun onlyRequestedFieldsAreAccepted() {
+        // The reply names three fields, but only correspondent was asked for.
+        val result =
+            parse(
+                """{"title": "New title", "correspondent": "Acme", "docDate": "2024-01-15"}""",
+                fields = listOf(spec(FieldKeys.CORRESPONDENT)),
+            )
+        result shouldBe FieldSuggestion(mapOf(FieldKeys.CORRESPONDENT to "Acme"))
     }
 
     @Test
-    fun skipsNonObjectBracesAndFindsRealObject() {
-        val response = "{not json} then {\"title\": \"Invoice Jan\"}"
-        parse(response).title shouldBe "Invoice Jan"
+    fun numberFieldAcceptsANumberDropsWordsAndReadsTheNestedFieldsObject() {
+        val amount = listOf(numberField("amount"))
+        // A plain integer answers a NUMBER field; the value is read from the nested "fields" object.
+        parse("""{"fields": {"amount": "42"}}""", amount)["amount"] shouldBe "42"
+        // A spelled-out number is off-type for a NUMBER field, so it is dropped.
+        parse("""{"fields": {"amount": "forty-two"}}""", amount)["amount"] shouldBe null
+    }
+
+    @Test
+    fun dateFieldDropsAnOffTypeAnswer() {
+        parse(
+            """{"fields": {"docDate": "not a date"}}""",
+            listOf(spec(FieldKeys.DOC_DATE)),
+        )[FieldKeys.DOC_DATE] shouldBe
+            null
+    }
+
+    @Test
+    fun textFieldSnapsToVocabularyCaseInsensitively() {
+        val result =
+            parse(
+                """{"fields": {"correspondent": "acme corp"}}""",
+                fields = listOf(spec(FieldKeys.CORRESPONDENT, vocabulary = listOf("ACME Corp"))),
+            )
+        result[FieldKeys.CORRESPONDENT] shouldBe "ACME Corp"
     }
 }
 
 /** Parsing/validation behavior for [AiText.parseEditSuggestion]. */
 class ParseEditSuggestionTest {
+    private val seeds = FieldKeys.seedDefinitions().associateBy { it.key }
+
+    private fun spec(
+        key: String,
+        mode: AiFieldMode = AiFieldMode.ALL,
+        vocabulary: List<String> = emptyList(),
+    ) = AiFieldSpec(seeds.getValue(key), mode, vocabulary)
+
     private fun parse(
         response: String,
-        currentTitle: String? = null,
-        currentCorrespondent: String? = null,
-        currentDocDate: String? = null,
-        correspondents: List<String> = emptyList(),
+        currentFields: Map<String, String> = emptyMap(),
         currentTags: List<String> = emptyList(),
         vocabulary: List<String> = emptyList(),
-        fields: List<AiFieldConfig> = emptyList(),
+        fields: List<AiFieldSpec> = emptyList(),
         maxTags: Int = 8,
         maxNewTags: Int = 5,
     ) = AiText.parseEditSuggestion(
         response,
-        currentTitle,
-        currentCorrespondent,
-        currentDocDate,
-        correspondents,
+        currentFields,
+        fields,
         currentTags,
         vocabulary,
-        fields,
         maxTags,
         maxNewTags,
     )
@@ -239,14 +304,14 @@ class ParseEditSuggestionTest {
         val result =
             parse(
                 """{"add_tags": ["tax", "invoice"], "remove_tags": ["utility"], """ +
-                    """"title": "Invoice Jan", "correspondent": "Acme", "date": "2024-01-15"}""",
+                    """"fields": {"title": "Invoice Jan", "correspondent": "Acme", "docDate": "2024-01-15"}}""",
                 currentTags = listOf("Utility"),
                 vocabulary = listOf("tax", "invoice"),
                 fields =
                     listOf(
-                        AiFieldConfig(AiField.TITLE),
-                        AiFieldConfig(AiField.CORRESPONDENT),
-                        AiFieldConfig(AiField.DOC_DATE),
+                        spec(FieldKeys.TITLE),
+                        spec(FieldKeys.CORRESPONDENT),
+                        spec(FieldKeys.DOC_DATE),
                     ),
             )
         result.addTags shouldContainExactly
@@ -256,7 +321,13 @@ class ParseEditSuggestionTest {
             )
         result.removeTags shouldContainExactly listOf("Utility")
         result.metadata shouldBe
-            MetadataSuggestion(title = "Invoice Jan", correspondent = "Acme", docDate = "2024-01-15")
+            FieldSuggestion(
+                mapOf(
+                    FieldKeys.TITLE to "Invoice Jan",
+                    FieldKeys.CORRESPONDENT to "Acme",
+                    FieldKeys.DOC_DATE to "2024-01-15",
+                ),
+            )
     }
 
     @Test
@@ -299,42 +370,42 @@ class ParseEditSuggestionTest {
     fun unfilledModeDropsValueWhenCurrentPresent() {
         val result =
             parse(
-                """{"title": "New title"}""",
-                currentTitle = "Old title",
-                fields = listOf(AiFieldConfig(AiField.TITLE, AiFieldMode.UNFILLED)),
+                """{"fields": {"title": "New title"}}""",
+                currentFields = mapOf(FieldKeys.TITLE to "Old title"),
+                fields = listOf(spec(FieldKeys.TITLE, AiFieldMode.UNFILLED)),
             )
-        result.metadata shouldBe MetadataSuggestion.EMPTY
+        result.metadata shouldBe FieldSuggestion.EMPTY
     }
 
     @Test
     fun unfilledModeKeepsValueWhenCurrentBlank() {
         val result =
             parse(
-                """{"title": "New title"}""",
-                fields = listOf(AiFieldConfig(AiField.TITLE, AiFieldMode.UNFILLED)),
+                """{"fields": {"title": "New title"}}""",
+                fields = listOf(spec(FieldKeys.TITLE, AiFieldMode.UNFILLED)),
             )
-        result.metadata.title shouldBe "New title"
+        result.metadata[FieldKeys.TITLE] shouldBe "New title"
     }
 
     @Test
     fun allModeAllowsOverwriteSuggestion() {
         val result =
             parse(
-                """{"title": "New title"}""",
-                currentTitle = "Old title",
-                fields = listOf(AiFieldConfig(AiField.TITLE, AiFieldMode.ALL)),
+                """{"fields": {"title": "New title"}}""",
+                currentFields = mapOf(FieldKeys.TITLE to "Old title"),
+                fields = listOf(spec(FieldKeys.TITLE, AiFieldMode.ALL)),
             )
-        result.metadata.title shouldBe "New title"
+        result.metadata[FieldKeys.TITLE] shouldBe "New title"
     }
 
     @Test
     fun unrequestedFieldsAreDroppedEvenWhenModelReturnsThem() {
         val result =
             parse(
-                """{"title": "New title", "correspondent": "Acme", "date": "2024-01-15"}""",
-                fields = listOf(AiFieldConfig(AiField.CORRESPONDENT)),
+                """{"fields": {"title": "New title", "correspondent": "Acme", "docDate": "2024-01-15"}}""",
+                fields = listOf(spec(FieldKeys.CORRESPONDENT)),
             )
-        result.metadata shouldBe MetadataSuggestion(correspondent = "Acme")
+        result.metadata shouldBe FieldSuggestion(mapOf(FieldKeys.CORRESPONDENT to "Acme"))
     }
 
     @Test
