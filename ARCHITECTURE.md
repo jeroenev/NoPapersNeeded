@@ -36,7 +36,7 @@ source sets hold implementations. Key packages:
 
 | Package | Contents |
 |---|---|
-| `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `Ingest.kt`, `Ocr.kt`, `ReviewConfigFacade.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`, `Settings.kt`. Consumers depend on the facets they use, not on `LibrarySession`. `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events, enforced at the type level: the writers it wraps are `internal` to `core` and its `writer` is not public. |
+| `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `FieldRegistry.kt` (the library's field definitions, values vocabulary and usage), `Ingest.kt`, `Ocr.kt`, `ReviewConfigFacade.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`, `Settings.kt`. Consumers depend on the facets they use, not on `LibrarySession`. `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events, enforced at the type level: the writers it wraps are `internal` to `core` and its `writer` is not public. |
 | `core.journal` | The metadata journal: content-addressed JSONL transactions (`JournalEvent`, `JournalOp`), segments (`Segment`, `SegmentWriter`), codec (`JournalCodec`), HLC (`Hlc`), snapshot compaction (`SnapshotCompactor`, `SnapshotFormat`), and the HLC/OR-set fold (`FoldedState`, `FoldTest`). |
 | `core.fs` | Filesystem abstraction over the library folder: `LibraryFileSystem` (platform impl), `NpnPaths` (`.npn/` layout), `ContentIdentity`/`HexEncoding` (hash handling), `OcrSidecarFiles`, `TrashOps`. |
 | `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsWriteGate`, `DbLocalJournalState`, `DeviceIdentity`, `ScanReport`. |
@@ -45,7 +45,7 @@ source sets hold implementations. Key packages:
 | `core.ocr` | OCR pipeline and sidecars: `OcrEngine` (the engine interface; `MlKitOcrEngine` on android, `TesseractCliEngine` on desktop, `core.ai.AiOcrEngine` for a vision model), `OcrEngines` (the engine vocabulary + ranking), `OcrEngineSelector` (which engine a document's run may use — the one place that decides whether the *paid* engine runs), `OcrPipeline`, `OcrSidecar`. |
 | `core.work` | `QueueDrainer`: the single-flight background drain shared by the OCR queue and the automatic AI enrichment queue. |
 | `core.xmp` | XMP metadata on export/bake-in-place: `PdfXmpIO` (platform), `XmpBytes`, `XmpParser`, `XmpSerializer`, `XmpMerger`, `NpnXmpData`, `BakeService`. |
-| `core.model` | `Document` domain model. |
+| `core.model` | `Document` domain model and the field model: `Field.kt` (`FieldType`, `FieldDef`, `FieldKeys` — well-known keys, seed definitions, key normalization) and `FieldValues.kt` (the one authority on a value's canonical form per type). |
 | `core.rules` / `core.pathrules` | Auto-match rules (`RuleMatcher`, `RuleApplier`, `AutoMatchRule`) and storage-path templates (`StoragePathRule*`, `StoragePathContext`). |
 | `core.watch` | Watched inbox folder: `WatchedFolder` (platform), `WatchedFolderImporter`. |
 | `core.ai` | Local/AI chat loop and tools over the library (`KoogChatAgent`, `AiChatTool`, `AiFacadeImpl`, `LibraryAiTools`). Contracts split per concept: `AiChat.kt`, `AiSuggest.kt`, `AiOcr.kt`, `AiConfig.kt`; `AiFacadeImpl` implements all three facets, so they share one cached endpoint client. Consumers in `core.app` drive it: `AiEditRun` (bulk, review-then-apply), `AiAutoEnricher` (unattended, queued in `ai_enrich_queue` off the OCR thread), and `OcrPipeline` via the `AiOcrEngine` adapter (page-image transcription, one call per page). `LibraryAiTools` is the assistant's entire view of the library — see docs/AI_TOOL_DATA_GAPS.md for what it deliberately does not expose. |
@@ -83,14 +83,19 @@ via `mise hot`.
    scanner / share intent / watched folder, hashes bytes (`SHA-256` = document
    identity), dedups, moves the file into the library, writes OCR sidecars, and
    appends metadata to the journal.
-2. **Journal is source of truth for metadata**: every change (tags, properties,
-    trash, relink) is an immutable, content-addressed JSONL transaction written by
+2. **Journal is source of truth for metadata**: every change (tags, field values,
+    field definitions, system properties, settings, trash, relink) is an immutable,
+    content-addressed JSONL transaction written by
     `JournalCoordinator`. You cannot write to the journal directly: the underlying
     `SegmentWriter`/`ContentAddressedJournalWriter` and the coordinator's held
     `writer` are `internal` to `core`, so the coordinator is the only reachable
     write path (enforced at the type level, not by convention).
 3. **Index is a cache**: `Indexer` folds journal state (OR-set tags, HLC LWW) into
-   the Room database (`FoldedState`, `MetadataAccumulator`). The db lives
+   the Room database (`FoldedState`, `MetadataAccumulator`). Field values land in
+   `document_fields` (one row per document × key, canonical string plus a numeric
+   shadow for NUMBER/DECIMAL) and definitions in `field_defs`; the five typed
+   columns on `documents` are written from the same map as a read cache for list
+   queries. One FTS `fields` column indexes every value. The db lives
    device-local, outside the library folder, and is rebuildable from the folder.
    The projection is a pure function of the applied source set, so
    `MetadataAccumulator` fingerprints that set and records it alongside the ready
@@ -116,9 +121,15 @@ via `mise hot`.
   `JournalCoordinator.SEEDED_SETTING_KEYS`. A key left out of that list reads as
   null on open (the open path folds only the seeded settings, not the whole
   journal) and only appears once something writes it in the running session.
-- Add a new property to a document → journal event + `FoldedState` + `Projections`
-  + the matching `core.app` contract file (`Metadata.kt` for a write, `Documents.kt`
-  for a read) + UI model.
+- A new document field is **data, not code**: define it in Settings → Documents (or
+  the panel's "New field…"), which writes a `field-def`; every editor, filter, sort,
+  storage-path placeholder (`{field:key}`), auto-match action, XMP bag entry, AI
+  request and assistant tool follows the registry. A new field *type* is the
+  two-file change: `FieldValues` (canonical form) + `FieldEditor` (control), plus
+  the `aiLiteral` on the enum constant.
+- A new per-document *system* marker (something the app owns, not the user) → a
+  `SystemProperty` + `prop-set` event + `FoldedState` + `Projections` + the matching
+  `core.app` contract file.
 - New screen → package under `app/ui/`, viewmodel + screen in `commonMain`,
   route in `app/ui/nav/Route.kt`.
 - New value or action in the document metadata panel → a field on `MetadataUiState`

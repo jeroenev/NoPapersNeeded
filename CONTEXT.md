@@ -3,6 +3,33 @@
 Terms with a precise meaning in this codebase. Use these words in code, commits,
 and discussion; sharpen them here when they drift.
 
+## Fields
+
+- **Field** — one named value on a document, identified by a stable **key**
+  (`FieldKeys.normalize`d, case-insensitively unique) and written as a `field-set`
+  journal op with HLC last-writer-wins. Title, correspondent, document type,
+  document date and notes are fields like any other; nothing in the code path is
+  specific to them beyond a few tuned strings (AI prompt wording, XMP interop
+  properties, the title's file-name fallback).
+- **Field definition** (`FieldDef`) — the registry entry for a key: label, `FieldType`
+  (TEXT, LONG_TEXT, NUMBER, DECIMAL, DATE), optional hint, and two flags:
+  **showByDefault** (render on every document and in the library filter, empty or
+  not) and **aiEnabled** (asked for in AI edit runs and filled by automatic
+  enrichment). Synced through `field-def` ops; edited in Settings → Documents.
+- **Well-known field** — one of the five keys a fresh library is seeded with
+  (`FieldKeys.WELL_KNOWN`). Their type is locked because other subsystems read
+  them as that type; everything else about them is editable.
+- **Canonical form** — the one stored representation of a value for its type
+  (`FieldValues`): trimmed text, `yyyy-MM-dd`, `-?\d+`, `-?\d+(\.\d+)?`. Locale
+  formatting happens only at the UI boundary. Blank canonicalizes to "no value":
+  a cleared field has no row, so "missing" is exactly "no row".
+- **Orphan value** — a value whose key has no definition (the definition was
+  removed without clearing values, or a sync brought a key this device has not
+  defined). Still stored, searchable and shown in a muted group; "Add to fields"
+  promotes the key into the registry.
+- **System property** (`SystemProperty`) — per-document state the app owns rather
+  than the user: `reviewed` and `ocrEngine`. Written as `prop-set`; never a field.
+
 ## AI editing
 
 - **Edit Run** — a scoped, batched, reviewable AI edit pass over library
@@ -102,13 +129,16 @@ whole session. Each operation has exactly one public home:
   `ocrVersions`, `setOcrEngine` (the single public home for the engine pin),
   plus the `ocrStatus` flow.
 - **Review Config** (`ReviewConfigFacade`) — library-wide review settings:
-  `reviewMode`/`setReviewMode`, `standardFields`/`setStandardFields`,
-  `markReviewedForMigration`.
+  `reviewMode`/`setReviewMode`, `markReviewedForMigration`.
+- **Field Registry** (`FieldRegistry`, session property `fieldRegistry`) — the
+  library's field definitions: `fields`/`visible`/`aiFields` flows, `upsert`,
+  `remove(key, clearValues)`, `reorder`, plus the values vocabulary
+  (`distinctValues`, `valuesForPrefix`), `orphanKeys` and `usageCounts`.
 - **Maintenance** (`MaintenanceFacade`) — repair and surgery on existing
   documents: `resolveDuplicate`, `applyRelink`, `splitPdf`.
 - **Metadata writing** (`MetadataWriter`, session property `meta`) — per-doc and
-  bulk edits only: tags on docs, reviewed flag, correspondent, doc type, doc
-  date, title, notes, custom fields.
+  bulk edits only: tags on docs, the reviewed flag, and field values by key
+  (`setField`, `applyEdits`), canonicalized against the registry type.
 - **Tag Admin** (`TagAdmin`, session property `tagAdmin`) — vocabulary-level tag
   operations: `renameTag`, `mergeTag`, `deleteTag`, `setTagStyle`.
 - **Doc Lifecycle** (`DocLifecycle`, session property `docLifecycle`) — a

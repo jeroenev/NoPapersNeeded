@@ -57,7 +57,15 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   just by convention: `SegmentWriter`/`ContentAddressedJournalWriter` and the coordinator's
   `writer` are `internal` to `core`, so no outside caller can grab a raw writer.
 - Document identity = SHA-256 of bytes; duplicates are forbidden (one canonical path per hash).
-- Merge semantics: OR-set for tags, HLC last-writer-wins for single-value properties.
+- Merge semantics: OR-set for tags, HLC last-writer-wins for single-value fields, system
+  properties, settings and field definitions.
+- Document fields are registry data, not code. Title, correspondent, docType, docDate and notes
+  are ordinary `field-set` fields whose definitions the library seeds; there is no per-field
+  Kotlin. Only two places may switch exhaustively on `FieldType`: `FieldValues` (canonical form)
+  and the UI's `FieldEditor` (input control) — everything else reads the `FieldDef`. Storage is
+  always the canonical form; a blank value clears the field and is never stored as `""`.
+  The five typed `documents` columns are a read cache the fold writes from the field map, never
+  a second source.
 
 ## Conventions
 
