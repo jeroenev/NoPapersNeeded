@@ -4,17 +4,20 @@ package dev.npn.app.ui.tags
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.selectableGroup
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Check
@@ -33,6 +36,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
@@ -92,7 +97,10 @@ fun TagFormDialog(
                     )
                 }
                 Text(stringResource(Res.string.common_color), style = MaterialTheme.typography.labelLarge)
-                FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.selectableGroup(),
+                ) {
                     // "None" swatch.
                     ColorSwatch(
                         color = null,
@@ -119,6 +127,12 @@ fun TagFormDialog(
     )
 }
 
+/** Diameter of the painted swatch; the touchable area around it is [SwatchTarget]. */
+private val SwatchDiameter = 36.dp
+
+/** Interaction target, kept at the accessibility minimum even though the swatch is smaller. */
+private val SwatchTarget = 48.dp
+
 @Composable
 private fun ColorSwatch(
     color: String?,
@@ -132,28 +146,42 @@ private fun ColorSwatch(
         } else {
             stringResource(Res.string.common_tags_color_value, color)
         }
-    androidx.compose.foundation.layout.Box(
+    // The tappable target is a full 48dp box for pointer/touch and font-scaling accessibility,
+    // while the painted swatch stays compact in the centre. One `selectable` with Role.RadioButton
+    // exposes the single-choice palette to assistive tech; the visible ring/check is decoration, so
+    // the inner content is cleared from the semantics tree to keep one node per option.
+    Box(
         Modifier
-            .size(32.dp)
-            .clip(CircleShape)
-            .background(c)
-            .border(
-                width = if (selected) 3.dp else 1.dp,
-                color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
-                shape = CircleShape,
-            ).semantics { contentDescription = description }
-            .clickable(onClick = onClick),
+            .size(SwatchTarget)
+            .selectable(
+                selected = selected,
+                role = Role.RadioButton,
+                onClick = onClick,
+            ).semantics { contentDescription = description },
         contentAlignment = Alignment.Center,
     ) {
-        if (color == null) {
-            Text(
-                stringResource(Res.string.common_tags_no_color_marker),
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-        }
-        if (selected) {
-            Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White)
+        Box(
+            Modifier
+                .size(SwatchDiameter)
+                .clip(CircleShape)
+                .background(c)
+                .border(
+                    width = if (selected) 3.dp else 1.dp,
+                    color = if (selected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.outline,
+                    shape = CircleShape,
+                ).clearAndSetSemantics {},
+            contentAlignment = Alignment.Center,
+        ) {
+            if (color == null) {
+                Text(
+                    stringResource(Res.string.common_tags_no_color_marker),
+                    style = MaterialTheme.typography.labelSmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (selected) {
+                Icon(Icons.Filled.Check, contentDescription = null, tint = Color.White)
+            }
         }
     }
 }
@@ -176,25 +204,31 @@ fun TagPickDialog(
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 message?.let { Text(it, style = MaterialTheme.typography.bodyMedium) }
-                LazyColumn(Modifier.heightIn(max = 300.dp)) {
+                LazyColumn(Modifier.heightIn(max = 300.dp).selectableGroup()) {
                     items(options, key = { it }) { name ->
-                        androidx.compose.foundation.layout.Row(
+                        val isSelected = selected == name
+                        Row(
                             Modifier
                                 .fillMaxWidth()
-                                .clickable { selected = name }
-                                .padding(vertical = 10.dp),
+                                .heightIn(min = 48.dp)
+                                // `selectable` carries both Role.RadioButton and the selected
+                                // state into semantics, so the row reads as a radio option.
+                                .selectable(
+                                    selected = isSelected,
+                                    role = Role.RadioButton,
+                                    onClick = { selected = name },
+                                ).padding(vertical = 10.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            if (selected == name) {
+                            if (isSelected) {
                                 Icon(
                                     Icons.Filled.Check,
                                     contentDescription = null,
                                     tint = MaterialTheme.colorScheme.primary,
                                 )
                             } else {
-                                androidx.compose.foundation.layout
-                                    .Box(Modifier.size(24.dp))
+                                Box(Modifier.size(24.dp))
                             }
                             Text(name)
                         }

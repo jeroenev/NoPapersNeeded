@@ -22,7 +22,6 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
@@ -70,7 +69,6 @@ import dev.npn.app.ui.common.parseHexColor
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.TagInfo
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_document_count
@@ -143,10 +141,7 @@ private class TagBulkDialogState {
 }
 
 @Composable
-fun TagManagementScreen(
-    session: LibrarySession,
-    onBack: () -> Unit,
-) {
+fun TagManagementScreen(session: LibrarySession) {
     val vm: TagManagementViewModel = viewModel { TagManagementViewModel(session) }
     val tags by vm.tags.collectAsStateWithLifecycle()
     val tree = remember(tags) { buildTree(tags) }
@@ -168,7 +163,6 @@ fun TagManagementScreen(
         tree = tree,
         isEmpty = tags.isEmpty(),
         snackbar = snackbar,
-        onBack = onBack,
         actions =
             TagCardActions(
                 onRename = { renameTarget = it },
@@ -271,7 +265,6 @@ private fun TagListScaffold(
     tree: List<TagNode>,
     isEmpty: Boolean,
     snackbar: SnackbarHostState,
-    onBack: () -> Unit,
     actions: TagCardActions,
     selection: TagSelection,
 ) {
@@ -292,14 +285,6 @@ private fun TagListScaffold(
             } else {
                 TopAppBar(
                     title = { Text(stringResource(Res.string.common_tags_title)) },
-                    navigationIcon = {
-                        IconButton(onClick = onBack) {
-                            Icon(
-                                Icons.AutoMirrored.Filled.ArrowBack,
-                                contentDescription = stringResource(Res.string.common_back),
-                            )
-                        }
-                    },
                 )
             }
         },

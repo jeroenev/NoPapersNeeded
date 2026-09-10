@@ -27,6 +27,9 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TechnicalDetails
@@ -163,6 +166,13 @@ private fun EditorSaveBar(
                         MaterialTheme.colorScheme.error
                     } else {
                         MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                // Announce save progress and outcome to assistive tech as it changes; an error is
+                // assertive so it interrupts, the rest are polite. The text itself is the message.
+                modifier =
+                    Modifier.semantics {
+                        liveRegion =
+                            if (draft.error != null) LiveRegionMode.Assertive else LiveRegionMode.Polite
                     },
             )
         }

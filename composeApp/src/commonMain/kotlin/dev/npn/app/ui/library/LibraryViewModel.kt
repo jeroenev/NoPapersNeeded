@@ -41,6 +41,7 @@ import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -52,6 +53,7 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -84,6 +86,11 @@ data class LibraryQuery(
 data class DocumentResults(
     val query: LibraryQuery,
     val items: List<DocListItem>,
+)
+
+/** One batch of documents just moved to the trash, offered back to the user via an Undo snackbar. */
+data class TrashUndo(
+    val docIds: List<String>,
 )
 
 data class LibraryUiState(
@@ -127,6 +134,12 @@ class LibraryViewModel(
 
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
+
+    // One-shot "documents moved to trash" events carrying the ids to restore. A buffered channel
+    // retains an event if the screen collector is between lifecycles, without replaying an already
+    // consumed Undo every time the screen returns.
+    private val trashUndoEvents = Channel<TrashUndo>(capacity = Channel.BUFFERED)
+    val trashUndo = trashUndoEvents.receiveAsFlow()
 
     // True once the user picks a view or applies a saved view this session. Guards against the
     // async default-view seed clobbering an explicit choice made before it arrives.
@@ -385,43 +398,61 @@ class LibraryViewModel(
         }
     }
 
-    // Tag/reviewed writes are a single batched write call (perDoc = false); trash is per-doc so
-    // one failure does not abort the rest (perDoc = true). See [runOnSelection].
+    // Tag/reviewed writes are a single batched write call. Trash has its own per-document path
+    // below because successful moves must be retained for Undo when another move fails.
     fun bulkAddTag(tag: String) = runOnSelection(UiAction.ADD_TAG) { meta.addTag(it, tag) }
 
     fun bulkRemoveTag(tag: String) = runOnSelection(UiAction.REMOVE_TAG) { meta.removeTag(it, tag) }
 
     fun bulkSetReviewed(reviewed: Boolean) = runOnSelection(UiAction.UPDATE) { meta.setReviewed(it, reviewed) }
 
-    fun bulkTrash() = runOnSelection(UiAction.TRASH, perDoc = true) { docLifecycle.trashDoc(it.single()) }
+    /**
+     * Move the current selection to the trash, one document at a time so a single failure does not
+     * abort the rest. On any successful move an [TrashUndo] event is emitted so the screen can offer
+     * an Undo snackbar; the failed ids stay selected for retry. See [runOnSelection] for the
+     * per-doc failure contract this mirrors.
+     */
+    fun bulkTrash() {
+        val ids = _ui.value.selected.toList()
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val trashed = ids.filter { runCatching { docLifecycle.trashDoc(it) }.isSuccess }
+            val failed = ids - trashed.toSet()
+            if (failed.isEmpty()) {
+                clearSelection()
+            } else {
+                _ui.update { it.copy(selected = failed.toSet(), selectionMode = true) }
+                message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, UiAction.TRASH, failed.size, ids.size))
+            }
+            if (trashed.isNotEmpty()) trashUndoEvents.trySend(TrashUndo(trashed))
+        }
+    }
+
+    /** Restore [ids] previously moved to the trash (the Undo action of the trash snackbar). */
+    fun undoTrash(ids: List<String>) {
+        if (ids.isEmpty()) return
+        viewModelScope.launch {
+            val failed = ids.count { runCatching { docLifecycle.restoreDoc(it) }.isFailure }
+            if (failed > 0) {
+                message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, UiAction.RESTORE_DOCUMENT, failed, ids.size))
+            }
+        }
+    }
 
     /**
      * Run a bulk op over the current selection.
      *
-     * - [perDoc] = false (default): [block] receives all selected ids as one batched call. On
-     *   failure surface a message and keep the whole selection so the user can retry.
-     * - [perDoc] = true: [block] is invoked once per id (as a singleton list) so each doc runs
-     *   independently; only the ids that failed are kept selected for retry.
-     *
-     * On full success the selection is cleared. [action] names the op for the failure message.
+     * [block] receives all selected ids as one batched call. On failure, surface a message and keep
+     * the whole selection so the user can retry. On success the selection is cleared.
      */
     private fun runOnSelection(
         action: UiAction,
-        perDoc: Boolean = false,
         block: suspend (List<String>) -> Unit,
     ) {
         val ids = _ui.value.selected.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            if (perDoc) {
-                val failed = ids.filter { runCatching { block(listOf(it)) }.isFailure }
-                if (failed.isEmpty()) {
-                    clearSelection()
-                } else {
-                    _ui.update { it.copy(selected = failed.toSet(), selectionMode = true) }
-                    message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, action, failed.size, ids.size))
-                }
-            } else if (runCatching { block(ids) }.isSuccess) {
+            if (runCatching { block(ids) }.isSuccess) {
                 clearSelection()
             } else {
                 message(uiText(UiTextKey.COULD_NOT_DOCUMENTS, action, ids.size))

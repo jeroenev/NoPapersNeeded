@@ -323,6 +323,73 @@ class LibraryViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun bulkTrashEmitsUndoWithTrashedIds() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val undo = mutableListOf<List<String>>()
+            backgroundScope.launch { model.trashUndo.collect { undo += it.docIds } }
+            model.startSelection("d1")
+            model.toggleSelection("d2")
+            runCurrent()
+            model.bulkTrash()
+            advanceUntilIdle()
+            undo shouldContainExactly listOf(listOf("d1", "d2"))
+        }
+
+    @Test
+    fun bulkTrashPartialFailureUndoesOnlyTrashedIds() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("d2") }
+            val model = vm(session = session)
+            val undo = mutableListOf<List<String>>()
+            backgroundScope.launch { model.trashUndo.collect { undo += it.docIds } }
+            model.startSelection("d1")
+            model.toggleSelection("d2")
+            model.toggleSelection("d3")
+            runCurrent()
+            model.bulkTrash()
+            advanceUntilIdle()
+            // Only the successfully trashed ids are offered for undo; d2 failed and stays selected.
+            undo shouldContainExactly listOf(listOf("d1", "d3"))
+        }
+
+    @Test
+    fun bulkTrashNoSuccessEmitsNoUndo() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("d1") }
+            val model = vm(session = session)
+            val undo = mutableListOf<List<String>>()
+            backgroundScope.launch { model.trashUndo.collect { undo += it.docIds } }
+            model.startSelection("d1")
+            runCurrent()
+            model.bulkTrash()
+            advanceUntilIdle()
+            undo shouldBe emptyList()
+        }
+
+    @Test
+    fun undoTrashRestoresGivenIds() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            model.undoTrash(listOf("d1", "d2"))
+            advanceUntilIdle()
+            session.docLifecycle.restoredDocs shouldContainExactly listOf("d1", "d2")
+        }
+
+    @Test
+    fun undoTrashPartialFailureEmitsMessage() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { docLifecycle.failRestore = { error("path taken") } }
+            val model = vm(session = session)
+            val messages = collectMessages(model)
+            model.undoTrash(listOf("d1", "d2"))
+            advanceUntilIdle()
+            messages shouldContainExactly listOf("Could not restore document 2 of 2 documents")
+        }
+
+    @Test
     fun bulkTrashPartialFailureKeepsOnlyFailedIdsSelected() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("d2") }

@@ -4,6 +4,8 @@
     <!-- Navigation rail item; kept short to fit beside the other rail labels. -->
     <string name="queue_nav_label">Queue</string>
     <string name="queue_help">Documents still waiting on text recognition or AI enrichment. Finished work clears itself; stopped work remains so you can retry it.</string>
+    <!-- Click label announced for a queue row; the whole row opens the document. -->
+    <string name="queue_open_document">Open document</string>
     <string name="queue_empty">Nothing left to process</string>
     <string name="queue_empty_subtitle">Every document has been read and enriched.</string>
 

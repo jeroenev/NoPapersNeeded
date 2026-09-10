@@ -41,6 +41,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -54,7 +55,7 @@ import kotlinx.coroutines.sync.withLock
  */
 data class DetailUiState(
     val pageIndex: Int = 0,
-    val pageCount: Int = 0,
+    val pageCount: PageCountState = PageCountState.Loading,
     val baking: Boolean = false,
     val reindexing: Boolean = false,
     val splitting: Boolean = false,
@@ -167,9 +168,18 @@ class DocDetailViewModel(
      */
     private val highlightTerms: List<String> = searchQuery?.let { queryTerms(it) }.orEmpty()
 
+    /**
+     * The document's load lifecycle. [observeDoc] emits null both before the first query and when
+     * the document is gone; [onEach] flips [docObserved] on the first emission so the fold can tell
+     * a not-yet-resolved null (→ [DocLoadState.Loading]) from a confirmed absence (→
+     * [DocLoadState.Missing]). A caller that handed us an [initialItem] starts resolved.
+     */
+    private var docObserved: Boolean = initialItem != null
+
     private val doc: StateFlow<DocListItem?> =
         documents
             .observeDoc(docId)
+            .onEach { docObserved = true }
             .stateIn(viewModelScope, WhileSubscribedTimeout, initialItem)
 
     private val reviewMode: StateFlow<ReviewMode> =
@@ -232,6 +242,7 @@ class DocDetailViewModel(
         combine(doc, reviewMode, fieldDefs, ocrText, ocrVersions) { item, mode, defs, text, versions ->
             DocumentSection(
                 item = item,
+                loadState = loadStateOf(item),
                 reviewed = item?.effectiveReviewed(mode) == true,
                 reviewMode = mode,
                 fieldDefs = defs,
@@ -239,6 +250,18 @@ class DocDetailViewModel(
                 ocrVersions = versions,
                 highlightTerms = highlightTerms,
             )
+        }
+
+    /**
+     * The row's load state from the latest [observeDoc] emission: a row present is [Present], a
+     * null after the first emission is [Missing], and a null before any emission stays [Loading]
+     * so the screen never flashes "unavailable" while the query is still in flight.
+     */
+    private fun loadStateOf(item: DocListItem?): DocLoadState =
+        when {
+            item != null -> DocLoadState.Present(item)
+            docObserved -> DocLoadState.Missing
+            else -> DocLoadState.Loading
         }
 
     private val vocabulary: Flow<VocabularyState> =
@@ -270,16 +293,14 @@ class DocDetailViewModel(
             document =
                 DocumentSection(
                     item = item,
+                    loadState = loadStateOf(item),
                     reviewed = item?.effectiveReviewed(ReviewMode.DEFAULT) == true,
                     highlightTerms = highlightTerms,
                 ),
         )
 
     init {
-        viewModelScope.launch {
-            val count = runCatching { content.pageCount(docId) }.getOrNull() ?: 0
-            _ui.update { it.copy(pageCount = count) }
-        }
+        loadPageCount()
         viewModelScope.launch {
             val configured = ai.isConfiguredOrFalse()
             aiTags.update { it.copy(available = configured) }
@@ -290,9 +311,24 @@ class DocDetailViewModel(
         }
     }
 
+    /**
+     * Resolve the page count. A null result (unreadable/corrupt file, or a missing row) is a
+     * failure the viewer offers to retry, not a silent zero that spins forever; 0 pages is [Empty].
+     */
+    private fun loadPageCount() {
+        _ui.update { it.copy(pageCount = PageCountState.Loading) }
+        viewModelScope.launch {
+            val count = runCatching { content.pageCount(docId) }.getOrNull()
+            _ui.update { it.copy(pageCount = pageCountStateOf(count)) }
+        }
+    }
+
+    /** Re-attempt a failed page-count resolution (the viewer's retry action). */
+    fun retryPageCount() = loadPageCount()
+
     fun goToPage(index: Int) {
         _ui.update { cur ->
-            if (index in 0 until cur.pageCount.coerceAtLeast(1)) cur.copy(pageIndex = index) else cur
+            if (index in 0 until cur.pageCount.count.coerceAtLeast(1)) cur.copy(pageIndex = index) else cur
         }
     }
 

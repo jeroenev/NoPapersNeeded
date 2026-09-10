@@ -52,6 +52,7 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -78,6 +79,9 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -124,6 +128,7 @@ import no_papers_needed.composeapp.generated.resources.library_mark_needs_review
 import no_papers_needed.composeapp.generated.resources.library_mark_reviewed
 import no_papers_needed.composeapp.generated.resources.library_more_actions
 import no_papers_needed.composeapp.generated.resources.library_move_to_trash_question
+import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.library_no_documents_subtitle
 import no_papers_needed.composeapp.generated.resources.library_no_documents_title
 import no_papers_needed.composeapp.generated.resources.library_no_matches_subtitle
@@ -132,6 +137,7 @@ import no_papers_needed.composeapp.generated.resources.library_ocr_pending
 import no_papers_needed.composeapp.generated.resources.library_ocr_pending_running
 import no_papers_needed.composeapp.generated.resources.library_refresh
 import no_papers_needed.composeapp.generated.resources.library_remove_tag
+import no_papers_needed.composeapp.generated.resources.library_results_summary
 import no_papers_needed.composeapp.generated.resources.library_review
 import no_papers_needed.composeapp.generated.resources.library_scan_document
 import no_papers_needed.composeapp.generated.resources.library_scan_progress
@@ -145,6 +151,7 @@ import no_papers_needed.composeapp.generated.resources.library_sort_size
 import no_papers_needed.composeapp.generated.resources.library_switch_view
 import no_papers_needed.composeapp.generated.resources.library_trash
 import no_papers_needed.composeapp.generated.resources.library_trash_documents
+import no_papers_needed.composeapp.generated.resources.library_undo
 import no_papers_needed.composeapp.generated.resources.queue_ai_pending
 import no_papers_needed.composeapp.generated.resources.ux_review_count
 import org.jetbrains.compose.resources.pluralStringResource
@@ -201,6 +208,7 @@ fun LibraryScreen(
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
+    TrashUndoSnackbar(vm, snackbar)
 
     val dialogs = rememberLibraryDialogState()
 
@@ -251,6 +259,7 @@ fun LibraryScreen(
                 results = results,
                 tagColors = tagColors,
                 reviewMode = reviewMode,
+                previewOnClick = wide,
                 scanProgress = scanProgress,
                 lastScan = lastScan,
                 ocr = ocr,
@@ -353,6 +362,38 @@ fun LibraryScreen(
 }
 
 /**
+ * Turns each [LibraryViewModel.trashUndo] event into an Undo snackbar. Keyed by a monotonic counter
+ * (not the batch) so two identical trash batches back-to-back both re-trigger the snackbar rather
+ * than being swallowed by snapshot equality. Tapping Undo restores exactly the ids that were moved.
+ */
+@Composable
+private fun TrashUndoSnackbar(
+    vm: LibraryViewModel,
+    snackbar: SnackbarHostState,
+) {
+    var pending by remember { mutableStateOf<Pair<Long, TrashUndo>?>(null) }
+    LaunchedEffect(vm) {
+        vm.trashUndo.collect { pending = (pending?.first?.plus(1) ?: 1L) to it }
+    }
+    val batch = pending?.second
+    val message =
+        batch?.let {
+            pluralStringResource(Res.plurals.library_moved_to_trash, it.docIds.size, it.docIds.size)
+        }
+    val undoLabel = stringResource(Res.string.library_undo)
+    LaunchedEffect(pending?.first) {
+        val current = batch ?: return@LaunchedEffect
+        val result =
+            snackbar.showSnackbar(
+                message = message ?: return@LaunchedEffect,
+                actionLabel = undoLabel,
+                withDismissAction = true,
+            )
+        if (result == SnackbarResult.ActionPerformed) vm.undoTrash(current.docIds)
+    }
+}
+
+/**
  * Desktop keyboard shortcuts for the library screen. Returns true when the event was handled.
  *
  * This is the thin Compose adapter: it gates on key-down + search-not-focused, translates the
@@ -407,6 +448,9 @@ private fun LibraryContent(
     results: DocumentResults?,
     tagColors: TagColors,
     reviewMode: ReviewMode,
+    // Wide layouts preview a tapped document in the side panel, so its click label reads "Preview";
+    // compact layouts open it and read "Open".
+    previewOnClick: Boolean,
     scanProgress: dev.npn.core.app.ScanProgressUi?,
     lastScan: dev.npn.core.index.ScanReport?,
     ocr: dev.npn.core.app.OcrStatus,
@@ -590,6 +634,18 @@ private fun LibraryContent(
                 onOpenQueue = onOpenQueue,
             )
 
+            // A concise "N documents · sorted by …" line sits just above the results, in the fixed
+            // band so it never scrolls away. Only shown once the first result set has arrived and
+            // is non-empty (the empty states carry their own copy).
+            results?.items?.takeIf { it.isNotEmpty() }?.let { items ->
+                ResultsSummary(
+                    count = items.size,
+                    sort = ui.sort,
+                    sortableFields = sortableFields,
+                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 4.dp),
+                )
+            }
+
             PullToRefreshBox(
                 isRefreshing = ui.refreshing,
                 onRefresh = vm::refresh,
@@ -624,6 +680,7 @@ private fun LibraryContent(
                                 results = results,
                                 content = session.content,
                                 tagColors = tagColors,
+                                reviewMode = reviewMode,
                                 ui = ui,
                                 columnWidth = gridColumnWidth,
                                 onColumnWidthChange = vm::setGridColumnWidth,
@@ -631,6 +688,7 @@ private fun LibraryContent(
                                 onToggleSelect = vm::toggleSelection,
                                 onStartSelection = vm::startSelection,
                                 contextActionsFor = contextActionsFor,
+                                previewOnClick = previewOnClick,
                             )
                         }
 
@@ -646,6 +704,7 @@ private fun LibraryContent(
                                 onToggleSelect = vm::toggleSelection,
                                 onStartSelection = vm::startSelection,
                                 contextActionsFor = contextActionsFor,
+                                previewOnClick = previewOnClick,
                             )
                         }
                     }
@@ -685,6 +744,7 @@ private fun DocList(
     onToggleSelect: (String) -> Unit,
     onStartSelection: (String) -> Unit,
     contextActionsFor: ((String) -> DocContextMenuActions)? = null,
+    previewOnClick: Boolean = false,
 ) {
     val row: @Composable (dev.npn.core.app.DocListItem) -> Unit = { item ->
         // Memoized per item (this runs in the item's composition scope) so each row receives the
@@ -709,6 +769,7 @@ private fun DocList(
             onLongClick = onLongClick,
             onToggleSelect = onToggle,
             contextActions = contextActions,
+            previewOnClick = previewOnClick,
         )
     }
 
@@ -1112,6 +1173,43 @@ private fun LibraryFab(
             )
         }
     }
+}
+
+/**
+ * One concise line above the results: how many documents match and how they are ordered. Reads the
+ * field label from the registry so a sort on a renamed field still names it correctly; falls back to
+ * the sort key for a field the registry no longer lists.
+ */
+@Composable
+private fun ResultsSummary(
+    count: Int,
+    sort: dev.npn.core.app.LibrarySort,
+    sortableFields: List<FieldDef>,
+    modifier: Modifier = Modifier,
+) {
+    val fieldLabel =
+        when (val field = sort.field) {
+            is SortField.Field -> sortableFields.firstOrNull { it.key == field.key }?.label ?: field.key
+            else -> sortLabel(sort.field)
+        }
+    val direction =
+        stringResource(
+            if (sort.ascending) Res.string.library_sort_ascending else Res.string.library_sort_descending,
+        )
+    Text(
+        text =
+            pluralStringResource(
+                Res.plurals.library_results_summary,
+                count,
+                count,
+                "$fieldLabel · $direction",
+            ),
+        style = MaterialTheme.typography.bodySmall,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
+        modifier = modifier.semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 @Composable

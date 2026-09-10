@@ -59,6 +59,8 @@
     <string name="detail_ocr">OCR</string>
     <string name="detail_suggest_tags">Tags voorstellen</string>
     <string name="detail_suggest_metadata">Details voorstellen</string>
+    <string name="detail_suggesting_tags">Tags voorstellen…</string>
+    <string name="detail_suggesting_metadata">Details voorstellen…</string>
     <string name="detail_document_date_plain">Documentdatum</string>
     <string name="detail_use_suggestion">Voorgestelde %1$s gebruiken</string>
     <string name="detail_dismiss_suggestion">Voorgestelde %1$s negeren</string>
@@ -109,6 +111,8 @@
     </plurals>
 
     <string name="detail_page_number">Pagina %1$d</string>
+    <string name="detail_no_pages">Dit document heeft geen pagina\'s om te tonen.</string>
+    <string name="detail_pages_failed">De pagina\'s van dit document konden niet worden gelezen.</string>
     <string name="detail_render_page_failed">Deze pagina kon niet worden weergegeven.</string>
     <string name="detail_zoom_out">Uitzoomen</string>
     <string name="detail_zoom_in">Inzoomen</string>

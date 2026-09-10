@@ -40,6 +40,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.TextLayoutResult
 import androidx.compose.ui.text.TextStyle
@@ -240,17 +243,22 @@ private fun FindBar(
                 contentDescription = stringResource(Res.string.detail_find_next),
             )
         }
+        // The find status changes as the user types; announce it politely so a screen reader
+        // reports "3 / 12" or "No matches found" without the user leaving the field.
+        val findStatusSemantics = Modifier.semantics { liveRegion = LiveRegionMode.Polite }
         if (matchCount > 0) {
             Text(
                 stringResource(Res.string.detail_find_position, current + 1, matchCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = findStatusSemantics,
             )
         } else if (searching) {
             Text(
                 stringResource(Res.string.detail_no_matches_found),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = findStatusSemantics,
             )
         }
         IconButton(onClick = onClear, enabled = query.isNotEmpty()) {

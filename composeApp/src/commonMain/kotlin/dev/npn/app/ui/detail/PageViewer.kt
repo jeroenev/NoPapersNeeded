@@ -4,6 +4,7 @@ import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -55,12 +56,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.detail_go
 import no_papers_needed.composeapp.generated.resources.detail_go_to_page
 import no_papers_needed.composeapp.generated.resources.detail_next_page
+import no_papers_needed.composeapp.generated.resources.detail_no_pages
 import no_papers_needed.composeapp.generated.resources.detail_page_number
 import no_papers_needed.composeapp.generated.resources.detail_page_position
 import no_papers_needed.composeapp.generated.resources.detail_page_range
+import no_papers_needed.composeapp.generated.resources.detail_pages_failed
 import no_papers_needed.composeapp.generated.resources.detail_previous_page
 import no_papers_needed.composeapp.generated.resources.detail_render_page_failed
 import no_papers_needed.composeapp.generated.resources.detail_zoom_in
@@ -83,20 +87,21 @@ import kotlin.math.roundToInt
 @Composable
 fun PageViewer(
     pageIndex: Int,
-    pageCount: Int,
+    pageCount: PageCountState,
     render: suspend (pageIndex: Int, maxDim: Int) -> ByteArray?,
     onPageChange: (Int) -> Unit,
     modifier: Modifier = Modifier,
+    onRetryPageCount: () -> Unit = {},
 ) {
-    if (pageCount <= 0) {
-        Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), Alignment.Center) {
-            CircularProgressIndicator()
-        }
+    val ready = pageCount as? PageCountState.Ready
+    if (ready == null) {
+        PageCountPlaceholder(pageCount, onRetryPageCount, modifier)
         return
     }
+    val count = ready.count
 
     val cache = remember { PageBitmapCache(maxEntries = 6) }
-    val pagerState = rememberPagerState(initialPage = pageIndex.coerceIn(0, pageCount - 1)) { pageCount }
+    val pagerState = rememberPagerState(initialPage = pageIndex.coerceIn(0, count - 1)) { count }
     val scope = rememberCoroutineScope()
 
     // Keep pager and the external page index in sync, both directions, without feedback loops:
@@ -131,7 +136,7 @@ fun PageViewer(
     val currentPage = rememberUpdatedState(current)
 
     fun goToPage(target: Int) {
-        scope.launch { pagerState.animateScrollToPage(target.coerceIn(0, pageCount - 1)) }
+        scope.launch { pagerState.animateScrollToPage(target.coerceIn(0, count - 1)) }
     }
 
     // Accumulates fractional touchpad scroll toward one page flip when at 1x (a mouse wheel notch
@@ -145,7 +150,7 @@ fun PageViewer(
                 .onSizeChanged { containerSize = Size(it.width.toFloat(), it.height.toFloat()) }
                 .viewerKeys(
                     pagerState = pagerState,
-                    pageCount = pageCount,
+                    pageCount = count,
                     transform = { transformOf(currentPage.value) },
                     onTransform = { setTransform(currentPage.value, it) },
                     containerSize = { containerSize },
@@ -235,10 +240,10 @@ fun PageViewer(
             modifier = Modifier.align(Alignment.BottomEnd).padding(12.dp),
         )
 
-        if (pageCount > 1) {
+        if (count > 1) {
             PageIndicator(
                 pageIndex = current,
-                pageCount = pageCount,
+                pageCount = count,
                 onPrev = { goToPage(current - 1) },
                 onNext = { goToPage(current + 1) },
                 onClick = { showGoToPage = true },
@@ -249,7 +254,7 @@ fun PageViewer(
 
     if (showGoToPage) {
         GoToPageDialog(
-            pageCount = pageCount,
+            pageCount = count,
             current = current,
             onGo = {
                 showGoToPage = false
@@ -257,6 +262,49 @@ fun PageViewer(
             },
             onDismiss = { showGoToPage = false },
         )
+    }
+}
+
+/**
+ * What the viewer shows when there is no page to page through: a spinner while the count resolves,
+ * a message for a document with no pages, and a retry for a count that could not be read (a corrupt
+ * or unreadable file). The prior viewer keyed a single spinner off `count <= 0`, so a failure span
+ * forever; separating the states is the fix for that infinite spinner.
+ */
+@Composable
+private fun PageCountPlaceholder(
+    state: PageCountState,
+    onRetry: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Box(modifier.background(MaterialTheme.colorScheme.surfaceVariant), Alignment.Center) {
+        when (state) {
+            // Handled by the caller; never reaches here.
+            is PageCountState.Ready -> {
+                return@Box
+            }
+
+            PageCountState.Loading -> {
+                CircularProgressIndicator()
+            }
+
+            PageCountState.Empty -> {
+                Text(
+                    stringResource(Res.string.detail_no_pages),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+
+            PageCountState.Failed -> {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        stringResource(Res.string.detail_pages_failed),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
+                }
+            }
+        }
     }
 }
 
@@ -283,13 +331,16 @@ private fun PageSlide(
 ) {
     val bucket = zoomBucket(zoom)
     var state by remember(page) { mutableStateOf<PageState>(PageState.Loading) }
+    // Bumped by the retry action so a failed render re-runs the effect below without changing the
+    // page or bucket.
+    var renderAttempt by remember(page) { mutableStateOf(0) }
 
     // Gesture detectors below are captured once by pointerInput and never refreshed, so they must
     // read the live transform through this State rather than the captured parameter (otherwise a
     // second double-tap sees the stale zoom=1 and re-zooms instead of resetting).
     val liveTransform = rememberUpdatedState(transform)
 
-    LaunchedEffect(page, bucket, isCurrent) {
+    LaunchedEffect(page, bucket, isCurrent, renderAttempt) {
         // Show any cached bitmap immediately (even at a coarser bucket) to avoid a spinner flash.
         cache.best(page)?.let { state = PageState.Ready(it) }
         val existing = cache.get(page, bucket)
@@ -347,10 +398,20 @@ private fun PageSlide(
             }
 
             PageState.Failed -> {
-                Text(
-                    stringResource(Res.string.detail_render_page_failed),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        stringResource(Res.string.detail_render_page_failed),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                    TextButton(
+                        onClick = {
+                            state = PageState.Loading
+                            renderAttempt++
+                        },
+                    ) {
+                        Text(stringResource(Res.string.common_retry))
+                    }
+                }
             }
         }
     }

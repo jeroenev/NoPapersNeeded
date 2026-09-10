@@ -3,6 +3,7 @@
     <string name="queue_title">Verwerkingswachtrij</string>
     <string name="queue_nav_label">Wachtrij</string>
     <string name="queue_help">Documenten die nog wachten op tekstherkenning of AI-verrijking. Voltooid werk verdwijnt vanzelf; gestopt werk blijft staan zodat je het opnieuw kunt proberen.</string>
+    <string name="queue_open_document">Document openen</string>
     <string name="queue_empty">Niets meer te verwerken</string>
     <string name="queue_empty_subtitle">Elk document is gelezen en verrijkt.</string>
 

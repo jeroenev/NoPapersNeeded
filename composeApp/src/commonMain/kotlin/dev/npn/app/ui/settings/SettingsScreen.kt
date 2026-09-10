@@ -150,11 +150,15 @@ private fun SettingsScaffold(
     val openCategory = selected?.let(::settingsCategory)
     // On compact the pane replaces the list, so the bar has to say which pane is open.
     val paneTitle = if (wide) null else openCategory?.title
+    // Settings is a top-level destination reached from the persistent shell, so the top level has
+    // no back arrow — it would be a dead end duplicating the rail or bar. The one place a back
+    // arrow belongs is the compact category drill-down, where it walks back to the category list.
+    val drilledDown = !wide && openCategory != null
     Scaffold(
         topBar = {
             SettingsTopBar(
                 title = stringResource(paneTitle ?: Res.string.common_settings_title),
-                onBack = onBack,
+                onBack = if (drilledDown) onBack else null,
             )
         },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -192,16 +196,18 @@ private fun SettingsScaffold(
 @Composable
 private fun SettingsTopBar(
     title: String,
-    onBack: () -> Unit,
+    onBack: (() -> Unit)?,
 ) {
     TopAppBar(
         title = { Text(text = title) },
         navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(Res.string.common_back),
-                )
+            if (onBack != null) {
+                IconButton(onClick = onBack) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.ArrowBack,
+                        contentDescription = stringResource(Res.string.common_back),
+                    )
+                }
             }
         },
     )

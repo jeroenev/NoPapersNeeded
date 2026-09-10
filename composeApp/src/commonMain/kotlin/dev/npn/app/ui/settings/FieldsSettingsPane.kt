@@ -5,8 +5,10 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
@@ -30,6 +32,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.FieldDefForm
@@ -40,6 +43,7 @@ import dev.npn.core.model.FieldKeys
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_delete
+import no_papers_needed.composeapp.generated.resources.common_edit
 import no_papers_needed.composeapp.generated.resources.common_save
 import no_papers_needed.composeapp.generated.resources.common_settings_document_fields_help
 import no_papers_needed.composeapp.generated.resources.common_settings_field_clear_values
@@ -144,7 +148,14 @@ private fun FieldRow(
     onDelete: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(vertical = 4.dp),
+        Modifier
+            .fillMaxWidth()
+            .heightIn(min = 48.dp)
+            .clickable(
+                onClick = onEdit,
+                role = Role.Button,
+                onClickLabel = stringResource(Res.string.common_edit),
+            ).padding(vertical = 4.dp),
         horizontalArrangement = Arrangement.spacedBy(4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -291,8 +302,18 @@ private fun DeleteFieldDialog(
                     ),
                 )
                 if (usage > 0) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Checkbox(checked = clearValues, onCheckedChange = { clearValues = it })
+                    Row(
+                        Modifier
+                            .fillMaxWidth()
+                            .heightIn(min = 48.dp)
+                            .toggleable(
+                                value = clearValues,
+                                role = Role.Checkbox,
+                                onValueChange = { clearValues = it },
+                            ),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Checkbox(checked = clearValues, onCheckedChange = null)
                         Text(stringResource(Res.string.common_settings_field_clear_values))
                     }
                 }

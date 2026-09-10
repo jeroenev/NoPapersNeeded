@@ -62,12 +62,17 @@ import org.jetbrains.compose.resources.stringResource
  * sheet. [queue] badges the queue item and, on compact layouts, the "More" item standing in front
  * of it — background work has to be visible from the bar without spending a permanent slot on a
  * screen that is empty most of the time.
+ *
+ * [aiProbe] is a tri-state, not a boolean, so the shell can *reserve* the AI slots while the
+ * configuration probe is still running rather than adding them the instant it resolves — otherwise
+ * the compact bar would shift sideways under the user's finger the moment the answer lands. While
+ * [AiProbe.PROBING] the entries are shown but inert; only [AiProbe.UNAVAILABLE] drops them.
  */
 @Composable
 fun NavigationShell(
     current: TopLevelDestination?,
     aiCurrent: AiDestination?,
-    aiConfigured: Boolean,
+    aiProbe: AiProbe,
     queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
     onAiChat: () -> Unit,
@@ -81,7 +86,7 @@ fun NavigationShell(
                     ShellRail(
                         current = current,
                         aiCurrent = aiCurrent,
-                        aiConfigured = aiConfigured,
+                        aiProbe = aiProbe,
                         queue = queue,
                         onNavigate = onNavigate,
                         onAiChat = onAiChat,
@@ -97,7 +102,7 @@ fun NavigationShell(
                     ShellBottomBar(
                         current = current,
                         aiCurrent = aiCurrent,
-                        aiConfigured = aiConfigured,
+                        aiProbe = aiProbe,
                         queue = queue,
                         onNavigate = onNavigate,
                         onAiChat = onAiChat,
@@ -113,7 +118,7 @@ fun NavigationShell(
 private fun ShellRail(
     current: TopLevelDestination?,
     aiCurrent: AiDestination?,
-    aiConfigured: Boolean,
+    aiProbe: AiProbe,
     queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
     onAiChat: () -> Unit,
@@ -131,17 +136,21 @@ private fun ShellRail(
                 onNavigate = onNavigate,
             )
         }
-        // Keep the AI items around while one of their screens is open, even if the configuration
-        // probe has not resolved yet, so the selected item never vanishes from under the user.
-        if (aiConfigured || aiCurrent != null) {
+        // Reserve the AI items while the probe runs, and keep them around while one of their
+        // screens is open, so the slots never appear or vanish from under the user. While probing
+        // they are inert; a resolved-unavailable probe drops them.
+        if (aiProbe.reservesSlot || aiCurrent != null) {
+            val enabled = aiProbe.isConfigured || aiCurrent != null
             NavigationRailItem(
                 selected = aiCurrent == AiDestination.CHAT,
+                enabled = enabled,
                 onClick = onAiChat,
                 icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
                 label = { Text(stringResource(Res.string.library_ai_assistant)) },
             )
             NavigationRailItem(
                 selected = aiCurrent == AiDestination.EDIT,
+                enabled = enabled,
                 onClick = onAiEdit,
                 icon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
                 label = { Text(stringResource(Res.string.library_ai_edit)) },
@@ -193,16 +202,18 @@ private fun RailItem(
 private fun ShellBottomBar(
     current: TopLevelDestination?,
     aiCurrent: AiDestination?,
-    aiConfigured: Boolean,
+    aiProbe: AiProbe,
     queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
     onAiChat: () -> Unit,
     onAiEdit: () -> Unit,
 ) {
     var moreOpen by remember { mutableStateOf(false) }
-    // Mirror the rail: keep the AI entries present while one of their screens is open, so they are
-    // where they were launched from even before the configuration probe resolves.
-    val aiVisible = aiConfigured || aiCurrent != null
+    // Reserve the assistant slot while the probe runs so the bar does not shift sideways when the
+    // answer lands, and keep it present while one of the AI screens is open. While probing it is
+    // shown but inert; only a resolved-unavailable probe removes it.
+    val aiReserved = aiProbe.reservesSlot || aiCurrent != null
+    val aiActive = aiProbe.isConfigured || aiCurrent != null
     NavigationBar {
         TopLevelDestination.compactBar.forEach { dest ->
             val selected = dest == current
@@ -218,9 +229,10 @@ private fun ShellBottomBar(
                 label = { Text(stringResource(dest.label)) },
             )
         }
-        if (aiVisible) {
+        if (aiReserved) {
             NavigationBarItem(
                 selected = aiCurrent == AiDestination.CHAT,
+                enabled = aiActive,
                 onClick = onAiChat,
                 icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
                 label = { Text(stringResource(Res.string.library_ai_assistant)) },
@@ -247,9 +259,10 @@ private fun ShellBottomBar(
     }
     if (moreOpen) {
         MoreSheet(
-            rows = moreRows(aiEdit = aiVisible),
+            rows = moreRows(aiEdit = aiReserved),
             current = current,
             aiCurrent = aiCurrent,
+            aiEditEnabled = aiActive,
             queue = queue,
             onDismiss = { moreOpen = false },
             onNavigate = { dest ->
@@ -299,6 +312,7 @@ private fun MoreSheet(
     rows: List<MoreRow>,
     current: TopLevelDestination?,
     aiCurrent: AiDestination?,
+    aiEditEnabled: Boolean,
     queue: QueueStatus,
     onDismiss: () -> Unit,
     onNavigate: (TopLevelDestination) -> Unit,
@@ -323,6 +337,7 @@ private fun MoreSheet(
                             label = stringResource(row.dest.label),
                             icon = if (selected) row.dest.selectedIcon else row.dest.icon,
                             selected = selected,
+                            enabled = true,
                             // The queue is the only screen behind the sheet that reports on itself.
                             badge =
                                 if (row.dest == TopLevelDestination.QUEUE) queue else QueueStatus.None,
@@ -335,6 +350,7 @@ private fun MoreSheet(
                             label = stringResource(Res.string.library_ai_edit),
                             icon = Icons.Outlined.AutoFixHigh,
                             selected = aiCurrent == AiDestination.EDIT,
+                            enabled = aiEditEnabled,
                             badge = QueueStatus.None,
                             onClick = onAiEdit,
                         )
@@ -350,6 +366,7 @@ private fun MoreSheetRow(
     label: String,
     icon: ImageVector,
     selected: Boolean,
+    enabled: Boolean,
     badge: QueueStatus,
     onClick: () -> Unit,
 ) {
@@ -357,7 +374,12 @@ private fun MoreSheetRow(
         modifier =
             Modifier
                 .fillMaxWidth()
-                .selectable(selected = selected, role = Role.Tab, onClick = onClick),
+                .selectable(
+                    selected = selected,
+                    enabled = enabled,
+                    role = Role.Tab,
+                    onClick = onClick,
+                ),
         headlineContent = { Text(label) },
         leadingContent = { Icon(imageVector = icon, contentDescription = null) },
         trailingContent = if (badge.isEmpty) null else ({ QueueBadge(badge) }),

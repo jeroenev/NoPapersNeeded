@@ -63,6 +63,7 @@ import no_papers_needed.composeapp.generated.resources.common_add_tag
 import no_papers_needed.composeapp.generated.resources.library_deselect
 import no_papers_needed.composeapp.generated.resources.library_more_tags
 import no_papers_needed.composeapp.generated.resources.library_open
+import no_papers_needed.composeapp.generated.resources.library_preview
 import no_papers_needed.composeapp.generated.resources.library_remove_tag
 import no_papers_needed.composeapp.generated.resources.library_select
 import no_papers_needed.composeapp.generated.resources.library_trash
@@ -212,12 +213,16 @@ private fun SelectableDocItem(
     onLongClick: () -> Unit,
     onToggleSelect: () -> Unit,
     contextActions: DocContextMenuActions?,
+    // Whether a non-selecting click previews the document (wide layouts) rather than opening it
+    // (compact layouts). Only the accessibility click label differs; the click action is [onClick].
+    previewOnClick: Boolean = false,
     itemContent: @Composable (itemModifier: Modifier, hovered: Boolean) -> Unit,
 ) {
     val hoverInteraction = remember { MutableInteractionSource() }
     val hovered by hoverInteraction.collectIsHoveredAsState()
     var menuAt by remember { mutableStateOf<Offset?>(null) }
-    val openLabel = stringResource(Res.string.library_open)
+    val openLabel =
+        stringResource(if (previewOnClick) Res.string.library_preview else Res.string.library_open)
     val selectionLabel =
         stringResource(if (selected) Res.string.library_deselect else Res.string.library_select)
     Box {
@@ -261,6 +266,7 @@ fun DocListRow(
     onLongClick: () -> Unit,
     onToggleSelect: () -> Unit,
     contextActions: DocContextMenuActions? = null,
+    previewOnClick: Boolean = false,
 ) {
     SelectableDocItem(
         selectionMode = selectionMode,
@@ -269,6 +275,7 @@ fun DocListRow(
         onLongClick = onLongClick,
         onToggleSelect = onToggleSelect,
         contextActions = contextActions,
+        previewOnClick = previewOnClick,
     ) { itemModifier, hovered ->
         Row(
             modifier = itemModifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -356,12 +363,14 @@ fun DocGridCard(
     item: DocListItem,
     content: DocContentFacade,
     tagColors: TagColors,
+    reviewMode: ReviewMode,
     selectionMode: Boolean,
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onToggleSelect: () -> Unit,
     contextActions: DocContextMenuActions? = null,
+    previewOnClick: Boolean = false,
 ) {
     SelectableDocItem(
         selectionMode = selectionMode,
@@ -370,6 +379,7 @@ fun DocGridCard(
         onLongClick = onLongClick,
         onToggleSelect = onToggleSelect,
         contextActions = contextActions,
+        previewOnClick = previewOnClick,
     ) { itemModifier, hovered ->
         Card(modifier = itemModifier) {
             Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
@@ -388,6 +398,11 @@ fun DocGridCard(
                         onToggleSelect = onToggleSelect,
                         modifier = Modifier.align(Alignment.TopEnd),
                     )
+                }
+                // The only card badge: review status, and only where the marker is real (inbox
+                // workflow). Deliberately minimal — no snippet/date/size on the card.
+                if (reviewMode.reviewMarkerIsAuthoritative) {
+                    ReviewedBadge(item.effectiveReviewed(reviewMode))
                 }
                 Text(
                     text = item.doc.displayTitle,

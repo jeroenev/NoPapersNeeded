@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="common_back">Terug</string>
+    <string name="common_more_actions">Meer acties</string>
     <string name="common_cancel">Annuleren</string>
     <string name="common_confirm">Bevestigen</string>
     <string name="common_apply">Toepassen</string>

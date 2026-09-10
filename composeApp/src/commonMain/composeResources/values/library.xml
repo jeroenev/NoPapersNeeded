@@ -26,6 +26,16 @@
     <string name="library_trash">Trash</string>
     <string name="library_trash_documents">Trash documents</string>
     <string name="library_open">Open</string>
+    <string name="library_preview">Preview</string>
+    <string name="library_undo">Undo</string>
+    <plurals name="library_moved_to_trash">
+        <item quantity="one">Moved %1$d document to trash</item>
+        <item quantity="other">Moved %1$d documents to trash</item>
+    </plurals>
+    <plurals name="library_results_summary">
+        <item quantity="one">%1$d document · %2$s</item>
+        <item quantity="other">%1$d documents · %2$s</item>
+    </plurals>
     <string name="library_select">Select</string>
     <string name="library_deselect">Deselect</string>
     <plurals name="library_selected_count">

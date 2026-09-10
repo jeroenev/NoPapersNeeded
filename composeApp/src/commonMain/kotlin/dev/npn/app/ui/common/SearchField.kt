@@ -1,5 +1,6 @@
 package dev.npn.app.ui.common
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
@@ -9,6 +10,7 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,6 +28,8 @@ import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.window.PopupProperties
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_clear_search
@@ -108,21 +112,49 @@ fun SearchField(
             },
         )
         if (hasSuggestions) {
-            DropdownMenu(
+            SearchSuggestions(
+                suggestions = suggestions,
+                selectedIndex = selectedIndex,
                 expanded = expanded && focused,
-                onDismissRequest = { expanded = false },
-                properties = PopupProperties(focusable = false),
-            ) {
-                suggestions.forEach { suggestion ->
-                    DropdownMenuItem(
-                        text = { Text(suggestion) },
-                        onClick = {
-                            expanded = false
-                            onSuggestionSelected(suggestion)
-                        },
-                    )
-                }
-            }
+                onDismiss = { expanded = false },
+                onSelect = {
+                    expanded = false
+                    onSuggestionSelected(it)
+                },
+            )
+        }
+    }
+}
+
+/** Search completions with a visible and semantic active row for keyboard navigation. */
+@Composable
+private fun SearchSuggestions(
+    suggestions: List<String>,
+    selectedIndex: Int,
+    expanded: Boolean,
+    onDismiss: () -> Unit,
+    onSelect: (String) -> Unit,
+) {
+    DropdownMenu(
+        expanded = expanded,
+        onDismissRequest = onDismiss,
+        properties = PopupProperties(focusable = false),
+    ) {
+        suggestions.forEachIndexed { index, suggestion ->
+            val active = index == selectedIndex
+            DropdownMenuItem(
+                text = { Text(suggestion) },
+                modifier =
+                    Modifier
+                        .then(
+                            if (active) {
+                                Modifier.background(MaterialTheme.colorScheme.primaryContainer)
+                            } else {
+                                Modifier
+                            },
+                        ).semantics { selected = active },
+                onClick = { onSelect(suggestion) },
+            )
         }
     }
 }

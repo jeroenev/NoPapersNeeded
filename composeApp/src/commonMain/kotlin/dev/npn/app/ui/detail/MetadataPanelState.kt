@@ -27,12 +27,14 @@ data class MetadataUiState(
 /**
  * The document itself plus the library-wide settings that decide how it is shown. [item] is null
  * until the document row arrives (and stays null for a document that is gone), which is the
- * panel's cue to render nothing. [reviewed] is already resolved against [reviewMode], so no call
- * site repeats that derivation.
+ * panel's cue to render nothing. [loadState] disambiguates that null: still-loading vs confirmed
+ * missing, so a screen can wait rather than flash "unavailable". [reviewed] is already resolved
+ * against [reviewMode], so no call site repeats that derivation.
  */
 @Immutable
 data class DocumentSection(
     val item: DocListItem? = null,
+    val loadState: DocLoadState = DocLoadState.Loading,
     val reviewed: Boolean = false,
     val reviewMode: ReviewMode = ReviewMode.DEFAULT,
     /** The field registry in display order; decides which fields render and how each is edited. */

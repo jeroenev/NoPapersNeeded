@@ -14,14 +14,12 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.DoneAll
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
@@ -37,6 +35,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -52,7 +53,6 @@ import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkStage
 import dev.npn.core.app.WorkState
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.queue_attempts
 import no_papers_needed.composeapp.generated.resources.queue_edit_run_discard
@@ -65,6 +65,7 @@ import no_papers_needed.composeapp.generated.resources.queue_empty
 import no_papers_needed.composeapp.generated.resources.queue_empty_subtitle
 import no_papers_needed.composeapp.generated.resources.queue_failed_help
 import no_papers_needed.composeapp.generated.resources.queue_help
+import no_papers_needed.composeapp.generated.resources.queue_open_document
 import no_papers_needed.composeapp.generated.resources.queue_retry_after
 import no_papers_needed.composeapp.generated.resources.queue_stage_ai
 import no_papers_needed.composeapp.generated.resources.queue_stage_ocr
@@ -91,7 +92,7 @@ import org.jetbrains.compose.resources.stringResource
 @Composable
 fun QueueScreen(
     session: LibrarySession,
-    onBack: () -> Unit,
+    onOpenDoc: (String) -> Unit,
     onOpenEditRun: (String) -> Unit,
 ) {
     val vm: QueueViewModel = viewModel { QueueViewModel(session) }
@@ -102,23 +103,16 @@ fun QueueScreen(
 
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(Res.string.queue_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(Res.string.common_back),
-                        )
-                    }
-                },
-            )
+            // No back arrow: the queue is a top-level destination (rail / settings / banners), not a
+            // pushed screen.
+            TopAppBar(title = { Text(stringResource(Res.string.queue_title)) })
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         QueueList(
             items = items,
             editRuns = editRuns,
+            onOpenDoc = onOpenDoc,
             onOpenEditRun = onOpenEditRun,
             onDiscardEditRun = vm::discardEditRun,
             onRetry = vm::retry,
@@ -131,6 +125,7 @@ fun QueueScreen(
 private fun QueueList(
     items: List<QueuedWork>,
     editRuns: List<QueuedEditRun>,
+    onOpenDoc: (String) -> Unit,
     onOpenEditRun: (String) -> Unit,
     onDiscardEditRun: (String) -> Unit,
     onRetry: (String) -> Unit,
@@ -164,7 +159,7 @@ private fun QueueList(
         }
         // One document can be owed both passes, so the stage is part of the identity.
         items(items, key = { "${it.stage}:${it.docId}" }) { entry ->
-            QueueRow(entry, onRetry)
+            QueueRow(entry, onOpenDoc, onRetry)
             HorizontalDivider()
         }
     }
@@ -277,10 +272,17 @@ private fun EditRunTrouble(run: QueuedEditRun) {
 @Composable
 private fun QueueRow(
     entry: QueuedWork,
+    onOpenDoc: (String) -> Unit,
     onRetry: (String) -> Unit,
 ) {
+    val openLabel = stringResource(Res.string.queue_open_document)
     Row(
-        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 10.dp),
+        Modifier
+            .fillMaxWidth()
+            .clickable(
+                onClickLabel = openLabel,
+                onClick = { onOpenDoc(entry.docId) },
+            ).padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.Top,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -361,7 +363,12 @@ private fun StateBadge(state: WorkState) {
             WorkState.FAILED -> scheme.errorContainer to scheme.onErrorContainer
             WorkState.READY -> scheme.secondaryContainer to scheme.onSecondaryContainer
         }
-    StatusBadge(stringResource(state.label), background, content)
+    StatusBadge(
+        stringResource(state.label),
+        background,
+        content,
+        Modifier.semantics { liveRegion = LiveRegionMode.Polite },
+    )
 }
 
 private val WorkStage.icon: ImageVector

@@ -54,6 +54,10 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.liveRegion
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.IsoDatePickerDialog
@@ -86,6 +90,8 @@ import no_papers_needed.composeapp.generated.resources.detail_ocr
 import no_papers_needed.composeapp.generated.resources.detail_pages
 import no_papers_needed.composeapp.generated.resources.detail_suggest_metadata
 import no_papers_needed.composeapp.generated.resources.detail_suggest_tags
+import no_papers_needed.composeapp.generated.resources.detail_suggesting_metadata
+import no_papers_needed.composeapp.generated.resources.detail_suggesting_tags
 import no_papers_needed.composeapp.generated.resources.detail_tab_details
 import no_papers_needed.composeapp.generated.resources.detail_tab_history
 import no_papers_needed.composeapp.generated.resources.detail_tab_preview
@@ -346,7 +352,14 @@ private fun AiTagSuggestions(
                 Text(stringResource(Res.string.detail_suggest_tags), modifier = Modifier.padding(start = 8.dp))
             }
             if (state.suggesting) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                val busyLabel = stringResource(Res.string.detail_suggesting_tags)
+                CircularProgressIndicator(
+                    Modifier.size(16.dp).semantics {
+                        contentDescription = busyLabel
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                    strokeWidth = 2.dp,
+                )
             }
         }
         if (state.suggestions.isNotEmpty()) {
@@ -417,7 +430,14 @@ private fun AiMetadataSuggestions(
                 Text(stringResource(Res.string.detail_suggest_metadata), modifier = Modifier.padding(start = 8.dp))
             }
             if (state.suggesting) {
-                CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                val busyLabel = stringResource(Res.string.detail_suggesting_metadata)
+                CircularProgressIndicator(
+                    Modifier.size(16.dp).semantics {
+                        contentDescription = busyLabel
+                        liveRegion = LiveRegionMode.Polite
+                    },
+                    strokeWidth = 2.dp,
+                )
             }
         }
         for ((key, value) in state.suggestion.values) {

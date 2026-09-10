@@ -1,6 +1,7 @@
 package dev.npn.app.ui.common
 
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -10,6 +11,9 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.collapse
+import androidx.compose.ui.semantics.expand
+import androidx.compose.ui.semantics.semantics
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_hide_technical_details
 import no_papers_needed.composeapp.generated.resources.common_show_technical_details
@@ -24,7 +28,25 @@ fun TechnicalDetails(
     if (details.isNullOrBlank()) return
     var expanded by rememberSaveable { mutableStateOf(false) }
     Column(modifier) {
-        TextButton(onClick = { expanded = !expanded }) {
+        // The label already flips between "Show"/"Hide"; the expand/collapse semantics action lets
+        // assistive tech announce and drive the disclosure state rather than reading a plain button.
+        TextButton(
+            onClick = { expanded = !expanded },
+            modifier =
+                Modifier.semantics {
+                    if (expanded) {
+                        collapse {
+                            expanded = false
+                            true
+                        }
+                    } else {
+                        expand {
+                            expanded = true
+                            true
+                        }
+                    }
+                },
+        ) {
             Text(
                 stringResource(
                     if (expanded) {
@@ -36,11 +58,15 @@ fun TechnicalDetails(
             )
         }
         if (expanded) {
-            Text(
-                details,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            // Support often needs to copy the diagnostic verbatim, so make the revealed text
+            // selectable rather than a read-only label.
+            SelectionContainer {
+                Text(
+                    details,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
         }
     }
 }

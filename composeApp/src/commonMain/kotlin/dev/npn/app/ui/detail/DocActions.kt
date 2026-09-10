@@ -95,7 +95,7 @@ fun DocActions(
         reindexing = ui.reindexing,
         splitting = ui.splitting,
         baking = ui.baking,
-        canSplit = ui.pageCount > 1,
+        canSplit = ui.pageCount.count > 1,
         aiOcr = ui.aiOcr,
         onRename = { dialog = DocActionDialog.RENAME },
         onReOcr = vm::reOcr,
@@ -111,7 +111,7 @@ fun DocActions(
     )
     DocActionDialogs(
         dialog = dialog,
-        pageCount = ui.pageCount,
+        pageCount = ui.pageCount.count,
         aiOcr = ui.aiOcr,
         vm = vm,
         snackbar = snackbar,

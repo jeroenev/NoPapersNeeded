@@ -54,6 +54,7 @@ import dev.npn.app.ui.detail.WithDraftResumeBanner
 import dev.npn.app.ui.library.LibraryFilterHandoff
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.AiDestination
+import dev.npn.app.ui.nav.AiProbe
 import dev.npn.app.ui.nav.NavigationShell
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.Route
@@ -159,9 +160,17 @@ private fun MainNav(
                 .BrowseContext()
         }
     // Probe once whether the AI assistant is configured; gates the AI entries in rail and menus.
-    val aiConfigured by produceState(initialValue = false, session) {
-        value = session.aiSuggest.isConfiguredOrFalse()
+    // Tri-state so the shell can reserve the AI slots while the probe runs rather than shifting
+    // the bar sideways when the answer lands; screens that only need the boolean read it off this.
+    val aiProbe by produceState(initialValue = AiProbe.PROBING, session) {
+        value =
+            if (session.aiSuggest.isConfiguredOrFalse()) {
+                AiProbe.CONFIGURED
+            } else {
+                AiProbe.UNAVAILABLE
+            }
     }
+    val aiConfigured = aiProbe.isConfigured
     // Outstanding background work, for the shell's queue badge. Read here rather than in a screen
     // because the badge is the only standing sign that the app is still busy — or, once a
     // background AI edit finishes, that it is waiting on the user — and on compact layouts the
@@ -192,7 +201,7 @@ private fun MainNav(
             NavigationShell(
                 current = nav.currentTopLevelDestination(),
                 aiCurrent = nav.currentAiDestination(),
-                aiConfigured = aiConfigured,
+                aiProbe = aiProbe,
                 queue = queue,
                 onNavigate = { dest -> nav.navigateTopLevel(dest) },
                 onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
@@ -264,21 +273,20 @@ private fun MainNavHost(
             )
         }
         composable<Route.Trash> {
-            TrashScreen(
-                session = session,
-                onBack = { nav.popBackStack() },
-            )
+            TrashScreen(session = session)
         }
         composable<Route.TagManagement> {
-            TagManagementScreen(
-                session = session,
-                onBack = { nav.popBackStack() },
-            )
+            TagManagementScreen(session = session)
         }
         composable<Route.Queue> {
             QueueScreen(
                 session = session,
-                onBack = { nav.popBackStack() },
+                onOpenDoc = { docId ->
+                    // A queued document is a real document; open it on its own, the way the resume
+                    // banner does, so Back from detail returns to the queue.
+                    browse.setOrder(listOf(docId), null)
+                    nav.navigate(Route.DocDetail(docId))
+                },
                 onOpenEditRun = { jobId -> nav.navigate(Route.AiEditReview(jobId)) },
             )
         }

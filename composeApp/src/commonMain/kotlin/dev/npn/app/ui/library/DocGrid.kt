@@ -85,6 +85,7 @@ internal fun DocGrid(
     results: DocumentResults,
     content: dev.npn.core.app.DocContentFacade,
     tagColors: TagColors,
+    reviewMode: dev.npn.core.model.ReviewMode,
     ui: LibraryUiState,
     columnWidth: Int,
     onColumnWidthChange: (Int) -> Unit,
@@ -92,6 +93,7 @@ internal fun DocGrid(
     onToggleSelect: (String) -> Unit,
     onStartSelection: (String) -> Unit,
     contextActionsFor: ((String) -> DocContextMenuActions)? = null,
+    previewOnClick: Boolean = false,
 ) {
     // Live cell width; re-seeded when the persisted value changes (e.g. after a commit).
     var width by remember { mutableStateOf(columnWidth.toFloat()) }
@@ -168,6 +170,7 @@ internal fun DocGrid(
                 docs = results.items,
                 content = content,
                 tagColors = tagColors,
+                reviewMode = reviewMode,
                 ui = ui,
                 cellWidth = width.roundToInt(),
                 state = gridState,
@@ -175,6 +178,7 @@ internal fun DocGrid(
                 onToggleSelect = onToggleSelect,
                 onStartSelection = onStartSelection,
                 contextActionsFor = contextActionsFor,
+                previewOnClick = previewOnClick,
             )
 
             VerticalScrollbar(gridState)
@@ -202,6 +206,7 @@ private fun DocGridCards(
     docs: List<dev.npn.core.app.DocListItem>,
     content: dev.npn.core.app.DocContentFacade,
     tagColors: TagColors,
+    reviewMode: dev.npn.core.model.ReviewMode,
     ui: LibraryUiState,
     cellWidth: Int,
     state: LazyGridState,
@@ -209,6 +214,7 @@ private fun DocGridCards(
     onToggleSelect: (String) -> Unit,
     onStartSelection: (String) -> Unit,
     contextActionsFor: ((String) -> DocContextMenuActions)? = null,
+    previewOnClick: Boolean = false,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(cellWidth.dp),
@@ -236,12 +242,14 @@ private fun DocGridCards(
                 item = item,
                 content = content,
                 tagColors = tagColors,
+                reviewMode = reviewMode,
                 selectionMode = selectionMode,
                 selected = id in ui.selected,
                 onClick = onClick,
                 onLongClick = onLongClick,
                 onToggleSelect = onToggle,
                 contextActions = contextActions,
+                previewOnClick = previewOnClick,
             )
         }
     }

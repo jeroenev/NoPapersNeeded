@@ -3,6 +3,7 @@
 package dev.npn.app.ui.library
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -12,6 +13,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -32,6 +34,7 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -45,9 +48,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.common.CommitTextField
 import dev.npn.app.ui.common.DatePickerField
 import dev.npn.app.ui.common.rememberFieldLocale
+import dev.npn.app.ui.common.rememberFieldText
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.TagInfo
 import dev.npn.core.model.FieldDef
@@ -59,6 +62,8 @@ import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_field_invalid_decimal
+import no_papers_needed.composeapp.generated.resources.common_field_invalid_number
 import no_papers_needed.composeapp.generated.resources.common_needs_review
 import no_papers_needed.composeapp.generated.resources.common_reviewed
 import no_papers_needed.composeapp.generated.resources.library_any
@@ -128,12 +133,21 @@ fun FilterPanel(
     modifier: Modifier = Modifier,
 ) {
     var draft by rememberSaveable(filter, stateSaver = LibraryFilterSaver) { mutableStateOf(filter) }
+    // Keys of the numeric bounds currently holding text that does not parse. Apply is blocked while
+    // any is present so an invalid entry can never be silently dropped and the stale value applied.
+    var invalidBounds by remember { mutableStateOf(emptySet<String>()) }
+    var resetCounter by remember { mutableStateOf(0) }
+    val setBoundValidity: (String, Boolean) -> Unit = { boundKey, valid ->
+        invalidBounds = if (valid) invalidBounds - boundKey else invalidBounds + boundKey
+    }
 
     Surface(modifier = modifier, tonalElevation = 3.dp) {
         Column(if (fillHeight) Modifier.fillMaxSize() else Modifier.fillMaxWidth()) {
             FilterPanelHeader(
                 onClearAll = {
                     draft = LibraryFilter()
+                    invalidBounds = emptySet()
+                    resetCounter++
                 },
                 onDismiss = onDismiss,
             )
@@ -146,18 +160,22 @@ fun FilterPanel(
                     .padding(bottom = 12.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                FilterFields(
-                    draft = draft,
-                    tags = tags,
-                    fields = fields,
-                    reviewMode = reviewMode,
-                    onDraftChange = { draft = it },
-                )
+                key(resetCounter) {
+                    FilterFields(
+                        draft = draft,
+                        tags = tags,
+                        fields = fields,
+                        reviewMode = reviewMode,
+                        onDraftChange = { draft = it },
+                        onBoundValidity = setBoundValidity,
+                    )
+                }
             }
 
             HorizontalDivider()
             OutlinedButton(
                 onClick = { onApply(draft) },
+                enabled = invalidBounds.isEmpty(),
                 modifier = Modifier.fillMaxWidth().padding(16.dp),
             ) { Text(stringResource(Res.string.library_apply_filters)) }
         }
@@ -216,6 +234,7 @@ private fun FilterFields(
     fields: FieldFilterOptions,
     reviewMode: ReviewMode,
     onDraftChange: (LibraryFilter) -> Unit,
+    onBoundValidity: (String, Boolean) -> Unit,
 ) {
     TagFilterSection(tags, draft, onDraftChange)
 
@@ -234,7 +253,7 @@ private fun FilterFields(
 
     for (def in fields.fields.filter { it.showByDefault }) {
         key(def.key) {
-            FieldFilterRow(def, fields.values[def.key].orEmpty(), draft, onDraftChange)
+            FieldFilterRow(def, fields.values[def.key].orEmpty(), draft, onDraftChange, onBoundValidity)
         }
     }
 
@@ -261,6 +280,7 @@ private fun FieldFilterRow(
     values: List<String>,
     draft: LibraryFilter,
     onDraftChange: (LibraryFilter) -> Unit,
+    onBoundValidity: (String, Boolean) -> Unit,
 ) {
     when (def.type) {
         FieldType.TEXT -> {
@@ -278,40 +298,50 @@ private fun FieldFilterRow(
 
         FieldType.DATE -> {
             SectionLabel(def.label)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                DatePickerField(
-                    value = draft.fieldRanges[def.key]?.from,
-                    label = stringResource(Res.string.library_from),
-                    onCommit = { onDraftChange(draft.withFieldBounds(def.key, from = it)) },
-                    modifier = Modifier.weight(1f),
-                )
-                DatePickerField(
-                    value = draft.fieldRanges[def.key]?.to,
-                    label = stringResource(Res.string.library_to),
-                    onCommit = { onDraftChange(draft.withFieldBounds(def.key, to = it)) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            BoundsLayout(
+                from = {
+                    DatePickerField(
+                        value = draft.fieldRanges[def.key]?.from,
+                        label = stringResource(Res.string.library_from),
+                        onCommit = { onDraftChange(draft.withFieldBounds(def.key, from = it)) },
+                        modifier = it,
+                    )
+                },
+                to = {
+                    DatePickerField(
+                        value = draft.fieldRanges[def.key]?.to,
+                        label = stringResource(Res.string.library_to),
+                        onCommit = { onDraftChange(draft.withFieldBounds(def.key, to = it)) },
+                        modifier = it,
+                    )
+                },
+            )
         }
 
         FieldType.NUMBER, FieldType.DECIMAL -> {
             SectionLabel(def.label)
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                NumberBound(
-                    def = def,
-                    value = draft.fieldRanges[def.key]?.from,
-                    label = stringResource(Res.string.library_from),
-                    onCommit = { onDraftChange(draft.withFieldBounds(def.key, from = it)) },
-                    modifier = Modifier.weight(1f),
-                )
-                NumberBound(
-                    def = def,
-                    value = draft.fieldRanges[def.key]?.to,
-                    label = stringResource(Res.string.library_to),
-                    onCommit = { onDraftChange(draft.withFieldBounds(def.key, to = it)) },
-                    modifier = Modifier.weight(1f),
-                )
-            }
+            BoundsLayout(
+                from = {
+                    NumberBound(
+                        def = def,
+                        value = draft.fieldRanges[def.key]?.from,
+                        label = stringResource(Res.string.library_from),
+                        onCommit = { onDraftChange(draft.withFieldBounds(def.key, from = it)) },
+                        onValidity = { valid -> onBoundValidity("${def.key}:from", valid) },
+                        modifier = it,
+                    )
+                },
+                to = {
+                    NumberBound(
+                        def = def,
+                        value = draft.fieldRanges[def.key]?.to,
+                        label = stringResource(Res.string.library_to),
+                        onCommit = { onDraftChange(draft.withFieldBounds(def.key, to = it)) },
+                        onValidity = { valid -> onBoundValidity("${def.key}:to", valid) },
+                        modifier = it,
+                    )
+                },
+            )
         }
 
         FieldType.LONG_TEXT -> {
@@ -320,27 +350,80 @@ private fun FieldFilterRow(
     }
 }
 
-/** One numeric range bound: typed in locale form, stored canonical; a partial entry changes nothing. */
+/**
+ * Below which the two from/to fields stack. A single filter row needs enough width for two labelled
+ * fields side by side; narrower than this they read better one above the other, and inline error
+ * text under an invalid numeric field no longer squeezes its sibling.
+ */
+private val BoundsStackBelow = 360.dp
+
+/**
+ * Lays a from/to pair side by side when there is room, stacked vertically when narrow. Each slot
+ * receives the [Modifier] it should apply so the side-by-side form can weight them equally while the
+ * stacked form fills the width.
+ */
+@Composable
+private fun BoundsLayout(
+    from: @Composable (Modifier) -> Unit,
+    to: @Composable (Modifier) -> Unit,
+) {
+    BoxWithConstraints(Modifier.fillMaxWidth()) {
+        if (maxWidth < BoundsStackBelow) {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                from(Modifier.fillMaxWidth())
+                to(Modifier.fillMaxWidth())
+            }
+        } else {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                from(Modifier.weight(1f))
+                to(Modifier.weight(1f))
+            }
+        }
+    }
+}
+
+/**
+ * One numeric range bound: typed in locale form, stored canonical. An entry that does not parse
+ * shows inline validation and reports itself invalid via [onValidity] so the panel can block Apply,
+ * rather than silently keeping the stale bound. A blank field is valid (it clears the bound).
+ */
 @Composable
 private fun NumberBound(
     def: FieldDef,
     value: String?,
     label: String,
     onCommit: (String?) -> Unit,
+    onValidity: (Boolean) -> Unit,
     modifier: Modifier,
 ) {
     val locale = rememberFieldLocale()
-    CommitTextField(
-        label = label,
-        initial = value?.let { FieldValues.display(def.type, it, locale) }.orEmpty(),
-        keyboardType = KeyboardType.Decimal,
-        modifier = modifier,
-        onCommit = { typed ->
+    var text by rememberFieldText(value?.let { FieldValues.display(def.type, it, locale) }.orEmpty())
+    val invalid = text.isNotBlank() && FieldValues.canonicalize(def.type, text, locale) is FieldParse.Invalid
+    // Report validity on entry and whenever it changes, and clear the invalid flag when this field
+    // leaves the composition (the row was removed) so a stale error never blocks Apply.
+    LaunchedEffect(invalid) { onValidity(!invalid) }
+    DisposableEffect(Unit) { onDispose { onValidity(true) } }
+    val error =
+        when {
+            !invalid -> null
+            def.type == FieldType.DECIMAL -> stringResource(Res.string.common_field_invalid_decimal)
+            else -> stringResource(Res.string.common_field_invalid_number)
+        }
+    OutlinedTextField(
+        value = text,
+        onValueChange = { typed ->
+            text = typed
             when (val parsed = FieldValues.canonicalize(def.type, typed, locale)) {
                 is FieldParse.Ok -> onCommit(parsed.canonical)
                 is FieldParse.Invalid -> Unit
             }
         },
+        label = { Text(label) },
+        isError = invalid,
+        supportingText = error?.let { { Text(it) } },
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        singleLine = true,
+        modifier = modifier.fillMaxWidth(),
     )
 }
 

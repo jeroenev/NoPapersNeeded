@@ -23,6 +23,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.heading
+import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 
 // The building blocks every settings pane is made of. Before these existed each pane hand-rolled
@@ -55,6 +57,10 @@ internal fun SettingsSubheading(title: String) {
         text = title,
         style = MaterialTheme.typography.titleMedium,
         color = MaterialTheme.colorScheme.primary,
+        // Marks each group title as a heading so screen readers can jump group to group down a long
+        // pane instead of walking every control. This is the in-pane structure improvement that is
+        // possible without owning the pane's scroll container (see the sticky-heading blocker note).
+        modifier = Modifier.semantics { heading() },
     )
 }
 

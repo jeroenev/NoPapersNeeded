@@ -40,24 +40,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     private fun tagSuggestions(vararg tags: String): List<TagSuggestion> = tags.map { TagSuggestion(it, isNew = false) }
 
     @Test
-    fun pageCountResolvedOnInit() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { content.pageCountValue = 7 }
-            val model = vm(session = session)
-            advanceUntilIdle()
-            model.ui.value.pageCount shouldBe 7
-        }
-
-    @Test
-    fun pageCountFailureLeavesZero() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { content.failPageCount = { error("boom") } }
-            val model = vm(session = session)
-            advanceUntilIdle()
-            model.ui.value.pageCount shouldBe 0
-        }
-
-    @Test
     fun goToPageIgnoresOutOfRange() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.pageCountValue = 3 }

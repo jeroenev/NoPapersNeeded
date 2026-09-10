@@ -149,6 +149,7 @@ private fun PreviewBody(
                         pageCount = ui.pageCount,
                         render = { p, maxDim -> vm.renderPage(p, maxDim) },
                         onPageChange = vm::goToPage,
+                        onRetryPageCount = vm::retryPageCount,
                         modifier = m,
                     )
                 }

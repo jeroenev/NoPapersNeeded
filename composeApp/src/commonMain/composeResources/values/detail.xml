@@ -60,6 +60,8 @@
     <string name="detail_ocr">OCR</string>
     <string name="detail_suggest_tags">Suggest tags</string>
     <string name="detail_suggest_metadata">Suggest details</string>
+    <string name="detail_suggesting_tags">Suggesting tags…</string>
+    <string name="detail_suggesting_metadata">Suggesting details…</string>
     <string name="detail_document_date_plain">Document date</string>
     <string name="detail_use_suggestion">Use suggested %1$s</string>
     <string name="detail_dismiss_suggestion">Dismiss suggested %1$s</string>
@@ -114,6 +116,8 @@
     </plurals>
 
     <string name="detail_page_number">Page %1$d</string>
+    <string name="detail_no_pages">This document has no pages to show.</string>
+    <string name="detail_pages_failed">Could not read this document\'s pages.</string>
     <string name="detail_render_page_failed">Could not render this page.</string>
     <string name="detail_zoom_out">Zoom out</string>
     <string name="detail_zoom_in">Zoom in</string>

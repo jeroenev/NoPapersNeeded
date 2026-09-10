@@ -12,10 +12,12 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material3.Card
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -47,10 +49,10 @@ import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_empty_trash
 import no_papers_needed.composeapp.generated.resources.common_empty_trash_question
+import no_papers_needed.composeapp.generated.resources.common_more_actions
 import no_papers_needed.composeapp.generated.resources.common_restore_all
 import no_papers_needed.composeapp.generated.resources.common_restore_all_question
 import no_papers_needed.composeapp.generated.resources.common_trash_delete_forever
@@ -111,10 +113,7 @@ private val TrashTab.labelResource: StringResource
         }
 
 @Composable
-fun TrashScreen(
-    session: LibrarySession,
-    onBack: () -> Unit,
-) {
+fun TrashScreen(session: LibrarySession) {
     val vm: TrashViewModel = viewModel { TrashViewModel(session) }
     val trashed by vm.trashed.collectAsStateWithLifecycle()
     val duplicates by vm.duplicates.collectAsStateWithLifecycle()
@@ -133,7 +132,6 @@ fun TrashScreen(
         state = TrashContentState(trashed, duplicates, missing, relinks),
         content = session.content,
         snackbar = snackbar,
-        onBack = onBack,
         onSelectTab = { tab = it },
         actions =
             TrashActions(
@@ -198,7 +196,6 @@ private fun TrashScaffold(
     state: TrashContentState,
     content: dev.npn.core.app.DocContentFacade,
     snackbar: SnackbarHostState,
-    onBack: () -> Unit,
     onSelectTab: (TrashTab) -> Unit,
     actions: TrashActions,
     bulkActions: TrashBulkActions,
@@ -207,22 +204,14 @@ private fun TrashScaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.common_trash_maintenance_title)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(Res.string.common_back),
-                        )
-                    }
-                },
+                // No back arrow: Trash is a top-level rail destination reached from navigation, not a
+                // pushed screen, so a back arrow would misrepresent it and crowd the bar.
                 actions = {
                     if (tab == TrashTab.TRASH && state.trashed.isNotEmpty()) {
-                        TextButton(onClick = bulkActions.onRestoreAll) {
-                            Text(stringResource(Res.string.common_restore_all))
-                        }
-                        TextButton(onClick = bulkActions.onEmptyTrash) {
-                            Text(stringResource(Res.string.common_empty_trash))
-                        }
+                        TrashOverflowMenu(
+                            onRestoreAll = bulkActions.onRestoreAll,
+                            onEmptyTrash = bulkActions.onEmptyTrash,
+                        )
                     }
                 },
             )
@@ -232,6 +221,43 @@ private fun TrashScaffold(
         Column(Modifier.fillMaxSize().padding(padding)) {
             TrashTabs(tab, state, onSelectTab)
             TrashTabContent(tab, state, content, actions)
+        }
+    }
+}
+
+/**
+ * The trash tab's bulk actions, tucked into an overflow menu so the top bar stays uncrowded on
+ * compact widths. Only rendered when there is something to act on (the caller gates on a non-empty
+ * trash), so the menu never opens onto nothing.
+ */
+@Composable
+private fun TrashOverflowMenu(
+    onRestoreAll: () -> Unit,
+    onEmptyTrash: () -> Unit,
+) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        IconButton(onClick = { expanded = true }) {
+            Icon(
+                Icons.Filled.MoreVert,
+                contentDescription = stringResource(Res.string.common_more_actions),
+            )
+        }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.common_restore_all)) },
+                onClick = {
+                    expanded = false
+                    onRestoreAll()
+                },
+            )
+            DropdownMenuItem(
+                text = { Text(stringResource(Res.string.common_empty_trash)) },
+                onClick = {
+                    expanded = false
+                    onEmptyTrash()
+                },
+            )
         }
     }
 }
