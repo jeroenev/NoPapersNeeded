@@ -14,6 +14,7 @@ import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TagDao
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineId
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.KSerializer
@@ -168,7 +169,9 @@ object LibraryAiTools {
 
     /**
      * Map a model-supplied field name (any casing; a key, a label or an alias) to the key the
-     * index stores it under. Unknown names come back lowercased so an orphan key still matches.
+     * index stores it under. A registered field resolves to its defined key, casing included;
+     * an unregistered name comes back lowercased, which still finds an orphan row of any casing
+     * because `SearchFieldsTool.searchField` compares keys case-insensitively.
      */
     private fun normalizeField(
         field: String,
@@ -178,8 +181,8 @@ object LibraryAiTools {
         if (f.isEmpty()) return SearchFieldsTool.ANY_FIELD
         val lc = f.lowercase()
         if (lc == SearchFieldsTool.ANY_FIELD) return SearchFieldsTool.ANY_FIELD
-        return fields.firstOrNull { it.key.lowercase() == lc || it.label.lowercase() == lc }?.key
-            ?: listOf(FILE_NAME_FIELD, OCR_ENGINE_FIELD).firstOrNull { it.lowercase() == lc }
+        return fields.firstOrNull { FieldKeys.sameKey(it.key, f) || it.label.equals(f, ignoreCase = true) }?.key
+            ?: listOf(FILE_NAME_FIELD, OCR_ENGINE_FIELD).firstOrNull { it.equals(f, ignoreCase = true) }
             ?: FIELD_ALIASES[lc]
             ?: lc
     }

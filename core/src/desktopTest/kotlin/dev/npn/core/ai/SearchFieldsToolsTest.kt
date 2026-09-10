@@ -176,6 +176,14 @@ class SearchFieldsToolsTest {
             val out = tool.execute(LibraryAiTools.SearchFieldsTool.Args(field = "AMOUNT", value = "eur"))
             out shouldContain "[doc:${"a".repeat(64)}]"
             out shouldContain "field=\"amount=EUR 42.50\""
+            // The other direction too: an undefined key keeps whatever casing its row was written
+            // with, so the lowercased fallback in normalizeField still has to find it.
+            db.documentFieldDao().upsertAll(
+                listOf(DocumentFieldEntity("a".repeat(64), "Vendor", "ACME Corp")),
+            )
+            val stored = tool.execute(LibraryAiTools.SearchFieldsTool.Args(field = "vendor"))
+            stored shouldContain "[doc:${"a".repeat(64)}]"
+            stored shouldContain "field=\"Vendor=ACME Corp\""
         }
 
     @Test
