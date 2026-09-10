@@ -1,6 +1,7 @@
 package dev.npn.core.journal
 
 import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldDef
 
 /**
  * The result of folding a set of journal events. All raw data is stored so that [apply] is
@@ -83,6 +84,14 @@ class FoldedState {
     // --- library-wide synced settings: key -> LWW (value, hlc) ---
     private val settings = HashMap<String, PropVal>()
 
+    // --- field registry: key -> LWW (definition-or-null, hlc); null means removed ---
+    private val fieldDefs = HashMap<String, DefVal>()
+
+    data class DefVal(
+        val def: FieldDef?,
+        override val hlc: Hlc,
+    ) : HlcStamped
+
     /**
      * Highest HLC across all applied events (any device, any op). Used to seed the local
      * [HlcClock] after a fold so new writes are ordered after everything already in the store,
@@ -157,6 +166,10 @@ class FoldedState {
 
             is JournalOp.SettingSet -> {
                 settings.putIfNewerHlc(op.key, event.hlc) { PropVal(op.value, event.hlc) }
+            }
+
+            is JournalOp.FieldDefSet -> {
+                fieldDefs.putIfNewerHlc(op.key, event.hlc) { DefVal(op.def, event.hlc) }
             }
 
             // Tolerant skip: an op from a newer build folds to nothing here.
@@ -254,15 +267,9 @@ class FoldedState {
         var current = doc
         val seen = HashSet<String>()
         while (seen.add(current)) {
-            val winner = relinkWinner(current) ?: break
-            current = winner
+            current = relinks[current]?.maxByOrNull { it.hlc }?.newDoc ?: break
         }
         return current
-    }
-
-    private fun relinkWinner(oldDoc: String): String? {
-        val claims = relinks[oldDoc] ?: return null
-        return claims.maxByOrNull { it.hlc }?.newDoc
     }
 
     /**
@@ -287,6 +294,15 @@ class FoldedState {
 
     /** Effective value of a library-wide synced setting, or null if never set/cleared. */
     fun effectiveSetting(key: String): String? = settings[key]?.value
+
+    /** The live field registry: every key whose winning definition is non-null, in display order. */
+    fun effectiveFieldDefs(): List<FieldDef> =
+        fieldDefs.values
+            .mapNotNull { it.def }
+            .sortedWith(compareBy<FieldDef> { it.position }.thenBy { it.key })
+
+    /** The winning definition for [key], or null when never defined or removed. */
+    fun effectiveFieldDef(key: String): FieldDef? = fieldDefs[key]?.def
 
     /** All documents this state has any tag data for (literal keys, before resolveDocId). */
     fun taggedDocs(): Set<String> = tagAdds.keys.toSet()

@@ -17,6 +17,8 @@ import dev.npn.core.journal.SegmentRef
 import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.systemNowMillis
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import kotlinx.coroutines.NonCancellable
@@ -38,6 +40,9 @@ private class SyncedSettings {
     private val values = MutableStateFlow<Map<String, String?>>(emptyMap())
 
     fun flow(key: String): kotlinx.coroutines.flow.Flow<String?> = values.map { it[key] }
+
+    /** The current value of a seeded key, without touching the fold. */
+    fun current(key: String): String? = values.value[key]
 
     /** Replace every seeded key's value from [source]. */
     fun seed(source: FoldedState) {
@@ -62,7 +67,7 @@ private class SyncedSettings {
          * Every synced setting published on open. A key left out of this list reads as null until
          * something writes it in the running session, so a new synced setting belongs here.
          */
-        private val SEEDED_KEYS = listOf(ReviewMode.WIRE_KEY, StandardField.WIRE_KEY)
+        private val SEEDED_KEYS = listOf(ReviewMode.WIRE_KEY, StandardField.WIRE_KEY, FieldKeys.SEEDED_SETTING)
     }
 }
 
@@ -117,6 +122,24 @@ class JournalCoordinator internal constructor(
     private val syncedSettings = SyncedSettings()
 
     fun settingFlow(key: String): kotlinx.coroutines.flow.Flow<String?> = syncedSettings.flow(key)
+
+    /**
+     * Write the well-known field definitions once per library. Guarded by the synced
+     * [FieldKeys.SEEDED_SETTING] marker rather than by "are there any definitions", so a user who
+     * deletes every default field does not get them back when another device opens the library.
+     *
+     * The cheap marker check runs first: [commitBuilt] materializes the whole fold, and paying
+     * that on every open is exactly what [refreshState]'s projection reuse avoids. Only a library
+     * that has never been seeded (once, ever) reaches the fold.
+     */
+    suspend fun seedFieldRegistryIfNeeded(defs: List<FieldDef>) {
+        if (syncedSettings.current(FieldKeys.SEEDED_SETTING) != null) return
+        if (writeBlockReason != null) return
+        commitBuilt { state ->
+            if (state.effectiveSetting(FieldKeys.SEEDED_SETTING) != null) return@commitBuilt emptyList()
+            defs.map { PendingOp.fieldDefSet(it) } + PendingOp.settingSet(FieldKeys.SEEDED_SETTING, "1")
+        }
+    }
 
     /** The folded state, replaying it from the accumulator the first time it is actually needed. */
     private suspend fun foldedState(): FoldedState = folded ?: accumulator.loadState().also { folded = it }

@@ -52,6 +52,44 @@ interface DocumentFieldDao {
     @Query("SELECT * FROM document_fields")
     suspend fun all(): List<DocumentFieldEntity>
 
+    /** Distinct values of one field across the library, for autocomplete and AI vocabulary. */
+    @Query(
+        "SELECT DISTINCT fieldValue FROM document_fields WHERE fieldKey = :key " +
+            "ORDER BY fieldValue COLLATE NOCASE LIMIT :limit",
+    )
+    fun observeDistinctValues(
+        key: String,
+        limit: Int,
+    ): Flow<List<String>>
+
+    @Query(
+        "SELECT DISTINCT fieldValue FROM document_fields WHERE fieldKey = :key " +
+            "ORDER BY fieldValue COLLATE NOCASE LIMIT :limit",
+    )
+    suspend fun distinctValues(
+        key: String,
+        limit: Int,
+    ): List<String>
+
+    /** Distinct values of one field starting with [prefix], case-insensitive. */
+    @Query(
+        "SELECT DISTINCT fieldValue FROM document_fields WHERE fieldKey = :key " +
+            "AND fieldValue LIKE :prefix || '%' ORDER BY fieldValue COLLATE NOCASE LIMIT :limit",
+    )
+    suspend fun valuesForPrefix(
+        key: String,
+        prefix: String,
+        limit: Int,
+    ): List<String>
+
+    /** Document ids carrying a value for [key]. */
+    @Query("SELECT docId FROM document_fields WHERE fieldKey = :key")
+    suspend fun docIdsWithKey(key: String): List<String>
+
+    /** Number of documents carrying a value for [key]. */
+    @Query("SELECT COUNT(*) FROM document_fields WHERE fieldKey = :key")
+    fun observeUsageCount(key: String): Flow<Int>
+
     /** Distinct field keys with their document counts, for the AI's list_fields tool. */
     @Query(
         "SELECT fieldKey, COUNT(*) AS count FROM document_fields " +

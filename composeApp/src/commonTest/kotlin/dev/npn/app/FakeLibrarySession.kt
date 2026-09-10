@@ -17,6 +17,7 @@ class FakeLibrarySession : LibrarySession {
     override val tags = FakeTagRepository()
     override val savedViews = FakeSavedViewRepository()
     override val rules = FakeAutoMatchRuleRepository()
+    override val fieldRegistry = FakeFieldRegistry()
     override val meta = FakeMetadataWriter()
     override val tagAdmin = FakeTagAdmin()
     override val docLifecycle = FakeDocLifecycle()

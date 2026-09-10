@@ -26,7 +26,8 @@ import androidx.room3.migration.AutoMigrationSpec
     // v12: adds ai_edit_jobs + ai_edit_job_docs (AI edit runs handed to the background).
     // v13: indexes metadata_events.documentId + adds the source-set fingerprint the open path
     //      uses to skip a whole-journal refold when nothing changed.
-    version = 13,
+    // v14: adds field_defs (the projected field registry).
+    version = 14,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -39,12 +40,14 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 10, to = 11),
         AutoMigration(from = 11, to = 12),
         AutoMigration(from = 12, to = 13),
+        AutoMigration(from = 13, to = 14),
     ],
     entities = [
         DocumentEntity::class,
         TagEntity::class,
         DocumentTagEntity::class,
         DocumentFieldEntity::class,
+        FieldDefEntity::class,
         FtsDocumentEntity::class,
         SavedViewEntity::class,
         ThumbnailEntity::class,
@@ -72,6 +75,8 @@ abstract class NpnDatabase : RoomDatabase() {
     abstract fun ftsDao(): FtsDao
 
     abstract fun documentFieldDao(): DocumentFieldDao
+
+    abstract fun fieldDefDao(): FieldDefDao
 
     abstract fun savedViewDao(): SavedViewDao
 

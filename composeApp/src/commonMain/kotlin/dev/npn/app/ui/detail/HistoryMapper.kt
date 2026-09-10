@@ -152,6 +152,11 @@ object HistoryMapper {
                     historyText(HistoryTextKey.SETTING_CHANGED, op.key)
                 }
 
+                is JournalOp.FieldDefSet -> {
+                    // Library-wide; never appears in a document's own history, but the mapper is total.
+                    historyText(HistoryTextKey.SETTING_CHANGED, op.key)
+                }
+
                 is JournalOp.Unknown -> {
                     if (op.payload.isEmpty()) {
                         historyText(HistoryTextKey.UNKNOWN_EVENT, op.wire)

@@ -370,7 +370,8 @@ class MetadataWriterTest {
                     rig.fs
                         .listAllUnder(NpnPaths.JOURNAL_DIR)
                         .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
-                objects.size shouldBe 2
+                // Two user transactions plus the one-time field-registry seed written on open.
+                objects.size shouldBe 3
                 objects.forEach { objectFile ->
                     assertIs<JournalSourceRead.Accepted>(
                         StorageV2Reader.read(objectFile.relPath, rig.fs.readBytes(objectFile.relPath)),
@@ -511,11 +512,19 @@ class MetadataWriterTest {
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
                 rig.session.rescan()
                 val id = rig.docId("a.pdf")
+                val beforeTag =
+                    rig.fs
+                        .listAllUnder(NpnPaths.JOURNAL_DIR)
+                        .map { it.relPath }
+                        .toSet()
                 rig.session.meta.addTag(listOf(id), "kept")
                 val canonical =
                     rig.fs
                         .listAllUnder(NpnPaths.JOURNAL_DIR)
-                        .single { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+                        .single {
+                            it.relPath !in beforeTag &&
+                                NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2
+                        }
                 val conflictName = "${canonical.name.removeSuffix(".jsonl")} (conflicted copy laptop).jsonl"
                 val conflictPath = canonical.relPath.substringBeforeLast('/') + "/" + conflictName
                 rig.fs.move(canonical.relPath, conflictPath)

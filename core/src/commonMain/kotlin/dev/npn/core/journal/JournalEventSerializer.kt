@@ -1,6 +1,8 @@
 package dev.npn.core.journal
 
 import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldType
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.descriptors.buildClassSerialDescriptor
@@ -31,27 +33,34 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
     override val descriptor: SerialDescriptor =
         buildClassSerialDescriptor("dev.npn.core.journal.JournalEvent")
 
-    override fun serialize(encoder: Encoder, value: JournalEvent) {
-        val json = (encoder as? JsonEncoder)
-            ?: error("JournalEventSerializer only supports JSON")
-        val obj = buildJsonObject {
-            put("v", JsonPrimitive(value.version))
-            put("seq", JsonPrimitive(value.seq))
-            put("hlc", json.json.encodeToJsonElement(hlcSerializer, value.hlc))
-            put("dev", JsonPrimitive(value.dev))
-            put("doc", value.doc?.let { JsonPrimitive(it) } ?: JsonNull)
-            put("op", JsonPrimitive(value.op.wire))
-            put("p", encodePayload(value.op))
-        }
+    override fun serialize(
+        encoder: Encoder,
+        value: JournalEvent,
+    ) {
+        val json =
+            (encoder as? JsonEncoder)
+                ?: error("JournalEventSerializer only supports JSON")
+        val obj =
+            buildJsonObject {
+                put("v", JsonPrimitive(value.version))
+                put("seq", JsonPrimitive(value.seq))
+                put("hlc", json.json.encodeToJsonElement(hlcSerializer, value.hlc))
+                put("dev", JsonPrimitive(value.dev))
+                put("doc", value.doc?.let { JsonPrimitive(it) } ?: JsonNull)
+                put("op", JsonPrimitive(value.op.wire))
+                put("p", encodePayload(value.op))
+            }
         json.encodeJsonElement(obj)
     }
 
     override fun deserialize(decoder: Decoder): JournalEvent {
-        val json = (decoder as? JsonDecoder)
-            ?: error("JournalEventSerializer only supports JSON")
+        val json =
+            (decoder as? JsonDecoder)
+                ?: error("JournalEventSerializer only supports JSON")
         val obj = json.decodeJsonElement().jsonObject
-        val version = obj["v"]?.jsonPrimitive?.content?.toIntOrNull()
-            ?: error("Missing event version")
+        val version =
+            obj["v"]?.jsonPrimitive?.content?.toIntOrNull()
+                ?: error("Missing event version")
         require(version == JournalEventVersions.V1) { "Unsupported event version: $version" }
         val seq = obj["seq"]!!.jsonPrimitive.content.toLong()
         val hlc = json.json.decodeFromJsonElement(hlcSerializer, obj["hlc"]!!)
@@ -63,86 +72,215 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
         return JournalEvent(version, seq, hlc, dev, doc, op)
     }
 
-    private fun encodePayload(op: JournalOp): JsonObject = when (op) {
-        is JournalOp.TagAdd -> buildJsonObject { put("tag", JsonPrimitive(op.tag)) }
-        is JournalOp.TagRemove -> buildJsonObject {
+    private fun encodePayload(op: JournalOp): JsonObject =
+        when (op) {
+            is JournalOp.TagAdd -> {
+                obj("tag" to JsonPrimitive(op.tag))
+            }
+
+            is JournalOp.TagRemove -> {
+                encodeTagRemove(op)
+            }
+
+            is JournalOp.PropSet -> {
+                keyValue(op.key.wire, op.value)
+            }
+
+            is JournalOp.FieldSet -> {
+                keyValue(op.key, op.value)
+            }
+
+            is JournalOp.DocTrash -> {
+                obj("origPath" to JsonPrimitive(op.origPath))
+            }
+
+            JournalOp.DocRestore -> {
+                JsonObject(emptyMap())
+            }
+
+            JournalOp.DocDelete -> {
+                JsonObject(emptyMap())
+            }
+
+            is JournalOp.Relink -> {
+                obj("newDoc" to JsonPrimitive(op.newDoc))
+            }
+
+            is JournalOp.TagRename -> {
+                fromTo(op.from, op.to)
+            }
+
+            is JournalOp.TagMerge -> {
+                fromTo(op.from, op.to)
+            }
+
+            is JournalOp.TagStyle -> {
+                encodeTagStyle(op)
+            }
+
+            is JournalOp.SettingSet -> {
+                keyValue(op.key, op.value)
+            }
+
+            is JournalOp.FieldDefSet -> {
+                obj(
+                    "key" to JsonPrimitive(op.key),
+                    "def" to (op.def?.let(::encodeFieldDef) ?: JsonNull),
+                )
+            }
+
+            is JournalOp.Unknown -> {
+                op.payload
+            }
+        }
+
+    private fun obj(vararg entries: Pair<String, JsonElement>): JsonObject = JsonObject(mapOf(*entries))
+
+    private fun nullable(value: String?): JsonElement = value?.let { JsonPrimitive(it) } ?: JsonNull
+
+    private fun keyValue(
+        key: String,
+        value: String?,
+    ): JsonObject = obj("key" to JsonPrimitive(key), "value" to nullable(value))
+
+    private fun fromTo(
+        from: String,
+        to: String,
+    ): JsonObject = obj("from" to JsonPrimitive(from), "to" to JsonPrimitive(to))
+
+    private fun encodeTagRemove(op: JournalOp.TagRemove): JsonObject =
+        buildJsonObject {
             put("tag", JsonPrimitive(op.tag))
-            put("dots", buildJsonArray {
-                op.dots.forEach { dot ->
-                    add(buildJsonArray {
-                        add(JsonPrimitive(dot.deviceId))
-                        add(JsonPrimitive(dot.seq))
-                    })
-                }
-            })
+            put(
+                "dots",
+                buildJsonArray {
+                    op.dots.forEach { dot ->
+                        add(
+                            buildJsonArray {
+                                add(JsonPrimitive(dot.deviceId))
+                                add(JsonPrimitive(dot.seq))
+                            },
+                        )
+                    }
+                },
+            )
         }
-        is JournalOp.PropSet -> buildJsonObject {
-            put("key", JsonPrimitive(op.key.wire))
-            put("value", op.value?.let { JsonPrimitive(it) } ?: JsonNull)
+
+    private fun encodeTagStyle(op: JournalOp.TagStyle): JsonObject =
+        obj("tag" to JsonPrimitive(op.tag), "color" to nullable(op.color), "icon" to nullable(op.icon))
+
+    private fun encodeFieldDef(def: FieldDef): JsonObject =
+        buildJsonObject {
+            put("label", JsonPrimitive(def.label))
+            put("type", JsonPrimitive(def.type.wire))
+            put("showByDefault", JsonPrimitive(def.showByDefault))
+            put("aiEnabled", JsonPrimitive(def.aiEnabled))
+            put("position", JsonPrimitive(def.position))
+            def.hint?.let { put("hint", JsonPrimitive(it)) }
         }
-        is JournalOp.FieldSet -> buildJsonObject {
-            put("key", JsonPrimitive(op.key))
-            put("value", op.value?.let { JsonPrimitive(it) } ?: JsonNull)
-        }
-        is JournalOp.DocTrash -> buildJsonObject { put("origPath", JsonPrimitive(op.origPath)) }
-        JournalOp.DocRestore -> JsonObject(emptyMap())
-        JournalOp.DocDelete -> JsonObject(emptyMap())
-        is JournalOp.Relink -> buildJsonObject { put("newDoc", JsonPrimitive(op.newDoc)) }
-        is JournalOp.TagRename -> buildJsonObject {
-            put("from", JsonPrimitive(op.from))
-            put("to", JsonPrimitive(op.to))
-        }
-        is JournalOp.TagMerge -> buildJsonObject {
-            put("from", JsonPrimitive(op.from))
-            put("to", JsonPrimitive(op.to))
-        }
-        is JournalOp.TagStyle -> buildJsonObject {
-            put("tag", JsonPrimitive(op.tag))
-            put("color", op.color?.let { JsonPrimitive(it) } ?: JsonNull)
-            put("icon", op.icon?.let { JsonPrimitive(it) } ?: JsonNull)
-        }
-        is JournalOp.SettingSet -> buildJsonObject {
-            put("key", JsonPrimitive(op.key))
-            put("value", op.value?.let { JsonPrimitive(it) } ?: JsonNull)
-        }
-        is JournalOp.Unknown -> op.payload
+
+    private fun decodeFieldDef(
+        key: String,
+        elem: JsonElement,
+    ): FieldDef? {
+        val obj = elem as? JsonObject ?: return null
+        val type = FieldType.fromWire(obj["type"]?.jsonPrimitive?.content) ?: return null
+        val label = obj["label"]?.jsonPrimitive?.content ?: return null
+        return FieldDef(
+            key = key,
+            label = label,
+            type = type,
+            showByDefault = obj["showByDefault"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: true,
+            aiEnabled = obj["aiEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
+            position = obj["position"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
+            hint = obj["hint"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content },
+        )
     }
 
-    private fun decodePayload(opWire: String, p: JsonObject): JournalOp = when (opWire) {
-        "tag-add" -> JournalOp.TagAdd(p["tag"]!!.jsonPrimitive.content)
-        "tag-remove" -> JournalOp.TagRemove(
-            tag = p["tag"]!!.jsonPrimitive.content,
-            dots = decodeDots(p["dots"]),
-        )
-        "prop-set" -> {
-            val key = DocProperty.fromWire(p["key"]!!.jsonPrimitive.content)
-                ?: return JournalOp.Unknown(opWire, p)
-            val valueElem = p["value"]
-            val value = if (valueElem == null || valueElem is JsonNull) null else valueElem.jsonPrimitive.content
-            JournalOp.PropSet(key, value)
+    private fun decodePayload(
+        opWire: String,
+        p: JsonObject,
+    ): JournalOp =
+        when (opWire) {
+            "tag-add" -> {
+                JournalOp.TagAdd(p.string("tag"))
+            }
+
+            "tag-remove" -> {
+                JournalOp.TagRemove(tag = p.string("tag"), dots = decodeDots(p["dots"]))
+            }
+
+            "prop-set" -> {
+                decodePropSet(p) ?: JournalOp.Unknown(opWire, p)
+            }
+
+            "field-set" -> {
+                p.stringOrNull("key")?.let { JournalOp.FieldSet(it, p.nullableString("value")) }
+                    ?: JournalOp.Unknown(opWire, p)
+            }
+
+            "doc-trash" -> {
+                JournalOp.DocTrash(p.string("origPath"))
+            }
+
+            "doc-restore" -> {
+                JournalOp.DocRestore
+            }
+
+            "doc-delete" -> {
+                JournalOp.DocDelete
+            }
+
+            "relink" -> {
+                JournalOp.Relink(p.string("newDoc"))
+            }
+
+            "tag-rename" -> {
+                JournalOp.TagRename(p.string("from"), p.string("to"))
+            }
+
+            "tag-merge" -> {
+                JournalOp.TagMerge(p.string("from"), p.string("to"))
+            }
+
+            "tag-style" -> {
+                JournalOp.TagStyle(p.string("tag"), p.nullableString("color"), p.nullableString("icon"))
+            }
+
+            "setting-set" -> {
+                JournalOp.SettingSet(p.string("key"), p.nullableString("value"))
+            }
+
+            JournalOp.FieldDefSet.WIRE -> {
+                decodeFieldDefSet(p) ?: JournalOp.Unknown(opWire, p)
+            }
+
+            else -> {
+                JournalOp.Unknown(opWire, p)
+            }
         }
-        "field-set" -> {
-            val key = p["key"]?.jsonPrimitive?.content ?: return JournalOp.Unknown(opWire, p)
-            val valueElem = p["value"]
-            val value = if (valueElem == null || valueElem is JsonNull) null else valueElem.jsonPrimitive.content
-            JournalOp.FieldSet(key, value)
-        }
-        "doc-trash" -> JournalOp.DocTrash(p["origPath"]!!.jsonPrimitive.content)
-        "doc-restore" -> JournalOp.DocRestore
-        "doc-delete" -> JournalOp.DocDelete
-        "relink" -> JournalOp.Relink(p["newDoc"]!!.jsonPrimitive.content)
-        "tag-rename" -> JournalOp.TagRename(p["from"]!!.jsonPrimitive.content, p["to"]!!.jsonPrimitive.content)
-        "tag-merge" -> JournalOp.TagMerge(p["from"]!!.jsonPrimitive.content, p["to"]!!.jsonPrimitive.content)
-        "tag-style" -> JournalOp.TagStyle(
-            tag = p["tag"]!!.jsonPrimitive.content,
-            color = p["color"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content },
-            icon = p["icon"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content },
-        )
-        "setting-set" -> JournalOp.SettingSet(
-            key = p["key"]!!.jsonPrimitive.content,
-            value = p["value"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content },
-        )
-        else -> JournalOp.Unknown(opWire, p)
+
+    /** A required string payload member; a malformed line fails fast and is skipped by the codec. */
+    private fun JsonObject.string(name: String): String = this[name]!!.jsonPrimitive.content
+
+    private fun JsonObject.stringOrNull(name: String): String? = this[name]?.jsonPrimitive?.content
+
+    /** A member that may be absent or JSON null; both read as null. */
+    private fun JsonObject.nullableString(name: String): String? =
+        this[name]?.let { if (it is JsonNull) null else it.jsonPrimitive.content }
+
+    private fun decodePropSet(p: JsonObject): JournalOp.PropSet? {
+        val key = DocProperty.fromWire(p.string("key")) ?: return null
+        return JournalOp.PropSet(key, p.nullableString("value"))
+    }
+
+    /** Null when the payload is malformed; the caller then keeps the op as [JournalOp.Unknown]. */
+    private fun decodeFieldDefSet(p: JsonObject): JournalOp.FieldDefSet? {
+        val key = p.stringOrNull("key")?.takeIf { it.isNotBlank() } ?: return null
+        val defElem = p["def"]
+        if (defElem == null || defElem is JsonNull) return JournalOp.FieldDefSet(key, null)
+        val def = decodeFieldDef(key, defElem) ?: return null
+        return JournalOp.FieldDefSet(key, def)
     }
 
     private fun decodeDots(elem: JsonElement?): List<Dot> {

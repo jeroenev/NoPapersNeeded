@@ -116,6 +116,26 @@ data class DocumentFieldEntity(
 )
 
 /**
+ * The field registry, projected from the journal's [dev.npn.core.journal.JournalOp.FieldDefSet]
+ * LWW state so the UI and the AI tools read it as a Room Flow like everything else. One row per
+ * live definition; a removed definition has no row. See [dev.npn.core.model.FieldDef].
+ */
+@Entity(
+    tableName = "field_defs",
+    indices = [Index(value = ["position"])],
+)
+data class FieldDefEntity(
+    @PrimaryKey val fieldKey: String,
+    val label: String,
+    /** [dev.npn.core.model.FieldType.wire]. */
+    val type: String,
+    val showByDefault: Boolean,
+    val aiEnabled: Boolean,
+    val position: Int,
+    val hint: String? = null,
+)
+
+/**
  * FTS5 full-text index over names, content, tags, correspondent, and document type. Plain
  * (regular) FTS5 table: docId lives as an indexed
  * column and updates are done as exact-match delete + reinsert (see [FtsDao.replaceDocument]).

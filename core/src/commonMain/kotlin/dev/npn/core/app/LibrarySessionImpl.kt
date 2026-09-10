@@ -37,6 +37,7 @@ import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.StandardField
 import dev.npn.core.ocr.OcrConfig
@@ -94,6 +95,7 @@ class LibrarySessionImpl private constructor(
     override val tags: TagRepository,
     override val savedViews: SavedViewRepository,
     override val rules: AutoMatchRuleRepository,
+    override val fieldRegistry: FieldRegistry,
     private val writer: MetadataWriterImpl,
     override val content: DocContentFacade,
     private val aiFacade: AiFacadeImpl,
@@ -638,6 +640,7 @@ class LibrarySessionImpl private constructor(
 
             val coordinator = createCoordinator(deps, writer, indexer)
             coordinator.refreshState()
+            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) })
 
             val pathRuleApplicator = StoragePathRuleApplicator(fs, db, ftsWriteGate, deps.storagePathRule)
             val importService =
@@ -692,6 +695,7 @@ class LibrarySessionImpl private constructor(
             val bakeService = BakeService(fs, deps.xmpIO)
 
             val documents = DocumentRepositoryImpl(db)
+            val fieldRegistry = FieldRegistryImpl(db, coordinator)
             val tags = TagRepositoryImpl(db.tagDao())
             val savedViews = SavedViewRepositoryImpl(db.savedViewDao())
             val content =
@@ -783,6 +787,7 @@ class LibrarySessionImpl private constructor(
                 tags = tags,
                 savedViews = savedViews,
                 rules = rules,
+                fieldRegistry = fieldRegistry,
                 writer = meta,
                 content = content,
                 aiFacade = ai,

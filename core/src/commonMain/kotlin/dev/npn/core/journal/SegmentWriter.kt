@@ -1,6 +1,7 @@
 package dev.npn.core.journal
 
 import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldDef
 
 /**
  * A pending op the caller wants to commit. The writer assigns seq and HLC and fills in the
@@ -74,6 +75,12 @@ data class PendingOp(
             key: String,
             value: String?,
         ) = PendingOp(null, JournalOp.SettingSet(key, value))
+
+        /** Define or update a registry field. */
+        fun fieldDefSet(def: FieldDef) = PendingOp(null, JournalOp.FieldDefSet(def.key, def))
+
+        /** Remove a registry field's definition; stored values are untouched. */
+        fun fieldDefRemove(key: String) = PendingOp(null, JournalOp.FieldDefSet(key, null))
     }
 }
 

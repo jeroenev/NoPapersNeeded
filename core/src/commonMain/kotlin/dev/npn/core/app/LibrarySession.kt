@@ -14,6 +14,7 @@ interface LibrarySession {
     val tags: TagRepository
     val savedViews: SavedViewRepository
     val rules: AutoMatchRuleRepository
+    val fieldRegistry: FieldRegistry
     val meta: MetadataWriter
     val tagAdmin: TagAdmin
     val docLifecycle: DocLifecycle

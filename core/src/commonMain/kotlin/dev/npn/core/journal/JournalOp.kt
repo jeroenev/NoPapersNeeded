@@ -1,6 +1,7 @@
 package dev.npn.core.journal
 
 import dev.npn.core.model.DocProperty
+import dev.npn.core.model.FieldDef
 import kotlinx.serialization.json.JsonObject
 
 /** A dot uniquely identifies a single event by its author device and per-device sequence. */
@@ -53,6 +54,27 @@ sealed class JournalOp {
         val value: String?,
     ) : JournalOp() {
         override val wire get() = "field-set"
+    }
+
+    /**
+     * {"key": String, "def": {label, type, showByDefault, aiEnabled, position, hint?} | null};
+     * doc null, library-wide. Defines (or, with a null [def], removes) one entry of the field
+     * registry. Last-writer-wins by HLC per key, so two devices adding two different fields both
+     * survive. Removing a definition never touches stored values: they become orphans.
+     */
+    data class FieldDefSet(
+        val key: String,
+        val def: FieldDef?,
+    ) : JournalOp() {
+        init {
+            require(def == null || def.key == key) { "FieldDefSet key must match its definition" }
+        }
+
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "field-def"
+        }
     }
 
     /** {"origPath": String}; doc required. */

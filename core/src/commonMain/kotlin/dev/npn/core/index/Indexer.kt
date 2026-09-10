@@ -58,6 +58,7 @@ class Indexer(
     private val tagDao get() = db.tagDao()
     private val ftsDao get() = db.ftsDao()
     private val fieldDao get() = db.documentFieldDao()
+    private val fieldDefDao get() = db.fieldDefDao()
     private val duplicateDao get() = db.duplicateDao()
 
     suspend fun rescan(
@@ -524,6 +525,9 @@ class Indexer(
         // pass below issues no serial reads; diffed writes are collected and flushed once.
         val preloaded = preloadRows(journalDocs)
         upsertReferencedTags(state, journalDocs, request.styledTags)
+        // The registry is library-wide and small; a diffed replace per fold keeps it in step
+        // with the fold at negligible cost and needs no per-op scoping.
+        fieldDefDao.replaceAll(state.effectiveFieldDefs())
         val changes = ProjectionChanges()
         val supersession = resolveSupersessions(state, journalDocs, preloaded.rows, changes)
 
