@@ -13,7 +13,9 @@ import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.ViewType
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
 import io.kotest.matchers.collections.shouldContainExactly
@@ -30,7 +32,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
         settings: FakeSettingsRepository = FakeSettingsRepository(),
         session: FakeLibrarySession = FakeLibrarySession(),
         selfTest: suspend (AiConfig) -> AiSelfTestReport = { error("no self-test expected") },
-    ) = SettingsViewModel(settings, session.content, session.reviewConfig, selfTest)
+    ) = SettingsViewModel(settings, session.content, session.reviewConfig, session.fieldRegistry, selfTest)
 
     @Test
     fun stateAggregatesAllSettingsFlows() =
@@ -326,4 +328,27 @@ class SettingsViewModelTest : MainDispatcherTest() {
                 originalFileName = "scan.pdf",
             )
     }
+
+    @Test
+    fun fieldManagerActionsReachTheRegistry() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val seeded = FieldKeys.seedDefinitions().map { it.key }
+
+            // Moving swaps with the neighbour; a move past either end changes nothing.
+            model.moveField(seeded[1], -1)
+            model.moveField(seeded[1], -1)
+            advanceUntilIdle()
+            session.fieldRegistry.reorders shouldContainExactly
+                listOf(listOf(seeded[1], seeded[0]) + seeded.drop(2))
+
+            val def =
+                FieldDef("amount", "Amount", FieldType.DECIMAL, showByDefault = true, aiEnabled = true, position = 9)
+            model.saveField(def)
+            model.removeField("amount", clearValues = true)
+            advanceUntilIdle()
+            session.fieldRegistry.upserts shouldContainExactly listOf(def)
+            session.fieldRegistry.removals shouldContainExactly listOf("amount" to true)
+        }
 }

@@ -85,6 +85,8 @@
     <string name="detail_field_hint">Hint (optional)</string>
     <string name="detail_field_show_by_default">Show on every document</string>
     <string name="detail_field_key_taken">A field with this key already exists</string>
+    <string name="detail_field_ai_enabled">Let AI fill this in</string>
+    <string name="detail_field_type_locked">The type of a built-in field cannot be changed</string>
     <string name="detail_text_queued">Text extraction is queued for this document.</string>
     <string name="detail_text_failed">Text extraction failed for this document.</string>
     <string name="detail_text_not_extracted">No text has been extracted from this document yet.</string>

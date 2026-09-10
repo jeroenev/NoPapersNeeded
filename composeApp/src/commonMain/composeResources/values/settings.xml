@@ -28,7 +28,19 @@
     <string name="common_settings_thumbnail_cache_help">Regenerate library thumbnails at the current quality. Use this if previews look blurry.</string>
     <string name="common_settings_review_workflow">Review workflow</string>
     <string name="common_settings_document_fields">Document fields</string>
-    <string name="common_settings_document_fields_help">Choose which built-in fields are shown on every document (synced across devices). Hidden fields keep their stored values and reappear when enabled again. Use custom fields on a document for anything else.</string>
+    <string name="common_settings_document_fields_help">The fields a document can carry, in display order. Fields shown on every document appear on each document and in the library filter; the others appear once a document has a value.</string>
+    <string name="common_settings_field_summary">%1$s · %2$s · %3$s</string>
+    <plurals name="common_settings_field_usage">
+        <item quantity="one">%1$d document</item>
+        <item quantity="other">%1$d documents</item>
+    </plurals>
+    <string name="common_settings_field_edit_title">Edit field</string>
+    <string name="common_settings_field_delete_title">Delete field</string>
+    <string name="common_settings_field_delete_message">Remove '%1$s' from the field list? %2$s carry a value for it; they keep it unless you clear it below.</string>
+    <string name="common_settings_field_clear_values">Also clear the values on those documents</string>
+    <string name="common_settings_field_move_up">Move up</string>
+    <string name="common_settings_field_move_down">Move down</string>
+    <string name="common_settings_field_type_change_warning">Existing values stay as they are; values that do not fit the new type are shown with a warning.</string>
     <string name="common_settings_auto_matching">Auto-matching</string>
     <string name="common_settings_auto_matching_rules">Auto-matching rules</string>
     <string name="common_settings_auto_matching_help">Automatically tag documents and set metadata when imported text matches a rule.</string>

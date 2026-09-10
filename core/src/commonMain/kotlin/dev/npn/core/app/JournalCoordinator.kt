@@ -20,7 +20,6 @@ import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -67,7 +66,7 @@ private class SyncedSettings {
          * Every synced setting published on open. A key left out of this list reads as null until
          * something writes it in the running session, so a new synced setting belongs here.
          */
-        private val SEEDED_KEYS = listOf(ReviewMode.WIRE_KEY, StandardField.WIRE_KEY, FieldKeys.SEEDED_SETTING)
+        private val SEEDED_KEYS = listOf(ReviewMode.WIRE_KEY, FieldKeys.SEEDED_SETTING)
     }
 }
 

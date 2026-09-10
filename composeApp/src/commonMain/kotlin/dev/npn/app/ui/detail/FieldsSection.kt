@@ -23,8 +23,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,8 +34,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.FieldDefForm
+import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.FieldEditor
-import dev.npn.app.ui.common.fieldTypeLabel
 import dev.npn.core.app.Doc
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -47,12 +46,6 @@ import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_save
 import no_papers_needed.composeapp.generated.resources.detail_add_field
 import no_papers_needed.composeapp.generated.resources.detail_add_to_fields
-import no_papers_needed.composeapp.generated.resources.detail_field_hint
-import no_papers_needed.composeapp.generated.resources.detail_field_key
-import no_papers_needed.composeapp.generated.resources.detail_field_key_taken
-import no_papers_needed.composeapp.generated.resources.detail_field_label
-import no_papers_needed.composeapp.generated.resources.detail_field_show_by_default
-import no_papers_needed.composeapp.generated.resources.detail_field_type
 import no_papers_needed.composeapp.generated.resources.detail_fields
 import no_papers_needed.composeapp.generated.resources.detail_new_field
 import no_papers_needed.composeapp.generated.resources.detail_orphan_fields
@@ -236,9 +229,9 @@ internal data class NewFieldSeed(
 )
 
 /**
- * Define a field: label (the key is derived from it until edited by hand), type, optional hint,
- * "show on every document", and an optional first value for this document. Confirming writes
- * the definition and the value together through [onConfirm].
+ * Define a field from the document panel: the shared [FieldDefForm] plus an optional first value
+ * for this document, edited with the control of the chosen type so what gets saved is already
+ * canonical. Confirming writes the definition and the value together through [onConfirm].
  */
 @Composable
 internal fun NewFieldDialog(
@@ -248,29 +241,12 @@ internal fun NewFieldDialog(
     onConfirm: (FieldDef, String?) -> Unit,
     onDismiss: () -> Unit,
 ) {
-    var label by remember { mutableStateOf(seed.label) }
-    var key by remember { mutableStateOf(seed.key) }
-    var keyEdited by remember { mutableStateOf(seed.key.isNotEmpty()) }
-    var type by remember { mutableStateOf(FieldType.TEXT) }
-    var hint by remember { mutableStateOf("") }
-    var showByDefault by remember { mutableStateOf(false) }
+    var form by remember {
+        mutableStateOf(FieldDefFormState(label = seed.label, key = seed.key, keyEdited = seed.key.isNotEmpty()))
+    }
     var value by remember { mutableStateOf(seed.value.orEmpty()) }
-
-    val normalizedKey = FieldKeys.normalize(key)
-    val taken = normalizedKey != null && existing.any { FieldKeys.sameKey(it.key, normalizedKey) }
-    val canSave = label.isNotBlank() && normalizedKey != null && !taken
-    val draftDef =
-        normalizedKey?.let {
-            FieldDef(
-                key = it,
-                label = label.trim().ifEmpty { it },
-                type = type,
-                showByDefault = showByDefault,
-                aiEnabled = false,
-                position = (existing.maxOfOrNull { d -> d.position } ?: -1) + 1,
-                hint = hint.trim().ifEmpty { null },
-            )
-        }
+    val draftDef = form.toDef(position = (existing.maxOfOrNull { it.position } ?: -1) + 1)
+    val canSave = form.label.isNotBlank() && draftDef != null && !form.collides(existing)
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -280,35 +256,12 @@ internal fun NewFieldDialog(
                 Modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                OutlinedTextField(
-                    value = label,
-                    onValueChange = {
-                        label = it
-                        if (!keyEdited) key = FieldKeys.normalize(it).orEmpty()
-                    },
-                    label = { Text(stringResource(Res.string.detail_field_label)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
+                FieldDefForm(
+                    state = form,
+                    onChange = { form = it },
+                    existing = existing,
+                    keySuggestions = keySuggestions,
                 )
-                KeyField(
-                    key = key,
-                    taken = taken,
-                    suggestions = keySuggestions.filter { s -> existing.none { FieldKeys.sameKey(it.key, s) } },
-                    onChange = {
-                        key = it
-                        keyEdited = true
-                    },
-                )
-                TypeDropdown(type) { type = it }
-                OutlinedTextField(
-                    value = hint,
-                    onValueChange = { hint = it },
-                    label = { Text(stringResource(Res.string.detail_field_hint)) },
-                    singleLine = true,
-                    modifier = Modifier.fillMaxWidth(),
-                )
-                ShowByDefaultSwitch(showByDefault) { showByDefault = it }
-                // The value editor follows the chosen type, so what gets saved is already canonical.
                 draftDef?.let { def ->
                     key(def.type) {
                         FieldEditor(def = def, value = value, onCommit = { value = it })
@@ -324,88 +277,4 @@ internal fun NewFieldDialog(
         },
         dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
     )
-}
-
-@Composable
-private fun ShowByDefaultSwitch(
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(stringResource(Res.string.detail_field_show_by_default))
-        Switch(checked = checked, onCheckedChange = onChange)
-    }
-}
-
-@Composable
-private fun KeyField(
-    key: String,
-    taken: Boolean,
-    suggestions: List<String>,
-    onChange: (String) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    val matching = suggestions.filter { key.isBlank() || it.contains(key, ignoreCase = true) }
-    Box {
-        OutlinedTextField(
-            value = key,
-            onValueChange = {
-                onChange(it)
-                expanded = matching.isNotEmpty()
-            },
-            label = { Text(stringResource(Res.string.detail_field_key)) },
-            isError = taken,
-            supportingText = if (taken) ({ Text(stringResource(Res.string.detail_field_key_taken)) }) else null,
-            singleLine = true,
-            trailingIcon = {
-                if (suggestions.isNotEmpty()) {
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        DropdownMenu(expanded = expanded && matching.isNotEmpty(), onDismissRequest = { expanded = false }) {
-            matching.forEach { suggestion ->
-                DropdownMenuItem(
-                    text = { Text(suggestion) },
-                    onClick = {
-                        expanded = false
-                        onChange(suggestion)
-                    },
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun TypeDropdown(
-    current: FieldType,
-    onSelect: (FieldType) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column {
-        Text(stringResource(Res.string.detail_field_type), style = MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick = { expanded = true }) {
-            Text(fieldTypeLabel(current))
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            FieldType.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(fieldTypeLabel(option)) },
-                    onClick = {
-                        expanded = false
-                        onSelect(option)
-                    },
-                )
-            }
-        }
-    }
 }

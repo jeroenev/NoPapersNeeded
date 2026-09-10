@@ -92,7 +92,8 @@ fun SettingsScreen(
     val aiModels by vm.aiModels.collectAsStateWithLifecycle()
     val aiSelfTest by vm.aiSelfTest.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
-    val standardFields by vm.standardFields.collectAsStateWithLifecycle()
+    val fields by vm.fields.collectAsStateWithLifecycle()
+    val fieldUsage by vm.fieldUsage.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     // Surface failed settings writes (properties-file I/O, SAF errors) on the same snackbar host.
@@ -107,7 +108,8 @@ fun SettingsScreen(
             aiModels = aiModels,
             aiSelfTest = aiSelfTest,
             reviewMode = reviewMode,
-            standardFields = standardFields,
+            fields = fields,
+            fieldUsage = fieldUsage,
             onChangeLibrary = onChangeLibrary,
             onAutoMatchRules = onAutoMatchRules,
             onThumbnailsCleared = { count -> thumbnailResult = count },

@@ -83,6 +83,8 @@
     <string name="detail_field_hint">Hint (optioneel)</string>
     <string name="detail_field_show_by_default">Op elk document tonen</string>
     <string name="detail_field_key_taken">Er bestaat al een veld met deze sleutel</string>
+    <string name="detail_field_ai_enabled">Laat AI dit invullen</string>
+    <string name="detail_field_type_locked">Het type van een ingebouwd veld kan niet worden gewijzigd</string>
     <string name="detail_text_queued">Tekstextractie voor dit document staat in de wachtrij.</string>
     <string name="detail_text_failed">Tekstextractie voor dit document is mislukt.</string>
     <string name="detail_text_not_extracted">Er is nog geen tekst uit dit document geëxtraheerd.</string>

@@ -65,7 +65,6 @@ import dev.npn.core.ai.AiField
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_choose_date
 import no_papers_needed.composeapp.generated.resources.detail_added

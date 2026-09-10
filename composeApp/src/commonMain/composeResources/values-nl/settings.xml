@@ -28,7 +28,19 @@
     <string name="common_settings_thumbnail_cache_help">Maak bibliotheekminiaturen opnieuw aan met de huidige kwaliteit. Gebruik dit als voorvertoningen onscherp zijn.</string>
     <string name="common_settings_review_workflow">Beoordelingsworkflow</string>
     <string name="common_settings_document_fields">Documentvelden</string>
-    <string name="common_settings_document_fields_help">Kies welke ingebouwde velden op elk document worden getoond (gesynchroniseerd tussen apparaten). Verborgen velden behouden hun opgeslagen waarden en verschijnen weer zodra ze zijn ingeschakeld. Gebruik aangepaste velden op een document voor al het overige.</string>
+    <string name="common_settings_document_fields_help">De velden die een document kan hebben, in weergavevolgorde. Velden die op elk document worden getoond, verschijnen op ieder document en in het bibliotheekfilter; de andere verschijnen zodra een document een waarde heeft.</string>
+    <string name="common_settings_field_summary">%1$s · %2$s · %3$s</string>
+    <plurals name="common_settings_field_usage">
+        <item quantity="one">%1$d document</item>
+        <item quantity="other">%1$d documenten</item>
+    </plurals>
+    <string name="common_settings_field_edit_title">Veld bewerken</string>
+    <string name="common_settings_field_delete_title">Veld verwijderen</string>
+    <string name="common_settings_field_delete_message">'%1$s' uit de veldenlijst verwijderen? %2$s hebben er een waarde voor; die blijft staan tenzij je hem hieronder wist.</string>
+    <string name="common_settings_field_clear_values">Wis ook de waarden op die documenten</string>
+    <string name="common_settings_field_move_up">Omhoog</string>
+    <string name="common_settings_field_move_down">Omlaag</string>
+    <string name="common_settings_field_type_change_warning">Bestaande waarden blijven zoals ze zijn; waarden die niet bij het nieuwe type passen, worden met een waarschuwing getoond.</string>
     <string name="common_settings_auto_matching">Automatisch taggen</string>
     <string name="common_settings_auto_matching_rules">Tagregels beheren</string>
     <string name="common_settings_auto_matching_help">Tag documenten en vul metadata in op basis van geïmporteerde tekst.</string>

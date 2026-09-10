@@ -19,7 +19,6 @@ import dev.npn.core.app.WorkFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 
@@ -111,26 +110,17 @@ class FakeOcrFacade : OcrFacade {
     }
 }
 
-/** Library-wide review workflow and standard-field visibility. */
+/** Library-wide review workflow. */
 class FakeReviewConfigFacade : ReviewConfigFacade {
     val reviewModeFlow = MutableStateFlow(ReviewMode.DEFAULT)
     override val reviewMode: Flow<ReviewMode> get() = reviewModeFlow
 
-    val standardFieldsFlow = MutableStateFlow(StandardField.DEFAULT)
-    override val standardFields: Flow<Set<StandardField>> get() = standardFieldsFlow
-
     val reviewModeSets = mutableListOf<ReviewMode>()
-    val standardFieldsSets = mutableListOf<Set<StandardField>>()
     val migrations = mutableListOf<Boolean>()
 
     override suspend fun setReviewMode(mode: ReviewMode) {
         reviewModeSets += mode
         reviewModeFlow.value = mode
-    }
-
-    override suspend fun setStandardFields(fields: Set<StandardField>) {
-        standardFieldsSets += fields
-        standardFieldsFlow.value = fields
     }
 
     override suspend fun markReviewedForMigration(onlyTagged: Boolean) {

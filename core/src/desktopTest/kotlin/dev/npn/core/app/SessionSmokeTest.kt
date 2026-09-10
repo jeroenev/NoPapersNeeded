@@ -1,6 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.model.StandardField
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.xmp.XmpParser
 import io.kotest.matchers.collections.shouldHaveSize
@@ -28,26 +27,6 @@ class SessionSmokeTest {
                         .observeDocuments(LibraryFilter(), LibrarySort())
                         .first()
                 docs shouldHaveSize 2
-            } finally {
-                rig.close()
-            }
-        }
-
-    @Test
-    fun standardFieldsSettingRoundTrips() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                // Never configured -> every field visible.
-                rig.session.standardFields.first() shouldBe StandardField.DEFAULT
-
-                rig.session.setStandardFields(setOf(StandardField.DOC_DATE, StandardField.NOTES))
-                rig.session.standardFields.first() shouldBe
-                    setOf(StandardField.DOC_DATE, StandardField.NOTES)
-
-                // Explicitly none is distinct from "never set".
-                rig.session.setStandardFields(emptySet())
-                rig.session.standardFields.first() shouldBe emptySet()
             } finally {
                 rig.close()
             }

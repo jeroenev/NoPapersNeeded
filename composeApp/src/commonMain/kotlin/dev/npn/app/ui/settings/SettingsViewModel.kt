@@ -12,6 +12,7 @@ import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
+import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SettingsRepository
@@ -19,9 +20,9 @@ import dev.npn.core.app.SettingsSnapshot
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.toAiConfig
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathTemplate
 import kotlinx.coroutines.CancellationException
@@ -122,6 +123,7 @@ class SettingsViewModel(
     private val settings: SettingsRepository,
     private val content: DocContentFacade,
     private val reviewConfig: ReviewConfigFacade,
+    private val fieldRegistry: FieldRegistry,
     /**
      * How the AI self-test is run. Injectable so [runAiSelfTest]'s consequence — switching AI page
      * reading off — is testable without an endpoint; production always uses [AiSelfTest.run].
@@ -129,7 +131,7 @@ class SettingsViewModel(
     private val selfTest: suspend (AiConfig) -> AiSelfTestReport = AiSelfTest::run,
 ) : MessagesViewModel() {
     constructor(settings: SettingsRepository, session: LibrarySession) :
-        this(settings, session.content, session.reviewConfig)
+        this(settings, session.content, session.reviewConfig, session.fieldRegistry)
 
     val state: StateFlow<SettingsUiState> =
         settings.settings
@@ -178,16 +180,32 @@ class SettingsViewModel(
 
     private var aiSelfTestJob: Job? = null
 
-    /** Library-wide visible standard fields (synced via the journal, like [reviewMode]). */
-    val standardFields: StateFlow<Set<StandardField>> =
-        reviewConfig.standardFields.stateIn(viewModelScope, WhileSubscribedTimeout, StandardField.DEFAULT)
+    /** The field registry in display order (synced via the journal, like [reviewMode]). */
+    val fields: StateFlow<List<FieldDef>> =
+        fieldRegistry.fields.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    fun setStandardFieldEnabled(
-        field: StandardField,
-        enabled: Boolean,
+    /** Documents carrying a value per field key, for the field manager's usage column and delete warning. */
+    val fieldUsage: StateFlow<Map<String, Int>> =
+        fieldRegistry.usageCounts().stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
+
+    fun saveField(def: FieldDef) = launchReporting(UiAction.DEFINE_FIELD) { fieldRegistry.upsert(def) }
+
+    fun removeField(
+        key: String,
+        clearValues: Boolean,
+    ) = launchReporting(UiAction.REMOVE_FIELD) { fieldRegistry.remove(key, clearValues) }
+
+    /** Swap [key] with its neighbour in registry order; a move past either end is a no-op. */
+    fun moveField(
+        key: String,
+        delta: Int,
     ) = launchReporting(UiAction.UPDATE) {
-        val current = reviewConfig.standardFields.first()
-        reviewConfig.setStandardFields(if (enabled) current + field else current - field)
+        val keys = fieldRegistry.current().map { it.key }.toMutableList()
+        val from = keys.indexOf(key)
+        val to = from + delta
+        if (from < 0 || to !in keys.indices) return@launchReporting
+        keys.add(to, keys.removeAt(from))
+        fieldRegistry.reorder(keys)
     }
 
     /**

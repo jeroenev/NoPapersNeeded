@@ -11,8 +11,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.vector.ImageVector
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_about
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help
@@ -49,10 +49,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
 import no_papers_needed.composeapp.generated.resources.common_settings_views
 import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder
-import no_papers_needed.composeapp.generated.resources.detail_correspondent
-import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
-import no_papers_needed.composeapp.generated.resources.detail_document_type
-import no_papers_needed.composeapp.generated.resources.detail_note
+import no_papers_needed.composeapp.generated.resources.detail_add_field
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -90,7 +87,8 @@ internal class SettingsPaneContext(
     val aiModels: AiModelListState,
     val aiSelfTest: AiSelfTestState,
     val reviewMode: ReviewMode,
-    val standardFields: Set<StandardField>,
+    val fields: List<FieldDef>,
+    val fieldUsage: Map<String, Int>,
     val onChangeLibrary: () -> Unit,
     val onAutoMatchRules: () -> Unit,
     val onThumbnailsCleared: (Int) -> Unit,
@@ -153,10 +151,7 @@ internal val SettingsCategories: List<SettingsCategory> =
             keywords =
                 listOf(
                     Res.string.common_settings_document_fields,
-                    Res.string.detail_correspondent,
-                    Res.string.detail_document_type,
-                    Res.string.detail_document_date_plain,
-                    Res.string.detail_note,
+                    Res.string.detail_add_field,
                     Res.string.common_settings_enable_inbox,
                     Res.string.common_settings_trash,
                     Res.string.common_settings_trash_retention_days,

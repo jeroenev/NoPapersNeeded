@@ -23,6 +23,9 @@ interface FieldRegistry {
     /** Keys that carry values on some document but have no definition, with document counts. */
     fun orphanKeys(): Flow<List<FieldKeyCount>>
 
+    /** How many documents carry a value for each key (registered or not); absent keys have none. */
+    fun usageCounts(): Flow<Map<String, Int>>
+
     /** Distinct stored values for [key], for autocomplete and AI vocabulary. Case-insensitive order. */
     fun distinctValues(
         key: String,

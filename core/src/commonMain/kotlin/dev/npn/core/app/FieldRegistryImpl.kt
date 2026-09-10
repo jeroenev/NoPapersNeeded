@@ -34,6 +34,9 @@ class FieldRegistryImpl(
 
     override fun orphanKeys(): Flow<List<FieldKeyCount>> = defDao.observeOrphanKeys()
 
+    override fun usageCounts(): Flow<Map<String, Int>> =
+        fieldDao.observeKeysWithCounts().map { rows -> rows.associate { it.fieldKey to it.count } }
+
     override fun distinctValues(
         key: String,
         limit: Int,

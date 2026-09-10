@@ -101,6 +101,12 @@ interface DocumentFieldDao {
     )
     suspend fun keysWithCounts(): List<FieldKeyCount>
 
+    @Query(
+        "SELECT fieldKey, COUNT(*) AS count FROM document_fields " +
+            "GROUP BY fieldKey ORDER BY fieldKey COLLATE NOCASE",
+    )
+    fun observeKeysWithCounts(): Flow<List<FieldKeyCount>>
+
     @Upsert
     suspend fun upsertAll(fields: List<DocumentFieldEntity>)
 

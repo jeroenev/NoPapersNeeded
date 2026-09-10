@@ -40,38 +40,6 @@ enum class ReviewMode(
 }
 
 /**
- * The built-in single-value document fields whose visibility is configurable per library (a
- * synced setting, see [dev.npn.core.journal.JournalOp.SettingSet], key [WIRE_KEY]). Hiding a
- * field only removes it from the editing UI; stored values are untouched and reappear when the
- * field is enabled again. Title is always visible and therefore not part of this set.
- */
-enum class StandardField(
-    val wire: String,
-) {
-    CORRESPONDENT("correspondent"),
-    DOC_TYPE("docType"),
-    DOC_DATE("docDate"),
-    NOTES("notes"),
-    ;
-
-    companion object {
-        const val WIRE_KEY = "standardFields"
-
-        /** All fields visible: the behavior of libraries that never configured the setting. */
-        val DEFAULT: Set<StandardField> = entries.toSet()
-
-        /** Comma-separated wire form; null (never set) means [DEFAULT], "" means none visible. */
-        fun fromWire(value: String?): Set<StandardField> {
-            if (value == null) return DEFAULT
-            val wires = value.split(',').map { it.trim() }.toSet()
-            return entries.filter { it.wire in wires }.toSet()
-        }
-
-        fun toWire(fields: Set<StandardField>): String = entries.filter { it in fields }.joinToString(",") { it.wire }
-    }
-}
-
-/**
  * Per-document system state settable via `prop-set` journal events. User-authored metadata (title,
  * correspondent, date, notes, anything the user adds) is NOT here: it is a registry field
  * ([FieldDef]) written as `field-set`. What remains are the two markers the app itself owns.

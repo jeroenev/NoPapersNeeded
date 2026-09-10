@@ -27,6 +27,10 @@ class FakeFieldRegistry : FieldRegistry {
 
     override fun orphanKeys(): Flow<List<FieldKeyCount>> = orphans
 
+    val usage = MutableStateFlow<Map<String, Int>>(emptyMap())
+
+    override fun usageCounts(): Flow<Map<String, Int>> = usage
+
     override fun distinctValues(
         key: String,
         limit: Int,

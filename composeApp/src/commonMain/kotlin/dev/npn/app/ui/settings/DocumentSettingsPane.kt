@@ -11,11 +11,9 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import dev.npn.app.ui.common.NumericField
 import dev.npn.core.model.ReviewMode
-import dev.npn.core.model.StandardField
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_settings_document_fields
-import no_papers_needed.composeapp.generated.resources.common_settings_document_fields_help
 import no_papers_needed.composeapp.generated.resources.common_settings_enable_inbox
 import no_papers_needed.composeapp.generated.resources.common_settings_inbox_help
 import no_papers_needed.composeapp.generated.resources.common_settings_inbox_migration_question
@@ -26,10 +24,6 @@ import no_papers_needed.composeapp.generated.resources.common_settings_review_wo
 import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
 import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
-import no_papers_needed.composeapp.generated.resources.detail_correspondent
-import no_papers_needed.composeapp.generated.resources.detail_document_date_plain
-import no_papers_needed.composeapp.generated.resources.detail_document_type
-import no_papers_needed.composeapp.generated.resources.detail_note
 import org.jetbrains.compose.resources.stringResource
 
 /** Accepted range for the trash-retention field (0 = purge immediately; capped at four digits). */
@@ -37,15 +31,18 @@ private val TRASH_RETENTION_RANGE = 0..9999
 private const val TRASH_RETENTION_MAX_DIGITS = 4
 
 /**
- * What a document looks like and how long it sticks around: which built-in fields exist, whether
- * new documents need an explicit review pass, and how long the trash holds on to deletions.
+ * What a document looks like and how long it sticks around: which fields exist, whether new
+ * documents need an explicit review pass, and how long the trash holds on to deletions.
  */
 @Composable
 internal fun DocumentSettingsPane(context: SettingsPaneContext) {
     SettingsGroup(title = stringResource(Res.string.common_settings_document_fields)) {
-        StandardFieldToggles(
-            enabled = context.standardFields,
-            onSetEnabled = context.vm::setStandardFieldEnabled,
+        FieldsSettingsPane(
+            fields = context.fields,
+            usage = context.fieldUsage,
+            onSave = context.vm::saveField,
+            onRemove = context.vm::removeField,
+            onMove = context.vm::moveField,
         )
     }
 
@@ -67,35 +64,6 @@ internal fun DocumentSettingsPane(context: SettingsPaneContext) {
         )
     }
 }
-
-/**
- * Library-wide visibility of the built-in document fields (synced across devices). Hiding a
- * field only hides its editor on the document panel; stored values survive and come back when
- * the field is enabled again. Title is always shown, so it is not listed here.
- */
-@Composable
-private fun StandardFieldToggles(
-    enabled: Set<StandardField>,
-    onSetEnabled: (StandardField, Boolean) -> Unit,
-) {
-    SettingsHelpText(stringResource(Res.string.common_settings_document_fields_help))
-    StandardField.entries.forEach { field ->
-        SettingsSwitchRow(
-            title = standardFieldLabel(field),
-            checked = field in enabled,
-            onCheckedChange = { onSetEnabled(field, it) },
-        )
-    }
-}
-
-@Composable
-internal fun standardFieldLabel(field: StandardField): String =
-    when (field) {
-        StandardField.CORRESPONDENT -> stringResource(Res.string.detail_correspondent)
-        StandardField.DOC_TYPE -> stringResource(Res.string.detail_document_type)
-        StandardField.DOC_DATE -> stringResource(Res.string.detail_document_date_plain)
-        StandardField.NOTES -> stringResource(Res.string.detail_note)
-    }
 
 /**
  * Turning the inbox on is a one-way door for existing documents: they all need a reviewed marker

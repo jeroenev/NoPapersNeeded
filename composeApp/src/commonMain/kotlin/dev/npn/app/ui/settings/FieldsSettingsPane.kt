@@ -1,0 +1,271 @@
+package dev.npn.app.ui.settings
+
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.KeyboardArrowDown
+import androidx.compose.material.icons.filled.KeyboardArrowUp
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.FieldDefForm
+import dev.npn.app.ui.common.FieldDefFormState
+import dev.npn.app.ui.common.fieldTypeLabel
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldKeys
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_delete
+import no_papers_needed.composeapp.generated.resources.common_save
+import no_papers_needed.composeapp.generated.resources.common_settings_document_fields_help
+import no_papers_needed.composeapp.generated.resources.common_settings_field_clear_values
+import no_papers_needed.composeapp.generated.resources.common_settings_field_delete_message
+import no_papers_needed.composeapp.generated.resources.common_settings_field_delete_title
+import no_papers_needed.composeapp.generated.resources.common_settings_field_edit_title
+import no_papers_needed.composeapp.generated.resources.common_settings_field_move_down
+import no_papers_needed.composeapp.generated.resources.common_settings_field_move_up
+import no_papers_needed.composeapp.generated.resources.common_settings_field_summary
+import no_papers_needed.composeapp.generated.resources.common_settings_field_type_change_warning
+import no_papers_needed.composeapp.generated.resources.common_settings_field_usage
+import no_papers_needed.composeapp.generated.resources.common_settings_syncs_across_devices
+import no_papers_needed.composeapp.generated.resources.detail_add_field
+import no_papers_needed.composeapp.generated.resources.detail_new_field
+import org.jetbrains.compose.resources.pluralStringResource
+import org.jetbrains.compose.resources.stringResource
+
+/**
+ * The library's field manager: every registered field in display order with its label, key, type
+ * and usage count. Tapping a row edits it; the arrows reorder; the bin deletes after a warning
+ * that names the usage count and offers to clear the values too. New fields are added at the end.
+ */
+@Composable
+internal fun FieldsSettingsPane(
+    fields: List<FieldDef>,
+    usage: Map<String, Int>,
+    onSave: (FieldDef) -> Unit,
+    onRemove: (key: String, clearValues: Boolean) -> Unit,
+    onMove: (key: String, delta: Int) -> Unit,
+) {
+    var editing by remember { mutableStateOf<FieldDef?>(null) }
+    var adding by remember { mutableStateOf(false) }
+    var deleting by remember { mutableStateOf<FieldDef?>(null) }
+
+    SettingsHelpText(stringResource(Res.string.common_settings_document_fields_help))
+    fields.forEachIndexed { index, def ->
+        key(def.key) {
+            FieldRow(
+                def = def,
+                count = usage[def.key] ?: 0,
+                canMoveUp = index > 0,
+                canMoveDown = index < fields.lastIndex,
+                onEdit = { editing = def },
+                onMove = { onMove(def.key, it) },
+                onDelete = { deleting = def },
+            )
+        }
+    }
+    OutlinedButton(onClick = { adding = true }) {
+        Icon(Icons.Filled.Add, contentDescription = null)
+        Text(stringResource(Res.string.detail_add_field), modifier = Modifier.padding(start = 8.dp))
+    }
+    SettingsHelpText(stringResource(Res.string.common_settings_syncs_across_devices))
+
+    if (adding) {
+        FieldDefDialog(
+            existing = fields,
+            def = null,
+            usage = 0,
+            onConfirm = {
+                onSave(it)
+                adding = false
+            },
+            onDismiss = { adding = false },
+        )
+    }
+    editing?.let { def ->
+        FieldDefDialog(
+            existing = fields,
+            def = def,
+            usage = usage[def.key] ?: 0,
+            onConfirm = {
+                onSave(it)
+                editing = null
+            },
+            onDismiss = { editing = null },
+        )
+    }
+    deleting?.let { def ->
+        DeleteFieldDialog(
+            def = def,
+            usage = usage[def.key] ?: 0,
+            onConfirm = { clear ->
+                onRemove(def.key, clear)
+                deleting = null
+            },
+            onDismiss = { deleting = null },
+        )
+    }
+}
+
+@Composable
+private fun FieldRow(
+    def: FieldDef,
+    count: Int,
+    canMoveUp: Boolean,
+    canMoveDown: Boolean,
+    onEdit: () -> Unit,
+    onMove: (Int) -> Unit,
+    onDelete: () -> Unit,
+) {
+    Row(
+        Modifier.fillMaxWidth().clickable(onClick = onEdit).padding(vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(def.label, style = MaterialTheme.typography.bodyLarge)
+            Text(
+                stringResource(
+                    Res.string.common_settings_field_summary,
+                    def.key,
+                    fieldTypeLabel(def.type),
+                    pluralStringResource(Res.plurals.common_settings_field_usage, count, count),
+                ),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        IconButton(onClick = { onMove(-1) }, enabled = canMoveUp) {
+            Icon(
+                Icons.Filled.KeyboardArrowUp,
+                contentDescription = stringResource(Res.string.common_settings_field_move_up),
+            )
+        }
+        IconButton(onClick = { onMove(1) }, enabled = canMoveDown) {
+            Icon(
+                Icons.Filled.KeyboardArrowDown,
+                contentDescription = stringResource(Res.string.common_settings_field_move_down),
+            )
+        }
+        IconButton(onClick = onDelete) {
+            Icon(Icons.Filled.Delete, contentDescription = stringResource(Res.string.common_delete))
+        }
+    }
+}
+
+/**
+ * Add or edit a definition. An existing field keeps its key (values are stored under it) and a
+ * well-known field keeps its type (other subsystems read it as that type); changing the type of a
+ * field with values in place is allowed but says what happens to them.
+ */
+@Composable
+private fun FieldDefDialog(
+    existing: List<FieldDef>,
+    def: FieldDef?,
+    usage: Int,
+    onConfirm: (FieldDef) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var form by remember { mutableStateOf(def?.let(FieldDefFormState::of) ?: FieldDefFormState()) }
+    val position = def?.position ?: ((existing.maxOfOrNull { it.position } ?: -1) + 1)
+    val result = form.toDef(position)
+    val canSave = form.label.isNotBlank() && result != null && !form.collides(existing, own = def?.key)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = {
+            Text(
+                stringResource(
+                    if (def ==
+                        null
+                    ) {
+                        Res.string.detail_new_field
+                    } else {
+                        Res.string.common_settings_field_edit_title
+                    },
+                ),
+            )
+        },
+        text = {
+            Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {
+                FieldDefForm(
+                    state = form,
+                    onChange = { form = it },
+                    existing = existing,
+                    ownKey = def?.key,
+                    lockKey = def != null,
+                    lockType = def != null && def.key in FieldKeys.WELL_KNOWN,
+                    typeWarning =
+                        if (def != null && usage > 0 && form.type != def.type) {
+                            stringResource(Res.string.common_settings_field_type_change_warning)
+                        } else {
+                            null
+                        },
+                )
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { result?.let(onConfirm) }, enabled = canSave) {
+                Text(stringResource(Res.string.common_save))
+            }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
+    )
+}
+
+@Composable
+private fun DeleteFieldDialog(
+    def: FieldDef,
+    usage: Int,
+    onConfirm: (clearValues: Boolean) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var clearValues by remember { mutableStateOf(false) }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(stringResource(Res.string.common_settings_field_delete_title)) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(
+                    stringResource(
+                        Res.string.common_settings_field_delete_message,
+                        def.label,
+                        pluralStringResource(Res.plurals.common_settings_field_usage, usage, usage),
+                    ),
+                )
+                if (usage > 0) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Checkbox(checked = clearValues, onCheckedChange = { clearValues = it })
+                        Text(stringResource(Res.string.common_settings_field_clear_values))
+                    }
+                }
+            }
+        },
+        confirmButton = {
+            TextButton(onClick = { onConfirm(clearValues) }) { Text(stringResource(Res.string.common_delete)) }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) } },
+    )
+}
