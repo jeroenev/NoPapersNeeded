@@ -54,6 +54,12 @@ Platform impls live in the same package under `androidMain`/`desktopMain` (e.g.
 `core.fs.LibraryFileSystem`, `core.pdf.PdfEngine`, `core.ocr.OcrEngine`,
 `core.db.NpnDatabase`).
 
+Opening a library is `LibrarySessionImpl.openSession(SessionDeps)` (commonMain) followed by
+`start(scope)`. On a plain JVM the `SessionDeps` come from `core.app.jvmSessionDeps`
+(`desktopMain`): the one place that wires java.nio + PDFBox + Tesseract + a Room index under an
+`AppDirs`. The desktop app, the `AppSessionRig` test harness and any headless JVM host build
+their sessions through it — nothing in `composeApp` is needed to run a library without a UI.
+
 ### `composeApp` — `dev.npn.app.*`
 
 Shared Compose Multiplatform UI + viewmodels + dependency wiring.
@@ -61,7 +67,7 @@ Shared Compose Multiplatform UI + viewmodels + dependency wiring.
 | Path | Contents |
 |---|---|
 | `app/App.kt` | Root composable / app shell. |
-| `app/di/` | `AppEnvironment` (session lifecycle: open/close/swap, watched folder) + `DefaultAppEnvironment`. `PlatformLibraryFactory`/`WatchedFolderFactory` are fun interfaces the platform source sets implement; `AppEnvironment.android/desktop.kt` build the real per-target pieces. |
+| `app/di/` | `AppEnvironment` (session lifecycle: open/close/swap, watched folder) + `DefaultAppEnvironment`. `PlatformLibraryFactory`/`WatchedFolderFactory` are fun interfaces the platform source sets implement; `AppEnvironment.android/desktop.kt` build the real per-target pieces. On desktop the per-library wiring itself is `core`'s `jvmSessionDeps` (see below); the DI file only binds settings to the session's knobs. |
 | `app/platform/` | Small shared platform hooks. |
 | `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split), `tags/`, `rules/`, `settings/`, `trash/`, `queue/` (the read-only OCR + AI enrichment backlog; a top-level rail destination on wide layouts, reached from settings on compact ones), `onboarding/`, `nav/` (shell + routes), `ai/`, `common/` (shared components: `TagEditor`, `DocThumbnail`, `SearchField`, `MessagesViewModel`, `SnackbarMessages`, `UiText`), `theme/`. ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). |
 | `commonMain/composeResources` | `values/` + `values-nl/` string resources (localization checked by `checkLocalization`). |

@@ -1,16 +1,13 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.npnDatabase
-import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.MutableClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
-import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.ThumbnailStore
-import dev.npn.core.xmp.PdfBoxXmpIO
 import kotlinx.coroutines.CoroutineScope
 import java.io.File
 import java.nio.file.Files
@@ -48,13 +45,14 @@ class FakeThumbStore(
 
 /**
  * Temp-dir rig that builds a real [LibrarySessionImpl] over a JVM filesystem + real Room DB +
- * real journal/index/ocr pieces. A second session on the same library (different deviceId) is
- * built via [secondSession] for convergence tests.
+ * real journal/index/ocr pieces, wired through the same [jvmSessionDeps] the desktop app uses.
+ * A second session on the same library (different deviceId) is built via [secondSession] for
+ * convergence tests.
  */
 class AppSessionRig private constructor(
     val libRoot: Path,
     val dbDir: File,
-    val fs: JvmLibraryFileSystem,
+    val fs: LibraryFileSystem,
     val db: NpnDatabase,
     val clock: MutableClock,
     val scope: CoroutineScope,
@@ -95,26 +93,31 @@ class AppSessionRig private constructor(
         ): AppSessionRig {
             val libRoot = Files.createTempDirectory("npn-app-lib")
             val dbDir = Files.createTempDirectory("npn-app-db").toFile()
-            val fs = JvmLibraryFileSystem(libRoot)
-            val db = npnDatabase(File(dbDir, "index.db"))
             val clock = MutableClock(autoTick = true)
             val deps =
-                SessionDeps(
-                    fs = fs,
-                    db = db,
-                    pdfEngine = PdfBoxEngine(),
-                    ocrEngine = ocr,
-                    xmpIO = PdfBoxXmpIO(),
-                    thumbnailStore = FakeThumbStore(File(dbDir, "thumbs")),
+                jvmSessionDeps(
+                    libraryRoot = libRoot,
+                    dirs = appDirs(dbDir, "first"),
                     scope = scope,
                     ocrLanguage = { "eng" },
                     trashRetentionDays = { 30 },
+                    storagePathRule = storagePathRule,
                     clock = clock,
                     installationId = "test-installation",
-                    storagePathRule = storagePathRule,
+                    ocrEngine = ocr,
+                    thumbnailStore = FakeThumbStore(File(dbDir, "thumbs")),
                 )
             val session = LibrarySessionImpl.openSession(deps)
-            return AppSessionRig(libRoot, dbDir, fs, db, clock, scope, session)
+            return AppSessionRig(libRoot, dbDir, deps.fs, deps.db, clock, scope, session)
+        }
+
+        /** One device's app-local dirs; each session over the folder gets its own. */
+        private fun appDirs(
+            dbDir: File,
+            device: String,
+        ): AppDirs {
+            val base = File(dbDir, device).path
+            return AppDirs(dbDir = base, thumbsDir = "$base/thumbs", tmpDir = "$base/tmp")
         }
     }
 
@@ -127,22 +130,19 @@ class AppSessionRig private constructor(
         scope: CoroutineScope,
         ocr: OcrEngine = NoopOcrEngine(),
     ): Pair<LibrarySessionImpl, NpnDatabase> {
-        val db2 = npnDatabase(File(dbDir, "index2.db"))
-        // Force a distinct deviceId by seeding the kv before openSession.
-        db2.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
         val deps =
-            SessionDeps(
-                fs = fs,
-                db = db2,
-                pdfEngine = PdfBoxEngine(),
-                ocrEngine = ocr,
-                xmpIO = PdfBoxXmpIO(),
-                thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
+            jvmSessionDeps(
+                libraryRoot = libRoot,
+                dirs = appDirs(dbDir, "second"),
                 scope = scope,
                 ocrLanguage = { "eng" },
                 trashRetentionDays = { 30 },
                 clock = MutableClock(50_000L, autoTick = true),
+                ocrEngine = ocr,
+                thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
             )
-        return LibrarySessionImpl.openSession(deps) to db2
+        // Force a distinct deviceId by seeding the kv before openSession.
+        deps.db.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
+        return LibrarySessionImpl.openSession(deps) to deps.db
     }
 }
