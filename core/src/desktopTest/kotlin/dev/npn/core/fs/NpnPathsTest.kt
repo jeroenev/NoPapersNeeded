@@ -4,6 +4,7 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 class NpnPathsTest {
     @Test
@@ -154,5 +155,41 @@ class NpnPathsTest {
         NpnPaths.indexable(file("doc.sync-conflict-20260715-120000-ABCDEFG.pdf")).shouldBeFalse()
         NpnPaths.indexable(file("~syncthing~doc.pdf")).shouldBeFalse()
         NpnPaths.indexable(FileMeta("dir", "dir", 0, 0, true)).shouldBeFalse()
+        // A name the app could not address on every replica is left alone, not indexed.
+        NpnPaths.indexable(file("C:evil.pdf")).shouldBeFalse()
+        NpnPaths.indexable(file("a\\b.pdf")).shouldBeFalse()
+    }
+
+    @Test
+    fun normalizeToleratesSlashesButRefusesEscapes() {
+        NpnPaths.normalize("/inbox//doc.pdf/") shouldBe "inbox/doc.pdf"
+        NpnPaths.normalize("") shouldBe ""
+        listOf(
+            "../outside.pdf",
+            "inbox/../../outside.pdf",
+            "inbox/./doc.pdf",
+            ".",
+            "..",
+            "inbox\\..\\..\\outside.pdf",
+            "C:/Windows/system32",
+            "c:relative.pdf",
+            "inbox/doc\u0000.pdf",
+        ).forEach { path ->
+            NpnPaths.isSafe(path).shouldBeFalse()
+            assertFailsWith<IllegalArgumentException>(path) { NpnPaths.normalize(path) }
+        }
+        // Dots inside a segment are ordinary; only the bare `.`/`..` segments traverse.
+        NpnPaths.isSafe("inbox/...pdf").shouldBeTrue()
+        NpnPaths.isSafe(".npn/journal/objects-v2-ab/x.jsonl").shouldBeTrue()
+        NpnPaths.isSafe("Invoice 2024:01.pdf").shouldBeTrue()
+    }
+
+    @Test
+    fun observationPredicatesNeverThrowOnUnsafePaths() {
+        // The watcher and rescan run these over whatever is on disk; a hostile name must be
+        // classified as "not ours", not kill the loop.
+        NpnPaths.isInternal("../.npn/x").shouldBeFalse()
+        NpnPaths.isHidden("a\\.b").shouldBeFalse()
+        NpnPaths.isOwnDeviceWrite("../.npn/journal/dev1/0.jsonl", "dev1").shouldBeFalse()
     }
 }

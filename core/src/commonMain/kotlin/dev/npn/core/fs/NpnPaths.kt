@@ -11,6 +11,13 @@ object NpnPaths {
     const val JOURNAL_DIR = ".npn/journal"
     const val OCR_DIR = ".npn/ocr"
     const val TRASH_DIR = ".npn/trash"
+
+    /**
+     * Import staging: a file is copied here, hashed, dedup-checked, then moved into place or
+     * deleted. Under `.npn/` so it is never indexed; `.part` so an interrupted import is
+     * recognizable as incomplete rather than mistaken for a document.
+     */
+    const val TMP_DIR = ".npn/tmp"
     const val DEFAULT_INBOX = "inbox"
 
     const val STORAGE_V1 = 1
@@ -211,9 +218,12 @@ object NpnPaths {
         }
     }
 
+    /** The staging path for one import attempt; [nonce] keeps concurrent imports apart. */
+    fun importStagingPath(nonce: String): String = "$TMP_DIR/$nonce.part"
+
     /** True when [relPath] is inside the `.npn/` metadata directory (app-internal). */
     fun isInternal(relPath: String): Boolean {
-        val norm = normalize(relPath)
+        val norm = joinSegments(relPath)
         return norm == NPN_DIR || norm.startsWith("$NPN_DIR/")
     }
 
@@ -229,7 +239,7 @@ object NpnPaths {
         relPath: String,
         deviceId: String,
     ): Boolean {
-        val norm = normalize(relPath)
+        val norm = joinSegments(relPath)
         val ownJournal = journalDeviceDir(deviceId)
         if (norm == ownJournal || norm.startsWith("$ownJournal/")) return true
         if (!norm.startsWith("$OCR_DIR/")) return false
@@ -242,7 +252,7 @@ object NpnPaths {
     }
 
     /** True when any path segment begins with a dot (hidden file/dir), e.g. `.npn`, `a/.b/c`. */
-    fun isHidden(relPath: String): Boolean = normalize(relPath).split('/').any { it.isNotEmpty() && it.startsWith('.') }
+    fun isHidden(relPath: String): Boolean = segments(relPath).any { it.startsWith('.') }
 
     /** True when [name] has a `.pdf` extension (case-insensitive). */
     fun isPdf(name: String): Boolean = name.substringAfterLast('.', "").equals("pdf", ignoreCase = true)
@@ -317,11 +327,13 @@ object NpnPaths {
 
     /**
      * True when a file should be indexed as a document: a PDF that is not app-internal, not
-     * hidden, not a sync-conflict file, and not a sync temp file.
+     * hidden, not a sync-conflict file, not a sync temp file, and at a path this app can address
+     * ([isSafe]) — a name no replica could hold is left alone rather than half-managed.
      */
     fun indexable(meta: FileMeta): Boolean {
         if (meta.isDirectory) return false
         if (!isPdf(meta.name)) return false
+        if (!isSafe(meta.relPath)) return false
         if (isInternal(meta.relPath)) return false
         if (isHidden(meta.relPath)) return false
         if (isSyncConflict(meta.name)) return false
@@ -329,8 +341,51 @@ object NpnPaths {
         return true
     }
 
-    /** Normalize a library-relative path: strip leading/trailing slashes, collapse repeats. */
-    fun normalize(relPath: String): String = relPath.split('/').filter { it.isNotEmpty() }.joinToString("/")
+    /**
+     * Normalize a library-relative path: strip leading/trailing slashes, collapse repeats.
+     *
+     * This is also the one gate every path passes before it can reach disk — both filesystem
+     * implementations resolve through it — so it refuses anything that could address a location
+     * outside the library or mean something different on another replica's platform
+     * (see [isSafe]). Paths the app generates itself never trip it; the check exists for paths
+     * that arrive from outside, which today is user input and tomorrow is a sync peer.
+     *
+     * @throws IllegalArgumentException when [relPath] is not [isSafe].
+     */
+    fun normalize(relPath: String): String {
+        val segments = segments(relPath)
+        val reason = unsafeReason(segments)
+        require(reason == null) { "$reason: '$relPath'" }
+        return segments.joinToString("/")
+    }
+
+    /**
+     * Whether [relPath] can be handled as a library-relative path at all: no `.`/`..` segments,
+     * no NUL, no backslash (a separator on Windows, so `a\..\b` would traverse there), and no
+     * drive prefix on the first segment (`C:` makes java.nio treat the rest as absolute on
+     * Windows). Leading, trailing and repeated `/` are tolerated — they cannot escape.
+     *
+     * Observation-side predicates ([indexable], [isInternal], [isHidden], [isOwnDeviceWrite]) use
+     * this to *ignore* such a path; the I/O side ([normalize]) refuses it. The split keeps a
+     * hostile or merely exotic name on disk from killing a rescan or the watcher.
+     */
+    fun isSafe(relPath: String): Boolean = unsafeReason(segments(relPath)) == null
+
+    private fun segments(relPath: String): List<String> = relPath.split('/').filter { it.isNotEmpty() }
+
+    /** [normalize] without the safety gate, for classifying paths observed on disk. */
+    private fun joinSegments(relPath: String): String = segments(relPath).joinToString("/")
+
+    private fun unsafeReason(segments: List<String>): String? =
+        when {
+            segments.any { it == "." || it == ".." } -> "Path traversal is not allowed"
+            segments.any { '\\' in it } -> "Backslash is not a path separator here"
+            segments.any { '\u0000' in it } -> "NUL is not allowed in a path"
+            segments.firstOrNull()?.let(drivePrefix::matches) == true -> "Drive prefixes are not library-relative"
+            else -> null
+        }
+
+    private val drivePrefix = Regex("^[A-Za-z]:.*")
 }
 
 /** Return [path] or a suffixed free candidate, preserving dotfiles and directory-name dots. */

@@ -35,9 +35,8 @@ sealed interface ImportResult {
  * Imports external PDFs or byte payloads into the library, deduplicating by content hash.
  *
  * Because [LibraryFileSystem.sha256] hashes a library-relative path (there is no stream-hash of an
- * [ExternalSource]), imports stage into `.npn/tmp/` first, hash there, dedup-check, then move into
- * place or delete. `.npn/tmp/` is under `.npn/` so it is excluded from indexing. It is cleaned on
- * both success and failure.
+ * [ExternalSource]), imports stage into [NpnPaths.TMP_DIR] first, hash there, dedup-check, then
+ * move into place or delete. The staging file is cleaned on both success and failure.
  */
 @OptIn(ExperimentalUuidApi::class)
 class ImportService(
@@ -47,9 +46,6 @@ class ImportService(
     private val clock: EpochClock = SystemEpochClock,
     private val ruleProvider: suspend () -> StoragePathRule? = { null },
 ) {
-    /** Temp staging dir, inside `.npn/` so it is never indexed. Defined here, not in NpnPaths. */
-    private val tmpDir = "${NpnPaths.NPN_DIR}/tmp"
-
     suspend fun importPdf(
         source: ExternalSource,
         suggestedName: String,
@@ -112,7 +108,7 @@ class ImportService(
         return ImportResult.Imported(hash, target)
     }
 
-    private fun freshTmpPath(): String = "$tmpDir/${Uuid.random()}.part"
+    private fun freshTmpPath(): String = NpnPaths.importStagingPath(Uuid.random().toString())
 
     private suspend fun cleanup(tmpPath: String) {
         if (fs.exists(tmpPath)) {

@@ -96,6 +96,22 @@ class JvmLibraryFileSystemTest {
         }
 
     @Test
+    fun refusesPathsThatEscapeTheLibrary() =
+        runTest {
+            val outside = root.parent.resolve("npn-fs-test-escape.pdf")
+            try {
+                assertFailsWith<IllegalArgumentException> {
+                    fs.writeBytesOnce("../npn-fs-test-escape.pdf", "x".encodeToByteArray())
+                }
+                assertFailsWith<IllegalArgumentException> { fs.readBytes("inbox/../../etc/passwd") }
+                assertFailsWith<IllegalArgumentException> { fs.exists("..") }
+                Files.exists(outside).shouldBeFalse()
+            } finally {
+                Files.deleteIfExists(outside)
+            }
+        }
+
+    @Test
     fun moveFailsOnExistingTarget() =
         runTest {
             fs.writeBytesOnce("a.pdf", "a".encodeToByteArray())
