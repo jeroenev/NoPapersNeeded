@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.FakeAiSuggest
+import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
@@ -123,7 +124,7 @@ internal class Rig(
             ai = ai,
             meta = meta,
             fieldRegistry = fieldRegistry,
-            readConfig = { config },
+            policy = UnattendedAiPolicy.fromConfig { config },
             clock = clock,
         )
 

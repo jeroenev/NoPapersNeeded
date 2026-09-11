@@ -17,8 +17,10 @@ package dev.npn.core.ocr
  *  expected, so above it [ai] never runs *unattended* — the document still gets OCR'd, just by
  *  [local]. It is not a hard ceiling: a user who asks for this document by name has seen the cost
  *  and gets what they asked for (`OcrFacade.aiOcrOffer` is what warns them).
- * @param aiAuto whether [ai] is currently this device's automatic engine (`AiConfig.ocrAuto`). Read
- *  per call rather than captured, so flipping the setting takes effect on the next document.
+ * @param aiAuto whether [ai] may be this replica's automatic engine right now — the OCR half of
+ *  `dev.npn.core.ai.UnattendedAiPolicy`, which is where "may this replica spend unattended" is
+ *  decided for OCR and enrichment alike; this selector owns only the per-document rule on top of
+ *  it. Read per call rather than captured, so a change takes effect on the next document.
  */
 class OcrEngineSelector(
     private val local: OcrEngine,

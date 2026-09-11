@@ -42,13 +42,13 @@ source sets hold implementations. Key packages:
 | `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsWriteGate`, `DbLocalJournalState`, `DeviceIdentity`, `ScanReport`. |
 | `core.db` | Room entities and DAOs (`NpnDatabase`, `DocumentDao`, `TagDao`, `FtsDao`, `MetadataProjectionDao`, `MiscDaos`, `Projections`). Schema files in `core/schemas`. Platform `NpnDatabase.android/desktop.kt` build the instance. |
 | `core.pdf` | PDF rendering/thumbnails: `PdfEngine` (platform impl), `RenderGate`, `ThumbnailService`. |
-| `core.ocr` | OCR pipeline and sidecars: `OcrEngine` (the engine interface; `MlKitOcrEngine` on android, `TesseractCliEngine` on desktop, `core.ai.AiOcrEngine` for a vision model), `OcrEngines` (the engine vocabulary + ranking), `OcrEngineSelector` (which engine a document's run may use — the one place that decides whether the *paid* engine runs), `OcrPipeline`, `OcrSidecar`. |
+| `core.ocr` | OCR pipeline and sidecars: `OcrEngine` (the engine interface; `MlKitOcrEngine` on android, `TesseractCliEngine` on desktop, `core.ai.AiOcrEngine` for a vision model), `OcrEngines` (the engine vocabulary + ranking), `OcrEngineSelector` (which engine a document's run may use, given `core.ai.UnattendedAiPolicy`'s permission to spend), `OcrPipeline`, `OcrSidecar`. |
 | `core.work` | `QueueDrainer`: the single-flight background drain shared by the OCR queue and the automatic AI enrichment queue. |
 | `core.xmp` | XMP metadata on export/bake-in-place: `PdfXmpIO` (platform), `XmpBytes`, `XmpParser`, `XmpSerializer`, `XmpMerger`, `NpnXmpData`, `BakeService`. |
 | `core.model` | `Document` domain model and the field model: `Field.kt` (`FieldType`, `FieldDef`, `FieldKeys` — well-known keys, seed definitions, key normalization) and `FieldValues.kt` (the one authority on a value's canonical form per type). |
 | `core.rules` / `core.pathrules` | Auto-match rules (`RuleMatcher`, `RuleApplier`, `AutoMatchRule`) and storage-path templates (`StoragePathRule*`, `StoragePathContext`). |
 | `core.watch` | Watched inbox folder: `WatchedFolder` (platform), `WatchedFolderImporter`. |
-| `core.ai` | Local/AI chat loop and tools over the library (`KoogChatAgent`, `AiChatTool`, `AiFacadeImpl`, `LibraryAiTools`). Contracts split per concept: `AiChat.kt`, `AiSuggest.kt`, `AiOcr.kt`, `AiConfig.kt`; `AiFacadeImpl` implements all three facets, so they share one cached endpoint client. Consumers in `core.app` drive it: `AiEditRun` (bulk, review-then-apply), `AiAutoEnricher` (unattended, queued in `ai_enrich_queue` off the OCR thread), and `OcrPipeline` via the `AiOcrEngine` adapter (page-image transcription, one call per page). `LibraryAiTools` is the assistant's entire view of the library — see docs/AI_TOOL_DATA_GAPS.md for what it deliberately does not expose. |
+| `core.ai` | Local/AI chat loop and tools over the library (`KoogChatAgent`, `AiChatTool`, `AiFacadeImpl`, `LibraryAiTools`). Contracts split per concept: `AiChat.kt`, `AiSuggest.kt`, `AiOcr.kt`, `AiConfig.kt`, `UnattendedAiPolicy.kt` (may this replica spend without being asked); `AiFacadeImpl` implements the three facets, so they share one cached endpoint client. Consumers in `core.app` drive it: `AiEditRun` (bulk, review-then-apply), `AiAutoEnricher` (unattended, queued in `ai_enrich_queue` off the OCR thread), and `OcrPipeline` via the `AiOcrEngine` adapter (page-image transcription, one call per page). `LibraryAiTools` is the assistant's entire view of the library — see docs/AI_TOOL_DATA_GAPS.md for what it deliberately does not expose. |
 
 Platform impls live in the same package under `androidMain`/`desktopMain` (e.g.
 `core.fs.LibraryFileSystem`, `core.pdf.PdfEngine`, `core.ocr.OcrEngine`,
@@ -175,12 +175,17 @@ via `mise hot`.
   the answer verbatim, and surface it on the processing queue as something to open.
   Work that writes unattended (`AiAutoEnricher`) is the other pattern; pick by
   whether a human must confirm the result.
-- Changing when the paid OCR engine runs → `OcrEngineSelector`, not `OcrPipeline`. It is the
-  single place that answers "may this document use the vision model", and the reason the
-  pipeline's "run the best-ranked engine" instinct cannot quietly bill a whole library. Its
-  page threshold binds the *unattended* path only; an asked-for run
-  (`OcrFacade.ocrWithAi`) runs at any length, and `OcrFacade.aiOcrOffer` is what warns the
-  user first.
+- Changing *who may spend on AI unattended* → `core.ai.UnattendedAiPolicy`, the one object that
+  answers it for both paid unattended paths (automatic vision OCR and automatic enrichment).
+  `SessionDeps.unattendedAi` defaults to the device policy (the user's own `AiConfig` toggles);
+  a host acting on a library's behalf supplies its own. Never read `AiConfig.ocrAuto` /
+  `autoOnOcr` from a consumer directly.
+- Changing when the paid OCR engine runs *for a given document* → `OcrEngineSelector`, not
+  `OcrPipeline`. It layers the per-document rule (engine pin, page threshold) on top of the
+  policy's yes/no, and is the reason the pipeline's "run the best-ranked engine" instinct cannot
+  quietly bill a whole library. Its page threshold binds the *unattended* path only; an
+  asked-for run (`OcrFacade.ocrWithAi`) runs at any length, and `OcrFacade.aiOcrOffer` is what
+  warns the user first.
 - Follow-up work after OCR → `OcrPipeline.onTextIndexed` fires whenever text is indexed,
   including on every index rebuild, so hang free/idempotent work there (auto-match rules).
   `OcrPipeline.onOcrProduced` fires only when this device just wrote a sidecar; anything

@@ -6,6 +6,7 @@ import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiOcrEngine
 import dev.npn.core.ai.AiSuggest
+import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.toEntity
@@ -655,7 +656,7 @@ class LibrarySessionImpl private constructor(
                 OcrEngineSelector(
                     local = deps.ocrEngine,
                     ai = AiOcrEngine(ai),
-                    aiAuto = { deps.aiConfig().ocrAuto },
+                    aiAuto = deps.unattendedAi::autoOcr,
                 )
             val ocrPipeline =
                 OcrPipeline(
@@ -737,7 +738,7 @@ class LibrarySessionImpl private constructor(
                     ai = ai,
                     meta = meta,
                     fieldRegistry = fieldRegistry,
-                    readConfig = deps.aiConfig,
+                    policy = deps.unattendedAi,
                     clock = deps.clock,
                 )
             val enrichWorker = QueueDrainer(deps.scope) { autoEnricher.processNext() }
@@ -844,6 +845,12 @@ class SessionDeps(
     val autoMatchRulesJson: suspend () -> String = { "[]" },
     val persistAutoMatchRulesJson: suspend (String) -> Unit = {},
     val aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
+    /**
+     * Who may spend on AI unattended. Defaults to the user's own [aiConfig] toggles — the device
+     * policy; a host with a different answer (a server running on a library's behalf) supplies
+     * its own.
+     */
+    val unattendedAi: UnattendedAiPolicy = UnattendedAiPolicy.fromConfig(aiConfig),
     val clock: EpochClock = SystemEpochClock,
     val installationId: String = "local-installation",
 ) {

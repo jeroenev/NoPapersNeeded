@@ -1,11 +1,11 @@
 package dev.npn.core.app
 
-import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.AiSuggest
+import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentDao
@@ -63,7 +63,7 @@ class AiAutoEnricher(
     private val ai: AiSuggest,
     private val meta: MetadataWriter,
     private val fieldRegistry: FieldRegistry,
-    private val readConfig: suspend () -> AiConfig,
+    private val policy: UnattendedAiPolicy,
     private val clock: EpochClock,
 ) {
     /** The shared write mechanics; this pass only projects the suggestion onto what it may write. */
@@ -84,9 +84,9 @@ class AiAutoEnricher(
      * [dev.npn.core.ocr.OcrPipeline.onOcrProduced] hook, so this must stay local-only work — never
      * a model call.
      *
-     * Enqueueing (not the drain) is where the user's setting is honoured: a document OCR'd while
-     * the toggle was off is never queued, so turning it on later enriches new documents rather
-     * than retroactively spending on the whole library.
+     * Enqueueing (not the drain) is where the [UnattendedAiPolicy] is honoured: a document OCR'd
+     * while the policy said no is never queued, so allowing it later enriches new documents
+     * rather than retroactively spending on the whole library.
      *
      * An existing row is left exactly as it is. Repeat firings for the same document are still
      * possible (a re-OCR under a better engine), and resetting the row on each one would let a
@@ -98,8 +98,7 @@ class AiAutoEnricher(
      * should wake the drain.
      */
     suspend fun enqueue(docId: String): Boolean {
-        val config = readConfig()
-        if (!config.autoOnOcr || !config.configured) return false
+        if (!policy.autoEnrich()) return false
         if (!isEnrichable(docId)) return false
         if (queueDao.getByDocId(docId) != null) return false
         val now = clock.nowMillis()
@@ -133,8 +132,7 @@ class AiAutoEnricher(
      * crash lose the enrichment outright, with nothing left to say it was owed.
      */
     suspend fun processNext(): Boolean {
-        val config = readConfig()
-        if (!config.autoOnOcr || !config.configured) return false
+        if (!policy.autoEnrich()) return false
         val now = clock.nowMillis()
         if (now < cooldownUntil) return false
         val entry = queueDao.nextDue(now) ?: return false
