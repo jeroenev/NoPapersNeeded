@@ -25,6 +25,16 @@
     <string name="ai_edit_title">AI edit</string>
     <string name="ai_edit_applying">Applying suggestions...</string>
     <string name="ai_edit_intro">Automate edits across a set of documents</string>
+    <string name="ai_edit_task_question">What do you want to do?</string>
+    <string name="ai_edit_task_organize">Organize untagged documents</string>
+    <string name="ai_edit_task_organize_help">Suggest tags for documents that do not have any yet.</string>
+    <string name="ai_edit_task_fill">Fill missing metadata</string>
+    <string name="ai_edit_task_fill_help">Fill in empty fields such as title, correspondent and date.</string>
+    <string name="ai_edit_task_clean_tags">Clean up tags</string>
+    <string name="ai_edit_task_clean_tags_help">Reuse the tags you already have and propose dropping ones that do not fit.</string>
+    <string name="ai_edit_task_custom">Custom edit</string>
+    <string name="ai_edit_task_custom_help">Pick the tags, fields and instructions yourself.</string>
+    <string name="ai_edit_task_change">Change task</string>
     <string name="ai_edit_scope">Documents</string>
     <string name="ai_edit_scope_selection">Selected documents (%1$d)</string>
     <string name="ai_edit_untagged_documents">Untagged documents</string>
@@ -34,10 +44,12 @@
     <string name="ai_edit_saved_view_choose">Choose a view</string>
     <string name="ai_edit_all_documents">All documents</string>
     <string name="ai_edit_fields">Autofill fields</string>
-    <string name="ai_edit_fields_help">Overwrite also replaces values that are already filled in.</string>
+    <string name="ai_edit_fields_help">Each field is filled only where it is empty, unless you let it replace existing values.</string>
+    <string name="ai_edit_fields_loading">Loading fields...</string>
     <string name="ai_edit_add_field">Add a field to this run</string>
     <string name="ai_edit_too_many_fields">Choose at most %1$d fields per run; more than that and the reply outweighs the document.</string>
-    <string name="ai_edit_overwrite">Overwrite</string>
+    <string name="ai_edit_field_mode_unfilled">Fill empty values only</string>
+    <string name="ai_edit_field_mode_all">Replace existing values too</string>
     <string name="ai_edit_tags">Tags</string>
     <string name="ai_edit_suggest_tags">Suggest tags</string>
     <string name="ai_edit_suggest_tags_help">Propose tags for each document</string>
@@ -48,25 +60,60 @@
     <string name="ai_edit_custom_prompt">Extra instructions (optional)</string>
     <string name="ai_edit_custom_prompt_hint">e.g. merge tags that differ only in case, or standardize a correspondent name</string>
     <string name="ai_edit_remove_tags_label">Remove</string>
+    <string name="ai_edit_add_tag">Add tag</string>
+    <string name="ai_edit_remove_tag">Remove tag</string>
     <string name="ai_edit_options">Options</string>
+    <string name="ai_edit_advanced">Advanced options</string>
+    <string name="ai_edit_advanced_help">Per-run limits. The defaults come from Settings.</string>
     <string name="ai_edit_tags_per_document">Tags per document</string>
     <string name="ai_edit_new_tags_per_document">New tags per document</string>
     <string name="ai_edit_documents_per_batch">Documents per batch</string>
     <string name="ai_edit_range">%1$d-%2$d</string>
     <string name="ai_edit_new_tags_range">%1$d-%2$d (%3$d = existing only)</string>
+    <string name="ai_edit_run_where">When to run</string>
+    <string name="ai_edit_run_now">Review now</string>
+    <string name="ai_edit_run_now_help">Suggest one batch and review the result here.</string>
     <string name="ai_edit_background">Run in the background</string>
     <string name="ai_edit_background_help">Covers every document in scope and keeps going after you leave this page. Results wait in the processing queue for you to review; nothing is written without you.</string>
+    <string name="ai_edit_recommended">Recommended</string>
     <string name="ai_edit_start">Start</string>
     <string name="ai_edit_start_background">Add to queue</string>
+    <string name="ai_edit_summary_tags">tags</string>
+    <string name="ai_edit_summary_tag_removals">tag removals</string>
+    <string name="ai_edit_summary_prompt">extra instructions</string>
+    <string name="ai_edit_summary_nothing">No changes requested</string>
+    <string name="ai_edit_blocked_no_task">Choose what you want to do</string>
+    <string name="ai_edit_blocked_nothing">Choose at least one kind of change</string>
+    <string name="ai_edit_blocked_no_documents">No documents match this scope</string>
+    <string name="ai_edit_blocked_no_saved_view">Choose a saved view</string>
+    <string name="ai_edit_blocked_loading">Counting documents...</string>
+    <string name="ai_edit_confirm_large_title">Send %1$d documents to the AI?</string>
+    <string name="ai_edit_confirm_large_message">That is one request per document to your AI provider, which may cost money. Nothing is written to your library without your review.</string>
+    <string name="ai_edit_confirm_large_confirm">Send</string>
+    <string name="ai_edit_cancel_title">Stop this run?</string>
+    <string name="ai_edit_cancel_confirm">Stop</string>
+    <string name="ai_edit_cancel_keep">Keep going</string>
+    <string name="ai_edit_leave_title">Discard these suggestions?</string>
+    <string name="ai_edit_leave_message">They have already been generated. Leaving now discards them without writing anything to your library.</string>
+    <string name="ai_edit_leave_confirm">Discard</string>
+    <string name="ai_edit_leave_stay">Stay</string>
+    <string name="ai_edit_change_settings">Change settings</string>
     <string name="ai_edit_queued_open">Open the queue</string>
     <string name="ai_edit_queued_review_title">Review AI edit</string>
     <string name="ai_edit_queued_loading">Loading suggestions...</string>
     <string name="ai_edit_queued_gone">This run is no longer available</string>
     <string name="ai_edit_queued_gone_subtitle">It was already reviewed or discarded, or it is still working.</string>
-    <string name="ai_edit_suggesting_progress">Suggesting - %1$d of %2$d</string>
+    <string name="ai_edit_suggesting_progress">Processed %1$d of %2$d</string>
+    <string name="ai_edit_suggesting_finishing">Preparing the review...</string>
+    <string name="ai_edit_last_completed">Last completed: %1$s</string>
     <string name="ai_edit_select_all">Select all</string>
+    <string name="ai_edit_select_recommended">Select recommended</string>
     <string name="ai_edit_clear_selection">Clear</string>
-    <string name="ai_edit_skip">Skip</string>
+    <string name="ai_edit_skip">Skip this batch</string>
+    <string name="ai_edit_discard_run">Discard run</string>
+    <string name="ai_edit_discard_run_title">Discard this run?</string>
+    <string name="ai_edit_discard_run_message">The suggestions were already generated. Discarding removes this run from the processing queue without writing anything.</string>
+    <string name="ai_edit_open_document">Open document</string>
     <string name="ai_edit_next_batch">Next batch</string>
     <string name="ai_edit_done">Done</string>
     <string name="ai_edit_replaces">Replaces: %1$s</string>
@@ -82,5 +129,21 @@
     <plurals name="ai_edit_queued">
         <item quantity="one">%1$d document queued. You will find the suggestions in the processing queue.</item>
         <item quantity="other">%1$d documents queued. You will find the suggestions in the processing queue.</item>
+    </plurals>
+    <plurals name="ai_edit_summary_fields">
+        <item quantity="one">%1$d field</item>
+        <item quantity="other">%1$d fields</item>
+    </plurals>
+    <plurals name="ai_edit_summary_requests">
+        <item quantity="one">%1$d AI request</item>
+        <item quantity="other">%1$d AI requests</item>
+    </plurals>
+    <plurals name="ai_edit_cancel_message">
+        <item quantity="one">%1$d document already has suggestions; stopping now discards them.</item>
+        <item quantity="other">%1$d documents already have suggestions; stopping now discards them.</item>
+    </plurals>
+    <plurals name="ai_edit_attention">
+        <item quantity="one">%1$d needs a closer look</item>
+        <item quantity="other">%1$d need a closer look</item>
     </plurals>
 </resources>

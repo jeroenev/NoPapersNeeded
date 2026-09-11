@@ -155,6 +155,13 @@ via `mise hot`.
   document names behind `WorkFacade.queue`, and derives whole-run progress behind
   `WorkFacade.editRuns`; a new queue table joins the same read there so the
   processing queue view keeps showing everything the app still owes.
+- A new starting point for a bulk AI edit → an `EditTask` constant plus its `preset` in
+  `app/ui/ai/AiEditTask.kt`, which is presentation policy composed out of the run's existing
+  knobs (scope, tag flags, per-field `AiFieldMode`). Nothing in `core` knows about tasks: the
+  page still builds one ordinary `AiEditRequest`. Editing what a task stands for demotes the run
+  to `EditTask.CUSTOM`, so the label never describes a configuration the user edited away.
+- Why the AI-edit page refuses to start → `AiEditUiState.startBlocker`, the one place that
+  answers it, rendered by `AiEditRunBar`. A disabled Start must always be able to say why.
 - Deferrable work the user must come back to → `AiEditQueue` is the pattern:
   persist the request and its subjects, buy the expensive part on a drain, store
   the answer verbatim, and surface it on the processing queue as something to open.

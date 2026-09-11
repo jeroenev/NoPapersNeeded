@@ -5,11 +5,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -26,8 +21,7 @@ import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.ai_collapse
-import no_papers_needed.composeapp.generated.resources.ai_expand
+import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_loading
 import org.jetbrains.compose.resources.stringResource
 
 /** Thumbnail size of a preview row; small enough that a full batch stays scannable. */
@@ -46,25 +40,22 @@ internal fun BatchPreview(
 ) {
     var expanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .selectable(selected = expanded, enabled = preview.batch.isNotEmpty()) { expanded = !expanded },
-            verticalAlignment = Alignment.CenterVertically,
+        ExpanderRow(
+            expanded = expanded,
+            onToggle = { expanded = !expanded },
+            enabled = preview.batch.isNotEmpty(),
+            showIcon = preview.batch.isNotEmpty(),
         ) {
             Text(
-                scopeCountText(preview.total, batchSize).resolve(),
+                if (preview.loaded) {
+                    scopeCountText(preview.total, batchSize).resolve()
+                } else {
+                    stringResource(Res.string.ai_edit_blocked_loading)
+                },
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.bodyMedium,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
             )
-            if (preview.batch.isNotEmpty()) {
-                Icon(
-                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    contentDescription =
-                        stringResource(if (expanded) Res.string.ai_collapse else Res.string.ai_expand),
-                )
-            }
         }
         if (expanded) {
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {

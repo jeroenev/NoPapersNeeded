@@ -47,14 +47,60 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
-/** The documents the next batch would process ([batch]) out of [total] still in scope. */
+/**
+ * The documents the next batch would process ([batch]) out of [total] still in scope.
+ *
+ * [loaded] separates "the scope query has answered and the answer is none" from "it has not
+ * answered yet", which a bare count cannot: without it an opening page claims zero documents for
+ * as long as the (possibly library-wide) query takes, and the user reads that as a broken scope.
+ */
 data class ScopePreview(
     val total: Int,
     val batch: List<DocListItem>,
+    val loaded: Boolean = true,
 ) {
     companion object {
-        val EMPTY = ScopePreview(0, emptyList())
+        val EMPTY = ScopePreview(0, emptyList(), loaded = false)
     }
+}
+
+/**
+ * What one Start would buy: [documents] in scope and [requests] model calls actually made now —
+ * the whole scope for a background run, one batch for a run reviewed here.
+ */
+data class RunPlan(
+    val documents: Int,
+    val requests: Int,
+    val background: Boolean,
+    val loaded: Boolean,
+) {
+    /** Whether the run is big enough that Start should ask first. */
+    val needsConfirmation: Boolean get() = requests > CONFIRM_ABOVE_REQUESTS
+
+    companion object {
+        val EMPTY = RunPlan(documents = 0, requests = 0, background = false, loaded = false)
+
+        /**
+         * Above this many model calls, Start asks for confirmation.
+         *
+         * Deliberately well above [AiTagging.BACKGROUND_THRESHOLD_DOCS]: that threshold answers
+         * "should a person wait for this", which is true of runs far too small to be worth a
+         * dialog. This one answers "is this a bulk commitment of the user's money" — a scope
+         * picked by filter can be the whole library, and "All documents" is one tap away from the
+         * scope they meant.
+         */
+        const val CONFIRM_ABOVE_REQUESTS = 50
+    }
+}
+
+/** Why Start is inert, in the order the user should fix them. Null means the run is ready. */
+enum class StartBlocker {
+    NO_TASK,
+    TOO_MANY_FIELDS,
+    NOTHING_REQUESTED,
+    NO_SAVED_VIEW,
+    LOADING_SCOPE,
+    NO_DOCUMENTS,
 }
 
 /** UI-level per-field autofill configuration for a run. */
@@ -118,6 +164,17 @@ data class AiEditUiState(
     val savedViews: List<SavedView> = emptyList(),
     val savedViewId: String? = null,
     val phase: EditPhase = EditPhase.Idle,
+    /**
+     * The job the user picked, or null while they have not picked one — in which case the page
+     * shows only the task chooser. See [EditTask].
+     */
+    val task: EditTask? = null,
+    /**
+     * Whether the field registry has answered yet. The field list is the only part of the form
+     * that arrives asynchronously, and an empty list is otherwise indistinguishable from a library
+     * with no fields.
+     */
+    val registryLoaded: Boolean = false,
     val maxTags: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
     val maxNewTags: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
     val batchSize: Int = AiTagging.DEFAULT_BATCH_DOCS,
@@ -149,15 +206,33 @@ data class AiEditUiState(
 private fun AiEditUiState.runsInBackground(count: Int): Boolean =
     backgroundOverride ?: (count > AiTagging.BACKGROUND_THRESHOLD_DOCS)
 
-/** Whether the configured run asks the model for anything at all (drives the Start affordance). */
+/**
+ * Whether the configured run asks the model for anything at all (drives the Start affordance).
+ *
+ * A custom prompt on its own deliberately does NOT count. The reply contract is built from the
+ * requested sections (see `AiPrompts.editSystem`), so a prompt-only run asks the model to answer
+ * with an object that has no allowed keys — it can only come back empty, having cost a request per
+ * document. The prompt refines a run; it cannot be one.
+ */
 fun AiEditUiState.hasEdits(): Boolean =
-    !tooManyFields &&
-        (
-            includeTags ||
-                includeTagRemovals ||
-                fieldOptions.values.any { it.enabled } ||
-                customPrompt.isNotBlank()
-        )
+    !tooManyFields && (includeTags || includeTagRemovals || fieldOptions.values.any { it.enabled })
+
+/**
+ * Why the run cannot start yet, most fixable first, or null when it can. Lives here rather than in
+ * the composables because every entry is a policy statement about the run, not about the layout —
+ * and because a disabled button with no reason is the single most common complaint about a form
+ * this dense.
+ */
+internal fun AiEditUiState.startBlocker(preview: ScopePreview): StartBlocker? =
+    when {
+        task == null -> StartBlocker.NO_TASK
+        tooManyFields -> StartBlocker.TOO_MANY_FIELDS
+        !hasEdits() -> StartBlocker.NOTHING_REQUESTED
+        scope == EditScope.SAVED_VIEW && savedViews.none { it.id == savedViewId } -> StartBlocker.NO_SAVED_VIEW
+        !preview.loaded -> StartBlocker.LOADING_SCOPE
+        preview.total == 0 -> StartBlocker.NO_DOCUMENTS
+        else -> null
+    }
 
 /** Whether [scope] can be picked: the hand-off, review mode and saved views gate three of them. */
 fun AiEditUiState.scopeAvailable(scope: EditScope): Boolean =
@@ -262,14 +337,28 @@ class AiEditViewModel(
         viewModelScope.launch {
             fieldRegistry.fields.collect { defs ->
                 _ui.update { state ->
-                    val seeded =
-                        state.fieldOptions.ifEmpty {
-                            defs.filter { it.aiEnabled }.associate { it.key to AiFieldOption() }
-                        }
-                    state.copy(fields = defs, fieldOptions = seeded)
+                    if (state.registryLoaded) state.copy(fields = defs) else state.seedFields(defs)
                 }
             }
         }
+    }
+
+    /**
+     * First registry answer: build the field rows, then let the chosen task have the last word.
+     *
+     * Re-applying the task here is what makes "Fill missing metadata" land on its field-based
+     * scope even when it was picked before the registry answered — that scope is unavailable while
+     * no field is enabled, so the preset would otherwise have silently fallen back. Only the first
+     * emission does this; later ones must never stomp what the user has since configured.
+     */
+    private fun AiEditUiState.seedFields(defs: List<FieldDef>): AiEditUiState {
+        val seeded =
+            copy(
+                fields = defs,
+                registryLoaded = true,
+                fieldOptions = defs.filter { it.aiEnabled }.associate { it.key to AiFieldOption() },
+            )
+        return seeded.task?.let(seeded::withTask) ?: seeded
     }
 
     /**
@@ -282,18 +371,32 @@ class AiEditViewModel(
             .flatMapLatest { (key, done) ->
                 edit.docsFor(key).map { docs ->
                     val remaining = docs.filterNot { it.doc.docId in done }
-                    ScopePreview(remaining.size, remaining.take(key.batchSize))
+                    ScopePreview(remaining.size, remaining.take(key.batchSize), loaded = true)
                 }
             }.stateIn(viewModelScope, WhileSubscribedTimeout, ScopePreview.EMPTY)
 
     /**
-     * Whether the currently configured run would go to the background queue, given the live scope
-     * size. Derived here (not in the composables) so the size threshold stays a viewmodel/domain
-     * policy; [start] re-resolves the decision against a fresh count when the run actually begins.
+     * What one Start would buy right now: where it runs, how many documents are in scope and how
+     * many model calls that actually costs. Derived here (not in the composables) so the size
+     * threshold stays a viewmodel/domain policy; [start] re-resolves the placement against a fresh
+     * count when the run actually begins.
      */
-    val runsInBackground: StateFlow<Boolean> =
-        combine(_ui, preview) { state, p -> state.runsInBackground(p.total) }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, false)
+    val plan: StateFlow<RunPlan> =
+        combine(_ui, preview) { state, p ->
+            val background = state.runsInBackground(p.total)
+            RunPlan(
+                documents = p.total,
+                // A backgrounded run covers the whole scope; one reviewed here stops at a batch.
+                requests = if (background) p.total else minOf(p.total, state.batchSize),
+                background = background,
+                loaded = p.loaded,
+            )
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, RunPlan.EMPTY)
+
+    /** Why Start is inert, or null when the run is ready; see [AiEditUiState.startBlocker]. */
+    val startBlocker: StateFlow<StartBlocker?> =
+        combine(_ui, preview) { state, p -> state.startBlocker(p) }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, StartBlocker.NO_TASK)
 
     private var run: Job? = null
 
@@ -321,6 +424,23 @@ class AiEditViewModel(
                 )
             }
         }
+    }
+
+    /**
+     * Pick the job this run does, applying its preset over the current configuration (Idle only).
+     *
+     * Also the way back: re-picking the task the run already carries resets it to the preset, so a
+     * form the user has edited into a corner has a one-click way out.
+     */
+    fun setTask(task: EditTask) {
+        if (_ui.value.phase != EditPhase.Idle) return
+        _ui.update { it.withTask(task) }
+    }
+
+    /** Drop back to the task chooser, keeping the scope and the numeric overrides (Idle only). */
+    fun clearTask() {
+        if (_ui.value.phase != EditPhase.Idle) return
+        _ui.update { it.copy(task = null) }
     }
 
     /** Change the scope (Idle only); unavailable scopes are ignored. */
@@ -377,7 +497,7 @@ class AiEditViewModel(
             ) {
                 it
             } else {
-                it.copy(fieldOptions = it.fieldOptions + (key to AiFieldOption()))
+                it.asCustom().copy(fieldOptions = it.fieldOptions + (key to AiFieldOption()))
             }
         }
     }
@@ -385,19 +505,19 @@ class AiEditViewModel(
     /** Toggle whether tag additions are suggested at all (Idle only). */
     fun setIncludeTags(value: Boolean) {
         if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.copy(includeTags = value) }
+        _ui.update { it.asCustom().copy(includeTags = value) }
     }
 
     /** Toggle whether the model may invent tags outside the current vocabulary (Idle only). */
     fun setAllowNewTags(value: Boolean) {
         if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.copy(allowNewTags = value) }
+        _ui.update { it.asCustom().copy(allowNewTags = value) }
     }
 
     /** Toggle whether tag removals are suggested (Idle only). */
     fun setIncludeTagRemovals(value: Boolean) {
         if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.copy(includeTagRemovals = value) }
+        _ui.update { it.asCustom().copy(includeTagRemovals = value) }
     }
 
     /** Set the free-text extra instructions (Idle only). */
@@ -419,9 +539,18 @@ class AiEditViewModel(
         if (_ui.value.phase != EditPhase.Idle) return
         _ui.update {
             val option = it.fieldOptions[key] ?: return@update it
-            it.copy(fieldOptions = it.fieldOptions + (key to transform(option)))
+            it.asCustom().copy(fieldOptions = it.fieldOptions + (key to transform(option)))
         }
     }
+
+    /**
+     * Editing what a task stands for makes the run custom, so the chosen task never describes a
+     * configuration the user has edited away. The document scope and the numeric caps are
+     * deliberately not part of that identity: "fill missing metadata, but only in this saved view"
+     * is still the same job.
+     */
+    private fun AiEditUiState.asCustom(): AiEditUiState =
+        if (task == null || task == EditTask.CUSTOM) this else copy(task = EditTask.CUSTOM)
 
     /**
      * Start the run: suggest the next batch here, or hand the whole scope to the background queue.
@@ -430,7 +559,9 @@ class AiEditViewModel(
      */
     fun start() {
         if (run?.isActive == true) return
-        if (!_ui.value.hasEdits()) return
+        // The same gate the button reads, enforced here too: nothing may spend model calls while
+        // the page would tell the user why it cannot.
+        if (_ui.value.task == null || !_ui.value.hasEdits()) return
         run =
             viewModelScope.launch {
                 val remaining = edit.remainingDocs(_ui.value.scopeKey())
@@ -495,6 +626,9 @@ class AiEditViewModel(
     /** Select or deselect every suggestion of every document (Review phase only; no-op otherwise). */
     fun setAllSelection(selected: Boolean) = updateReview { it.setAllSelected(selected) }
 
+    /** Reset the batch to the pre-select policy; see [List.selectRecommended]. */
+    fun selectRecommended() = updateReview { it.selectRecommended() }
+
     /** Apply a selection transform to the current Review batch; a no-op in every other phase. */
     private fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
         _ui.update { state ->
@@ -513,6 +647,17 @@ class AiEditViewModel(
     fun nextBatch() {
         if (_ui.value.phase !is EditPhase.Done) return
         start()
+    }
+
+    /**
+     * Return to the setup form from a terminal phase, keeping the run's configuration and the
+     * documents it already spent. The way to change one's mind between batches without leaving the
+     * page and losing which documents were already reviewed.
+     */
+    fun reconfigure() {
+        val phase = _ui.value.phase
+        if (phase !is EditPhase.Done && phase !is EditPhase.Queued) return
+        _ui.update { it.copy(phase = EditPhase.Idle) }
     }
 
     private suspend fun suggestBatch() {

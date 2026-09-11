@@ -103,6 +103,9 @@ class AiEditReviewViewModel(
 
     fun setAllSelection(selected: Boolean) = updateReview { it.setAllSelected(selected) }
 
+    /** Reset the batch to the pre-select policy; see [List.selectRecommended]. */
+    fun selectRecommended() = updateReview { it.selectRecommended() }
+
     private fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
         _phase.update { phase ->
             val current = phase as? QueuedReviewPhase.Review ?: return@update phase

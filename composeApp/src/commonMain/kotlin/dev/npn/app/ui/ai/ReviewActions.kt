@@ -4,6 +4,19 @@ import dev.npn.core.app.ReviewChip
 import dev.npn.core.app.ReviewDoc
 
 /**
+ * What leaving a Review without applying actually does, which differs between the two flows and
+ * must not be worded as if it did not: the interactive run keeps its scope and can suggest a next
+ * batch, while a queued run is the only copy of an answer already paid for and is destroyed.
+ */
+internal enum class ReviewExit {
+    /** Interactive run: this batch is skipped, its documents stay reviewed, the scope remains. */
+    SKIP_BATCH,
+
+    /** Queued run: the stored suggestions are discarded and the run leaves the processing queue. */
+    DISCARD_RUN,
+}
+
+/**
  * Everything the user can do to a Review batch, bundled so the batch renders identically wherever
  * it appears: the interactive AI-edit run and a queued run opened from the processing queue drive
  * the same widgets and must not grow separate ones.
@@ -13,8 +26,11 @@ internal data class ReviewActions(
     val onToggleField: (docId: String, key: String) -> Unit,
     val onSetDoc: (String, Boolean) -> Unit,
     val onSetAll: (Boolean) -> Unit,
+    val onSelectRecommended: () -> Unit,
     val onApply: () -> Unit,
-    val onSkip: () -> Unit,
+    val onExit: () -> Unit,
+    val onOpenDoc: (String) -> Unit,
+    val exit: ReviewExit,
 )
 
 /**
@@ -51,6 +67,33 @@ internal fun List<ReviewDoc>.setDocSelection(
 
 /** Select or deselect every suggestion of every document. */
 internal fun List<ReviewDoc>.setAllSelected(selected: Boolean): List<ReviewDoc> = map { it.withAllSelected(selected) }
+
+/**
+ * Select exactly the suggestions that need no judgement — reusing a tag the library already has,
+ * filling a field that is empty — and deselect the rest.
+ *
+ * This is the domain's own pre-select policy expressed as a transform, which is what makes it a
+ * safe bulk action: "select all" also ticks the three kinds of suggestion the projector
+ * deliberately left off (invented tags, tag removals, values that would replace something), so
+ * offering it as *the* prominent shortcut quietly undoes the one guard rail this screen has.
+ */
+internal fun List<ReviewDoc>.selectRecommended(): List<ReviewDoc> =
+    map { doc ->
+        doc.copy(
+            chips = doc.chips.map { it.copy(selected = !it.isNew) },
+            removals = doc.removals.map { it.copy(selected = false) },
+            fields = doc.fields.map { it.copy(selected = it.current == null) },
+        )
+    }
+
+/**
+ * How many suggestions in the batch are the kind a person has to decide about, so the header can
+ * say so instead of leaving the user to notice one overwrite among two hundred rows.
+ */
+internal fun List<ReviewDoc>.attentionCount(): Int =
+    sumOf { doc ->
+        doc.chips.count { it.isNew } + doc.removals.size + doc.fields.count { it.current != null }
+    }
 
 private fun List<ReviewDoc>.mapDoc(
     docId: String,

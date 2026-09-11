@@ -44,6 +44,7 @@ fun AiEditReviewScreen(
     session: LibrarySession,
     jobId: String,
     onBack: () -> Unit,
+    onOpenDoc: (String) -> Unit,
 ) {
     val vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) }
     val phase by vm.phase.collectAsStateWithLifecycle()
@@ -57,8 +58,13 @@ fun AiEditReviewScreen(
                 onToggleField = vm::toggleField,
                 onSetDoc = vm::setDocSelection,
                 onSetAll = vm::setAllSelection,
+                onSelectRecommended = vm::selectRecommended,
                 onApply = vm::apply,
-                onSkip = vm::skip,
+                onExit = vm::skip,
+                onOpenDoc = onOpenDoc,
+                // This flow's exit destroys the only copy of an answer already paid for, so it is
+                // labelled and confirmed as the destructive action it is.
+                exit = ReviewExit.DISCARD_RUN,
             )
         }
 

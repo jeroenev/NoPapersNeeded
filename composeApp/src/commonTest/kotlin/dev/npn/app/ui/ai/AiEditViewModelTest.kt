@@ -7,6 +7,7 @@ import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.doc
 import dev.npn.app.resolveEnglish
+import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.FieldSuggestion
@@ -16,6 +17,9 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.app.EditScope
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.ReviewChip
+import dev.npn.core.app.ReviewDoc
+import dev.npn.core.app.ReviewField
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
 import dev.npn.core.model.FieldDef
@@ -64,12 +68,18 @@ private fun edit(
  * A viewmodel with the run pinned to the foreground unless a test says otherwise. Left to itself
  * the background default depends on the scope size, which is not what most of these tests are
  * about; the ones that *are* pass `background = null` and let it decide.
+ *
+ * The task defaults to [EditTask.CUSTOM] — the everything-on preset — because that is what these
+ * tests were written against, and because a page with no task chosen deliberately configures
+ * nothing. Preset behaviour has its own suite in [AiEditTaskTest].
  */
 private fun vm(
     session: FakeLibrarySession = FakeLibrarySession(),
     settings: FakeSettingsRepository = FakeSettingsRepository(),
     background: Boolean? = false,
+    task: EditTask? = EditTask.CUSTOM,
 ) = AiEditViewModel(session, settings).also { model ->
+    task?.let(model::setTask)
     background?.let(model::setBackground)
 }
 
@@ -445,6 +455,7 @@ class AiEditConfigurationTest : MainDispatcherTest() {
             val model = AiEditViewModel(session, FakeSettingsRepository(), listOf("a", "c"))
             val jobs = listOf(launch { model.ui.collect {} }, launch { model.preview.collect {} })
             advanceUntilIdle()
+            model.setTask(EditTask.CUSTOM)
 
             model.ui.value.scope shouldBe EditScope.SELECTION
             model.ui.value.selectionSize shouldBe 2
@@ -1150,4 +1161,328 @@ class AiEditBackgroundTest : MainDispatcherTest() {
             job.cancel()
             messageJob.cancel()
         }
+
+    @Test
+    fun aRunPlanCountsWhatOneStartActuallySpends() =
+        runTest(dispatcher) {
+            val session = sessionOf(AiTagging.DEFAULT_BATCH_DOCS + 10)
+            val model = vm(session, background = false)
+            val jobs = listOf(launch { model.ui.collect {} }, launch { model.plan.collect {} })
+            advanceUntilIdle()
+            model.setScope(EditScope.ALL)
+            advanceUntilIdle()
+
+            // Reviewed here: one batch is bought now, however big the scope is.
+            model.plan.value.documents shouldBe AiTagging.DEFAULT_BATCH_DOCS + 10
+            model.plan.value.requests shouldBe AiTagging.DEFAULT_BATCH_DOCS
+
+            // Queued: the whole scope is bought, so that is what the user is told.
+            model.setBackground(true)
+            advanceUntilIdle()
+            model.plan.value.requests shouldBe AiTagging.DEFAULT_BATCH_DOCS + 10
+            jobs.forEach { it.cancel() }
+        }
+}
+
+/**
+ * Task presets. A task is a named combination of the same knobs the form exposes by hand, so what
+ * matters is that picking one lands on that combination and that editing it away is honest about
+ * having done so.
+ */
+class AiEditTaskTest : MainDispatcherTest() {
+    private fun model(session: FakeLibrarySession = FakeLibrarySession()) =
+        AiEditViewModel(session, FakeSettingsRepository())
+
+    @Test
+    fun organizingUntaggedDocumentsAsksForTagsOnly() =
+        runTest(dispatcher) {
+            val model = model()
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            model.setTask(EditTask.ORGANIZE_UNTAGGED)
+
+            model.ui.value.scope shouldBe EditScope.UNTAGGED
+            model.ui.value.includeTags shouldBe true
+            model.ui.value.allowNewTags shouldBe true
+            model.ui.value.includeTagRemovals shouldBe false
+            model.ui.value.fieldOptions.values
+                .none { it.enabled } shouldBe true
+            job.cancel()
+        }
+
+    @Test
+    fun cleaningUpTagsNeverInventsNewOnes() =
+        runTest(dispatcher) {
+            val model = model()
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            model.setTask(EditTask.CLEAN_UP_TAGS)
+
+            model.ui.value.scope shouldBe EditScope.ALL
+            model.ui.value.includeTags shouldBe true
+            model.ui.value.includeTagRemovals shouldBe true
+            // The point of a clean-up is fewer distinct tags, so the run may not add to the
+            // vocabulary while doing it.
+            model.ui.value.allowNewTags shouldBe false
+            job.cancel()
+        }
+
+    @Test
+    fun fillingFieldsTargetsTheDocumentsMissingThemAndTouchesNoTags() =
+        runTest(dispatcher) {
+            val model = model()
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            model.setTask(EditTask.FILL_FIELDS)
+
+            model.ui.value.scope shouldBe EditScope.MISSING_FIELDS
+            model.ui.value.includeTags shouldBe false
+            model.ui.value.includeTagRemovals shouldBe false
+            model.ui.value.fieldOptions.keys shouldContainExactlyInAnyOrder seededAiFieldKeys
+            model.ui.value.fieldOptions.values
+                .all { it.enabled && it.mode == AiFieldMode.UNFILLED } shouldBe true
+            job.cancel()
+        }
+
+    @Test
+    fun aTaskPickedBeforeTheRegistryArrivesStillLandsOnItsScope() =
+        runTest(dispatcher) {
+            val model = model()
+            val job = launch { model.ui.collect {} }
+
+            // No advanceUntilIdle: the field registry has not answered, so the field-based scope
+            // is not available yet and the preset cannot take it.
+            model.setTask(EditTask.FILL_FIELDS)
+            model.ui.value.scope shouldBe EditScope.UNTAGGED
+
+            advanceUntilIdle()
+
+            // Seeding the fields finishes applying the task rather than leaving the fallback.
+            model.ui.value.scope shouldBe EditScope.MISSING_FIELDS
+            model.ui.value.fieldOptions.values
+                .all { it.enabled } shouldBe true
+            job.cancel()
+        }
+
+    @Test
+    fun aHandedOverSelectionOutranksThePresetScope() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { documents.documents.value = listOf(item("a")) }
+            val model = AiEditViewModel(session, FakeSettingsRepository(), listOf("a"))
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            // The user already said which documents; the task says what to do to those.
+            model.setTask(EditTask.CLEAN_UP_TAGS)
+            model.ui.value.scope shouldBe EditScope.SELECTION
+            job.cancel()
+        }
+
+    @Test
+    fun editingWhatATaskStandsForMakesTheRunCustom() =
+        runTest(dispatcher) {
+            val model = model()
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setTask(EditTask.ORGANIZE_UNTAGGED)
+
+            model.setIncludeTagRemovals(true)
+
+            model.ui.value.task shouldBe EditTask.CUSTOM
+            model.ui.value.includeTagRemovals shouldBe true
+            job.cancel()
+        }
+
+    @Test
+    fun choosingWhereToRunOrWhichDocumentsKeepsTheTask() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"))
+                    savedViews.views.value =
+                        listOf(SavedView("v1", "Invoices", LibraryFilter(), LibrarySort()))
+                }
+            val model = model(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setTask(EditTask.FILL_FIELDS)
+
+            // Same job, different paperwork: neither of these changes what the run asks for.
+            model.setScope(EditScope.SAVED_VIEW)
+            model.setBackground(true)
+            model.setBatchSize(3)
+            model.setCustomPrompt("prefer the sender on the letterhead")
+
+            model.ui.value.task shouldBe EditTask.FILL_FIELDS
+            job.cancel()
+        }
+
+    @Test
+    fun rePickingTheCurrentTaskResetsItsEdits() =
+        runTest(dispatcher) {
+            val model = model()
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setTask(EditTask.FILL_FIELDS)
+            model.setIncludeTags(true)
+            model.setFieldMode(FieldKeys.TITLE, AiFieldMode.ALL)
+            model.ui.value.task shouldBe EditTask.CUSTOM
+
+            model.setTask(EditTask.FILL_FIELDS)
+
+            model.ui.value.task shouldBe EditTask.FILL_FIELDS
+            model.ui.value.includeTags shouldBe false
+            model.ui.value.fieldOptions
+                .getValue(FieldKeys.TITLE)
+                .mode shouldBe AiFieldMode.UNFILLED
+            job.cancel()
+        }
+
+    @Test
+    fun startDoesNothingUntilATaskIsChosen() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"))
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                }
+            val model = model(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            model.start()
+            advanceUntilIdle()
+
+            session.aiSuggest.suggestEditsCalls shouldBe emptyList()
+            model.ui.value.phase shouldBe EditPhase.Idle
+            job.cancel()
+        }
+
+    @Test
+    fun clearingTheTaskReturnsToTheChooser() =
+        runTest(dispatcher) {
+            val model = model()
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setTask(EditTask.CLEAN_UP_TAGS)
+
+            model.clearTask()
+
+            model.ui.value.task shouldBe null
+            job.cancel()
+        }
+}
+
+/**
+ * Why Start is inert. Tested against the pure projection rather than the flow, because the
+ * question is which reason wins for a given configuration, not when a StateFlow emits.
+ */
+class AiEditStartBlockerTest {
+    private val ready =
+        AiEditUiState(
+            task = EditTask.CUSTOM,
+            registryLoaded = true,
+            fieldOptions = mapOf(FieldKeys.TITLE to AiFieldOption()),
+        )
+    private val loaded = ScopePreview(total = 3, batch = emptyList(), loaded = true)
+
+    @Test
+    fun aReadyRunHasNoBlocker() {
+        ready.startBlocker(loaded) shouldBe null
+    }
+
+    @Test
+    fun noTaskComesFirst() {
+        // Even with nothing else configured, the first thing to fix is the first question asked.
+        ready
+            .copy(task = null, includeTags = false, fieldOptions = emptyMap())
+            .startBlocker(loaded) shouldBe StartBlocker.NO_TASK
+    }
+
+    @Test
+    fun aPromptOnItsOwnIsNotAnEdit() {
+        // A prompt-only run asks the model for an object with no allowed keys: it can only come
+        // back empty, one paid request per document.
+        val promptOnly =
+            ready.copy(
+                includeTags = false,
+                includeTagRemovals = false,
+                fieldOptions = emptyMap(),
+                customPrompt = "merge tags that differ only in case",
+            )
+        promptOnly.hasEdits() shouldBe false
+        promptOnly.startBlocker(loaded) shouldBe StartBlocker.NOTHING_REQUESTED
+    }
+
+    @Test
+    fun tooManyFieldsBeatsEverythingElseRequested() {
+        val fields = (1..AiEditRequest.MAX_FIELDS_PER_RUN + 1).associate { "f$it" to AiFieldOption() }
+        ready.copy(fieldOptions = fields).startBlocker(loaded) shouldBe StartBlocker.TOO_MANY_FIELDS
+    }
+
+    @Test
+    fun aSavedViewScopeNeedsAView() {
+        ready.copy(scope = EditScope.SAVED_VIEW).startBlocker(loaded) shouldBe StartBlocker.NO_SAVED_VIEW
+    }
+
+    @Test
+    fun anUnansweredScopeQueryIsNotAnEmptyScope() {
+        // The distinction the loaded flag exists for: this must not read as "no documents".
+        ready.startBlocker(ScopePreview.EMPTY) shouldBe StartBlocker.LOADING_SCOPE
+        ready.startBlocker(loaded.copy(total = 0)) shouldBe StartBlocker.NO_DOCUMENTS
+    }
+}
+
+/**
+ * Bulk selection over a review batch. "Recommended" has to mean exactly what the domain's
+ * pre-select policy means, or the header's shortcut quietly disagrees with the rows.
+ */
+class ReviewSelectionTest {
+    private val docs =
+        listOf(
+            ReviewDoc(
+                docId = "a",
+                title = "A",
+                fileName = "a.pdf",
+                snippet = null,
+                chips =
+                    listOf(
+                        ReviewChip("invoice", isNew = false, selected = false),
+                        ReviewChip("brandnew", isNew = true, selected = true),
+                    ),
+                removals = listOf(ReviewChip("utility", isNew = false, selected = true)),
+                fields =
+                    listOf(
+                        ReviewField("title", "Title", "New", current = null, selected = false),
+                        ReviewField("correspondent", "From", "Acme", current = "Old", selected = true),
+                    ),
+            ),
+        )
+
+    @Test
+    fun recommendedIsExistingTagsAndEmptyFieldsOnly() {
+        val doc = docs.selectRecommended().single()
+
+        doc.chips.single { it.tag == "invoice" }.selected shouldBe true
+        doc.chips.single { it.tag == "brandnew" }.selected shouldBe false
+        doc.removals.single().selected shouldBe false
+        doc.fields.single { it.key == "title" }.selected shouldBe true
+        doc.fields.single { it.key == "correspondent" }.selected shouldBe false
+    }
+
+    @Test
+    fun attentionCountsInventedTagsRemovalsAndOverwrites() {
+        docs.attentionCount() shouldBe 3
+    }
+
+    @Test
+    fun selectAllStillTakesEverythingIncludingTheRiskyOnes() {
+        val doc = docs.setAllSelected(true).single()
+
+        (doc.chips + doc.removals).all { it.selected } shouldBe true
+        doc.fields.all { it.selected } shouldBe true
+    }
 }

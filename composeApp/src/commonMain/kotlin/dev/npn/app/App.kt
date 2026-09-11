@@ -498,6 +498,9 @@ private fun NavGraphBuilder.aiRoutes(
             settings = settings,
             onBack = { nav.popBackStack() },
             onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
+            // Pushed on top of the review, so coming back finds the batch and its ticked boxes
+            // exactly as they were.
+            onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
             selection = selection,
         )
     }
@@ -506,6 +509,7 @@ private fun NavGraphBuilder.aiRoutes(
             session = session,
             jobId = entry.toRoute<Route.AiEditReview>().jobId,
             onBack = { nav.popBackStack() },
+            onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
         )
     }
 }

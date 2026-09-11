@@ -25,6 +25,16 @@
     <string name="ai_edit_title">AI-bewerken</string>
     <string name="ai_edit_applying">Suggesties toepassen...</string>
     <string name="ai_edit_intro">Automatiseer bewerkingen over een reeks documenten</string>
+    <string name="ai_edit_task_question">Wat wil je doen?</string>
+    <string name="ai_edit_task_organize">Documenten zonder tags opruimen</string>
+    <string name="ai_edit_task_organize_help">Stel tags voor bij documenten die er nog geen hebben.</string>
+    <string name="ai_edit_task_fill">Ontbrekende metadata invullen</string>
+    <string name="ai_edit_task_fill_help">Vul lege velden in zoals titel, correspondent en datum.</string>
+    <string name="ai_edit_task_clean_tags">Tags opschonen</string>
+    <string name="ai_edit_task_clean_tags_help">Hergebruik de tags die je al hebt en stel voor tags te laten vallen die niet passen.</string>
+    <string name="ai_edit_task_custom">Aangepaste bewerking</string>
+    <string name="ai_edit_task_custom_help">Kies zelf de tags, velden en instructies.</string>
+    <string name="ai_edit_task_change">Andere taak kiezen</string>
     <string name="ai_edit_scope">Documenten</string>
     <string name="ai_edit_scope_selection">Geselecteerde documenten (%1$d)</string>
     <string name="ai_edit_untagged_documents">Documenten zonder tags</string>
@@ -34,10 +44,12 @@
     <string name="ai_edit_saved_view_choose">Kies een weergave</string>
     <string name="ai_edit_all_documents">Alle documenten</string>
     <string name="ai_edit_fields">Velden automatisch invullen</string>
-    <string name="ai_edit_fields_help">Overschrijven vervangt ook waarden die al ingevuld zijn.</string>
+    <string name="ai_edit_fields_help">Elk veld wordt alleen ingevuld waar het leeg is, tenzij je bestaande waarden laat vervangen.</string>
+    <string name="ai_edit_fields_loading">Velden laden...</string>
     <string name="ai_edit_add_field">Veld aan deze run toevoegen</string>
     <string name="ai_edit_too_many_fields">Kies hoogstens %1$d velden per run; met meer weegt het antwoord zwaarder dan het document.</string>
-    <string name="ai_edit_overwrite">Overschrijven</string>
+    <string name="ai_edit_field_mode_unfilled">Alleen lege waarden invullen</string>
+    <string name="ai_edit_field_mode_all">Ook bestaande waarden vervangen</string>
     <string name="ai_edit_tags">Tags</string>
     <string name="ai_edit_suggest_tags">Tags voorstellen</string>
     <string name="ai_edit_suggest_tags_help">Stel tags voor per document</string>
@@ -48,25 +60,60 @@
     <string name="ai_edit_custom_prompt">Extra instructies (optioneel)</string>
     <string name="ai_edit_custom_prompt_hint">bijv. tags samenvoegen die alleen in hoofdletters verschillen, of een correspondentnaam standaardiseren</string>
     <string name="ai_edit_remove_tags_label">Verwijderen</string>
+    <string name="ai_edit_add_tag">Tag toevoegen</string>
+    <string name="ai_edit_remove_tag">Tag verwijderen</string>
     <string name="ai_edit_options">Opties</string>
+    <string name="ai_edit_advanced">Geavanceerde opties</string>
+    <string name="ai_edit_advanced_help">Limieten voor deze run. De standaardwaarden komen uit Instellingen.</string>
     <string name="ai_edit_tags_per_document">Tags per document</string>
     <string name="ai_edit_new_tags_per_document">Nieuwe tags per document</string>
     <string name="ai_edit_documents_per_batch">Documenten per batch</string>
     <string name="ai_edit_range">%1$d-%2$d</string>
     <string name="ai_edit_new_tags_range">%1$d-%2$d (%3$d = alleen bestaande)</string>
+    <string name="ai_edit_run_where">Wanneer uitvoeren</string>
+    <string name="ai_edit_run_now">Nu nakijken</string>
+    <string name="ai_edit_run_now_help">Stel één batch voor en kijk het resultaat hier na.</string>
     <string name="ai_edit_background">Op de achtergrond uitvoeren</string>
     <string name="ai_edit_background_help">Behandelt alle documenten in het bereik en loopt door nadat je deze pagina verlaat. De resultaten wachten in de verwerkingswachtrij tot je ze nakijkt; er wordt niets weggeschreven zonder jou.</string>
+    <string name="ai_edit_recommended">Aanbevolen</string>
     <string name="ai_edit_start">Start</string>
     <string name="ai_edit_start_background">Aan wachtrij toevoegen</string>
+    <string name="ai_edit_summary_tags">tags</string>
+    <string name="ai_edit_summary_tag_removals">tags verwijderen</string>
+    <string name="ai_edit_summary_prompt">extra instructies</string>
+    <string name="ai_edit_summary_nothing">Geen wijzigingen gevraagd</string>
+    <string name="ai_edit_blocked_no_task">Kies wat je wilt doen</string>
+    <string name="ai_edit_blocked_nothing">Kies minstens één soort wijziging</string>
+    <string name="ai_edit_blocked_no_documents">Geen documenten in dit bereik</string>
+    <string name="ai_edit_blocked_no_saved_view">Kies een opgeslagen weergave</string>
+    <string name="ai_edit_blocked_loading">Documenten tellen...</string>
+    <string name="ai_edit_confirm_large_title">%1$d documenten naar de AI sturen?</string>
+    <string name="ai_edit_confirm_large_message">Dat is één verzoek per document aan je AI-provider, wat geld kan kosten. Er wordt niets naar je bibliotheek weggeschreven zonder dat jij het nakijkt.</string>
+    <string name="ai_edit_confirm_large_confirm">Versturen</string>
+    <string name="ai_edit_cancel_title">Deze run stoppen?</string>
+    <string name="ai_edit_cancel_confirm">Stoppen</string>
+    <string name="ai_edit_cancel_keep">Doorgaan</string>
+    <string name="ai_edit_leave_title">Deze suggesties weggooien?</string>
+    <string name="ai_edit_leave_message">Ze zijn al gegenereerd. Als je nu weggaat, worden ze weggegooid zonder dat er iets naar je bibliotheek wordt weggeschreven.</string>
+    <string name="ai_edit_leave_confirm">Weggooien</string>
+    <string name="ai_edit_leave_stay">Blijven</string>
+    <string name="ai_edit_change_settings">Instellingen wijzigen</string>
     <string name="ai_edit_queued_open">Wachtrij openen</string>
     <string name="ai_edit_queued_review_title">AI-bewerking nakijken</string>
     <string name="ai_edit_queued_loading">Suggesties laden...</string>
     <string name="ai_edit_queued_gone">Deze bewerking is niet meer beschikbaar</string>
     <string name="ai_edit_queued_gone_subtitle">Ze is al nagekeken of weggegooid, of ze is nog bezig.</string>
-    <string name="ai_edit_suggesting_progress">Voorstellen - %1$d van %2$d</string>
+    <string name="ai_edit_suggesting_progress">%1$d van %2$d verwerkt</string>
+    <string name="ai_edit_suggesting_finishing">Nakijken voorbereiden...</string>
+    <string name="ai_edit_last_completed">Laatst afgerond: %1$s</string>
     <string name="ai_edit_select_all">Alles selecteren</string>
+    <string name="ai_edit_select_recommended">Aanbevolen selecteren</string>
     <string name="ai_edit_clear_selection">Wissen</string>
-    <string name="ai_edit_skip">Overslaan</string>
+    <string name="ai_edit_skip">Deze batch overslaan</string>
+    <string name="ai_edit_discard_run">Run weggooien</string>
+    <string name="ai_edit_discard_run_title">Deze run weggooien?</string>
+    <string name="ai_edit_discard_run_message">De suggesties zijn al gegenereerd. Weggooien haalt deze run uit de verwerkingswachtrij zonder iets weg te schrijven.</string>
+    <string name="ai_edit_open_document">Document openen</string>
     <string name="ai_edit_next_batch">Volgende batch</string>
     <string name="ai_edit_done">Gereed</string>
     <string name="ai_edit_replaces">Vervangt: %1$s</string>
@@ -82,5 +129,21 @@
     <plurals name="ai_edit_queued">
         <item quantity="one">%1$d document in de wachtrij. Je vindt de suggesties in de verwerkingswachtrij.</item>
         <item quantity="other">%1$d documenten in de wachtrij. Je vindt de suggesties in de verwerkingswachtrij.</item>
+    </plurals>
+    <plurals name="ai_edit_summary_fields">
+        <item quantity="one">%1$d veld</item>
+        <item quantity="other">%1$d velden</item>
+    </plurals>
+    <plurals name="ai_edit_summary_requests">
+        <item quantity="one">%1$d AI-verzoek</item>
+        <item quantity="other">%1$d AI-verzoeken</item>
+    </plurals>
+    <plurals name="ai_edit_cancel_message">
+        <item quantity="one">%1$d document heeft al suggesties; nu stoppen gooit ze weg.</item>
+        <item quantity="other">%1$d documenten hebben al suggesties; nu stoppen gooit ze weg.</item>
+    </plurals>
+    <plurals name="ai_edit_attention">
+        <item quantity="one">%1$d verdient een nadere blik</item>
+        <item quantity="other">%1$d verdienen een nadere blik</item>
     </plurals>
 </resources>

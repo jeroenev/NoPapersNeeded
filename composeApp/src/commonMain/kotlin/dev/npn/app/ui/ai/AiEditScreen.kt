@@ -23,22 +23,35 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.EditProgress
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_applying
+import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_confirm
+import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_keep
+import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_message
+import no_papers_needed.composeapp.generated.resources.ai_edit_cancel_title
 import no_papers_needed.composeapp.generated.resources.ai_edit_done
+import no_papers_needed.composeapp.generated.resources.ai_edit_last_completed
+import no_papers_needed.composeapp.generated.resources.ai_edit_leave_confirm
+import no_papers_needed.composeapp.generated.resources.ai_edit_leave_message
+import no_papers_needed.composeapp.generated.resources.ai_edit_leave_stay
+import no_papers_needed.composeapp.generated.resources.ai_edit_leave_title
 import no_papers_needed.composeapp.generated.resources.ai_edit_queued
 import no_papers_needed.composeapp.generated.resources.ai_edit_queued_open
+import no_papers_needed.composeapp.generated.resources.ai_edit_suggesting_finishing
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggesting_progress
 import no_papers_needed.composeapp.generated.resources.ai_edit_title
 import no_papers_needed.composeapp.generated.resources.common_back
@@ -56,6 +69,7 @@ fun AiEditScreen(
     settings: SettingsRepository,
     onBack: () -> Unit,
     onOpenQueue: () -> Unit,
+    onOpenDoc: (String) -> Unit,
     selection: List<String> = emptyList(),
 ) {
     val vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) }
@@ -70,17 +84,27 @@ fun AiEditScreen(
                 onToggleField = vm::toggleField,
                 onSetDoc = vm::setDocSelection,
                 onSetAll = vm::setAllSelection,
+                onSelectRecommended = vm::selectRecommended,
                 onApply = vm::apply,
-                onSkip = vm::skipReview,
+                onExit = vm::skipReview,
+                onOpenDoc = onOpenDoc,
+                exit = ReviewExit.SKIP_BATCH,
             )
         }
+
+    // Leaving mid-flight throws away answers that were already paid for, so Back asks first in
+    // exactly the phases where that is true.
+    var confirmingLeave by remember { mutableStateOf(false) }
+    val phase = ui.phase
+    val leavingCostsSuggestions = phase is EditPhase.Review || phase is EditPhase.Suggesting
+    val requestBack = { if (leavingCostsSuggestions) confirmingLeave = true else onBack() }
 
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text(stringResource(Res.string.ai_edit_title)) },
                 navigationIcon = {
-                    IconButton(onClick = onBack) {
+                    IconButton(onClick = requestBack) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack,
                             contentDescription = stringResource(Res.string.common_back),
@@ -92,43 +116,126 @@ fun AiEditScreen(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
-            when (val phase = ui.phase) {
-                is EditPhase.Idle -> AiEditSetup(ui, vm, session.content)
-                is EditPhase.Suggesting -> SuggestingPhase(phase.progress, vm::cancel)
-                is EditPhase.Review -> ReviewBatch(phase.docs, phase.emptyDocs, session.content, actions)
-                is EditPhase.Applying -> CenteredProgress(stringResource(Res.string.ai_edit_applying))
-                is EditPhase.Queued -> QueuedPhase(phase.documents, onOpenQueue, onBack)
-                is EditPhase.Done -> DonePhase(phase.result, vm::nextBatch, onBack)
-            }
+            EditPhaseContent(ui, vm, session, actions, onOpenQueue, onBack)
+        }
+    }
+    if (confirmingLeave) {
+        ConfirmDialog(
+            title = stringResource(Res.string.ai_edit_leave_title),
+            message = stringResource(Res.string.ai_edit_leave_message),
+            confirmLabel = stringResource(Res.string.ai_edit_leave_confirm),
+            dismissLabel = stringResource(Res.string.ai_edit_leave_stay),
+            destructive = true,
+            onConfirm = {
+                confirmingLeave = false
+                onBack()
+            },
+            onDismiss = { confirmingLeave = false },
+        )
+    }
+}
+
+/** The one step of the flow that is currently on screen; see [EditPhase]. */
+@Composable
+private fun EditPhaseContent(
+    ui: AiEditUiState,
+    vm: AiEditViewModel,
+    session: LibrarySession,
+    actions: ReviewActions,
+    onOpenQueue: () -> Unit,
+    onBack: () -> Unit,
+) {
+    when (val phase = ui.phase) {
+        is EditPhase.Idle -> {
+            AiEditSetup(ui, vm, session.content)
+        }
+
+        is EditPhase.Suggesting -> {
+            SuggestingPhase(phase.progress, vm::cancel)
+        }
+
+        is EditPhase.Review -> {
+            ReviewBatch(phase.docs, phase.emptyDocs, session.content, actions)
+        }
+
+        is EditPhase.Applying -> {
+            CenteredProgress(stringResource(Res.string.ai_edit_applying))
+        }
+
+        is EditPhase.Queued -> {
+            QueuedPhase(phase.documents, onOpenQueue, onBack)
+        }
+
+        is EditPhase.Done -> {
+            DonePhase(
+                result = phase.result,
+                onNextBatch = vm::nextBatch,
+                onBack = onBack,
+                onReconfigure = vm::reconfigure,
+            )
         }
     }
 }
 
+/**
+ * Suggestion progress.
+ *
+ * Reports documents *completed*, not the one being worked on: the run is concurrent
+ * ([dev.npn.core.app.AiEditRun]), so there is no single current document, and the title the run
+ * reports is the one that finished last. The count used to be `done + 1` to read as "working on
+ * number N", which meant a finished batch of twelve claimed "13 of 12".
+ */
 @Composable
 private fun SuggestingPhase(
     progress: EditProgress,
     onCancel: () -> Unit,
 ) {
+    var confirming by remember { mutableStateOf(false) }
     Column(
         Modifier.fillMaxSize().padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            stringResource(
-                Res.string.ai_edit_suggesting_progress,
-                progress.done + 1,
-                progress.total,
-            ),
+            stringResource(Res.string.ai_edit_suggesting_progress, progress.done, progress.total),
             style = MaterialTheme.typography.titleMedium,
         )
         val fraction = if (progress.total == 0) 0f else progress.done.toFloat() / progress.total
         LinearProgressIndicator(progress = { fraction }, modifier = Modifier.fillMaxWidth())
-        Text(
-            progress.currentDisplayTitle,
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (progress.done > 0) {
+            Text(
+                stringResource(Res.string.ai_edit_last_completed, progress.currentDisplayTitle),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        // The gap between the last answer and the Review is spent projecting suggestions onto the
+        // documents, which on a big batch is long enough to look like a stall.
+        if (progress.total > 0 && progress.done == progress.total) {
+            Text(
+                stringResource(Res.string.ai_edit_suggesting_finishing),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+        OutlinedButton(
+            onClick = { if (progress.done > 0) confirming = true else onCancel() },
+        ) {
+            Text(stringResource(Res.string.common_cancel))
+        }
+    }
+    if (confirming) {
+        ConfirmDialog(
+            title = stringResource(Res.string.ai_edit_cancel_title),
+            message = pluralStringResource(Res.plurals.ai_edit_cancel_message, progress.done, progress.done),
+            confirmLabel = stringResource(Res.string.ai_edit_cancel_confirm),
+            dismissLabel = stringResource(Res.string.ai_edit_cancel_keep),
+            destructive = true,
+            onConfirm = {
+                confirming = false
+                onCancel()
+            },
+            onDismiss = { confirming = false },
         )
-        OutlinedButton(onClick = onCancel) { Text(stringResource(Res.string.common_cancel)) }
     }
 }
 

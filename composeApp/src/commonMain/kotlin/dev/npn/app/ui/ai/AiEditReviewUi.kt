@@ -14,12 +14,11 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.selection.selectable
+import androidx.compose.foundation.selection.toggleable
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.outlined.AddCircleOutline
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.RemoveCircleOutline
 import androidx.compose.material3.Button
 import androidx.compose.material3.Checkbox
@@ -27,6 +26,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -41,10 +41,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.state.ToggleableState
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.UiTextKey
@@ -55,20 +57,31 @@ import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.ReviewDoc
 import dev.npn.core.app.ReviewField
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.ai_collapse
+import no_papers_needed.composeapp.generated.resources.ai_edit_add_tag
+import no_papers_needed.composeapp.generated.resources.ai_edit_attention
+import no_papers_needed.composeapp.generated.resources.ai_edit_change_settings
 import no_papers_needed.composeapp.generated.resources.ai_edit_clear_selection
+import no_papers_needed.composeapp.generated.resources.ai_edit_discard_run
+import no_papers_needed.composeapp.generated.resources.ai_edit_discard_run_message
+import no_papers_needed.composeapp.generated.resources.ai_edit_discard_run_title
 import no_papers_needed.composeapp.generated.resources.ai_edit_done
 import no_papers_needed.composeapp.generated.resources.ai_edit_next_batch
 import no_papers_needed.composeapp.generated.resources.ai_edit_no_suggestions
+import no_papers_needed.composeapp.generated.resources.ai_edit_open_document
+import no_papers_needed.composeapp.generated.resources.ai_edit_remove_tag
 import no_papers_needed.composeapp.generated.resources.ai_edit_remove_tags_label
 import no_papers_needed.composeapp.generated.resources.ai_edit_replaces
 import no_papers_needed.composeapp.generated.resources.ai_edit_select_all
+import no_papers_needed.composeapp.generated.resources.ai_edit_select_recommended
 import no_papers_needed.composeapp.generated.resources.ai_edit_skip
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggestions_selected
-import no_papers_needed.composeapp.generated.resources.ai_expand
 import no_papers_needed.composeapp.generated.resources.common_apply
+import no_papers_needed.composeapp.generated.resources.common_cancel
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
+
+/** Thumbnail size of a review row; big enough to recognise the page behind the suggestions. */
+private val ReviewThumbnailSize = 56.dp
 
 /**
  * One batch of suggestions awaiting confirmation: per-document chips and field rows, the
@@ -97,7 +110,7 @@ internal fun ReviewBatch(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { BatchSelectionHeader(selected, total, actions.onSetAll) }
+            item { BatchSelectionHeader(selected, total, docs.attentionCount(), actions) }
             items(docs, key = { it.docId }) { doc ->
                 ReviewRow(doc, content, actions)
             }
@@ -105,32 +118,47 @@ internal fun ReviewBatch(
                 item { NoSuggestionsSection(emptyDocs) }
             }
         }
-        ApplyBar(selected, docsWithSelection, actions.onApply, actions.onSkip)
+        ApplyBar(selected, docsWithSelection, actions)
     }
 }
 
+/**
+ * How much of the batch is selected, how much of it needs judgement, and the bulk actions.
+ *
+ * "Select recommended" leads because it is the only bulk action that respects the pre-select
+ * policy: "select all" also ticks invented tags, removals and overwrites, which the projector
+ * deliberately left off. A [FlowRow] so three actions plus a summary still fit a phone.
+ */
 @Composable
 private fun BatchSelectionHeader(
     selected: Int,
     total: Int,
-    onSetAll: (Boolean) -> Unit,
+    attention: Int,
+    actions: ReviewActions,
 ) {
-    Row(
-        Modifier.fillMaxWidth(),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-    ) {
+    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
             pluralStringResource(Res.plurals.ai_edit_suggestions_selected, total, selected, total),
-            Modifier.weight(1f),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        TextButton(onClick = { onSetAll(true) }) {
-            Text(stringResource(Res.string.ai_edit_select_all))
+        if (attention > 0) {
+            Text(
+                pluralStringResource(Res.plurals.ai_edit_attention, attention, attention),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.primary,
+            )
         }
-        TextButton(onClick = { onSetAll(false) }) {
-            Text(stringResource(Res.string.ai_edit_clear_selection))
+        FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            TextButton(onClick = actions.onSelectRecommended) {
+                Text(stringResource(Res.string.ai_edit_select_recommended))
+            }
+            TextButton(onClick = { actions.onSetAll(true) }) {
+                Text(stringResource(Res.string.ai_edit_select_all))
+            }
+            TextButton(onClick = { actions.onSetAll(false) }) {
+                Text(stringResource(Res.string.ai_edit_clear_selection))
+            }
         }
     }
 }
@@ -152,9 +180,20 @@ private fun ReviewRow(
             else -> ToggleableState.Indeterminate
         }
     Row(horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.Top) {
-        DocThumbnail(docId = doc.docId, content = content, size = 56.dp)
+        DocThumbnail(docId = doc.docId, content = content, size = ReviewThumbnailSize)
         Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Text(doc.displayTitle, style = MaterialTheme.typography.titleSmall)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Text(doc.displayTitle, Modifier.weight(1f), style = MaterialTheme.typography.titleSmall)
+                // The snippet is two lines of OCR text, which is not enough to judge a date or a
+                // correspondent against. This is the way to the page itself; the review survives
+                // the trip, because the screen stays on the back stack.
+                IconButton(onClick = { actions.onOpenDoc(doc.docId) }) {
+                    Icon(
+                        Icons.AutoMirrored.Filled.OpenInNew,
+                        contentDescription = stringResource(Res.string.ai_edit_open_document),
+                    )
+                }
+            }
             doc.snippet?.let {
                 Text(
                     it,
@@ -195,9 +234,11 @@ private fun AddChipsRow(
                 onClick = { onToggle(doc.docId, chip.tag) },
                 label = { TagSuggestionLabel(tag = chip.tag, isNew = chip.isNew) },
                 leadingIcon = {
+                    // Named, not decorative: add and remove chips are otherwise identical to a
+                    // screen reader, and they are opposite edits to the same tag.
                     Icon(
                         Icons.Outlined.AddCircleOutline,
-                        contentDescription = null,
+                        contentDescription = stringResource(Res.string.ai_edit_add_tag),
                         modifier = Modifier.size(FilterChipDefaults.IconSize),
                     )
                 },
@@ -227,7 +268,7 @@ private fun RemovalChipsRow(
                 leadingIcon = {
                     Icon(
                         Icons.Outlined.RemoveCircleOutline,
-                        contentDescription = null,
+                        contentDescription = stringResource(Res.string.ai_edit_remove_tag),
                         modifier = Modifier.size(FilterChipDefaults.IconSize),
                     )
                 },
@@ -258,10 +299,13 @@ private fun ReviewFieldRow(
     onToggle: () -> Unit,
 ) {
     Row(
-        Modifier.fillMaxWidth().selectable(selected = field.selected) { onToggle() },
+        Modifier
+            .fillMaxWidth()
+            .toggleable(value = field.selected, role = Role.Checkbox, onValueChange = { onToggle() }),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Checkbox(checked = field.selected, onCheckedChange = { onToggle() })
+        // Null callback: the row is the target, so the checkbox must not be a second one.
+        Checkbox(checked = field.selected, onCheckedChange = null)
         Column(Modifier.weight(1f).padding(start = 4.dp)) {
             Text(
                 field.label,
@@ -271,15 +315,17 @@ private fun ReviewFieldRow(
             Text(
                 field.value,
                 style = MaterialTheme.typography.bodyMedium,
-                maxLines = 2,
+                maxLines = 3,
                 overflow = TextOverflow.Ellipsis,
             )
+            // What this would destroy, in the error colour: it is the one suggestion kind that
+            // does not add to the library but replaces part of it.
             field.current?.let {
                 Text(
                     stringResource(Res.string.ai_edit_replaces, it),
                     style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    maxLines = 1,
+                    color = MaterialTheme.colorScheme.error,
+                    maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
                 )
             }
@@ -292,12 +338,10 @@ private fun NoSuggestionsSection(docs: List<ReviewDoc>) {
     var expanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth()) {
         HorizontalDivider()
-        Row(
-            Modifier
-                .fillMaxWidth()
-                .selectable(selected = expanded) { expanded = !expanded }
-                .padding(vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+        ExpanderRow(
+            expanded = expanded,
+            onToggle = { expanded = !expanded },
+            modifier = Modifier.padding(vertical = 8.dp),
         ) {
             Text(
                 pluralStringResource(
@@ -308,13 +352,6 @@ private fun NoSuggestionsSection(docs: List<ReviewDoc>) {
                 Modifier.weight(1f),
                 style = MaterialTheme.typography.titleSmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Icon(
-                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                contentDescription =
-                    stringResource(
-                        if (expanded) Res.string.ai_collapse else Res.string.ai_expand,
-                    ),
             )
         }
         if (expanded) {
@@ -334,35 +371,71 @@ private fun NoSuggestionsSection(docs: List<ReviewDoc>) {
 private fun ApplyBar(
     selectedSuggestions: Int,
     docCount: Int,
-    onApply: () -> Unit,
-    onSkip: () -> Unit,
+    actions: ReviewActions,
 ) {
+    var confirmingDiscard by remember { mutableStateOf(false) }
     Surface(tonalElevation = 3.dp) {
-        Row(
+        FlowRow(
             Modifier.fillMaxWidth().padding(16.dp),
-            verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Text(uiText(UiTextKey.TAGGING_APPLY_SUMMARY, selectedSuggestions, docCount).resolve(), Modifier.weight(1f))
+            Text(
+                uiText(UiTextKey.TAGGING_APPLY_SUMMARY, selectedSuggestions, docCount).resolve(),
+                Modifier.align(Alignment.CenterVertically),
+            )
             // Escape hatch: leave Review without writing (also the only way forward when nothing
-            // is selected — all suggestions new/deselected or every doc had no suggestions).
-            OutlinedButton(onClick = onSkip) { Text(stringResource(Res.string.ai_edit_skip)) }
-            Button(onClick = onApply, enabled = selectedSuggestions > 0) {
+            // is selected — all suggestions new/deselected or every doc had no suggestions). What
+            // that costs differs per flow, so both the label and the confirmation do too.
+            OutlinedButton(
+                onClick = {
+                    when (actions.exit) {
+                        ReviewExit.SKIP_BATCH -> actions.onExit()
+                        ReviewExit.DISCARD_RUN -> confirmingDiscard = true
+                    }
+                },
+            ) {
+                Text(
+                    stringResource(
+                        when (actions.exit) {
+                            ReviewExit.SKIP_BATCH -> Res.string.ai_edit_skip
+                            ReviewExit.DISCARD_RUN -> Res.string.ai_edit_discard_run
+                        },
+                    ),
+                )
+            }
+            Button(onClick = actions.onApply, enabled = selectedSuggestions > 0) {
                 Text(stringResource(Res.string.common_apply))
             }
         }
+    }
+    if (confirmingDiscard) {
+        ConfirmDialog(
+            title = stringResource(Res.string.ai_edit_discard_run_title),
+            message = stringResource(Res.string.ai_edit_discard_run_message),
+            confirmLabel = stringResource(Res.string.ai_edit_discard_run),
+            dismissLabel = stringResource(Res.string.common_cancel),
+            destructive = true,
+            onConfirm = {
+                confirmingDiscard = false
+                actions.onExit()
+            },
+            onDismiss = { confirmingDiscard = false },
+        )
     }
 }
 
 /**
  * Terminal counts after Apply. [onNextBatch] is offered only when the flow has a next batch to
- * run — a queued run has no scope left to continue into, so it passes null.
+ * run — a queued run has no scope left to continue into, so it passes null — and [onReconfigure]
+ * only where there is a setup form to go back to.
  */
 @Composable
 internal fun DonePhase(
     result: ApplyResult,
     onNextBatch: (() -> Unit)?,
     onBack: () -> Unit,
+    onReconfigure: (() -> Unit)? = null,
 ) {
     Column(
         Modifier.fillMaxSize().padding(16.dp),
@@ -372,6 +445,13 @@ internal fun DonePhase(
         Text(doneSummary(result), style = MaterialTheme.typography.titleMedium, textAlign = TextAlign.Center)
         if (result.moreRemain && onNextBatch != null) {
             Button(onClick = onNextBatch) { Text(stringResource(Res.string.ai_edit_next_batch)) }
+        }
+        // Between batches is exactly when people realise the run asked for the wrong thing, and
+        // leaving the page to fix it would forget which documents were already reviewed.
+        if (onReconfigure != null) {
+            OutlinedButton(onClick = onReconfigure) {
+                Text(stringResource(Res.string.ai_edit_change_settings))
+            }
         }
         OutlinedButton(onClick = onBack) { Text(stringResource(Res.string.ai_edit_done)) }
     }
