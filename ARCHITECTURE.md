@@ -118,7 +118,9 @@ via `mise hot`.
 ## Where to look for common tasks
 
 - A new library-wide synced setting → a `setting-set` op plus its key in
-  `JournalCoordinator.SEEDED_SETTING_KEYS`. A key left out of that list reads as
+  `SyncedSettings.SEEDED_KEYS` (a private class at the top of `JournalCoordinator.kt`;
+  read through `JournalCoordinator.settingFlow(key)`, written with
+  `PendingOp.settingSet` — `reviewMode` is the model). A key left out of that list reads as
   null on open (the open path folds only the seeded settings, not the whole
   journal) and only appears once something writes it in the running session.
 - A new document field is **data, not code**: define it in Settings → Documents (or
