@@ -38,11 +38,15 @@ import kotlin.uuid.Uuid
 /**
  * Koog executor + model pair built from one [AiConfig]. Rebuilt only when the config
  * changes (the facade caches it), so the underlying HTTP client is reused across calls.
+ *
+ * @param ownedTransport the base Ktor client this runtime created for itself and must release in
+ *  [close]; null when the caller supplied one through [build] and keeps ownership of it.
  */
 internal class AiRuntime(
     val executor: PromptExecutor,
     val model: LLModel,
     private val client: LLMClient,
+    private val ownedTransport: HttpClient? = null,
 ) {
     /**
      * Ids of the models the configured endpoint offers, for the settings model picker.
@@ -55,9 +59,16 @@ internal class AiRuntime(
             else -> client.models().map { it.id }
         }.sorted()
 
-    /** Release the underlying HTTP client. Call once the runtime is no longer cached. */
+    /**
+     * Release the HTTP resources this runtime owns. Call once the runtime is no longer cached.
+     *
+     * Koog derives its per-provider client from the base transport with `HttpClient.config {}`,
+     * and a derived Ktor client does not own the engine — so closing [client] alone would leak
+     * the engine of a transport we created. A caller-supplied transport is the caller's to close.
+     */
     fun close() {
         client.close()
+        ownedTransport?.close()
     }
 
     companion object {
@@ -87,27 +98,44 @@ internal class AiRuntime(
 
         private const val OPENCODE_SESSION_HEADER = "x-opencode-session"
 
-        fun build(config: AiConfig): AiRuntime {
+        /**
+         * Build the runtime for [config] over [transport], the base Ktor client every request to
+         * the endpoint goes through. Koog layers its own plugins on a derived copy, so plugins
+         * installed on [transport] — a metering interceptor, request logging, a test's recorder —
+         * see every call the runtime makes, whichever provider it is for. Provider-specific wire
+         * requirements (the OpenCode Go session header) are added on top here, never in place of
+         * what the caller installed.
+         *
+         * A null [transport] means "a plain client, owned by the runtime": it is created here and
+         * released by [close]. A supplied one stays the caller's to close, because it outlives any
+         * one runtime by design (the facade rebuilds runtimes when the config changes).
+         */
+        fun build(
+            config: AiConfig,
+            transport: HttpClient? = null,
+        ): AiRuntime {
+            val owned = if (transport == null) HttpClient() else null
+            val base = transport ?: checkNotNull(owned)
             val httpFactory =
-                if (config.provider == AiProvider.OPENCODE_GO) {
-                    KtorKoogHttpClient.Factory(openCodeGoClient())
-                } else {
-                    KtorKoogHttpClient.Factory()
+                KtorKoogHttpClient.Factory(
+                    if (config.provider == AiProvider.OPENCODE_GO) base.withOpenCodeSession() else base,
+                )
+            val built =
+                when (config.provider) {
+                    AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> openAiRuntime(config, httpFactory)
+                    AiProvider.ANTHROPIC -> anthropicRuntime(config, httpFactory)
+                    AiProvider.GOOGLE -> googleRuntime(config, httpFactory)
+                    AiProvider.MISTRAL -> mistralRuntime(config, httpFactory)
+                    AiProvider.DEEPSEEK -> deepSeekRuntime(config, httpFactory)
+                    AiProvider.OPENROUTER -> openRouterRuntime(config, httpFactory)
+                    AiProvider.OLLAMA -> ollamaRuntime(config, httpFactory)
                 }
-            return when (config.provider) {
-                AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> openAiRuntime(config, httpFactory)
-                AiProvider.ANTHROPIC -> anthropicRuntime(config, httpFactory)
-                AiProvider.GOOGLE -> googleRuntime(config, httpFactory)
-                AiProvider.MISTRAL -> mistralRuntime(config, httpFactory)
-                AiProvider.DEEPSEEK -> deepSeekRuntime(config, httpFactory)
-                AiProvider.OPENROUTER -> openRouterRuntime(config, httpFactory)
-                AiProvider.OLLAMA -> ollamaRuntime(config, httpFactory)
-            }
+            return AiRuntime(built.executor, built.model, built.client, ownedTransport = owned)
         }
 
         /**
-         * Base Ktor client for the OpenCode Go gateway, which rejects requests that carry no
-         * `x-opencode-session` header (one stable id per conversation).
+         * The OpenCode Go gateway rejects requests that carry no `x-opencode-session` header (one
+         * stable id per conversation), so a client bound for it derives a copy that stamps one.
          *
          * Koog's provider clients expose no per-request header hook, so the header is stamped
          * here, in the request pipeline: each request reports the [AiGatewaySession] its caller
@@ -120,14 +148,13 @@ internal class AiRuntime(
          * `AiPrompts.editSystem`), so keeping a whole batch on one id helps the
          * gateway's prefix caching instead of fragmenting it.
          *
-         * Koog derives its own client off this one (`HttpClient.config {}` layers its SSE,
-         * timeout and JSON plugins on top and shares this engine), and closes that derived
-         * client — releasing the shared engine — when [close] runs.
+         * Derived with `HttpClient.config {}`, so it keeps every plugin the receiver already has
+         * and shares its engine; the receiver stays the one that owns that engine.
          */
         @OptIn(ExperimentalUuidApi::class)
-        internal fun openCodeGoClient(): HttpClient {
+        internal fun HttpClient.withOpenCodeSession(): HttpClient {
             val fallbackSessionId = Uuid.random().toString()
-            return HttpClient {
+            return config {
                 install("npn-opencode-session") {
                     requestPipeline.intercept(HttpRequestPipeline.Before) {
                         context.headers[OPENCODE_SESSION_HEADER] =

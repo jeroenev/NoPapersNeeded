@@ -14,7 +14,7 @@ import kotlin.coroutines.coroutineContext
  * Carrying it in the coroutine context bridges that gap without threading a parameter through
  * every Koog API. Chat installs it around a turn (see `AiFacadeImpl.ask`, value = the chat
  * session id, so every turn of one conversation reuses one id); requests made without it fall
- * back to a per-client id (see [AiRuntime.openCodeGoClient]).
+ * back to a per-client id (see `AiRuntime.withOpenCodeSession`).
  */
 internal class AiGatewaySession(
     val id: String,

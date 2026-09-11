@@ -7,6 +7,7 @@ import ai.koog.prompt.message.AttachmentSource
 import dev.npn.core.app.AiTagging
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.toFieldDef
+import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -22,9 +23,15 @@ import kotlin.uuid.Uuid
  * configuration live on every call (settings can change between calls) and caches the built
  * runtime while the config is unchanged. Purely a read-side consumer of the Room index; all
  * writes stay with MetadataWriter/JournalCoordinator.
+ *
+ * @param transport the base Ktor client every endpoint call goes through, when the host wants to
+ *  see or shape those calls (metering, logging, a test recorder); see [AiRuntime.build]. It
+ *  outlives every runtime this facade builds and stays the host's to close. Null means each
+ *  runtime owns a plain client of its own.
  */
 class AiFacadeImpl(
     private val db: NpnDatabase,
+    private val transport: HttpClient? = null,
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
     AiSuggest,
@@ -263,7 +270,7 @@ class AiFacadeImpl(
                 // swapping. Any in-flight request still holding the old runtime will fail once its
                 // client is closed — acceptable, since the endpoint changed out from under it.
                 cached?.second?.close()
-                AiRuntime.build(config).also { cachedRuntime = key to it }
+                AiRuntime.build(config, transport).also { cachedRuntime = key to it }
             }
         }
     }

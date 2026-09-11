@@ -3,6 +3,7 @@ package dev.npn.core.ai
 import com.sun.net.httpserver.HttpServer
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -22,14 +23,15 @@ class AiGatewaySessionTest {
             val sent = mutableListOf<String?>()
             val server = echoServer(sent)
             val url = "http://127.0.0.1:${server.address.port}/"
-            val client = AiRuntime.openCodeGoClient()
+            val base = HttpClient()
+            val client = with(AiRuntime) { base.withOpenCodeSession() }
             try {
                 client.get(url)
                 withContext(AiGatewaySession("chat-42")) { client.get(url) }
                 withContext(AiGatewaySession("chat-42")) { client.get(url) }
                 client.get(url)
             } finally {
-                client.close()
+                base.close()
                 server.stop(0)
             }
             // Both turns of one conversation report that conversation, not the fallback.
