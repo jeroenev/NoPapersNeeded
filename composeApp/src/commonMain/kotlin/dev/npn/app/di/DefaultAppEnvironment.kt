@@ -125,35 +125,41 @@ class DefaultAppEnvironment(
         }
     }
 
-    override suspend fun openLibrary(location: String) =
-        sessionMutex.withLock {
-            _opening.value = true
-            _openError.value = null
-            try {
-                closeCurrentInternal()
+    override suspend fun openLibrary(location: String) = sessionMutex.withLock { openLibraryLocked(location) }
 
-                val opened = factory.build(location, appScope)
-                val session = LibrarySessionImpl.openSession(opened.deps)
-                session.start(appScope)
-                currentClose = opened.close
-                _session.value = session
-                settings.edit { it.copy(libraryLocation = location) }
-            } finally {
-                _opening.value = false
-            }
+    private suspend fun openLibraryLocked(location: String) {
+        _opening.value = true
+        _openError.value = null
+        try {
+            closeCurrentInternal()
+
+            val opened = factory.build(location, appScope)
+            val session = LibrarySessionImpl.openSession(opened.deps)
+            session.start(appScope)
+            currentClose = opened.close
+            _session.value = session
+            settings.edit { it.copy(libraryLocation = location) }
+        } finally {
+            _opening.value = false
         }
+    }
 
     override suspend fun closeLibrary() =
         sessionMutex.withLock {
             closeCurrentInternal()
         }
 
-    override suspend fun openPersistedLibrary() {
-        val location = settings.settings.first().libraryLocation ?: return
-        // Keep the persisted location on failure; surface the error by leaving the
-        // session null and rethrowing so the UI can handle it.
-        openLibrary(location)
-    }
+    override suspend fun openPersistedLibrary() =
+        sessionMutex.withLock {
+            // The app shell and an Android share intent may both request restoration during cold
+            // start. The first opens it; the waiter must reuse that session rather than close and
+            // rebuild it underneath the import.
+            if (_session.value != null) return@withLock
+            val location = settings.settings.first().libraryLocation ?: return@withLock
+            // Keep the persisted location on failure; surface the error by leaving the
+            // session null and rethrowing so the UI can handle it.
+            openLibraryLocked(location)
+        }
 
     private suspend fun closeCurrentInternal() {
         _session.value?.close()

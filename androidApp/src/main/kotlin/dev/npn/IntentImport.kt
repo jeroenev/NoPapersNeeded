@@ -8,10 +8,10 @@ import android.os.Build
 import android.os.Parcelable
 import android.provider.OpenableColumns
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.platform.withLibraryForForegroundImport
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibrarySession
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 
 /**
@@ -97,32 +97,33 @@ object IntentImport {
         env: AppEnvironment,
         intent: Intent,
     ): Result? {
-        val session = env.session.first() ?: return null
-        val uris = extractUris(intent)
-        if (uris.isEmpty()) return Result(0, 0, 0, 0)
+        return env.withLibraryForForegroundImport { session ->
+            val uris = extractUris(intent)
+            if (uris.isEmpty()) return@withLibraryForForegroundImport Result(0, 0, 0, 0)
 
-        val resolver = context.contentResolver
-        val (pdfUris, imageBytes) = partitionUris(resolver, uris)
+            val resolver = context.contentResolver
+            val (pdfUris, imageBytes) = partitionUris(resolver, uris)
 
-        val tally = Tally()
-        var total = 0
+            val tally = Tally()
+            var total = 0
 
-        for (uri in pdfUris) {
-            total++
-            val bytes = readBytes(resolver, uri)
-            if (bytes == null) {
-                tally.failed++
-                continue
+            for (uri in pdfUris) {
+                total++
+                val bytes = readBytes(resolver, uri)
+                if (bytes == null) {
+                    tally.failed++
+                    continue
+                }
+                tally.record(session.ingest.importPdfBytes(bytes, displayName(resolver, uri) ?: FALLBACK_SHARED_PDF))
             }
-            tally.record(session.ingest.importPdfBytes(bytes, displayName(resolver, uri) ?: FALLBACK_SHARED_PDF))
-        }
 
-        if (imageBytes.isNotEmpty()) {
-            total++
-            tally.record(session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF))
-        }
+            if (imageBytes.isNotEmpty()) {
+                total++
+                tally.record(session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF))
+            }
 
-        return Result(tally.imported, tally.duplicates, tally.failed, total)
+            Result(tally.imported, tally.duplicates, tally.failed, total)
+        }
     }
 
     /**

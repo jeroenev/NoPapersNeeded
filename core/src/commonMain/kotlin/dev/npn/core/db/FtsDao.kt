@@ -84,8 +84,17 @@ interface FtsDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(rows: List<FtsDocumentEntity>)
 
-    /** Indexed rows containing a token with the requested prefix, used to derive autocomplete. */
-    @Query("SELECT * FROM fts_documents WHERE fts_documents MATCH :query ORDER BY rank LIMIT :limit")
+    /**
+     * Indexed rows containing a token with the requested prefix, used to derive autocomplete.
+     * Return only bounded content/field fragments: selecting complete OCR bodies and long-text
+     * fields made Android copy and tokenize several potentially huge values on every keystroke.
+     */
+    @Query(
+        "SELECT docId, fileName, " +
+            "snippet(fts_documents, 2, '', '', ' ', 16) AS content, tags, " +
+            "snippet(fts_documents, 4, '', '', ' ', 16) AS fields " +
+            "FROM fts_documents WHERE fts_documents MATCH :query ORDER BY rank LIMIT :limit",
+    )
     suspend fun rowsForPrefix(
         query: String,
         limit: Int,
