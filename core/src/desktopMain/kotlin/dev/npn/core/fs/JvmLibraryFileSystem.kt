@@ -26,8 +26,9 @@ import kotlin.io.path.name
 
 /**
  * java.nio-backed [LibraryFileSystem] for desktop. All suspend functions run on
- * [Dispatchers.IO]. Writes are atomic where possible (temp file in the same directory +
- * atomic move that fails if the target exists). Never appends or overwrites.
+ * [Dispatchers.IO]. Writes stage a temp file in the same directory and then install it under
+ * its final name with a primitive that cannot replace an existing entry
+ * ([atomicMoveNoReplace]). Never appends or overwrites.
  */
 class JvmLibraryFileSystem(
     private val root: Path,
@@ -135,8 +136,8 @@ class JvmLibraryFileSystem(
         }
         val parent = target.parent
         if (parent != null) Files.createDirectories(parent)
-        // Write to a temp file in the same directory, then atomically move failing if the
-        // target appeared meanwhile (no REPLACE_EXISTING).
+        // Write to a temp file in the same directory, then install it under the final name,
+        // which fails if the target appeared meanwhile.
         val tmp = Files.createTempFile(parent ?: root, ".npn-tmp-", ".part")
         try {
             Files.write(tmp, bytes, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)
@@ -205,26 +206,57 @@ class JvmLibraryFileSystem(
         }
         val parent = to.parent
         if (parent != null) Files.createDirectories(parent)
-        // No REPLACE_EXISTING: move throws FileAlreadyExistsException if target appears.
-        atomicMoveNoReplace(from, to)
+        try {
+            atomicMoveNoReplace(from, to)
+        } catch (e: java.nio.file.FileAlreadyExistsException) {
+            error("Target already exists: $toRelPath")
+        }
         Unit
     }
 
     /**
-     * Move [from] onto [to] atomically without REPLACE_EXISTING (throws
-     * [java.nio.file.FileAlreadyExistsException] if [to] appears), falling back to a plain
-     * no-replace move on filesystems that do not support atomic moves.
+     * Move [from] onto [to] so that an existing [to] can never be replaced, throwing
+     * [java.nio.file.FileAlreadyExistsException] instead.
+     *
+     * [StandardCopyOption.ATOMIC_MOVE] is `rename(2)`, which silently replaces the target, and a
+     * plain [Files.move] only stats the target before renaming — so neither refuses a target that
+     * appears while the caller is staging its bytes. `link(2)` does: it installs a second name for
+     * the same inode and fails with EEXIST as one indivisible step. It is the primitive
+     * [publishVerifiedObjectOnce] already relies on. Unlinking [from] afterwards is outside that
+     * step, so a crash in between leaves a spare copy at [from] rather than a lost object — the
+     * trade the write-once invariant asks for.
+     *
+     * Filesystems with no hard links, and cross-device moves, fall back to a plain no-replace
+     * [Files.move]; ATOMIC_MOVE is never used, because it cannot refuse.
      */
     private fun atomicMoveNoReplace(
         from: Path,
         to: Path,
     ) {
-        try {
-            Files.move(from, to, StandardCopyOption.ATOMIC_MOVE)
-        } catch (e: java.nio.file.AtomicMoveNotSupportedException) {
+        if (linkNoReplace(from, to)) {
+            Files.delete(from)
+        } else {
             Files.move(from, to)
         }
     }
+
+    /** Hard-link [from] as [to], or return false when this provider has no usable `link(2)`. */
+    private fun linkNoReplace(
+        from: Path,
+        to: Path,
+    ): Boolean =
+        try {
+            Files.createLink(to, from)
+            true
+        } catch (e: java.nio.file.FileAlreadyExistsException) {
+            throw e
+        } catch (_: UnsupportedOperationException) {
+            false
+        } catch (_: IOException) {
+            // EXDEV, EPERM on a hard-link-less filesystem, and anything else a plain move can
+            // report for itself with a better diagnostic.
+            false
+        }
 
     override suspend fun delete(relPath: String) =
         withContext(Dispatchers.IO) {
