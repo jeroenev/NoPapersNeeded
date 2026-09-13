@@ -622,12 +622,9 @@ class SafLibraryFileSystem(
             val output =
                 resolver.openOutputStream(target.uri, "w")
                     ?: throw IOException("Cannot open external target: ${target.uri}")
-            try {
-                output.use { input.copyTo(it, STREAM_BUFFER_SIZE) }
-            } catch (e: Throwable) {
-                deleteQuietly(target.uri)
-                throw e
-            }
+            // The external URI belongs to the caller and may have existed before this copy. SAF
+            // has no portable rollback for a partial overwrite, so close it but never delete it.
+            output.use { input.copyTo(it, STREAM_BUFFER_SIZE) }
         } ?: throw IOException("Cannot read: $relPath")
         Unit
     }

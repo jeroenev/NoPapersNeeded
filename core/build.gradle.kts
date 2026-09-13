@@ -32,6 +32,9 @@ kotlin {
         // (SAF, MLKit wrappers) a test source set it never had. Without it, everything in
         // commonTest is only ever verified through the `desktop` target.
         withHostTest {}
+        withDeviceTest {
+            instrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        }
     }
 
     sourceSets {
@@ -67,6 +70,12 @@ kotlin {
             implementation(libs.pdfbox.android)
             implementation(libs.mlkit.text.recognition)
             implementation(libs.ktor.client.okhttp)
+        }
+        getByName("androidDeviceTest") {
+            dependencies {
+                implementation(libs.androidx.test.junit)
+                implementation(libs.androidx.test.runner)
+            }
         }
         getByName("desktopMain") {
             dependencies {

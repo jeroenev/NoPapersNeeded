@@ -12,6 +12,7 @@ import dev.npn.app.platform.withLibraryForForegroundImport
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.fs.ExternalSource
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -111,12 +112,16 @@ object IntentImport {
             for (uri in pdfUris) {
                 total++
                 val outcome =
-                    runCatching {
+                    try {
                         session.ingest.importPdf(
                             ExternalSource(uri),
                             displayName(resolver, uri) ?: FALLBACK_SHARED_PDF,
                         )
-                    }.getOrNull()
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (_: Exception) {
+                        null
+                    }
                 if (outcome == null) tally.failed++ else tally.record(outcome)
             }
 

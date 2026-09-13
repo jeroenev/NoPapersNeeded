@@ -11,6 +11,7 @@ import androidx.lifecycle.lifecycleScope
 import dev.npn.app.App
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.LocalDocumentScanner
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -46,8 +47,13 @@ class MainActivity : ComponentActivity() {
         val importIntent = intent ?: return
         lifecycleScope.launch {
             val result =
-                runCatching { IntentImport.import(this@MainActivity, env, importIntent) }
-                    .getOrNull()
+                try {
+                    IntentImport.import(this@MainActivity, env, importIntent)
+                } catch (e: CancellationException) {
+                    throw e
+                } catch (_: Exception) {
+                    null
+                }
             when {
                 result == null -> {
                     toast(getString(R.string.import_library_required))
