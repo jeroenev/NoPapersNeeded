@@ -90,7 +90,7 @@ class DocumentRepositoryImpl(
                 if (queryText == null) {
                     // Attach tags and custom fields for all docs in one pass.
                     val ids = docs.map { it.docId }
-                    val tagsByDoc = tagsFor(ids)
+                    val tagsByDoc = tagsForDocuments(ids)
                     val fieldsByDoc = fieldsFor(ids)
                     docs.map {
                         DocListItem(it.toDoc(fieldsByDoc[it.docId].orEmpty()), tagsByDoc[it.docId].orEmpty())
@@ -106,7 +106,7 @@ class DocumentRepositoryImpl(
                     val order = hits.map { it.docId }.withIndex().associate { it.value to it.index }
                     val matched = docs.filter { it.docId in snippetById }
                     val ids = matched.map { it.docId }
-                    val tagsByDoc = tagsFor(ids)
+                    val tagsByDoc = tagsForDocuments(ids)
                     val fieldsByDoc = fieldsFor(ids)
                     matched
                         .sortedBy { order[it.docId] ?: Int.MAX_VALUE }
@@ -207,7 +207,7 @@ class DocumentRepositoryImpl(
             .observeTrashed()
             .conflate()
             .mapLatest { docs ->
-                val tags = tagsFor(docs.map { it.docId })
+                val tags = tagsForDocuments(docs.map { it.docId })
                 docs.map { DocListItem(it.toDoc(), tags[it.docId].orEmpty()) }
             }.flowOn(Dispatchers.Default)
 
@@ -231,7 +231,7 @@ class DocumentRepositoryImpl(
             }.sortedBy { it.hlc }
     }
 
-    private suspend fun tagsFor(docIds: List<String>): Map<String, List<String>> {
+    override suspend fun tagsForDocuments(docIds: List<String>): Map<String, List<String>> {
         if (docIds.isEmpty()) return emptyMap()
         return documentDao
             .tagsForDocs(docIds)

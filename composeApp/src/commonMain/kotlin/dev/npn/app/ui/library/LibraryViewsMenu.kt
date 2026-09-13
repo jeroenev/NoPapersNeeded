@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.Inbox
 import androidx.compose.material.icons.filled.MoreVert
@@ -163,6 +165,7 @@ private fun SavedViewMenuItem(
                                 ),
                             )
                         },
+                        leadingIcon = { Icon(Icons.Filled.PushPin, contentDescription = null) },
                         onClick = {
                             actions = false
                             onTogglePin()
@@ -170,6 +173,7 @@ private fun SavedViewMenuItem(
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(Res.string.library_rename)) },
+                        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
                         onClick = {
                             actions = false
                             onRename()
@@ -177,6 +181,7 @@ private fun SavedViewMenuItem(
                     )
                     DropdownMenuItem(
                         text = { Text(stringResource(Res.string.common_delete)) },
+                        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
                         onClick = {
                             actions = false
                             onDelete()

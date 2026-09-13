@@ -1,19 +1,15 @@
 package dev.npn.app.ui.detail
 
-import androidx.compose.foundation.layout.Box
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.ContentCut
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -24,6 +20,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TooltipIconButton
+import dev.npn.app.ui.common.TopBarAction
+import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.sharePdfBytes
 import dev.npn.app.ui.common.supportsSharing
 import dev.npn.core.app.AiOcrOffer
@@ -86,12 +84,14 @@ fun DocActions(
     vm: DocDetailViewModel,
     snackbar: SnackbarHostState,
     onGone: () -> Unit,
+    compact: Boolean = true,
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<DocActionDialog?>(null) }
 
     ShareOrExportButton(item = item, vm = vm, snackbar = snackbar)
     DocActionsMenu(
+        compact = compact,
         reindexing = ui.reindexing,
         splitting = ui.splitting,
         baking = ui.baking,
@@ -186,8 +186,8 @@ private fun ShareOrExportButton(
 }
 
 @Composable
-@Suppress("LongMethod")
 private fun DocActionsMenu(
+    compact: Boolean,
     reindexing: Boolean,
     splitting: Boolean,
     baking: Boolean,
@@ -200,98 +200,77 @@ private fun DocActionsMenu(
     onBakeInPlace: () -> Unit,
     onTrash: () -> Unit,
 ) {
-    var menu by remember { mutableStateOf(false) }
-    Box {
-        TooltipIconButton(Icons.Filled.MoreVert, stringResource(Res.string.detail_more_actions), { menu = true })
-        DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.detail_rename_file)) },
-                onClick = {
-                    menu = false
-                    onRename()
-                },
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            if (reindexing) Res.string.detail_rerunning_ocr else Res.string.detail_rerun_ocr,
-                        ),
-                    )
-                },
-                leadingIcon = { Icon(Icons.Filled.Refresh, contentDescription = null) },
+    val rename =
+        TopBarAction(Icons.Filled.Edit, stringResource(Res.string.detail_rename_file), onRename)
+    val reOcr =
+        TopBarAction(
+            icon = Icons.Filled.Refresh,
+            label = stringResource(if (reindexing) Res.string.detail_rerunning_ocr else Res.string.detail_rerun_ocr),
+            onClick = onReOcr,
+            enabled = !reindexing,
+        )
+    val split =
+        TopBarAction(
+            icon = Icons.Filled.ContentCut,
+            label = stringResource(if (splitting) Res.string.detail_splitting else Res.string.detail_split_document),
+            onClick = onSplit,
+            enabled = canSplit && !splitting,
+        )
+    val bake =
+        TopBarAction(
+            icon = Icons.Filled.PictureAsPdf,
+            label = stringResource(if (baking) Res.string.detail_baking else Res.string.detail_bake_metadata_in_place),
+            onClick = onBakeInPlace,
+            enabled = !baking,
+        )
+    // Hidden only without an endpoint: there the action can do nothing but explain itself, and this
+    // menu is not where AI gets introduced. Length never hides or disables it — a long document is
+    // the case the vision model is most wanted for — so the label just says so, and the
+    // confirmation carries the cost.
+    val aiOcrAction =
+        if (aiOcr == AiOcrOffer.Unavailable) {
+            null
+        } else {
+            TopBarAction(
+                icon = Icons.Filled.AutoAwesome,
+                label =
+                    when (aiOcr) {
+                        is AiOcrOffer.Large -> stringResource(Res.string.detail_ai_ocr_large, aiOcr.pages)
+                        else -> stringResource(Res.string.detail_ai_ocr)
+                    },
+                onClick = onAiOcr,
                 enabled = !reindexing,
-                onClick = {
-                    menu = false
-                    onReOcr()
-                },
-            )
-            // Hidden only without an endpoint: there the action can do nothing but explain itself,
-            // and this menu is not where AI gets introduced. Length never hides or disables it —
-            // a long document is the case the vision model is most wanted for — so the label just
-            // says so, and the confirmation carries the cost.
-            if (aiOcr != AiOcrOffer.Unavailable) {
-                DropdownMenuItem(
-                    text = {
-                        Text(
-                            when (aiOcr) {
-                                is AiOcrOffer.Large -> {
-                                    stringResource(Res.string.detail_ai_ocr_large, aiOcr.pages)
-                                }
-
-                                else -> {
-                                    stringResource(Res.string.detail_ai_ocr)
-                                }
-                            },
-                        )
-                    },
-                    leadingIcon = { Icon(Icons.Filled.AutoAwesome, contentDescription = null) },
-                    enabled = !reindexing,
-                    onClick = {
-                        menu = false
-                        onAiOcr()
-                    },
-                )
-            }
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            if (splitting) Res.string.detail_splitting else Res.string.detail_split_document,
-                        ),
-                    )
-                },
-                leadingIcon = { Icon(Icons.Filled.ContentCut, contentDescription = null) },
-                enabled = canSplit && !splitting,
-                onClick = {
-                    menu = false
-                    onSplit()
-                },
-            )
-            DropdownMenuItem(
-                text = {
-                    Text(
-                        stringResource(
-                            if (baking) Res.string.detail_baking else Res.string.detail_bake_metadata_in_place,
-                        ),
-                    )
-                },
-                enabled = !baking,
-                onClick = {
-                    menu = false
-                    onBakeInPlace()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.detail_trash)) },
-                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-                onClick = {
-                    menu = false
-                    onTrash()
-                },
             )
         }
-    }
+    val trash = TopBarAction(Icons.Filled.Delete, stringResource(Res.string.detail_trash), onTrash)
+    // A wide bar promotes the direct document edits to icons; AI OCR and bake-in-place stay one tap
+    // away in the overflow. A compact bar — and the narrow side-panel header — keep everything in
+    // the overflow so the few icons that fit there are not crowded out.
+    val inline =
+        if (compact) {
+            emptyList()
+        } else {
+            buildList {
+                add(rename)
+                add(reOcr)
+                add(split)
+                add(trash)
+            }
+        }
+    val overflow =
+        buildList {
+            if (compact) add(rename)
+            if (compact) add(reOcr)
+            aiOcrAction?.let { add(it) }
+            if (compact) add(split)
+            add(bake)
+            if (compact) add(trash)
+        }
+    TopBarActions(
+        inline = inline,
+        overflow = overflow,
+        overflowLabel = stringResource(Res.string.detail_more_actions),
+    )
 }
 
 @Composable

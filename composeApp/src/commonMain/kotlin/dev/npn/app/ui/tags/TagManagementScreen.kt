@@ -25,6 +25,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.SelectAll
@@ -594,6 +595,7 @@ private fun SingleMenuItems(
 ) {
     DropdownMenuItem(
         text = { Text(stringResource(Res.string.common_rename)) },
+        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
         onClick = {
             onDismiss()
             actions.onRename(node.path)
@@ -601,6 +603,7 @@ private fun SingleMenuItems(
     )
     DropdownMenuItem(
         text = { Text(stringResource(Res.string.common_tags_merge_into)) },
+        leadingIcon = { Icon(Icons.AutoMirrored.Filled.CallMerge, contentDescription = null) },
         onClick = {
             onDismiss()
             actions.onMerge(node.path)
@@ -608,6 +611,7 @@ private fun SingleMenuItems(
     )
     DropdownMenuItem(
         text = { Text(stringResource(Res.string.common_tags_color_style)) },
+        leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
         onClick = {
             onDismiss()
             actions.onStyle(node.path, node.info?.color)
@@ -615,6 +619,7 @@ private fun SingleMenuItems(
     )
     DropdownMenuItem(
         text = { Text(stringResource(Res.string.common_delete)) },
+        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
         onClick = {
             onDismiss()
             actions.onDelete(node.path)
@@ -631,6 +636,7 @@ private fun BulkMenuItems(
 ) {
     DropdownMenuItem(
         text = { Text(pluralStringResource(Res.plurals.common_tags_merge_many_title, count, count)) },
+        leadingIcon = { Icon(Icons.AutoMirrored.Filled.CallMerge, contentDescription = null) },
         onClick = {
             onDismiss()
             actions.onMergeSelected()
@@ -638,6 +644,7 @@ private fun BulkMenuItems(
     )
     DropdownMenuItem(
         text = { Text(pluralStringResource(Res.plurals.common_tags_color_many_title, count, count)) },
+        leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
         onClick = {
             onDismiss()
             actions.onStyleSelected()
@@ -645,6 +652,7 @@ private fun BulkMenuItems(
     )
     DropdownMenuItem(
         text = { Text(pluralStringResource(Res.plurals.common_tags_delete_many_title, count, count)) },
+        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
         onClick = {
             onDismiss()
             actions.onDeleteSelected()

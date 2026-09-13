@@ -113,6 +113,13 @@ interface DocumentRepository {
      * underlying journal events are immutable once written.
      */
     suspend fun history(docId: String): List<DocumentHistoryRecord>
+
+    /**
+     * Tag names carried by each of [docIds], keyed by doc id and sorted alphabetically. Empty when
+     * [docIds] is empty. Lets a caller read a selection's tags without depending on the result set
+     * it was selected from, which a filter change can swap out from under it.
+     */
+    suspend fun tagsForDocuments(docIds: List<String>): Map<String, List<String>>
 }
 
 interface TagRepository {

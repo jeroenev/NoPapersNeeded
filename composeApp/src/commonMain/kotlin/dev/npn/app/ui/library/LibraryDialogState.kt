@@ -42,8 +42,11 @@ class LibraryDialogState {
     var renameView by mutableStateOf<SavedView?>(null)
         private set
 
-    /** Tag names shown by the add/remove pickers; loaded lazily when a picker opens. */
+    /** Tag names shown by the add picker; loaded lazily when it opens. */
     var allTagNames by mutableStateOf<List<String>>(emptyList())
+
+    /** Tag names shown by the remove picker: only those carried by the current selection. */
+    var removableTagNames by mutableStateOf<List<String>>(emptyList())
 
     fun openFilter() {
         showFilter = true
@@ -173,7 +176,7 @@ fun LibraryDialogHost(
                     selectedCount,
                     selectedCount,
                 ),
-            allTagNames = state.allTagNames,
+            allTagNames = state.removableTagNames,
             confirmLabel = stringResource(Res.string.library_remove),
             onConfirm = {
                 onRemoveTag(it)

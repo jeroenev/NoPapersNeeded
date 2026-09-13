@@ -183,7 +183,13 @@ private fun LoadedDocScreen(
                         showNav = showNavInTopBar,
                         onBack = onBack,
                         actions = {
-                            DocActions(item = current, vm = vm, snackbar = snackbar, onGone = onBack)
+                            DocActions(
+                                item = current,
+                                vm = vm,
+                                snackbar = snackbar,
+                                onGone = onBack,
+                                compact = compact,
+                            )
                         },
                     )
                     browsePosition?.takeIf { canBrowse && compact }?.let { position ->

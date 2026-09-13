@@ -19,10 +19,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CheckBox
+import androidx.compose.material.icons.filled.CheckBoxOutlineBlank
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.LabelOff
+import androidx.compose.material.icons.filled.NewLabel
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material3.Card
 import androidx.compose.material3.Checkbox
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -138,6 +146,7 @@ private fun DocContextMenu(
         DropdownMenu(expanded = true, onDismissRequest = onDismiss) {
             DropdownMenuItem(
                 text = { Text(stringResource(Res.string.library_open)) },
+                leadingIcon = { Icon(Icons.Filled.OpenInNew, contentDescription = null) },
                 onClick = {
                     onDismiss()
                     actions.onOpen()
@@ -151,6 +160,12 @@ private fun DocContextMenu(
                         ),
                     )
                 },
+                leadingIcon = {
+                    Icon(
+                        if (selected) Icons.Filled.CheckBox else Icons.Filled.CheckBoxOutlineBlank,
+                        contentDescription = null,
+                    )
+                },
                 onClick = {
                     onDismiss()
                     onToggleSelect()
@@ -158,6 +173,7 @@ private fun DocContextMenu(
             )
             DropdownMenuItem(
                 text = { Text(stringResource(Res.string.common_add_tag)) },
+                leadingIcon = { Icon(Icons.Filled.NewLabel, contentDescription = null) },
                 onClick = {
                     onDismiss()
                     actions.onAddTag()
@@ -165,6 +181,7 @@ private fun DocContextMenu(
             )
             DropdownMenuItem(
                 text = { Text(stringResource(Res.string.library_remove_tag)) },
+                leadingIcon = { Icon(Icons.Filled.LabelOff, contentDescription = null) },
                 onClick = {
                     onDismiss()
                     actions.onRemoveTag()
@@ -172,6 +189,7 @@ private fun DocContextMenu(
             )
             DropdownMenuItem(
                 text = { Text(stringResource(Res.string.library_trash)) },
+                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
                 onClick = {
                     onDismiss()
                     actions.onTrash()

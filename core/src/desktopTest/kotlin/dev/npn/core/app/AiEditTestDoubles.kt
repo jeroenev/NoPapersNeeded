@@ -90,6 +90,8 @@ internal class FakeDocuments : DocumentRepository {
     ): List<String> = error("unused")
 
     override suspend fun history(docId: String): List<DocumentHistoryRecord> = error("unused")
+
+    override suspend fun tagsForDocuments(docIds: List<String>): Map<String, List<String>> = error("unused")
 }
 
 internal class FakeMeta : MetadataWriter {

@@ -118,6 +118,11 @@ class FakeDocumentRepository : DocumentRepository {
         query: String,
         limit: Int,
     ): List<String> = suggestionsList.filter { it.startsWith(query, ignoreCase = true) }.take(limit)
+
+    override suspend fun tagsForDocuments(docIds: List<String>): Map<String, List<String>> =
+        documents.value
+            .filter { it.doc.docId in docIds }
+            .associate { it.doc.docId to it.tags }
 }
 
 class FakeTagRepository : TagRepository {

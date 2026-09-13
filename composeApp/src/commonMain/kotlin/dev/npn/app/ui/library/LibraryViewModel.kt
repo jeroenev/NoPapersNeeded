@@ -405,6 +405,23 @@ class LibraryViewModel(
 
     fun bulkRemoveTag(tag: String) = runOnSelection(UiAction.REMOVE_TAG) { meta.removeTag(it, tag) }
 
+    /**
+     * Tag names carried by at least one of the current selection, sorted. The remove-tag picker
+     * offers only these: removing a tag the selection does not carry is a no-op, and the whole
+     * vocabulary would bury the handful actually in play. Reads the repository rather than the
+     * visible results so a selection that survived a filter change still lists completely.
+     */
+    suspend fun tagsInSelection(): List<String> {
+        val selected = _ui.value.selected.toList()
+        if (selected.isEmpty()) return emptyList()
+        return documentRepository
+            .tagsForDocuments(selected)
+            .values
+            .flatten()
+            .distinct()
+            .sorted()
+    }
+
     fun bulkSetReviewed(reviewed: Boolean) = runOnSelection(UiAction.UPDATE) { meta.setReviewed(it, reviewed) }
 
     /**

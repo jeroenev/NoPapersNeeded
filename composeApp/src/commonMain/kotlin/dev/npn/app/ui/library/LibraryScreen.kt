@@ -24,17 +24,24 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Sort
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.AutoFixHigh
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.DocumentScanner
 import androidx.compose.material.icons.filled.FilterList
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.LabelOff
 import androidx.compose.material.icons.filled.NewLabel
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.SelectAll
+import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CircularProgressIndicator
@@ -93,6 +100,8 @@ import dev.npn.app.ui.common.ScrollbarWidth
 import dev.npn.app.ui.common.SearchField
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TooltipIconButton
+import dev.npn.app.ui.common.TopBarAction
+import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isLandscape
@@ -259,6 +268,7 @@ fun LibraryScreen(
                 results = results,
                 tagColors = tagColors,
                 reviewMode = reviewMode,
+                wide = wide,
                 previewOnClick = wide,
                 scanProgress = scanProgress,
                 lastScan = lastScan,
@@ -289,8 +299,11 @@ fun LibraryScreen(
                     dialogs.openAddTag()
                 },
                 onRemoveTag = {
-                    scope.launch { dialogs.allTagNames = session.tags.allTagNames() }
-                    dialogs.openRemoveTag()
+                    // Only the tags the selection actually carries: removing any other is a no-op.
+                    scope.launch {
+                        dialogs.removableTagNames = vm.tagsInSelection()
+                        dialogs.openRemoveTag()
+                    }
                 },
             )
         }
@@ -448,6 +461,9 @@ private fun LibraryContent(
     results: DocumentResults?,
     tagColors: TagColors,
     reviewMode: ReviewMode,
+    // Wide layouts have room to show more top-bar actions as direct icons before spilling them into
+    // the overflow menu.
+    wide: Boolean,
     // Wide layouts preview a tapped document in the side panel, so its click label reads "Preview";
     // compact layouts open it and read "Open".
     previewOnClick: Boolean,
@@ -522,6 +538,7 @@ private fun LibraryContent(
                     count = ui.selected.size,
                     total = allDocIds.size,
                     reviewMode = reviewMode,
+                    wide = wide,
                     onClose = vm::clearSelection,
                     onSelectAll = { vm.selectAll(allDocIds) },
                     onAddTag = onAddTag,
@@ -535,6 +552,7 @@ private fun LibraryContent(
                     viewType = ui.viewType,
                     sort = ui.sort,
                     sortableFields = sortableFields,
+                    wide = wide,
                     extras = topBarExtras,
                     onOpenFilter = onOpenFilter,
                     onSetSort = vm::setSort,
@@ -815,49 +833,43 @@ private fun LibraryTopBar(
     viewType: ViewType,
     sort: dev.npn.core.app.LibrarySort,
     sortableFields: List<FieldDef>,
+    wide: Boolean,
     extras: @Composable () -> Unit,
     onOpenFilter: () -> Unit,
     onSetSort: (SortField, Boolean) -> Unit,
     onSetView: (ViewType) -> Unit,
     onRefresh: () -> Unit,
 ) {
+    val next = if (viewType == ViewType.LIST) ViewType.GRID else ViewType.LIST
+    val switchView =
+        TopBarAction(
+            // The icon names the view being switched *to*, matching the label.
+            icon = if (next == ViewType.GRID) Icons.Filled.GridView else Icons.AutoMirrored.Filled.List,
+            // Lowercased: the label is interpolated mid-sentence ("Switch to list view"), and Dutch
+            // compounds it into one word.
+            label = stringResource(Res.string.library_switch_view, viewTypeLabel(next).lowercase()),
+            onClick = { onSetView(next) },
+        )
+    val refresh = TopBarAction(Icons.Filled.Refresh, stringResource(Res.string.library_refresh), onRefresh)
     TopAppBar(
         title = { Text(stringResource(Res.string.library_documents), maxLines = 1, overflow = TextOverflow.Ellipsis) },
         actions = {
             extras()
             TooltipIconButton(Icons.Filled.FilterList, stringResource(Res.string.library_filters), onOpenFilter)
             SortMenuButton(sort, sortableFields, onSetSort)
-            var expanded by remember { mutableStateOf(false) }
-            Box {
-                TooltipIconButton(
-                    Icons.Filled.MoreVert,
-                    stringResource(Res.string.library_more_actions),
-                    { expanded = true },
-                )
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    val next = if (viewType == ViewType.LIST) ViewType.GRID else ViewType.LIST
-                    DropdownMenuItem(
-                        // Lowercased: the label is interpolated mid-sentence ("Switch to list
-                        // view"), and Dutch compounds it into one word.
-                        text = {
-                            Text(
-                                stringResource(Res.string.library_switch_view, viewTypeLabel(next).lowercase()),
-                            )
-                        },
-                        onClick = {
-                            expanded = false
-                            onSetView(next)
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.library_refresh)) },
-                        onClick = {
-                            expanded = false
-                            onRefresh()
-                        },
-                    )
+            // A desktop window has room for the view and refresh toggles beside filter and sort;
+            // a compact bar keeps both one tap away in the overflow menu.
+            val (inline, overflow) =
+                if (wide) {
+                    listOf(switchView, refresh) to emptyList()
+                } else {
+                    emptyList<TopBarAction>() to listOf(switchView, refresh)
                 }
-            }
+            TopBarActions(
+                inline = inline,
+                overflow = overflow,
+                overflowLabel = stringResource(Res.string.library_more_actions),
+            )
         },
     )
 }
@@ -914,6 +926,7 @@ private fun SelectionTopBar(
     count: Int,
     total: Int,
     reviewMode: ReviewMode,
+    wide: Boolean,
     onClose: () -> Unit,
     onSelectAll: () -> Unit,
     onAddTag: () -> Unit,
@@ -922,6 +935,52 @@ private fun SelectionTopBar(
     onSetReviewed: (Boolean) -> Unit,
     onRequestTrash: () -> Unit,
 ) {
+    val addTag = TopBarAction(Icons.Filled.NewLabel, stringResource(Res.string.common_add_tag), onAddTag)
+    val removeTag = TopBarAction(Icons.Filled.LabelOff, stringResource(Res.string.library_remove_tag), onRemoveTag)
+    val aiEdit =
+        onAiEdit?.let {
+            TopBarAction(Icons.Filled.AutoFixHigh, stringResource(Res.string.library_ai_edit), it)
+        }
+    val trash = TopBarAction(Icons.Filled.Delete, stringResource(Res.string.library_trash), onRequestTrash)
+    val selectAll =
+        TopBarAction(
+            icon = Icons.Filled.SelectAll,
+            label = stringResource(Res.string.common_select_all),
+            onClick = onSelectAll,
+            enabled = total > 0,
+        )
+    // Adding and removing tags and AI edit are all about the selection itself, so a wide bar shows
+    // them beside add-tag and trash. A compact bar keeps just the two frequent actions and leaves
+    // remove-tag, AI edit and the reviewed toggles in the overflow menu.
+    val inline =
+        buildList {
+            add(addTag)
+            if (wide) add(removeTag)
+            if (wide) aiEdit?.let { add(it) }
+            add(trash)
+        }
+    val overflow =
+        buildList {
+            add(selectAll)
+            if (!wide) add(removeTag)
+            if (!wide) aiEdit?.let { add(it) }
+            if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+                add(
+                    TopBarAction(
+                        icon = Icons.Filled.CheckCircle,
+                        label = stringResource(Res.string.library_mark_reviewed),
+                        onClick = { onSetReviewed(true) },
+                    ),
+                )
+                add(
+                    TopBarAction(
+                        icon = Icons.Filled.RadioButtonUnchecked,
+                        label = stringResource(Res.string.library_mark_needs_review),
+                        onClick = { onSetReviewed(false) },
+                    ),
+                )
+            }
+        }
     TopAppBar(
         title = {
             Text(
@@ -932,63 +991,11 @@ private fun SelectionTopBar(
         },
         navigationIcon = { TooltipIconButton(Icons.Filled.Clear, stringResource(Res.string.common_cancel), onClose) },
         actions = {
-            TooltipIconButton(Icons.Filled.NewLabel, stringResource(Res.string.common_add_tag), onAddTag)
-            TooltipIconButton(Icons.Filled.Delete, stringResource(Res.string.library_trash), onRequestTrash)
-            var expanded by remember { mutableStateOf(false) }
-            Box {
-                TooltipIconButton(
-                    Icons.Filled.MoreVert,
-                    stringResource(Res.string.library_more_actions),
-                    { expanded = true },
-                )
-                DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.common_select_all)) },
-                        enabled = total > 0,
-                        onClick = {
-                            expanded = false
-                            onSelectAll()
-                        },
-                    )
-                    DropdownMenuItem(
-                        text = { Text(stringResource(Res.string.library_remove_tag)) },
-                        onClick = {
-                            expanded = false
-                            onRemoveTag()
-                        },
-                    )
-                    onAiEdit?.let { edit ->
-                        DropdownMenuItem(
-                            text = { Text(stringResource(Res.string.library_ai_edit)) },
-                            onClick = {
-                                expanded = false
-                                edit()
-                            },
-                        )
-                    }
-                    if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
-                        listOf(true, false).forEach { reviewed ->
-                            DropdownMenuItem(
-                                text = {
-                                    Text(
-                                        stringResource(
-                                            if (reviewed) {
-                                                Res.string.library_mark_reviewed
-                                            } else {
-                                                Res.string.library_mark_needs_review
-                                            },
-                                        ),
-                                    )
-                                },
-                                onClick = {
-                                    expanded = false
-                                    onSetReviewed(reviewed)
-                                },
-                            )
-                        }
-                    }
-                }
-            }
+            TopBarActions(
+                inline = inline,
+                overflow = overflow,
+                overflowLabel = stringResource(Res.string.library_more_actions),
+            )
         },
     )
 }
@@ -1159,6 +1166,7 @@ private fun LibraryFab(
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             DropdownMenuItem(
                 text = { Text(stringResource(Res.string.library_scan_document)) },
+                leadingIcon = { Icon(Icons.Filled.DocumentScanner, contentDescription = null) },
                 onClick = {
                     expanded = false
                     onScan()
@@ -1166,6 +1174,7 @@ private fun LibraryFab(
             )
             DropdownMenuItem(
                 text = { Text(stringResource(Res.string.library_import_pdf)) },
+                leadingIcon = { Icon(Icons.Filled.UploadFile, contentDescription = null) },
                 onClick = {
                     expanded = false
                     onImport()

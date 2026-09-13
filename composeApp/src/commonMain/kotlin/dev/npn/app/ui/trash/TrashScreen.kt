@@ -4,6 +4,7 @@ package dev.npn.app.ui.trash
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -13,14 +14,11 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.DeleteSweep
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.PrimaryTabRow
 import androidx.compose.material3.Scaffold
@@ -46,6 +44,9 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.TopBarAction
+import dev.npn.app.ui.common.TopBarActions
+import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
@@ -202,19 +203,25 @@ private fun TrashScaffold(
 ) {
     Scaffold(
         topBar = {
-            TopAppBar(
-                title = { Text(stringResource(Res.string.common_trash_maintenance_title)) },
-                // No back arrow: Trash is a top-level rail destination reached from navigation, not a
-                // pushed screen, so a back arrow would misrepresent it and crowd the bar.
-                actions = {
-                    if (tab == TrashTab.TRASH && state.trashed.isNotEmpty()) {
-                        TrashOverflowMenu(
-                            onRestoreAll = bulkActions.onRestoreAll,
-                            onEmptyTrash = bulkActions.onEmptyTrash,
-                        )
-                    }
-                },
-            )
+            BoxWithConstraints {
+                // A desktop window shows the two bulk actions directly; a compact bar keeps them in
+                // the overflow menu so the bar stays uncrowded.
+                val wide = maxWidth > WideLayoutBreakpoint
+                TopAppBar(
+                    title = { Text(stringResource(Res.string.common_trash_maintenance_title)) },
+                    // No back arrow: Trash is a top-level rail destination reached from navigation, not a
+                    // pushed screen, so a back arrow would misrepresent it and crowd the bar.
+                    actions = {
+                        if (tab == TrashTab.TRASH && state.trashed.isNotEmpty()) {
+                            TrashBulkActions(
+                                wide = wide,
+                                onRestoreAll = bulkActions.onRestoreAll,
+                                onEmptyTrash = bulkActions.onEmptyTrash,
+                            )
+                        }
+                    },
+                )
+            }
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
@@ -226,40 +233,31 @@ private fun TrashScaffold(
 }
 
 /**
- * The trash tab's bulk actions, tucked into an overflow menu so the top bar stays uncrowded on
- * compact widths. Only rendered when there is something to act on (the caller gates on a non-empty
- * trash), so the menu never opens onto nothing.
+ * The trash tab's bulk actions. A desktop window has room for both as direct icons; a compact bar
+ * keeps them in the overflow menu instead. Only rendered when there is something to act on (the
+ * caller gates on a non-empty trash), so the menu never opens onto nothing.
  */
 @Composable
-private fun TrashOverflowMenu(
+private fun TrashBulkActions(
+    wide: Boolean,
     onRestoreAll: () -> Unit,
     onEmptyTrash: () -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    Box {
-        IconButton(onClick = { expanded = true }) {
-            Icon(
-                Icons.Filled.MoreVert,
-                contentDescription = stringResource(Res.string.common_more_actions),
-            )
+    val restoreAll =
+        TopBarAction(Icons.Filled.Restore, stringResource(Res.string.common_restore_all), onRestoreAll)
+    val emptyTrash =
+        TopBarAction(Icons.Filled.DeleteSweep, stringResource(Res.string.common_empty_trash), onEmptyTrash)
+    val (inline, overflow) =
+        if (wide) {
+            listOf(restoreAll, emptyTrash) to emptyList()
+        } else {
+            emptyList<TopBarAction>() to listOf(restoreAll, emptyTrash)
         }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.common_restore_all)) },
-                onClick = {
-                    expanded = false
-                    onRestoreAll()
-                },
-            )
-            DropdownMenuItem(
-                text = { Text(stringResource(Res.string.common_empty_trash)) },
-                onClick = {
-                    expanded = false
-                    onEmptyTrash()
-                },
-            )
-        }
-    }
+    TopBarActions(
+        inline = inline,
+        overflow = overflow,
+        overflowLabel = stringResource(Res.string.common_more_actions),
+    )
 }
 
 @Composable
