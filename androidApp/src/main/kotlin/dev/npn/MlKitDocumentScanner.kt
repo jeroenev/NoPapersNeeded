@@ -1,8 +1,6 @@
 package dev.npn
 
 import android.app.Activity
-import android.content.Context
-import android.net.Uri
 import androidx.activity.ComponentActivity
 import androidx.activity.result.ActivityResult
 import androidx.activity.result.ActivityResultLauncher
@@ -12,9 +10,9 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import dev.npn.app.platform.DocumentScanner
+import dev.npn.app.platform.ScannedPdf
+import dev.npn.core.fs.ExternalSource
 import kotlinx.coroutines.CompletableDeferred
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
 
 /**
  * [DocumentScanner] backed by the MLKit / Google Play services document scanner
@@ -27,7 +25,6 @@ import kotlinx.coroutines.withContext
 class MlKitDocumentScanner(
     private val activity: ComponentActivity,
 ) : DocumentScanner {
-
     override val available: Boolean = true
 
     private var pending: CompletableDeferred<GmsDocumentScanningResult?>? = null
@@ -48,25 +45,30 @@ class MlKitDocumentScanner(
             }
         }
 
-    override suspend fun scanToPdf(): ByteArray? {
+    override suspend fun scanToPdf(): ScannedPdf? {
         // Cancel any previous pending scan.
         pending?.complete(null)
 
-        val options = GmsDocumentScannerOptions.Builder()
-            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
-            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_PDF)
-            .setGalleryImportAllowed(true)
-            .build()
+        val options =
+            GmsDocumentScannerOptions
+                .Builder()
+                .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+                .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_PDF)
+                .setGalleryImportAllowed(true)
+                .build()
 
         val deferred = CompletableDeferred<GmsDocumentScanningResult?>()
         pending = deferred
 
-        val started = runCatching {
-            val intentSender = GmsDocumentScanning.getClient(options)
-                .getStartScanIntent(activity)
-                .await()
-            launcher.launch(IntentSenderRequest.Builder(intentSender).build())
-        }
+        val started =
+            runCatching {
+                val intentSender =
+                    GmsDocumentScanning
+                        .getClient(options)
+                        .getStartScanIntent(activity)
+                        .await()
+                launcher.launch(IntentSenderRequest.Builder(intentSender).build())
+            }
         if (started.isFailure) {
             pending = null
             return null
@@ -74,15 +76,8 @@ class MlKitDocumentScanner(
 
         val result = deferred.await() ?: return null
         val pdfUri = result.pdf?.uri ?: return null
-        return readUri(activity, pdfUri)
+        return ScannedPdf(ExternalSource(pdfUri), "scan.pdf")
     }
-
-    private suspend fun readUri(context: Context, uri: Uri): ByteArray? =
-        withContext(Dispatchers.IO) {
-            runCatching {
-                context.contentResolver.openInputStream(uri)?.use { it.readBytes() }
-            }.getOrNull()
-        }
 }
 
 /** Await a Google Play services [com.google.android.gms.tasks.Task] from a coroutine. */

@@ -11,6 +11,7 @@ import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.withLibraryForForegroundImport
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.fs.ExternalSource
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
@@ -109,12 +110,14 @@ object IntentImport {
 
             for (uri in pdfUris) {
                 total++
-                val bytes = readBytes(resolver, uri)
-                if (bytes == null) {
-                    tally.failed++
-                    continue
-                }
-                tally.record(session.ingest.importPdfBytes(bytes, displayName(resolver, uri) ?: FALLBACK_SHARED_PDF))
+                val outcome =
+                    runCatching {
+                        session.ingest.importPdf(
+                            ExternalSource(uri),
+                            displayName(resolver, uri) ?: FALLBACK_SHARED_PDF,
+                        )
+                    }.getOrNull()
+                if (outcome == null) tally.failed++ else tally.record(outcome)
             }
 
             if (imageBytes.isNotEmpty()) {

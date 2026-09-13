@@ -1,5 +1,6 @@
 package dev.npn.core.fs
 
+import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -9,8 +10,10 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.io.InputStream
 import java.security.DigestInputStream
 import java.security.MessageDigest
+import java.util.UUID
 
 /**
  * Storage Access Framework backed [LibraryFileSystem] for Android (PLAN section 4, "Android
@@ -415,12 +418,7 @@ class SafLibraryFileSystem(
         }
 
         if (!moved) {
-            // Fallback: copy the bytes into the new location write-once, then delete the source.
-            val data =
-                resolver.openInputStream(docUri(source.docId))?.use { it.readBytes() }
-                    ?: throw IOException("Cannot read source for move: $fromRelPath")
-            writeBytesInDir(toParentId, toName, data, toRelPath)
-            DocumentsContract.deleteDocument(resolver, docUri(source.docId))
+            streamMoveFallback(source, fromRelPath, toRelPath, toParentId, toName)
             return@withContext
         }
 
@@ -440,6 +438,45 @@ class SafLibraryFileSystem(
         }
         Unit
     }
+
+    /** Stream a cross-directory move without making a partial PDF visible at the final path. */
+    private fun streamMoveFallback(
+        source: Entry,
+        fromRelPath: String,
+        toRelPath: String,
+        toParentId: String,
+        toName: String,
+    ) {
+        val stagingName = ".npn-move-${UUID.randomUUID()}.part"
+        val stagingUri =
+            copyIntoNewFile(toParentId, stagingName, toRelPath, mimeForName(toName)) {
+                resolver.openInputStream(docUri(source.docId))
+                    ?: throw IOException("Cannot read source for move: $fromRelPath")
+            }
+        val renamedUri = publishMovedCopy(stagingUri, fromRelPath, toRelPath, toName)
+        val renamedId = DocumentsContract.getDocumentId(renamedUri)
+        val actualName = DocumentFile.fromSingleUri(context, renamedUri)?.name
+        val published = resolveEntry(toRelPath)
+        if ((actualName != null && actualName != toName) || published?.docId != renamedId) {
+            deleteQuietly(renamedUri)
+            throw IOException("Move target collided: $toRelPath")
+        }
+        DocumentsContract.deleteDocument(resolver, docUri(source.docId))
+    }
+
+    private fun publishMovedCopy(
+        stagingUri: Uri,
+        fromRelPath: String,
+        toRelPath: String,
+        toName: String,
+    ): Uri =
+        try {
+            DocumentsContract.renameDocument(resolver, stagingUri, toName)
+                ?: throw IOException("Provider did not rename the staging copy")
+        } catch (e: Exception) {
+            deleteQuietly(stagingUri)
+            throw IOException("Move publish failed: $fromRelPath -> $toRelPath", e)
+        }
 
     /**
      * Create a file with an exact name inside [parentId] and write [bytes] once. SAF may silently
@@ -468,6 +505,38 @@ class SafLibraryFileSystem(
             throw e
         }
     }
+
+    /** Create an exact-name file and stream [openInput] into it, removing partial output on error. */
+    private fun copyIntoNewFile(
+        parentId: String,
+        name: String,
+        relForError: String,
+        mime: String = mimeForName(name),
+        openInput: () -> InputStream,
+    ): Uri {
+        val createdUri = createDocument(parentId, name, mime, relForError)
+        assertExactCreatedName(createdUri, name, relForError)
+        try {
+            streamInto(resolver, createdUri, relForError, openInput)
+        } catch (e: Throwable) {
+            deleteQuietly(createdUri)
+            throw e
+        }
+        return createdUri
+    }
+
+    private fun createDocument(
+        parentId: String,
+        name: String,
+        mime: String,
+        relForError: String,
+    ): Uri =
+        DocumentsContract.createDocument(
+            resolver,
+            docUri(parentId),
+            mime,
+            name,
+        ) ?: throw IOException("Failed to create file: $relForError")
 
     private fun writeCreatedFile(
         uri: Uri,
@@ -537,10 +606,10 @@ class SafLibraryFileSystem(
         }
         val name = splitSegments(toRelPath).last()
         val parentId = resolveParentDir(toRelPath, create = true)
-        val data =
-            resolver.openInputStream(source.uri)?.use { it.readBytes() }
+        copyIntoNewFile(parentId, name, toRelPath) {
+            resolver.openInputStream(source.uri)
                 ?: throw IOException("Cannot open external source: ${source.uri}")
-        writeBytesInDir(parentId, name, data, toRelPath)
+        }
         Unit
     }
 
@@ -549,14 +618,35 @@ class SafLibraryFileSystem(
         target: ExternalSource,
     ) = withContext(Dispatchers.IO) {
         val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
-        val data =
-            resolver.openInputStream(docUri(entry.docId))?.use { it.readBytes() }
-                ?: throw IOException("Cannot read: $relPath")
-        resolver.openOutputStream(target.uri, "w")?.use { it.write(data) }
-            ?: throw IOException("Cannot open external target: ${target.uri}")
+        resolver.openInputStream(docUri(entry.docId))?.use { input ->
+            val output =
+                resolver.openOutputStream(target.uri, "w")
+                    ?: throw IOException("Cannot open external target: ${target.uri}")
+            try {
+                output.use { input.copyTo(it, STREAM_BUFFER_SIZE) }
+            } catch (e: Throwable) {
+                deleteQuietly(target.uri)
+                throw e
+            }
+        } ?: throw IOException("Cannot read: $relPath")
         Unit
     }
 
     /** SAF provides no reliable change notifications; indexing is rescan-driven. */
     override fun watch(): Flow<FsEvent> = emptyFlow()
+}
+
+private const val STREAM_BUFFER_SIZE = 64 * 1024
+
+private fun streamInto(
+    resolver: ContentResolver,
+    target: Uri,
+    relForError: String,
+    openInput: () -> InputStream,
+) {
+    openInput().use { input ->
+        resolver.openOutputStream(target, "w")?.use { output ->
+            input.copyTo(output, STREAM_BUFFER_SIZE)
+        } ?: throw IOException("Cannot open for write: $relForError")
+    }
 }

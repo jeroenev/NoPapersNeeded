@@ -1,6 +1,7 @@
 package dev.npn.app.ui.library
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.platform.ScannedPdf
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiText
@@ -484,9 +485,9 @@ class LibraryViewModel(
     }
 
     /** Launch a platform scan; cancellation stays quiet while an actual scanner failure is visible. */
-    fun scan(scanToPdf: suspend () -> ByteArray?) {
+    fun scan(scanToPdf: suspend () -> ScannedPdf?) {
         viewModelScope.launch {
-            val bytes =
+            val scanned =
                 try {
                     scanToPdf()
                 } catch (e: CancellationException) {
@@ -495,25 +496,34 @@ class LibraryViewModel(
                     message(uiText(UiTextKey.SCAN_CAPTURE_FAILED))
                     return@launch
                 }
-            if (bytes != null) importScannedPdfNow(bytes)
+            if (scanned != null) importScannedPdfNow(scanned)
         }
+    }
+
+    private suspend fun importScannedPdfNow(scanned: ScannedPdf) {
+        reportScanImport { ingest.importPdf(scanned.source, scanned.suggestedName) }
     }
 
     private suspend fun importScannedPdfNow(bytes: ByteArray) {
         val name = "scan-${randomId()}.pdf"
+        reportScanImport { ingest.importPdfBytes(bytes, name) }
+    }
+
+    private suspend fun reportScanImport(import: suspend () -> ImportOutcome) {
         val msg =
-            runCatching { ingest.importPdfBytes(bytes, name) }.fold(
-                onSuccess = { outcome ->
-                    when (outcome) {
-                        is ImportOutcome.Imported -> uiText(UiTextKey.SCAN_IMPORTED)
-                        is ImportOutcome.Duplicate -> uiText(UiTextKey.SCAN_ALREADY_IN_LIBRARY)
-                        is ImportOutcome.Failed -> uiText(UiTextKey.SCAN_IMPORT_FAILED, outcome.message)
-                    }
-                },
+            runCatching { import() }.fold(
+                onSuccess = ::scanOutcomeMessage,
                 onFailure = { uiText(UiTextKey.SCAN_IMPORT_FAILED, reasonOf(it)) },
             )
         message(msg)
     }
+
+    private fun scanOutcomeMessage(outcome: ImportOutcome): UiText =
+        when (outcome) {
+            is ImportOutcome.Imported -> uiText(UiTextKey.SCAN_IMPORTED)
+            is ImportOutcome.Duplicate -> uiText(UiTextKey.SCAN_ALREADY_IN_LIBRARY)
+            is ImportOutcome.Failed -> uiText(UiTextKey.SCAN_IMPORT_FAILED, outcome.message)
+        }
 
     // Names are trimmed here so the trimming rule lives in one place rather than in each dialog.
 

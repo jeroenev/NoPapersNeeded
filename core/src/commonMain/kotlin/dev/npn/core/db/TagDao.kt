@@ -35,6 +35,16 @@ interface TagDao {
     )
     fun observeAllWithCounts(): Flow<List<TagWithCount>>
 
+    /** Tag counts limited to documents the AI search tools can reach. */
+    @Query(
+        "SELECT t.name AS name, t.color AS color, t.icon AS icon, COUNT(d.docId) AS count " +
+            "FROM tags t LEFT JOIN document_tags dt ON t.name = dt.tag " +
+            "LEFT JOIN documents d ON d.docId = dt.docId " +
+            "AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "GROUP BY t.name, t.color, t.icon ORDER BY t.name",
+    )
+    fun observeAllWithLiveCounts(): Flow<List<TagWithCount>>
+
     /**
      * Remove tag rows that no non-deleted document references. Tags exist only through use: when
      * the last document drops a tag (untag, rename, merge, permanent delete) it vanishes from the

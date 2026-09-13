@@ -101,6 +101,15 @@ interface DocumentFieldDao {
     )
     suspend fun keysWithCounts(): List<FieldKeyCount>
 
+    /** Distinct field keys with counts limited to documents the AI search tools can reach. */
+    @Query(
+        "SELECT f.fieldKey, COUNT(*) AS count FROM document_fields f " +
+            "JOIN documents d ON d.docId = f.docId " +
+            "WHERE d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "GROUP BY f.fieldKey ORDER BY f.fieldKey COLLATE NOCASE",
+    )
+    suspend fun keysWithLiveCounts(): List<FieldKeyCount>
+
     @Query(
         "SELECT fieldKey, COUNT(*) AS count FROM document_fields " +
             "GROUP BY fieldKey ORDER BY fieldKey COLLATE NOCASE",

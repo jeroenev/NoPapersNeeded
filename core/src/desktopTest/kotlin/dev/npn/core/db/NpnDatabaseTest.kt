@@ -132,6 +132,33 @@ class NpnDatabaseTest {
         }
 
     @Test
+    fun tagCountsIncludeOnlyLiveDocuments() =
+        runTest {
+            val docDao = db.documentDao()
+            val tagDao = db.tagDao()
+            val live = "a".repeat(64)
+            val trashed = "b".repeat(64)
+            val missing = "c".repeat(64)
+            docDao.upsertAll(
+                listOf(
+                    doc(live),
+                    doc(trashed, relPath = "trashed.pdf", trashed = true),
+                    doc(missing, relPath = "missing.pdf", missing = true),
+                ),
+            )
+            tagDao.upsert(TagEntity("invoice"))
+            tagDao.setForDocument(live, listOf("invoice"))
+            tagDao.setForDocument(trashed, listOf("invoice"))
+            tagDao.setForDocument(missing, listOf("invoice"))
+
+            tagDao
+                .observeAllWithLiveCounts()
+                .first()
+                .single { it.name == "invoice" }
+                .count shouldBe 1
+        }
+
+    @Test
     fun setForDocumentReplacesTags() =
         runTest {
             val docDao = db.documentDao()

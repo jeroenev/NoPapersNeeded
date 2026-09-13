@@ -111,20 +111,37 @@ object LibraryAiTools {
             append("- [doc:")
                 .append(doc.docId)
                 .append("] file=\"")
-                .append(doc.fileName)
+                .append(escapeQuoted(doc.fileName))
                 .append('"')
-            doc.title?.takeIf { it.isNotBlank() }?.let { append(" title=\"").append(it).append('"') }
+            doc.title?.takeIf { it.isNotBlank() }?.let { append(" title=\"").append(escapeQuoted(it)).append('"') }
             doc.docDate?.let { append(" date=").append(it) }
-            doc.correspondent?.takeIf { it.isNotBlank() }?.let { append(" correspondent=\"").append(it).append('"') }
+            doc.correspondent
+                ?.takeIf { it.isNotBlank() }
+                ?.let { append(" correspondent=\"").append(escapeQuoted(it)).append('"') }
             field?.let {
                 append(" field=\"")
-                    .append(it.first)
+                    .append(escapeQuoted(it.first))
                     .append("=")
-                    .append(it.second)
+                    .append(escapeQuoted(it.second))
                     .append('"')
             }
             snippet?.takeIf { it.isNotBlank() }?.let {
-                append(" snippet=\"").append(stripSnippetMarkers(it)).append('"')
+                append(" snippet=\"").append(escapeQuoted(stripSnippetMarkers(it))).append('"')
+            }
+        }
+
+    /** Escape values embedded in the tool's quoted, one-document-per-line format. */
+    internal fun escapeQuoted(value: String): String =
+        buildString(value.length) {
+            for (char in value) {
+                when (char) {
+                    '\\' -> append("\\\\")
+                    '"' -> append("\\\"")
+                    '\n' -> append("\\n")
+                    '\r' -> append("\\r")
+                    '\t' -> append("\\t")
+                    else -> append(char)
+                }
             }
         }
 
@@ -135,6 +152,9 @@ object LibraryAiTools {
 
     /** The file name: a document column, searchable like a field but not a registry entry. */
     const val FILE_NAME_FIELD = "fileName"
+
+    /** The library-relative path, distinct from the base [FILE_NAME_FIELD]. */
+    const val PATH_FIELD = "path"
 
     /**
      * The engine whose text is indexed: maintained by the app rather than the user. Searchable by
@@ -154,14 +174,14 @@ object LibraryAiTools {
      * chat system prompt instead, which are built at runtime.
      */
     fun fieldVocabulary(fields: List<FieldDef>): String =
-        (fields.map { "${it.key} (${it.label}, ${it.type.wire})" } + FILE_NAME_FIELD + OCR_ENGINE_FIELD)
+        (fields.map { "${it.key} (${it.label}, ${it.type.wire})" } + FILE_NAME_FIELD + PATH_FIELD + OCR_ENGINE_FIELD)
             .joinToString(", ")
 
     private val FIELD_ALIASES: Map<String, String> =
         mapOf(
             "file" to FILE_NAME_FIELD,
             "filename" to FILE_NAME_FIELD,
-            "path" to FILE_NAME_FIELD,
+            "path" to PATH_FIELD,
             "name" to FILE_NAME_FIELD,
             "engine" to OCR_ENGINE_FIELD,
             "ocr" to OCR_ENGINE_FIELD,
@@ -182,7 +202,7 @@ object LibraryAiTools {
         val lc = f.lowercase()
         if (lc == SearchFieldsTool.ANY_FIELD) return SearchFieldsTool.ANY_FIELD
         return fields.firstOrNull { FieldKeys.sameKey(it.key, f) || it.label.equals(f, ignoreCase = true) }?.key
-            ?: listOf(FILE_NAME_FIELD, OCR_ENGINE_FIELD).firstOrNull { it.equals(f, ignoreCase = true) }
+            ?: listOf(FILE_NAME_FIELD, PATH_FIELD, OCR_ENGINE_FIELD).firstOrNull { it.equals(f, ignoreCase = true) }
             ?: FIELD_ALIASES[lc]
             ?: lc
     }
@@ -206,14 +226,17 @@ object LibraryAiTools {
 
         override suspend fun execute(args: Args): String {
             if (args.query.isBlank()) return "Error: query must not be blank."
-            val hits = ftsDao.search(FtsQuery.sanitize(args.query)).take(MAX_SEARCH_RESULTS)
+            val hits = ftsDao.search(FtsQuery.sanitize(args.query))
+            val docs = documentDao.getByDocIds(hits.map { it.docId }).associateBy { it.docId }
             val lines =
-                hits.mapNotNull { hit ->
-                    documentDao
-                        .getByDocId(hit.docId)
-                        ?.takeIf { it.isLive() }
-                        ?.let { docLine(it, hit.snippet) }
-                }
+                hits
+                    .asSequence()
+                    .mapNotNull { hit ->
+                        docs[hit.docId]
+                            ?.takeIf { it.isLive() }
+                            ?.let { docLine(it, hit.snippet) }
+                    }.take(MAX_SEARCH_RESULTS)
+                    .toList()
             return if (lines.isEmpty()) {
                 "No documents match \"${args.query}\". Try fewer or different terms."
             } else {
@@ -233,7 +256,7 @@ object LibraryAiTools {
         class Args
 
         override suspend fun execute(args: Args): String {
-            val tags = tagDao.observeAllWithCounts().first()
+            val tags = tagDao.observeAllWithLiveCounts().first()
             return if (tags.isEmpty()) {
                 "The library has no tags yet."
             } else {
@@ -309,14 +332,14 @@ object LibraryAiTools {
             description =
                 "List the metadata fields documents carry: every registered field (key, label, type, " +
                     "whether it shows on every document) with document counts, keys in use without a " +
-                    "definition, and the two document columns searchable like fields: $FILE_NAME_FIELD and " +
-                    "$OCR_ENGINE_FIELD. Call this to discover field keys before using search_fields.",
+                    "definition, and the document columns searchable like fields: $FILE_NAME_FIELD, $PATH_FIELD, " +
+                    "and $OCR_ENGINE_FIELD. Call this to discover field keys before using search_fields.",
         ) {
         @Serializable
         class Args
 
         override suspend fun execute(args: Args): String {
-            val counts = fieldDao.keysWithCounts().associate { it.fieldKey to it.count }
+            val counts = fieldDao.keysWithLiveCounts().associate { it.fieldKey to it.count }
             val registered = fields.map { it.key }.toSet()
             return buildString {
                 appendLine("Registered fields (key · label · type · documents with a value):")
@@ -332,8 +355,11 @@ object LibraryAiTools {
                     )
                 }
                 append(
-                    "Also searchable: $FILE_NAME_FIELD (the file name) and $OCR_ENGINE_FIELD (the engine whose " +
-                        "text is indexed for search: $OCR_ENGINE_LABELS; set by the app, not the user).",
+                    "Also searchable: $FILE_NAME_FIELD (the base file name), " +
+                        "$PATH_FIELD (the library-relative path), " +
+                        "and $OCR_ENGINE_FIELD (the engine whose " +
+                        "text is indexed for search: $OCR_ENGINE_LABELS; " +
+                        "set by the app, not the user).",
                 )
             }
         }
@@ -358,7 +384,8 @@ object LibraryAiTools {
         @Serializable
         data class Args(
             @property:LLMDescription(
-                "Field to search: a key (or label) from list_fields, $FILE_NAME_FIELD, $OCR_ENGINE_FIELD, " +
+                "Field to search: a key (or label) from list_fields, $FILE_NAME_FIELD, $PATH_FIELD, " +
+                    "$OCR_ENGINE_FIELD, " +
                     "or \"any\" for every user-authored field.",
             )
             val field: String = "any",
@@ -384,6 +411,7 @@ object LibraryAiTools {
                 when (key) {
                     ANY_FIELD -> searchAnyField(value)
                     FILE_NAME_FIELD -> searchColumn(FILE_NAME_FIELD, value) { it.fileName }
+                    PATH_FIELD -> searchColumn(PATH_FIELD, value) { it.relPath }
                     OCR_ENGINE_FIELD -> searchColumn(OCR_ENGINE_FIELD, value) { it.ocrEngine }
                     else -> searchField(key, value, range)
                 }
@@ -402,7 +430,8 @@ object LibraryAiTools {
         }
 
         private fun isKnownField(key: String): Boolean =
-            key == ANY_FIELD || key == FILE_NAME_FIELD || key == OCR_ENGINE_FIELD || fields.any { it.key == key }
+            key == ANY_FIELD || key == FILE_NAME_FIELD || key == PATH_FIELD || key == OCR_ENGINE_FIELD ||
+                fields.any { it.key == key }
 
         /** Resolve docId -> matched (key, value) lines, deduped per document. */
         private suspend fun linesForMatches(matches: Map<String, Pair<String, String>>): List<String> {
@@ -515,6 +544,7 @@ object LibraryAiTools {
                 doc.ocrEngineOverride?.let { appendLine("ocrEnginePinnedByUser: $it") }
                 if (doc.trashed) appendLine("status: in trash")
                 if (doc.missing) appendLine("status: file missing")
+                if (doc.deleted) appendLine("status: permanently deleted")
             }.trimEnd()
         }
     }

@@ -7,7 +7,6 @@ import io.kotest.matchers.string.shouldNotContain
 import kotlin.test.Test
 
 class LibraryAiToolsTest {
-
     private fun doc(
         docId: String = "a".repeat(64),
         relPath: String = "inbox/report.pdf",
@@ -37,9 +36,10 @@ class LibraryAiToolsTest {
 
     @Test
     fun docLineIncludesOptionalMetadataWhenPresent() {
-        val line = LibraryAiTools.docLine(
-            doc(title = "Q3 Report", docDate = "2026-07-15", correspondent = "ACME"),
-        )
+        val line =
+            LibraryAiTools.docLine(
+                doc(title = "Q3 Report", docDate = "2026-07-15", correspondent = "ACME"),
+            )
         line shouldContain "title=\"Q3 Report\""
         line shouldContain "date=2026-07-15"
         line shouldContain "correspondent=\"ACME\""
@@ -65,5 +65,19 @@ class LibraryAiToolsTest {
     @Test
     fun stripSnippetMarkersRemovesControlChars() {
         LibraryAiTools.stripSnippetMarkers("a\u0001b\u0002c") shouldBe "abc"
+    }
+
+    @Test
+    fun docLineEscapesQuotedValuesAndLineBreaks() {
+        val line =
+            LibraryAiTools.docLine(
+                doc(fileName = "a\"b.pdf", title = "first\nsecond"),
+                snippet = "tab\there",
+            )
+
+        line shouldContain "file=\"a\\\"b.pdf\""
+        line shouldContain "title=\"first\\nsecond\""
+        line shouldContain "snippet=\"tab\\there\""
+        line.lines().size shouldBe 1
     }
 }

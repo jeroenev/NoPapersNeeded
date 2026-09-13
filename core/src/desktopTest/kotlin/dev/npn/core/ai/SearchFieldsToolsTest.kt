@@ -121,8 +121,9 @@ class SearchFieldsToolsTest {
             out shouldContain "Keys in use without a definition:"
             out shouldContain "amount (2 docs)"
             out shouldContain "ref (1 docs)"
-            // The two document columns searchable like fields stay advertised.
+            // The document columns searchable like fields stay advertised.
             out shouldContain "Also searchable: fileName"
+            out shouldContain "path"
             out shouldContain "ocrEngine"
         }
 
