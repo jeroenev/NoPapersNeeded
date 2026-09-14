@@ -102,9 +102,13 @@ class JvmLibraryFileSystem internal constructor(
         VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
 
     /**
-     * Set once the filesystem has answered "no hard links" so later writes skip the doomed
-     * `link(2)`. All links here are within one directory, so a refusal is a property of the
-     * filesystem, not of the pair.
+     * Set once a same-bucket link in [publishObject] has come back false, meaning the filesystem
+     * itself has no usable `link(2)` (checked there because those links never cross a mount point,
+     * so a refusal is a property of the filesystem, not of the pair). [move] and the other
+     * call sites can cross into a bind-mounted or otherwise separate-device subtree, where a link
+     * failure (EXDEV) says nothing about the filesystem in general; they consult this latch to skip
+     * a doomed attempt once it is known, but never set it themselves ([linkNoReplace]'s
+     * `mayLatch = false`).
      */
     @Volatile
     private var linksUnavailable = false
@@ -264,6 +268,8 @@ class JvmLibraryFileSystem internal constructor(
         staging: Path,
         canonical: Path,
     ): VerifiedPublicationResult {
+        // mayLatch = true (the default): staging and canonical always share a bucket directory, so
+        // a refusal here is the filesystem's, safe to remember for the rest of the session.
         if (linkNoReplace(staging, canonical)) return VerifiedPublicationResult.PUBLISHED
         // A generic failure with the target in place is a lost race, not a missing primitive.
         if (Files.isRegularFile(canonical)) throw java.nio.file.FileAlreadyExistsException(canonical.toString())
@@ -321,7 +327,10 @@ class JvmLibraryFileSystem internal constructor(
         from: Path,
         to: Path,
     ) {
-        if (linkNoReplace(from, to)) {
+        // mayLatch = false: from/to can straddle a bind-mounted or otherwise separate-device
+        // subtree (unlike publishObject's bucket-local links), so a refusal here must not be
+        // remembered as "this filesystem has no hard links" — see linksUnavailable.
+        if (linkNoReplace(from, to, mayLatch = false)) {
             Files.delete(from)
         } else {
             Files.move(from, to)
@@ -332,10 +341,11 @@ class JvmLibraryFileSystem internal constructor(
     private fun linkNoReplace(
         from: Path,
         to: Path,
+        mayLatch: Boolean = true,
     ): Boolean {
         if (linksUnavailable) return false
         val linked = linker.link(from, to)
-        if (!linked) linksUnavailable = true
+        if (!linked && mayLatch) linksUnavailable = true
         return linked
     }
 

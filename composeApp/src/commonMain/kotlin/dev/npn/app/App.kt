@@ -48,6 +48,7 @@ import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
+import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.LocalDocumentDrafts
@@ -81,6 +82,8 @@ import no_papers_needed.composeapp.generated.resources.common_open_saved_library
 import no_papers_needed.composeapp.generated.resources.common_opening_library
 import no_papers_needed.composeapp.generated.resources.common_pick_folder_again
 import no_papers_needed.composeapp.generated.resources.common_retry
+import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
+import no_papers_needed.composeapp.generated.resources.common_storage_access_help
 import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
 import no_papers_needed.composeapp.generated.resources.library_settings
 import no_papers_needed.composeapp.generated.resources.library_tags
@@ -547,6 +550,11 @@ private fun RestoreErrorScreen(
 ) {
     val genericMessage = stringResource(Res.string.common_open_saved_library_failed)
     var folderUnusable by remember { mutableStateOf(false) }
+    // The factory refuses to open a direct library at all without the all-files grant, so a
+    // revoked grant lands here, not in the settings screen: offer the same request flow onboarding
+    // does, rather than leaving "Retry" as the only, doomed-to-repeat action.
+    val storage = rememberStorageAccess()
+    val storageAccessMissing = !useSaf && !storage.usable
     val pick =
         rememberLibraryFolderPicker(
             useSaf = useSaf,
@@ -570,6 +578,16 @@ private fun RestoreErrorScreen(
             )
             if (message != genericMessage) {
                 TechnicalDetails(message)
+            }
+            if (storageAccessMissing) {
+                Text(
+                    text = stringResource(Res.string.common_storage_access_help),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    textAlign = TextAlign.Center,
+                )
+                Button(onClick = storage.request) {
+                    Text(stringResource(Res.string.common_storage_access_grant))
+                }
             }
             Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
             OutlinedButton(onClick = pick) {

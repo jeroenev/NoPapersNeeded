@@ -86,6 +86,37 @@ class JvmLibraryFileSystemPublicationTest {
     }
 
     @Test
+    fun aLinkFailureDuringACrossDirectoryMoveDoesNotDisablePublication() {
+        // Simulates an EXDEV on one cross-directory move (e.g. a bind-mounted subtree) on a
+        // filesystem whose bucket-local hard links otherwise work fine: the failure must be
+        // call-specific, never latched into "this filesystem has no link(2)" (see linksUnavailable).
+        var crossDirectoryFailureUsed = false
+        val flaky =
+            NoReplaceLinker { from, to ->
+                if (!crossDirectoryFailureUsed && from.parent != to.parent) {
+                    crossDirectoryFailureUsed = true
+                    false
+                } else {
+                    Files.createLink(to, from)
+                    true
+                }
+            }
+        val fs = JvmLibraryFileSystem(root, PathExternalIo, ObjectPublication.HARD_LINK_ONLY, flaky)
+        runBlocking {
+            fs.writeBytesOnce("a/one.txt", "1".encodeToByteArray())
+            fs.move("a/one.txt", "b/one.txt")
+            fs.exists("a/one.txt") shouldBe false
+            fs.readBytes("b/one.txt").decodeToString() shouldBe "1"
+
+            // A same-bucket publish afterwards must still use link(2) rather than having been
+            // permanently downgraded by the cross-directory move's failure above.
+            val bytes = "tx".encodeToByteArray()
+            val result = fs.publishVerifiedObjectOnce(stage("s1.part", bytes), "bucket/obj", sha256Bytes(bytes))
+            result shouldBe VerifiedPublicationResult.PUBLISHED
+        }
+    }
+
+    @Test
     fun ordinaryWritesAndMovesKeepWriteOnceWithoutLinks() {
         val fs = fs(ObjectPublication.HARD_LINK_OR_RENAME)
         runBlocking {
