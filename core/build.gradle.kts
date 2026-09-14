@@ -54,6 +54,9 @@ kotlin {
         // library target, so the Android edge into `jvmShared` is drawn by hand.
         val jvmSharedMain by getting
         val jvmSharedTest by getting
+        jvmSharedMain.dependencies {
+            compileOnly(libs.jna)
+        }
         androidMain.get().dependsOn(jvmSharedMain)
         getByName("androidHostTest").dependsOn(jvmSharedTest)
 
@@ -84,6 +87,7 @@ kotlin {
             implementation(libs.kotest.assertions)
         }
         androidMain.dependencies {
+            implementation("net.java.dev.jna:jna:${libs.versions.jna.get()}@aar")
             implementation(libs.androidx.core.ktx)
             implementation(libs.androidx.documentfile)
             implementation(libs.pdfbox.android)
@@ -98,6 +102,7 @@ kotlin {
         }
         getByName("desktopMain") {
             dependencies {
+                implementation(libs.jna)
                 implementation(libs.pdfbox)
                 implementation(libs.pdfbox.xmpbox)
                 implementation(libs.ktor.client.cio)

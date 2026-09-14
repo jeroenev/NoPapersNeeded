@@ -70,9 +70,11 @@ allprojects {
                 "src/commonMain/kotlin",
                 "src/androidMain/kotlin",
                 "src/desktopMain/kotlin",
+                "src/jvmSharedMain/kotlin",
                 "src/main/kotlin",
                 "src/commonTest/kotlin",
                 "src/desktopTest/kotlin",
+                "src/jvmSharedTest/kotlin",
             ),
         )
     }

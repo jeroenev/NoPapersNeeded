@@ -226,8 +226,10 @@ watches it with inotify, rescans whenever it returns to the foreground, and its 
 metadata syncs along with the PDFs. Seeing files those tools write requires the
 "All files access" grant (`MANAGE_EXTERNAL_STORAGE`), which onboarding asks for; without
 it the app can only see its own files. Shared storage has no hard links, so verified
-publication there renames the hash-verified staging object into place instead of
-linking it.
+publication there uses `renameat2(RENAME_NOREPLACE)` through JNA to install the
+hash-verified staging object without replacing a concurrently synced file. If the
+filesystem lacks that primitive, the operation fails rather than risking replacement.
+Moves across mount points likewise fail without removing the source.
 
 The Storage Access Framework remains available as an advanced option
 (Settings → Library → Advanced → *Use Storage Access Framework*) for folders that have

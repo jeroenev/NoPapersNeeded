@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.FolderAccess
 import dev.npn.app.ui.common.persistDirectoryAccess
+import dev.npn.app.ui.common.rememberStorageAccess
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching
@@ -78,12 +79,20 @@ private fun WatchedFolderSettings(
 ) {
     // The inbox is imported from, never written as a library, so a folder that is not on device
     // storage may still be watched through SAF: prefer the configured mode, fall back to the other.
+    val storage = rememberStorageAccess()
     val picker =
         rememberDirectoryPickerLauncher { dir ->
             if (dir == null) return@rememberDirectoryPickerLauncher
-            val preferred = if (useSaf) FolderAccess.SAF else FolderAccess.DIRECT
-            val fallback = if (useSaf) FolderAccess.DIRECT else FolderAccess.SAF
-            val location = persistDirectoryAccess(dir, preferred) ?: persistDirectoryAccess(dir, fallback)
+            val preferSaf = useSaf || !storage.usable
+            val preferred = if (preferSaf) FolderAccess.SAF else FolderAccess.DIRECT
+            val fallback = if (preferSaf) FolderAccess.DIRECT else FolderAccess.SAF
+            val location =
+                persistDirectoryAccess(dir, preferred)
+                    ?: if (fallback == FolderAccess.SAF || storage.usable) {
+                        persistDirectoryAccess(dir, fallback)
+                    } else {
+                        null
+                    }
             if (location != null) onSetFolder(location)
         }
     SettingsHelpText(stringResource(Res.string.common_settings_watched_folder_help))

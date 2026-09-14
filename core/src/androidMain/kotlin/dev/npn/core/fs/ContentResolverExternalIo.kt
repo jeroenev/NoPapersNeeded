@@ -25,9 +25,9 @@ class ContentResolverExternalIo(
             ?: throw IOException("Cannot open external source: ${source.uri}")
 
     override fun openOutput(target: ExternalSource): OutputStream =
-        // "w" rather than "wt": the caller-owned target normally comes fresh from a save dialog,
-        // and some document providers reject the truncate mode outright (mirrors SafLibraryFileSystem).
-        resolver.openOutputStream(target.uri, "w")
+        // Explicit truncation is required when exporting over an existing, longer document.
+        // A provider that cannot truncate must fail rather than leave stale trailing PDF bytes.
+        resolver.openOutputStream(target.uri, "wt")
             ?: throw IOException("Cannot open external target: ${target.uri}")
 }
 

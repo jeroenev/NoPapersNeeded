@@ -44,11 +44,13 @@ import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.LocaleProvider
+import dev.npn.app.ui.common.SafStorageSwitch
 import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.common.rememberStorageAccess
+import dev.npn.app.ui.common.supportsSafStorage
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.LocalDocumentDrafts
@@ -70,6 +72,7 @@ import dev.npn.app.ui.settings.SettingsScreen
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.trash.TrashScreen
+import dev.npn.core.app.LibraryLocations
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
@@ -82,6 +85,7 @@ import no_papers_needed.composeapp.generated.resources.common_open_saved_library
 import no_papers_needed.composeapp.generated.resources.common_opening_library
 import no_papers_needed.composeapp.generated.resources.common_pick_folder_again
 import no_papers_needed.composeapp.generated.resources.common_retry
+import no_papers_needed.composeapp.generated.resources.common_settings_advanced
 import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
 import no_papers_needed.composeapp.generated.resources.common_storage_access_help
 import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
@@ -126,7 +130,8 @@ private fun AppRoot(env: AppEnvironment) {
             val settingsSnapshot by env.settings.settings.collectAsStateWithLifecycle(null)
             RestoreErrorScreen(
                 message = restoreError!!,
-                useSaf = settingsSnapshot?.useSafStorage == true,
+                savedLocation = settingsSnapshot?.libraryLocation,
+                preferSaf = settingsSnapshot?.useSafStorage == true,
                 onRetry = {
                     scope.launch {
                         restoreError = null
@@ -544,7 +549,8 @@ private fun LoadingScreen() {
 @Composable
 private fun RestoreErrorScreen(
     message: String,
-    useSaf: Boolean,
+    savedLocation: String?,
+    preferSaf: Boolean,
     onRetry: () -> Unit,
     onRepickReturned: (String) -> Unit,
 ) {
@@ -554,7 +560,10 @@ private fun RestoreErrorScreen(
     // revoked grant lands here, not in the settings screen: offer the same request flow onboarding
     // does, rather than leaving "Retry" as the only, doomed-to-repeat action.
     val storage = rememberStorageAccess()
-    val storageAccessMissing = !useSaf && !storage.usable
+    val savedUsesSaf = savedLocation?.let(LibraryLocations::isContentUri)
+    var useSaf by remember(savedLocation) { mutableStateOf(savedUsesSaf ?: preferSaf) }
+    var showAdvanced by remember { mutableStateOf(false) }
+    val storageAccessMissing = !storage.usable && (savedUsesSaf == false || !useSaf)
     val pick =
         rememberLibraryFolderPicker(
             useSaf = useSaf,
@@ -590,8 +599,16 @@ private fun RestoreErrorScreen(
                 }
             }
             Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
-            OutlinedButton(onClick = pick) {
+            OutlinedButton(onClick = pick, enabled = useSaf || storage.usable) {
                 Text(stringResource(Res.string.common_pick_folder_again))
+            }
+            if (supportsSafStorage()) {
+                TextButton(onClick = { showAdvanced = !showAdvanced }) {
+                    Text(stringResource(Res.string.common_settings_advanced))
+                }
+                if (showAdvanced) {
+                    SafStorageSwitch(checked = useSaf, onCheckedChange = { useSaf = it })
+                }
             }
             if (folderUnusable) {
                 Text(

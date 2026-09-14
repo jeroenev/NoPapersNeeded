@@ -11,7 +11,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -25,6 +24,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.ui.common.SafStorageSwitch
 import dev.npn.app.ui.common.StorageAccessState
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.createLibraryFolder
@@ -49,8 +49,6 @@ import no_papers_needed.composeapp.generated.resources.common_onboarding_sync
 import no_papers_needed.composeapp.generated.resources.common_onboarding_use_recommended
 import no_papers_needed.composeapp.generated.resources.common_opening_library
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
-import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
-import no_papers_needed.composeapp.generated.resources.common_settings_use_saf_help
 import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
 import no_papers_needed.composeapp.generated.resources.common_storage_access_help
 import no_papers_needed.composeapp.generated.resources.common_storage_access_title
@@ -278,26 +276,5 @@ private fun StorageAccessStep(storage: StorageAccessState) {
     )
     Button(onClick = storage.request) {
         Text(stringResource(Res.string.common_storage_access_grant))
-    }
-}
-
-@Composable
-private fun SafStorageSwitch(
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(4.dp)) {
-        Text(
-            text = stringResource(Res.string.common_settings_use_saf),
-            style = MaterialTheme.typography.bodyMedium,
-            textAlign = TextAlign.Center,
-        )
-        Switch(checked = checked, onCheckedChange = onCheckedChange)
-        Text(
-            text = stringResource(Res.string.common_settings_use_saf_help),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
     }
 }

@@ -36,12 +36,10 @@ enum class ObjectPublication {
     HARD_LINK_ONLY,
 
     /**
-     * Hard link, else a plain no-replace rename of the verified staging file within its bucket.
+     * Hard link, else renameat2(RENAME_NOREPLACE) of the verified staging file within its bucket.
      * Android's shared storage is a FUSE mount that refuses `link(2)` with EPERM, so this is the
-     * best primitive there. It is safe for the same reason the SAF implementation's rename is:
-     * objects are content-addressed and verified in full before the rename, so the published file
-     * is never torn, and a target that appears in the window between the existence check and the
-     * rename holds the same bytes by construction.
+     * exclusive rename primitive there. Both operations refuse an existing target atomically,
+     * including one concurrently installed by a sync client. Unsupported filesystems fail closed.
      */
     HARD_LINK_OR_RENAME,
 }
@@ -281,9 +279,7 @@ class JvmLibraryFileSystem internal constructor(
             }
 
             ObjectPublication.HARD_LINK_OR_RENAME -> {
-                // Plain move, never ATOMIC_MOVE: rename(2) would replace silently, while Files.move
-                // refuses an existing target (see atomicMoveNoReplace for the residual window).
-                Files.move(staging, canonical)
+                LinuxNoReplaceMove.move(staging, canonical)
                 VerifiedPublicationResult.PUBLISHED
             }
         }
@@ -320,8 +316,8 @@ class JvmLibraryFileSystem internal constructor(
      * step, so a crash in between leaves a spare copy at [from] rather than a lost object — the
      * trade the write-once invariant asks for.
      *
-     * Filesystems with no hard links, and cross-device moves, fall back to a plain no-replace
-     * [Files.move]; ATOMIC_MOVE is never used, because it cannot refuse.
+     * Filesystems with no hard links use renameat2(RENAME_NOREPLACE). A filesystem without
+     * either primitive, or a move across mount points, fails without touching either file.
      */
     private fun atomicMoveNoReplace(
         from: Path,
@@ -333,7 +329,7 @@ class JvmLibraryFileSystem internal constructor(
         if (linkNoReplace(from, to, mayLatch = false)) {
             Files.delete(from)
         } else {
-            Files.move(from, to)
+            LinuxNoReplaceMove.move(from, to)
         }
     }
 

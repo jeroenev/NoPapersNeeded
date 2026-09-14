@@ -5,6 +5,10 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.runBlocking
 import java.nio.file.Files
 import java.nio.file.Path
+import java.util.concurrent.Callable
+import java.util.concurrent.CyclicBarrier
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.io.path.name
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -83,6 +87,50 @@ class JvmLibraryFileSystemPublicationTest {
             runBlocking { fs.publishVerifiedObjectOnce(stage("s1.part", bytes), "bucket/obj", sha256Bytes(bytes)) }
         }
         Files.readAllBytes(root.resolve("bucket/obj")).decodeToString() shouldBe "other"
+    }
+
+    @Test
+    fun exclusiveRenameAllowsOnlyOneConcurrentPublisher() {
+        val contenders = 8
+        val barrier = CyclicBarrier(contenders)
+        val executor = Executors.newFixedThreadPool(contenders)
+        try {
+            val results =
+                (0 until contenders).map { index ->
+                    val source = root.resolve("source-$index")
+                    Files.write(source, "$index".encodeToByteArray())
+                    executor.submit(
+                        Callable {
+                            barrier.await(10, TimeUnit.SECONDS)
+                            try {
+                                LinuxNoReplaceMove.move(source, root.resolve("winner"))
+                                index
+                            } catch (_: java.nio.file.FileAlreadyExistsException) {
+                                null
+                            }
+                        },
+                    )
+                }
+            val winners = results.mapNotNull { it.get(10, TimeUnit.SECONDS) }
+            winners.size shouldBe 1
+            Files.readAllBytes(root.resolve("winner")).decodeToString() shouldBe "${winners.single()}"
+            for (index in 0 until contenders) {
+                Files.exists(root.resolve("source-$index")) shouldBe (index != winners.single())
+            }
+        } finally {
+            executor.shutdownNow()
+        }
+    }
+
+    @Test
+    fun exclusiveRenameRefusesEvenADanglingSymlink() {
+        val source = root.resolve("source")
+        val target = root.resolve("target")
+        Files.write(source, "ours".encodeToByteArray())
+        Files.createSymbolicLink(target, root.resolve("absent"))
+        assertFailsWith<java.nio.file.FileAlreadyExistsException> { LinuxNoReplaceMove.move(source, target) }
+        Files.isSymbolicLink(target) shouldBe true
+        Files.readAllBytes(source).decodeToString() shouldBe "ours"
     }
 
     @Test

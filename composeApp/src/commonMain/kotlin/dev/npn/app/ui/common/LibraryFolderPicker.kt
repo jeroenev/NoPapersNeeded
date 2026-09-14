@@ -3,7 +3,7 @@ package dev.npn.app.ui.common
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.rememberUpdatedState
-import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
+import io.github.vinceglb.filekit.PlatformFile
 
 /**
  * The one folder picker for library locations: launches the platform directory dialog, persists
@@ -23,12 +23,17 @@ fun rememberLibraryFolderPicker(
     val currentUseSaf by rememberUpdatedState(useSaf)
     val currentOnPicked by rememberUpdatedState(onPicked)
     val currentOnUnusable by rememberUpdatedState(onUnusable)
-    val picker =
-        rememberDirectoryPickerLauncher { dir ->
-            if (dir == null) return@rememberDirectoryPickerLauncher
-            val access = if (currentUseSaf) FolderAccess.SAF else FolderAccess.DIRECT
-            val location = persistDirectoryAccess(dir, access)
-            if (location == null) currentOnUnusable() else currentOnPicked(location)
-        }
-    return { picker.launch() }
+    return rememberLibraryDirectoryPicker(localOnly = !useSaf) { dir ->
+        if (dir == null) return@rememberLibraryDirectoryPicker
+        val access = if (currentUseSaf) FolderAccess.SAF else FolderAccess.DIRECT
+        val location = persistDirectoryAccess(dir, access)
+        if (location == null) currentOnUnusable() else currentOnPicked(location)
+    }
 }
+
+/** Android filters remote providers in direct mode; desktop uses its native directory picker. */
+@Composable
+internal expect fun rememberLibraryDirectoryPicker(
+    localOnly: Boolean,
+    onPicked: (PlatformFile?) -> Unit,
+): () -> Unit
