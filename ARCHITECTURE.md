@@ -24,8 +24,16 @@ desktopApp ─┘
 ```
 
 The KMP JVM target is named `desktop`, so every module has `commonMain`,
-`androidMain`, `desktopMain` (+ `commonTest`/`desktopTest`). `androidApp` and
+`androidMain`, `desktopMain` (+ `commonTest`/`desktopTest`). `core` also has
+`jvmSharedMain`, shared by the Android and desktop targets, for java.nio code both run:
+the direct-filesystem `JvmLibraryFileSystem` and `JvmWatchedFolder`. `androidApp` and
 `desktopApp` are thin entrypoints that launch the shared Compose UI.
+
+Android picks the library implementation from the persisted location string
+(`LibraryLocations`): a plain path opens the shared direct filesystem (the default, and
+what Syncthing interoperability relies on; needs the all-files grant), a `content://`
+tree uri opens `SafLibraryFileSystem` (the advanced option for cloud document providers
+and for pre-existing SAF libraries).
 
 ## Modules and package map
 
@@ -67,7 +75,7 @@ Shared Compose Multiplatform UI + viewmodels + dependency wiring.
 | Path | Contents |
 |---|---|
 | `app/App.kt` | Root composable / app shell. |
-| `app/di/` | `AppEnvironment` (session lifecycle: open/close/swap, watched folder) + `DefaultAppEnvironment`. `PlatformLibraryFactory`/`WatchedFolderFactory` are fun interfaces the platform source sets implement; `AppEnvironment.android/desktop.kt` build the real per-target pieces. On desktop the per-library wiring itself is `core`'s `jvmSessionDeps` (see below); the DI file only binds settings to the session's knobs. |
+| `app/di/` | `AppEnvironment` (session lifecycle: open/close/swap, watched folder) + `DefaultAppEnvironment`. `PlatformLibraryFactory`/`WatchedFolderFactory` are fun interfaces the platform source sets implement; `AppEnvironment.android/desktop.kt` build the real per-target pieces. On desktop the per-library wiring itself is `core`'s `jvmSessionDeps` (see below); the DI file only binds settings to the session's knobs. Android's factory dispatches on the location string: direct path → `JvmLibraryFileSystem` with `ContentResolverExternalIo` and rename-fallback publication, `content://` → `SafLibraryFileSystem`. |
 | `app/platform/` | Small shared platform hooks. |
 | `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split), `tags/`, `rules/`, `settings/`, `trash/`, `queue/` (the read-only OCR + AI enrichment backlog; a top-level rail destination on wide layouts, reached from settings on compact ones), `onboarding/`, `nav/` (shell + routes), `ai/`, `common/` (shared components: `TagEditor`, `DocThumbnail`, `SearchField`, `MessagesViewModel`, `SnackbarMessages`, `UiText`), `theme/`. ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). |
 | `commonMain/composeResources` | `values/` + `values-nl/` string resources (localization checked by `checkLocalization`). |

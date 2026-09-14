@@ -24,11 +24,38 @@ expect fun thumbCacheMaxEntries(): Int
 expect fun platformFileToExternalSource(file: PlatformFile): ExternalSource
 
 /**
- * Persist directory access for a picked library folder and return the location string used
- * by [dev.npn.app.di.AppEnvironment.openLibrary]. Desktop returns the absolute path; Android
- * takes a persistable uri permission and returns the tree uri string.
+ * How a picked folder is handed to the app. [DIRECT] is a plain filesystem path the app reads and
+ * writes itself: the only mode on desktop and the default on Android, where it is what lets a sync
+ * tool such as Syncthing share the folder. [SAF] is Android's Storage Access Framework tree uri,
+ * kept as an advanced option for folders that have no path (cloud document providers) and for
+ * libraries opened that way before the direct mode existed.
  */
-expect fun persistDirectoryAccess(dir: PlatformFile): String
+enum class FolderAccess { DIRECT, SAF }
+
+/**
+ * Persist access to a picked folder and return the location string used by
+ * [dev.npn.app.di.AppEnvironment.openLibrary] and the watched-folder setting, or null when the
+ * folder cannot be used in [access]: on Android, [FolderAccess.DIRECT] resolves the picker's tree
+ * uri to a device-storage path and has none for cloud providers; [FolderAccess.SAF] is refused on
+ * desktop, which has no document providers.
+ */
+expect fun persistDirectoryAccess(
+    dir: PlatformFile,
+    access: FolderAccess,
+): String?
+
+/**
+ * Whether the platform offers [FolderAccess.SAF] at all (Android). Gates the advanced
+ * "Use Storage Access Framework" setting and the onboarding escape hatch.
+ */
+expect fun supportsSafStorage(): Boolean
+
+/**
+ * The folder the platform recommends for a new library, or null when it has no opinion. Android
+ * proposes `Documents/NoPapersNeeded` on shared storage: visible in any file manager, reachable
+ * by Syncthing, and it survives an uninstall. Desktop leaves the choice to the user's file dialog.
+ */
+expect fun defaultLibraryLocation(): String?
 
 /**
  * Whether the platform offers a native share sheet. Platforms that do (Android) show a Share
@@ -38,14 +65,16 @@ expect fun persistDirectoryAccess(dir: PlatformFile): String
 expect fun supportsSharing(): Boolean
 
 /**
- * Whether the platform can create a new library folder directly (desktop). Platforms that cannot
- * (Android's SAF tree picker) only offer choosing an existing folder.
+ * Whether the platform can create a new library folder inside a [FolderAccess.DIRECT] parent.
+ * True everywhere now that Android has plain paths; SAF parents are still refused by
+ * [createLibraryFolder].
  */
 expect fun supportsLibraryFolderCreation(): Boolean
 
 /**
- * Create a new library folder named [name] inside [parentLocation] and return its location string,
- * or null on failure. Only called when [supportsLibraryFolderCreation] is true.
+ * Create a new library folder named [name] inside [parentLocation] (a [FolderAccess.DIRECT]
+ * location) and return its location string, or null on failure. Creating an existing directory
+ * succeeds, so the recommended default folder is opened through this too.
  */
 expect suspend fun createLibraryFolder(
     parentLocation: String,

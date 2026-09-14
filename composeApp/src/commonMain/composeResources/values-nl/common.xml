@@ -140,4 +140,19 @@
     <string name="common_create_new_library">Bibliotheek aanmaken</string>
     <string name="common_new_library_folder_name">Naam van nieuwe map</string>
 
+    <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
+    <string name="common_onboarding_use_recommended">Aanbevolen map gebruiken</string>
+    <string name="common_onboarding_recommended_help">Je bibliotheek wordt opgeslagen in %1$s, waar bestandsbeheerders en synchronisatieprogramma\'s zoals Syncthing erbij kunnen.</string>
+    <string name="common_storage_access_title">Toegang tot de opslag van dit apparaat toestaan</string>
+    <string name="common_storage_access_help">No Papers Needed bewaart je bibliotheek als een gewone map op dit apparaat. Om die te lezen en te schrijven, inclusief bestanden die andere apps zoals Syncthing toevoegen, is toegang tot alle bestanden nodig.</string>
+    <string name="common_storage_access_grant">Toegang toestaan</string>
+    <string name="common_ok">OK</string>
+    <string name="common_folder_unusable_title">Map kan niet worden gebruikt</string>
+    <string name="common_folder_not_on_device">Deze map staat niet op de opslag van dit apparaat. Kies een map op de interne opslag of een SD-kaart, of zet de optie Storage Access Framework onder Geavanceerd aan om mappen van andere apps te gebruiken.</string>
+    <string name="common_settings_advanced">Geavanceerd</string>
+    <string name="common_settings_use_saf">Storage Access Framework gebruiken</string>
+    <string name="common_settings_use_saf_help">Oude modus: mappen openen via de documentkiezer van Android in plaats van rechtstreeks op de opslag van het apparaat. Trager, zonder wijzigingsmeldingen, en bestanden die synchronisatieprogramma\'s toevoegen kunnen onopgemerkt blijven. Geldt vanaf de volgende keer dat je een map kiest.</string>
+    <string name="common_settings_library_saf_note">Deze bibliotheek is geopend via het Storage Access Framework.</string>
+    <string name="common_settings_storage_access_missing">Toegang tot de opslag van dit apparaat is niet toegestaan. Bestanden die andere apps zoals Syncthing toevoegen, zijn niet zichtbaar.</string>
+
 </resources>

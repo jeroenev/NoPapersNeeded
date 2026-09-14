@@ -6,13 +6,19 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import dev.npn.app.ui.common.rememberStorageAccess
+import dev.npn.app.ui.common.supportsSafStorage
+import dev.npn.core.app.LibraryLocations
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pathrules.StoragePathContext
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_settings_advanced
 import no_papers_needed.composeapp.generated.resources.common_settings_change_library
 import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnail_cache
+import no_papers_needed.composeapp.generated.resources.common_settings_library_saf_note
 import no_papers_needed.composeapp.generated.resources.common_settings_no_library
 import no_papers_needed.composeapp.generated.resources.common_settings_storage
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_access_missing
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_organize_help
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_organize_paths
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_path_template
@@ -24,6 +30,9 @@ import no_papers_needed.composeapp.generated.resources.common_settings_storage_s
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_sample_type
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_variables
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_help
+import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
+import no_papers_needed.composeapp.generated.resources.common_settings_use_saf_help
+import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
 import org.jetbrains.compose.resources.stringResource
 
 /** Variables accepted by the storage-path template, echoed in the field's help copy. */
@@ -36,12 +45,27 @@ private const val STORAGE_PATH_VARIABLES =
  */
 @Composable
 internal fun LibrarySettingsPane(context: SettingsPaneContext) {
+    val location = context.state.libraryLocation
+    val safLibrary = location != null && LibraryLocations.isContentUri(location)
+    val storage = rememberStorageAccess()
     SettingsGroup(title = null) {
         Text(
-            text = context.state.libraryLocation ?: stringResource(Res.string.common_settings_no_library),
+            text = location ?: stringResource(Res.string.common_settings_no_library),
             style = MaterialTheme.typography.bodyMedium,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+        if (safLibrary) {
+            SettingsHelpText(stringResource(Res.string.common_settings_library_saf_note))
+        }
+        // A direct library whose grant was revoked still opens what the app itself wrote, but not
+        // what Syncthing wrote next to it: say so where the user looks for the library.
+        if (location != null && !safLibrary && !storage.usable) {
+            SettingsHelpText(stringResource(Res.string.common_settings_storage_access_missing))
+            SettingsActionRow(
+                label = stringResource(Res.string.common_storage_access_grant),
+                onClick = storage.request,
+            )
+        }
         SettingsActionRow(
             label = stringResource(Res.string.common_settings_change_library),
             onClick = context.onChangeLibrary,
@@ -60,6 +84,19 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
             onClick = { context.vm.clearThumbnailCache(context.onThumbnailsCleared) },
             help = stringResource(Res.string.common_settings_thumbnail_cache_help),
         )
+    }
+
+    // Android only: the Storage Access Framework stays available for folders that have no path
+    // (cloud document providers). It changes what the next folder choice persists, nothing else.
+    if (supportsSafStorage()) {
+        SettingsGroup(title = stringResource(Res.string.common_settings_advanced)) {
+            SettingsSwitchRow(
+                title = stringResource(Res.string.common_settings_use_saf),
+                help = stringResource(Res.string.common_settings_use_saf_help),
+                checked = context.state.useSafStorage,
+                onCheckedChange = { on -> context.vm.edit { it.copy(useSafStorage = on) } },
+            )
+        }
     }
 }
 

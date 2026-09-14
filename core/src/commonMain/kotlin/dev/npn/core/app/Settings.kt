@@ -20,6 +20,12 @@ data class SettingsSnapshot(
     val landscapeListColumns: Boolean = false,
     val watchedFolder: String? = null,
     val watchedFolderDeleteAfterImport: Boolean = false,
+    /**
+     * Android only: pick library and watched folders through the Storage Access Framework instead
+     * of as plain device-storage paths. Affects only what the *next* folder choice persists; an
+     * already opened library keeps the mode its location string encodes ([LibraryLocations]).
+     */
+    val useSafStorage: Boolean = false,
     val storagePathTemplate: String? = null,
     val storagePathEnabled: Boolean = false,
     val autoMatchRulesJson: String = "[]",
@@ -180,6 +186,7 @@ object SettingsCodec {
                 watchedFolderDeleteAfterImport =
                     reader.boolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT)
                         ?: DEFAULTS.watchedFolderDeleteAfterImport,
+                useSafStorage = reader.boolean(SettingsKeys.USE_SAF_STORAGE) ?: DEFAULTS.useSafStorage,
                 storagePathTemplate = reader.string(SettingsKeys.STORAGE_PATH_TEMPLATE),
                 storagePathEnabled = reader.boolean(SettingsKeys.STORAGE_PATH_ENABLED) ?: DEFAULTS.storagePathEnabled,
                 autoMatchRulesJson = reader.string(SettingsKeys.AUTO_MATCH_RULES_JSON) ?: DEFAULTS.autoMatchRulesJson,
@@ -226,6 +233,7 @@ object SettingsCodec {
         writer.putBoolean(SettingsKeys.LANDSCAPE_LIST_COLUMNS, s.landscapeListColumns)
         writer.putOptional(SettingsKeys.WATCHED_FOLDER, s.watchedFolder)
         writer.putBoolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT, s.watchedFolderDeleteAfterImport)
+        writer.putBoolean(SettingsKeys.USE_SAF_STORAGE, s.useSafStorage)
         writer.putOptional(SettingsKeys.STORAGE_PATH_TEMPLATE, s.storagePathTemplate)
         writer.putBoolean(SettingsKeys.STORAGE_PATH_ENABLED, s.storagePathEnabled)
         writer.putString(SettingsKeys.AUTO_MATCH_RULES_JSON, s.autoMatchRulesJson)
@@ -272,6 +280,7 @@ internal object SettingsKeys {
     const val INSTALLATION_ID = "installationId"
     const val WATCHED_FOLDER = "watchedFolder"
     const val WATCHED_FOLDER_DELETE_AFTER_IMPORT = "watchedFolderDeleteAfterImport"
+    const val USE_SAF_STORAGE = "useSafStorage"
     const val STORAGE_PATH_TEMPLATE = "storagePathTemplate"
     const val STORAGE_PATH_ENABLED = "storagePathEnabled"
     const val AUTO_MATCH_RULES_JSON = "autoMatchRulesJson"

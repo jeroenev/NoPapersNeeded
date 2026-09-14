@@ -141,4 +141,19 @@
     <string name="common_create_new_library">Create a library</string>
     <string name="common_new_library_folder_name">New folder name</string>
 
+    <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
+    <string name="common_onboarding_use_recommended">Use the recommended folder</string>
+    <string name="common_onboarding_recommended_help">Your library will be stored in %1$s, where file managers and sync tools such as Syncthing can reach it.</string>
+    <string name="common_storage_access_title">Allow access to device storage</string>
+    <string name="common_storage_access_help">No Papers Needed keeps your library as a plain folder on this device. To read and write it, including files added by other apps such as Syncthing, allow access to all files.</string>
+    <string name="common_storage_access_grant">Allow access</string>
+    <string name="common_ok">OK</string>
+    <string name="common_folder_unusable_title">Folder cannot be used</string>
+    <string name="common_folder_not_on_device">This folder is not on device storage. Choose a folder on internal storage or an SD card, or turn on the Storage Access Framework option under Advanced to use folders from other apps.</string>
+    <string name="common_settings_advanced">Advanced</string>
+    <string name="common_settings_use_saf">Use Storage Access Framework</string>
+    <string name="common_settings_use_saf_help">Legacy mode: open folders through Android\'s document picker instead of directly on device storage. Slower, without change notifications, and files added by sync tools may go unnoticed. Applies the next time you choose a folder.</string>
+    <string name="common_settings_library_saf_note">This library is opened through the Storage Access Framework.</string>
+    <string name="common_settings_storage_access_missing">Access to device storage is not allowed. Files added by other apps, such as Syncthing, will not be visible.</string>
+
 </resources>

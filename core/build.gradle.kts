@@ -13,6 +13,18 @@ kotlin {
     jvmToolchain(17)
     jvm("desktop")
 
+    // `jvmShared` is what Android and desktop have in common beyond commonMain: java.nio and
+    // java.security. The direct-filesystem library implementation lives there so Android's
+    // non-SAF storage mode is the very same class the desktop app runs, not a port of it.
+    applyDefaultHierarchyTemplate {
+        common {
+            group("jvmShared") {
+                withJvm()
+                withAndroidTarget()
+            }
+        }
+    }
+
     androidLibrary {
         namespace = "dev.npn.core"
         compileSdk =
@@ -38,6 +50,13 @@ kotlin {
     }
 
     sourceSets {
+        // The hierarchy template matches the `desktop` jvm target but not the AGP multiplatform
+        // library target, so the Android edge into `jvmShared` is drawn by hand.
+        val jvmSharedMain by getting
+        val jvmSharedTest by getting
+        androidMain.get().dependsOn(jvmSharedMain)
+        getByName("androidHostTest").dependsOn(jvmSharedTest)
+
         commonMain.dependencies {
             implementation(libs.kotlinx.coroutines.core)
             implementation(libs.kotlinx.serialization.json)

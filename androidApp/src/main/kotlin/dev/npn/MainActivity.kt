@@ -2,6 +2,7 @@ package dev.npn
 
 import android.content.Intent
 import android.os.Bundle
+import android.os.SystemClock
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -40,6 +41,21 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent)
+    }
+
+    /**
+     * Syncthing and other apps change the library while this app is in the background, and the
+     * filesystem watch cannot be relied on to have seen it (the process may have been dead, and
+     * inotify on the FUSE mount is best effort). A rescan on every return to the foreground is the
+     * documented Syncthing coexistence rule; it is rate-limited so a quick app switch is free.
+     */
+    override fun onResume() {
+        super.onResume()
+        val session = env.session.value ?: return
+        val now = SystemClock.elapsedRealtime()
+        if (now - lastResumeRescan < RESUME_RESCAN_MIN_INTERVAL_MS) return
+        lastResumeRescan = now
+        env.appScope.launch { runCatching { session.ingest.rescan() } }
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -103,5 +119,10 @@ class MainActivity : ComponentActivity() {
 
     private fun toast(message: String) {
         Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+    }
+
+    private companion object {
+        var lastResumeRescan = 0L
+        const val RESUME_RESCAN_MIN_INTERVAL_MS = 15_000L
     }
 }

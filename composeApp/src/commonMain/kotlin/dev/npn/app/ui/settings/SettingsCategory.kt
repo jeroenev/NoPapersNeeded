@@ -47,6 +47,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_storage_o
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_path_template
 import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
+import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
 import no_papers_needed.composeapp.generated.resources.common_settings_views
 import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder
 import no_papers_needed.composeapp.generated.resources.detail_add_field
@@ -127,6 +128,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_storage_organize_paths,
                     Res.string.common_settings_storage_path_template,
                     Res.string.common_settings_clear_thumbnail_cache,
+                    Res.string.common_settings_use_saf,
                 ),
             content = { LibrarySettingsPane(it) },
         ),

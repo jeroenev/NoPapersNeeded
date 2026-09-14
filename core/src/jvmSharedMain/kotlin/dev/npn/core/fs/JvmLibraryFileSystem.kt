@@ -14,7 +14,6 @@ import java.nio.file.FileVisitResult
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
-import java.nio.file.StandardCopyOption
 import java.nio.file.StandardOpenOption
 import java.nio.file.StandardWatchEventKinds
 import java.nio.file.WatchKey
@@ -25,16 +24,90 @@ import java.security.MessageDigest
 import kotlin.io.path.name
 
 /**
- * java.nio-backed [LibraryFileSystem] for desktop. All suspend functions run on
- * [Dispatchers.IO]. Writes stage a temp file in the same directory and then install it under
- * its final name with a primitive that cannot replace an existing entry
- * ([atomicMoveNoReplace]). Never appends or overwrites.
+ * How [JvmLibraryFileSystem.publishVerifiedObjectOnce] installs a hash-verified staging object
+ * under its canonical name when the filesystem has no usable `link(2)`.
  */
-class JvmLibraryFileSystem(
+enum class ObjectPublication {
+    /**
+     * Hard link or nothing: a filesystem without `link(2)` gets a
+     * [VerifiedPublicationUnavailableException], and the journal stays on the v1 writer for the
+     * session. The desktop default, where every supported filesystem has hard links.
+     */
+    HARD_LINK_ONLY,
+
+    /**
+     * Hard link, else a plain no-replace rename of the verified staging file within its bucket.
+     * Android's shared storage is a FUSE mount that refuses `link(2)` with EPERM, so this is the
+     * best primitive there. It is safe for the same reason the SAF implementation's rename is:
+     * objects are content-addressed and verified in full before the rename, so the published file
+     * is never torn, and a target that appears in the window between the existence check and the
+     * rename holds the same bytes by construction.
+     */
+    HARD_LINK_OR_RENAME,
+}
+
+/** The one no-replace primitive, abstracted so tests can simulate a filesystem without `link(2)`. */
+internal fun interface NoReplaceLinker {
+    /**
+     * Install [to] as a second name for [from]. Returns false when the filesystem has no usable
+     * hard links; throws [java.nio.file.FileAlreadyExistsException] when [to] already exists.
+     */
+    fun link(
+        from: Path,
+        to: Path,
+    ): Boolean
+}
+
+internal object HardLinkLinker : NoReplaceLinker {
+    override fun link(
+        from: Path,
+        to: Path,
+    ): Boolean =
+        try {
+            Files.createLink(to, from)
+            true
+        } catch (e: java.nio.file.FileAlreadyExistsException) {
+            throw e
+        } catch (_: UnsupportedOperationException) {
+            false
+        } catch (_: IOException) {
+            // EXDEV, EPERM on a hard-link-less filesystem, and anything else a plain move can
+            // report for itself with a better diagnostic.
+            false
+        }
+}
+
+/**
+ * java.nio-backed [LibraryFileSystem] over a plain directory: the desktop library, and Android's
+ * default (non-SAF) library. All suspend functions run on [Dispatchers.IO]. Writes stage a temp
+ * file in the same directory and then install it under its final name with a primitive that
+ * cannot replace an existing entry ([atomicMoveNoReplace]). Never appends or overwrites.
+ *
+ * [externalIo] opens the platform's external files for import/export (see [ExternalIo]);
+ * [publication] picks the fallback when the filesystem has no hard links (see [ObjectPublication]).
+ */
+class JvmLibraryFileSystem internal constructor(
     private val root: Path,
+    private val externalIo: ExternalIo,
+    private val publication: ObjectPublication,
+    private val linker: NoReplaceLinker,
 ) : LibraryFileSystem {
+    constructor(
+        root: Path,
+        externalIo: ExternalIo = defaultExternalIo(),
+        publication: ObjectPublication = ObjectPublication.HARD_LINK_ONLY,
+    ) : this(root, externalIo, publication, HardLinkLinker)
+
     override val verifiedPublicationCapability: VerifiedPublicationCapability =
         VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
+
+    /**
+     * Set once the filesystem has answered "no hard links" so later writes skip the doomed
+     * `link(2)`. All links here are within one directory, so a refusal is a property of the
+     * filesystem, not of the pair.
+     */
+    @Volatile
+    private var linksUnavailable = false
 
     private fun resolve(relPath: String): Path {
         val norm = NpnPaths.normalize(relPath)
@@ -169,31 +242,46 @@ class JvmLibraryFileSystem(
             check(hashPath(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
             val result =
                 try {
-                    // Creating a hard link installs one complete directory entry and cannot replace an
-                    // existing target. Providers without this primitive must use the v1 writer.
-                    Files.createLink(canonical, staging)
-                    VerifiedPublicationResult.PUBLISHED
+                    publishObject(staging, canonical)
                 } catch (_: java.nio.file.FileAlreadyExistsException) {
                     check(Files.isRegularFile(canonical) && hashPath(canonical) == expectedHash) {
                         "Canonical object exists with invalid bytes: $canonicalPath"
                     }
                     VerifiedPublicationResult.ALREADY_PRESENT
-                } catch (e: UnsupportedOperationException) {
-                    throw VerifiedPublicationUnavailableException("Atomic no-replace publication is unsupported", e)
-                } catch (e: IOException) {
-                    if (Files.isRegularFile(canonical)) {
-                        check(hashPath(canonical) == expectedHash) {
-                            "Canonical object appeared with invalid bytes: $canonicalPath"
-                        }
-                        VerifiedPublicationResult.ALREADY_PRESENT
-                    } else {
-                        throw VerifiedPublicationUnavailableException("Atomic no-replace publication failed", e)
-                    }
                 }
             check(hashPath(canonical) == expectedHash) { "Published object hash mismatch: $canonicalPath" }
             Files.deleteIfExists(staging)
             result
         }
+
+    /**
+     * Install the verified [staging] object as [canonical] without ever replacing an existing
+     * entry. A hard link installs one complete directory entry and cannot replace; without hard
+     * links the behaviour follows [publication]. Throws [java.nio.file.FileAlreadyExistsException]
+     * when the canonical object is already there.
+     */
+    private fun publishObject(
+        staging: Path,
+        canonical: Path,
+    ): VerifiedPublicationResult {
+        if (linkNoReplace(staging, canonical)) return VerifiedPublicationResult.PUBLISHED
+        // A generic failure with the target in place is a lost race, not a missing primitive.
+        if (Files.isRegularFile(canonical)) throw java.nio.file.FileAlreadyExistsException(canonical.toString())
+        return when (publication) {
+            ObjectPublication.HARD_LINK_ONLY -> {
+                throw VerifiedPublicationUnavailableException(
+                    "Atomic no-replace publication is unsupported on this filesystem: $canonical",
+                )
+            }
+
+            ObjectPublication.HARD_LINK_OR_RENAME -> {
+                // Plain move, never ATOMIC_MOVE: rename(2) would replace silently, while Files.move
+                // refuses an existing target (see atomicMoveNoReplace for the residual window).
+                Files.move(staging, canonical)
+                VerifiedPublicationResult.PUBLISHED
+            }
+        }
+    }
 
     override suspend fun move(
         fromRelPath: String,
@@ -240,23 +328,16 @@ class JvmLibraryFileSystem(
         }
     }
 
-    /** Hard-link [from] as [to], or return false when this provider has no usable `link(2)`. */
+    /** Hard-link [from] as [to], or return false when this filesystem has no usable `link(2)`. */
     private fun linkNoReplace(
         from: Path,
         to: Path,
-    ): Boolean =
-        try {
-            Files.createLink(to, from)
-            true
-        } catch (e: java.nio.file.FileAlreadyExistsException) {
-            throw e
-        } catch (_: UnsupportedOperationException) {
-            false
-        } catch (_: IOException) {
-            // EXDEV, EPERM on a hard-link-less filesystem, and anything else a plain move can
-            // report for itself with a better diagnostic.
-            false
-        }
+    ): Boolean {
+        if (linksUnavailable) return false
+        val linked = linker.link(from, to)
+        if (!linked) linksUnavailable = true
+        return linked
+    }
 
     override suspend fun delete(relPath: String) =
         withContext(Dispatchers.IO) {
@@ -323,8 +404,26 @@ class JvmLibraryFileSystem(
         }
         val parent = target.parent
         if (parent != null) Files.createDirectories(parent)
-        // COPY without REPLACE_EXISTING: fails if target appears concurrently.
-        Files.copy(source.path, target, StandardCopyOption.COPY_ATTRIBUTES)
+        // Stream into a same-directory temp file, then install it no-replace, so a partial PDF is
+        // never visible at the final path and a target that appears meanwhile is not replaced.
+        val tmp = Files.createTempFile(parent ?: root, ".npn-tmp-", ".part")
+        try {
+            externalIo.openInput(source).use { input ->
+                Files.newOutputStream(tmp, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING).use {
+                    input.copyTo(it, STREAM_BUFFER_SIZE)
+                }
+            }
+            try {
+                atomicMoveNoReplace(tmp, target)
+            } catch (e: java.nio.file.FileAlreadyExistsException) {
+                error("Target already exists: $toRelPath")
+            }
+        } finally {
+            try {
+                Files.deleteIfExists(tmp)
+            } catch (_: IOException) {
+            }
+        }
         Unit
     }
 
@@ -332,9 +431,11 @@ class JvmLibraryFileSystem(
         relPath: String,
         target: ExternalSource,
     ) = withContext(Dispatchers.IO) {
-        val parent = target.path.parent
-        if (parent != null) Files.createDirectories(parent)
-        Files.copy(resolve(relPath), target.path, StandardCopyOption.REPLACE_EXISTING)
+        Files.newInputStream(resolve(relPath)).use { input ->
+            // The external target belongs to the caller and may have existed before this copy;
+            // close it on failure but never delete it.
+            externalIo.openOutput(target).use { output -> input.copyTo(output, STREAM_BUFFER_SIZE) }
+        }
         Unit
     }
 
@@ -430,3 +531,5 @@ class JvmLibraryFileSystem(
             }
         }
 }
+
+private const val STREAM_BUFFER_SIZE = 64 * 1024

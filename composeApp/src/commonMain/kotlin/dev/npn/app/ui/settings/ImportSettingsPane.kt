@@ -10,6 +10,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.FolderAccess
 import dev.npn.app.ui.common.persistDirectoryAccess
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import no_papers_needed.composeapp.generated.resources.Res
@@ -40,6 +41,7 @@ internal fun ImportSettingsPane(context: SettingsPaneContext) {
     SettingsGroup(title = stringResource(Res.string.common_settings_watched_folder)) {
         WatchedFolderSettings(
             watchedFolder = context.state.watchedFolder,
+            useSaf = context.state.useSafStorage,
             deleteAfterImport = context.state.watchedFolderDeleteAfterImport,
             onSetFolder = { folder -> context.vm.edit { it.copy(watchedFolder = folder) } },
             onSetDeleteAfterImport = { on -> context.vm.edit { it.copy(watchedFolderDeleteAfterImport = on) } },
@@ -69,13 +71,20 @@ internal fun ImportSettingsPane(context: SettingsPaneContext) {
 @Composable
 private fun WatchedFolderSettings(
     watchedFolder: String?,
+    useSaf: Boolean,
     deleteAfterImport: Boolean,
     onSetFolder: (String?) -> Unit,
     onSetDeleteAfterImport: (Boolean) -> Unit,
 ) {
+    // The inbox is imported from, never written as a library, so a folder that is not on device
+    // storage may still be watched through SAF: prefer the configured mode, fall back to the other.
     val picker =
         rememberDirectoryPickerLauncher { dir ->
-            if (dir != null) onSetFolder(persistDirectoryAccess(dir))
+            if (dir == null) return@rememberDirectoryPickerLauncher
+            val preferred = if (useSaf) FolderAccess.SAF else FolderAccess.DIRECT
+            val fallback = if (useSaf) FolderAccess.DIRECT else FolderAccess.SAF
+            val location = persistDirectoryAccess(dir, preferred) ?: persistDirectoryAccess(dir, fallback)
+            if (location != null) onSetFolder(location)
         }
     SettingsHelpText(stringResource(Res.string.common_settings_watched_folder_help))
     Text(

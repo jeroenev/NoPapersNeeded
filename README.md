@@ -213,8 +213,27 @@ thumbnails live outside the library folder and are never synced.
 
 Metadata uses content-addressed storage-v2 objects. Metadata writes require verified
 publication with atomic create-without-replacement semantics, supported by all current
-desktop and Android/SAF libraries. A future provider that cannot guarantee this is
+desktop and Android libraries. A future provider that cannot guarantee this is
 read-only for metadata rather than falling back to another storage format.
+
+### Android storage
+
+On Android the library is, by default, a plain folder on shared storage
+(`Documents/NoPapersNeeded` is proposed on first run) that the app reads and writes
+directly with the same filesystem implementation as the desktop app. That is what lets
+Syncthing (or any other sync tool that works with real paths) share the folder: the app
+watches it with inotify, rescans whenever it returns to the foreground, and its `.npn/`
+metadata syncs along with the PDFs. Seeing files those tools write requires the
+"All files access" grant (`MANAGE_EXTERNAL_STORAGE`), which onboarding asks for; without
+it the app can only see its own files. Shared storage has no hard links, so verified
+publication there renames the hash-verified staging object into place instead of
+linking it.
+
+The Storage Access Framework remains available as an advanced option
+(Settings → Library → Advanced → *Use Storage Access Framework*) for folders that have
+no path, such as cloud document providers, and every library chosen through SAF before
+the direct mode existed keeps opening that way. Direct cloud integrations
+(Dropbox, Drive, OneDrive, WebDAV) are planned as their own adapters, not via SAF.
 
 ## License
 

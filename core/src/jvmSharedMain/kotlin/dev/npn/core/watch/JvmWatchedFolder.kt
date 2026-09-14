@@ -1,6 +1,6 @@
 package dev.npn.core.watch
 
-import dev.npn.core.fs.ExternalSource
+import dev.npn.core.fs.externalSourceOfPath
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.awaitClose
@@ -13,15 +13,16 @@ import java.io.IOException
 import java.nio.file.ClosedWatchServiceException
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.Paths
 import java.nio.file.StandardWatchEventKinds
 import java.nio.file.WatchKey
 import java.nio.file.WatchService
 import kotlin.streams.asSequence
 
 /**
- * Desktop [WatchedFolder]: a plain directory, listed non-recursively via java.nio and watched
- * with a [WatchService] on the single directory (same pattern as JvmLibraryFileSystem.watch,
- * minus the recursive registration).
+ * Plain-directory [WatchedFolder] (desktop, and Android's direct storage mode): listed
+ * non-recursively via java.nio and watched with a [WatchService] on the single directory (same
+ * pattern as JvmLibraryFileSystem.watch, minus the recursive registration).
  */
 class JvmWatchedFolder(
     private val dir: Path,
@@ -46,7 +47,7 @@ class JvmWatchedFolder(
                                 name = path.fileName.toString(),
                                 size = runCatching { Files.size(path) }.getOrDefault(0L),
                                 mtimeMillis = mtime,
-                                source = ExternalSource(path),
+                                source = externalSourceOfPath(path),
                             )
                         }.toList()
                 }
@@ -55,7 +56,8 @@ class JvmWatchedFolder(
 
     override suspend fun delete(file: WatchedFolderFile): Boolean =
         withContext(Dispatchers.IO) {
-            runCatching { Files.deleteIfExists(Path.of(file.id)) }.getOrDefault(false)
+            // Paths.get, not Path.of: the latter is Java 11 and only reached Android at API 34.
+            runCatching { Files.deleteIfExists(Paths.get(file.id)) }.getOrDefault(false)
         }
 
     override fun changes(): Flow<Unit> =

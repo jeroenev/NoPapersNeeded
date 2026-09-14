@@ -47,6 +47,7 @@ import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isConfiguredOrFalse
+import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.LocalDocumentDrafts
@@ -68,11 +69,13 @@ import dev.npn.app.ui.settings.SettingsScreen
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.trash.TrashScreen
-import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
+import no_papers_needed.composeapp.generated.resources.common_folder_unusable_title
+import no_papers_needed.composeapp.generated.resources.common_ok
 import no_papers_needed.composeapp.generated.resources.common_open_library_title
 import no_papers_needed.composeapp.generated.resources.common_open_saved_library_failed
 import no_papers_needed.composeapp.generated.resources.common_opening_library
@@ -117,8 +120,10 @@ private fun AppRoot(env: AppEnvironment) {
     val current = session
     when {
         restoreError != null && current == null && !opening -> {
+            val settingsSnapshot by env.settings.settings.collectAsStateWithLifecycle(null)
             RestoreErrorScreen(
                 message = restoreError!!,
+                useSaf = settingsSnapshot?.useSafStorage == true,
                 onRetry = {
                     scope.launch {
                         restoreError = null
@@ -308,15 +313,14 @@ private fun NavGraphBuilder.settingsRoutes(
         // the confirm button uses — so "Resume draft" always has somewhere to go, even when the
         // only unsaved work is an in-flight save with no dirty entry.
         var draftWarning by remember { mutableStateOf<String?>(null) }
+        var folderUnusable by remember { mutableStateOf(false) }
+        val settingsSnapshot by env.settings.settings.collectAsStateWithLifecycle(null)
         val changePicker =
-            rememberDirectoryPickerLauncher { dir ->
-                if (dir != null) {
-                    env.requestOpenLibrary(
-                        dev.npn.app.ui.common
-                            .persistDirectoryAccess(dir),
-                    )
-                }
-            }
+            rememberLibraryFolderPicker(
+                useSaf = settingsSnapshot?.useSafStorage == true,
+                onPicked = env::requestOpenLibrary,
+                onUnusable = { folderUnusable = true },
+            )
         SettingsScreen(
             env = env,
             session = session,
@@ -328,11 +332,21 @@ private fun NavGraphBuilder.settingsRoutes(
                 if (pending != null) {
                     draftWarning = pending.key
                 } else {
-                    changePicker.launch()
+                    changePicker()
                 }
             },
             onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
         )
+        if (folderUnusable) {
+            AlertDialog(
+                onDismissRequest = { folderUnusable = false },
+                title = { Text(stringResource(Res.string.common_folder_unusable_title)) },
+                text = { Text(stringResource(Res.string.common_folder_not_on_device)) },
+                confirmButton = {
+                    TextButton(onClick = { folderUnusable = false }) { Text(stringResource(Res.string.common_ok)) }
+                },
+            )
+        }
         draftWarning?.let { docId ->
             AlertDialog(
                 onDismissRequest = { draftWarning = null },
@@ -527,19 +541,21 @@ private fun LoadingScreen() {
 @Composable
 private fun RestoreErrorScreen(
     message: String,
+    useSaf: Boolean,
     onRetry: () -> Unit,
     onRepickReturned: (String) -> Unit,
 ) {
     val genericMessage = stringResource(Res.string.common_open_saved_library_failed)
-    val picker =
-        rememberDirectoryPickerLauncher { dir ->
-            if (dir != null) {
-                onRepickReturned(
-                    dev.npn.app.ui.common
-                        .persistDirectoryAccess(dir),
-                )
-            }
-        }
+    var folderUnusable by remember { mutableStateOf(false) }
+    val pick =
+        rememberLibraryFolderPicker(
+            useSaf = useSaf,
+            onPicked = {
+                folderUnusable = false
+                onRepickReturned(it)
+            },
+            onUnusable = { folderUnusable = true },
+        )
     Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -556,8 +572,15 @@ private fun RestoreErrorScreen(
                 TechnicalDetails(message)
             }
             Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
-            OutlinedButton(onClick = { picker.launch() }) {
+            OutlinedButton(onClick = pick) {
                 Text(stringResource(Res.string.common_pick_folder_again))
+            }
+            if (folderUnusable) {
+                Text(
+                    stringResource(Res.string.common_folder_not_on_device),
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center,
+                )
             }
         }
     }
