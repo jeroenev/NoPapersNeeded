@@ -1013,6 +1013,7 @@ private fun Banners(
 ) {
     Column(Modifier.padding(horizontal = 16.dp)) {
         scanProgress?.let { ScanProgressBanner(it) }
+        PathConflictsBanner(lastScan?.pathConflicts.orEmpty())
         val conflicts = lastScan?.conflictFiles.orEmpty()
         val dupes = lastScan?.duplicates.orEmpty()
         if (!dismissed && (conflicts.isNotEmpty() || dupes.isNotEmpty())) {

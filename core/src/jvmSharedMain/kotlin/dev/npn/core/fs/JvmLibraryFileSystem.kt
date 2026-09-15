@@ -285,6 +285,33 @@ class JvmLibraryFileSystem internal constructor(
         }
     }
 
+    override val supportsDocumentRelocation: Boolean get() = true
+
+    override suspend fun claimDocument(
+        fromRelPath: String,
+        toRelPath: String,
+    ) = withContext(Dispatchers.IO) {
+        LinuxNoReplaceMove.move(resolve(fromRelPath), resolve(toRelPath))
+    }
+
+    override suspend fun sameFile(
+        first: String,
+        second: String,
+    ): Boolean =
+        withContext(Dispatchers.IO) {
+            Files.isSameFile(resolve(first), resolve(second))
+        }
+
+    override suspend fun copyOnce(
+        fromRelPath: String,
+        toRelPath: String,
+    ) = withContext(Dispatchers.IO) {
+        val to = resolve(toRelPath)
+        Files.createDirectories(to.parent)
+        Files.copy(resolve(fromRelPath), to)
+        Unit
+    }
+
     override suspend fun move(
         fromRelPath: String,
         toRelPath: String,

@@ -15,12 +15,12 @@ import kotlin.test.Test
  */
 class MetadataWriterBatchTest {
     /**
-     * One call, one journal transaction, one move. Writing the same values setter-by-setter
+     * One metadata transaction plus a path intent, one move. Writing the same values setter-by-setter
      * publishes an object and re-runs the storage path rules per value, so a synced library folder
      * sees a rename for each half-finished name.
      */
     @Test
-    fun applyEditsCommitsOnceAndMovesOnce() =
+    fun applyEditsCommitsMetadataAndPathIntentAndMovesOnce() =
         runTest {
             val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
             val rig = AppSessionRig.create(backgroundScope, storagePathRule = { rule })
@@ -42,7 +42,7 @@ class MetadataWriterBatchTest {
                         ),
                 )
 
-                rig.journalObjectCount() shouldBe objectsBefore + 1
+                rig.journalObjectCount() shouldBe objectsBefore + 2
                 val doc = rig.db.documentDao().getByDocId(id)!!
                 doc.title shouldBe "Annual report"
                 doc.correspondent shouldBe "Acme"
@@ -83,8 +83,8 @@ class MetadataWriterBatchTest {
                     fields = mapOf(FieldKeys.CORRESPONDENT to "Acme"),
                 )
 
-                // One object for both documents, not one each.
-                rig.journalObjectCount() shouldBe objectsBefore + 1
+                // One metadata object for both documents, followed by their two path intents.
+                rig.journalObjectCount() shouldBe objectsBefore + 3
 
                 val docA = rig.db.documentDao().getByDocId(a)!!
                 val docB = rig.db.documentDao().getByDocId(b)!!

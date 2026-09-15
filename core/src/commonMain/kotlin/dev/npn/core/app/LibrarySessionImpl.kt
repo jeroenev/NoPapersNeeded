@@ -636,7 +636,10 @@ class LibrarySessionImpl private constructor(
             coordinator.refreshState()
             coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) })
 
-            val pathRuleApplicator = StoragePathRuleApplicator(fs, db, ftsWriteGate, deps.storagePathRule)
+            val pathRuleApplicator =
+                StoragePathRuleApplicator(fs, db, deps.storagePathRule) { docId, path ->
+                    coordinator.commitAndApply(listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, path)))
+                }
             val importService =
                 ImportService(
                     fs = fs,

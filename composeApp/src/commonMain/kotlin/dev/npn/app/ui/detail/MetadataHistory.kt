@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.Label
 import androidx.compose.material.icons.automirrored.filled.LabelOff
@@ -112,6 +113,7 @@ private fun HistoryEventKind.icon() =
         HistoryEventKind.TAG_REMOVE -> Icons.AutoMirrored.Filled.LabelOff
         HistoryEventKind.PROP_REVIEWED -> Icons.Filled.CheckCircle
         HistoryEventKind.PROP_OCR_ENGINE -> Icons.Filled.Settings
+        HistoryEventKind.PROP_STORAGE_PATH -> Icons.AutoMirrored.Filled.DriveFileMove
         HistoryEventKind.FIELD_SET -> Icons.Filled.TextFields
         HistoryEventKind.FIELD_REMOVE -> Icons.Filled.TextFields
         HistoryEventKind.TRASH -> Icons.Filled.Delete

@@ -104,6 +104,13 @@ via `mise hot`.
     `SegmentWriter`/`ContentAddressedJournalWriter` and the coordinator's held
     `writer` are `internal` to `core`, so the coordinator is the only reachable
     write path (enforced at the type level, not by convention).
+    Explicit PDF renames/moves and storage-path rules also write the `storagePath`
+    system property, keyed by document hash, before moving bytes. HLC LWW chooses
+    the intended location across devices; `DocumentPathReconciler` materializes it
+    on metadata refresh or rescan. The cached `relPath` remains the actual available
+    location, not an unfulfilled intent. Trash/delete suspend path reconciliation;
+    restore records its final destination. PDFs without a path intent retain their
+    discovered location.
 3. **Index is a cache**: `Indexer` folds journal state (OR-set tags, HLC LWW) into
    the Room database (`FoldedState`, `MetadataAccumulator`). Field values land in
    `document_fields` (one row per document × key, canonical string plus a numeric

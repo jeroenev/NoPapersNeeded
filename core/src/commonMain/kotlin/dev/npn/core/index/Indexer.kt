@@ -53,6 +53,7 @@ class Indexer(
     private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
 ) {
     private val rescanMutex = Mutex()
+    private val documentPaths = DocumentPathReconciler(fs, db)
     private val _scanState = MutableStateFlow<IndexProgress?>(null)
 
     /** Lightweight progress surface; null when idle. */
@@ -150,6 +151,7 @@ class Indexer(
                         FoldRequest(diskPaths = diskPaths, reconcileFileState = true),
                     )
 
+                documentPaths.reconcileDuplicates(metadataState, recon.duplicates)
                 val dupByDoc = recon.duplicates.groupBy { it.docId }
                 for ((docId, entries) in dupByDoc) {
                     duplicateDao.replaceAll(docId, entries.map { DuplicateEntity(docId, it.extraRelPath) })
@@ -168,6 +170,7 @@ class Indexer(
                     relinkCandidates = recon.relinkCandidates,
                     hashedCount = hashedCount,
                     durationMillis = clock.nowMillis() - started,
+                    pathConflicts = documentPaths.conflicts(metadataState),
                 )
             } finally {
                 _scanState.value = null
@@ -249,7 +252,7 @@ class Indexer(
                 documentDao.upsert(missingDoc)
                 recon.existingByDocId[docAtPath.docId] = missingDoc
                 existingByPath.remove(meta.relPath)
-                insertNewDocument(hash, meta, now)
+                recon.existingByDocId[hash] = insertNewDocument(hash, meta, now)
                 recon.newDocs[hash] = meta
                 recon.added++
                 recon.changed++
@@ -257,7 +260,7 @@ class Indexer(
                     RelinkCandidate(docAtPath.docId, hash, reason = "path-match", score = RELINK_SCORE_PATH_MATCH),
                 )
             } else {
-                insertNewDocument(hash, meta, now)
+                recon.existingByDocId[hash] = insertNewDocument(hash, meta, now)
                 recon.newDocs[hash] = meta
                 recon.added++
             }
@@ -451,8 +454,8 @@ class Indexer(
         hash: String,
         meta: FileMeta,
         now: Long,
-    ) {
-        documentDao.upsert(
+    ): DocumentEntity {
+        val row =
             DocumentEntity(
                 docId = hash,
                 relPath = meta.relPath,
@@ -461,8 +464,9 @@ class Indexer(
                 mtime = meta.mtimeMillis,
                 addedAt = now,
                 // reviewed defaults to false (new doc = needs review).
-            ),
-        )
+            )
+        documentDao.upsert(row)
+        return row
     }
 
     /** Returns (score, reason). score 0 means no candidate. */
@@ -536,6 +540,7 @@ class Indexer(
         // Bulk preload the current projection (rows, tags, fields, FTS content) so the per-doc
         // pass below issues no serial reads; diffed writes are collected and flushed once.
         val preloaded = preloadRows(state, journalDocs)
+        documentPaths.releaseStaleOwners(state, preloaded.rows)
         upsertReferencedTags(state, journalDocs, request.styledTags)
         // The registry is library-wide and small; a diffed replace per fold keeps it in step
         // with the fold at negligible cost and needs no per-op scoping.
@@ -831,7 +836,7 @@ class Indexer(
     }
 
     /** Project one doc's tags, fields, props, lifecycle, row and FTS from the folded state. */
-    private fun projectDocument(
+    private suspend fun projectDocument(
         doc: String,
         row: DocumentEntity,
         state: FoldedState,
@@ -861,7 +866,7 @@ class Indexer(
 
         // Diffed: skip the upsert when the effective row equals what is stored, so a fold
         // triggered by one edit does not rewrite (and invalidate) every other doc's row.
-        val newRow =
+        val projectedRow =
             row.copy(
                 relPath = lifecycle.relPath,
                 fileName = lifecycle.fileName,
@@ -878,6 +883,7 @@ class Indexer(
                 deleted = lifecycle.deleted,
                 missing = lifecycle.missing,
             )
+        val newRow = documentPaths.project(projectedRow, state)
         val rowChanged = newRow != row
         if (rowChanged) changes.docRows.add(newRow)
 
@@ -891,7 +897,7 @@ class Indexer(
         // already exists there is nothing to write.
         val searchableChanged = rowChanged || tagsChanged || doc in changes.fields
         if (searchableChanged || doc !in preloaded.ftsIndexed) {
-            changes.ftsRows.add(FtsRows.row(doc, lifecycle.fileName, effTags, fields, content = ""))
+            changes.ftsRows.add(FtsRows.row(doc, newRow.fileName, effTags, fields, content = ""))
         }
     }
 

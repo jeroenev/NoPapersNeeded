@@ -1,7 +1,17 @@
 package dev.npn.core.index
 
 /** A path holding a duplicate copy of an already-indexed document's content hash. */
-data class DuplicateReport(val docId: String, val extraRelPath: String)
+data class DuplicateReport(
+    val docId: String,
+    val extraRelPath: String,
+)
+
+/** A journaled location that cannot yet be materialized; the current file is retained. */
+data class PathConflict(
+    val docId: String,
+    val currentPath: String,
+    val intendedPath: String,
+)
 
 /**
  * A candidate pairing between a disappeared/superseded document and a new one, produced by the
@@ -23,7 +33,11 @@ data class RelinkCandidate(
  * original path (resurrected by sync or the user). The indexer prefers the file (clears
  * missing) and reports it so the UI can offer to re-trash.
  */
-data class Resurrected(val docId: String, val relPath: String, val wasDeleted: Boolean)
+data class Resurrected(
+    val docId: String,
+    val relPath: String,
+    val wasDeleted: Boolean,
+)
 
 /** Result of a full rescan. All counts are for this scan only. */
 data class ScanReport(
@@ -37,6 +51,7 @@ data class ScanReport(
     val relinkCandidates: List<RelinkCandidate>,
     val hashedCount: Int,
     val durationMillis: Long,
+    val pathConflicts: List<PathConflict> = emptyList(),
 )
 
 /**

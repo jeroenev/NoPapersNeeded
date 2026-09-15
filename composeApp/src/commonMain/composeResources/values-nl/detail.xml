@@ -133,6 +133,8 @@
     <string name="detail_history_review_state_changed">Beoordelingsstatus ingesteld op '%1$s'</string>
     <string name="detail_history_ocr_engine_cleared">Vastgezette OCR-engine gewist</string>
     <string name="detail_history_ocr_engine_pinned">OCR-engine vastgezet op %1$s</string>
+    <string name="detail_history_storage_path_set">Gewenste bestandslocatie ingesteld op %1$s</string>
+    <string name="detail_history_storage_path_cleared">Gewenste bestandslocatie gewist</string>
     <string name="detail_history_field_removed">%1$s gewist</string>
     <string name="detail_history_field_set">%1$s ingesteld op '%2$s'</string>
     <string name="detail_history_document_trashed">Document van '%1$s' naar de prullenbak verplaatst</string>

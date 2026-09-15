@@ -138,6 +138,8 @@
     <string name="detail_history_review_state_changed">Set review state to '%1$s'</string>
     <string name="detail_history_ocr_engine_cleared">Cleared OCR engine pin</string>
     <string name="detail_history_ocr_engine_pinned">Pinned OCR engine to %1$s</string>
+    <string name="detail_history_storage_path_set">Set intended file location to %1$s</string>
+    <string name="detail_history_storage_path_cleared">Cleared intended file location</string>
     <string name="detail_history_field_removed">Cleared %1$s</string>
     <string name="detail_history_field_set">Set %1$s to '%2$s'</string>
     <string name="detail_history_document_trashed">Trashed document from '%1$s'</string>

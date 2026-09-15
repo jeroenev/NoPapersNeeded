@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
@@ -23,8 +24,7 @@ import dev.npn.core.pathrules.StoragePathRuleApplicator
  *
  * File-level operations (trash/restore/permanent delete/rename/move) touch the filesystem directly
  * and keep the DB row in sync immediately (flags/paths) so the UI reacts without waiting for a
- * rescan. Trash/restore/delete also emit journal events so the state syncs across devices; rename
- * and move do not: paths are file-level state that the indexer re-derives from disk on rescan.
+ * rescan. Rename and move journal an intended location before the fold reconciles the physical PDF.
  */
 class MetadataWriterImpl(
     private val coordinator: JournalCoordinator,
@@ -224,7 +224,7 @@ class MetadataWriterImpl(
         // via TrashOps.restore if the target is taken).
         val finalPath = restoreFromTrash(docId, target) ?: target
         coordinator.commitWithOptimisticLifecycle(
-            ops = listOf(PendingOp.docRestore(docId)),
+            ops = listOf(PendingOp.docRestore(docId), PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath)),
             lifecycleDocs = setOf(docId),
         ) {
             documentDao.upsert(
@@ -284,13 +284,14 @@ class MetadataWriterImpl(
         destination: (DocumentEntity) -> Pair<String, String>?,
     ) {
         val doc = documentDao.getByDocId(docId) ?: return
-        val (target, fileName) = destination(doc) ?: return
+        if (doc.trashed || doc.deleted || doc.missing) return
+        val (target, _) = destination(doc) ?: return
         if (NpnPaths.normalize(target) == NpnPaths.normalize(doc.relPath)) return
-        fs.move(doc.relPath, target)
-        documentDao.upsert(doc.copy(relPath = target, fileName = fileName))
+        require(DocumentPaths.isDocumentPath(target)) { "Invalid document path: $target" }
+        check(!fs.exists(target)) { "Target already exists: $target" }
+        coordinator.commitAndApply(listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, target)))
         applyAutoMatch(docId)
         pathRuleApplicator.applyFor(docId)
-        // No journal event: path is file-level state, re-derived on rescan.
     }
 
     /** Trim a system-property input, coercing null/blank to null (clears the property). */

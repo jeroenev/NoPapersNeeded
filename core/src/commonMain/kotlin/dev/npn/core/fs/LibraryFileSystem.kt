@@ -84,6 +84,15 @@ interface LibraryFileSystem {
     /** Whether this provider can atomically publish a complete staged object without replacement. */
     val verifiedPublicationCapability: VerifiedPublicationCapability
 
+    /** Supports verified publication to arbitrary PDF names without replacing a concurrent file. */
+    val supportsDocumentRelocation: Boolean get() = false
+
+    /** Atomically consume the source name without replacing the destination; no link/unlink fallback. */
+    suspend fun claimDocument(
+        fromRelPath: String,
+        toRelPath: String,
+    ): Unit = throw VerifiedPublicationUnavailableException("Atomic document claiming is unsupported")
+
     /** Recursive walk of the whole library, including `.npn/` contents. Directories are included. */
     suspend fun listAll(): List<FileMeta>
 
@@ -130,6 +139,20 @@ interface LibraryFileSystem {
         fromRelPath: String,
         toRelPath: String,
     )
+
+    /** Copy to an unpublished staging file without replacement. Platforms can stream large PDFs. */
+    suspend fun copyOnce(
+        fromRelPath: String,
+        toRelPath: String,
+    ) {
+        writeBytesOnce(toRelPath, readBytes(fromRelPath))
+    }
+
+    /** True if two existing paths address the same file (including case aliases and hard links). */
+    suspend fun sameFile(
+        first: String,
+        second: String,
+    ): Boolean = first == second
 
     suspend fun delete(relPath: String)
 

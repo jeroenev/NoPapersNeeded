@@ -42,7 +42,7 @@ enum class ReviewMode(
 /**
  * Per-document system state settable via `prop-set` journal events. User-authored metadata (title,
  * correspondent, date, notes, anything the user adds) is NOT here: it is a registry field
- * ([FieldDef]) written as `field-set`. What remains are the two markers the app itself owns.
+ * ([FieldDef]) written as `field-set`. These properties describe app-owned state.
  */
 enum class SystemProperty(
     val wire: String,
@@ -56,6 +56,9 @@ enum class SystemProperty(
      * other LWW property; devices re-select the indexed sidecar when it changes.
      */
     OCR_ENGINE("ocrEngine"),
+
+    /** Intended library-relative PDF location; LWW by document hash, independent of local availability. */
+    STORAGE_PATH("storagePath"),
     ;
 
     companion object {

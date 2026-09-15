@@ -16,6 +16,7 @@ enum class HistoryEventKind {
     TAG_REMOVE,
     PROP_REVIEWED,
     PROP_OCR_ENGINE,
+    PROP_STORAGE_PATH,
     FIELD_SET,
     FIELD_REMOVE,
     TRASH,
@@ -55,6 +56,8 @@ enum class HistoryTextKey {
     REVIEW_STATE_CHANGED,
     OCR_ENGINE_CLEARED,
     OCR_ENGINE_PINNED,
+    STORAGE_PATH_SET,
+    STORAGE_PATH_CLEARED,
     FIELD_REMOVED,
     FIELD_SET,
     DOCUMENT_TRASHED,
@@ -182,6 +185,7 @@ object HistoryMapper {
                 when (op.key) {
                     SystemProperty.REVIEWED -> HistoryEventKind.PROP_REVIEWED
                     SystemProperty.OCR_ENGINE -> HistoryEventKind.PROP_OCR_ENGINE
+                    SystemProperty.STORAGE_PATH -> HistoryEventKind.PROP_STORAGE_PATH
                 }
             }
 
@@ -215,6 +219,14 @@ object HistoryMapper {
         value: String?,
     ): HistoryDescription =
         when (key) {
+            SystemProperty.STORAGE_PATH -> {
+                if (value == null) {
+                    historyText(HistoryTextKey.STORAGE_PATH_CLEARED)
+                } else {
+                    historyText(HistoryTextKey.STORAGE_PATH_SET, value)
+                }
+            }
+
             SystemProperty.REVIEWED -> {
                 when (value) {
                     "true" -> historyText(HistoryTextKey.MARKED_REVIEWED)
