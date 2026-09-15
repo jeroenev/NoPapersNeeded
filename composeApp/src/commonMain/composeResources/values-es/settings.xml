@@ -159,4 +159,63 @@
     <string name="common_settings_move_field_failed">No se pudo mover el campo: %1$s</string>
     <string name="common_settings_clear_thumbnails_failed">No se pudo borrar la caché de miniaturas: %1$s</string>
     <string name="common_settings_review_workflow_failed">No se pudo cambiar el flujo de revisión: %1$s</string>
+
+    <string name="common_settings_category_cloud">Sincronización en la nube</string>
+    <string name="common_settings_cloud_help">Refleja esta biblioteca en tu propio almacenamiento en la nube mediante rclone: los PDF, los metadatos y la papelera viajan como archivos normales, así que cualquier dispositivo con el mismo remoto ve la misma biblioteca. rclone hace las transferencias; la app decide qué se mueve, verifica cada archivo antes de que entre en la biblioteca y nunca reemplaza ni elimina nada para resolver un conflicto.</string>
+    <string name="common_settings_cloud_engine_checking">Buscando rclone…</string>
+    <string name="common_settings_cloud_engine_available">rclone %1$s está listo.</string>
+    <string name="common_settings_cloud_engine_missing">No se encontró rclone (se buscó %1$s). Instálalo desde rclone.org, ejecuta «rclone config» para añadir tu almacenamiento y vuelve a comprobarlo.</string>
+    <string name="common_settings_cloud_engine_failed">rclone no respondió: %1$s</string>
+    <string name="common_settings_cloud_engine_check">Volver a comprobar</string>
+    <string name="common_settings_cloud_remote">Remoto</string>
+    <string name="common_settings_cloud_remote_help">Un remoto de rclone con una carpeta, como %1$s, o una cadena de conexión de rclone. La carpeta se crea en la primera sincronización.</string>
+    <string name="common_settings_cloud_load_remotes">Mostrar remotos configurados</string>
+    <string name="common_settings_cloud_configured_remotes">Remotos configurados</string>
+    <string name="common_settings_cloud_reload_remotes">Recargar remotos</string>
+    <string name="common_settings_cloud_no_remotes">rclone aún no tiene remotos configurados. Ejecuta «rclone config» para añadir uno o introduce una cadena de conexión.</string>
+    <string name="common_settings_cloud_remotes_failed">No se pudieron leer los remotos de rclone: %1$s</string>
+    <string name="common_settings_cloud_failure_unknown">sin detalles registrados</string>
+    <string name="common_settings_cloud_schedule">Programación</string>
+    <string name="common_settings_cloud_interval">Intervalo de sincronización: %1$s</string>
+    <string name="common_settings_cloud_auto">Sincronizar automáticamente</string>
+    <string name="common_settings_cloud_auto_help">Sincroniza en el intervalo elegido y poco después de cada cambio en este dispositivo. «Sincronizar ahora» funciona en cualquier caso.</string>
+    <plurals name="common_settings_cloud_interval_minutes">
+        <item quantity="one">Cada minuto</item>
+        <item quantity="other">Cada %1$d minutos</item>
+    </plurals>
+    <plurals name="common_settings_cloud_interval_hours">
+        <item quantity="one">Cada hora</item>
+        <item quantity="other">Cada %1$d horas</item>
+    </plurals>
+    <string name="common_settings_cloud_status">Estado</string>
+    <string name="common_settings_cloud_sync_now">Sincronizar ahora</string>
+    <string name="common_settings_cloud_progress">%1$s (%2$d de %3$d)</string>
+    <string name="common_settings_cloud_phase_listing">Listando el remoto</string>
+    <string name="common_settings_cloud_phase_pull_metadata">Descargando metadatos</string>
+    <string name="common_settings_cloud_phase_resolve">Identificando documentos remotos</string>
+    <string name="common_settings_cloud_phase_apply_local">Actualizando esta biblioteca</string>
+    <string name="common_settings_cloud_phase_push_documents">Subiendo documentos</string>
+    <string name="common_settings_cloud_phase_push_metadata">Subiendo metadatos</string>
+    <string name="common_settings_cloud_phase_indexing">Indexando</string>
+    <string name="common_settings_cloud_never">Aún no se ha sincronizado.</string>
+    <string name="common_settings_cloud_last_summary">Última sincronización %1$s: %2$d descargados, %3$d subidos, %4$d movidos y %5$d eliminados en el remoto.</string>
+    <string name="common_settings_cloud_last_failed">La última sincronización %1$s falló: %2$s</string>
+    <plurals name="common_settings_cloud_conflict_count">
+        <item quantity="one">Queda %1$d conflicto por resolver:</item>
+        <item quantity="other">Quedan %1$d conflictos por resolver:</item>
+    </plurals>
+    <plurals name="common_settings_cloud_error_count">
+        <item quantity="one">%1$d archivo no se pudo transferir y se volverá a intentar:</item>
+        <item quantity="other">%1$d archivos no se pudieron transferir y se volverá a intentar:</item>
+    </plurals>
+    <string name="common_settings_cloud_problem_line">%1$s: %2$s</string>
+    <string name="common_settings_cloud_outcome_completed">Sincronización terminada.</string>
+    <string name="common_settings_cloud_outcome_failed">La sincronización falló: %1$s</string>
+    <string name="common_settings_cloud_outcome_not_configured">Introduce primero un remoto.</string>
+    <string name="common_settings_cloud_outcome_unavailable">rclone no está disponible en este dispositivo.</string>
+    <string name="common_settings_cloud_outcome_running">Ya hay una sincronización en curso.</string>
+    <string name="common_settings_cloud_binary">Ejecutable de rclone</string>
+    <string name="common_settings_cloud_binary_help">Déjalo vacío para usar rclone del PATH del sistema.</string>
+    <string name="common_settings_cloud_config">Archivo de configuración de rclone</string>
+    <string name="common_settings_cloud_config_help">Déjalo vacío para usar el archivo de configuración predeterminado de rclone.</string>
 </resources>

@@ -22,6 +22,9 @@ import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.settings.SettingsRepository
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
+import dev.npn.core.sync.SyncOutcome
+import dev.npn.core.sync.SyncStatus
+import dev.npn.core.sync.TransportAvailability
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.watch.liesInLibrary
 import kotlinx.coroutines.Job
@@ -31,6 +34,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
@@ -78,6 +82,7 @@ class SettingsViewModel(
     private val storagePath = session.storagePath
     private val trashRetention = session.trashRetention
     private val fieldRegistry = session.fieldRegistry
+    private val sync = session.sync
 
     private val typedTemplate =
         TypedSetting<String>(viewModelScope) { template ->
@@ -168,16 +173,35 @@ class SettingsViewModel(
 
     internal fun openFieldDialog(dialog: FieldDialog?) = fieldDialog.set(dialog)
 
+    /**
+     * How the last manual sync ended; null while none was asked for, one is under way, or a later
+     * (automatic) pass has started since — its result is what the status then shows.
+     */
+    private val syncOutcome = MutableStateFlow<SyncOutcome?>(null)
+
+    /** Live cloud sync state: what is running, and how the last pass ended. */
+    private val syncStatus: Flow<SyncStatus> = sync.status.onEach { if (it.running) syncOutcome.value = null }
+
+    /** Whether the transfer engine answers, probed on demand via [probeTransport]. */
+    private val transport = MutableStateFlow<TransportAvailability?>(null)
+
+    private var probeJob: Job? = null
+
+    /** Remote names from rclone's config, fetched on demand via [loadRemotes]. */
+    private val remotes = MutableStateFlow(RemoteListState())
+
+    private val cloud: Flow<CloudSyncState> = combine(syncStatus, transport, remotes, syncOutcome, ::CloudSyncState)
+
     /** Everything a settings pane shows, as one value. */
     internal val paneState: StateFlow<SettingsPaneState> =
-        combine(state, aiModels, aiSelfTest, reviewMode, combine(fields, fieldUsage, fieldDialog.flow, ::Triple)) {
-            ui,
-            models,
-            selfTest,
-            mode,
-            (defs, usage, dialog),
-            ->
-            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog)
+        combine(
+            state,
+            aiModels,
+            aiSelfTest,
+            combine(reviewMode, cloud, ::Pair),
+            combine(fields, fieldUsage, fieldDialog.flow, ::Triple),
+        ) { ui, models, selfTest, (mode, cloudState), (defs, usage, dialog) ->
+            SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog, cloudState)
         }.stateIn(
             viewModelScope,
             WhileSubscribedTimeout,
@@ -305,6 +329,39 @@ class SettingsViewModel(
                 }
             }
         return saved && turnedOff
+    }
+
+    override fun probeTransport() {
+        probeJob?.cancel()
+        remotes.value = RemoteListState()
+        probeJob =
+            viewModelScope.launch {
+                transport.value =
+                    runCatchingCancellable { sync.transportAvailability() }.getOrElse { failure ->
+                        TransportAvailability.Failed(failure.message ?: failure::class.simpleName ?: "error")
+                    }
+            }
+    }
+
+    override fun loadRemotes() {
+        viewModelScope.launch {
+            remotes.value =
+                runCatchingCancellable { sync.listRemotes() }.fold(
+                    onSuccess = { RemoteListState(remotes = it) },
+                    onFailure = { RemoteListState(error = it.reasonText()) },
+                )
+        }
+    }
+
+    /** The facade is not supposed to throw, but a UI scope must not be the thing that finds out. */
+    override fun syncNow() {
+        viewModelScope.launch {
+            syncOutcome.value = null
+            syncOutcome.value =
+                runCatchingCancellable { sync.syncNow() }.getOrElse { failure ->
+                    SyncOutcome.Failed(failure.message ?: failure::class.simpleName ?: "error")
+                }
+        }
     }
 
     override fun clearThumbnailCache() =

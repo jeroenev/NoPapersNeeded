@@ -32,6 +32,7 @@ interface LibrarySession {
     val maintenance: MaintenanceFacade
     val work: WorkFacade
     val aiEditQueue: AiEditQueueFacade
+    val sync: SyncFacade
 
     /** Where the session's failures go, for a caller reporting one of its own that nobody awaits. */
     val log: NpnLog

@@ -7,6 +7,8 @@ import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.sync.LocalStaging
+import dev.npn.core.sync.SyncTransport
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.IdSource
 import dev.npn.core.util.NpnLog
@@ -48,6 +50,10 @@ class SessionDeps(
     val timeSource: TimeSource = TimeSource.Monotonic,
     /** Where fresh names (journal actors, staging files, device ids) come from; a test seeds it. */
     val ids: IdSource = IdSource.Random,
+    /** The cloud transfer engine, or null for a host without one: the sync facet then says it is unavailable. */
+    val syncTransport: SyncTransport? = null,
+    /** App-private scratch space cloud transfers pass through; needed beside [syncTransport]. */
+    val syncStaging: LocalStaging? = null,
 ) {
     /**
      * Close the index and device databases. Exposed here so the composeApp DI layer (which does not

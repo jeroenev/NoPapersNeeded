@@ -2,6 +2,7 @@ package dev.npn.app.ui.settings
 
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.AutoAwesome
+import androidx.compose.material.icons.outlined.CloudSync
 import androidx.compose.material.icons.outlined.Description
 import androidx.compose.material.icons.outlined.FolderOpen
 import androidx.compose.material.icons.outlined.Info
@@ -28,11 +29,24 @@ import no_papers_needed.composeapp.generated.resources.common_settings_ai_test
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_rules
 import no_papers_needed.composeapp.generated.resources.common_settings_category_appearance
+import no_papers_needed.composeapp.generated.resources.common_settings_category_cloud
 import no_papers_needed.composeapp.generated.resources.common_settings_category_documents
 import no_papers_needed.composeapp.generated.resources.common_settings_category_import
 import no_papers_needed.composeapp.generated.resources.common_settings_change_library
 import no_papers_needed.composeapp.generated.resources.common_settings_choose_folder
 import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnail_cache
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_auto
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_binary
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_config
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_configured_remotes
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_check
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_interval
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_load_remotes
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_reload_remotes
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_remote
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_schedule
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_status
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sync_now
 import no_papers_needed.composeapp.generated.resources.common_settings_default_view
 import no_papers_needed.composeapp.generated.resources.common_settings_document_fields
 import no_papers_needed.composeapp.generated.resources.common_settings_enable_ai
@@ -79,6 +93,7 @@ enum class SettingsCategoryId {
     LIBRARY,
     IMPORT,
     DOCUMENTS,
+    CLOUD_SYNC,
     AI,
     APPEARANCE,
     ABOUT,
@@ -106,6 +121,7 @@ internal data class SettingsPaneState(
     val fieldUsage: Map<String, Int>,
     /** The field manager's open dialog, if any. */
     val fieldDialog: FieldDialog? = null,
+    val cloud: CloudSyncState = CloudSyncState(),
 )
 
 /** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
@@ -193,6 +209,28 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_trash_retention_days,
                 ),
             content = { state, actions -> DocumentSettingsPane(state, actions) },
+        ),
+        SettingsCategory(
+            id = SettingsCategoryId.CLOUD_SYNC,
+            title = Res.string.common_settings_category_cloud,
+            icon = Icons.Outlined.CloudSync,
+            keywords =
+                listOf(
+                    Res.string.common_settings_cloud_engine_check,
+                    Res.string.common_settings_cloud_remote,
+                    Res.string.common_settings_cloud_configured_remotes,
+                    Res.string.common_settings_cloud_load_remotes,
+                    Res.string.common_settings_cloud_reload_remotes,
+                    Res.string.common_settings_cloud_schedule,
+                    Res.string.common_settings_cloud_auto,
+                    Res.string.common_settings_cloud_interval,
+                    Res.string.common_settings_cloud_status,
+                    Res.string.common_settings_cloud_sync_now,
+                    Res.string.common_settings_advanced,
+                    Res.string.common_settings_cloud_binary,
+                    Res.string.common_settings_cloud_config,
+                ),
+            content = { state, actions -> CloudSyncSettingsPane(state, actions) },
         ),
         SettingsCategory(
             id = SettingsCategoryId.AI,

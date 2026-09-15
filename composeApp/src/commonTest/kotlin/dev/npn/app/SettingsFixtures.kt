@@ -66,6 +66,12 @@ internal open class NoSettingsPaneActions : SettingsPaneActions {
 
     override fun clearThumbnailCache() = Unit
 
+    override fun probeTransport() = Unit
+
+    override fun loadRemotes() = Unit
+
+    override fun syncNow() = Unit
+
     override fun saveField(def: FieldDef) = Unit
 
     override fun removeField(

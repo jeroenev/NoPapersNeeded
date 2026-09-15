@@ -5,6 +5,7 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.app.aiedit.AiAutoEnricher
 import dev.npn.core.app.aiedit.AiEditQueue
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.fs.holds
 import dev.npn.core.index.DuplicateResolver
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
@@ -19,6 +20,9 @@ import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.rules.RuleApplier
+import dev.npn.core.sync.SyncEngine
+import dev.npn.core.sync.SyncHooks
+import dev.npn.core.sync.SyncService
 import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.work.drainedQueue
@@ -315,6 +319,62 @@ internal class SessionGraph(
                     db.invalidationTracker.createFlow("documents"),
                 ),
         )
+
+    /**
+     * Cloud sync through the host's transfer engine, null when the host wired none. A pass folds the
+     * journal objects it brought in, and the rescan it runs for the PDFs it moved is followed up as a
+     * relink's is ([rescans]).
+     */
+    val sync: SyncService? =
+        deps.syncTransport?.let { transport ->
+            deps.syncStaging?.let { staging ->
+                SyncService(
+                    transport = transport,
+                    config = deps.settings.cloudSync,
+                    engine =
+                        SyncEngine(
+                            deps.fs,
+                            db,
+                            deps.deviceDb,
+                            staging,
+                            deps.installationId,
+                            SessionSyncHooks(),
+                            deps.clock,
+                            deps.ids,
+                        ),
+                    kv = deps.deviceDb.keyValueDao(),
+                    clock = deps.clock,
+                    owned = { pass -> lifetime.owned(pass) },
+                )
+            }
+        }
+
+    /** What a sync pass asks of the session: the journal's answers, a fold, a rescan. */
+    private inner class SessionSyncHooks : SyncHooks {
+        override suspend fun intendedPaths(docIds: Collection<String>): Map<String, String?> =
+            coordinator.intendedPaths(docIds)
+
+        override suspend fun metadataArrived() {
+            coordinator.reconcileMetadata()
+            ocrPipeline.reconcileSidecars()
+        }
+
+        override suspend fun documentsChanged() {
+            rescans.trySend(coordinator.rescan())
+        }
+
+        override suspend fun trashRetentionDays(): Int? = trashRetention.current()
+
+        override suspend fun deleteDeletedCopy(
+            docId: String,
+            relPath: String,
+        ): Boolean =
+            coordinator.serialized { journal ->
+                val delete = journal.isDeleted(docId) && deps.fs.holds(relPath, docId)
+                if (delete) deps.fs.delete(relPath)
+                delete
+            }
+    }
 
     /**
      * What opening does to the library's data once everything is wired, before the session starts:

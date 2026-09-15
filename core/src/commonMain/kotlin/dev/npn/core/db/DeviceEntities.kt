@@ -204,3 +204,29 @@ data class AiEditJobDocEntity(
     val failed: Boolean = false,
     val lastError: String? = null,
 )
+
+/**
+ * What this device last established about one file on the configured cloud remote, in
+ * [DeviceDatabase]: the document (or trash entry) behind a remote path, and the size/mtime the
+ * remote reported when that identity was established. The sync engine re-identifies an entry whose
+ * size or mtime moved and guards every destructive remote call with the same pair, so a file
+ * another writer replaced is never moved or deleted on the strength of stale knowledge.
+ *
+ * Here rather than in the index because nothing in the folder can rebuild it: losing it costs no
+ * data, but re-identifying every remote PDF whose backend reports no SHA-256 means downloading it
+ * again. Rows belong to the remote named in the `sync.remote` kv key; switching remotes clears the
+ * table.
+ */
+@Entity(
+    tableName = "sync_remote_entries",
+    indices = [Index(value = ["docId"])],
+)
+data class SyncRemoteEntryEntity(
+    @PrimaryKey val remotePath: String,
+    /** `document` | `trash`; see `dev.npn.core.sync.ManifestKind`. */
+    val kind: String,
+    val size: Long,
+    val mtime: Long,
+    val docId: String?,
+    val syncedAt: Long,
+)

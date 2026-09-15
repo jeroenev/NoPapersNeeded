@@ -14,6 +14,8 @@ import dev.npn.core.pdf.PdfBoxAndroidEngine
 import dev.npn.core.pdf.renderParallelism
 import dev.npn.core.settings.LibraryLocations
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.sync.DirectoryStaging
+import dev.npn.core.sync.RcloneTransport
 import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.PdfBoxAndroidXmpIO
@@ -57,7 +59,20 @@ fun androidSessionDeps(
         settings = settings,
         log = log,
         installationId = installationId,
+        syncTransport = RcloneTransport(settings.cloudSync) { bundledRclone(context) ?: "rclone" },
+        syncStaging = DirectoryStaging(File(context.cacheDir, "sync/$key").toPath()),
     )
+}
+
+/**
+ * The rclone executable shipped inside the APK, when the build includes one. Android only lets an
+ * app execute files from its native library directory, so a bundled rclone travels as
+ * `jniLibs/<abi>/librclone.so` (the Round Sync convention) and is run from there as a subprocess.
+ * Absent that file the transport falls back to PATH, which on a device means "not installed".
+ */
+private fun bundledRclone(context: Context): String? {
+    val file = File(context.applicationInfo.nativeLibraryDir, "librclone.so")
+    return file.takeIf { it.canExecute() }?.absolutePath
 }
 
 private fun libraryFileSystem(

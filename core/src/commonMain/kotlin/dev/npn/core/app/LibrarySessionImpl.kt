@@ -54,6 +54,7 @@ internal class LibrarySessionImpl(
     private val staleFiles = graph.staleFiles
     private val otherRescans = graph.rescans
     private val queues = graph.work
+    private val syncService = graph.sync
 
     /** The drains' gate, opened here by the first rescan that succeeds ([SessionGraph.rescanned]). */
     private val drainsReady = graph.rescanned
@@ -93,6 +94,7 @@ internal class LibrarySessionImpl(
     override val docLifecycle: DocLifecycle = graph.lifecycle
     override val aiChat: AiChat = graph.ai
     override val aiSuggest: AiSuggest = graph.ai
+    override val sync: SyncFacade = syncService ?: NoSyncFacade
 
     private val scanReports = MutableStateFlow<ScanReport?>(null)
     override val lastScanReport: Flow<ScanReport?> = scanReports.asStateFlow()
@@ -245,6 +247,10 @@ internal class LibrarySessionImpl(
             }
         }
 
+        // Cloud sync's own schedule: a cheap due-check per minute against the configured interval,
+        // plus the debounced "something changed" requests the watch below files.
+        syncService?.start(scope)
+
         // Watch services and sync providers may omit events. This reconciliation reads only the
         // metadata directory and skips unchanged source fingerprints; it never walks PDFs.
         scope.launch {
@@ -271,13 +277,17 @@ internal class LibrarySessionImpl(
 
             // A remote OCR-engine override it folds in is re-selected by the ReconcileOcr that
             // settled() holds for it, once per burst.
+            // A new journal object (this device's own edit, or one a folder syncer dropped in) is
+            // exactly what the cloud remote is waiting for.
             is WatchAction.IngestObject -> {
                 log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) }
+                syncService?.requestSoon()
             }
 
             WatchAction.ReconcileJournal -> {
                 log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
                 log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
+                syncService?.requestSoon()
             }
 
             WatchAction.ReconcileOcr -> {
@@ -299,11 +309,13 @@ internal class LibrarySessionImpl(
     /**
      * A rescan the session runs itself: at start, for a change in the folder, after a file settled.
      * Then every queue is kicked, as the rescan may have lifted a write block the AI drains wait out
-     * or settled a file an OCR run waited for, and the trash is purged.
+     * or settled a file an OCR run waited for, a cloud sync pass is asked for soon, and the trash is
+     * purged.
      */
     private suspend fun backgroundRescan() {
         rescan()
         queues.kickAll()
+        syncService?.requestSoon()
         trashPurge.purgeExpired()
     }
 

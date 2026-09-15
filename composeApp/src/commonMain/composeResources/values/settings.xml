@@ -166,4 +166,63 @@
     <string name="common_settings_move_field_failed">Could not move the field: %1$s</string>
     <string name="common_settings_clear_thumbnails_failed">Could not clear the thumbnail cache: %1$s</string>
     <string name="common_settings_review_workflow_failed">Could not change the review workflow: %1$s</string>
+
+    <string name="common_settings_category_cloud">Cloud sync</string>
+    <string name="common_settings_cloud_help">Mirrors this library to your own cloud storage through rclone: PDFs, metadata and trash travel as plain files, so any device with the same remote sees the same library. rclone does the transfers; the app decides what moves, verifies every file before it enters the library, and never replaces or deletes anything to settle a conflict.</string>
+    <string name="common_settings_cloud_engine_checking">Checking for rclone…</string>
+    <string name="common_settings_cloud_engine_available">rclone %1$s is ready.</string>
+    <string name="common_settings_cloud_engine_missing">rclone was not found (looked for %1$s). Install it from rclone.org, run “rclone config” to add your storage, then check again.</string>
+    <string name="common_settings_cloud_engine_failed">rclone did not answer: %1$s</string>
+    <string name="common_settings_cloud_engine_check">Check again</string>
+    <string name="common_settings_cloud_remote">Remote</string>
+    <string name="common_settings_cloud_remote_help">An rclone remote and folder, such as %1$s, or an rclone connection string. The folder is created on first sync.</string>
+    <string name="common_settings_cloud_load_remotes">Show configured remotes</string>
+    <string name="common_settings_cloud_configured_remotes">Configured remotes</string>
+    <string name="common_settings_cloud_reload_remotes">Reload remotes</string>
+    <string name="common_settings_cloud_no_remotes">rclone has no remotes configured yet. Run “rclone config” to add one, or enter a connection string.</string>
+    <string name="common_settings_cloud_remotes_failed">Could not read rclone&apos;s remotes: %1$s</string>
+    <string name="common_settings_cloud_failure_unknown">no details recorded</string>
+    <string name="common_settings_cloud_schedule">Schedule</string>
+    <string name="common_settings_cloud_interval">Sync interval: %1$s</string>
+    <string name="common_settings_cloud_auto">Sync automatically</string>
+    <string name="common_settings_cloud_auto_help">Runs a pass at the chosen interval and shortly after changes on this device. “Sync now” works either way.</string>
+    <plurals name="common_settings_cloud_interval_minutes">
+        <item quantity="one">Every minute</item>
+        <item quantity="other">Every %1$d minutes</item>
+    </plurals>
+    <plurals name="common_settings_cloud_interval_hours">
+        <item quantity="one">Every hour</item>
+        <item quantity="other">Every %1$d hours</item>
+    </plurals>
+    <string name="common_settings_cloud_status">Status</string>
+    <string name="common_settings_cloud_sync_now">Sync now</string>
+    <string name="common_settings_cloud_progress">%1$s (%2$d of %3$d)</string>
+    <string name="common_settings_cloud_phase_listing">Listing the remote</string>
+    <string name="common_settings_cloud_phase_pull_metadata">Downloading metadata</string>
+    <string name="common_settings_cloud_phase_resolve">Identifying remote documents</string>
+    <string name="common_settings_cloud_phase_apply_local">Updating this library</string>
+    <string name="common_settings_cloud_phase_push_documents">Uploading documents</string>
+    <string name="common_settings_cloud_phase_push_metadata">Uploading metadata</string>
+    <string name="common_settings_cloud_phase_indexing">Indexing</string>
+    <string name="common_settings_cloud_never">Not synced yet.</string>
+    <string name="common_settings_cloud_last_summary">Last sync %1$s: %2$d downloaded, %3$d uploaded, %4$d moved and %5$d removed on the remote.</string>
+    <string name="common_settings_cloud_last_failed">Last sync %1$s failed: %2$s</string>
+    <plurals name="common_settings_cloud_conflict_count">
+        <item quantity="one">%1$d conflict was left for you to resolve:</item>
+        <item quantity="other">%1$d conflicts were left for you to resolve:</item>
+    </plurals>
+    <plurals name="common_settings_cloud_error_count">
+        <item quantity="one">%1$d file could not be transferred and will be retried:</item>
+        <item quantity="other">%1$d files could not be transferred and will be retried:</item>
+    </plurals>
+    <string name="common_settings_cloud_problem_line">%1$s: %2$s</string>
+    <string name="common_settings_cloud_outcome_completed">Sync finished.</string>
+    <string name="common_settings_cloud_outcome_failed">Sync failed: %1$s</string>
+    <string name="common_settings_cloud_outcome_not_configured">Enter a remote first.</string>
+    <string name="common_settings_cloud_outcome_unavailable">rclone is not available on this device.</string>
+    <string name="common_settings_cloud_outcome_running">A sync is already running.</string>
+    <string name="common_settings_cloud_binary">rclone executable</string>
+    <string name="common_settings_cloud_binary_help">Leave empty to use rclone from the system PATH.</string>
+    <string name="common_settings_cloud_config">rclone config file</string>
+    <string name="common_settings_cloud_config_help">Leave empty to use rclone&apos;s default config file.</string>
 </resources>

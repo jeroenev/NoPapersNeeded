@@ -12,6 +12,9 @@ import dev.npn.core.pdf.renderParallelism
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.PlatformDirs
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.sync.DirectoryStaging
+import dev.npn.core.sync.RcloneTransport
+import dev.npn.core.sync.SyncTransport
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
@@ -43,6 +46,8 @@ fun jvmSessionDeps(
     installationId: String,
     ocrEngine: OcrEngine = TesseractCliEngine(),
     log: NpnLog = JvmLog(),
+    /** rclone from PATH by default; the settings' explicit executable path overrides it per call. */
+    syncTransport: SyncTransport? = RcloneTransport(settings.cloudSync),
 ): SessionDeps =
     SessionDeps(
         fs = JvmLibraryFileSystem(libraryRoot, PathExternalIo),
@@ -58,6 +63,8 @@ fun jvmSessionDeps(
         log = log,
         clock = clock,
         installationId = installationId,
+        syncTransport = syncTransport,
+        syncStaging = DirectoryStaging(Path.of(dirs.syncDir)),
     )
 
 /**

@@ -171,6 +171,10 @@ interface DocumentDao {
     @Query("SELECT * FROM documents d WHERE $LIVE_DOCUMENT ORDER BY addedAt DESC")
     suspend fun getAllLive(): List<DocumentEntity>
 
+    /** Every row, whatever its lifecycle, for passes that must mirror trash and delete state. */
+    @Query("SELECT * FROM documents")
+    suspend fun getAllRows(): List<DocumentEntity>
+
     @Query("SELECT * FROM documents WHERE trashed = 1 AND deleted = 0 ORDER BY addedAt DESC")
     fun observeTrashed(): Flow<List<DocumentEntity>>
 

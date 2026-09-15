@@ -24,6 +24,8 @@ import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.LegacyLibrarySettings
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.sync.CloudSyncConfig
+import dev.npn.core.sync.SyncTransport
 import dev.npn.core.testing.copy
 import dev.npn.core.util.EpochClock
 import dev.npn.core.util.JvmLog
@@ -135,6 +137,13 @@ internal class AppSessionRig private constructor(
             aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
             /** Whether the session records a deleted document's return ([JournalCoordinator]'s gate). */
             writeUndelete: Boolean = JournalOp.DocUndelete.WRITTEN,
+            /**
+             * Null (the default) wires no cloud sync, so ordinary tests never spawn rclone; a sync
+             * test passes its directory-backed transport and a [cloudSync] naming the remote.
+             */
+            syncTransport: SyncTransport? = null,
+            cloudSync: suspend () -> CloudSyncConfig = { CloudSyncConfig.DISABLED },
+            installationId: String = "test-installation",
             /** The PDF engine the session uses, over the real one. */
             pdfEngine: (PdfEngine) -> PdfEngine = { it },
             /** The library filesystem the session sees, over the real one the rig's [fs] reads directly. */
@@ -148,13 +157,15 @@ internal class AppSessionRig private constructor(
                     scope = scope,
                     library = libRoot,
                     data = File(dbDir, "first"),
-                    installationId = "test-installation",
+                    installationId = installationId,
                     clock = clock,
                     ocr = ocr,
                     log = log,
                     aiConfig = aiConfig,
                     legacyLibrarySettings = legacyLibrarySettings,
                     deviceTrashRetentionDays = deviceTrashRetentionDays,
+                    syncTransport = syncTransport,
+                    cloudSync = cloudSync,
                 )
             val session =
                 openSession(base.copy(fs = files(base.fs), pdfEngine = pdfEngine(base.pdfEngine)), writeUndelete)
@@ -276,8 +287,8 @@ internal fun appSessionTest(
                 legacyLibrarySettings,
                 aiConfig,
                 writeUndelete,
-                pdfEngine,
-                files,
+                pdfEngine = pdfEngine,
+                files = files,
             ).use { block(it) }
     }
 
@@ -334,6 +345,8 @@ internal fun testSessionDeps(
     aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
     legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
     deviceTrashRetentionDays: Int? = null,
+    syncTransport: SyncTransport? = null,
+    cloudSync: suspend () -> CloudSyncConfig = { CloudSyncConfig.DISABLED },
 ): SessionDeps =
     jvmSessionDeps(
         libraryRoot = library,
@@ -346,11 +359,13 @@ internal fun testSessionDeps(
                     legacyLibrarySettings().copy(trashRetentionDays = deviceTrashRetentionDays)
                 },
                 aiConfig = aiConfig,
+                cloudSync = cloudSync,
             ),
         clock = clock,
         installationId = installationId,
         ocrEngine = ocr,
         log = log,
+        syncTransport = syncTransport,
     )
 
 /** An [openSession] result: [use] it, and it closes the session and its databases afterwards. */

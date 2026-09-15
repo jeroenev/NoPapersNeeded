@@ -16,6 +16,7 @@ import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.StoragePathFacade
 import dev.npn.core.app.StoragePathSetting
+import dev.npn.core.app.SyncFacade
 import dev.npn.core.app.TrashRetentionFacade
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.WorkFacade
@@ -26,6 +27,10 @@ import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
+import dev.npn.core.sync.SyncOutcome
+import dev.npn.core.sync.SyncStatus
+import dev.npn.core.sync.TransportAvailability
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.update
@@ -299,6 +304,54 @@ class FakeAiEditQueue : AiEditQueueFacade {
     override suspend fun discardEditRun(jobId: String) {
         discardFailure?.let { throw it }
         discarded += jobId
+    }
+}
+
+/**
+ * Cloud sync. Records how often a pass was asked for and serves a scripted outcome and availability.
+ * The failure hooks drive the viewmodel's error paths; [availabilityGate] holds a probe open so a
+ * test can race two of them.
+ */
+class FakeSyncFacade : SyncFacade {
+    val statusFlow = MutableStateFlow(SyncStatus())
+    override val status: Flow<SyncStatus> get() = statusFlow
+
+    var manualSyncs = 0
+    var scheduledSyncs = 0
+    var probes = 0
+    var outcome: SyncOutcome = SyncOutcome.NotConfigured
+    var availability: TransportAvailability = TransportAvailability.NotInstalled("rclone")
+    var remotes: List<String> = emptyList()
+
+    /** When set, [transportAvailability] waits here before answering with the [availability] of that moment. */
+    var availabilityGate: CompletableDeferred<Unit>? = null
+
+    /** Thrown by [listRemotes] when set. */
+    var listRemotesFailure: Throwable? = null
+
+    /** Thrown by [syncNow] when set: the facade is not supposed to throw, which a test wants to see survive. */
+    var syncNowFailure: Throwable? = null
+
+    override suspend fun syncNow(): SyncOutcome {
+        manualSyncs++
+        syncNowFailure?.let { throw it }
+        return outcome
+    }
+
+    override suspend fun syncScheduled(): SyncOutcome {
+        scheduledSyncs++
+        return outcome
+    }
+
+    override suspend fun transportAvailability(): TransportAvailability {
+        probes++
+        availabilityGate?.await()
+        return availability
+    }
+
+    override suspend fun listRemotes(): List<String> {
+        listRemotesFailure?.let { throw it }
+        return remotes
     }
 }
 

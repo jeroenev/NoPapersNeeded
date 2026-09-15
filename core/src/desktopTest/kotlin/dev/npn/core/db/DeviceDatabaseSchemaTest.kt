@@ -72,6 +72,7 @@ class DeviceDatabaseSchemaTest {
         val SHIPPED: Map<Int, String> =
             mapOf(
                 1 to "c682552d5e6662738f8589c47bbd5f32",
+                2 to "8be6b3e142a51e482a3206023f2c955b",
             )
     }
 }

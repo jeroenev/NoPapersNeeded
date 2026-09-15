@@ -1,5 +1,6 @@
 package dev.npn.core.db
 
+import androidx.room3.AutoMigration
 import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.RoomDatabase
@@ -20,13 +21,18 @@ import kotlinx.coroutines.Dispatchers
  * - the automatic AI enrichment queue, and which documents it already enriched here
  *   ([AiEnrichQueueDao]);
  * - the OCR queue with its requests, attempts and backoff, and the pages a failed run already paid
- *   for ([OcrQueueDao]).
+ *   for ([OcrQueueDao]);
+ * - what the cloud sync last established about each file on its remote ([SyncRemoteDao]).
  *
  * Rows are keyed by document hash, which a rebuilt index gives the same documents again.
  */
 @Database(
-    version = 1,
+    // v2: adds sync_remote_entries (what the cloud sync engine last knew about each remote file).
+    version = 2,
     exportSchema = true,
+    autoMigrations = [
+        AutoMigration(from = 1, to = 2),
+    ],
     entities = [
         KeyValueEntity::class,
         AiEditJobEntity::class,
@@ -35,6 +41,7 @@ import kotlinx.coroutines.Dispatchers
         AiEnrichedEntity::class,
         OcrQueueEntity::class,
         OcrPageCacheEntity::class,
+        SyncRemoteEntryEntity::class,
     ],
 )
 @ConstructedBy(DeviceDatabaseConstructor::class)
@@ -46,6 +53,8 @@ abstract class DeviceDatabase : RoomDatabase() {
     abstract fun aiEnrichQueueDao(): AiEnrichQueueDao
 
     abstract fun ocrQueueDao(): OcrQueueDao
+
+    abstract fun syncRemoteDao(): SyncRemoteDao
 
     companion object {
         /**

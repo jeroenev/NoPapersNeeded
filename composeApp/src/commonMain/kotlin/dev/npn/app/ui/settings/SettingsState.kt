@@ -9,6 +9,9 @@ import dev.npn.core.app.TrashSettings
 import dev.npn.core.model.FieldDef
 import dev.npn.core.settings.SettingsSnapshot
 import dev.npn.core.settings.toAiConfig
+import dev.npn.core.sync.SyncOutcome
+import dev.npn.core.sync.SyncStatus
+import dev.npn.core.sync.TransportAvailability
 
 internal const val DEFAULT_STORAGE_PATH_TEMPLATE = "{doc_date:yyyy}/{title}.pdf"
 
@@ -25,7 +28,31 @@ data class SettingsUiState(
 ) {
     /** Whether the endpoint is complete enough to call — what gates the self-test button. */
     val aiConfigured: Boolean get() = snapshot.toAiConfig().configured
+
+    /** A remote is named, so a pass can be asked for — what gates "sync now" and the automatic toggle. */
+    val cloudConfigured: Boolean get() = !snapshot.cloudRemote.isNullOrBlank()
 }
+
+/**
+ * What the cloud sync pane shows beside the settings: the live pass ([status]), whether the transfer
+ * engine answers ([transport], null until the pane asked), the remotes rclone's config names, and how
+ * the last manual "sync now" ended ([outcome], cleared when any new pass starts).
+ */
+data class CloudSyncState(
+    val status: SyncStatus = SyncStatus(),
+    val transport: TransportAvailability? = null,
+    val remotes: RemoteListState = RemoteListState(),
+    val outcome: SyncOutcome? = null,
+)
+
+/**
+ * The remote names rclone's config lists, as the cloud pane sees them: [remotes] is null until
+ * asked (or after the engine was probed again), [error] explains a listing that failed.
+ */
+data class RemoteListState(
+    val remotes: List<String>? = null,
+    val error: UiText? = null,
+)
 
 /**
  * Transient state of the AI self-test: [report] is the last run's verdicts (null until one has
@@ -59,6 +86,9 @@ enum class TextSetting(
     AI_BASE_URL({ snapshot, value -> snapshot.copy(aiBaseUrl = value) }),
     AI_API_KEY({ snapshot, value -> snapshot.copy(aiApiKey = value) }),
     AI_MODEL({ snapshot, value -> snapshot.copy(aiModel = value) }),
+    CLOUD_REMOTE({ snapshot, value -> snapshot.copy(cloudRemote = value) }),
+    RCLONE_PATH({ snapshot, value -> snapshot.copy(rclonePath = value) }),
+    RCLONE_CONFIG_PATH({ snapshot, value -> snapshot.copy(rcloneConfigPath = value) }),
 }
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
@@ -137,6 +167,22 @@ interface SettingsActions {
 
     /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
     fun clearThumbnailCache()
+
+    /**
+     * Ask the transfer engine whether it is usable. Cheap (one short-lived process), so the pane asks
+     * again whenever the executable or config path changes; only the latest probe answers. A probe
+     * also forgets the remote list, which came from the config file the old paths pointed at.
+     */
+    fun probeTransport()
+
+    /**
+     * Fetch the remote names rclone knows. A failure is kept beside the list, not written over the
+     * engine status the probe established: rclone may well be fine and only its config unreadable.
+     */
+    fun loadRemotes()
+
+    /** Run a cloud sync pass now and keep its outcome for the pane; progress streams through the status. */
+    fun syncNow()
 
     fun saveField(def: FieldDef)
 

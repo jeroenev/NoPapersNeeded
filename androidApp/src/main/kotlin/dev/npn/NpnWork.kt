@@ -66,6 +66,11 @@ class RescanOcrWorker(
                 session.work.drainOcr()
                 session.work.drainEnrichment()
                 session.work.drainEditRuns()
+                // Cloud sync last, so the sidecars and metadata the drains just wrote travel with
+                // this pass. Honours the user's automatic toggle and interval; a pass cut short by
+                // the timeout leaves nothing half-installed (every transfer stages, then publishes)
+                // and the next run picks up what is left.
+                session.sync.syncScheduled()
             }
         }.fold(
             onSuccess = { Result.success() },

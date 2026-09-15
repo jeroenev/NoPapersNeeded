@@ -27,4 +27,6 @@ fun SessionDeps.copy(
         installationId = installationId,
         computation = computation,
         timeSource = timeSource,
+        syncTransport = syncTransport,
+        syncStaging = syncStaging,
     )

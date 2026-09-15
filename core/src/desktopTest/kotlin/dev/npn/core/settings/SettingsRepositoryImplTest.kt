@@ -3,6 +3,7 @@ package dev.npn.core.settings
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiTagging
+import dev.npn.core.sync.CloudSyncConfig
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.RecordingLog
 import io.kotest.matchers.shouldBe
@@ -125,6 +126,44 @@ class SettingsRepositoryImplTest {
 
         override fun close() = out.close()
     }
+
+    @Test
+    fun theCloudRemoteRoundTripsUntrimmed() =
+        runTest {
+            val file = directory.resolve("settings.properties").toFile()
+            // The field is edited one keystroke at a time, so the repository must not trim: a
+            // leading or trailing space is a half-typed path, and the space inside the path is
+            // part of it. Consumers trim at the point of use. Both the write and the reload
+            // (Properties escaping included) have to leave every space where it was.
+            SettingsRepositoryImpl(NpnLog.None, file).edit { it.copy(cloudRemote = " drive:My Docs ") }
+
+            SettingsRepositoryImpl(NpnLog.None, file).settings.first().cloudRemote shouldBe " drive:My Docs "
+        }
+
+    @Test
+    fun cloudSyncSettingsAreNormalisedOnWrite() =
+        runTest {
+            val file = directory.resolve("settings.properties").toFile()
+            SettingsRepositoryImpl(NpnLog.None, file).edit {
+                it.copy(
+                    cloudSyncEnabled = true,
+                    cloudRemote = "drive:My Docs",
+                    // Below the allowed range: clamped up to the minimum.
+                    cloudSyncIntervalMinutes = 1,
+                    rclonePath = "/opt/rclone/rclone",
+                    // Whitespace-only reads as "not set", never as a path.
+                    rcloneConfigPath = "   ",
+                )
+            }
+
+            val snapshot = SettingsRepositoryImpl(NpnLog.None, file).settings.first()
+            snapshot.cloudSyncEnabled shouldBe true
+            snapshot.cloudRemote shouldBe "drive:My Docs"
+            snapshot.cloudSyncIntervalMinutes shouldBe CloudSyncConfig.MIN_INTERVAL_MINUTES
+            snapshot.rclonePath shouldBe "/opt/rclone/rclone"
+            snapshot.rcloneConfigPath shouldBe null
+            snapshot.toCloudSyncConfig().configured shouldBe true
+        }
 
     @Test
     fun aiProviderAndReasoningPersist() =

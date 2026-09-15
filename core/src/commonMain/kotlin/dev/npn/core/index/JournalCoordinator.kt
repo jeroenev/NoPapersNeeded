@@ -473,6 +473,14 @@ internal class JournalCoordinator(
     suspend fun <T> serialized(block: suspend (LockedJournal) -> T): T = locked { block(lockedJournal) }
 
     /**
+     * Where each of [docIds]' files is meant to be ([FoldedState.intendedPath]), read from the live
+     * fold under the lock. For the cloud sync, which moves a document's remote copy to where the
+     * journal wants it: the index row only caches where the file is.
+     */
+    suspend fun intendedPaths(docIds: Collection<String>): Map<String, String?> =
+        locked { foldedState().let { state -> docIds.associateWith(state::intendedPath) } }
+
+    /**
      * Deleted documents an import brought back in this session without a record of it, as no
      * `doc-undelete` is written ([writeUndelete] off), until a lifecycle change of theirs. A delete
      * for good still removing the bytes ([LockedJournal.isDeleted]) leaves them be: the journal

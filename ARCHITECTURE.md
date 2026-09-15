@@ -101,6 +101,7 @@ One line per package. The rules each package enforces are in section 6.
 | `core.work` | `QueueDrainer`, `drainedQueue`, `QueueRetryPolicy`, `EndpointHealth`. |
 | `core.ai` | The AI layer: `AiChat.kt`, `AiSuggest.kt`, `AiConfig.kt`, `UnattendedAiPolicy.kt`; `AiFacadeImpl`, `KoogChatAgent`, `LibraryAiTools`, `ChatHistoryWindow`, `AiRuntime`, `AiRuntimeCache`, `AiSelfTest`, `AiModelCatalog`, `ProviderClientFactory`. |
 | `core.settings` | This device's own settings and directories, never per library: `Settings.kt` (`SettingsRepository`, `SettingsSnapshot`, `SettingsCodec`, `SettingsKeys`, `LegacyLibrarySettings`, `GridSizing`), `SessionSettings`, `AppDirs`, `LibraryLocations`, `PlatformDirs`. |
+| `core.sync` | Cloud sync of the library folder through rclone (section 5.6). `SyncTransport`/`RemoteStore` are the transfer seam (`RcloneTransport`/`RcloneCli` in `jvmSharedMain` drive `rclone rc --loopback` as a subprocess; tests use a directory-backed store). `SyncEngine` runs one pass: `DocumentResolver`, `SyncPlanner` (pure), `LocalApplier`, `RemotePusher`, `MetadataTransfer`. `SyncService` is the session's `SyncFacade`; `SyncHooks` is what a pass asks of the session. `CloudSyncConfig` is device-local; credentials stay in rclone's own config. |
 | `core.update` | The update check: `AppVersions`, `LatestReleaseSource`, `GitHubLatestRelease`. |
 | `core.util` | `runCatchingCancellable`, `Throwable.reason()`, `EpochClock`, `NpnLog` and `runLogged`, `NpnJson`. |
 
@@ -158,6 +159,7 @@ scope with no handler:
 | Follow-up rescan | A scan deferred a file still being written, or an OCR read found stale bytes | One pending timer, rescheduled, that rescans after the settle window. |
 | Rule mirror | The `AUTO_MATCH_RULES` setting changes | Caches another device's rule list into the index. |
 | OCR queue watch | Rows other writers add to the OCR queue | Kicks the OCR drain. |
+| Cloud sync schedule | Every minute, and soon after a journal change or a rescan | `SyncService`: a due-check against the configured interval, and one debounced pass after local changes, while automatic sync is on. |
 | Maintenance tick | Every 15 minutes | Metadata reconcile, a retry of a failed initial rescan, and a kick of every queue so backed-off rows come due. |
 
 Each queue (OCR, AI enrichment, queued AI edit runs) has a `QueueDrainer`: one worker loop fed by
@@ -301,6 +303,35 @@ one cached endpoint client (`AiRuntimeCache`). Consumers: `AiEditRun` (bulk, rev
 OCR), and `OcrPipeline` through the vision engine, one call per page. `LibraryAiTools` is the
 assistant's entire view of the library; `docs/AI_TOOL_DATA_GAPS.md` lists what it deliberately
 leaves out.
+
+### 5.6 Cloud sync
+
+`core.sync` treats an rclone remote as one more replica of the library folder, never of the index.
+One pass (`SyncEngine`) lists the remote (a failed listing fails the pass), pulls the metadata the
+library lacks and folds it, identifies every remote PDF by its SHA-256, plans (`SyncPlanner`, pure),
+applies the local half, pushes documents, and pushes metadata last, so a replica that sees this
+device's journal event finds the remote files that go with it already in place.
+
+- Journal objects, snapshots, OCR sidecars and device markers are a set union: immutable,
+  hash- or size-verified, staged then published. Nothing deletes a journal object, so the union only
+  grows.
+- A remote PDF is identified by the manifest (`sync_remote_entries` in `DeviceDatabase`, keyed by
+  remote path with the size and mtime it had when identified), else by the backend's own SHA-256,
+  else by a download. The manifest lives beside the device's own state because rebuilding the index
+  must not mean downloading the whole remote again.
+- A document's remote path follows the journal's `storagePath` intent
+  (`FoldedState.intendedPath`), as its local path does; without one, its remote name stands.
+- Trash and delete for good are the journal's decisions. The pass mirrors them onto the remote, and
+  a replica applies the same move to its own file, as a folder syncer would deliver it, only once the
+  remote holds no live copy under any path; the rescan that follows projects it. A delete is decided
+  again under the writer lock (`SyncHooks.deleteDeletedCopy`), so bytes an import brought back since
+  the plan stay. Trash entries carry their trash episode in their name (section 6.3),
+  and the remote's trash is purged by it, never by mtime.
+- A missing remote file is unknown, never a deletion; a remote PDF that could not be identified is
+  left alone on both sides until it can be. Nothing is deleted or replaced to settle a conflict:
+  occupied targets are reported and uniquified. Every remote move and delete is guarded by a fresh
+  `stat` against the size and mtime the plan was made from, every local move and delete by the
+  file's hash, and a failed guard is a reported conflict, not an action.
 
 ## 6. Rules by concept
 
