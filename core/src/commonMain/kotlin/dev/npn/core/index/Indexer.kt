@@ -14,6 +14,7 @@ import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
+import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -45,7 +46,7 @@ import kotlinx.coroutines.sync.withLock
  *
  * Only one rescan runs at a time (guarded by a [Mutex]); calling [rescan] repeatedly is safe.
  */
-@Suppress("TooManyFunctions")
+@Suppress("TooManyFunctions", "LargeClass")
 class Indexer(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
@@ -66,10 +67,12 @@ class Indexer(
     private val fieldDefDao get() = db.fieldDefDao()
     private val duplicateDao get() = db.duplicateDao()
 
+    @Suppress("LongMethod")
     suspend fun rescan(
         metadataState: FoldedState,
         fullHash: Boolean = false,
         onProgress: (IndexProgress) -> Unit = {},
+        onExternalMoves: (suspend (List<PendingOp>) -> Unit)? = null,
     ): ScanReport =
         rescanMutex.withLock {
             val started = clock.nowMillis()
@@ -137,6 +140,14 @@ class Indexer(
                 }
 
                 report(IndexProgress(IndexProgress.Phase.RECONCILING))
+                if (onExternalMoves != null) {
+                    val moves =
+                        ExternalDocumentMoves(
+                            fs,
+                            db.keyValueDao(),
+                        ).detect(metadataState, dbProjection, indexable, hashes)
+                    if (moves.isNotEmpty()) onExternalMoves(moves)
+                }
                 val diskPaths = indexable.map { it.relPath }.toHashSet()
 
                 val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
@@ -884,6 +895,7 @@ class Indexer(
                 missing = lifecycle.missing,
             )
         val newRow = documentPaths.project(projectedRow, state)
+        documentPaths.observe(newRow, state)
         val rowChanged = newRow != row
         if (rowChanged) changes.docRows.add(newRow)
 

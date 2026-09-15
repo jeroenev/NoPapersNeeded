@@ -15,6 +15,12 @@ internal class DocumentPathReconciler(
     private val db: NpnDatabase,
 ) {
     private val paths = DocumentPaths(fs)
+    private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
+
+    suspend fun observe(
+        row: DocumentEntity,
+        state: FoldedState,
+    ) = externalMoves.observe(row, state)
 
     suspend fun project(
         row: DocumentEntity,

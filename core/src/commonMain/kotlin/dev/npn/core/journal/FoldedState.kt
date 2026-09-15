@@ -20,6 +20,7 @@ import dev.npn.core.model.SystemProperty
  * Instances are mutable accumulators; [copy]-style snapshotting is not needed because folding
  * is deterministic regardless of the order events were applied.
  */
+@Suppress("TooManyFunctions")
 class FoldedState {
     // --- raw tag data ---
     // doc -> literal tag name -> (dot -> hlc) of live adds
@@ -230,6 +231,12 @@ class FoldedState {
     ): String? = props[doc]?.get(key)?.value
 
     fun allProps(doc: String): Map<SystemProperty, String?> = props[doc]?.mapValues { it.value.value } ?: emptyMap()
+
+    /** Winning version, including explicit clears, for comparing device-local observation baselines. */
+    fun propVersion(
+        doc: String,
+        key: SystemProperty,
+    ): Hlc? = props[doc]?.get(key)?.hlc
 
     /**
      * Effective custom fields for a document: only keys whose winning value is non-null (a null

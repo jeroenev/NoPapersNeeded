@@ -94,6 +94,7 @@ private class SyncedSettings {
  * [FoldedState] refresh, or the DB projection. Expose new capabilities as named members here
  * rather than widening [writer] back to public.
  */
+@Suppress("TooManyFunctions")
 class JournalCoordinator internal constructor(
     internal val writer: SegmentWriter,
     private val indexer: Indexer,
@@ -208,7 +209,7 @@ class JournalCoordinator internal constructor(
                 folded = reconciled
                 observeSourceHlc(reconciled.maxHlc)
                 syncedSettings.seed(reconciled)
-                val report = indexer.rescan(metadataState = reconciled)
+                val report = rescanWithExternalMoves(reconciled)
                 accumulator.markReady(reconciled.maxHlc)
                 writeBlockReason = null
                 report
@@ -406,7 +407,7 @@ class JournalCoordinator internal constructor(
                 folded = reconciled
                 observeSourceHlc(reconciled.maxHlc)
                 syncedSettings.seed(reconciled)
-                val report = indexer.rescan(metadataState = reconciled)
+                val report = rescanWithExternalMoves(reconciled)
                 accumulator.markReady(reconciled.maxHlc)
                 report
             }
@@ -430,6 +431,18 @@ class JournalCoordinator internal constructor(
         val version = if (published == null) NpnPaths.STORAGE_V1 else NpnPaths.STORAGE_V2
         return path to version
     }
+
+    /** Called under the coordinator mutex; the indexer already holds its scan lock in the callback. */
+    private suspend fun rescanWithExternalMoves(state: FoldedState): ScanReport =
+        indexer.rescan(metadataState = state, onExternalMoves = { ops ->
+            withContext(NonCancellable) {
+                val (published, written) = writeTransaction(ops)
+                val (path, version) = sourcePathAndVersion(published, written)
+                accumulator.recordLocalSource(path, version, published?.contentHash, written)
+                written.forEach(state::apply)
+                observeSourceHlc(state.maxHlc)
+            }
+        })
 
     private suspend fun writeTransaction(ops: List<PendingOp>): Pair<PublishedTransaction?, List<JournalEvent>> {
         val contentWriter = objectWriter ?: return null to writer.commit(ops)
