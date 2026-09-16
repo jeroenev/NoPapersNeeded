@@ -10,6 +10,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -17,9 +18,7 @@ import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
-import dev.npn.app.ui.common.TypedTextField
 import dev.npn.app.ui.common.formatEpochDateTime
-import dev.npn.app.ui.common.resolve
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncPhase
 import dev.npn.core.sync.SyncProgress
@@ -27,15 +26,11 @@ import dev.npn.core.sync.SyncRunSummary
 import dev.npn.core.sync.TransportAvailability
 import kotlinx.coroutines.delay
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_settings_advanced
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_auto
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_auto_help
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_binary
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_binary_help
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_config
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_config_help
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_configured_remotes
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_change_folder
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_conflict_count
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_disconnect
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_available
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_check
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_checking
@@ -49,9 +44,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_cloud_int
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_interval_minutes
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_last_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_last_summary
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_load_remotes
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_never
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_no_remotes
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_outcome_completed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_outcome_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_outcome_not_configured
@@ -66,29 +59,22 @@ import no_papers_needed.composeapp.generated.resources.common_settings_cloud_pha
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_phase_resolve
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_problem_line
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_progress
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_reload_remotes
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_remote
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_remote_help
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_remotes_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_schedule
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_title
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_unavailable
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_status
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sync_now
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
-
-/** Example remote shown with the remote field. */
-private const val REMOTE_EXAMPLE = "gdrive:NoPapersNeeded"
 
 /** Interval choices offered for automatic passes, in minutes. */
 private val INTERVAL_OPTIONS = listOf(5, 15, 30, 60, 180, 720, 1440)
 
 private const val MINUTES_PER_HOUR = 60
 
-/**
- * How long a path field must be quiet before rclone is probed with it: past the pause after which
- * what is typed is saved, as the engine reads the saved paths.
- */
-private const val PROBE_DEBOUNCE_MS = 1_000L
+/** How long a probe already answered waits before asking again for changed engine paths. */
+private const val PROBE_DEBOUNCE_MS = 400L
 
 private const val MAX_LISTED_PROBLEMS = 5
 
@@ -96,9 +82,9 @@ private const val MAX_LISTED_PROBLEMS = 5
 private val ItemSpacing = 8.dp
 
 /**
- * Cloud synchronization through rclone: whether the engine is usable on this device, which remote
- * the library mirrors to, the automatic schedule, a manual pass with its progress and outcome,
- * and the two advanced paths (executable, config file).
+ * Cloud synchronization through the bundled rclone. With no remote configured the pane is the
+ * in-app setup wizard (provider, sign-in, folder); once one is chosen it shows the status, schedule
+ * and manual pass, plus the two ways to change that choice (a different folder, or disconnect).
  */
 @Composable
 internal fun CloudSyncSettingsPane(
@@ -108,61 +94,87 @@ internal fun CloudSyncSettingsPane(
     val settings = state.settings
     val snapshot = settings.snapshot
     val cloud = state.cloud
-    // The executable and config paths decide whether rclone answers; probe again when either
-    // changes, once typing has paused. The effect restarting on the next keystroke absorbs a burst.
+    // Ask whether the engine is usable when the pane opens, and again if the stored executable or
+    // config path changes. A probe already answered means the change is where one query lands.
     LaunchedEffect(snapshot.rclonePath, snapshot.rcloneConfigPath) {
         if (cloud.transport != null) delay(PROBE_DEBOUNCE_MS)
         actions.probeTransport()
     }
+    val configured = settings.cloudConfigured
+    // With no remote, entering the pane (or disconnecting) opens the wizard on the provider list;
+    // cancelling leaves it idle until the user asks again, so this must not key on the wizard state.
+    DisposableEffect(configured, cloud.setupAvailable) {
+        if (!configured && cloud.setupAvailable) actions.cloudSetup.start()
+        onDispose {}
+    }
     val available = cloud.transport is TransportAvailability.Available
+    // Changing the folder, or disconnecting, must not race a pass that is reading the remote.
+    val editable = !cloud.status.running
 
     SettingsSection(title = null) {
         HelpText(stringResource(Res.string.common_settings_cloud_help))
         EngineStatus(cloud.transport, onCheck = actions::probeTransport)
     }
 
-    SettingsSection(title = stringResource(Res.string.common_settings_cloud_remote)) {
-        RemoteEditor(snapshot.cloudRemote.orEmpty(), cloud, actions, available)
+    // The wizard also takes over when it is open for an already-configured remote (the "change
+    // folder" flow), not only while none is set.
+    if (cloud.setup != null || !configured) {
+        SettingsSection(title = stringResource(Res.string.common_settings_cloud_setup_title)) {
+            if (cloud.setupAvailable) {
+                CloudSetupWizard(cloud.setup, actions.cloudSetup)
+            } else {
+                HelpText(stringResource(Res.string.common_settings_cloud_setup_unavailable))
+            }
+        }
+    } else {
+        SettingsSection(title = stringResource(Res.string.common_settings_cloud_remote)) {
+            ConnectedRemote(snapshot.cloudRemote.orEmpty(), actions.cloudSetup, available, editable)
+        }
+        SettingsSection(title = stringResource(Res.string.common_settings_cloud_schedule)) {
+            SwitchRow(
+                label = stringResource(Res.string.common_settings_cloud_auto),
+                help = stringResource(Res.string.common_settings_cloud_auto_help),
+                checked = snapshot.cloudSyncEnabled,
+                // Turning it on needs a working engine and a remote; turning it off must always work,
+                // or a remote cleared afterwards leaves the switch stuck on.
+                enabled = snapshot.cloudSyncEnabled || available,
+                onCheckedChange = { on -> actions.edit { it.copy(cloudSyncEnabled = on) } },
+            )
+            val interval = intervalLabel(snapshot.cloudSyncIntervalMinutes)
+            Dropdown(
+                selected = stringResource(Res.string.common_settings_cloud_interval, interval),
+                options = INTERVAL_OPTIONS,
+                optionLabel = { intervalLabel(it) },
+                onSelect = { minutes -> actions.edit { it.copy(cloudSyncIntervalMinutes = minutes) } },
+            )
+        }
+        SettingsSection(title = stringResource(Res.string.common_settings_cloud_status)) {
+            SyncStatusSection(cloud, available, actions::syncNow)
+        }
     }
+}
 
-    SettingsSection(title = stringResource(Res.string.common_settings_cloud_schedule)) {
-        SwitchRow(
-            label = stringResource(Res.string.common_settings_cloud_auto),
-            help = stringResource(Res.string.common_settings_cloud_auto_help),
-            checked = snapshot.cloudSyncEnabled,
-            // Turning it on needs a working engine and a remote; turning it off must always work,
-            // or a remote cleared afterwards leaves the switch stuck on.
-            enabled = snapshot.cloudSyncEnabled || (available && settings.cloudConfigured),
-            onCheckedChange = { on -> actions.edit { it.copy(cloudSyncEnabled = on) } },
-        )
-        val interval = intervalLabel(snapshot.cloudSyncIntervalMinutes)
-        Dropdown(
-            selected = stringResource(Res.string.common_settings_cloud_interval, interval),
-            options = INTERVAL_OPTIONS,
-            optionLabel = { intervalLabel(it) },
-            onSelect = { minutes -> actions.edit { it.copy(cloudSyncIntervalMinutes = minutes) } },
-        )
-    }
-
-    SettingsSection(title = stringResource(Res.string.common_settings_cloud_status)) {
-        SyncStatusSection(cloud, available && settings.cloudConfigured, actions::syncNow)
-    }
-
-    SettingsSection(title = stringResource(Res.string.common_settings_advanced)) {
-        TypedTextField(
-            value = snapshot.rclonePath.orEmpty(),
-            onValueChange = { path -> actions.type(TextSetting.RCLONE_PATH, path) },
-            onDone = { actions.doneTyping(TextSetting.RCLONE_PATH) },
-            label = stringResource(Res.string.common_settings_cloud_binary),
-            supportingText = { Text(text = stringResource(Res.string.common_settings_cloud_binary_help)) },
-        )
-        TypedTextField(
-            value = snapshot.rcloneConfigPath.orEmpty(),
-            onValueChange = { path -> actions.type(TextSetting.RCLONE_CONFIG_PATH, path) },
-            onDone = { actions.doneTyping(TextSetting.RCLONE_CONFIG_PATH) },
-            label = stringResource(Res.string.common_settings_cloud_config),
-            supportingText = { Text(text = stringResource(Res.string.common_settings_cloud_config_help)) },
-        )
+/**
+ * The remote the library mirrors to, with the two ways to change it. The raw `name:path` is shown
+ * read-only: it is an rclone address the wizard produced, not something a user should type.
+ */
+@Composable
+private fun ConnectedRemote(
+    remote: String,
+    setup: CloudSetupActions,
+    available: Boolean,
+    editable: Boolean,
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(ItemSpacing)) {
+        Text(text = remote, style = MaterialTheme.typography.bodyMedium)
+        Row(horizontalArrangement = Arrangement.spacedBy(ItemSpacing)) {
+            OutlinedButton(onClick = setup::changeFolder, enabled = available && editable) {
+                Text(text = stringResource(Res.string.common_settings_cloud_change_folder))
+            }
+            OutlinedButton(onClick = setup::disconnect, enabled = editable) {
+                Text(text = stringResource(Res.string.common_settings_cloud_disconnect))
+            }
+        }
     }
 }
 
@@ -192,54 +204,6 @@ private fun EngineStatus(
     Text(text = text, style = MaterialTheme.typography.bodyMedium)
     if (transport !is TransportAvailability.Available) {
         SettingsActionRow(label = stringResource(Res.string.common_settings_cloud_engine_check), onClick = onCheck)
-    }
-}
-
-@Composable
-private fun RemoteEditor(
-    remote: String,
-    cloud: CloudSyncState,
-    actions: SettingsActions,
-    available: Boolean,
-) {
-    TypedTextField(
-        value = remote,
-        onValueChange = { typed -> actions.type(TextSetting.CLOUD_REMOTE, typed) },
-        onDone = { actions.doneTyping(TextSetting.CLOUD_REMOTE) },
-        label = stringResource(Res.string.common_settings_cloud_remote),
-        supportingText = { Text(text = stringResource(Res.string.common_settings_cloud_remote_help, REMOTE_EXAMPLE)) },
-    )
-    val remotes = cloud.remotes.remotes
-    Row(horizontalArrangement = Arrangement.spacedBy(ItemSpacing)) {
-        if (!remotes.isNullOrEmpty()) {
-            // Picking a name fills in `name:`; the folder on that remote is the user's to add.
-            Dropdown(
-                selected = stringResource(Res.string.common_settings_cloud_configured_remotes),
-                options = remotes,
-                optionLabel = { it },
-                onSelect = { name ->
-                    actions.type(TextSetting.CLOUD_REMOTE, "$name:")
-                    actions.doneTyping(TextSetting.CLOUD_REMOTE)
-                },
-            )
-        }
-        // Always offered, so a remote added with `rclone config` while this screen is open can be
-        // picked up without leaving Settings.
-        OutlinedButton(onClick = actions::loadRemotes, enabled = available && !cloud.status.running) {
-            val label =
-                if (remotes == null) {
-                    Res.string.common_settings_cloud_load_remotes
-                } else {
-                    Res.string.common_settings_cloud_reload_remotes
-                }
-            Text(text = stringResource(label))
-        }
-    }
-    val error = cloud.remotes.error
-    if (error != null) {
-        HelpText(stringResource(Res.string.common_settings_cloud_remotes_failed, error.resolve()))
-    } else if (remotes != null && remotes.isEmpty()) {
-        HelpText(stringResource(Res.string.common_settings_cloud_no_remotes))
     }
 }
 

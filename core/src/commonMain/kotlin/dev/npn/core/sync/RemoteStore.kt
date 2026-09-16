@@ -82,6 +82,12 @@ interface SyncTransport {
     suspend fun listRemotes(): List<String>
 
     fun open(remote: String): RemoteStore
+
+    /**
+     * Release any long-lived resources the engine holds (a spawned process). Defaults to nothing so
+     * a stateless or test transport need not care; the session calls it on close.
+     */
+    fun close() {}
 }
 
 /**

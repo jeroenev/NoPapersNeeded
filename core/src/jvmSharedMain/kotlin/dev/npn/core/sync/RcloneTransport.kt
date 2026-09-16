@@ -1,5 +1,7 @@
 package dev.npn.core.sync
 
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -17,31 +19,36 @@ import java.nio.file.Paths
 import java.time.OffsetDateTime
 
 /**
- * The rclone-backed [SyncTransport]. The executable and config file are read from the live
- * [config] on every call, so a path typed into settings takes effect without reopening the
- * library; [defaultBinary] is the platform's fallback (`rclone` on PATH, or an executable the app
- * ships).
+ * The rclone-backed [SyncTransport]. It owns one long-lived engine per launch configuration
+ * ([RcloneDaemon] by default) so every transfer and every setup call shares the same process: a
+ * remote is small-talk, and a persistent engine is what makes the interactive OAuth sign-in
+ * possible and keeps a pass from spawning a process per file.
+ *
+ * The launch parameters are read from the live [config] on every call, so a path typed into
+ * settings takes effect without reopening the library; [defaults] is what the host supplies when
+ * the settings name nothing (the bundled executable, the app-private config file). A change to
+ * either closes the old engine and starts a fresh one on the next call.
  */
 class RcloneTransport(
     private val config: suspend () -> CloudSyncConfig,
-    private val defaultBinary: () -> String = { "rclone" },
+    private val defaults: RcloneDefaults = RcloneDefaults(),
+    private val engineFactory: (RcloneLaunch) -> RcloneRpc = { RcloneDaemon(it) },
 ) : SyncTransport {
-    private suspend fun cli(): RcloneCli {
-        val cfg = config()
-        return RcloneCli(
-            binary = cfg.rcloneBinary?.trim()?.takeIf { it.isNotEmpty() } ?: defaultBinary(),
-            configPath = cfg.rcloneConfig?.trim()?.takeIf { it.isNotEmpty() },
-        )
-    }
+    private val gate = Mutex()
+    private var engine: RcloneRpc? = null
+    private var launched: RcloneLaunch? = null
+
+    /** In-app provider setup, over the same engine the transfers use. */
+    val setup: CloudSetup = RcloneCloudSetup(::rpc)
 
     override suspend fun availability(): TransportAvailability {
-        val cli = cli()
+        val spec = launch()
         return try {
-            val version = cli.call("core/version")["version"]?.jsonPrimitive?.contentOrNull ?: "unknown"
+            val version = rpc().call("core/version")["version"]?.jsonPrimitive?.contentOrNull ?: "unknown"
             TransportAvailability.Available(version)
         } catch (failure: RcloneException) {
             if (failure.status == null) {
-                TransportAvailability.NotInstalled(cli.binary)
+                TransportAvailability.NotInstalled(spec.binary)
             } else {
                 TransportAvailability.Failed(failure.message ?: "rclone did not answer")
             }
@@ -49,14 +56,44 @@ class RcloneTransport(
     }
 
     override suspend fun listRemotes(): List<String> =
-        cli()
+        rpc()
             .call("config/listremotes")["remotes"]
             ?.takeIf { it !is JsonNull }
             ?.jsonArray
             ?.mapNotNull { it.jsonPrimitive.contentOrNull }
             .orEmpty()
 
-    override fun open(remote: String): RemoteStore = RcloneRemoteStore(remote, ::cli)
+    override fun open(remote: String): RemoteStore = RcloneRemoteStore(remote, ::rpc)
+
+    override fun close() {
+        val current = engine
+        engine = null
+        launched = null
+        current?.close()
+    }
+
+    private suspend fun launch(): RcloneLaunch {
+        val cfg = config()
+        return RcloneLaunch(
+            binary = cfg.rcloneBinary?.trim()?.takeIf { it.isNotEmpty() } ?: defaults.binary,
+            configPath = cfg.rcloneConfig?.trim()?.takeIf { it.isNotEmpty() } ?: defaults.configPath,
+            cacheDir = defaults.cacheDir,
+        )
+    }
+
+    /** The current engine, starting a fresh one when the launch parameters changed. */
+    private suspend fun rpc(): RcloneRpc {
+        val spec = launch()
+        return gate.withLock {
+            val current = engine
+            if (current != null && launched == spec) return@withLock current
+            current?.close()
+            engineFactory(spec).also {
+                engine = it
+                launched = spec
+            }
+        }
+    }
 }
 
 /**
@@ -66,13 +103,13 @@ class RcloneTransport(
  */
 class RcloneRemoteStore(
     private val remote: String,
-    private val cli: suspend () -> RcloneCli,
+    private val rpc: suspend () -> RcloneRpc,
 ) : RemoteStore {
     override suspend fun list(): List<RemoteEntry> {
         // rclone answers "directory not found" for a root that does not exist yet, which would fail
         // every pass until someone created the folder by hand. Creating it is idempotent and cheap,
         // and an empty folder then lists as empty.
-        cli().call(
+        rpc().call(
             "operations/mkdir",
             buildJsonObject {
                 put("fs", remote)
@@ -92,7 +129,7 @@ class RcloneRemoteStore(
                 }
             }
         val list =
-            cli().call("operations/list", input)["list"]?.takeIf { it !is JsonNull }?.jsonArray
+            rpc().call("operations/list", input)["list"]?.takeIf { it !is JsonNull }?.jsonArray
                 ?: JsonArray(emptyList())
         return list.mapNotNull { it.jsonObject.toEntry() }
     }
@@ -107,7 +144,7 @@ class RcloneRemoteStore(
                     putJsonArray("hashTypes") { add(JsonPrimitive("sha256")) }
                 }
             }
-        val item = cli().call("operations/stat", input)["item"]
+        val item = rpc().call("operations/stat", input)["item"]
         if (item == null || item is JsonNull) return null
         return item.jsonObject.toEntry()
     }
@@ -142,7 +179,7 @@ class RcloneRemoteStore(
         from: String,
         to: String,
     ) {
-        cli().call(
+        rpc().call(
             "operations/movefile",
             buildJsonObject {
                 put("srcFs", remote)
@@ -154,7 +191,7 @@ class RcloneRemoteStore(
     }
 
     override suspend fun delete(path: String) {
-        cli().call(
+        rpc().call(
             "operations/deletefile",
             buildJsonObject {
                 put("fs", remote)
@@ -169,7 +206,7 @@ class RcloneRemoteStore(
         dstFs: String,
         dstRemote: String,
     ) {
-        cli().call(
+        rpc().call(
             "operations/copyfile",
             buildJsonObject {
                 put("srcFs", srcFs)

@@ -35,23 +35,16 @@ data class SettingsUiState(
 
 /**
  * What the cloud sync pane shows beside the settings: the live pass ([status]), whether the transfer
- * engine answers ([transport], null until the pane asked), the remotes rclone's config names, and how
- * the last manual "sync now" ended ([outcome], cleared when any new pass starts).
+ * engine answers ([transport], null until the pane asked), how the last manual "sync now" ended
+ * ([outcome], cleared when any new pass starts), and the setup wizard's step ([setup], null while it
+ * is closed) on a device that wired one ([setupAvailable]).
  */
 data class CloudSyncState(
     val status: SyncStatus = SyncStatus(),
     val transport: TransportAvailability? = null,
-    val remotes: RemoteListState = RemoteListState(),
     val outcome: SyncOutcome? = null,
-)
-
-/**
- * The remote names rclone's config lists, as the cloud pane sees them: [remotes] is null until
- * asked (or after the engine was probed again), [error] explains a listing that failed.
- */
-data class RemoteListState(
-    val remotes: List<String>? = null,
-    val error: UiText? = null,
+    val setup: CloudSetupState? = null,
+    val setupAvailable: Boolean = false,
 )
 
 /**
@@ -86,9 +79,6 @@ enum class TextSetting(
     AI_BASE_URL({ snapshot, value -> snapshot.copy(aiBaseUrl = value) }),
     AI_API_KEY({ snapshot, value -> snapshot.copy(aiApiKey = value) }),
     AI_MODEL({ snapshot, value -> snapshot.copy(aiModel = value) }),
-    CLOUD_REMOTE({ snapshot, value -> snapshot.copy(cloudRemote = value) }),
-    RCLONE_PATH({ snapshot, value -> snapshot.copy(rclonePath = value) }),
-    RCLONE_CONFIG_PATH({ snapshot, value -> snapshot.copy(rcloneConfigPath = value) }),
 }
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
@@ -169,20 +159,16 @@ interface SettingsActions {
     fun clearThumbnailCache()
 
     /**
-     * Ask the transfer engine whether it is usable. Cheap (one short-lived process), so the pane asks
-     * again whenever the executable or config path changes; only the latest probe answers. A probe
-     * also forgets the remote list, which came from the config file the old paths pointed at.
+     * Ask the transfer engine whether it is usable; the pane asks when it opens, and again when the
+     * stored executable or config path changes. Only the latest probe answers.
      */
     fun probeTransport()
 
-    /**
-     * Fetch the remote names rclone knows. A failure is kept beside the list, not written over the
-     * engine status the probe established: rclone may well be fine and only its config unreadable.
-     */
-    fun loadRemotes()
-
     /** Run a cloud sync pass now and keep its outcome for the pane; progress streams through the status. */
     fun syncNow()
+
+    /** The in-app cloud setup wizard: provider, sign-in, folder. */
+    val cloudSetup: CloudSetupActions
 
     fun saveField(def: FieldDef)
 

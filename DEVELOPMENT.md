@@ -63,6 +63,11 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 - OCR on desktop: the Windows installers and the Flatpak bundle Tesseract with models for
   every UI language. The other Linux packages need `tesseract-ocr` on `PATH`; without it,
   only embedded PDF text is indexed, and scans imported meanwhile are OCR'd once it is there.
+- Cloud sync uses a bundled rclone. Building the Android app cross-compiles it into the APK,
+  which needs Go 1.26+ on `PATH` and Android NDK 29 (`sdkmanager --install "ndk;29.0.14206865"`);
+  `-Pnpn.rclone.skip=true` builds without the engine for fast iteration, never for a release.
+  Desktop packaging downloads the pinned rclone release (`:desktopApp:downloadRclone`) into the
+  app image.
 
 ## Building
 
@@ -101,6 +106,8 @@ The ones that need more than their description:
 - `mise test-device` runs the instrumentation tests on a connected device; CI only compiles them.
 - `mise baseline-profile` regenerates the baseline profile on a device on Android 13+ (see
   [Release builds: R8 and baseline profiles](#release-builds-r8-and-baseline-profiles)).
+- `mise rclone-android` cross-compiles just the bundled rclone for Android, which `mise apk`
+  and every other Android build do on the way (see [Requirements](#requirements)).
 - `mise apk-release` is signed only with `NPN_KEYSTORE_*` set, and `mise release <version>`
   bumps the version, tags `v<version>` and pushes; CI publishes the release (see
   [Releases](#releases)).
@@ -481,5 +488,6 @@ Moves across mount points likewise fail without removing the source.
 The Storage Access Framework remains available as an advanced option
 (Settings → Library → Advanced → *Use Storage Access Framework*) for folders that have
 no path, such as cloud document providers, and every library chosen through SAF before
-the direct mode existed keeps opening that way. Direct cloud integrations
-(Dropbox, Drive, OneDrive, WebDAV) are planned as their own adapters, not via SAF.
+the direct mode existed keeps opening that way. Cloud sync (Settings → Cloud sync) reaches
+Dropbox, Drive, OneDrive, WebDAV/Nextcloud and the rest through the bundled rclone, set up
+in the app rather than through SAF.

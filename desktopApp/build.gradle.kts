@@ -390,3 +390,76 @@ tasks.register<Tar>("packageLinuxTarball") {
     val launcher = "app/bin/$npnAppName"
     doLast { ArchiveModes.requireExecutablesKept(archives.tarTree(archive), stage.get().asFile, into, launcher) }
 }
+
+// --- Bundled rclone --------------------------------------------------------
+// Cloud sync shells out to rclone, so every desktop package carries the official build for the
+// host platform at `<app>/lib/rclone/rclone`, where core's bundledRcloneBinary() looks after the
+// NPN_RCLONE override. Pinned by hash like every download a package ships: the values are the ones
+// rclone lists in the PGP-signed SHA256SUMS of the release (check its signature when bumping).
+val rcloneVersion = "v1.75.1"
+val rcloneSha256 =
+    mapOf(
+        "linux-amd64" to "982b5aa772841168f8e380f139e9e787b2a105403e32b94da8676a0e1c0a13ab",
+        "linux-arm64" to "03f2504174034b6d004152ed7369251c9a9ec1f7e0836eda420f5c7a5ec0dff9",
+        "osx-amd64" to "29253d0288b8fbbac46baad6e5f6add6cb01d462c79f10805bbd4631c4cdf82c",
+        "osx-arm64" to "c61d7a371c62bcbbe882c3423aa4b8bf63485c248dd0f692997b8f0c3f6d0c6f",
+        "windows-amd64" to "200eb602c126d82aa38b51e0f6b9ae837473ff99b51278d3f6f837574c494d6e",
+    )
+
+val rclonePlatform: String =
+    run {
+        val os = System.getProperty("os.name").lowercase()
+        val arch = System.getProperty("os.arch").lowercase()
+        val osPart =
+            when {
+                os.contains("win") -> "windows"
+                os.contains("mac") -> "osx"
+                else -> "linux"
+            }
+        val archPart = if (arch.contains("aarch64") || arch.contains("arm64")) "arm64" else "amd64"
+        "$osPart-$archPart"
+    }
+val rcloneExecutable = if (rclonePlatform.startsWith("windows")) "rclone.exe" else "rclone"
+
+val downloadRclone =
+    tasks.register<DownloadRcloneTask>("downloadRclone") {
+        group = "compose desktop"
+        description = "Downloads the pinned rclone build for this host and verifies its checksum."
+        version.set(rcloneVersion)
+        platform.set(rclonePlatform)
+        // Checked when the task runs, so a host without a pinned build only fails what needs rclone.
+        val platform = rclonePlatform
+        val pinned = rcloneSha256[platform]
+        sha256.set(providers.provider { pinned ?: throw GradleException("No pinned rclone checksum for $platform") })
+        binary.set(layout.buildDirectory.file("rclone/$rcloneExecutable"))
+    }
+
+// Every package is built from createDistributable's app image, so the engine goes into it there.
+tasks.named { it == "createDistributable" }.configureEach {
+    // Locals only: the action is stored in the configuration cache, which cannot hold the script.
+    val engine = downloadRclone.flatMap { it.binary }
+    val bundled = "lib/rclone/$rcloneExecutable"
+    val appImage = distributableAppImage
+    inputs.file(engine)
+    doLast {
+        val target = appImage.get().file(bundled).asFile
+        target.parentFile.mkdirs()
+        engine.get().asFile.copyTo(target, overwrite = true)
+        target.setExecutable(true, false)
+    }
+}
+
+// `mise hot` / `mise desktop` run from source, with no app image for the lookup to find: point the
+// app at the engine this build downloaded, so the cloud pane works without rclone on PATH.
+tasks.named { it == "run" || it == "hotRun" }.configureEach {
+    dependsOn(downloadRclone)
+    if (this is JavaExec) {
+        systemProperty(
+            "npn.rclone",
+            layout.buildDirectory
+                .file("rclone/$rcloneExecutable")
+                .get()
+                .asFile.path,
+        )
+    }
+}

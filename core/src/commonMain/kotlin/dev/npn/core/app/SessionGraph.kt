@@ -323,10 +323,11 @@ internal class SessionGraph(
     /**
      * Cloud sync through the host's transfer engine, null when the host wired none. A pass folds the
      * journal objects it brought in, and the rescan it runs for the PDFs it moved is followed up as a
-     * relink's is ([rescans]).
+     * relink's is ([rescans]). The engine a transport keeps running is stopped with the session.
      */
     val sync: SyncService? =
         deps.syncTransport?.let { transport ->
+            lifetime.releaseOnClose(transport::close)
             deps.syncStaging?.let { staging ->
                 SyncService(
                     transport = transport,
@@ -344,6 +345,7 @@ internal class SessionGraph(
                         ),
                     kv = deps.deviceDb.keyValueDao(),
                     clock = deps.clock,
+                    setup = deps.syncSetup,
                     owned = { pass -> lifetime.owned(pass) },
                 )
             }

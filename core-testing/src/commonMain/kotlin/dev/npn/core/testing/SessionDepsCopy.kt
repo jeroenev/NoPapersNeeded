@@ -29,4 +29,5 @@ fun SessionDeps.copy(
         timeSource = timeSource,
         syncTransport = syncTransport,
         syncStaging = syncStaging,
+        syncSetup = syncSetup,
     )

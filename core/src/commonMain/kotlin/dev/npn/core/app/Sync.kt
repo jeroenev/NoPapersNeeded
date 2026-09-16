@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.sync.CloudSetup
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
@@ -28,6 +29,12 @@ interface SyncFacade {
 
     /** Remote names from the transfer engine's configuration, for the settings picker. */
     suspend fun listRemotes(): List<String>
+
+    /**
+     * In-app remote setup (provider catalog, sign-in, folder picker), or null on a host that wired
+     * no configurable engine. The wizard in settings is the only consumer.
+     */
+    val setup: CloudSetup?
 }
 
 /** The facade of a session whose host wired no transfer engine. */
@@ -41,6 +48,8 @@ object NoSyncFacade : SyncFacade {
     override suspend fun transportAvailability(): TransportAvailability = UNAVAILABLE
 
     override suspend fun listRemotes(): List<String> = emptyList()
+
+    override val setup: CloudSetup? = null
 
     private val UNAVAILABLE = TransportAvailability.NotInstalled("no transfer engine wired for this host")
 }

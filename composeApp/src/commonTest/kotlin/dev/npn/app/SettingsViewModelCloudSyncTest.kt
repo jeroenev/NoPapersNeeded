@@ -1,9 +1,12 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.settings.CloudSetupState
 import dev.npn.app.ui.settings.CloudSyncState
-import dev.npn.app.ui.settings.RemoteListState
 import dev.npn.app.ui.settings.SettingsViewModel
+import dev.npn.core.sync.OAuthStatus
+import dev.npn.core.sync.RcloneOption
+import dev.npn.core.sync.RcloneProvider
+import dev.npn.core.sync.SetupStep
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncReport
 import dev.npn.core.sync.SyncStatus
@@ -26,10 +29,12 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
     /** A viewmodel over [session] whose pane state is collected, as the screen collects it. */
-    private fun TestScope.vm(session: FakeLibrarySession): SettingsViewModel =
-        settingsVm(session = session).also { collecting(it.paneState) }
+    private fun TestScope.vm(
+        session: FakeLibrarySession,
+        settings: FakeSettingsRepository = FakeSettingsRepository(),
+    ): SettingsViewModel = settingsVm(settings = settings, session = session).also { collecting(it.paneState) }
 
-    private val SettingsViewModel.cloud: CloudSyncState get() = paneState.value.cloud
+    private val SettingsViewModel.cloudState: CloudSyncState get() = paneState.value.cloud
 
     @Test
     fun onlyTheLatestProbeMayAnswer() =
@@ -43,59 +48,21 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
             model.probeTransport()
             runCurrent()
             session.sync.probes shouldBe 1
-            model.cloud.transport.shouldBeNull()
+            model.cloudState.transport.shouldBeNull()
 
             // ...and the one for the finished path, which answers straight away.
             session.sync.availabilityGate = null
             session.sync.availability = TransportAvailability.Available("v1.70")
             model.probeTransport()
             advanceUntilIdle()
-            model.cloud.transport shouldBe TransportAvailability.Available("v1.70")
+            model.cloudState.transport shouldBe TransportAvailability.Available("v1.70")
 
             // The stale probe finishing late must not write over that answer.
             session.sync.availability = TransportAvailability.NotInstalled("/half/typed")
             gate.complete(Unit)
             advanceUntilIdle()
-            model.cloud.transport shouldBe TransportAvailability.Available("v1.70")
+            model.cloudState.transport shouldBe TransportAvailability.Available("v1.70")
             session.sync.probes shouldBe 2
-        }
-
-    @Test
-    fun aNewProbeForgetsTheRemoteList() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession()
-            val model = vm(session)
-            session.sync.remotes = listOf("drive", "nas")
-            model.loadRemotes()
-            advanceUntilIdle()
-            model.cloud.remotes shouldBe RemoteListState(remotes = listOf("drive", "nas"))
-
-            // The list came from the config file the old paths pointed at: gone the moment a new
-            // probe is asked for, before it has answered.
-            session.sync.availabilityGate = CompletableDeferred()
-            model.probeTransport()
-            runCurrent()
-            model.cloud.remotes shouldBe RemoteListState()
-        }
-
-    @Test
-    fun aFailedRemoteListingKeepsTheEngineStatus() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession()
-            val model = vm(session)
-            session.sync.availability = TransportAvailability.Available("v1.70")
-            model.probeTransport()
-            advanceUntilIdle()
-
-            session.sync.listRemotesFailure = IllegalStateException("config unreadable")
-            model.loadRemotes()
-            advanceUntilIdle()
-
-            model.cloud.remotes.error shouldBe UiText.Raw("config unreadable")
-            model.cloud.remotes.remotes
-                .shouldBeNull()
-            // rclone itself is fine; only its config could not be read.
-            model.cloud.transport shouldBe TransportAvailability.Available("v1.70")
         }
 
     @Test
@@ -108,7 +75,7 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
             model.syncNow()
             advanceUntilIdle()
 
-            model.cloud.outcome shouldBe SyncOutcome.Failed("engine exploded")
+            model.cloudState.outcome shouldBe SyncOutcome.Failed("engine exploded")
             session.sync.manualSyncs shouldBe 1
         }
 
@@ -122,12 +89,296 @@ class SettingsViewModelCloudSyncTest : MainDispatcherTest() {
 
             model.syncNow()
             advanceUntilIdle()
-            model.cloud.outcome shouldBe SyncOutcome.Completed(report)
+            model.cloudState.outcome shouldBe SyncOutcome.Completed(report)
 
             // An automatic pass starts: its result is what the status shows from here on.
             session.sync.statusFlow.value = SyncStatus(running = true)
             advanceUntilIdle()
-            model.cloud.outcome.shouldBeNull()
-            model.cloud.status.running shouldBe true
+            model.cloudState.outcome.shouldBeNull()
+            model.cloudState.status.running shouldBe true
         }
+
+    @Test
+    fun theWizardLoadsProvidersAndBeginsTheFormWithTheDefaults() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            val chosen = provider()
+            setup.providersResult = listOf(chosen)
+            setup.beginResult = { question("client_id", "state-1") }
+            val model = vm(session)
+
+            model.cloud.available shouldBe true
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloudState.setup shouldBe CloudSetupState.Providers(listOf(chosen))
+
+            model.cloud.chooseProvider(chosen)
+            model.cloud.setValue("client_secret", "sekret")
+            model.cloud.submit()
+            advanceUntilIdle()
+
+            setup.begins.single() shouldBe
+                FakeCloudSetup.BeginCall(
+                    name = "drive",
+                    type = "drive",
+                    params = mapOf("client_id" to "default-id", "client_secret" to "sekret"),
+                )
+            // The question rclone asked is what the form shows next.
+            (model.cloudState.setup as CloudSetupState.Form).question?.option?.name shouldBe "client_id"
+        }
+
+    @Test
+    fun aBrowserSignInQuestionIsAnsweredForTheUserAndItsUrlSurfaces() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            val chosen = provider(options = emptyList())
+            val gate = CompletableDeferred<Unit>()
+            setup.answerGate = gate
+            setup.beginResult = { question("config_is_local", "oauth-state") }
+            setup.answerResult = { SetupStep.Done("drive") }
+            setup.oauthStatusResult = OAuthStatus(running = true, authUrl = "http://127.0.0.1:53682/auth")
+            val model = vm(session)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(chosen)
+            model.cloud.submit()
+            // The blocking answer is held on the gate; the poll runs while it waits.
+            runCurrent()
+
+            setup.answers.single() shouldBe FakeCloudSetup.AnswerCall("drive", "oauth-state", "true")
+            (model.cloudState.setup as CloudSetupState.SigningIn).authUrl shouldBe "http://127.0.0.1:53682/auth"
+            setup.oauthStatusCalls shouldBe 1
+
+            gate.complete(Unit)
+            advanceUntilIdle()
+            model.cloudState.setup shouldBe CloudSetupState.Folders(remote = "drive:", path = "")
+        }
+
+    @Test
+    fun aBrowserProviderSkipsTheFormAndAnswersRclonesOwnQuestions() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            val chosen = provider(options = emptyList(), browserSignIn = true)
+            setup.beginResult = { question("config_shared_client_id", "client_id_warning") }
+            setup.answerResult = { call ->
+                if (call.state == "client_id_warning") {
+                    question("config_is_local", "oauth-state")
+                } else {
+                    SetupStep.Done("drive")
+                }
+            }
+            val model = vm(session)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(chosen)
+            advanceUntilIdle()
+
+            // No form is ever shown: the wizard starts the conversation with no parameters...
+            setup.begins.single() shouldBe FakeCloudSetup.BeginCall("drive", "drive", emptyMap())
+            // ...answers Drive's shared-client warning itself, then the browser prompt too.
+            setup.answers shouldBe
+                listOf(
+                    FakeCloudSetup.AnswerCall("drive", "client_id_warning", "true"),
+                    FakeCloudSetup.AnswerCall("drive", "oauth-state", "true"),
+                )
+            model.cloudState.setup shouldBe CloudSetupState.Folders(remote = "drive:", path = "")
+        }
+
+    @Test
+    fun aGenericQuestionMapsToAnAnswer() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            val chosen = provider()
+            setup.beginResult = { question("client_secret", "state-1") }
+            setup.answerResult = { SetupStep.Done("drive") }
+            val model = vm(session)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(chosen)
+            model.cloud.submit()
+            advanceUntilIdle()
+            model.cloud.setValue("client_secret", "abc")
+            model.cloud.submit()
+            advanceUntilIdle()
+
+            setup.answers.single() shouldBe FakeCloudSetup.AnswerCall("drive", "state-1", "abc")
+            model.cloudState.setup shouldBe CloudSetupState.Folders(remote = "drive:", path = "")
+        }
+
+    @Test
+    fun choosingAFolderPersistsItAsTheRemote() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            val settings = FakeSettingsRepository()
+            val chosen = provider(options = emptyList())
+            setup.beginResult = { SetupStep.Done("drive") }
+            setup.foldersResult = { listOf("NoPapersNeeded", "Archive") }
+            val model = vm(session, settings)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(chosen)
+            model.cloud.submit()
+            advanceUntilIdle()
+            model.cloudState.setup shouldBe
+                CloudSetupState.Folders(
+                    remote = "drive:",
+                    path = "",
+                    folders = listOf("NoPapersNeeded", "Archive"),
+                )
+
+            model.cloud.openFolder("NoPapersNeeded")
+            advanceUntilIdle()
+            setup.folderLists.last() shouldBe FakeCloudSetup.FolderCall("drive:", "NoPapersNeeded")
+
+            model.cloud.useFolder()
+            advanceUntilIdle()
+
+            settings.settingsFlow.value.cloudRemote shouldBe "drive:NoPapersNeeded"
+            model.cloudState.setup.shouldBeNull()
+        }
+
+    @Test
+    fun creatingAFolderRefreshesTheListing() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            val chosen = provider(options = emptyList())
+            setup.beginResult = { SetupStep.Done("drive") }
+            setup.foldersResult = { emptyList() }
+            val model = vm(session)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(chosen)
+            model.cloud.submit()
+            advanceUntilIdle()
+
+            model.cloud.createFolder("NoPapersNeeded")
+            advanceUntilIdle()
+
+            setup.madeFolders.single() shouldBe FakeCloudSetup.FolderCall("drive:", "NoPapersNeeded")
+            setup.folderLists.last() shouldBe FakeCloudSetup.FolderCall("drive:", "")
+        }
+
+    @Test
+    fun cancellingABrowserSignInStopsIt() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            val chosen = provider(options = emptyList())
+            setup.answerGate = CompletableDeferred()
+            setup.beginResult = { question("config_is_local", "oauth-state") }
+            setup.oauthStatusResult = OAuthStatus(running = true, authUrl = "http://127.0.0.1:53682/auth")
+            val model = vm(session)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloud.chooseProvider(chosen)
+            model.cloud.submit()
+            runCurrent()
+
+            model.cloud.cancel()
+            advanceUntilIdle()
+
+            model.cloudState.setup.shouldBeNull()
+            setup.stopOauthCalls shouldBe 1
+        }
+
+    @Test
+    fun aFailedSetupSurfacesAndRetryReloadsTheProviders() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val setup = FakeCloudSetup()
+            session.sync.setup = setup
+            setup.providersFailure = IllegalStateException("engine down")
+            val model = vm(session)
+
+            model.cloud.start()
+            advanceUntilIdle()
+            (model.cloudState.setup as CloudSetupState.Failed).message shouldBe "engine down"
+
+            setup.providersFailure = null
+            val chosen = provider()
+            setup.providersResult = listOf(chosen)
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloudState.setup shouldBe CloudSetupState.Providers(listOf(chosen))
+        }
+
+    @Test
+    fun withoutASetupFacadeTheWizardIsUnavailable() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session)
+
+            model.cloud.available shouldBe false
+            model.cloud.start()
+            advanceUntilIdle()
+            model.cloudState.setup.shouldBeNull()
+        }
+
+    @Test
+    fun disconnectClearsTheRemoteAndTheAutomaticToggle() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val settings = FakeSettingsRepository()
+            settings.updateSettings { it.copy(cloudRemote = "drive:NoPapersNeeded", cloudSyncEnabled = true) }
+            val model = vm(session, settings)
+
+            model.cloud.disconnect()
+            advanceUntilIdle()
+
+            settings.settingsFlow.value.cloudRemote
+                .shouldBeNull()
+            settings.settingsFlow.value.cloudSyncEnabled shouldBe false
+            model.cloudState.setup.shouldBeNull()
+        }
+
+    private fun provider(
+        type: String = "drive",
+        name: String = "Google Drive",
+        options: List<RcloneOption> =
+            listOf(
+                RcloneOption(
+                    name = "client_id",
+                    help = "Client id",
+                    type = "string",
+                    required = true,
+                    defaultValue = "default-id",
+                ),
+            ),
+        browserSignIn: Boolean = false,
+    ) = RcloneProvider(
+        type = type,
+        name = name,
+        description = "$name storage",
+        options = options,
+        browserSignIn = browserSignIn,
+    )
+
+    private fun question(
+        option: String,
+        state: String,
+        type: String = "string",
+    ) = SetupStep.Question(
+        remoteName = "drive",
+        state = state,
+        option = RcloneOption(name = option, help = "$option help", type = type),
+    )
 }

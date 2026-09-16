@@ -88,6 +88,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `config/lint/lint.xml` is the one configuration.
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
+- Android builds cross-compile the bundled rclone (cloud sync) into `jniLibs`, so they need
+  Go 1.26+ on `PATH` and Android NDK 29 (`sdkmanager --install "ndk;29.0.14206865"`).
+  `mise rclone-android` builds just the engine; `-Pnpn.rclone.skip=true` skips it while
+  iterating (never for a release). Desktop packaging downloads the pinned rclone release
+  (`:desktopApp:downloadRclone`, hash-pinned) into the app image.
 - CI (`.github/workflows/ci.yml`) runs, with `+` joining one Gradle invocation's tasks:
   shellcheck (hooks, mise tasks, `.github/scripts`) → spotlessCheck + checkLocalization +
   checkFieldTypeBranches + detekt → tests with coverage (kover drives both desktop test suites) +

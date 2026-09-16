@@ -12,7 +12,9 @@ import dev.npn.core.pdf.renderParallelism
 import dev.npn.core.settings.AppDirs
 import dev.npn.core.settings.PlatformDirs
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.sync.CloudSetup
 import dev.npn.core.sync.DirectoryStaging
+import dev.npn.core.sync.RcloneDefaults
 import dev.npn.core.sync.RcloneTransport
 import dev.npn.core.sync.SyncTransport
 import dev.npn.core.util.EpochClock
@@ -46,8 +48,14 @@ fun jvmSessionDeps(
     installationId: String,
     ocrEngine: OcrEngine = TesseractCliEngine(),
     log: NpnLog = JvmLog(),
-    /** rclone from PATH by default; the settings' explicit executable path overrides it per call. */
-    syncTransport: SyncTransport? = RcloneTransport(settings.cloudSync),
+    /**
+     * The bundled rclone by default, with an app-private config file and cache, so the user's own
+     * `~/.config/rclone/rclone.conf` is never touched; the settings' explicit executable and config
+     * paths still override these per call.
+     */
+    syncTransport: SyncTransport? = RcloneTransport(settings.cloudSync, desktopRclone()),
+    /** Derived from [syncTransport] unless a host wires a setup engine of its own. */
+    syncSetup: CloudSetup? = (syncTransport as? RcloneTransport)?.setup,
 ): SessionDeps =
     SessionDeps(
         fs = JvmLibraryFileSystem(libraryRoot, PathExternalIo),
@@ -64,8 +72,23 @@ fun jvmSessionDeps(
         clock = clock,
         installationId = installationId,
         syncTransport = syncTransport,
+        syncSetup = syncSetup,
         syncStaging = DirectoryStaging(Path.of(dirs.syncDir)),
     )
+
+/**
+ * The bundled rclone (or `rclone` on PATH when this build ships none), with its config file and
+ * cache in the app's data directory. Both directories are made up front, so rclone never has to
+ * make them and never falls back to the user's own.
+ */
+private fun desktopRclone(): RcloneDefaults {
+    val home = File(PlatformDirs.appDataDir()).apply { mkdirs() }
+    return RcloneDefaults(
+        binary = bundledRcloneBinary() ?: "rclone",
+        configPath = File(home, "rclone.conf").path,
+        cacheDir = File(home, "rclone-cache").apply { mkdirs() }.path,
+    )
+}
 
 /**
  * The desktop app's one log, shared by everything in the process: stderr plus `npn.log` in the

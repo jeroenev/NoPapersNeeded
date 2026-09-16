@@ -27,6 +27,10 @@ import dev.npn.core.index.IndexProgress
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrEngineRef
+import dev.npn.core.sync.CloudSetup
+import dev.npn.core.sync.OAuthStatus
+import dev.npn.core.sync.RcloneProvider
+import dev.npn.core.sync.SetupStep
 import dev.npn.core.sync.SyncOutcome
 import dev.npn.core.sync.SyncStatus
 import dev.npn.core.sync.TransportAvailability
@@ -352,6 +356,113 @@ class FakeSyncFacade : SyncFacade {
     override suspend fun listRemotes(): List<String> {
         listRemotesFailure?.let { throw it }
         return remotes
+    }
+
+    /** In-app setup, when a test wires one. */
+    override var setup: CloudSetup? = null
+}
+
+/**
+ * In-app cloud setup. Scripts each protocol step and records the calls, so a view-model test can
+ * drive the wizard without an engine. [answerGate] holds the (normally blocking) sign-in answer so
+ * a test can observe the status poll that runs while it is in flight.
+ */
+class FakeCloudSetup : CloudSetup {
+    var providersResult: List<RcloneProvider> = emptyList()
+    var providersFailure: Throwable? = null
+    var providersCalls = 0
+
+    data class BeginCall(
+        val name: String,
+        val type: String,
+        val params: Map<String, String>,
+    )
+
+    data class AnswerCall(
+        val name: String,
+        val state: String,
+        val result: String,
+    )
+
+    data class FolderCall(
+        val remote: String,
+        val path: String,
+    )
+
+    val begins = mutableListOf<BeginCall>()
+    val answers = mutableListOf<AnswerCall>()
+    val folderLists = mutableListOf<FolderCall>()
+    val madeFolders = mutableListOf<FolderCall>()
+
+    /** What [begin] answers; the default is a failure so a test cannot silently pass through. */
+    var beginResult: (BeginCall) -> SetupStep = { SetupStep.Failed("no begin scripted") }
+
+    /** What [answer] answers. */
+    var answerResult: (AnswerCall) -> SetupStep = { SetupStep.Failed("no answer scripted") }
+
+    /** When set, [answer] waits here before returning, simulating the blocking sign-in. */
+    var answerGate: CompletableDeferred<Unit>? = null
+
+    var oauthStatusResult: OAuthStatus? = null
+    var oauthStatusCalls = 0
+    var stopOauthCalls = 0
+
+    var foldersResult: (FolderCall) -> List<String> = { emptyList() }
+    var foldersFailure: Throwable? = null
+    var makeFolderFailure: Throwable? = null
+
+    override suspend fun providers(): List<RcloneProvider> {
+        providersCalls++
+        providersFailure?.let { throw it }
+        return providersResult
+    }
+
+    override suspend fun begin(
+        name: String,
+        type: String,
+        params: Map<String, String>,
+    ): SetupStep {
+        val call = BeginCall(name, type, params)
+        begins += call
+        return beginResult(call)
+    }
+
+    override suspend fun answer(
+        name: String,
+        state: String,
+        result: String,
+    ): SetupStep {
+        val call = AnswerCall(name, state, result)
+        answers += call
+        answerGate?.await()
+        return answerResult(call)
+    }
+
+    override suspend fun oauthStatus(): OAuthStatus? {
+        oauthStatusCalls++
+        return oauthStatusResult
+    }
+
+    override suspend fun stopOauth() {
+        stopOauthCalls++
+    }
+
+    override suspend fun folders(
+        remote: String,
+        path: String,
+    ): List<String> {
+        val call = FolderCall(remote, path)
+        folderLists += call
+        foldersFailure?.let { throw it }
+        return foldersResult(call)
+    }
+
+    override suspend fun makeFolder(
+        remote: String,
+        path: String,
+    ) {
+        madeFolders += FolderCall(remote, path)
+        makeFolderFailure?.let { throw it }
     }
 }
 

@@ -30,6 +30,8 @@ class SyncService(
     private val engine: SyncEngine,
     private val kv: KeyValueDao,
     private val clock: EpochClock,
+    /** In-app remote setup, or null when the host wired only transfers. */
+    override val setup: CloudSetup? = null,
     private val owned: suspend (suspend () -> SyncOutcome) -> SyncOutcome = { it() },
     private val checkIntervalMillis: Long = DEFAULT_CHECK_INTERVAL_MS,
     private val soonDelayMillis: Long = DEFAULT_SOON_DELAY_MS,

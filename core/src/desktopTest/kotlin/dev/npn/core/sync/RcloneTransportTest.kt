@@ -90,8 +90,10 @@ class RcloneTransportTest {
 
                 store.delete("2026/b.pdf")
                 store.list().shouldBe(emptyList())
+                // rclone answered, with an error of its own: a status, unlike a process that never
+                // started. Its value differs per engine (500 from `rc --loopback`, 404 from `rcd`).
                 val failure = assertFailsWith<RcloneException> { store.delete("2026/b.pdf") }
-                failure.status shouldBe 500
+                failure.status.shouldNotBeNull()
             } finally {
                 remoteDir.toFile().deleteRecursively()
                 localDir.toFile().deleteRecursively()

@@ -39,6 +39,27 @@ jobs:
         with:
           cache-provider: basic
 
+      # The bundled rclone is cross-compiled with Go and the NDK into the APK, which the Android
+      # builds below merge; caching Go's module and build caches keeps that step from downloading
+      # rclone's whole dependency tree on every run.
+      - name: Set up Go
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
+        with:
+          go-version: "1.26.x"
+          cache: false
+
+      - name: Cache Go build and module caches
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5.1.0
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: rclone-${{ runner.os }}-${{ hashFiles('androidApp/build.gradle.kts') }}
+          restore-keys: rclone-${{ runner.os }}-
+
+      - name: Install Android NDK (for the bundled rclone)
+        run: yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "ndk;29.0.14206865"
+
       - name: Shell scripts
         run: shellcheck .githooks/* .mise/tasks/* .github/scripts/*
 

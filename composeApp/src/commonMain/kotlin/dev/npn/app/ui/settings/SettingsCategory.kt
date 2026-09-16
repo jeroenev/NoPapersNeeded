@@ -36,15 +36,14 @@ import no_papers_needed.composeapp.generated.resources.common_settings_change_li
 import no_papers_needed.composeapp.generated.resources.common_settings_choose_folder
 import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnail_cache
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_auto
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_binary
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_config
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_configured_remotes
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_change_folder
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_connect
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_disconnect
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_engine_check
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_interval
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_load_remotes
-import no_papers_needed.composeapp.generated.resources.common_settings_cloud_reload_remotes
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_remote
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_schedule
+import no_papers_needed.composeapp.generated.resources.common_settings_cloud_setup_title
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_status
 import no_papers_needed.composeapp.generated.resources.common_settings_cloud_sync_now
 import no_papers_needed.composeapp.generated.resources.common_settings_default_view
@@ -217,18 +216,16 @@ internal val SettingsCategories: List<SettingsCategory> =
             keywords =
                 listOf(
                     Res.string.common_settings_cloud_engine_check,
+                    Res.string.common_settings_cloud_setup_title,
+                    Res.string.common_settings_cloud_connect,
                     Res.string.common_settings_cloud_remote,
-                    Res.string.common_settings_cloud_configured_remotes,
-                    Res.string.common_settings_cloud_load_remotes,
-                    Res.string.common_settings_cloud_reload_remotes,
+                    Res.string.common_settings_cloud_change_folder,
+                    Res.string.common_settings_cloud_disconnect,
                     Res.string.common_settings_cloud_schedule,
                     Res.string.common_settings_cloud_auto,
                     Res.string.common_settings_cloud_interval,
                     Res.string.common_settings_cloud_status,
                     Res.string.common_settings_cloud_sync_now,
-                    Res.string.common_settings_advanced,
-                    Res.string.common_settings_cloud_binary,
-                    Res.string.common_settings_cloud_config,
                 ),
             content = { state, actions -> CloudSyncSettingsPane(state, actions) },
         ),

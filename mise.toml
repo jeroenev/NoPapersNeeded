@@ -22,8 +22,12 @@ description = "Regenerate the Android baseline profile on the connected device (
 run = "./gradlew :androidApp:generateBaselineProfile"
 
 [tasks.apk]
-description = "Build the Android debug APK"
+description = "Build the Android debug APK (cross-compiles the bundled rclone; needs Go + NDK)"
 run = "./gradlew :androidApp:assembleDebug"
+
+[tasks.rclone-android]
+description = "Cross-compile the bundled rclone for Android into jniLibs (needs Go + the NDK)"
+run = "./gradlew :androidApp:buildRcloneAndroid"
 
 [tasks.apk-release]
 description = "Build the Android release APK (signed when NPN_KEYSTORE_* is set, else unsigned)"

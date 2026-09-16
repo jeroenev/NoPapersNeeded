@@ -27,6 +27,10 @@ a folder you choose, readable by any other app, today and in ten years.
 - **Every device, one library.** Keep the folder in sync with the tool you already use,
   such as Syncthing or Nextcloud, and every phone and computer sees the same documents,
   tags and search results. Changes made on two devices at once merge cleanly.
+- **Or sync it to your cloud from the app.** Mirror the library to Google Drive, Dropbox,
+  OneDrive, WebDAV/Nextcloud, S3, Backblaze B2, SFTP and more, set up entirely in the app:
+  pick a provider, sign in and choose a folder. The files stay plain files there too, and
+  nothing else needs installing.
 - **No lock-in.** Your files are never converted, renamed behind your back or locked in
   a database. Stop using the app and you still have a tidy folder of PDFs.
 - **Safe by design.** Deleted documents go to a trash you can restore from, and the app

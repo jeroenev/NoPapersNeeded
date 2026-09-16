@@ -187,10 +187,22 @@ class SettingsViewModel(
 
     private var probeJob: Job? = null
 
-    /** Remote names from rclone's config, fetched on demand via [loadRemotes]. */
-    private val remotes = MutableStateFlow(RemoteListState())
+    /** The in-app setup wizard (provider, sign-in, folder) behind the pane's controls. */
+    internal val cloud =
+        CloudSetupController(
+            scope = viewModelScope,
+            setup = { sync.setup },
+            readRemote = { settings.settings.first().cloudRemote },
+            persistRemote = { remote -> edit { it.copy(cloudRemote = remote) } },
+            clearRemote = { edit { it.copy(cloudRemote = null, cloudSyncEnabled = false) } },
+        )
 
-    private val cloud: Flow<CloudSyncState> = combine(syncStatus, transport, remotes, syncOutcome, ::CloudSyncState)
+    override val cloudSetup: CloudSetupActions get() = cloud
+
+    private val cloudState: Flow<CloudSyncState> =
+        combine(syncStatus, transport, syncOutcome, cloud.state) { status, engine, outcome, setup ->
+            CloudSyncState(status, engine, outcome, setup, cloud.available)
+        }
 
     /** Everything a settings pane shows, as one value. */
     internal val paneState: StateFlow<SettingsPaneState> =
@@ -198,7 +210,7 @@ class SettingsViewModel(
             state,
             aiModels,
             aiSelfTest,
-            combine(reviewMode, cloud, ::Pair),
+            combine(reviewMode, cloudState, ::Pair),
             combine(fields, fieldUsage, fieldDialog.flow, ::Triple),
         ) { ui, models, selfTest, (mode, cloudState), (defs, usage, dialog) ->
             SettingsPaneState(ui, models, selfTest, mode, defs, usage, dialog, cloudState)
@@ -333,7 +345,6 @@ class SettingsViewModel(
 
     override fun probeTransport() {
         probeJob?.cancel()
-        remotes.value = RemoteListState()
         probeJob =
             viewModelScope.launch {
                 transport.value =
@@ -341,16 +352,6 @@ class SettingsViewModel(
                         TransportAvailability.Failed(failure.message ?: failure::class.simpleName ?: "error")
                     }
             }
-    }
-
-    override fun loadRemotes() {
-        viewModelScope.launch {
-            remotes.value =
-                runCatchingCancellable { sync.listRemotes() }.fold(
-                    onSuccess = { RemoteListState(remotes = it) },
-                    onFailure = { RemoteListState(error = it.reasonText()) },
-                )
-        }
     }
 
     /** The facade is not supposed to throw, but a UI scope must not be the thing that finds out. */

@@ -7,6 +7,7 @@ import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.settings.SessionSettings
+import dev.npn.core.sync.CloudSetup
 import dev.npn.core.sync.LocalStaging
 import dev.npn.core.sync.SyncTransport
 import dev.npn.core.util.EpochClock
@@ -54,6 +55,8 @@ class SessionDeps(
     val syncTransport: SyncTransport? = null,
     /** App-private scratch space cloud transfers pass through; needed beside [syncTransport]. */
     val syncStaging: LocalStaging? = null,
+    /** In-app remote setup over the same engine; null leaves the settings without the setup wizard. */
+    val syncSetup: CloudSetup? = null,
 ) {
     /**
      * Close the index and device databases. Exposed here so the composeApp DI layer (which does not

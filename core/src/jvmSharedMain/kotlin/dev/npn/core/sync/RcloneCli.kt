@@ -14,31 +14,23 @@ import java.io.IOException
 import java.io.InputStream
 
 /**
- * A failed rclone call. [status] is rclone's RC status code when the call reached rclone (500 for
- * an operation error, 404 for an unknown method); null means the process itself could not be
- * started, which is how a missing executable shows up.
- */
-class RcloneException(
-    message: String,
-    val status: Int?,
-    cause: Throwable? = null,
-) : IOException(message, cause)
-
-/**
  * Drives the rclone executable through its remote-control API in loopback mode: one process per
- * call, `rclone rc --loopback <method> --json <input>`, JSON in and JSON out. This is the same RPC
- * surface `librclone` exposes in-process, so a later switch to the embedded library (gomobile on
- * Android) replaces this class and nothing above it. Following the existing Tesseract precedent,
- * no native binding is involved and a missing binary degrades to "unavailable".
+ * call, `rclone rc --loopback <method> --json <input>`, JSON in and JSON out. This is the stateless
+ * [RcloneRpc]; [RcloneDaemon] is the long-lived variant the app normally uses. Following the
+ * existing Tesseract precedent, no native binding is involved and a missing binary degrades to
+ * "unavailable".
  */
 class RcloneCli(
     val binary: String,
     private val configPath: String? = null,
     private val io: CoroutineDispatcher = Dispatchers.IO,
-) {
-    suspend fun call(
+) : RcloneRpc {
+    /** Nothing outlives a call: each one owns and reaps its own process. */
+    override fun close() = Unit
+
+    override suspend fun call(
         method: String,
-        input: JsonObject = JsonObject(emptyMap()),
+        input: JsonObject,
     ): JsonObject =
         withContext(io) {
             val command = ArrayList<String>()
