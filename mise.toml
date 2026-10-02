@@ -3,9 +3,11 @@
 # See https://mise.jdx.dev/tasks/ for details.
 
 [env]
-# Launcher activity used by the Android deploy/launch tasks.
+# Android package ids used by the deploy/uninstall tasks. The debug build has its own package so
+# it installs next to the release build.
 ANDROID_APP_ID = "dev.npn"
-ANDROID_LAUNCHER = "dev.npn/.MainActivity"
+ANDROID_APP_ID_DEBUG = "dev.npn.debug"
+ANDROID_ACTIVITY = "dev.npn.MainActivity"
 
 # Only needed by `mise icons`, which re-renders the committed desktop icons from
 # design/branding/icon.svg. Nothing in the Gradle build depends on these.
@@ -20,7 +22,7 @@ description = "Build the Android debug APK"
 run = "./gradlew :androidApp:assembleDebug"
 
 [tasks.apk-release]
-description = "Build the Android release APK (unsigned until a signing config is added)"
+description = "Build the Android release APK (signed when NPN_KEYSTORE_* is set, else unsigned)"
 run = "./gradlew :androidApp:assembleRelease"
 
 [tasks.bundle]
@@ -31,7 +33,11 @@ run = "./gradlew :androidApp:bundleRelease"
 # Defined as a file task in .mise/tasks/deploy for the multi-step logic.
 
 [tasks.uninstall]
-description = "Uninstall the app from the connected device"
+description = "Uninstall the debug build from the connected device"
+run = "adb uninstall $ANDROID_APP_ID_DEBUG"
+
+[tasks.uninstall-release]
+description = "Uninstall the release build from the connected device"
 run = "adb uninstall $ANDROID_APP_ID"
 
 # --- Android wireless ------------------------------------------------------
@@ -62,6 +68,10 @@ run = "./gradlew :desktopApp:run"
 description = "Build a Linux .deb native distribution"
 run = "./gradlew :desktopApp:packageDeb"
 
+[tasks.package-rpm]
+description = "Build a Linux .rpm native distribution (needs rpmbuild)"
+run = "./gradlew :desktopApp:packageRpm"
+
 [tasks.package-appimage]
 description = "Build a Linux AppImage (downloads appimagetool on first run)"
 run = "./gradlew :desktopApp:packageAppImage"
@@ -69,6 +79,9 @@ run = "./gradlew :desktopApp:packageAppImage"
 [tasks.package-jar]
 description = "Build a self-contained runnable uber JAR"
 run = "./gradlew :desktopApp:packageUberJarForCurrentOS"
+
+# `mise release <version>` bumps npn.version, commits, tags v<version> and pushes; the tag
+# triggers .github/workflows/release.yml (file task in .mise/tasks/release).
 
 # `mise icons` re-renders the committed desktop icon bitmaps from the branding SVG
 # (file task in .mise/tasks/icons).

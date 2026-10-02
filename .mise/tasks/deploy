@@ -3,8 +3,13 @@
 #USAGE flag "--release" help="Deploy the release build instead of debug"
 set -euo pipefail
 
-APP_ID="${ANDROID_APP_ID:-dev.npn}"
-LAUNCHER="${ANDROID_LAUNCHER:-dev.npn/.MainActivity}"
+ACTIVITY="${ANDROID_ACTIVITY:-dev.npn.MainActivity}"
+# Debug and release are separate packages (debug has the .debug applicationId suffix).
+if [ "${usage_release:-false}" = "true" ]; then
+    LAUNCHER="${ANDROID_APP_ID:-dev.npn}/$ACTIVITY"
+else
+    LAUNCHER="${ANDROID_APP_ID_DEBUG:-dev.npn.debug}/$ACTIVITY"
+fi
 
 # Collect serials of online devices (state == "device"). A single wireless phone
 # can show up twice: once as an IP:port entry and once as an mDNS/TLS entry. Both

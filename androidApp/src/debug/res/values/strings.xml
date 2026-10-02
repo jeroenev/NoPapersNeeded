@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Debug build only: tells it apart from the release build installed next to it. -->
+<resources>
+    <string name="app_name">NPN debug</string>
+</resources>

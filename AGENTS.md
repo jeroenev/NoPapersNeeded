@@ -8,7 +8,8 @@ README covers the design, user-facing build/packaging details, and the library f
 - `core` — platform-agnostic domain: journal, index, fs, pdf, ocr, xmp, Room db.
   Room 3 via KSP; schemas in `core/schemas`.
 - `composeApp` — shared Compose UI + viewmodels (`dev.npn.app.ui.*`, `di`).
-- `androidApp` — Android entrypoint (`dev.npn`, launcher `dev.npn/.MainActivity`).
+- `androidApp` — Android entrypoint (`dev.npn`, launcher `dev.npn/.MainActivity`). The debug
+  build is a separate package, `dev.npn.debug`, so it installs next to the release build.
 - `desktopApp` — desktop entrypoint + packaging (deb/AppImage/uber-jar).
 - KMP JVM target is named `desktop` (not `jvm`); source sets are
   `desktopMain`/`desktopTest`, tasks are `:core:desktopTest`, `:composeApp:compileKotlinDesktop`, etc.
@@ -39,6 +40,10 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   when verifying larger changes. Actions minutes and artifact storage are metered (private repo):
   PRs stop after compile, packaging runs on `main` only, binaries upload only on a manual run, and
   the Windows build (`windows.yml`) and CodeQL run weekly or on demand. Keep it that way.
+- Version: `npn.version` in `gradle.properties` is the only version; everything else derives
+  from it (`buildSrc` `NpnVersion`, generated `dev.npn.app.BuildInfo`). Never hardcode a version
+  or bump it by hand: `mise release <version>` bumps, commits and tags together, and
+  `release.yml` rejects a tag that does not match.
 
 ## Detekt
 

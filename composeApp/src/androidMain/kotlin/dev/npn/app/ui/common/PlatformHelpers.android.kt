@@ -22,6 +22,9 @@ import java.io.File
 /** Folder name of the recommended library under shared storage's `Documents/`. */
 private const val DEFAULT_LIBRARY_DIR = "NoPapersNeeded"
 
+/** The debug build's applicationId suffix (see androidApp/build.gradle.kts). */
+private const val DEBUG_PACKAGE_SUFFIX = ".debug"
+
 actual suspend fun loadImageBitmap(path: String): ImageBitmap? =
     withContext(Dispatchers.IO) {
         runCatching {
@@ -73,10 +76,16 @@ actual fun persistDirectoryAccess(
 
 actual fun supportsSafStorage(): Boolean = true
 
+/**
+ * The debug build proposes a folder of its own, so a debug install next to the release one only
+ * touches the real library when that is picked on purpose.
+ */
 @Suppress("DEPRECATION") // The public Documents directory is exactly where a user-owned library belongs.
-actual fun defaultLibraryLocation(): String? =
-    File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), DEFAULT_LIBRARY_DIR)
-        .absolutePath
+actual fun defaultLibraryLocation(): String? {
+    val isDebugBuild = FileKit.context.packageName.endsWith(DEBUG_PACKAGE_SUFFIX)
+    val name = if (isDebugBuild) "$DEFAULT_LIBRARY_DIR-debug" else DEFAULT_LIBRARY_DIR
+    return File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOCUMENTS), name).absolutePath
+}
 
 actual fun supportsSharing(): Boolean = true
 

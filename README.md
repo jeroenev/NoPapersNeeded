@@ -75,18 +75,21 @@ below if you prefer to run them directly.
 | Task | Wraps |
 |------|-------|
 | `mise apk` | `./gradlew :androidApp:assembleDebug` |
-| `mise apk-release` | `./gradlew :androidApp:assembleRelease` (unsigned) |
+| `mise apk-release` | `./gradlew :androidApp:assembleRelease` (signed only with `NPN_KEYSTORE_*` set, see [Releases](#releases)) |
 | `mise bundle` | `./gradlew :androidApp:bundleRelease` |
 | `mise deploy` | `installDebug` over adb, then launches the app (add `--release` for the release build) |
-| `mise uninstall` | `adb uninstall dev.npn` |
+| `mise uninstall` | `adb uninstall dev.npn.debug` (the debug build) |
+| `mise uninstall-release` | `adb uninstall dev.npn` (the release build) |
 | `mise pair` | one-time adb Wi-Fi pairing wizard (Android 11+) |
 | `mise connect <ip:port>` | `adb connect` for an already-paired device |
 | `mise devices` | `adb devices -l` |
 | `mise hot` | `./gradlew :desktopApp:hotRun --auto` (Compose Hot Reload) |
 | `mise desktop` | `./gradlew :desktopApp:run` |
 | `mise package-deb` | `./gradlew :desktopApp:packageDeb` |
+| `mise package-rpm` | `./gradlew :desktopApp:packageRpm` (needs `rpmbuild`) |
 | `mise package-appimage` | `./gradlew :desktopApp:packageAppImage` |
 | `mise package-jar` | `./gradlew :desktopApp:packageUberJarForCurrentOS` |
+| `mise release <version>` | Bumps the version, tags `v<version>` and pushes; CI publishes the release |
 | `mise icons` | Re-renders the desktop icon bitmaps from `design/branding/icon.svg` |
 | `mise test` | `./gradlew :core:desktopTest` |
 | `mise test-fast` | Core and shared UI desktop tests |
@@ -115,11 +118,18 @@ single command:
 
 ```
 mise pair      # one time: follow the prompts, uses the phone's Wireless debugging screen
-mise deploy    # every time: build + install over adb + launch dev.npn/.MainActivity
+mise deploy    # every time: build + install over adb + launch dev.npn.debug/dev.npn.MainActivity
 ```
 
 `mise deploy` runs the Android Gradle Plugin `installDebug` task (build + adb
-install) and then `adb shell am start -n dev.npn/.MainActivity`. If the device
+install) and then `adb shell am start -n dev.npn.debug/dev.npn.MainActivity`.
+
+The debug build is its own package, `dev.npn.debug`, so it installs next to the release
+build (`dev.npn`) rather than replacing it. It shows up as "NPN debug" with an amber
+icon and proposes `Documents/NoPapersNeeded-debug` as its library, so it only writes to
+your real library if you point it there; it then acts as a second device on that
+library. `mise deploy --release` installs the release build instead, which needs the
+`NPN_KEYSTORE_*` variables from [Releases](#releases). If the device
 drops off the network later, reconnect with `mise connect <ip:port>` (no
 re-pairing needed). A USB-connected device works too; skip `mise pair`.
 
@@ -158,8 +168,10 @@ plugin appends its own `--resource-dir` after any `freeArgs`, and jpackage keeps
 last one ([#773](https://github.com/JetBrains/compose-multiplatform/issues/773),
 [CMP-9837](https://youtrack.jetbrains.com/projects/CMP/issues/CMP-9837/packageDeb-task-fails-to-include-custom-.desktop-files)).
 Without the override the entry has no `StartupWMClass`, so GNOME cannot match the
-running window to the installed app and shows a generic taskbar icon. `.rpm` is not
-built: it needs `rpmbuild`, which is not present on Debian/Ubuntu build hosts.
+running window to the installed app and shows a generic taskbar icon.
+
+`./gradlew :desktopApp:packageRpm` builds the `.rpm` the same way. It needs `rpmbuild`,
+which Debian/Ubuntu hosts get from the `rpm` package.
 
 On Windows, `./gradlew :desktopApp:packageDistributionForCurrentOS` produces `.msi`
 and `.exe` installers (via WiX, downloaded automatically at build time, so network
@@ -179,6 +191,34 @@ automatically into `desktopApp/build/appimage/` on first run, so this task needs
 network access. It builds with `--appimage-extract-and-run` and therefore does not
 need FUSE on the build host; running the resulting AppImage still needs FUSE, or the
 end user can run it with `--appimage-extract-and-run`. The AppImage is x86_64 only.
+
+### Releases
+
+The version lives in one place: `npn.version` in `gradle.properties`. The Android
+`versionName`, the Android `versionCode` (`major*10000 + minor*100 + patch`), the desktop
+package version and the About screen all read it. It must be plain `major.minor.patch`
+(jpackage/MSI accept nothing else; major ≤ 255, minor and patch ≤ 99).
+
+To release, from an up-to-date `main` that CI has passed:
+
+```
+mise release 1.2.0
+```
+
+That bumps `npn.version`, commits `[main] Release 1.2.0`, tags `v1.2.0` and pushes both.
+The tag starts `.github/workflows/release.yml`, which refuses a tag that does not match
+`npn.version`, builds the signed APK, AppImage, `.deb`, `.rpm`, `.msi` and `.exe` into a
+draft release, adds `SHA256SUMS` and publishes it. If a build job fails the draft stays
+unpublished: fix the problem, delete the draft and the tag, and release the next patch
+version.
+
+The APK is signed with the release key, read from the environment:
+`NPN_KEYSTORE_FILE`, `NPN_KEYSTORE_PASSWORD` and `NPN_KEY_ALIAS`. The workflow gets them
+from the repository secrets `NPN_KEYSTORE_BASE64` (the keystore, base64-encoded),
+`NPN_KEYSTORE_PASSWORD` and `NPN_KEY_ALIAS`. The keystore is never committed. Keep a
+backup: Android only installs an update signed with the same key, so losing it means
+users have to uninstall and reinstall. The committed `npn-debug.keystore` is for debug
+builds only.
 
 ### App icon
 

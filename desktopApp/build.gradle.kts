@@ -31,7 +31,7 @@ kotlin {
 }
 
 val npnAppName = "no-papers-needed"
-val npnAppVersion = "1.0.0"
+val npnAppVersion = NpnVersion.of(project).name
 val npnDisplayName = "No papers needed"
 val npnDescription = "Personal paperless document library"
 val npnMainClass = "dev.npn.desktop.MainKt"
@@ -96,7 +96,7 @@ compose.desktop {
     }
 }
 
-// --- Linux .deb packaging -------------------------------------------------
+// --- Linux .deb and .rpm packaging ---------------------------------------
 // jpackage builds the installed .desktop entry from a template, and its built-in one has
 // no StartupWMClass, so the shell cannot match the running window to the installed entry
 // and shows a generic taskbar icon. Overriding that template is a supported jpackage
@@ -104,9 +104,10 @@ compose.desktop {
 // own --resource-dir (which it uses for the macOS Info.plist) after the task's freeArgs,
 // and jpackage keeps the last one. See JetBrains/compose-multiplatform#773 and CMP-9837.
 //
-// So the .deb is built here instead, by calling jpackage on the app image the plugin
-// produces - the same approach the AppImage task below already uses. Nothing is
-// post-processed: jpackage generates the entry from our template.
+// So the .deb and .rpm are built here instead, by calling jpackage on the app image the
+// plugin produces - the same approach the AppImage task below already uses. Nothing is
+// post-processed: jpackage generates the entry from our template. The .rpm needs
+// `rpmbuild` on the host (the `rpm` package on Debian/Ubuntu).
 
 // jpackage picks overrides out of the resource dir by file name: "<app name>.desktop" for
 // the menu entry template (caps tokens are substituted by jpackage) and "<app name>.png"
@@ -163,11 +164,15 @@ val prepareJPackageResources =
         outDir.set(jpackageResourceDir)
     }
 
-abstract class PackageDebTask
+abstract class PackageLinuxInstallerTask
     @Inject
     constructor(
         private val execOps: ExecOperations,
     ) : DefaultTask() {
+        /** jpackage `--type`: `deb` or `rpm`. */
+        @get:Input
+        abstract val packageType: Property<String>
+
         @get:InputDirectory
         abstract val appImageSrc: DirectoryProperty
 
@@ -208,7 +213,7 @@ abstract class PackageDebTask
                     args =
                         listOf(
                             "--type",
-                            "deb",
+                            packageType.get(),
                             // Packages the already-built app image, which carries the bundled
                             // runtime, the launcher and the icon.
                             "--app-image",
@@ -234,11 +239,12 @@ abstract class PackageDebTask
         }
     }
 
-tasks.register<PackageDebTask>("packageDeb") {
+fun PackageLinuxInstallerTask.packageAs(type: String) {
     group = "compose desktop"
-    description = "Builds a Linux .deb from the jpackage app-image output."
+    description = "Builds a Linux .$type from the jpackage app-image output."
     dependsOn("createDistributable", prepareJPackageResources)
 
+    packageType.set(type)
     appImageSrc.set(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName"))
     resourceDir.set(jpackageResourceDir)
     licenseFile.set(rootProject.layout.projectDirectory.file("LICENSE"))
@@ -253,11 +259,14 @@ tasks.register<PackageDebTask>("packageDeb") {
     appVersion.set(npnAppVersion)
     appDescription.set(npnDescription)
     menuGroup.set(npnLinuxMenuGroup)
-    destinationDir.set(layout.buildDirectory.dir("compose/binaries/main/deb"))
+    destinationDir.set(layout.buildDirectory.dir("compose/binaries/main/$type"))
 }
 
+tasks.register<PackageLinuxInstallerTask>("packageDeb") { packageAs("deb") }
+tasks.register<PackageLinuxInstallerTask>("packageRpm") { packageAs("rpm") }
+
 // The plugin has no Linux target format of its own now, so it does not register
-// `packageDistributionForCurrentOS` there; on Linux, build the .deb with `packageDeb`.
+// `packageDistributionForCurrentOS` there; on Linux, use `packageDeb` and `packageRpm`.
 // On Windows the plugin still owns that task and produces the .msi/.exe.
 
 // --- AppImage packaging ---------------------------------------------------

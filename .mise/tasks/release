@@ -1,0 +1,48 @@
+#!/usr/bin/env bash
+#MISE description="Bump npn.version, commit, tag v<version> and push; the tag triggers the release workflow"
+#USAGE arg "<version>" help="New version, major.minor.patch (e.g. 1.2.0)"
+set -euo pipefail
+
+# The version lives only in gradle.properties (npn.version). This bumps it and tags that same
+# commit, so the tag and the code cannot disagree; .github/workflows/release.yml checks it again.
+
+version="${usage_version:?usage: mise release <major.minor.patch>}"
+version="${version#v}"
+tag="v$version"
+props=gradle.properties
+
+die() {
+    echo "error: $*" >&2
+    exit 1
+}
+
+# Same rules as buildSrc NpnVersion: jpackage/MSI only take plain numbers, MSI caps major at 255,
+# and minor/patch stay below 100 so the Android versionCode keeps increasing.
+[[ "$version" =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]] || die "version must be major.minor.patch, got '$version'"
+((10#${BASH_REMATCH[1]} <= 255 && 10#${BASH_REMATCH[2]} <= 99 && 10#${BASH_REMATCH[3]} <= 99)) ||
+    die "out of range: major 0-255, minor and patch 0-99"
+
+cd "$(git rev-parse --show-toplevel)"
+
+[ "$(git symbolic-ref --quiet --short HEAD)" = main ] || die "releases are cut from main"
+git diff --quiet HEAD -- "$props" || die "$props has uncommitted changes"
+
+git fetch --quiet --tags origin main
+# Only release what CI has already seen on main.
+[ "$(git rev-parse HEAD)" = "$(git rev-parse origin/main)" ] ||
+    die "main is not in sync with origin/main; push (and let CI pass) or pull first"
+! git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null || die "tag $tag already exists"
+
+current=$(sed -n 's/^npn\.version=//p' "$props")
+[ -n "$current" ] || die "npn.version not found in $props"
+[ "$version" != "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n1)" = "$version" ] ||
+    die "$version is not newer than the current $current"
+
+echo ">> $current -> $version"
+sed -i "s/^npn\.version=.*/npn.version=$version/" "$props"
+git commit --quiet -m "[main] Release $version" -- "$props"
+git tag -a "$tag" -m "Release $version"
+git push --atomic origin main "$tag"
+
+echo ">> Pushed $tag. The release workflow builds the binaries into a draft and publishes it:"
+echo "   gh run watch \$(gh run list --workflow release.yml --limit 1 --json databaseId --jq '.[0].databaseId')"

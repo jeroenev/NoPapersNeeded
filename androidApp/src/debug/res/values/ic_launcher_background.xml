@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Debug build only: an amber background so its launcher icon stands out from the release
+         build's deep teal. -->
+    <color name="ic_launcher_background">#B35C00</color>
+</resources>
