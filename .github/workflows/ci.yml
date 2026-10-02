@@ -1,9 +1,19 @@
 name: CI
 
+# Actions minutes and artifact storage are metered on this private repo, so this workflow keeps
+# per-push work to what catches breakage: PRs check, test and compile; pushes to main also package;
+# binaries are only uploaded on a manual run. Windows packaging lives in windows.yml.
 on:
   push:
     branches: [main]
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
   pull_request:
+    paths-ignore:
+      - "**.md"
+      - "docs/**"
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -32,65 +42,61 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: Formatting (Spotless)
-        run: ./gradlew spotlessCheck
-
       - name: Shell scripts
         run: shellcheck .githooks/*
 
-      - name: Localization guard
-        run: ./gradlew checkLocalization
+      # Grouped into few Gradle invocations: each one pays configuration again.
+      - name: Formatting, localization guard and static analysis
+        run: ./gradlew spotlessCheck checkLocalization detekt
 
-      - name: Static analysis (detekt)
-        run: ./gradlew detekt
-
+      # Desktop suites with coverage, then the same commonTest suites against the Android target
+      # plus whatever only exists there (androidHostTest). Coverage stays on the desktop run.
       - name: Tests and coverage
         run: >-
           ./gradlew
           :composeApp:koverHtmlReportDesktop
           :composeApp:koverXmlReportDesktop
+          :core:testAndroidHostTest
+          :composeApp:testAndroidHostTest
 
-      # The same commonTest suites against the Android target, plus whatever only exists there
-      # (androidHostTest). Coverage stays on the desktop run; this is about target-specific breakage.
-      - name: Tests (Android target, host JVM)
-        run: ./gradlew :core:testAndroidHostTest :composeApp:testAndroidHostTest
+      - name: Compile (Android and desktop)
+        run: >-
+          ./gradlew
+          :core:compileAndroidMain
+          :composeApp:compileKotlinDesktop
+          :composeApp:compileAndroidMain
 
-      - name: Compile core (Android)
-        run: ./gradlew :core:compileAndroidMain
-
-      - name: Compile composeApp (desktop)
-        run: ./gradlew :composeApp:compileKotlinDesktop
-
-      - name: Compile composeApp (Android)
-        run: ./gradlew :composeApp:compileAndroidMain
-
-      - name: Assemble Android debug APK
-        run: ./gradlew :androidApp:assembleDebug
-
-      - name: Build desktop app
-        run: ./gradlew :desktopApp:build
-
-      - name: Package Linux AppImage
-        run: ./gradlew :desktopApp:packageAppImage
+      - name: Assemble APK, build and package desktop app
+        if: github.event_name != 'pull_request'
+        run: >-
+          ./gradlew
+          :androidApp:assembleDebug
+          :desktopApp:build
+          :desktopApp:packageAppImage
 
       - name: Upload debug APK
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
           name: androidApp-debug
           path: androidApp/build/outputs/apk/debug/androidApp-debug.apk
+          retention-days: 7
 
       - name: Upload AppImage
+        if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v7
         with:
           name: no-papers-needed-appimage
           path: desktopApp/build/appimage/*.AppImage
+          retention-days: 7
 
       - name: Upload core test reports
-        if: always()
+        if: failure()
         uses: actions/upload-artifact@v7
         with:
           name: core-test-reports
           path: core/build/reports/tests/desktopTest
+          retention-days: 7
 
       - name: Upload coverage reports
         if: always()
@@ -98,63 +104,4 @@ jobs:
         with:
           name: kover-coverage-reports
           path: composeApp/build/reports/kover
-          if-no-files-found: error
-
-  windows:
-    name: Windows desktop build
-    runs-on: windows-latest
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-
-      - name: Set up JDK 17
-        uses: actions/setup-java@v5
-        with:
-          distribution: temurin
-          java-version: "17"
-
-      - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v6
-        with:
-          cache-provider: basic
-
-      - name: Formatting (Spotless)
-        run: ./gradlew.bat spotlessCheck
-
-      - name: Localization guard
-        run: ./gradlew.bat checkLocalization
-
-      - name: Static analysis (detekt)
-        run: ./gradlew.bat detekt
-
-      # Windows runners ship the Android SDK, but Android compilation is covered by the
-      # ubuntu job; this job focuses on the desktop target where Windows-specific issues
-      # (java.nio, jlink/jpackage/WiX) can surface.
-      - name: Tests and coverage
-        run: >-
-          ./gradlew.bat
-          :composeApp:koverHtmlReportDesktop
-          :composeApp:koverXmlReportDesktop
-
-      - name: Compile composeApp (desktop)
-        run: ./gradlew.bat :composeApp:compileKotlinDesktop
-
-      - name: Package Windows installers (MSI + Exe)
-        run: ./gradlew.bat :desktopApp:packageDistributionForCurrentOS
-
-      - name: Upload Windows installer artifacts
-        uses: actions/upload-artifact@v7
-        with:
-          name: no-papers-needed-windows-installers
-          path: |
-            desktopApp/build/compose/binaries/main/msi/*.msi
-            desktopApp/build/compose/binaries/main/exe/*.exe
-
-      - name: Upload core test reports
-        if: always()
-        uses: actions/upload-artifact@v7
-        with:
-          name: windows-core-test-reports
-          path: core/build/reports/tests/desktopTest
+          retention-days: 7

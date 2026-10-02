@@ -36,7 +36,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - CI (`.github/workflows/ci.yml`) runs: spotlessCheck → shellcheck → checkLocalization →
   detekt → tests+coverage (kover drives both desktop test suites) → Android-target host tests →
   compile android+desktop → assembleDebug → desktopApp build → packageAppImage. Match that order
-  when verifying larger changes.
+  when verifying larger changes. Actions minutes and artifact storage are metered (private repo):
+  PRs stop after compile, packaging runs on `main` only, binaries upload only on a manual run, and
+  the Windows build (`windows.yml`) and CodeQL run weekly or on demand. Keep it that way.
 
 ## Detekt
 
