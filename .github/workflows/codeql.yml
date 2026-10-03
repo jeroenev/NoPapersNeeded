@@ -7,6 +7,7 @@ on:
   workflow_dispatch:
 
 permissions:
+  actions: read # the CodeQL action reads its own workflow run; required on private repos
   contents: read
   security-events: write
 
