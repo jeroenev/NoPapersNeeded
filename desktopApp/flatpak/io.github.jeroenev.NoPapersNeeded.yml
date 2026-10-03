@@ -11,7 +11,7 @@ sdk: org.freedesktop.Sdk
 command: no-papers-needed
 
 finish-args:
-  # AWT on JDK 17 only speaks X11 (XWayland on a Wayland session).
+  # AWT in the bundled JDK only speaks X11 (XWayland on a Wayland session).
   - --socket=x11
   - --share=ipc
   - --device=dri

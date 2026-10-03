@@ -11,11 +11,13 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
-// jpackage/jlink must come from the toolchain JDK 17, not the system JVM. The system JVM here
-// is a JDK 25 install without jlink/jpackage, which fails compose.desktop's checkRuntime.
-val jdk17 =
+// The JDK that jlink/jpackage bundle as the app's runtime. It is newer than the JDK 17 the code
+// is compiled for (which Android shares), so the desktop app gets current AWT/HiDPI fixes without
+// raising the bytecode target. It must be a toolchain JDK, not the system JVM: a system JDK
+// without jlink/jpackage fails compose.desktop's checkRuntime.
+val runtimeJdk =
     javaToolchains.launcherFor {
-        languageVersion.set(JavaLanguageVersion.of(17))
+        languageVersion.set(JavaLanguageVersion.of(25))
     }
 
 dependencies {
@@ -56,11 +58,15 @@ compose.desktop {
     application {
         mainClass = npnMainClass
 
-        // Use the toolchain JDK 17 (foojay-provisioned) for jlink/jpackage.
+        // Use the toolchain runtime JDK (foojay-provisioned) for jlink/jpackage.
         javaHome =
-            jdk17
+            runtimeJdk
                 .get()
                 .metadata.installationPath.asFile.absolutePath
+
+        // Skiko, the bundled SQLite driver and JNA load native libraries from the classpath. JDK 24+
+        // warns about that unless native access is granted, and later releases will refuse it.
+        jvmArgs("--enable-native-access=ALL-UNNAMED")
 
         nativeDistributions {
             // jlink strips the runtime to a minimal module set. FileKit's Linux file picker
@@ -249,7 +255,7 @@ fun PackageLinuxInstallerTask.packageAs(type: String) {
     resourceDir.set(jpackageResourceDir)
     licenseFile.set(rootProject.layout.projectDirectory.file("LICENSE"))
     jpackageTool.set(
-        jdk17
+        runtimeJdk
             .get()
             .metadata.installationPath
             .file("bin/jpackage")
