@@ -244,6 +244,25 @@ class SafLibraryFileSystem(
                 ?: throw IOException("Cannot open for read: $relPath")
         }
 
+    override suspend fun readTail(
+        relPath: String,
+        maxBytes: Int,
+    ): ByteArray =
+        withContext(Dispatchers.IO) {
+            val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
+            resolver.openInputStream(docUri(entry.docId))?.use { input ->
+                // Providers stream; skipping still avoids holding the whole file in memory.
+                var toSkip = maxOf(0L, entry.size - maxBytes)
+                while (toSkip > 0) {
+                    val skipped = input.skip(toSkip)
+                    if (skipped <= 0) break
+                    toSkip -= skipped
+                }
+                val tail = input.readBytes()
+                tail.copyOfRange(maxOf(0, tail.size - maxBytes), tail.size)
+            } ?: throw IOException("Cannot open for read: $relPath")
+        }
+
     override suspend fun writeBytesOnce(
         relPath: String,
         bytes: ByteArray,

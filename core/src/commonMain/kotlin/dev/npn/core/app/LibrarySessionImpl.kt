@@ -19,6 +19,7 @@ import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.debounced
 import dev.npn.core.index.DbLocalJournalState
 import dev.npn.core.index.DeviceIdentity
+import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.FsSegmentStore
 import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.index.ImportResult
@@ -29,6 +30,7 @@ import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SplitService
+import dev.npn.core.index.WriteSettle
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.HlcClock
@@ -74,6 +76,8 @@ import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.json.Json
 
@@ -215,21 +219,49 @@ class LibrarySessionImpl private constructor(
         owned {
             val report = coordinator.rescan()
             _lastScanReport.value = report
+            report.retryAfterMillis?.let { scheduleSettleRescan(it) }
             // Adopt/re-select OCR sidecars picked up by the rescan, then queue/kick + purge trash.
             ocrPipeline.reconcileSidecars()
             queuePendingOcr()
             report
         }
 
+    // The one pending follow-up rescan for files a scan deferred as still being written. A file
+    // can finish without another watch event, and SAF libraries have no watcher at all.
+    private val settleRescanLock = Mutex()
+    private var settleRescan: Job? = null
+
+    private suspend fun scheduleSettleRescan(afterMillis: Long) {
+        settleRescanLock.withLock {
+            settleRescan?.cancel()
+            settleRescan =
+                operationScope.launch {
+                    delay(afterMillis + SETTLE_RESCAN_MARGIN_MS)
+                    // Cleared first: the rescan below may schedule the next one.
+                    settleRescanLock.withLock { settleRescan = null }
+                    runCatching { doWatchTriggeredRescan() }
+                }
+        }
+    }
+
     override suspend fun importPdf(
         source: ExternalSource,
         suggestedName: String,
-    ): ImportOutcome = owned { map(importService.importPdf(source, suggestedName)).also { afterImport(it) } }
+    ): ImportOutcome =
+        owned { importing { map(importService.importPdf(source, suggestedName)).also { afterImport(it) } } }
 
     override suspend fun importPdfBytes(
         bytes: ByteArray,
         suggestedName: String,
-    ): ImportOutcome = owned { map(importService.importBytes(bytes, suggestedName)).also { afterImport(it) } }
+    ): ImportOutcome =
+        owned { importing { map(importService.importBytes(bytes, suggestedName)).also { afterImport(it) } } }
+
+    private inline fun importing(block: () -> ImportOutcome): ImportOutcome =
+        try {
+            block()
+        } catch (e: EmptyImportException) {
+            ImportOutcome.Failed(e.message ?: "empty file")
+        }
 
     override suspend fun importImagesAsPdf(
         images: List<ByteArray>,
@@ -412,6 +444,9 @@ class LibrarySessionImpl private constructor(
     override fun start(scope: CoroutineScope) {
         if (started) return
         started = true
+
+        // OCR found a document's file no longer matches its hash: rescan once it has settled.
+        ocrPipeline.onStaleFile = { scheduleSettleRescan(WriteSettle.QUIET_MILLIS) }
 
         // OCR worker drain loop: kick on each queue change.
         jobs.add(
@@ -625,6 +660,9 @@ class LibrarySessionImpl private constructor(
 
     companion object {
         private const val METADATA_RECONCILIATION_INTERVAL_MS = 15L * 60L * 1000L
+
+        /** Slack past a deferred file's settle time, so the follow-up does not land just short. */
+        private const val SETTLE_RESCAN_MARGIN_MS = 500L
         private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
 
         /**

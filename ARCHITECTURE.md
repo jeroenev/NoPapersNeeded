@@ -126,6 +126,10 @@ via `mise hot`.
    Because of that reuse, **changing what a fold produces from the same events
    requires bumping `MetadataAccumulator.PROJECTION_VERSION`** — otherwise
    existing installs keep serving rows built by the old fold. See the KDoc there.
+   A rescan only hashes a PDF once its bytes have settled (`WriteSettle`): files
+   written in place (`cp`, scanner apps) are deferred and picked up by a follow-up
+   rescan, and `OcrPipeline` re-checks the hash of the bytes it reads before
+   publishing a sidecar, so a partial file never gets a document identity.
 4. **UI reads the cache**: viewmodels subscribe to Room DAO Flows (with the named
    `WhileSubscribed(5_000)` constant) and map rows into UI models via the
    `core.app` facet interfaces; the Compose layer is a pure renderer of those.

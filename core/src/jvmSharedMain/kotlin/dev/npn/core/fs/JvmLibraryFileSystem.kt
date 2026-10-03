@@ -9,6 +9,7 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.IOException
+import java.nio.ByteBuffer
 import java.nio.file.FileVisitOption
 import java.nio.file.FileVisitResult
 import java.nio.file.Files
@@ -199,6 +200,22 @@ class JvmLibraryFileSystem internal constructor(
     override suspend fun readBytes(relPath: String): ByteArray =
         withContext(Dispatchers.IO) {
             Files.readAllBytes(resolve(relPath))
+        }
+
+    override suspend fun readTail(
+        relPath: String,
+        maxBytes: Int,
+    ): ByteArray =
+        withContext(Dispatchers.IO) {
+            Files.newByteChannel(resolve(relPath)).use { channel ->
+                val start = maxOf(0L, channel.size() - maxBytes)
+                val buffer = ByteBuffer.allocate((channel.size() - start).toInt())
+                channel.position(start)
+                while (buffer.hasRemaining() && channel.read(buffer) >= 0) {
+                    // read fills the buffer
+                }
+                buffer.array().copyOf(buffer.position())
+            }
         }
 
     override suspend fun writeBytesOnce(

@@ -1,9 +1,15 @@
 package dev.npn.core.fs
 
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.ChannelResult
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.conflate
-import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.channelFlow
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.selects.onTimeout
+import kotlinx.coroutines.selects.select
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 /**
  * Metadata for a single filesystem entry inside the library.
@@ -47,19 +53,57 @@ sealed interface FsEvent {
 }
 
 /**
- * Debounce a coarse [FsEvent] flow: collapse bursts into a single trailing emission roughly
- * every [windowMillis]. Uses conflate + a sampling delay so rapid filesystem churn (a big sync
- * batch) produces one event instead of hundreds.
+ * Debounce a coarse [FsEvent] flow: a burst becomes one emission once the folder has been quiet
+ * for [quietMillis], so a file being written in place is not rescanned while its first bytes are
+ * still landing. Continuous churn (a big sync batch) still emits at least every [maxWaitMillis].
+ *
+ * A burst that touched more than one path emits `Changed(null)`, so no path in it is lost to the
+ * collapse.
  */
-fun Flow<FsEvent>.debounced(windowMillis: Long = 500L): Flow<FsEvent> {
-    val upstream = this.conflate()
-    return flow {
-        upstream.collect { value ->
-            emit(value)
-            delay(windowMillis)
+@OptIn(ExperimentalCoroutinesApi::class) // select's onTimeout
+fun Flow<FsEvent>.debounced(
+    quietMillis: Long = 500L,
+    maxWaitMillis: Long = 5_000L,
+): Flow<FsEvent> =
+    channelFlow {
+        val events = Channel<FsEvent>(Channel.UNLIMITED)
+        launch {
+            collect { events.send(it) }
+            events.close()
+        }
+        var burst = events.receiveCatching().getOrNull() ?: return@channelFlow
+        var deadline = TimeSource.Monotonic.markNow() + maxWaitMillis.milliseconds
+        while (true) {
+            val wait = minOf(quietMillis.milliseconds, -deadline.elapsedNow())
+            // select, not withTimeout around a receive: a timeout racing a receive cannot drop
+            // the event. Null means the burst is over: quiet, or at its deadline.
+            val next: ChannelResult<FsEvent>? =
+                if (wait.isPositive()) {
+                    select {
+                        events.onReceiveCatching { it }
+                        onTimeout(wait) { null }
+                    }
+                } else {
+                    null
+                }
+            when {
+                next == null -> {
+                    send(burst)
+                    burst = events.receiveCatching().getOrNull() ?: return@channelFlow
+                    deadline = TimeSource.Monotonic.markNow() + maxWaitMillis.milliseconds
+                }
+
+                next.isClosed -> {
+                    send(burst)
+                    return@channelFlow
+                }
+
+                next.getOrNull() != burst -> {
+                    burst = FsEvent.Changed(null)
+                }
+            }
         }
     }
-}
 
 /**
  * An external location outside the library (a file to import from or export to).
@@ -113,6 +157,15 @@ interface LibraryFileSystem {
     suspend fun stat(relPath: String): FileMeta?
 
     suspend fun readBytes(relPath: String): ByteArray
+
+    /**
+     * Up to the last [maxBytes] bytes of [relPath]. Platforms override this to seek instead of
+     * reading the whole file.
+     */
+    suspend fun readTail(
+        relPath: String,
+        maxBytes: Int,
+    ): ByteArray = readBytes(relPath).let { it.copyOfRange(maxOf(0, it.size - maxBytes), it.size) }
 
     /**
      * Create [relPath] with [bytes], creating parent directories as needed. Fails with an

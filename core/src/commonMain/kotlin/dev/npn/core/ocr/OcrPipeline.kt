@@ -10,6 +10,7 @@ import dev.npn.core.db.TagDao
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.FtsRows
 import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.pdf.PdfEngine
@@ -79,6 +80,13 @@ class OcrPipeline(
      */
     var onOcrProduced: (suspend (docId: String) -> Unit)? = null
 
+    /**
+     * Optional hook called when a document's file no longer hashes to its docId: it was replaced
+     * or is still being written. Nothing is published for it; a rescan sorts out what the file
+     * now is.
+     */
+    var onStaleFile: (suspend (docId: String) -> Unit)? = null
+
     companion object {
         const val STATE_PENDING = "pending"
         const val STATE_DONE = "done"
@@ -93,6 +101,12 @@ class OcrPipeline(
         const val ENGINE_EMBEDDED = OcrEngines.EMBEDDED
 
         private val UNPROCESSED_STATES = setOf(OCR_NONE, OCR_PENDING, OCR_FAILED)
+
+        /**
+         * SHA-256 of no bytes. Never a document, so never an OCR key: a sidecar under it was
+         * written by an older build for a file indexed before its bytes arrived.
+         */
+        private const val EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
 
         /** The device part of a re-run writer key: `<deviceId>.r<runMillis>`. */
         private val RERUN_WRITER = Regex("""(.+)\.r(\d+)""")
@@ -166,9 +180,16 @@ class OcrPipeline(
      */
     suspend fun processDoc(docId: String) {
         val doc = documentDao.getByDocId(docId)
-        if (doc == null) {
+        if (doc == null || docId == EMPTY_SHA256) {
             // Nothing to do; drop any stray queue entry.
             ocrQueueDao.delete(docId)
+            return
+        }
+        if (doc.missing || doc.deleted || doc.trashed) {
+            // No file to read. Unqueued as never processed, so the rescan that brings it back
+            // queues it again.
+            ocrQueueDao.delete(docId)
+            if (doc.ocrState == OCR_PENDING) setOcrState(docId, OCR_NONE)
             return
         }
 
@@ -177,6 +198,13 @@ class OcrPipeline(
         val rerun = ocrQueueDao.getByDocId(docId)?.rerun == true
         if (versions.isEmpty() || canImprove(doc, versions, rerun)) {
             val own = runOwnOcr(doc, versions)
+            if (own == OwnOcr.STALE) {
+                // Not this document's bytes, so not its failure either. Left out of the queue: the
+                // rescan replaces the row, or refreshes it if the file turns out unchanged.
+                ocrQueueDao.delete(docId)
+                onStaleFile?.invoke(docId)
+                return
+            }
             if (own == OwnOcr.FAILED && versions.isEmpty()) return // failure already recorded
             // Only a sidecar this call published counts as new text. Being queued is not enough: a
             // rebuilt index re-queues every document, and those runs land here and adopt what is
@@ -267,6 +295,9 @@ class OcrPipeline(
                 fail(doc.docId, "read failed", t)
                 return OwnOcr.FAILED
             }
+        // The sidecar is keyed by docId and is write-once and synced, so text from any other
+        // bytes would stick to this document everywhere.
+        if (sha256Bytes(bytes) != doc.docId) return OwnOcr.STALE
         val result =
             try {
                 extractOrOcr(bytes, doc)
@@ -316,6 +347,9 @@ class OcrPipeline(
 
         /** Nothing usable came out of the pass; already recorded via [fail]. */
         FAILED,
+
+        /** The file's bytes no longer hash to the docId; nothing was run or recorded. */
+        STALE,
     }
 
     private class PageResult(
@@ -365,6 +399,7 @@ class OcrPipeline(
      */
     suspend fun reconcileSidecars() {
         for ((hash, writerKeys) in sidecarsByHash()) {
+            if (hash == EMPTY_SHA256) continue
             val doc = documentDao.getByDocId(hash) ?: continue
             val versions = writerKeys.mapNotNull { versionFor(hash, it) }
             if (versions.isEmpty()) continue

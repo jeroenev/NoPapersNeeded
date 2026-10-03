@@ -52,6 +52,10 @@ data class ScanReport(
     val hashedCount: Int,
     val durationMillis: Long,
     val pathConflicts: List<PathConflict> = emptyList(),
+    /** PDFs left for a later scan because they still looked like a write in progress. */
+    val deferred: List<String> = emptyList(),
+    /** When set, a rescan after this many milliseconds can index some of [deferred]. */
+    val retryAfterMillis: Long? = null,
 )
 
 /**

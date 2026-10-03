@@ -92,10 +92,31 @@ class Indexer(
 
                 val dbProjection = documentDao.allPathsAndMeta()
                 val byPath = dbProjection.associateBy { it.relPath }
-                val toHash =
+                val changed =
                     indexable.filter { meta ->
                         val known = byPath[meta.relPath]
                         fullHash || known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
+                    }
+                // A file still being written is left for a later scan rather than given the
+                // identity of a partial file. A known path keeps its old row meanwhile.
+                val settle = WriteSettle(fs, started)
+                val deferred = DeferredFiles()
+                val toHash =
+                    changed.filter { meta ->
+                        when (val verdict = settle.verdict(meta)) {
+                            WriteSettle.Verdict.Ready -> {
+                                true
+                            }
+
+                            WriteSettle.Verdict.Skip -> {
+                                false
+                            }
+
+                            is WriteSettle.Verdict.Wait -> {
+                                deferred.add(meta.relPath, verdict.millis)
+                                false
+                            }
+                        }
                     }
 
                 report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
@@ -123,8 +144,14 @@ class Indexer(
                         launch(Dispatchers.Default) {
                             for (meta in pending) {
                                 val hash = fs.sha256(meta.relPath)
+                                // Written to while it was hashed: the hash is of no settled content.
+                                val stable = settle.unchangedSince(meta)
                                 progressMutex.withLock {
-                                    hashes[meta.relPath] = hash
+                                    if (stable) {
+                                        hashes[meta.relPath] = hash
+                                    } else {
+                                        deferred.add(meta.relPath, WriteSettle.QUIET_MILLIS)
+                                    }
                                     hashedCount++
                                     report(
                                         IndexProgress(
@@ -182,6 +209,8 @@ class Indexer(
                     hashedCount = hashedCount,
                     durationMillis = clock.nowMillis() - started,
                     pathConflicts = documentPaths.conflicts(metadataState),
+                    deferred = deferred.paths,
+                    retryAfterMillis = deferred.retryAfterMillis,
                 )
             } finally {
                 _scanState.value = null

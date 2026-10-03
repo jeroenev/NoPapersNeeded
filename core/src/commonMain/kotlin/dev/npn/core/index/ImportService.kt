@@ -31,6 +31,9 @@ sealed interface ImportResult {
     ) : ImportResult
 }
 
+/** The file to import has no bytes. */
+class EmptyImportException : IllegalArgumentException("The file is empty")
+
 /**
  * Imports external PDFs or byte payloads into the library, deduplicating by content hash.
  *
@@ -79,6 +82,8 @@ class ImportService(
         suggestedName: String,
         toDir: String,
     ): ImportResult {
+        // An empty file is never a document; its hash would claim the empty-content identity.
+        if (fs.stat(tmpPath)?.size == 0L) throw EmptyImportException()
         val hash = fs.sha256(tmpPath)
 
         // Dedup: known, non-deleted hash -> duplicate.
