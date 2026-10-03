@@ -54,6 +54,7 @@ import androidx.compose.ui.input.key.isCtrlPressed
 import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.liveRegion
@@ -65,6 +66,7 @@ import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TagSuggestionLabel
+import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.core.ai.TagSuggestion
@@ -166,6 +168,7 @@ internal fun MetadataTabs(
                 Tab(
                     selected = tab == t,
                     onClick = { savedTab = t },
+                    modifier = Modifier.testTag(TestTags.panelTab(t.name)),
                     text = {
                         Text(
                             when (t) {

@@ -176,10 +176,11 @@ mise baseline-profile   # Android 13+ device; takes about 10 minutes; leave the 
 It installs `dev.npn.benchmark` (debug-signed, next to any other build), which proposes its own
 library folder, `Documents/NoPapersNeeded-benchmark`. The generator seeds demo PDFs there,
 grants all-files access through the system settings switch, and records cold start
-(`startup-prof.txt`, which also orders the DEX) and browsing (`baseline-prof.txt`). Gradle
-uninstalls the app afterwards; delete the folder if you like. Regenerate the profile and commit
-it when startup or the library screens change substantially; a stale profile still works, it
-just covers less.
+(`startup-prof.txt`, which also orders the DEX) and browsing (`baseline-prof.txt`). It finds the
+app's buttons and tabs by the test tags in composeApp's `TestTags` (exposed on Android as resource
+ids), never by their text, so the device can run any language. Gradle uninstalls the app
+afterwards; delete the folder if you like. Regenerate the profile and commit it when startup or
+the library screens change substantially; a stale profile still works, it just covers less.
 
 ### Raw Gradle commands
 

@@ -27,6 +27,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -46,11 +47,13 @@ import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.SafStorageSwitch
 import dev.npn.app.ui.common.TechnicalDetails
+import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.supportsSafStorage
+import dev.npn.app.ui.common.testTagsAsResourceIds
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.LocalDocumentDrafts
@@ -101,7 +104,7 @@ import org.jetbrains.compose.resources.stringResource
 fun App(env: AppEnvironment) {
     LocaleProvider(env.settings) {
         NpnTheme {
-            Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
+            Surface(Modifier.fillMaxSize().testTagsAsResourceIds(), color = MaterialTheme.colorScheme.background) {
                 AppRoot(env)
             }
         }
@@ -597,7 +600,7 @@ private fun RestoreErrorScreen(
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                 )
-                Button(onClick = storage.request) {
+                Button(onClick = storage.request, modifier = Modifier.testTag(TestTags.STORAGE_ACCESS_GRANT)) {
                     Text(stringResource(Res.string.common_storage_access_grant))
                 }
             }

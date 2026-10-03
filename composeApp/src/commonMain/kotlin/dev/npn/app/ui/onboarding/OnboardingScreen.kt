@@ -20,12 +20,14 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.common.SafStorageSwitch
 import dev.npn.app.ui.common.StorageAccessState
+import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.createLibraryFolder
 import dev.npn.app.ui.common.defaultLibraryLocation
@@ -165,7 +167,10 @@ fun OnboardingScreen(env: AppEnvironment) {
 
                 else -> {
                     if (recommended != null) {
-                        Button(onClick = { openRecommended(recommended) }) {
+                        Button(
+                            onClick = { openRecommended(recommended) },
+                            modifier = Modifier.testTag(TestTags.USE_RECOMMENDED_FOLDER),
+                        ) {
                             Text(stringResource(Res.string.common_onboarding_use_recommended))
                         }
                         Text(
@@ -274,7 +279,7 @@ private fun StorageAccessStep(storage: StorageAccessState) {
         color = MaterialTheme.colorScheme.onSurfaceVariant,
         textAlign = TextAlign.Center,
     )
-    Button(onClick = storage.request) {
+    Button(onClick = storage.request, modifier = Modifier.testTag(TestTags.STORAGE_ACCESS_GRANT)) {
         Text(stringResource(Res.string.common_storage_access_grant))
     }
 }

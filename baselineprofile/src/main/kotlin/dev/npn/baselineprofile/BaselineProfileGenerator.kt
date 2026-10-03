@@ -12,7 +12,6 @@ import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
-import java.util.regex.Pattern
 
 /**
  * Records the code a user hits on the way in: cold start, the library grid, scrolling it, and
@@ -76,14 +75,14 @@ class BaselineProfileGenerator {
      * (OxygenOS) refuse `appops set` from the shell.
      */
     private fun MacrobenchmarkScope.passOnboarding() {
-        device.wait(Until.findObject(By.text(ALLOW_ACCESS)), SHORT_WAIT_MS)?.let { allow ->
+        device.wait(Until.findObject(By.res(STORAGE_ACCESS_GRANT)), SHORT_WAIT_MS)?.let { allow ->
             allow.click()
             device.wait(Until.findObject(By.checkable(true)), LONG_WAIT_MS)?.click()
                 ?: error("No all-files access switch")
             device.waitForIdle()
             device.pressBack()
         }
-        device.wait(Until.findObject(By.text(USE_RECOMMENDED)), SHORT_WAIT_MS)?.click()
+        device.wait(Until.findObject(By.res(USE_RECOMMENDED_FOLDER)), SHORT_WAIT_MS)?.click()
     }
 
     private fun MacrobenchmarkScope.awaitLibrary() =
@@ -99,7 +98,7 @@ class BaselineProfileGenerator {
             device.waitForIdle()
         }
         (device.findObject(By.textContains(PDF)) ?: document).click()
-        device.wait(Until.hasObject(By.text(PREVIEW_TAB)), LONG_WAIT_MS)
+        device.wait(Until.hasObject(By.res(PREVIEW_TAB)), LONG_WAIT_MS)
         device.waitForIdle()
         device.pressBack()
         device.wait(Until.hasObject(By.textContains(PDF)), LONG_WAIT_MS)
@@ -112,9 +111,10 @@ class BaselineProfileGenerator {
         const val LONG_WAIT_MS = 30_000L
         const val GESTURE_MARGIN_DIVISOR = 5
 
-        // English and Dutch, whichever the device runs.
-        val ALLOW_ACCESS: Pattern = Pattern.compile("Allow access|Toegang toestaan")
-        val USE_RECOMMENDED: Pattern = Pattern.compile("Use the recommended folder|Aanbevolen map gebruiken")
-        val PREVIEW_TAB: Pattern = Pattern.compile("Preview|Voorbeeld")
+        // Test tags from composeApp's TestTags, which the app exposes as resource ids, so the
+        // generator works in any device language.
+        const val STORAGE_ACCESS_GRANT = "storage_access_grant"
+        const val USE_RECOMMENDED_FOLDER = "use_recommended_folder"
+        const val PREVIEW_TAB = "panel_tab_preview"
     }
 }
