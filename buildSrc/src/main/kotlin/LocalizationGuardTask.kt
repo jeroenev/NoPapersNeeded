@@ -14,14 +14,16 @@ import java.io.File
 import javax.xml.XMLConstants
 import javax.xml.parsers.DocumentBuilderFactory
 
+/**
+ * Guards the string resources and the Compose UI that uses them. Each resource root holds a
+ * default `values` directory plus one `values-<language>` directory per translation; every
+ * translation, found on disk so a new language is guarded on arrival, must define each
+ * translatable default key, nothing else, and the same placeholders.
+ */
 abstract class LocalizationGuardTask : DefaultTask() {
     @get:InputFiles
     @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val defaultResourceDirectories: ConfigurableFileCollection
-
-    @get:InputFiles
-    @get:PathSensitive(PathSensitivity.RELATIVE)
-    abstract val dutchResourceDirectories: ConfigurableFileCollection
+    abstract val resourceRoots: ConfigurableFileCollection
 
     @get:InputDirectory
     @get:PathSensitive(PathSensitivity.RELATIVE)
@@ -34,35 +36,19 @@ abstract class LocalizationGuardTask : DefaultTask() {
     @TaskAction
     fun checkLocalization() {
         val problems = mutableListOf<String>()
-        val defaults = readResources(defaultResourceDirectories.files, problems)
-        val dutch = readResources(dutchResourceDirectories.files, problems)
-
-        val requiredKeys = defaults.filterValues { it.translatable }.keys
-        (requiredKeys - dutch.keys).sorted().forEach {
-            problems += "Dutch resources are missing ${it.displayName} (defined in ${defaults.getValue(it).file.path})"
+        val roots = resourceRoots.files.sortedBy { it.path }
+        val defaults = readResources(roots.map { it.resolve("values") }.filter { it.isDirectory }, problems)
+        val translations =
+            roots
+                .flatMap { it.listFiles().orEmpty().toList() }
+                .filter { it.isDirectory && TRANSLATION.matches(it.name) }
+                .groupBy { it.name }
+                .toSortedMap()
+        if (translations.isEmpty()) {
+            problems += "No values-<language> directories found under ${roots.map { it.path }}"
         }
-        (dutch.keys - defaults.keys).sorted().forEach {
-            problems += "Dutch resources contain extra ${it.displayName} (${dutch.getValue(it).file.path})"
-        }
-
-        (requiredKeys intersect dutch.keys).sorted().forEach { key ->
-            val defaultEntry = defaults.getValue(key)
-            val dutchEntry = dutch.getValue(key)
-            if (defaultEntry.values.keys != dutchEntry.values.keys) {
-                problems +=
-                    "Plural quantities differ for ${key.displayName}: " +
-                    "default=${defaultEntry.values.keys.sorted()}, Dutch=${dutchEntry.values.keys.sorted()}"
-            }
-            (defaultEntry.values.keys intersect dutchEntry.values.keys).sorted().forEach { quantity ->
-                val defaultPlaceholders = placeholders(defaultEntry.values.getValue(quantity))
-                val dutchPlaceholders = placeholders(dutchEntry.values.getValue(quantity))
-                if (defaultPlaceholders != dutchPlaceholders) {
-                    val suffix = quantity.takeIf { it.isNotEmpty() }?.let { "[$it]" }.orEmpty()
-                    problems +=
-                        "Placeholder mismatch for ${key.displayName}$suffix: " +
-                        "default=$defaultPlaceholders, Dutch=$dutchPlaceholders"
-                }
-            }
+        translations.forEach { (directory, files) ->
+            checkTranslation(directory, defaults, readResources(files, problems), problems)
         }
 
         checkHardcodedComposeStrings(problems)
@@ -72,15 +58,57 @@ abstract class LocalizationGuardTask : DefaultTask() {
                 buildString {
                     appendLine("Localization guard failed with ${problems.size} problem(s):")
                     problems.sorted().forEach { appendLine("  - $it") }
-                    append("Use Compose resources for user-facing text; update both default and values-nl XML.")
+                    append(
+                        "Use Compose resources for user-facing text; update the default XML and every " +
+                            "values-<language> translation.",
+                    )
                 },
             )
         }
-        logger.lifecycle("Localization guard passed: default/Dutch resources and commonMain UI are in sync.")
+        logger.lifecycle(
+            "Localization guard passed: default resources, ${translations.keys.joinToString()} and commonMain UI " +
+                "are in sync.",
+        )
+    }
+
+    /** Compares one translation ([directory], e.g. `values-de`) against the default resources. */
+    private fun checkTranslation(
+        directory: String,
+        defaults: Map<ResourceKey, ResourceEntry>,
+        translation: Map<ResourceKey, ResourceEntry>,
+        problems: MutableList<String>,
+    ) {
+        val requiredKeys = defaults.filterValues { it.translatable }.keys
+        (requiredKeys - translation.keys).sorted().forEach {
+            problems += "$directory is missing ${it.displayName} (defined in ${defaults.getValue(it).file.path})"
+        }
+        (translation.keys - defaults.keys).sorted().forEach {
+            problems += "$directory contains extra ${it.displayName} (${translation.getValue(it).file.path})"
+        }
+
+        (requiredKeys intersect translation.keys).sorted().forEach { key ->
+            val defaultEntry = defaults.getValue(key)
+            val translated = translation.getValue(key)
+            if (defaultEntry.values.keys != translated.values.keys) {
+                problems +=
+                    "Plural quantities differ for ${key.displayName} in $directory: " +
+                    "default=${defaultEntry.values.keys.sorted()}, $directory=${translated.values.keys.sorted()}"
+            }
+            (defaultEntry.values.keys intersect translated.values.keys).sorted().forEach { quantity ->
+                val defaultPlaceholders = placeholders(defaultEntry.values.getValue(quantity))
+                val translatedPlaceholders = placeholders(translated.values.getValue(quantity))
+                if (defaultPlaceholders != translatedPlaceholders) {
+                    val suffix = quantity.takeIf { it.isNotEmpty() }?.let { "[$it]" }.orEmpty()
+                    problems +=
+                        "Placeholder mismatch for ${key.displayName}$suffix in $directory: " +
+                        "default=$defaultPlaceholders, $directory=$translatedPlaceholders"
+                }
+            }
+        }
     }
 
     private fun readResources(
-        directories: Set<File>,
+        directories: Collection<File>,
         problems: MutableList<String>,
     ): Map<ResourceKey, ResourceEntry> {
         val resources = mutableMapOf<ResourceKey, ResourceEntry>()
@@ -164,7 +192,7 @@ abstract class LocalizationGuardTask : DefaultTask() {
             }
     }
 
-    private fun resourceXmlFiles(directories: Set<File>): List<File> =
+    private fun resourceXmlFiles(directories: Collection<File>): List<File> =
         directories
             .flatMap { directory -> directory.walkTopDown().filter { it.isFile && it.extension == "xml" }.toList() }
             .sortedBy { it.path }
@@ -311,6 +339,8 @@ abstract class LocalizationGuardTask : DefaultTask() {
     )
 
     companion object {
+        /** A language qualifier (`values-de`, `values-pt-rBR`, `values-b+sr+Latn`), not `values-night`. */
+        private val TRANSLATION = Regex("values-(?:[a-z]{2,3}(?:-r[A-Z]{2})?|b\\+[A-Za-z0-9+]+)")
         private val PLACEHOLDER = Regex("%(?:(\\d+)\\$)?[-#+ 0,(<]*\\d*(?:\\.\\d+)?([tT])?([a-zA-Z%])")
     }
 }

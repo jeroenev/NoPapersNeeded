@@ -32,14 +32,10 @@ spotless {
 
 val checkLocalization by tasks.registering(LocalizationGuardTask::class) {
     group = "verification"
-    description = "Checks translation parity, placeholders, and hardcoded Compose UI strings."
-    defaultResourceDirectories.from(
-        layout.projectDirectory.dir("composeApp/src/commonMain/composeResources/values"),
-        layout.projectDirectory.dir("androidApp/src/main/res/values"),
-    )
-    dutchResourceDirectories.from(
-        layout.projectDirectory.dir("composeApp/src/commonMain/composeResources/values-nl"),
-        layout.projectDirectory.dir("androidApp/src/main/res/values-nl"),
+    description = "Checks every translation's keys and placeholders, and hardcoded Compose UI strings."
+    resourceRoots.from(
+        layout.projectDirectory.dir("composeApp/src/commonMain/composeResources"),
+        layout.projectDirectory.dir("androidApp/src/main/res"),
     )
     uiSourceDirectory.set(layout.projectDirectory.dir("composeApp/src/commonMain/kotlin/dev/npn/app"))
     hardcodedAllowlist.set(layout.projectDirectory.file("config/localization-hardcoded-allowlist.txt"))

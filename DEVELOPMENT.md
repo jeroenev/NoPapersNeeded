@@ -107,10 +107,11 @@ below if you prefer to run them directly.
 Formatting is enforced incrementally with Spotless and ktlint. Run
 `./gradlew spotlessCheck` to check it or `./gradlew spotlessApply` to format
 Kotlin and Gradle Kotlin scripts.
-Localization parity, XML placeholders, and obvious hardcoded strings in shared
-Compose UI are checked with `./gradlew checkLocalization`. The task also runs as
-part of `./gradlew check`; intentional language-neutral literals must be listed
-in `config/localization-hardcoded-allowlist.txt`.
+Localization parity and XML placeholders for every `values-<language>` translation,
+and obvious hardcoded strings in shared Compose UI, are checked with
+`./gradlew checkLocalization` (its own tests: `./gradlew :buildSrc:test`). The task
+also runs as part of `./gradlew check`; intentional language-neutral literals must be
+listed in `config/localization-hardcoded-allowlist.txt`.
 Run `mise hooks-install` once per clone to enable the pre-commit formatting and
 fast-test checks; the hook never formats or stages files. Commit messages are
 prefixed with the current branch name when needed.
