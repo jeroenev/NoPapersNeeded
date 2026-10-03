@@ -16,6 +16,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.ObjectPublication
 import dev.npn.core.fs.SafLibraryFileSystem
 import dev.npn.core.ocr.MlKitOcrEngine
+import dev.npn.core.ocr.OcrLanguages
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfBoxAndroidEngine
 import dev.npn.core.watch.JvmWatchedFolder
@@ -62,7 +63,9 @@ fun createAppEnvironment(context: Context): AppEnvironment {
                 xmpIO = PdfBoxAndroidXmpIO(appContext),
                 thumbnailStore = DirThumbnailStore(thumbsDir.absolutePath),
                 scope = scope,
-                ocrLanguage = { settings.settings.first().ocrLanguage },
+                ocrLanguage = {
+                    OcrLanguages.effective(settings.settings.first().ocrLanguage, Locale.getDefault().language)
+                },
                 trashRetentionDays = { settings.settings.first().trashRetentionDays },
                 installationId = settings.settings.first().installationId,
                 storagePathRule = {

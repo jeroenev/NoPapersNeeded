@@ -51,6 +51,13 @@ expect fun persistDirectoryAccess(
 expect fun supportsSafStorage(): Boolean
 
 /**
+ * Whether OCR takes a language setting. Desktop's Tesseract needs to be told which languages to
+ * recognise; Android's MLKit Latin recogniser reads every Latin-script language without one, so
+ * Android hides the picker.
+ */
+expect fun ocrHasLanguageSetting(): Boolean
+
+/**
  * The folder the platform recommends for a new library, or null when it has no opinion. Android
  * proposes `Documents/NoPapersNeeded` on shared storage: visible in any file manager, reachable
  * by Syncthing, and it survives an uninstall. Desktop leaves the choice to the user's file dialog.

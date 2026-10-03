@@ -169,4 +169,48 @@ class SettingsRepositoryImplTest {
                 directory.toFile().deleteRecursively()
             }
         }
+
+    @Test
+    fun ocrLanguagesDefaultToAutomaticAndPersistAChoice() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                val file = directory.resolve("settings.properties").toFile()
+                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
+
+                // A choice of English only is still a choice, not the automatic default.
+                SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = "eng") }
+                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "eng"
+
+                SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = "nld + eng") }
+                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "nld+eng"
+
+                SettingsRepositoryImpl(file).edit { it.copy(ocrLanguage = null) }
+                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
+    fun legacyOcrLanguageMigrates() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                // Every install before the language picker stored a single code, "eng" by default.
+                val file = directory.resolve("settings.properties").toFile()
+                file.writeText("ocrLanguage=eng\n")
+                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe null
+
+                file.writeText("ocrLanguage=fra\n")
+                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "fra"
+
+                // The next write moves it to the new key and drops the old one.
+                SettingsRepositoryImpl(file).edit { it.copy(appLanguage = "fr") }
+                file.readText().lines().none { it.startsWith("ocrLanguage=") } shouldBe true
+                SettingsRepositoryImpl(file).settings.first().ocrLanguage shouldBe "fra"
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
 }

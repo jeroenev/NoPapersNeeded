@@ -27,6 +27,7 @@ internal class OcrPipelineRig {
         ocr: OcrEngine,
         database: NpnDatabase = db,
         engines: OcrEngineSelector = OcrEngineSelector(local = ocr),
+        config: OcrConfig = OcrConfig(),
     ) = OcrPipeline(
         fs = fs,
         sidecars = OcrSidecarFiles(fs),
@@ -38,6 +39,7 @@ internal class OcrPipelineRig {
         tagDao = database.tagDao(),
         fieldDao = database.documentFieldDao(),
         deviceId = deviceId,
+        config = config,
     )
 
     /**
@@ -79,17 +81,26 @@ internal class FakeOcrEngine(
     private val isAvailable: Boolean,
     override val name: String,
     private val canned: String = "canned ocr text",
+    /** What [languagesFor] resolves a request to; all of it by default, like a real engine. */
+    private val installed: (String) -> String = { it },
 ) : OcrEngine {
     var calls = 0
         private set
 
+    /** The `lang` of the last [recognizePng] call. */
+    var lastLang: String? = null
+        private set
+
     override suspend fun available(): Boolean = isAvailable
+
+    override suspend fun languagesFor(lang: String): String = installed(lang)
 
     override suspend fun recognizePng(
         png: ByteArray,
         lang: String,
     ): String {
         calls++
+        lastLang = lang
         return canned
     }
 }

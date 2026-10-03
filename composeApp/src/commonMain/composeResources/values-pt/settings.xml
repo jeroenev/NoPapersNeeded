@@ -11,8 +11,13 @@
     <string name="common_settings_change_library">Trocar biblioteca</string>
     <string name="common_settings_watched_folder">Pasta monitorada</string>
     <string name="common_settings_ocr">OCR</string>
-    <string name="common_settings_ocr_language_code">Código do idioma do OCR</string>
-    <string name="common_settings_ocr_language_help">Código de idioma do Tesseract/MLKit, p. ex. %1$s.</string>
+    <string name="common_settings_ocr_match_app_language">Usar o idioma do app</string>
+    <string name="common_settings_ocr_match_app_language_help">Reconhece o idioma do app e o inglês.</string>
+    <string name="common_settings_ocr_languages_help">Escolha todos os idiomas em que seus documentos estão escritos. Cada idioma a mais deixa o reconhecimento um pouco mais lento; idiomas sem modelo instalado são ignorados.</string>
+    <string name="common_settings_ocr_other_language">Outro código de idioma</string>
+    <string name="common_settings_ocr_other_language_help">Código do Tesseract para um idioma fora da lista, p. ex. %1$s. O modelo precisa estar instalado.</string>
+    <string name="common_settings_ocr_add_language">Adicionar</string>
+    <string name="common_settings_ocr_android_help">Texto em qualquer idioma de alfabeto latino é reconhecido automaticamente.</string>
     <string name="common_settings_ai_assistant">Assistente de IA</string>
     <string name="common_settings_trash">Lixeira</string>
     <string name="common_settings_trash_retention_days">Manter na lixeira (dias)</string>

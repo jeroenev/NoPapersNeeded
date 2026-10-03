@@ -22,6 +22,13 @@ interface OcrEngine {
      */
     suspend fun available(): Boolean
 
+    /**
+     * The languages a run asked to recognise [lang] actually reads, in the same `+`-joined form:
+     * the sidecar records these, so it never claims a language the engine skipped. By default all
+     * of them; Tesseract drops the ones whose model is not installed.
+     */
+    suspend fun languagesFor(lang: String): String = lang
+
     /** Recognize text in a PNG image for [lang] (e.g. "eng"). Returns the recognized text. */
     suspend fun recognizePng(
         png: ByteArray,

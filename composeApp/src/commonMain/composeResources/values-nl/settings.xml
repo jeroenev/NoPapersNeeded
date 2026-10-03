@@ -11,8 +11,13 @@
     <string name="common_settings_change_library">Bibliotheek wijzigen</string>
     <string name="common_settings_watched_folder">Bewaakte map</string>
     <string name="common_settings_ocr">OCR</string>
-    <string name="common_settings_ocr_language_code">OCR-taalcode</string>
-    <string name="common_settings_ocr_language_help">Taalcode voor Tesseract/MLKit, bijvoorbeeld %1$s.</string>
+    <string name="common_settings_ocr_match_app_language">Taal van de app volgen</string>
+    <string name="common_settings_ocr_match_app_language_help">Herkent de taal van de app en Engels.</string>
+    <string name="common_settings_ocr_languages_help">Kies elke taal waarin je documenten geschreven zijn. Elke extra taal maakt herkenning iets trager; talen waarvan het model niet geïnstalleerd is, worden overgeslagen.</string>
+    <string name="common_settings_ocr_other_language">Andere taalcode</string>
+    <string name="common_settings_ocr_other_language_help">Tesseract-code voor een taal die er niet tussen staat, bijvoorbeeld %1$s. Het model moet geïnstalleerd zijn.</string>
+    <string name="common_settings_ocr_add_language">Toevoegen</string>
+    <string name="common_settings_ocr_android_help">Tekst in elke taal met Latijns schrift wordt automatisch herkend.</string>
     <string name="common_settings_ai_assistant">AI-assistent</string>
     <string name="common_settings_trash">Prullenbak</string>
     <string name="common_settings_trash_retention_days">Bewaartermijn prullenbak (dagen)</string>

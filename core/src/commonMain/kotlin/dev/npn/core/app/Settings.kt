@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
+import dev.npn.core.ocr.OcrLanguages
 import kotlinx.coroutines.flow.Flow
 
 // ---------- settings (app-global, not per library) ----------
@@ -12,7 +13,11 @@ data class SettingsSnapshot(
     val installationId: String,
     val libraryLocation: String? = null,
     val appLanguage: String? = null,
-    val ocrLanguage: String = "eng",
+    /**
+     * Tesseract codes OCR recognises, `+`-joined ([dev.npn.core.ocr.OcrLanguages]); null follows
+     * the app language. Only the desktop engine reads it: MLKit's Latin recogniser takes none.
+     */
+    val ocrLanguage: String? = null,
     val trashRetentionDays: Int = TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
     val defaultViewType: ViewType = ViewType.GRID,
     val librarySort: LibrarySort = LibrarySort(),
@@ -150,6 +155,11 @@ object SettingsCodec {
         snapshot.copy(
             libraryLocation = snapshot.libraryLocation?.ifEmpty { null },
             appLanguage = snapshot.appLanguage?.ifEmpty { null },
+            ocrLanguage =
+                snapshot.ocrLanguage
+                    ?.let(OcrLanguages::parse)
+                    ?.ifEmpty { null }
+                    ?.let(OcrLanguages::format),
             watchedFolder = snapshot.watchedFolder?.ifEmpty { null },
             storagePathTemplate = snapshot.storagePathTemplate?.ifEmpty { null },
             gridColumnWidth =
@@ -172,7 +182,7 @@ object SettingsCodec {
                 installationId = installationId,
                 libraryLocation = reader.string(SettingsKeys.LIBRARY_LOCATION),
                 appLanguage = reader.string(SettingsKeys.APP_LANGUAGE),
-                ocrLanguage = reader.string(SettingsKeys.OCR_LANGUAGE) ?: DEFAULTS.ocrLanguage,
+                ocrLanguage = reader.string(SettingsKeys.OCR_LANGUAGES) ?: legacyOcrLanguage(reader),
                 trashRetentionDays = reader.int(SettingsKeys.TRASH_RETENTION_DAYS) ?: DEFAULTS.trashRetentionDays,
                 defaultViewType = enumOr(reader.string(SettingsKeys.DEFAULT_VIEW_TYPE), DEFAULTS.defaultViewType),
                 librarySort =
@@ -230,7 +240,8 @@ object SettingsCodec {
         writer.putString(SettingsKeys.INSTALLATION_ID, s.installationId)
         writer.putOptional(SettingsKeys.LIBRARY_LOCATION, s.libraryLocation)
         writer.putOptional(SettingsKeys.APP_LANGUAGE, s.appLanguage)
-        writer.putString(SettingsKeys.OCR_LANGUAGE, s.ocrLanguage)
+        writer.putOptional(SettingsKeys.OCR_LANGUAGES, s.ocrLanguage)
+        writer.remove(SettingsKeys.LEGACY_OCR_LANGUAGE)
         writer.putInt(SettingsKeys.TRASH_RETENTION_DAYS, s.trashRetentionDays)
         writer.putString(SettingsKeys.DEFAULT_VIEW_TYPE, s.defaultViewType.name)
         writer.putString(SettingsKeys.LIBRARY_SORT_FIELD, s.librarySort.field.wire)
@@ -258,6 +269,14 @@ object SettingsCodec {
         writer.putOptional(SettingsKeys.DISMISSED_UPDATE_VERSION, s.dismissedUpdateVersion)
     }
 
+    /**
+     * The single code stored before automatic existed. Every install wrote one, "eng" by default,
+     * so "eng" means the user never chose and reads as automatic: still English, now plus the app
+     * language. Anything else was a choice and stays one. [store] drops the key afterwards.
+     */
+    private fun legacyOcrLanguage(reader: Reader): String? =
+        reader.string(SettingsKeys.LEGACY_OCR_LANGUAGE)?.takeUnless { it == OcrLanguages.ENGLISH }
+
     private fun Writer.putOptional(
         key: String,
         value: String?,
@@ -278,7 +297,10 @@ object SettingsCodec {
 internal object SettingsKeys {
     const val LIBRARY_LOCATION = "libraryLocation"
     const val APP_LANGUAGE = "appLanguage"
-    const val OCR_LANGUAGE = "ocrLanguage"
+
+    /** Superseded by [OCR_LANGUAGES]; only read to migrate it. */
+    const val LEGACY_OCR_LANGUAGE = "ocrLanguage"
+    const val OCR_LANGUAGES = "ocrLanguages"
     const val TRASH_RETENTION_DAYS = "trashRetentionDays"
     const val DEFAULT_VIEW_TYPE = "defaultViewType"
     const val LIBRARY_SORT_FIELD = "librarySortField"

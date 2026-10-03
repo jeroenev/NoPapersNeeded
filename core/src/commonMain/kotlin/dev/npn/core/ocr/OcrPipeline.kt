@@ -319,7 +319,7 @@ class OcrPipeline(
                 doc = doc.docId,
                 dev = deviceId,
                 engine = result.engine,
-                lang = config.lang,
+                lang = result.lang,
                 createdAt = now(),
                 pages = result.pages,
             )
@@ -355,6 +355,7 @@ class OcrPipeline(
     private class PageResult(
         val pages: List<String>,
         val engine: String,
+        val lang: String,
     )
 
     private suspend fun extractOrOcr(
@@ -368,6 +369,9 @@ class OcrPipeline(
             // engine label is the truth about every OCR'd page in it.
             val engine = engines.forDocument(doc.ocrEngineOverride, handle.pageCount)
             val canOcr = engine.available()
+            // Resolved once, like the engine, so every page reads the same languages and the
+            // sidecar records the ones actually used.
+            val lang = if (canOcr) engine.languagesFor(config.lang) else config.lang
             val pages = ArrayList<String>(handle.pageCount)
             var usedOcr = false
             for (i in 0 until handle.pageCount) {
@@ -377,7 +381,7 @@ class OcrPipeline(
                     pages.add(embedded)
                 } else {
                     val png = handle.renderPagePng(i, config.renderDpiDim)
-                    pages.add(engine.recognizePng(png, config.lang))
+                    pages.add(engine.recognizePng(png, lang))
                     usedOcr = true
                 }
             }
@@ -385,7 +389,7 @@ class OcrPipeline(
             // pages are deterministic and identical across devices, so a partially embedded
             // result is still labeled (and ranked) by its OCR engine.
             val name = if (usedOcr) engine.name else ENGINE_EMBEDDED
-            return PageResult(pages, name)
+            return PageResult(pages, name, lang)
         } finally {
             handle.close()
         }

@@ -11,6 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.vector.ImageVector
+import dev.npn.app.ui.common.ocrHasLanguageSetting
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
@@ -39,7 +40,8 @@ import no_papers_needed.composeapp.generated.resources.common_settings_load_mode
 import no_papers_needed.composeapp.generated.resources.common_settings_max_new_tags
 import no_papers_needed.composeapp.generated.resources.common_settings_max_suggested_tags
 import no_papers_needed.composeapp.generated.resources.common_settings_model
-import no_papers_needed.composeapp.generated.resources.common_settings_ocr_language_code
+import no_papers_needed.composeapp.generated.resources.common_settings_ocr
+import no_papers_needed.composeapp.generated.resources.common_settings_ocr_match_app_language
 import no_papers_needed.composeapp.generated.resources.common_settings_reasoning_help
 import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import
 import no_papers_needed.composeapp.generated.resources.common_settings_server_url
@@ -138,11 +140,13 @@ internal val SettingsCategories: List<SettingsCategory> =
             title = Res.string.common_settings_category_import,
             icon = Icons.Outlined.MoveToInbox,
             keywords =
-                listOf(
+                listOfNotNull(
                     Res.string.common_settings_watched_folder,
                     Res.string.common_settings_choose_folder,
                     Res.string.common_settings_remove_after_import,
-                    Res.string.common_settings_ocr_language_code,
+                    Res.string.common_settings_ocr,
+                    // Only desktop shows the OCR language switch; Android's OCR takes no language.
+                    Res.string.common_settings_ocr_match_app_language.takeIf { ocrHasLanguageSetting() },
                     Res.string.common_settings_auto_matching_rules,
                 ),
             content = { ImportSettingsPane(it) },

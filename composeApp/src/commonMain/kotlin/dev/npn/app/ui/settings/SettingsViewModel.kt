@@ -40,7 +40,8 @@ private const val DEFAULT_STORAGE_PATH_TEMPLATE = "{doc_date:yyyy}/{title}.pdf"
 data class SettingsUiState(
     val libraryLocation: String? = null,
     val appLanguage: String? = null,
-    val ocrLanguage: String = "eng",
+    /** Null follows the app language; see [dev.npn.core.ocr.OcrLanguages]. */
+    val ocrLanguage: String? = null,
     val trashRetentionDays: Int = TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
     val defaultViewType: ViewType = ViewType.GRID,
     val landscapeListColumns: Boolean = false,

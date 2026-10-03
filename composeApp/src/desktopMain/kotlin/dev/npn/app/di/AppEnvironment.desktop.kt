@@ -5,6 +5,7 @@ import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.app.desktop
 import dev.npn.core.app.jvmSessionDeps
 import dev.npn.core.app.toAiConfig
+import dev.npn.core.ocr.OcrLanguages
 import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.watch.JvmWatchedFolder
@@ -30,7 +31,9 @@ fun createAppEnvironment(): AppEnvironment {
                 libraryRoot = Path.of(location),
                 dirs = AppDirs.desktop(location),
                 scope = scope,
-                ocrLanguage = { settings.settings.first().ocrLanguage },
+                ocrLanguage = {
+                    OcrLanguages.effective(settings.settings.first().ocrLanguage, Locale.getDefault().language)
+                },
                 trashRetentionDays = { settings.settings.first().trashRetentionDays },
                 installationId = settings.settings.first().installationId,
                 storagePathRule = {

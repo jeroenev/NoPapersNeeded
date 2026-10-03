@@ -38,6 +38,8 @@ actual fun persistDirectoryAccess(
 
 actual fun supportsSafStorage(): Boolean = false
 
+actual fun ocrHasLanguageSetting(): Boolean = true
+
 actual fun defaultLibraryLocation(): String? = null
 
 actual fun supportsSharing(): Boolean = false

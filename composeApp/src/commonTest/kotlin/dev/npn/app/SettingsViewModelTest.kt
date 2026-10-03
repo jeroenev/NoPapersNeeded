@@ -91,7 +91,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             val job = launch { model.state.collect {} }
             advanceUntilIdle()
-            model.state.value.ocrLanguage shouldBe "eng"
+            model.state.value.ocrLanguage shouldBe null
             settings.updateSettings { it.copy(ocrLanguage = "fra") }
             advanceUntilIdle()
             model.state.value.ocrLanguage shouldBe "fra"

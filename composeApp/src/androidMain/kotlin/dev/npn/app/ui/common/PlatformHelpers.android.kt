@@ -76,6 +76,8 @@ actual fun persistDirectoryAccess(
 
 actual fun supportsSafStorage(): Boolean = true
 
+actual fun ocrHasLanguageSetting(): Boolean = false
+
 /**
  * Every build but the release one (debug, and the benchmark build that generates baseline profiles)
  * proposes a folder of its own, named after its applicationId suffix, so installing one next to the

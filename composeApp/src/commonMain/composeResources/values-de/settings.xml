@@ -11,8 +11,13 @@
     <string name="common_settings_change_library">Bibliothek wechseln</string>
     <string name="common_settings_watched_folder">Überwachter Ordner</string>
     <string name="common_settings_ocr">OCR</string>
-    <string name="common_settings_ocr_language_code">OCR-Sprachcode</string>
-    <string name="common_settings_ocr_language_help">Tesseract-/MLKit-Sprachcode, z. B. %1$s.</string>
+    <string name="common_settings_ocr_match_app_language">App-Sprache verwenden</string>
+    <string name="common_settings_ocr_match_app_language_help">Erkennt die App-Sprache und Englisch.</string>
+    <string name="common_settings_ocr_languages_help">Wähle alle Sprachen, in denen deine Dokumente geschrieben sind. Jede weitere Sprache macht die Erkennung etwas langsamer; Sprachen ohne installiertes Modell werden übersprungen.</string>
+    <string name="common_settings_ocr_other_language">Anderer Sprachcode</string>
+    <string name="common_settings_ocr_other_language_help">Tesseract-Code für eine nicht aufgeführte Sprache, z. B. %1$s. Das Modell muss installiert sein.</string>
+    <string name="common_settings_ocr_add_language">Hinzufügen</string>
+    <string name="common_settings_ocr_android_help">Text in allen Sprachen mit lateinischer Schrift wird automatisch erkannt.</string>
     <string name="common_settings_ai_assistant">KI-Assistent</string>
     <string name="common_settings_trash">Papierkorb</string>
     <string name="common_settings_trash_retention_days">Papierkorb-Aufbewahrung (Tage)</string>

@@ -23,31 +23,69 @@ class TesseractCliEngine(
     override val name: String = OcrEngines.TESSERACT
 
     /** Probed once; the binary does not appear or disappear over a session's lifetime. */
-    private val detected: Boolean by lazy { detect() }
+    private val detected: Boolean by lazy { query("--version") != null }
+
+    /** The last [probeLanguages] result; null until the first one. */
+    @Volatile
+    private var installedLanguages: Set<String>? = null
 
     override suspend fun available(): Boolean = detected
+
+    override suspend fun languagesFor(lang: String): String = withContext(Dispatchers.IO) { usableLanguages(lang) }
+
+    /**
+     * [lang] without the codes that have no installed model: Tesseract refuses the whole run when
+     * one is missing, and the automatic setting asks for the app language's model, which a Linux
+     * install with only English would lack. Unchanged when nothing requested is installed, or the
+     * list is unknown, so Tesseract's own error still applies then.
+     */
+    private fun usableLanguages(lang: String): String {
+        val requested = lang.split('+').filter(String::isNotBlank)
+        var installed = installedLanguages ?: probeLanguages()
+        // A model can be installed while the app runs, so look again before skipping one. Only a
+        // request with a missing model pays for that, a short process next to a page of OCR.
+        if (requested.any { it !in installed }) installed = probeLanguages()
+        if (installed.isEmpty()) return lang
+        val kept = requested.filter { it in installed }
+        return if (kept.isEmpty()) lang else kept.joinToString("+")
+    }
+
+    /**
+     * Models this Tesseract has, from `--list-langs` (a header line, then one code per line);
+     * empty when it cannot say.
+     */
+    private fun probeLanguages(): Set<String> =
+        query("--list-langs")
+            ?.lines()
+            ?.drop(1)
+            ?.map(String::trim)
+            ?.filter { it.isNotEmpty() && ' ' !in it }
+            ?.toSet()
+            .orEmpty()
+            .also { installedLanguages = it }
 
     private fun process(vararg command: String): ProcessBuilder =
         ProcessBuilder(*command).apply {
             tessdataDir?.let { environment()["TESSDATA_PREFIX"] = it }
         }
 
-    private fun detect(): Boolean =
+    /** Runs `tesseract <args>` briefly; its combined output on success, else null. */
+    private fun query(vararg args: String): String? =
         try {
             val proc =
-                process(binary, "--version")
+                process(binary, *args)
                     .redirectErrorStream(true)
                     .start()
-            proc.inputStream.readBytes() // drain
+            val output = proc.inputStream.readBytes().decodeToString()
             val finished = proc.waitFor(10, TimeUnit.SECONDS)
             if (!finished) {
                 proc.destroyForcibly()
-                false
+                null
             } else {
-                proc.exitValue() == 0
+                output.takeIf { proc.exitValue() == 0 }
             }
         } catch (_: Throwable) {
-            false
+            null
         }
 
     override suspend fun recognizePng(
@@ -61,7 +99,7 @@ class TesseractCliEngine(
                 temp.writeBytes(png)
                 // `tesseract <input> stdout -l <lang>` prints recognized text to stdout.
                 val proc =
-                    process(binary, temp.absolutePath, "stdout", "-l", lang)
+                    process(binary, temp.absolutePath, "stdout", "-l", usableLanguages(lang))
                         .redirectErrorStream(false)
                         .start()
 

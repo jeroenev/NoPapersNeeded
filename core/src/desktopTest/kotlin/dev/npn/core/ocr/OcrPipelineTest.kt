@@ -75,6 +75,19 @@ class OcrPipelineTest {
         }
 
     @Test
+    fun sidecarRecordsTheLanguagesTheEngineActuallyRead() =
+        runTest {
+            // Asked for Dutch and English, but only the English model is installed.
+            val fake = FakeOcrEngine(isAvailable = true, name = "tesseract", installed = { "eng" })
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+
+            rig.pipeline("devA", fake, config = OcrConfig(lang = "nld+eng")).processDoc(docId)
+
+            fake.lastLang shouldBe "eng"
+            OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.tesseract")).lang shouldBe "eng"
+        }
+
+    @Test
     fun secondDeviceAdoptsSidecarWithoutOcr() =
         runTest {
             // Device A OCRs an image-only doc.
