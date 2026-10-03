@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_edit">Editar</string>
+    <string name="common_create">Crear</string>
+    <string name="common_rename">Renombrar</string>
+    <string name="common_name">Nombre</string>
+    <string name="common_color">Color</string>
+
+    <string name="common_rules_title">Reglas automáticas</string>
+    <string name="common_rules_add">Añadir regla</string>
+    <string name="common_rules_empty_title">Aún no hay reglas</string>
+    <string name="common_rules_empty_subtitle">Crea una regla para etiquetar documentos automáticamente según su texto.</string>
+    <string name="common_rules_delete_title">Eliminar regla</string>
+    <string name="common_rules_delete_message">¿Eliminar esta regla? Las etiquetas ya aplicadas se conservan.</string>
+    <string name="common_rules_actions_tags">Etiquetas: %1$s</string>
+    <string name="common_rules_actions_set">%1$s: %2$s</string>
+    <string name="common_rules_join_parts">%1$s · %2$s</string>
+    <string name="common_rules_summary">%1$s · %2$s · %3$s · prioridad %4$d</string>
+    <string name="common_rules_new_title">Nueva regla</string>
+    <string name="common_rules_edit_title">Editar regla</string>
+    <string name="common_rules_pattern">Patrón</string>
+    <string name="common_rules_invalid_regex">Expresión regular no válida</string>
+    <string name="common_rules_priority">Prioridad</string>
+    <string name="common_rules_tags_to_add">Etiquetas a añadir (separadas por comas)</string>
+    <string name="common_rules_set_field">Definir %1$s (opcional)</string>
+    <string name="common_rules_match_field">Campo de coincidencia</string>
+    <string name="common_rules_algorithm">Algoritmo</string>
+    <string name="common_rules_field_content">Texto extraído</string>
+    <string name="common_rules_field_file_name">Nombre de archivo</string>
+    <string name="common_rules_algorithm_exact">Exacto</string>
+    <string name="common_rules_algorithm_any_word">Cualquier palabra</string>
+    <string name="common_rules_algorithm_all_words">Todas las palabras</string>
+    <string name="common_rules_algorithm_regex">Regex</string>
+    <string name="common_rules_algorithm_fuzzy">Aproximado</string>
+
+    <string name="common_tags_title">Etiquetas</string>
+    <string name="common_tags_new">Nueva etiqueta</string>
+    <string name="common_tags_empty_title">Aún no hay etiquetas</string>
+    <string name="common_tags_empty_subtitle">Añade etiquetas a los documentos para verlas aquí. Las etiquetas desaparecen automáticamente cuando ningún documento las usa.</string>
+    <string name="common_tags_rename_title">Renombrar etiqueta</string>
+    <string name="common_tags_new_name">Nombre nuevo</string>
+    <string name="common_tags_merge_title">Combinar &quot;%1$s&quot; con</string>
+    <string name="common_tags_merge">Combinar</string>
+    <plurals name="common_tags_merge_many_title">
+        <item quantity="one">Combinar %1$d etiqueta</item>
+        <item quantity="other">Combinar %1$d etiquetas</item>
+    </plurals>
+    <string name="common_tags_merge_keep_message">Elige la etiqueta que se conservará. Los documentos con las otras etiquetas recibirán esta en su lugar.</string>
+    <plurals name="common_tags_color_many_title">
+        <item quantity="one">Definir color para %1$d etiqueta</item>
+        <item quantity="other">Definir color para %1$d etiquetas</item>
+    </plurals>
+    <string name="common_tags_delete_title">Eliminar etiqueta</string>
+    <string name="common_tags_delete_message">¿Quitar &quot;%1$s&quot; de todos los documentos? Esta acción no se puede deshacer.</string>
+    <plurals name="common_tags_delete_many_title">
+        <item quantity="one">Eliminar %1$d etiqueta</item>
+        <item quantity="other">Eliminar %1$d etiquetas</item>
+    </plurals>
+    <plurals name="common_tags_delete_many_message">
+        <item quantity="one">¿Quitar %1$d etiqueta de todos los documentos? Esta acción no se puede deshacer.</item>
+        <item quantity="other">¿Quitar %1$d etiquetas de todos los documentos? Esta acción no se puede deshacer.</item>
+    </plurals>
+    <string name="common_tags_style_title">Estilo de etiqueta</string>
+    <string name="common_tags_namespace_only">%1$s: solo espacio de nombres</string>
+    <string name="common_tags_actions">Acciones de etiqueta</string>
+    <string name="common_tags_merge_into">Combinar con...</string>
+    <string name="common_tags_color_style">Color / estilo</string>
+    <string name="common_tags_name_hierarchy">Nombre (rutas con puntos para la jerarquía)</string>
+    <string name="common_tags_no_color">Sin color</string>
+    <string name="common_tags_color_value">Color %1$s</string>
+
+    <string name="common_trash_maintenance_title">Papelera y mantenimiento</string>
+    <string name="common_trash_tab">Papelera</string>
+    <string name="common_trash_duplicates_tab">Duplicados</string>
+    <string name="common_trash_missing_tab">Faltantes</string>
+    <string name="common_trash_tab_count">%1$s (%2$d)</string>
+    <string name="common_trash_delete_forever">Eliminar definitivamente</string>
+    <string name="common_trash_delete_forever_message">¿Eliminar este documento de forma permanente? El archivo se borra y no se puede recuperar.</string>
+    <string name="common_trash_empty">La papelera está vacía</string>
+    <string name="common_trash_was_path">estaba en: %1$s</string>
+    <string name="common_trash_restore">Restaurar</string>
+    <string name="common_trash_no_duplicates">Sin duplicados</string>
+    <string name="common_trash_no_duplicates_subtitle">Cada hash tiene una única ruta canónica.</string>
+    <string name="common_trash_extra_copy">Copia adicional</string>
+    <string name="common_trash_remove_extra">Quitar copia</string>
+    <string name="common_trash_no_missing_files">No faltan archivos</string>
+    <string name="common_trash_missing_from">Falta en: %1$s</string>
+    <string name="common_trash_no_relink_candidates">No se encontraron candidatos para revincular. Vuelve a analizar cuando el archivo regrese.</string>
+    <string name="common_trash_match_reason">Coincidencia (%1$s)</string>
+    <string name="common_trash_relink">Revincular</string>
+</resources>

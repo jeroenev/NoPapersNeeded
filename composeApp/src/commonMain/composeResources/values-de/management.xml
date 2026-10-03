@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_edit">Bearbeiten</string>
+    <string name="common_create">Erstellen</string>
+    <string name="common_rename">Umbenennen</string>
+    <string name="common_name">Name</string>
+    <string name="common_color">Farbe</string>
+
+    <string name="common_rules_title">Zuordnungsregeln</string>
+    <string name="common_rules_add">Regel hinzufügen</string>
+    <string name="common_rules_empty_title">Noch keine Regeln</string>
+    <string name="common_rules_empty_subtitle">Erstelle eine Regel, um Dokumente anhand ihres Texts automatisch zu taggen.</string>
+    <string name="common_rules_delete_title">Regel löschen</string>
+    <string name="common_rules_delete_message">Diese Regel löschen? Bereits angewendete Tags bleiben erhalten.</string>
+    <string name="common_rules_actions_tags">Tags: %1$s</string>
+    <string name="common_rules_actions_set">%1$s: %2$s</string>
+    <string name="common_rules_join_parts">%1$s · %2$s</string>
+    <string name="common_rules_summary">%1$s · %2$s · %3$s · Priorität %4$d</string>
+    <string name="common_rules_new_title">Neue Regel</string>
+    <string name="common_rules_edit_title">Regel bearbeiten</string>
+    <string name="common_rules_pattern">Muster</string>
+    <string name="common_rules_invalid_regex">Ungültiger regulärer Ausdruck</string>
+    <string name="common_rules_priority">Priorität</string>
+    <string name="common_rules_tags_to_add">Tags hinzufügen (kommagetrennt)</string>
+    <string name="common_rules_set_field">%1$s setzen (optional)</string>
+    <string name="common_rules_match_field">Abgleich mit</string>
+    <string name="common_rules_algorithm">Algorithmus</string>
+    <string name="common_rules_field_content">Extrahierter Text</string>
+    <string name="common_rules_field_file_name">Dateiname</string>
+    <string name="common_rules_algorithm_exact">Exakt</string>
+    <string name="common_rules_algorithm_any_word">Beliebiges Wort</string>
+    <string name="common_rules_algorithm_all_words">Alle Wörter</string>
+    <string name="common_rules_algorithm_regex">Regex</string>
+    <string name="common_rules_algorithm_fuzzy">Ähnlich</string>
+
+    <string name="common_tags_title">Tags</string>
+    <string name="common_tags_new">Neues Tag</string>
+    <string name="common_tags_empty_title">Noch keine Tags</string>
+    <string name="common_tags_empty_subtitle">Füge Dokumenten Tags hinzu, damit sie hier erscheinen. Tags verschwinden automatisch, wenn kein Dokument sie mehr verwendet.</string>
+    <string name="common_tags_rename_title">Tag umbenennen</string>
+    <string name="common_tags_new_name">Neuer Name</string>
+    <string name="common_tags_merge_title">„%1$s“ zusammenführen mit</string>
+    <string name="common_tags_merge">Zusammenführen</string>
+    <plurals name="common_tags_merge_many_title">
+        <item quantity="one">%1$d Tag zusammenführen</item>
+        <item quantity="other">%1$d Tags zusammenführen</item>
+    </plurals>
+    <string name="common_tags_merge_keep_message">Wähle das Tag, das bleiben soll. Dokumente mit den anderen Tags erhalten stattdessen dieses Tag.</string>
+    <plurals name="common_tags_color_many_title">
+        <item quantity="one">Farbe für %1$d Tag festlegen</item>
+        <item quantity="other">Farbe für %1$d Tags festlegen</item>
+    </plurals>
+    <string name="common_tags_delete_title">Tag löschen</string>
+    <string name="common_tags_delete_message">„%1$s“ von allen Dokumenten entfernen? Das lässt sich nicht rückgängig machen.</string>
+    <plurals name="common_tags_delete_many_title">
+        <item quantity="one">%1$d Tag löschen</item>
+        <item quantity="other">%1$d Tags löschen</item>
+    </plurals>
+    <plurals name="common_tags_delete_many_message">
+        <item quantity="one">%1$d Tag von allen Dokumenten entfernen? Das lässt sich nicht rückgängig machen.</item>
+        <item quantity="other">%1$d Tags von allen Dokumenten entfernen? Das lässt sich nicht rückgängig machen.</item>
+    </plurals>
+    <string name="common_tags_style_title">Tag-Stil</string>
+    <string name="common_tags_namespace_only">%1$s - nur Namensraum</string>
+    <string name="common_tags_actions">Tag-Aktionen</string>
+    <string name="common_tags_merge_into">Zusammenführen mit...</string>
+    <string name="common_tags_color_style">Farbe / Stil</string>
+    <string name="common_tags_name_hierarchy">Name (Hierarchie mit Punkten)</string>
+    <string name="common_tags_no_color">Keine Farbe</string>
+    <string name="common_tags_color_value">Farbe %1$s</string>
+
+    <string name="common_trash_maintenance_title">Papierkorb &amp; Wartung</string>
+    <string name="common_trash_tab">Papierkorb</string>
+    <string name="common_trash_duplicates_tab">Duplikate</string>
+    <string name="common_trash_missing_tab">Fehlend</string>
+    <string name="common_trash_tab_count">%1$s (%2$d)</string>
+    <string name="common_trash_delete_forever">Endgültig löschen</string>
+    <string name="common_trash_delete_forever_message">Dieses Dokument endgültig löschen? Die Datei wird entfernt und kann nicht wiederhergestellt werden.</string>
+    <string name="common_trash_empty">Papierkorb ist leer</string>
+    <string name="common_trash_was_path">war: %1$s</string>
+    <string name="common_trash_restore">Wiederherstellen</string>
+    <string name="common_trash_no_duplicates">Keine Duplikate</string>
+    <string name="common_trash_no_duplicates_subtitle">Jeder Hash hat genau einen Pfad.</string>
+    <string name="common_trash_extra_copy">Weitere Kopie</string>
+    <string name="common_trash_remove_extra">Kopie entfernen</string>
+    <string name="common_trash_no_missing_files">Keine fehlenden Dateien</string>
+    <string name="common_trash_missing_from">Fehlt in: %1$s</string>
+    <string name="common_trash_no_relink_candidates">Keine passenden Dateien gefunden. Scanne erneut, sobald die Datei wieder da ist.</string>
+    <string name="common_trash_match_reason">Übereinstimmung (%1$s)</string>
+    <string name="common_trash_relink">Neu verknüpfen</string>
+</resources>

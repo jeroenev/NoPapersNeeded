@@ -1,0 +1,158 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_back">Retour</string>
+    <string name="common_more_actions">Plus d’actions</string>
+    <string name="common_cancel">Annuler</string>
+    <string name="common_confirm">Confirmer</string>
+    <string name="common_apply">Appliquer</string>
+    <string name="common_delete">Supprimer</string>
+    <string name="common_retry">Réessayer</string>
+    <string name="common_save">Enregistrer</string>
+    <string name="common_try_again">Réessayer</string>
+    <string name="common_show_technical_details">Afficher les détails</string>
+    <string name="common_hide_technical_details">Masquer les détails</string>
+    <string name="common_search_documents">Rechercher des documents</string>
+    <string name="common_clear_search">Effacer la recherche</string>
+    <string name="common_add_tag">Ajouter une étiquette</string>
+    <string name="common_remove_tag">Retirer %1$s</string>
+    <string name="common_create_tag_hint">Appuyez sur + pour créer « %1$s »</string>
+    <string name="common_create_tag_with_color">Créer « %1$s » avec une couleur…</string>
+    <string name="common_new">nouveau</string>
+    <string name="common_reviewed">Vérifié</string>
+    <string name="common_needs_review">À vérifier</string>
+    <string name="common_view_list">Liste</string>
+    <string name="common_view_grid">Grille</string>
+    <string name="common_unknown_error">erreur inconnue</string>
+    <string name="common_could_not_open_library">Impossible d’ouvrir la bibliothèque.</string>
+    <string name="common_could_not_queue_edit_run">Impossible de mettre la modification IA en file : %1$s</string>
+
+    <string name="common_opening_library">Ouverture de la bibliothèque…</string>
+    <string name="common_open_saved_library_failed">Impossible d’ouvrir la bibliothèque enregistrée.</string>
+    <string name="common_open_library_title">Impossible d’ouvrir votre bibliothèque</string>
+    <string name="common_pick_folder_again">Rechoisir le dossier</string>
+
+    <string name="common_onboarding_intro">Gardez vos PDF, étiquettes et informations ensemble dans un dossier qui vous appartient. Choisissez où stocker votre bibliothèque pour commencer.</string>
+    <string name="common_onboarding_sync">Utilisez un outil comme Syncthing pour synchroniser le dossier entier de la bibliothèque, puis ouvrez-le sur chaque appareil. La synchronisation est assurée par l’outil de votre choix.</string>
+    <string name="common_choose_library_folder">Ouvrir une bibliothèque</string>
+
+    <string name="common_could_not_action">Impossible de %1$s : %2$s</string>
+    <string name="common_no_ai_tag_suggestions">Aucune suggestion : le document n’a peut-être pas encore été traité par OCR</string>
+    <string name="common_no_ai_metadata_suggestions">Aucune suggestion : le document n’a peut-être pas encore été traité par OCR</string>
+    <string name="common_ai_assistant_unreachable">Impossible de joindre l’assistant IA : %1$s</string>
+    <string name="common_ai_assistant_empty_answer">L’assistant a renvoyé une réponse vide.</string>
+    <string name="common_scan_imported">Numérisation importée</string>
+    <string name="common_scan_already_in_library">Numérisation déjà dans la bibliothèque</string>
+    <string name="common_scan_import_failed">Échec de l’import de la numérisation : %1$s</string>
+    <string name="common_scan_capture_failed">Échec de la numérisation. Vérifiez l’accès à l’appareil photo et réessayez.</string>
+    <string name="common_tagging_done_empty">Aucun document à étiqueter</string>
+    <string name="common_join_items">%1$s, %2$s</string>
+    <string name="common_tagging_apply_summary">Appliquer %1$s à %2$s</string>
+    <string name="common_tagging_done_summary">Appliqué : %1$s à %2$s</string>
+
+    <string name="common_action_add_tag">ajouter l’étiquette</string>
+    <string name="common_action_remove_tag">retirer l’étiquette</string>
+    <string name="common_action_save_field">enregistrer le champ</string>
+    <string name="common_action_remove_field">retirer le champ</string>
+    <string name="common_action_define_field">définir le champ</string>
+    <string name="common_action_update_review_state">mettre à jour l’état de vérification</string>
+    <string name="common_action_move_to_trash">déplacer dans la corbeille</string>
+    <string name="common_action_rename_file">renommer le fichier</string>
+    <string name="common_action_rerun_ocr">relancer l’OCR</string>
+    <string name="common_action_ai_ocr">lire le texte avec l’assistant</string>
+    <string name="common_action_change_ocr_engine">changer de moteur OCR</string>
+    <string name="common_action_create_tag">créer l’étiquette</string>
+    <string name="common_action_rename_tag">renommer l’étiquette</string>
+    <string name="common_action_merge_tags">fusionner les étiquettes</string>
+    <string name="common_action_delete_tag">supprimer l’étiquette</string>
+    <string name="common_action_update_tag_style">mettre à jour le style de l’étiquette</string>
+    <string name="common_action_restore_document">restaurer le document</string>
+    <string name="common_action_delete_document">supprimer le document</string>
+    <string name="common_action_remove_duplicate">retirer le doublon</string>
+    <string name="common_action_relink_document">relier le document</string>
+    <string name="common_action_save_rule">enregistrer la règle</string>
+    <string name="common_action_delete_rule">supprimer la règle</string>
+    <string name="common_action_update_rule">mettre à jour la règle</string>
+    <string name="common_action_update">mettre à jour</string>
+    <string name="common_action_trash">mettre à la corbeille</string>
+    <string name="common_action_suggest_tags">suggérer des étiquettes</string>
+    <string name="common_action_suggest_metadata">suggérer des informations</string>
+    <string name="common_action_tag">étiqueter</string>
+
+    <plurals name="common_could_not_documents">
+        <item quantity="one">Impossible de %1$s %2$d document</item>
+        <item quantity="other">Impossible de %1$s %2$d documents</item>
+    </plurals>
+    <plurals name="common_could_not_partial_documents">
+        <item quantity="one">Impossible de %1$s %2$d document sur %3$d</item>
+        <item quantity="other">Impossible de %1$s %2$d documents sur %3$d</item>
+    </plurals>
+    <plurals name="common_could_not_suggest_tags_partial">
+        <item quantity="one">Impossible d’obtenir des suggestions pour %1$d document sur %2$d</item>
+        <item quantity="other">Impossible d’obtenir des suggestions pour %1$d documents sur %2$d</item>
+    </plurals>
+    <plurals name="common_imported_count">
+        <item quantity="one">%1$d importé</item>
+        <item quantity="other">%1$d importés</item>
+    </plurals>
+    <plurals name="common_duplicate_count">
+        <item quantity="one">%1$d doublon</item>
+        <item quantity="other">%1$d doublons</item>
+    </plurals>
+    <plurals name="common_failed_count">
+        <item quantity="one">%1$d échec</item>
+        <item quantity="other">%1$d échecs</item>
+    </plurals>
+    <plurals name="common_document_count">
+        <item quantity="one">%1$d document</item>
+        <item quantity="other">%1$d documents</item>
+    </plurals>
+    <plurals name="common_suggestion_count">
+        <item quantity="one">%1$d suggestion</item>
+        <item quantity="other">%1$d suggestions</item>
+    </plurals>
+    <plurals name="common_tagging_scope_count_batch">
+        <item quantity="one">%1$d document : les %2$d premiers sont traités dans ce lot</item>
+        <item quantity="other">%1$d documents : les %2$d premiers sont traités dans ce lot</item>
+    </plurals>
+
+    <string name="common_choose_date">Choisir une date</string>
+    <string name="common_field_invalid_number">Saisissez un nombre entier</string>
+    <string name="common_field_invalid_decimal">Saisissez un nombre</string>
+    <string name="common_field_invalid_date">Saisissez une date au format aaaa-MM-jj</string>
+    <string name="common_field_type_text">Texte</string>
+    <string name="common_field_type_long_text">Texte long</string>
+    <string name="common_field_type_number">Nombre entier</string>
+    <string name="common_field_type_decimal">Nombre décimal</string>
+    <string name="common_field_type_date">Date</string>
+    <string name="common_clear_date">Effacer la date</string>
+    <string name="common_select_all">Tout sélectionner</string>
+    <string name="common_restore_all">Tout restaurer</string>
+    <string name="common_empty_trash">Vider la corbeille</string>
+    <plurals name="common_restore_all_question">
+        <item quantity="one">Restaurer %1$d document ?</item>
+        <item quantity="other">Restaurer %1$d documents ?</item>
+    </plurals>
+    <plurals name="common_empty_trash_question">
+        <item quantity="one">Supprimer définitivement %1$d document ? Cette action est irréversible.</item>
+        <item quantity="other">Supprimer définitivement %1$d documents ? Cette action est irréversible.</item>
+    </plurals>
+
+    <string name="common_create_new_library">Créer une bibliothèque</string>
+    <string name="common_new_library_folder_name">Nom du nouveau dossier</string>
+
+    <!-- Library storage: direct device-storage folders, the Android all-files grant, and the SAF escape hatch -->
+    <string name="common_onboarding_use_recommended">Utiliser le dossier recommandé</string>
+    <string name="common_onboarding_recommended_help">Votre bibliothèque sera stockée dans %1$s, où les gestionnaires de fichiers et les outils de synchronisation comme Syncthing peuvent y accéder.</string>
+    <string name="common_storage_access_title">Autoriser l’accès au stockage de l’appareil</string>
+    <string name="common_storage_access_help">No Papers Needed conserve votre bibliothèque sous forme de simple dossier sur cet appareil. Pour la lire et y écrire, y compris les fichiers ajoutés par d’autres applications comme Syncthing, autorisez l’accès à tous les fichiers.</string>
+    <string name="common_storage_access_grant">Autoriser l’accès</string>
+    <string name="common_ok">OK</string>
+    <string name="common_folder_unusable_title">Dossier inutilisable</string>
+    <string name="common_folder_not_on_device">Ce dossier ne se trouve pas dans le stockage de l’appareil. Choisissez un dossier sur le stockage interne ou une carte SD, ou activez l’option Storage Access Framework sous Avancé pour utiliser des dossiers d’autres applications.</string>
+    <string name="common_settings_advanced">Avancé</string>
+    <string name="common_settings_use_saf">Utiliser le Storage Access Framework</string>
+    <string name="common_settings_use_saf_help">Ancien mode : ouvre les dossiers via le sélecteur de documents d’Android plutôt que directement sur le stockage de l’appareil. Plus lent, sans notification de changement ; les fichiers ajoutés par des outils de synchronisation peuvent passer inaperçus. S’applique au prochain choix de dossier.</string>
+    <string name="common_settings_library_saf_note">Cette bibliothèque est ouverte via le Storage Access Framework.</string>
+    <string name="common_settings_storage_access_missing">L’accès au stockage de l’appareil n’est pas autorisé. Les fichiers ajoutés par d’autres applications, comme Syncthing, ne seront pas visibles.</string>
+
+</resources>

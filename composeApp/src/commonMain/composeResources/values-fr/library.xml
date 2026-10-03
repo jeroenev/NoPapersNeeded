@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_more_tags">+%1$d</string>
+    <string name="library_documents">Documents</string>
+    <string name="library_refresh">Actualiser</string>
+    <string name="library_filters">Filtres</string>
+    <string name="library_switch_to_list">Passer à la vue liste</string>
+    <string name="library_switch_to_grid">Passer à la vue grille</string>
+    <string name="library_sort">Trier</string>
+    <string name="library_sort_name">Nom</string>
+    <string name="library_sort_added">Date d’ajout</string>
+    <string name="library_sort_doc_date">Date du document</string>
+    <string name="library_sort_size">Taille</string>
+    <string name="library_sort_ascending">Croissant</string>
+    <string name="library_sort_descending">Décroissant</string>
+
+    <string name="library_no_documents_title">Aucun document pour l’instant</string>
+    <string name="library_no_documents_subtitle">Importez un PDF pour commencer.</string>
+    <string name="library_no_matches_title">Aucun résultat</string>
+    <string name="library_no_matches_subtitle">Essayez de modifier votre recherche ou vos filtres.</string>
+    <string name="library_import_pdf">Importer un PDF</string>
+    <string name="library_clear_filters">Effacer les filtres</string>
+
+    <string name="library_review">Examiner</string>
+    <string name="library_mark_reviewed">Marquer comme vérifié</string>
+    <string name="library_mark_needs_review">Marquer comme à vérifier</string>
+    <string name="library_trash">Corbeille</string>
+    <string name="library_trash_documents">Mettre à la corbeille</string>
+    <string name="library_open">Ouvrir</string>
+    <string name="library_preview">Aperçu</string>
+    <string name="library_undo">Annuler</string>
+    <plurals name="library_moved_to_trash">
+        <item quantity="one">%1$d document mis à la corbeille</item>
+        <item quantity="other">%1$d documents mis à la corbeille</item>
+    </plurals>
+    <plurals name="library_results_summary">
+        <item quantity="one">%1$d document · %2$s</item>
+        <item quantity="other">%1$d documents · %2$s</item>
+    </plurals>
+    <string name="library_select">Sélectionner</string>
+    <string name="library_deselect">Désélectionner</string>
+    <plurals name="library_selected_count">
+        <item quantity="one">%1$d sélectionné</item>
+        <item quantity="other">%1$d sélectionnés</item>
+    </plurals>
+    <plurals name="library_move_to_trash_question">
+        <item quantity="one">Mettre %1$d document à la corbeille ?</item>
+        <item quantity="other">Mettre %1$d documents à la corbeille ?</item>
+    </plurals>
+
+    <string name="library_scan_progress">%1$s (%2$d/%3$d)</string>
+    <string name="library_path_conflict">Impossible de déplacer %1$s vers %2$s. Le fichier actuel est conservé. Résolvez le conflit à la destination ou choisissez un autre emplacement ; NPN réessaiera lors de la prochaine analyse.</string>
+    <plurals name="library_conflict_file_count">
+        <item quantity="one">%1$d fichier en conflit.</item>
+        <item quantity="other">%1$d fichiers en conflit.</item>
+    </plurals>
+    <plurals name="library_duplicate_count">
+        <item quantity="one">%1$d doublon.</item>
+        <item quantity="other">%1$d doublons.</item>
+    </plurals>
+    <string name="library_dismiss">Ignorer</string>
+    <plurals name="library_ocr_pending">
+        <item quantity="one">OCR en attente : %1$d</item>
+        <item quantity="other">OCR en attente : %1$d</item>
+    </plurals>
+    <plurals name="library_ocr_pending_running">
+        <item quantity="one">OCR en attente : %1$d (en cours)</item>
+        <item quantity="other">OCR en attente : %1$d (en cours)</item>
+    </plurals>
+
+    <string name="library_import">Importer</string>
+    <string name="library_add">Ajouter</string>
+    <string name="library_remove">Retirer</string>
+    <string name="library_remove_tag">Retirer l’étiquette</string>
+    <string name="library_scan_document">Numériser un document</string>
+
+    <string name="library_all_documents">Tous les documents</string>
+    <string name="library_review_queue">À vérifier</string>
+    <string name="library_untagged_documents">Documents sans étiquette</string>
+    <string name="library_tags">Étiquettes</string>
+    <string name="library_saved_views">Vues enregistrées</string>
+    <string name="library_save_current_view_ellipsis">Enregistrer la vue actuelle…</string>
+    <string name="library_settings">Paramètres</string>
+    <string name="library_ai_assistant">Assistant IA</string>
+    <string name="library_ai_edit">Modification IA</string>
+    <string name="library_pinned">Épinglées</string>
+    <string name="library_view_actions">Actions de la vue</string>
+    <string name="library_pin">Épingler</string>
+    <string name="library_unpin">Désépingler</string>
+    <string name="library_rename">Renommer</string>
+    <string name="library_views">Vues</string>
+    <string name="library_more_actions">Plus d’actions</string>
+    <string name="library_preview_close">Fermer l’aperçu</string>
+
+    <string name="library_clear_all">Tout effacer</string>
+    <string name="library_no_tags_yet">Aucune étiquette pour l’instant</string>
+    <string name="library_reviewed_filter">Vérifiés</string>
+    <string name="library_untagged_only">Sans étiquette uniquement</string>
+    <string name="library_untagged">Sans étiquette</string>
+    <string name="library_apply_filters">Appliquer les filtres</string>
+    <string name="library_any">Tous</string>
+    <string name="library_tag_filter_all">ET %1$s</string>
+    <string name="library_tag_filter_any">OU %1$s</string>
+    <string name="library_tag_filter_none">SAUF %1$s</string>
+    <string name="library_remove_filter">Retirer le filtre</string>
+
+    <string name="library_save_current_view">Enregistrer la vue actuelle</string>
+    <string name="library_view_name">Nom de la vue</string>
+    <string name="library_rename_saved_view">Renommer la vue enregistrée</string>
+    <string name="library_tag">Étiqueter</string>
+    <plurals name="library_add_tag_to_documents">
+        <item quantity="one">Ajouter une étiquette à %1$d document</item>
+        <item quantity="other">Ajouter une étiquette à %1$d documents</item>
+    </plurals>
+    <plurals name="library_remove_tag_from_documents">
+        <item quantity="one">Retirer une étiquette de %1$d document</item>
+        <item quantity="other">Retirer une étiquette de %1$d documents</item>
+    </plurals>
+
+    <string name="library_smaller_grid_items">Vignettes plus petites</string>
+    <string name="library_larger_grid_items">Vignettes plus grandes</string>
+
+    <string name="library_search_tags">Rechercher des étiquettes</string>
+    <string name="library_from">Du</string>
+    <string name="library_to">Au</string>
+    <string name="library_field_equals">%1$s : %2$s</string>
+    <string name="library_field_from">%1$s à partir du %2$s</string>
+    <string name="library_field_to">%1$s jusqu’au %2$s</string>
+    <string name="library_search_field">Rechercher dans %1$s</string>
+    <plurals name="library_doc_ids_filter">
+        <item quantity="one">Limité à %1$d document</item>
+        <item quantity="other">Limité à %1$d documents</item>
+    </plurals>
+</resources>

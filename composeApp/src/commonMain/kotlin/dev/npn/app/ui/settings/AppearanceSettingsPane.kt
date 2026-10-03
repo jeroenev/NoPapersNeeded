@@ -10,7 +10,11 @@ import no_papers_needed.composeapp.generated.resources.common_settings_landscape
 import no_papers_needed.composeapp.generated.resources.common_settings_language
 import no_papers_needed.composeapp.generated.resources.common_settings_language_dutch
 import no_papers_needed.composeapp.generated.resources.common_settings_language_english
+import no_papers_needed.composeapp.generated.resources.common_settings_language_french
+import no_papers_needed.composeapp.generated.resources.common_settings_language_german
 import no_papers_needed.composeapp.generated.resources.common_settings_language_help
+import no_papers_needed.composeapp.generated.resources.common_settings_language_portuguese
+import no_papers_needed.composeapp.generated.resources.common_settings_language_spanish
 import no_papers_needed.composeapp.generated.resources.common_settings_language_system
 import no_papers_needed.composeapp.generated.resources.common_settings_views
 import no_papers_needed.composeapp.generated.resources.common_view_grid
@@ -18,7 +22,7 @@ import no_papers_needed.composeapp.generated.resources.common_view_list
 import org.jetbrains.compose.resources.stringResource
 
 /** Languages the app UI can be switched to. Null = follow the system locale. */
-private val APP_LANGUAGES: List<String?> = listOf(null, "en", "nl")
+private val APP_LANGUAGES: List<String?> = listOf(null, "en", "nl", "de", "fr", "es", "pt")
 
 /** Device-local presentation: how the library renders by default, and in which language. */
 @Composable
@@ -67,5 +71,9 @@ private fun appLanguageLabel(language: String?): String =
         null -> stringResource(Res.string.common_settings_language_system)
         "en" -> stringResource(Res.string.common_settings_language_english)
         "nl" -> stringResource(Res.string.common_settings_language_dutch)
+        "de" -> stringResource(Res.string.common_settings_language_german)
+        "fr" -> stringResource(Res.string.common_settings_language_french)
+        "es" -> stringResource(Res.string.common_settings_language_spanish)
+        "pt" -> stringResource(Res.string.common_settings_language_portuguese)
         else -> language
     }

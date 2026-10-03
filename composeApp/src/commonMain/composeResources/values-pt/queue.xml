@@ -1,0 +1,51 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="queue_title">Fila de processamento</string>
+    <!-- Navigation rail item; kept short to fit beside the other rail labels. -->
+    <string name="queue_nav_label">Fila</string>
+    <string name="queue_help">Documentos que ainda aguardam o reconhecimento de texto ou a análise por IA. O que for concluído some sozinho; o que for interrompido permanece para você tentar de novo.</string>
+    <!-- Click label announced for a queue row; the whole row opens the document. -->
+    <string name="queue_open_document">Abrir documento</string>
+    <string name="queue_empty">Nada mais para processar</string>
+    <string name="queue_empty_subtitle">Todos os documentos foram lidos e analisados.</string>
+
+    <!-- Section above the per-document queue: AI edit runs handed to the background. -->
+    <string name="queue_edit_runs">Edições com IA</string>
+    <string name="queue_edit_run_progress">%1$d de %2$d documentos com sugestões</string>
+    <string name="queue_edit_run_review">Revisar</string>
+    <string name="queue_edit_run_discard">Descartar</string>
+
+    <plurals name="queue_edit_run_documents">
+        <item quantity="one">Edição com IA de %1$d documento</item>
+        <item quantity="other">Edição com IA de %1$d documentos</item>
+    </plurals>
+
+    <plurals name="queue_edit_run_failures">
+        <item quantity="one">%1$d documento sem sugestões</item>
+        <item quantity="other">%1$d documentos sem sugestões</item>
+    </plurals>
+
+    <string name="queue_stage_ocr">Reconhecimento de texto</string>
+    <string name="queue_stage_ai">Análise por IA</string>
+
+    <string name="queue_state_waiting">Aguardando</string>
+    <string name="queue_state_running">Em execução</string>
+    <string name="queue_state_retrying">Nova tentativa</string>
+    <string name="queue_state_failed">Falhou</string>
+    <string name="queue_state_ready">Pronto para revisar</string>
+
+    <string name="queue_retry_after">Próxima tentativa após %1$s</string>
+    <string name="queue_temporary_failure">Uma tentativa de processamento falhou. O app tentará novamente.</string>
+    <string name="queue_failed_help">O processamento parou após falhas repetidas. Verifique a configuração do OCR e tente de novo.</string>
+
+    <plurals name="queue_attempts">
+        <item quantity="one">%1$d tentativa com falha</item>
+        <item quantity="other">%1$d tentativas com falha</item>
+    </plurals>
+
+    <plurals name="queue_ai_pending">
+        <item quantity="one">Análise por IA pendente: %1$d</item>
+        <item quantity="other">Análise por IA pendente: %1$d</item>
+    </plurals>
+
+</resources>

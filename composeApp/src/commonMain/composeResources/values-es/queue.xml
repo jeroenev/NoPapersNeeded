@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="queue_title">Cola de procesamiento</string>
+    <string name="queue_nav_label">Cola</string>
+    <string name="queue_help">Documentos que aún esperan el reconocimiento de texto o el enriquecimiento con IA. El trabajo terminado desaparece solo; el trabajo detenido permanece para que puedas reintentarlo.</string>
+    <string name="queue_open_document">Abrir documento</string>
+    <string name="queue_empty">No queda nada por procesar</string>
+    <string name="queue_empty_subtitle">Todos los documentos se han leído y enriquecido.</string>
+
+    <string name="queue_edit_runs">Ejecuciones de edición con IA</string>
+    <string name="queue_edit_run_progress">%1$d de %2$d documentos con sugerencias</string>
+    <string name="queue_edit_run_review">Revisar</string>
+    <string name="queue_edit_run_discard">Descartar</string>
+
+    <plurals name="queue_edit_run_documents">
+        <item quantity="one">Edición con IA de %1$d documento</item>
+        <item quantity="other">Edición con IA de %1$d documentos</item>
+    </plurals>
+
+    <plurals name="queue_edit_run_failures">
+        <item quantity="one">No se pudieron generar sugerencias para %1$d documento</item>
+        <item quantity="other">No se pudieron generar sugerencias para %1$d documentos</item>
+    </plurals>
+
+    <string name="queue_stage_ocr">Reconocimiento de texto</string>
+    <string name="queue_stage_ai">Enriquecimiento con IA</string>
+
+    <string name="queue_state_waiting">En espera</string>
+    <string name="queue_state_running">En curso</string>
+    <string name="queue_state_retrying">Reintentando</string>
+    <string name="queue_state_failed">Fallido</string>
+    <string name="queue_state_ready">Listo para revisar</string>
+
+    <string name="queue_retry_after">Próximo intento después de %1$s</string>
+    <string name="queue_temporary_failure">Un intento de procesamiento falló. La aplicación volverá a intentarlo.</string>
+    <string name="queue_failed_help">El procesamiento se detuvo tras varios fallos. Revisa la configuración del OCR y vuelve a intentarlo.</string>
+
+    <plurals name="queue_attempts">
+        <item quantity="one">%1$d intento fallido</item>
+        <item quantity="other">%1$d intentos fallidos</item>
+    </plurals>
+
+    <plurals name="queue_ai_pending">
+        <item quantity="one">Enriquecimiento con IA pendiente: %1$d</item>
+        <item quantity="other">Enriquecimiento con IA pendiente: %1$d</item>
+    </plurals>
+
+</resources>

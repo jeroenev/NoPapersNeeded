@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ux_sync_help">Úsalo en varios dispositivos</string>
+    <string name="ux_library_name">Mis documentos</string>
+    <string name="ux_match_all">Coincidir con todas</string>
+    <string name="ux_match_any">Coincidir con alguna</string>
+    <string name="ux_include_tags">Incluir etiquetas</string>
+    <string name="ux_exclude_tags">Excluir etiquetas</string>
+    <string name="ux_mixed_tags">Esta vista necesita todas las etiquetas del grupo «Coincidir con todas» y al menos una del grupo «Coincidir con alguna». Elige un solo modo de coincidencia para unirlas en un único grupo.</string>
+    <string name="ux_no_matching_tags">Ninguna etiqueta coincide con tu búsqueda.</string>
+    <string name="ux_refine_tag_search">Afina tu búsqueda para ver las etiquetas restantes.</string>
+    <string name="ux_review_count">Por revisar · %1$d</string>
+    <string name="ux_review_next">Revisado y siguiente</string>
+    <string name="ux_review_finish">Revisado y terminar</string>
+    <string name="ux_expand_document">Ampliar el espacio del documento</string>
+    <string name="ux_resize_panes">Redimensionar documento y detalles</string>
+    <string name="ux_save_changes">Guardar cambios</string>
+    <string name="ux_save_failed_summary">No se pudieron guardar los cambios. Revisa el acceso a la biblioteca e inténtalo de nuevo.</string>
+    <string name="ux_drafts_count">Documentos sin guardar: %1$d</string>
+    <string name="ux_resume_draft">Seguir editando</string>
+    <string name="ux_draft_hint">Tu borrador se conserva al cambiar de documento. Guarda para aplicar tus cambios.</string>
+    <string name="ux_discard">Descartar cambios</string>
+    <string name="ux_discard_prompt">¿Descartar los cambios sin guardar de este documento?</string>
+    <string name="ux_tags_saved">Las etiquetas y las sugerencias del asistente aceptadas se guardan al instante.</string>
+    <string name="ux_field_invalid">El valor de un campo no corresponde a su tipo.</string>
+    <string name="ux_show_suggestions">Mostrar sugerencias</string>
+    <string name="ux_discard_short">Descartar</string>
+    <string name="ux_library_draft_warning">Guarda o descarta tus borradores de documentos antes de abrir otra biblioteca.</string>
+    <string name="ux_update_available">La versión %1$s está disponible</string>
+    <string name="ux_update_download">Descargar</string>
+</resources>

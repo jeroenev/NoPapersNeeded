@@ -1,0 +1,134 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="library_more_tags">+%1$d</string>
+    <string name="library_documents">Documentos</string>
+    <string name="library_refresh">Actualizar</string>
+    <string name="library_filters">Filtros</string>
+    <string name="library_switch_to_list">Cambiar a vista de lista</string>
+    <string name="library_switch_to_grid">Cambiar a vista de cuadrícula</string>
+    <string name="library_sort">Ordenar</string>
+    <string name="library_sort_name">Nombre</string>
+    <string name="library_sort_added">Añadido</string>
+    <string name="library_sort_doc_date">Fecha del documento</string>
+    <string name="library_sort_size">Tamaño</string>
+    <string name="library_sort_ascending">Ascendente</string>
+    <string name="library_sort_descending">Descendente</string>
+
+    <string name="library_no_documents_title">Aún no hay documentos</string>
+    <string name="library_no_documents_subtitle">Importa un PDF para empezar.</string>
+    <string name="library_no_matches_title">Sin coincidencias</string>
+    <string name="library_no_matches_subtitle">Prueba a ajustar la búsqueda o los filtros.</string>
+    <string name="library_import_pdf">Importar PDF</string>
+    <string name="library_clear_filters">Borrar filtros</string>
+
+    <string name="library_review">Revisar</string>
+    <string name="library_mark_reviewed">Marcar como revisado</string>
+    <string name="library_mark_needs_review">Marcar para revisar</string>
+    <string name="library_trash">Papelera</string>
+    <string name="library_trash_documents">Mover documentos a la papelera</string>
+    <string name="library_open">Abrir</string>
+    <string name="library_preview">Vista previa</string>
+    <string name="library_undo">Deshacer</string>
+    <plurals name="library_moved_to_trash">
+        <item quantity="one">%1$d documento movido a la papelera</item>
+        <item quantity="other">%1$d documentos movidos a la papelera</item>
+    </plurals>
+    <plurals name="library_results_summary">
+        <item quantity="one">%1$d documento · %2$s</item>
+        <item quantity="other">%1$d documentos · %2$s</item>
+    </plurals>
+    <string name="library_select">Seleccionar</string>
+    <string name="library_deselect">Deseleccionar</string>
+    <plurals name="library_selected_count">
+        <item quantity="one">%1$d seleccionado</item>
+        <item quantity="other">%1$d seleccionados</item>
+    </plurals>
+    <plurals name="library_move_to_trash_question">
+        <item quantity="one">¿Mover %1$d documento a la papelera?</item>
+        <item quantity="other">¿Mover %1$d documentos a la papelera?</item>
+    </plurals>
+
+    <string name="library_scan_progress">%1$s (%2$d/%3$d)</string>
+    <string name="library_path_conflict">No se pudo mover %1$s a %2$s. Se conserva el archivo actual. Resuelve el conflicto en el destino o elige otra ubicación; NPN lo reintentará en el siguiente análisis.</string>
+    <plurals name="library_conflict_file_count">
+        <item quantity="one">%1$d archivo en conflicto.</item>
+        <item quantity="other">%1$d archivos en conflicto.</item>
+    </plurals>
+    <plurals name="library_duplicate_count">
+        <item quantity="one">%1$d duplicado.</item>
+        <item quantity="other">%1$d duplicados.</item>
+    </plurals>
+    <string name="library_dismiss">Cerrar</string>
+    <plurals name="library_ocr_pending">
+        <item quantity="one">OCR pendiente: %1$d</item>
+        <item quantity="other">OCR pendiente: %1$d</item>
+    </plurals>
+    <plurals name="library_ocr_pending_running">
+        <item quantity="one">OCR pendiente: %1$d (en curso)</item>
+        <item quantity="other">OCR pendiente: %1$d (en curso)</item>
+    </plurals>
+
+    <string name="library_import">Importar</string>
+    <string name="library_add">Añadir</string>
+    <string name="library_remove">Quitar</string>
+    <string name="library_remove_tag">Quitar etiqueta</string>
+    <string name="library_scan_document">Escanear documento</string>
+
+    <string name="library_all_documents">Todos los documentos</string>
+    <string name="library_review_queue">Cola de revisión</string>
+    <string name="library_untagged_documents">Documentos sin etiquetas</string>
+    <string name="library_tags">Etiquetas</string>
+    <string name="library_saved_views">Vistas guardadas</string>
+    <string name="library_save_current_view_ellipsis">Guardar vista actual...</string>
+    <string name="library_settings">Ajustes</string>
+    <string name="library_ai_assistant">Asistente de IA</string>
+    <string name="library_ai_edit">Edición con IA</string>
+    <string name="library_pinned">Fijadas</string>
+    <string name="library_view_actions">Acciones de la vista</string>
+    <string name="library_pin">Fijar</string>
+    <string name="library_unpin">Dejar de fijar</string>
+    <string name="library_rename">Renombrar</string>
+    <string name="library_views">Vistas</string>
+    <string name="library_more_actions">Más acciones</string>
+    <string name="library_preview_close">Cerrar vista previa</string>
+
+    <string name="library_clear_all">Borrar todo</string>
+    <string name="library_no_tags_yet">Aún no hay etiquetas</string>
+    <string name="library_reviewed_filter">Revisados</string>
+    <string name="library_untagged_only">Solo sin etiquetas</string>
+    <string name="library_untagged">Sin etiquetas</string>
+    <string name="library_apply_filters">Aplicar filtros</string>
+    <string name="library_any">Cualquiera</string>
+    <string name="library_tag_filter_all">Y %1$s</string>
+    <string name="library_tag_filter_any">O %1$s</string>
+    <string name="library_tag_filter_none">NO %1$s</string>
+    <string name="library_remove_filter">Quitar filtro</string>
+
+    <string name="library_save_current_view">Guardar vista actual</string>
+    <string name="library_view_name">Nombre de la vista</string>
+    <string name="library_rename_saved_view">Renombrar vista guardada</string>
+    <string name="library_tag">Etiqueta</string>
+    <plurals name="library_add_tag_to_documents">
+        <item quantity="one">Añadir etiqueta a %1$d documento</item>
+        <item quantity="other">Añadir etiqueta a %1$d documentos</item>
+    </plurals>
+    <plurals name="library_remove_tag_from_documents">
+        <item quantity="one">Quitar etiqueta de %1$d documento</item>
+        <item quantity="other">Quitar etiqueta de %1$d documentos</item>
+    </plurals>
+
+    <string name="library_smaller_grid_items">Cuadrícula más pequeña</string>
+    <string name="library_larger_grid_items">Cuadrícula más grande</string>
+
+    <string name="library_search_tags">Buscar etiquetas</string>
+    <string name="library_from">Desde</string>
+    <string name="library_to">Hasta</string>
+    <string name="library_field_equals">%1$s: %2$s</string>
+    <string name="library_field_from">%1$s desde %2$s</string>
+    <string name="library_field_to">%1$s hasta %2$s</string>
+    <string name="library_search_field">Buscar %1$s</string>
+    <plurals name="library_doc_ids_filter">
+        <item quantity="one">Limitado a %1$d documento</item>
+        <item quantity="other">Limitado a %1$d documentos</item>
+    </plurals>
+</resources>

@@ -1,0 +1,91 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="common_edit">Modifier</string>
+    <string name="common_create">Créer</string>
+    <string name="common_rename">Renommer</string>
+    <string name="common_name">Nom</string>
+    <string name="common_color">Couleur</string>
+
+    <string name="common_rules_title">Règles automatiques</string>
+    <string name="common_rules_add">Ajouter une règle</string>
+    <string name="common_rules_empty_title">Aucune règle pour l’instant</string>
+    <string name="common_rules_empty_subtitle">Créez une règle pour étiqueter automatiquement les documents d’après leur texte.</string>
+    <string name="common_rules_delete_title">Supprimer la règle</string>
+    <string name="common_rules_delete_message">Supprimer cette règle ? Les étiquettes déjà appliquées ne seront pas retirées.</string>
+    <string name="common_rules_actions_tags">Étiquettes : %1$s</string>
+    <string name="common_rules_actions_set">%1$s : %2$s</string>
+    <string name="common_rules_join_parts">%1$s · %2$s</string>
+    <string name="common_rules_summary">%1$s · %2$s · %3$s · priorité %4$d</string>
+    <string name="common_rules_new_title">Nouvelle règle</string>
+    <string name="common_rules_edit_title">Modifier la règle</string>
+    <string name="common_rules_pattern">Motif</string>
+    <string name="common_rules_invalid_regex">Expression régulière non valide</string>
+    <string name="common_rules_priority">Priorité</string>
+    <string name="common_rules_tags_to_add">Étiquettes à ajouter (séparées par des virgules)</string>
+    <string name="common_rules_set_field">Définir %1$s (facultatif)</string>
+    <string name="common_rules_match_field">Champ à comparer</string>
+    <string name="common_rules_algorithm">Algorithme</string>
+    <string name="common_rules_field_content">Texte extrait</string>
+    <string name="common_rules_field_file_name">Nom du fichier</string>
+    <string name="common_rules_algorithm_exact">Exact</string>
+    <string name="common_rules_algorithm_any_word">Un des mots</string>
+    <string name="common_rules_algorithm_all_words">Tous les mots</string>
+    <string name="common_rules_algorithm_regex">Regex</string>
+    <string name="common_rules_algorithm_fuzzy">Approximatif</string>
+
+    <string name="common_tags_title">Étiquettes</string>
+    <string name="common_tags_new">Nouvelle étiquette</string>
+    <string name="common_tags_empty_title">Aucune étiquette pour l’instant</string>
+    <string name="common_tags_empty_subtitle">Ajoutez des étiquettes aux documents pour les voir ici. Les étiquettes disparaissent automatiquement quand plus aucun document ne les utilise.</string>
+    <string name="common_tags_rename_title">Renommer l’étiquette</string>
+    <string name="common_tags_new_name">Nouveau nom</string>
+    <string name="common_tags_merge_title">Fusionner « %1$s » dans</string>
+    <string name="common_tags_merge">Fusionner</string>
+    <plurals name="common_tags_merge_many_title">
+        <item quantity="one">Fusionner %1$d étiquette</item>
+        <item quantity="other">Fusionner %1$d étiquettes</item>
+    </plurals>
+    <string name="common_tags_merge_keep_message">Choisissez l’étiquette à conserver. Les documents portant les autres étiquettes recevront celle-ci à la place.</string>
+    <plurals name="common_tags_color_many_title">
+        <item quantity="one">Définir la couleur de %1$d étiquette</item>
+        <item quantity="other">Définir la couleur de %1$d étiquettes</item>
+    </plurals>
+    <string name="common_tags_delete_title">Supprimer l’étiquette</string>
+    <string name="common_tags_delete_message">Retirer « %1$s » de tous les documents ? Cette action est irréversible.</string>
+    <plurals name="common_tags_delete_many_title">
+        <item quantity="one">Supprimer %1$d étiquette</item>
+        <item quantity="other">Supprimer %1$d étiquettes</item>
+    </plurals>
+    <plurals name="common_tags_delete_many_message">
+        <item quantity="one">Retirer %1$d étiquette de tous les documents ? Cette action est irréversible.</item>
+        <item quantity="other">Retirer %1$d étiquettes de tous les documents ? Cette action est irréversible.</item>
+    </plurals>
+    <string name="common_tags_style_title">Style de l’étiquette</string>
+    <string name="common_tags_namespace_only">%1$s – espace de noms uniquement</string>
+    <string name="common_tags_actions">Actions de l’étiquette</string>
+    <string name="common_tags_merge_into">Fusionner dans…</string>
+    <string name="common_tags_color_style">Couleur / style</string>
+    <string name="common_tags_name_hierarchy">Nom (points pour la hiérarchie)</string>
+    <string name="common_tags_no_color">Sans couleur</string>
+    <string name="common_tags_color_value">Couleur %1$s</string>
+
+    <string name="common_trash_maintenance_title">Corbeille &amp; maintenance</string>
+    <string name="common_trash_tab">Corbeille</string>
+    <string name="common_trash_duplicates_tab">Doublons</string>
+    <string name="common_trash_missing_tab">Manquants</string>
+    <string name="common_trash_tab_count">%1$s (%2$d)</string>
+    <string name="common_trash_delete_forever">Supprimer définitivement</string>
+    <string name="common_trash_delete_forever_message">Supprimer définitivement ce document ? Le fichier est effacé et ne pourra pas être récupéré.</string>
+    <string name="common_trash_empty">La corbeille est vide</string>
+    <string name="common_trash_was_path">ancien chemin : %1$s</string>
+    <string name="common_trash_restore">Restaurer</string>
+    <string name="common_trash_no_duplicates">Aucun doublon</string>
+    <string name="common_trash_no_duplicates_subtitle">Chaque document n’existe qu’à un seul emplacement.</string>
+    <string name="common_trash_extra_copy">Copie en trop</string>
+    <string name="common_trash_remove_extra">Retirer la copie</string>
+    <string name="common_trash_no_missing_files">Aucun fichier manquant</string>
+    <string name="common_trash_missing_from">Absent de : %1$s</string>
+    <string name="common_trash_no_relink_candidates">Aucun fichier correspondant trouvé. Relancez une analyse quand le fichier sera revenu.</string>
+    <string name="common_trash_match_reason">Correspondance (%1$s)</string>
+    <string name="common_trash_relink">Relier</string>
+</resources>

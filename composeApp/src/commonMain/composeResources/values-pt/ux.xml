@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="ux_sync_help">Use em vários dispositivos</string>
+    <string name="ux_library_name">Meus documentos</string>
+    <string name="ux_match_all">Todas</string>
+    <string name="ux_match_any">Qualquer uma</string>
+    <string name="ux_include_tags">Incluir etiquetas</string>
+    <string name="ux_exclude_tags">Excluir etiquetas</string>
+    <string name="ux_mixed_tags">Este filtro exige todas as etiquetas do grupo "Todas" e pelo menos uma do grupo "Qualquer uma". Escolha um único modo para uni-las em um só grupo.</string>
+    <string name="ux_no_matching_tags">Nenhuma etiqueta corresponde à sua busca.</string>
+    <string name="ux_refine_tag_search">Refine a busca para ver as demais etiquetas.</string>
+    <string name="ux_review_count">Para revisar · %1$d</string>
+    <string name="ux_review_next">Marcar revisado e avançar</string>
+    <string name="ux_review_finish">Marcar revisado e concluir</string>
+    <string name="ux_expand_document">Expandir área do documento</string>
+    <string name="ux_resize_panes">Redimensionar documento e detalhes</string>
+    <string name="ux_save_changes">Salvar alterações</string>
+    <string name="ux_save_failed_summary">Não foi possível salvar as alterações. Verifique o acesso à biblioteca e tente de novo.</string>
+    <string name="ux_drafts_count">Documentos não salvos: %1$d</string>
+    <string name="ux_resume_draft">Continuar editando</string>
+    <string name="ux_draft_hint">Seu rascunho é mantido quando você troca de documento. Salve para aplicar as alterações.</string>
+    <string name="ux_discard">Descartar alterações</string>
+    <string name="ux_discard_prompt">Descartar as alterações não salvas deste documento?</string>
+    <string name="ux_tags_saved">As etiquetas e as sugestões aceitas do assistente são salvas imediatamente.</string>
+    <string name="ux_field_invalid">Um valor não corresponde ao tipo do campo.</string>
+    <string name="ux_show_suggestions">Mostrar sugestões</string>
+    <string name="ux_discard_short">Descartar</string>
+    <string name="ux_library_draft_warning">Salve ou descarte os rascunhos dos documentos antes de abrir outra biblioteca.</string>
+    <string name="ux_update_available">A versão %1$s está disponível</string>
+    <string name="ux_update_download">Baixar</string>
+</resources>

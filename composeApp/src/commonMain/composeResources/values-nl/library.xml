@@ -4,7 +4,8 @@
     <string name="library_documents">Documenten</string>
     <string name="library_refresh">Vernieuwen</string>
     <string name="library_filters">Filters</string>
-    <string name="library_switch_view">Overschakelen naar %1$sweergave</string>
+    <string name="library_switch_to_list">Overschakelen naar lijstweergave</string>
+    <string name="library_switch_to_grid">Overschakelen naar rasterweergave</string>
     <string name="library_sort">Sorteren</string>
     <string name="library_sort_name">Naam</string>
     <string name="library_sort_added">Toegevoegd</string>

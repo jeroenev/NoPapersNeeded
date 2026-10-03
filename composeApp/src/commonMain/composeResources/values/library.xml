@@ -4,7 +4,8 @@
     <string name="library_documents">Documents</string>
     <string name="library_refresh">Refresh</string>
     <string name="library_filters">Filters</string>
-    <string name="library_switch_view">Switch to %1$s view</string>
+    <string name="library_switch_to_list">Switch to list view</string>
+    <string name="library_switch_to_grid">Switch to grid view</string>
     <string name="library_sort">Sort</string>
     <string name="library_sort_name">Name</string>
     <string name="library_sort_added">Added</string>

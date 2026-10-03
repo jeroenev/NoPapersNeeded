@@ -121,8 +121,6 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_add_tag
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_select_all
-import no_papers_needed.composeapp.generated.resources.common_view_grid
-import no_papers_needed.composeapp.generated.resources.common_view_list
 import no_papers_needed.composeapp.generated.resources.library_add
 import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import no_papers_needed.composeapp.generated.resources.library_clear_filters
@@ -157,7 +155,8 @@ import no_papers_needed.composeapp.generated.resources.library_sort_ascending
 import no_papers_needed.composeapp.generated.resources.library_sort_descending
 import no_papers_needed.composeapp.generated.resources.library_sort_name
 import no_papers_needed.composeapp.generated.resources.library_sort_size
-import no_papers_needed.composeapp.generated.resources.library_switch_view
+import no_papers_needed.composeapp.generated.resources.library_switch_to_grid
+import no_papers_needed.composeapp.generated.resources.library_switch_to_list
 import no_papers_needed.composeapp.generated.resources.library_trash
 import no_papers_needed.composeapp.generated.resources.library_trash_documents
 import no_papers_needed.composeapp.generated.resources.library_undo
@@ -845,9 +844,12 @@ private fun LibraryTopBar(
         TopBarAction(
             // The icon names the view being switched *to*, matching the label.
             icon = if (next == ViewType.GRID) Icons.Filled.GridView else Icons.AutoMirrored.Filled.List,
-            // Lowercased: the label is interpolated mid-sentence ("Switch to list view"), and Dutch
-            // compounds it into one word.
-            label = stringResource(Res.string.library_switch_view, viewTypeLabel(next).lowercase()),
+            // Whole sentences, not an interpolated view name: Dutch compounds it into one word and
+            // German capitalises it, so no single template fits every language.
+            label =
+                stringResource(
+                    if (next == ViewType.GRID) Res.string.library_switch_to_grid else Res.string.library_switch_to_list,
+                ),
             onClick = { onSetView(next) },
         )
     val refresh = TopBarAction(Icons.Filled.Refresh, stringResource(Res.string.library_refresh), onRefresh)
@@ -1233,11 +1235,4 @@ private fun sortLabel(field: SortField): String =
 
         // A field the registry no longer lists (e.g. a saved sort on a deleted field): show the key.
         is SortField.Field -> field.key
-    }
-
-@Composable
-private fun viewTypeLabel(viewType: ViewType): String =
-    when (viewType) {
-        ViewType.LIST -> stringResource(Res.string.common_view_list)
-        ViewType.GRID -> stringResource(Res.string.common_view_grid)
     }

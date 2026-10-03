@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="queue_title">Verarbeitung</string>
+    <string name="queue_nav_label">Verarbeitung</string>
+    <string name="queue_help">Dokumente, die noch auf Texterkennung oder KI-Anreicherung warten. Erledigtes verschwindet von selbst; angehaltene Aufgaben bleiben, damit du sie wiederholen kannst.</string>
+    <string name="queue_open_document">Dokument öffnen</string>
+    <string name="queue_empty">Nichts mehr zu verarbeiten</string>
+    <string name="queue_empty_subtitle">Jedes Dokument wurde gelesen und angereichert.</string>
+
+    <string name="queue_edit_runs">KI-Bearbeitungen</string>
+    <string name="queue_edit_run_progress">Vorschläge für %1$d von %2$d Dokumenten</string>
+    <string name="queue_edit_run_review">Prüfen</string>
+    <string name="queue_edit_run_discard">Verwerfen</string>
+
+    <plurals name="queue_edit_run_documents">
+        <item quantity="one">KI-Bearbeitung von %1$d Dokument</item>
+        <item quantity="other">KI-Bearbeitung von %1$d Dokumenten</item>
+    </plurals>
+
+    <plurals name="queue_edit_run_failures">
+        <item quantity="one">Für %1$d Dokument konnte kein Vorschlag erstellt werden</item>
+        <item quantity="other">Für %1$d Dokumente konnte kein Vorschlag erstellt werden</item>
+    </plurals>
+
+    <string name="queue_stage_ocr">Texterkennung</string>
+    <string name="queue_stage_ai">KI-Anreicherung</string>
+
+    <string name="queue_state_waiting">Wartet</string>
+    <string name="queue_state_running">Läuft</string>
+    <string name="queue_state_retrying">Neuer Versuch</string>
+    <string name="queue_state_failed">Fehlgeschlagen</string>
+    <string name="queue_state_ready">Bereit zur Prüfung</string>
+
+    <string name="queue_retry_after">Nächster Versuch: %1$s</string>
+    <string name="queue_temporary_failure">Ein Verarbeitungsversuch ist fehlgeschlagen. Die App versucht es erneut.</string>
+    <string name="queue_failed_help">Die Verarbeitung wurde nach wiederholten Fehlern gestoppt. Prüfe die OCR-Einrichtung und versuche es erneut.</string>
+
+    <plurals name="queue_attempts">
+        <item quantity="one">%1$d fehlgeschlagener Versuch</item>
+        <item quantity="other">%1$d fehlgeschlagene Versuche</item>
+    </plurals>
+
+    <plurals name="queue_ai_pending">
+        <item quantity="one">KI-Anreicherung ausstehend: %1$d</item>
+        <item quantity="other">KI-Anreicherung ausstehend: %1$d</item>
+    </plurals>
+
+</resources>

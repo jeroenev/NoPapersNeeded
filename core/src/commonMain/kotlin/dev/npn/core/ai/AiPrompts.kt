@@ -68,6 +68,7 @@ internal data class AiPromptContext(
                 "de" to "German",
                 "es" to "Spanish",
                 "it" to "Italian",
+                "pt" to "Portuguese",
             )
     }
 }

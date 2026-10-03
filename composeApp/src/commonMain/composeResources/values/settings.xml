@@ -138,8 +138,12 @@
     <string name="common_settings_language">Language</string>
     <string name="common_settings_language_help">Interface language for this device. System default follows the operating system.</string>
     <string name="common_settings_language_system">System default</string>
-    <string name="common_settings_language_english">English</string>
-    <string name="common_settings_language_dutch">Nederlands</string>
+    <string name="common_settings_language_english" translatable="false">English</string>
+    <string name="common_settings_language_dutch" translatable="false">Nederlands</string>
+    <string name="common_settings_language_german" translatable="false">Deutsch</string>
+    <string name="common_settings_language_french" translatable="false">Français</string>
+    <string name="common_settings_language_spanish" translatable="false">Español</string>
+    <string name="common_settings_language_portuguese" translatable="false">Português (Brasil)</string>
     <string name="common_settings_enable_inbox">Enable inbox workflow</string>
     <string name="common_settings_inbox_help">New documents land in an inbox and you mark them reviewed by hand. When off, documents just appear and count as reviewed once tagged.</string>
     <string name="common_settings_syncs_across_devices">This setting syncs across your devices.</string>

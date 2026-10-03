@@ -1,0 +1,48 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="queue_title">File de traitement</string>
+    <string name="queue_nav_label">Traitement</string>
+    <string name="queue_help">Documents en attente de lecture du texte ou d’enrichissement IA. Les tâches terminées disparaissent d’elles-mêmes ; celles qui se sont arrêtées restent pour que vous puissiez les relancer.</string>
+    <string name="queue_open_document">Ouvrir le document</string>
+    <string name="queue_empty">Plus rien à traiter</string>
+    <string name="queue_empty_subtitle">Chaque document a été lu et enrichi.</string>
+
+    <string name="queue_edit_runs">Modifications IA</string>
+    <string name="queue_edit_run_progress">%1$d sur %2$d documents traités</string>
+    <string name="queue_edit_run_review">Vérifier</string>
+    <string name="queue_edit_run_discard">Abandonner</string>
+
+    <plurals name="queue_edit_run_documents">
+        <item quantity="one">Modification IA de %1$d document</item>
+        <item quantity="other">Modification IA de %1$d documents</item>
+    </plurals>
+
+    <plurals name="queue_edit_run_failures">
+        <item quantity="one">Aucune suggestion possible pour %1$d document</item>
+        <item quantity="other">Aucune suggestion possible pour %1$d documents</item>
+    </plurals>
+
+    <string name="queue_stage_ocr">Lecture du texte</string>
+    <string name="queue_stage_ai">Enrichissement IA</string>
+
+    <string name="queue_state_waiting">En attente</string>
+    <string name="queue_state_running">En cours</string>
+    <string name="queue_state_retrying">Nouvel essai</string>
+    <string name="queue_state_failed">Échec</string>
+    <string name="queue_state_ready">Prêt à vérifier</string>
+
+    <string name="queue_retry_after">Nouvel essai après %1$s</string>
+    <string name="queue_temporary_failure">Une tentative de traitement a échoué. L’application réessaiera.</string>
+    <string name="queue_failed_help">Le traitement s’est arrêté après plusieurs échecs. Vérifiez la configuration de l’OCR, puis réessayez.</string>
+
+    <plurals name="queue_attempts">
+        <item quantity="one">%1$d tentative échouée</item>
+        <item quantity="other">%1$d tentatives échouées</item>
+    </plurals>
+
+    <plurals name="queue_ai_pending">
+        <item quantity="one">Enrichissement IA en attente : %1$d</item>
+        <item quantity="other">Enrichissement IA en attente : %1$d</item>
+    </plurals>
+
+</resources>
