@@ -89,6 +89,11 @@ compose.desktop {
         // warns about that unless native access is granted, and later releases will refuse it.
         jvmArgs("--enable-native-access=ALL-UNNAMED")
 
+        // 8-byte instead of 12-byte object headers (JEP 519, a product option since JDK 25): a
+        // smaller heap and better cache use for the many small objects Compose and the index
+        // allocate.
+        jvmArgs("-XX:+UseCompactObjectHeaders")
+
         nativeDistributions {
             // jlink strips the runtime to a minimal module set. FileKit's Linux file picker
             // uses dbus-java, which needs com.sun.security.auth.module.UnixSystem from
