@@ -58,8 +58,11 @@ jobs:
           cache-provider: basic
           cache-read-only: true
 
-      - name: Install rpmbuild
-        run: sudo apt-get install --yes --no-install-recommends rpm
+      - name: Install rpmbuild and flatpak-builder
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends rpm flatpak flatpak-builder
+          flatpak remote-add --user --if-not-exists flathub https://dl.flathub.org/repo/flathub.flatpakrepo
 
       - name: Decode signing keystore
         env:
@@ -83,6 +86,10 @@ jobs:
           :desktopApp:packageDeb
           :desktopApp:packageRpm
 
+      # Reuses the app image built above; also downloads the Flatpak SDK and compiles Tesseract.
+      - name: Build Flatpak bundle
+        run: .mise/tasks/package-flatpak
+
       # androidApp-release.apk only exists when signing succeeded; unsigned builds are named
       # androidApp-release-unsigned.apk, so a missing signature fails the copy below.
       - name: Upload to draft release
@@ -92,6 +99,7 @@ jobs:
           cp desktopApp/build/appimage/*.AppImage dist/
           cp desktopApp/build/compose/binaries/main/deb/*.deb dist/
           cp desktopApp/build/compose/binaries/main/rpm/*.rpm dist/
+          cp desktopApp/build/flatpak/*.flatpak dist/
           gh release upload "$TAG" dist/*
 
   windows:

@@ -76,6 +76,9 @@ run = "./gradlew :desktopApp:packageRpm"
 description = "Build a Linux AppImage (downloads appimagetool on first run)"
 run = "./gradlew :desktopApp:packageAppImage"
 
+# `mise package-flatpak` builds a .flatpak bundle with flatpak-builder (file task in
+# .mise/tasks/package-flatpak).
+
 [tasks.package-jar]
 description = "Build a self-contained runnable uber JAR"
 run = "./gradlew :desktopApp:packageUberJarForCurrentOS"

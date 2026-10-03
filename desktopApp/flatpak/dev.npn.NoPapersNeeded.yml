@@ -1,0 +1,108 @@
+# Flatpak manifest, built by `mise package-flatpak` (.mise/tasks/package-flatpak).
+#
+# The app module repackages the jpackage app image (`:desktopApp:createDistributable`), with its
+# bundled runtime, the same way the AppImage, .deb and .rpm do; Gradle is not run inside
+# flatpak-builder. Tesseract is built from source because the sandbox cannot reach a host
+# install, and desktop OCR shells out to the `tesseract` CLI (TesseractCliEngine).
+app-id: dev.npn.NoPapersNeeded
+runtime: org.freedesktop.Platform
+runtime-version: "25.08"
+sdk: org.freedesktop.Sdk
+command: no-papers-needed
+
+finish-args:
+  # AWT on JDK 17 only speaks X11 (XWayland on a Wayland session).
+  - --socket=x11
+  - --share=ipc
+  - --device=dri
+  # AI endpoints.
+  - --share=network
+  # The library is a user-chosen folder that the app reads and writes directly, by path, across
+  # restarts. Folders outside these are still reachable through the portal picker, but only as
+  # a document-portal path.
+  - --filesystem=home
+  - --filesystem=/media
+  - --filesystem=/run/media
+  - --filesystem=/mnt
+  # Tesseract's CMake build compiles in no data dir and would look in the working directory.
+  - --env=TESSDATA_PREFIX=/app/share/tessdata
+
+cleanup:
+  - /include
+  - /lib/pkgconfig
+  - /lib/cmake
+  - /share/man
+  - "*.a"
+  - "*.la"
+
+modules:
+  - name: leptonica
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_SHARED_LIBS=ON
+      - -DSW_BUILD=OFF
+      - -DBUILD_PROG=OFF
+    sources:
+      - type: archive
+        url: https://github.com/DanBloomberg/leptonica/releases/download/1.87.0/leptonica-1.87.0.tar.gz
+        sha256: c73363397f96eb1295602bf44d708a994ad42046c791bf03ea0505d829bdb6a7
+
+  - name: tesseract
+    buildsystem: cmake-ninja
+    builddir: true
+    config-opts:
+      - -DCMAKE_BUILD_TYPE=Release
+      - -DBUILD_SHARED_LIBS=ON
+      - -DBUILD_TRAINING_TOOLS=OFF
+      - -DBUILD_TESTS=OFF
+      - -DDISABLE_CURL=ON
+      - -DDISABLE_ARCHIVE=ON
+      - -DGRAPHICS_DISABLED=ON
+      # Portable SIMD: the build must run on any x86_64, not just the CI runner's CPU.
+      - -DENABLE_NATIVE=OFF
+      - -DOPENMP_BUILD=OFF
+    sources:
+      - type: archive
+        url: https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.3.tar.gz
+        sha256: 9218e62793116d42a9f6d14cd9348518b27f382096eea3d0f2d1a24616bb5884
+
+  # Fast models for the languages the OCR language setting is most likely set to; found through
+  # TESSDATA_PREFIX in finish-args.
+  - name: tessdata
+    buildsystem: simple
+    build-commands:
+      - install -Dm644 -t /app/share/tessdata *.traineddata
+    sources:
+      - type: file
+        url: https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/eng.traineddata
+        sha256: 7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2
+      - type: file
+        url: https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/nld.traineddata
+        sha256: ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6
+      - type: file
+        url: https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/fra.traineddata
+        sha256: ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca
+      - type: file
+        url: https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/deu.traineddata
+        sha256: 19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d
+
+  - name: no-papers-needed
+    buildsystem: simple
+    build-commands:
+      - cp -a app /app/lib/no-papers-needed
+      - ln -s /app/lib/no-papers-needed/bin/no-papers-needed /app/bin/no-papers-needed
+      - install -Dm644 dev.npn.NoPapersNeeded.desktop -t /app/share/applications
+      - install -Dm644 dev.npn.NoPapersNeeded.metainfo.xml -t /app/share/metainfo
+      - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/dev.npn.NoPapersNeeded.png
+    sources:
+      - type: dir
+        path: ../build/compose/binaries/main/app/no-papers-needed
+        dest: app
+      - type: file
+        path: dev.npn.NoPapersNeeded.desktop
+      - type: file
+        path: dev.npn.NoPapersNeeded.metainfo.xml
+      - type: file
+        path: ../src/main/resources/icon.png

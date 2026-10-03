@@ -10,7 +10,8 @@ README covers the design, user-facing build/packaging details, and the library f
 - `composeApp` — shared Compose UI + viewmodels (`dev.npn.app.ui.*`, `di`).
 - `androidApp` — Android entrypoint (`dev.npn`, launcher `dev.npn/.MainActivity`). The debug
   build is a separate package, `dev.npn.debug`, so it installs next to the release build.
-- `desktopApp` — desktop entrypoint + packaging (deb/AppImage/uber-jar).
+- `desktopApp` — desktop entrypoint + packaging (deb/rpm/AppImage/uber-jar; Flatpak manifest
+  in `desktopApp/flatpak/`, built by `mise package-flatpak`).
 - KMP JVM target is named `desktop` (not `jvm`); source sets are
   `desktopMain`/`desktopTest`, tasks are `:core:desktopTest`, `:composeApp:compileKotlinDesktop`, etc.
 - `core` and `composeApp` also run tests against the Android target on a host JVM

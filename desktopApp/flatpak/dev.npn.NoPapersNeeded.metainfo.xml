@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<component type="desktop-application">
+  <id>dev.npn.NoPapersNeeded</id>
+  <name>No papers needed</name>
+  <summary>Personal paperless document library</summary>
+  <metadata_license>CC0-1.0</metadata_license>
+  <project_license>Apache-2.0</project_license>
+  <description>
+    <p>
+      Keeps your scanned and downloaded PDFs in a plain folder you own, with tags, fields,
+      full-text search and OCR. The folder is the source of truth and syncs with any file sync
+      tool.
+    </p>
+  </description>
+  <launchable type="desktop-id">dev.npn.NoPapersNeeded.desktop</launchable>
+  <categories>
+    <category>Office</category>
+  </categories>
+  <content_rating type="oars-1.1"/>
+</component>

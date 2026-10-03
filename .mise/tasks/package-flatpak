@@ -1,0 +1,55 @@
+#!/usr/bin/env bash
+#MISE description="Build a Linux .flatpak bundle (needs flatpak-builder; builds Tesseract on the first run)"
+set -euo pipefail
+
+# Repackages the jpackage app image with flatpak-builder (desktopApp/flatpak/), then exports a
+# single-file bundle. Missing runtimes are installed from the Flathub remote: per user if one is
+# configured there, otherwise system-wide. The builder state dir (under build/) keeps the
+# Tesseract build, so only the first run compiles it.
+
+cd "$(git rev-parse --show-toplevel)"
+
+app_id=dev.npn.NoPapersNeeded
+manifest="desktopApp/flatpak/$app_id.yml"
+out=desktopApp/build/flatpak
+version=$(sed -n 's/^npn\.version=//p' gradle.properties)
+bundle="$out/no-papers-needed-$version-x86_64.flatpak"
+
+if command -v flatpak-builder >/dev/null; then
+    builder=(flatpak-builder)
+elif flatpak info org.flatpak.Builder >/dev/null 2>&1; then
+    builder=(flatpak run --command=flatpak-builder org.flatpak.Builder)
+else
+    echo "error: needs flatpak-builder (distro package, or 'flatpak install flathub org.flatpak.Builder')" >&2
+    exit 1
+fi
+
+# Runtimes installed in either installation will do; flatpak-builder's own --install-deps-from
+# would insist on one of them.
+runtime_version=$(sed -n 's/^runtime-version: "\(.*\)"$/\1/p' "$manifest")
+if flatpak remotes --user --columns=name | grep -qx flathub; then
+    installation=--user
+else
+    installation=--system
+fi
+for runtime in org.freedesktop.Platform org.freedesktop.Sdk; do
+    flatpak info "$runtime//$runtime_version" >/dev/null 2>&1 ||
+        flatpak install --noninteractive "$installation" flathub "$runtime//$runtime_version"
+done
+
+./gradlew :desktopApp:createDistributable
+
+"${builder[@]}" \
+    --force-clean \
+    --disable-rofiles-fuse \
+    --state-dir="$out/state" \
+    --repo="$out/repo" \
+    "$out/build-dir" \
+    "$manifest"
+
+# --runtime-repo lets `flatpak install` fetch the runtime from Flathub when the user lacks it.
+flatpak build-bundle \
+    --runtime-repo=https://dl.flathub.org/repo/flathub.flatpakrepo \
+    "$out/repo" "$bundle" "$app_id"
+
+echo "Flatpak bundle written: $bundle"

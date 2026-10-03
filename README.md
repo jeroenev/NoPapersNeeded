@@ -88,6 +88,7 @@ below if you prefer to run them directly.
 | `mise package-deb` | `./gradlew :desktopApp:packageDeb` |
 | `mise package-rpm` | `./gradlew :desktopApp:packageRpm` (needs `rpmbuild`) |
 | `mise package-appimage` | `./gradlew :desktopApp:packageAppImage` |
+| `mise package-flatpak` | Single-file `.flatpak` bundle (needs `flatpak-builder`) |
 | `mise package-jar` | `./gradlew :desktopApp:packageUberJarForCurrentOS` |
 | `mise release <version>` | Bumps the version, tags `v<version>` and pushes; CI publishes the release |
 | `mise icons` | Re-renders the desktop icon bitmaps from `design/branding/icon.svg` |
@@ -192,6 +193,29 @@ network access. It builds with `--appimage-extract-and-run` and therefore does n
 need FUSE on the build host; running the resulting AppImage still needs FUSE, or the
 end user can run it with `--appimage-extract-and-run`. The AppImage is x86_64 only.
 
+Desktop, build a Flatpak bundle:
+
+```
+mise package-flatpak
+# output: desktopApp/build/flatpak/no-papers-needed-<version>-x86_64.flatpak
+```
+
+The manifest, `desktopApp/flatpak/dev.npn.NoPapersNeeded.yml`, repackages the same
+jpackage app image on the `org.freedesktop.Platform` runtime; Gradle does not run inside
+flatpak-builder. The sandbox cannot run a host `tesseract`, so the manifest builds
+Tesseract from source with fast models for English, Dutch, French and German. Only the
+first run compiles it; the builder state in `desktopApp/build/flatpak/` keeps it. The
+task needs `flatpak-builder`, either the distro package or
+`flatpak install flathub org.flatpak.Builder`, and installs the runtime and SDK from
+Flathub if they are missing.
+
+Install the bundle with `flatpak install --user no-papers-needed-<version>-x86_64.flatpak`;
+it fetches the runtime from Flathub if needed. The sandbox can read and write your home
+folder, `/media`, `/run/media` and `/mnt`, which is where a library can live. Settings and
+the index go to `~/.var/app/dev.npn.NoPapersNeeded/`, so a Flatpak install does not share
+them with a `.deb` or AppImage install on the same machine. There is no update channel: a
+new version is installed the same way.
+
 ### Releases
 
 The version lives in one place: `npn.version` in `gradle.properties`. The Android
@@ -207,7 +231,7 @@ mise release 1.2.0
 
 That bumps `npn.version`, commits `[main] Release 1.2.0`, tags `v1.2.0` and pushes both.
 The tag starts `.github/workflows/release.yml`, which refuses a tag that does not match
-`npn.version`, builds the signed APK, AppImage, `.deb`, `.rpm`, `.msi` and `.exe` into a
+`npn.version`, builds the signed APK, AppImage, `.deb`, `.rpm`, `.flatpak`, `.msi` and `.exe` into a
 draft release, adds `SHA256SUMS` and publishes it. If a build job fails the draft stays
 unpublished: fix the problem, delete the draft and the tag, and release the next patch
 version.
