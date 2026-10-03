@@ -183,8 +183,9 @@ object NpnPaths {
     /**
      * `.npn/ocr/<sha256>.<writerKey>.json`. The writer key is `<deviceId>` for legacy sidecars
      * (one per device) and `<deviceId>.<engine>` for engine-qualified sidecars (one per
-     * device+engine, letting multiple OCR versions co-exist). Readers treat the whole middle
-     * as an opaque key; see [OcrSidecarFiles.listForHash].
+     * device+engine, letting multiple OCR versions co-exist). A deliberate re-run of an engine this
+     * device already published for gets [ocrRerunWriterKey], since sidecars are write-once. Readers
+     * treat the whole middle as an opaque key; see [OcrSidecarFiles.listForHash].
      */
     fun ocrSidecarPath(
         sha256: String,
@@ -196,6 +197,17 @@ object NpnPaths {
         deviceId: String,
         engine: String,
     ): String = "$deviceId.$engine"
+
+    /**
+     * Writer key for a re-run of [engine] on a device that already published one:
+     * `<deviceId>.r<runMillis>.<engine>`. The run stamp orders runs of one engine, newest first,
+     * and builds that predate it read the key as one more device's version of that engine.
+     */
+    fun ocrRerunWriterKey(
+        deviceId: String,
+        runMillis: Long,
+        engine: String,
+    ): String = "$deviceId.r$runMillis.$engine"
 
     /**
      * `.npn/trash/<baseName>__<first 8 hash chars>.<ext>`

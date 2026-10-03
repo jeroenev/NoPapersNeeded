@@ -56,10 +56,15 @@ import dev.npn.core.rules.RuleApplier
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.PdfXmpIO
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -185,24 +190,46 @@ class LibrarySessionImpl private constructor(
     private var jobs: MutableList<Job> = ArrayList()
     private var started = false
 
-    override suspend fun rescan(): ScanReport {
-        val report = coordinator.rescan()
-        _lastScanReport.value = report
-        // Adopt/re-select OCR sidecars picked up by the rescan, then queue/kick + purge trash.
-        ocrPipeline.reconcileSidecars()
-        queuePendingOcr()
-        return report
+    // Caller-driven work that writes outside the coordinator (rescans, imports) runs on this job
+    // rather than the caller's coroutine, so close() cancels and awaits it before the environment
+    // closes the database. Callers start these from scopes that outlive the session: the activity
+    // rescans on the app scope whenever it resumes, including on the way back from the folder
+    // picker that is about to swap the library.
+    private val operations = SupervisorJob(deps.scope.coroutineContext[Job])
+    private val operationScope = CoroutineScope(deps.scope.coroutineContext + operations)
+
+    private suspend fun <T> owned(block: suspend () -> T): T {
+        val work = operationScope.async { block() }
+        return try {
+            work.await()
+        } catch (e: CancellationException) {
+            work.cancel()
+            // The caller was cancelled: let its own cancellation propagate. Otherwise the session
+            // closed under the call, which is a failure the caller should see, not a cancellation.
+            currentCoroutineContext().ensureActive()
+            throw IllegalStateException("Library session is closed", e)
+        }
     }
+
+    override suspend fun rescan(): ScanReport =
+        owned {
+            val report = coordinator.rescan()
+            _lastScanReport.value = report
+            // Adopt/re-select OCR sidecars picked up by the rescan, then queue/kick + purge trash.
+            ocrPipeline.reconcileSidecars()
+            queuePendingOcr()
+            report
+        }
 
     override suspend fun importPdf(
         source: ExternalSource,
         suggestedName: String,
-    ): ImportOutcome = map(importService.importPdf(source, suggestedName)).also { afterImport(it) }
+    ): ImportOutcome = owned { map(importService.importPdf(source, suggestedName)).also { afterImport(it) } }
 
     override suspend fun importPdfBytes(
         bytes: ByteArray,
         suggestedName: String,
-    ): ImportOutcome = map(importService.importBytes(bytes, suggestedName)).also { afterImport(it) }
+    ): ImportOutcome = owned { map(importService.importBytes(bytes, suggestedName)).also { afterImport(it) } }
 
     override suspend fun importImagesAsPdf(
         images: List<ByteArray>,
@@ -219,14 +246,12 @@ class LibrarySessionImpl private constructor(
         docId: String,
         extraRelPath: String,
         keepCanonical: Boolean,
-    ) {
-        maintenanceService.resolveDuplicate(docId, extraRelPath, keepCanonical)
-    }
+    ) = owned { maintenanceService.resolveDuplicate(docId, extraRelPath, keepCanonical) }
 
     override suspend fun applyRelink(
         oldDocId: String,
         newDocId: String,
-    ) {
+    ) = owned {
         // commitAndRescan already refreshes the coordinator's folded state under the lock.
         _lastScanReport.value = relinkService.applyRelink(oldDocId, newDocId)
     }
@@ -239,7 +264,7 @@ class LibrarySessionImpl private constructor(
 
     override suspend fun reOcr(docId: String) {
         if (db.documentDao().getByDocId(docId) == null) return
-        enqueuePendingOcr(docId)
+        enqueuePendingOcr(docId, rerun = true)
         ocrWorker.kick()
     }
 
@@ -273,14 +298,15 @@ class LibrarySessionImpl private constructor(
     }
 
     override suspend fun ocrVersions(docId: String): List<OcrVersion> {
-        val active = db.documentDao().getByDocId(docId)?.ocrEngine
+        val doc = db.documentDao().getByDocId(docId)
         return ocrPipeline.listVersions(docId).map {
             OcrVersion(
                 engine = it.engine,
                 deviceId = it.deviceId,
                 lang = it.lang,
                 createdAt = it.createdAt,
-                active = it.engine == active,
+                // Rows indexed before the writer key was recorded only know the engine.
+                active = doc?.ocrSource?.let { source -> it.writerKey == source } ?: (it.engine == doc?.ocrEngine),
             )
         }
     }
@@ -321,6 +347,11 @@ class LibrarySessionImpl private constructor(
     override suspend fun discardEditRun(jobId: String) = editQueue.discardEditRun(jobId)
 
     override suspend fun splitPdf(
+        docId: String,
+        segments: List<IntRange>,
+    ): SplitOutcome = owned { split(docId, segments) }
+
+    private suspend fun split(
         docId: String,
         segments: List<IntRange>,
     ): SplitOutcome {
@@ -538,6 +569,8 @@ class LibrarySessionImpl private constructor(
         ocrWorker.close()
         enrichWorker.close()
         editWorker.close()
+        operations.cancelAndJoin()
+        coordinator.close()
         started = false
         // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
     }
@@ -575,12 +608,16 @@ class LibrarySessionImpl private constructor(
      * write is a partial UPDATE so this state flip cannot clobber metadata columns a concurrent
      * journal fold just projected onto the same row.
      */
-    private suspend fun enqueuePendingOcr(docId: String) {
+    private suspend fun enqueuePendingOcr(
+        docId: String,
+        rerun: Boolean = false,
+    ) {
         db.ocrQueueDao().upsert(
             OcrQueueEntity(
                 docId = docId,
                 state = OcrPipeline.STATE_PENDING,
                 updatedAt = deps.clock.nowMillis(),
+                rerun = rerun,
             ),
         )
         db.documentDao().updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)

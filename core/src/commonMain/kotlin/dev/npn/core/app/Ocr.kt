@@ -6,7 +6,12 @@ import kotlinx.coroutines.flow.Flow
 interface OcrFacade {
     val ocrStatus: Flow<OcrStatus>
 
-    /** Re-queue a single document for OCR (resets its state to pending and kicks the worker). */
+    /**
+     * Re-queue a single document for OCR (resets its state to pending and kicks the worker). This
+     * device's engine runs again whenever it ranks at least as high as the indexed version; a run
+     * that reads different text is published as a new version and, being the newest of its engine,
+     * becomes the indexed one. A run that reads the same text publishes nothing.
+     */
     suspend fun reOcr(docId: String)
 
     /**

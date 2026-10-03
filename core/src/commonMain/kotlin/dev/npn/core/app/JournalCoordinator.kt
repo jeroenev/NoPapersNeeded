@@ -107,6 +107,26 @@ class JournalCoordinator internal constructor(
     private val mutex = Mutex()
     private var objectWriter = objectWriter
     private var writeBlockReason: String? = null
+    private var closed = false
+
+    /**
+     * Run [block] under the single-writer [mutex], refusing once [close] has run. Every fold and
+     * journal write goes through here, so [close] doubles as the barrier the session needs before
+     * its database is closed.
+     */
+    private suspend inline fun <T> locked(block: () -> T): T =
+        mutex.withLock {
+            check(!closed) { "Library session is closed" }
+            block()
+        }
+
+    /**
+     * Wait for the write or fold in progress, if any, then refuse every later one. A caller that
+     * started one outside the session's own jobs (a rescan when the app returns to the foreground)
+     * would otherwise still be writing to the database when the session closes it; the native SQLite
+     * driver crashes rather than throwing.
+     */
+    suspend fun close() = mutex.withLock { closed = true }
 
     /**
      * The folded journal state, or null when this session has not needed it yet.
@@ -153,7 +173,7 @@ class JournalCoordinator internal constructor(
      * projection) costs a refold and a whole-DB reprojection here.
      */
     suspend fun refreshState(preserveLifecycleDocs: Set<String> = emptySet()) =
-        mutex.withLock {
+        locked {
             try {
                 when (val outcome = accumulator.reconcileOnOpen()) {
                     is OpenReconciliation.ProjectionCurrent -> {
@@ -178,7 +198,7 @@ class JournalCoordinator internal constructor(
         }
 
     suspend fun ingestObject(relPath: String) =
-        mutex.withLock {
+        locked {
             withDurableProjectionRecovery {
                 // Fold before opening the transaction: loadState reads the events as they stand
                 // BEFORE this object is ingested, which is exactly the base its events apply onto.
@@ -202,7 +222,7 @@ class JournalCoordinator internal constructor(
 
     /** Strictly reconcile metadata before touching the document projection. */
     suspend fun rescan(): ScanReport =
-        mutex.withLock {
+        locked {
             try {
                 val current = foldedState()
                 val reconciled = accumulator.reconcile(current).state ?: current
@@ -220,7 +240,7 @@ class JournalCoordinator internal constructor(
         }
 
     suspend fun reconcileMetadata() =
-        mutex.withLock {
+        locked {
             try {
                 val reconciliation = accumulator.reconcile(folded)
                 val current = reconciliation.state
@@ -229,7 +249,7 @@ class JournalCoordinator internal constructor(
                     // nothing to project, and replaying the journal just to prove that is what made
                     // the periodic tick as expensive as a boot.
                     writeBlockReason = null
-                    return@withLock
+                    return@locked
                 }
                 folded = current
                 observeSourceHlc(current.maxHlc)
@@ -262,9 +282,9 @@ class JournalCoordinator internal constructor(
      * Returns the snapshot's content hash if one was published, else null.
      */
     suspend fun compact(nowMillis: Long = systemNowMillis()): String? =
-        mutex.withLock {
-            val activeCompactor = compactor ?: return@withLock null
-            if (!activeCompactor.supported || writeBlockReason != null) return@withLock null
+        locked {
+            val activeCompactor = compactor ?: return@locked null
+            if (!activeCompactor.supported || writeBlockReason != null) return@locked null
             val support = accumulator.snapshotSupport
             val (objects, snapshots) = support.compactionCandidates()
             val plan =
@@ -274,7 +294,7 @@ class JournalCoordinator internal constructor(
                     threshold = compactionThreshold,
                     nowMillis = nowMillis,
                     stabilityWindowMs = compactionStabilityWindowMs,
-                ) ?: return@withLock null
+                ) ?: return@locked null
             withContext(NonCancellable) {
                 val published = activeCompactor.publish(plan) ?: return@withContext null
                 withDurableProjectionRecovery {
@@ -296,11 +316,11 @@ class JournalCoordinator internal constructor(
      * Returns true if anything was committed (non-empty op list), false for a no-op.
      */
     suspend fun commitBuilt(block: (FoldedState) -> List<PendingOp>): Boolean =
-        mutex.withLock {
+        locked {
             ensureWritable()
             val current = foldedState()
             val ops = block(current)
-            if (ops.isEmpty()) return@withLock false
+            if (ops.isEmpty()) return@locked false
             // Once the write-once segment exists, cancellation must not leave the disposable DB
             // projection stale until the next rescan or edit.
             withContext(NonCancellable) {
@@ -366,11 +386,11 @@ class JournalCoordinator internal constructor(
         lifecycleDocs: Set<String>,
         optimisticWrite: suspend () -> Unit,
     ): Boolean =
-        mutex.withLock {
+        locked {
             ensureWritable()
             val current = foldedState()
             optimisticWrite()
-            if (ops.isEmpty()) return@withLock false
+            if (ops.isEmpty()) return@locked false
             withContext(NonCancellable) {
                 val (published, written) = writeTransaction(ops)
                 projectWrittenTransaction(current, published, written, preserveLifecycleDocs = lifecycleDocs)
@@ -390,7 +410,7 @@ class JournalCoordinator internal constructor(
      * rescan.
      */
     suspend fun commitAndRescan(ops: List<PendingOp>): ScanReport =
-        mutex.withLock {
+        locked {
             ensureWritable()
             val current = foldedState()
             withContext(NonCancellable) {

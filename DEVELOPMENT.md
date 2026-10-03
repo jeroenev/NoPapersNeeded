@@ -23,6 +23,11 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
   the library folder, and is never synced. Delete it and it rebuilds from the folder.
 - OCR travels as sidecars. Extracted text is written to `.npn/ocr/` keyed by file
   hash and device id, so a device adopts another device's OCR instead of redoing it.
+  The best-ranked engine is indexed (ai > mlkit > tesseract > embedded text layer);
+  a device runs its own engine only when it would rank higher, or when the user asks
+  for a re-OCR and its engine ranks at least as high. A re-run of an engine the device
+  already published gets a run-stamped name (`<deviceId>.r<millis>.<engine>`), and
+  the newest run of an engine wins.
 - Identity is the SHA-256 of the file bytes. Renames and moves never detach
   metadata, and imports dedup by hash.
 - XMP is baked on export. Exported/shared copies get `dc:subject` keywords and an

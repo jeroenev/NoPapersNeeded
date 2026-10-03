@@ -31,7 +31,8 @@ import androidx.room3.migration.AutoMigrationSpec
     // v15: document_fields becomes the authoritative projection of every user value (numValue +
     //      composite indices); FTS indexes one `fields` column instead of per-property columns.
     // v16: auto_match_rules sets any field (JSON `sets` column) instead of correspondent/docType.
-    version = 16,
+    // v17: adds documents.ocrSource (the indexed sidecar's writer key) + ocr_queue.rerun.
+    version = 17,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -47,6 +48,7 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 13, to = 14),
         AutoMigration(from = 14, to = 15, spec = NpnDatabase.FtsFieldsColumn::class),
         AutoMigration(from = 15, to = 16, spec = NpnDatabase.RuleSetsColumn::class),
+        AutoMigration(from = 16, to = 17),
     ],
     entities = [
         DocumentEntity::class,

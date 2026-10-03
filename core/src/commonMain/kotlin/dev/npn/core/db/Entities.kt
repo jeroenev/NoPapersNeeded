@@ -1,5 +1,6 @@
 package dev.npn.core.db
 
+import androidx.room3.ColumnInfo
 import androidx.room3.Entity
 import androidx.room3.Fts5
 import androidx.room3.Index
@@ -83,6 +84,11 @@ data class DocumentEntity(
      * again on this device under a better engine.
      */
     val aiEnrichedAt: Long? = null,
+    /**
+     * Writer key of the OCR sidecar currently indexed for search. [ocrEngine] alone cannot tell two
+     * versions from the same engine apart, and a re-run adds exactly that.
+     */
+    val ocrSource: String? = null,
 )
 
 @Entity(tableName = "tags")
@@ -231,6 +237,11 @@ data class OcrQueueEntity(
     val attempts: Int = 0,
     val updatedAt: Long,
     val lastError: String? = null,
+    /**
+     * The user asked for this document to be OCR'd again: run this device's engine when it ranks
+     * at least as high as the indexed version, not only when it would rank higher.
+     */
+    @ColumnInfo(defaultValue = "0") val rerun: Boolean = false,
 )
 
 /**

@@ -2,11 +2,14 @@ package dev.npn.core.app
 
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.xmp.XmpParser
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
@@ -81,6 +84,32 @@ class SessionSmokeTest {
                 val img = PdfFixtures.jpegBytes()
                 val outcome = rig.session.importImagesAsPdf(listOf(img), "scan.pdf")
                 outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * The Android activity rescans on the app scope whenever it resumes, which includes coming back
+     * from the folder picker that is about to swap the library. The environment closes the database
+     * right after [LibrarySessionImpl.close], so close must not return while that rescan still runs.
+     */
+    @Test
+    fun closeWaitsForARescanStartedOutsideTheSession() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("one.pdf", PdfFixtures.embeddedTextPdf("first document"))
+                val outside = async { runCatching { rig.session.rescan() } }
+                runCurrent()
+
+                rig.session.close()
+
+                val result = outside.await()
+                if (result.isFailure) {
+                    result.exceptionOrNull().shouldBeInstanceOf<IllegalStateException>()
+                }
+                shouldThrow<IllegalStateException> { rig.session.rescan() }
             } finally {
                 rig.close()
             }

@@ -50,13 +50,14 @@ interface DocumentDao {
     /**
      * Targeted update of the OCR bookkeeping columns. A partial UPDATE (not a row upsert) so a
      * background OCR write can never clobber metadata columns a concurrent journal fold just
-     * projected onto the same row. [pageCount] only fills a NULL page count; a null [engine]
-     * keeps the stored engine.
+     * projected onto the same row. [pageCount] only fills a NULL page count; a null [engine] or
+     * [source] keeps the stored value.
      */
     @Query(
         "UPDATE documents SET ocrState = :state, " +
             "pageCount = COALESCE(pageCount, :pageCount), " +
-            "ocrEngine = COALESCE(:engine, ocrEngine) " +
+            "ocrEngine = COALESCE(:engine, ocrEngine), " +
+            "ocrSource = COALESCE(:source, ocrSource) " +
             "WHERE docId = :docId",
     )
     suspend fun updateOcrState(
@@ -64,6 +65,7 @@ interface DocumentDao {
         state: String,
         pageCount: Int?,
         engine: String?,
+        source: String? = null,
     )
 
     /**
