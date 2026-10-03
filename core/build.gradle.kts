@@ -146,3 +146,11 @@ dependencies {
     add("kspAndroid", libs.room3.compiler)
     add("kspDesktop", libs.room3.compiler)
 }
+
+// On a fresh Windows machine PDFBox's first font lookup scans every system font to build its
+// cache, which can outlast runTest's one-minute default in whichever test gets there first.
+if (System.getProperty("os.name").startsWith("Windows")) {
+    tasks.withType<Test>().configureEach {
+        systemProperty("kotlinx.coroutines.test.default_timeout", "5m")
+    }
+}
