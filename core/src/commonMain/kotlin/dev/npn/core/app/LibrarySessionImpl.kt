@@ -783,23 +783,12 @@ class LibrarySessionImpl private constructor(
                     coordinator = coordinator,
                     onMetadataApplied = pathRuleApplicator::applyFor,
                 )
-            // The settings JSON is the source of truth; this table is its disposable mirror. Only
-            // reconcile it when it actually differs — an unconditional clear + per-rule upsert on
-            // every open is a write burst on the awaited open path that invalidates the rules Room
-            // flow for no change.
-            val storedRules =
-                runCatching { AutoMatchRuleJson.decodeList(deps.autoMatchRulesJson()) }
-                    .getOrDefault(emptyList())
-                    .map { it.toEntity() }
-                    .sortedWith(compareBy({ it.position }, { it.id }))
-            if (db.autoMatchRuleDao().getAll() != storedRules) {
-                db.autoMatchRuleDao().replaceAll(storedRules)
-            }
+            val rulesReadable = mirrorAutoMatchRules(deps)
             val rules =
                 AutoMatchRuleRepositoryImpl(
                     dao = db.autoMatchRuleDao(),
                     applier = ruleApplier,
-                    persist = deps.persistAutoMatchRulesJson,
+                    persist = if (rulesReadable) deps.persistAutoMatchRulesJson else { _ -> },
                 )
             val meta =
                 MetadataWriterImpl(
@@ -867,6 +856,36 @@ class LibrarySessionImpl private constructor(
                 content = content,
                 aiFacade = ai,
             )
+        }
+
+        /**
+         * Bring the rules table in step with the settings JSON it mirrors, and report whether that
+         * JSON could be read at all.
+         *
+         * The JSON is the source of truth; the table is its disposable mirror, reconciled only when
+         * it actually differs — an unconditional clear + per-rule upsert on every open is a write
+         * burst on the awaited open path that invalidates the rules Room flow for no change.
+         *
+         * JSON that does not decode (written by a newer build, or damaged) is not "no rules". The
+         * table keeps the last rules that did decode, and the caller must not persist the table
+         * over the JSON either: the next save would write back only what this build understood.
+         */
+        private suspend fun mirrorAutoMatchRules(deps: SessionDeps): Boolean {
+            val json = deps.autoMatchRulesJson()
+            val decoded =
+                try {
+                    AutoMatchRuleJson.decodeList(json)
+                } catch (e: IllegalArgumentException) {
+                    println("Auto-match rules did not decode; keeping the last ones that did: ${e.message}")
+                    return false
+                }
+            val storedRules =
+                decoded
+                    .map { it.toEntity() }
+                    .sortedWith(compareBy({ it.position }, { it.id }))
+            val dao = deps.db.autoMatchRuleDao()
+            if (dao.getAll() != storedRules) dao.replaceAll(storedRules)
+            return true
         }
 
         /**

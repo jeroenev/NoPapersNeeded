@@ -11,8 +11,11 @@ import dev.npn.core.rules.RuleField
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import java.io.File
+import java.nio.file.Files
 import kotlin.test.Test
 
 class AutoMatchRuleIntegrationTest {
@@ -205,5 +208,76 @@ class AutoMatchRuleIntegrationTest {
             )
         // The current shape round-trips through the same codec.
         AutoMatchRuleJson.decodeList(AutoMatchRuleJson.encodeList(rules)) shouldBe rules
+    }
+
+    @Test
+    fun rulesThatFailToDecodeKeepTheTableAndAreNeverWrittenOver() =
+        runTest {
+            val libRoot = Files.createTempDirectory("npn-rules-lib")
+            val dataDir = Files.createTempDirectory("npn-rules-data").toFile()
+            val settings = RulesSettings(AutoMatchRuleJson.encodeList(listOf(rule("r1", "Invoice rule"))))
+            try {
+                settings.open(backgroundScope, libRoot, dataDir).use { session ->
+                    session.rules.observeRules().first().map { it.name } shouldBe listOf("Invoice rule")
+                }
+
+                // A blob this build cannot read: from a newer version, say, or a damaged file.
+                settings.json = "{not json"
+                settings.open(backgroundScope, libRoot, dataDir).use { session ->
+                    session.rules.observeRules().first().map { it.name } shouldBe listOf("Invoice rule")
+                    session.rules.save(rule("", "Added later"))
+                    session.rules.observeRules().first().map { it.name } shouldContain "Added later"
+                }
+
+                settings.json shouldBe "{not json"
+            } finally {
+                libRoot.toFile().deleteRecursively()
+                dataDir.deleteRecursively()
+            }
+        }
+
+    private fun rule(
+        id: String,
+        name: String,
+    ) = AutoMatchRule(id = id, name = name, algorithm = MatchAlgorithm.ANY_WORD, pattern = "invoice", tags = listOf("t"))
+
+    /** The device settings that hold the rules blob, reopened against one library and index. */
+    private class RulesSettings(
+        var json: String,
+    ) {
+        suspend fun open(
+            scope: CoroutineScope,
+            libRoot: java.nio.file.Path,
+            dataDir: File,
+        ): OpenSession {
+            val deps =
+                jvmSessionDeps(
+                    libraryRoot = libRoot,
+                    dirs = AppDirs(dbDir = dataDir.path, thumbsDir = "$dataDir/thumbs", tmpDir = "$dataDir/tmp"),
+                    scope = scope,
+                    ocrLanguage = { "eng" },
+                    trashRetentionDays = { 30 },
+                    autoMatchRulesJson = { json },
+                    persistAutoMatchRulesJson = { json = it },
+                    installationId = "test-installation",
+                    ocrEngine = NoopOcrEngine(),
+                    thumbnailStore = FakeThumbStore(File(dataDir, "thumbs")),
+                )
+            return OpenSession(LibrarySessionImpl.openSession(deps), deps)
+        }
+    }
+
+    private class OpenSession(
+        val session: LibrarySessionImpl,
+        private val deps: SessionDeps,
+    ) {
+        suspend fun use(block: suspend (LibrarySessionImpl) -> Unit) {
+            try {
+                block(session)
+            } finally {
+                session.close()
+                deps.closeDb()
+            }
+        }
     }
 }
