@@ -36,8 +36,21 @@ jobs:
         with:
           cache-provider: basic
 
-      - name: Tests (desktop)
-        run: ./gradlew.bat :core:desktopTest :composeApp:desktopTest
+      # Only the packages whose behaviour depends on the OS: the real filesystem (paths,
+      # no-replace publication, trash, moves), the bundled SQLite, the file watcher, Tesseract
+      # and PDFBox file I/O. Domain logic, AI and viewmodel tests behave identically on every
+      # JVM and already run in ci.yml.
+      - name: Tests (platform-specific)
+        shell: bash
+        run: >-
+          ./gradlew.bat :core:desktopTest
+          --tests 'dev.npn.core.fs.*'
+          --tests 'dev.npn.core.db.*'
+          --tests 'dev.npn.core.index.*'
+          --tests 'dev.npn.core.watch.*'
+          --tests 'dev.npn.core.ocr.*'
+          --tests 'dev.npn.core.pdf.*'
+          --tests 'dev.npn.core.xmp.*'
 
       - name: Package Windows installers (MSI + Exe)
         run: ./gradlew.bat :desktopApp:packageDistributionForCurrentOS
