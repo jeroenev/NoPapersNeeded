@@ -4,6 +4,7 @@ import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
 import java.net.URI
+import java.security.MessageDigest
 import javax.inject.Inject
 
 plugins {
@@ -75,6 +76,11 @@ val npnWmClass = npnMainClass.replace('.', '-')
 val npnIconPng = layout.projectDirectory.file("src/main/resources/icon.png")
 val npnIconIco = layout.projectDirectory.file("src/main/resources/icon.ico")
 
+// Per-OS files jpackage puts in the app image; only a Windows build has any (the bundled
+// Tesseract, see prepareWindowsTesseract below).
+val isWindowsHost = System.getProperty("os.name").startsWith("Windows")
+val windowsAppResources = layout.buildDirectory.dir("tesseract-windows/app-resources")
+
 compose.desktop {
     application {
         mainClass = npnMainClass
@@ -110,6 +116,7 @@ compose.desktop {
             packageVersion = npnAppVersion
             description = npnDescription
             licenseFile.set(rootProject.file("LICENSE"))
+            if (isWindowsHost) appResourcesRootDir.set(windowsAppResources)
             linux {
                 shortcut = true
                 iconFile.set(npnIconPng)
@@ -480,6 +487,197 @@ val packageAppImage =
         appDir.set(layout.buildDirectory.dir("appimage/AppDir"))
         outFile.set(layout.buildDirectory.file("appimage/$npnAppName-$npnAppVersion-$appImageArch.AppImage"))
     }
+
+// --- Bundled Tesseract (Windows) -------------------------------------------
+// Desktop OCR shells out to the `tesseract` CLI (TesseractCliEngine). Linux users install it with
+// their package manager and the Flatpak builds it in, but almost no Windows machine has one, so a
+// Windows build ships its own: tesseract.exe and the DLLs it links, taken from the UB Mannheim
+// installer (upstream publishes no Windows binaries; this is the build its docs point to), plus
+// the fast models of every language the app UI is translated into. Compose copies the "windows"
+// folder of the app resources into the app image, where AppEnvironment.desktop.kt finds it.
+//
+// Extracting the NSIS installer needs 7-Zip (on PATH, or its default install location; GitHub's
+// Windows runners have it). The installer's DLLs carry ~100 MB of debug info, stripped when a
+// binutils `strip` is around (the runners' MinGW has one); without it the build still works, the
+// installer is just larger.
+val tesseractWindowsInstallerUrl =
+    "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe"
+val tesseractWindowsInstallerSha256 = "c885fff6998e0608ba4bb8ab51436e1c6775c2bafc2559a19b423e18678b60c9"
+
+// tesseract.exe and the DLLs it loads, transitively: every import in the installer's own
+// folder (the rest are Windows system DLLs). Recompute when bumping the installer, e.g. with
+// `objdump -p` on the extracted files; the CI smoke test fails if one is missing.
+val tesseractWindowsFiles =
+    listOf(
+        "tesseract.exe",
+        "libarchive-13.dll",
+        "libb2-1.dll",
+        "libbz2-1.dll",
+        "libcrypto-3-x64.dll",
+        "libdeflate.dll",
+        "libexpat-1.dll",
+        "libgcc_s_seh-1.dll",
+        "libgif-7.dll",
+        "libiconv-2.dll",
+        "libjbig-0.dll",
+        "libjpeg-8.dll",
+        "libleptonica-6.dll",
+        "libLerc.dll",
+        "liblz4.dll",
+        "liblzma-5.dll",
+        "libopenjp2-7.dll",
+        "libpng16-16.dll",
+        "libsharpyuv-0.dll",
+        "libstdc++-6.dll",
+        "libtesseract-5.dll",
+        "libtiff-6.dll",
+        "libwebp-7.dll",
+        "libwebpmux-3.dll",
+        "libwinpthread-1.dll",
+        "libzstd.dll",
+        "zlib1.dll",
+    )
+
+// tessdata_fast models, same release as the Flatpak manifest's: one per UI language.
+val tessdataFastBaseUrl = "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0"
+val tessdataFastModels =
+    mapOf(
+        "eng" to "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+        "nld" to "ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6",
+        "deu" to "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
+        "fra" to "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca",
+        "spa" to "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464",
+        "por" to "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb",
+    )
+
+abstract class PrepareWindowsTesseractTask
+    @Inject
+    constructor(
+        private val execOps: ExecOperations,
+    ) : DefaultTask() {
+        @get:Input
+        abstract val installerUrl: Property<String>
+
+        @get:Input
+        abstract val installerSha256: Property<String>
+
+        /** File names to take from the installer. */
+        @get:Input
+        abstract val files: ListProperty<String>
+
+        @get:Input
+        abstract val modelBaseUrl: Property<String>
+
+        /** Tesseract language code to the SHA-256 of its model. */
+        @get:Input
+        abstract val models: MapProperty<String, String>
+
+        /** Verified downloads, kept across runs so a rebuild does not fetch them again. */
+        @get:Internal
+        abstract val downloadDir: DirectoryProperty
+
+        @get:OutputDirectory
+        abstract val outDir: DirectoryProperty
+
+        @TaskAction
+        fun prepare() {
+            val downloads = downloadDir.get().asFile.apply { mkdirs() }
+            val installerName = installerUrl.get().substringAfterLast('/')
+            val installer = fetch(installerUrl.get(), installerSha256.get(), File(downloads, installerName))
+
+            val root = outDir.get().asFile
+            root.deleteRecursively()
+            val home = File(root, "windows/tesseract").apply { mkdirs() }
+            // NSIS installers are 7-Zip archives; `e` takes just the named files, flattened.
+            execOps
+                .exec {
+                    executable = sevenZip()
+                    args = listOf("e", "-y", "-o${home.absolutePath}", installer.absolutePath) + files.get()
+                }.assertNormalExitValue()
+            files.get().forEach { require(File(home, it).isFile) { "$it is not in $installerName" } }
+            stripDebugInfo(home)
+
+            val tessdata = File(home, "tessdata").apply { mkdirs() }
+            models.get().forEach { (lang, sha256) ->
+                val model =
+                    fetch("${modelBaseUrl.get()}/$lang.traineddata", sha256, File(downloads, "$lang.traineddata"))
+                model.copyTo(File(tessdata, model.name), overwrite = true)
+            }
+        }
+
+        private fun fetch(
+            url: String,
+            sha256: String,
+            target: File,
+        ): File {
+            if (target.isFile && sha256Of(target) == sha256) return target
+            logger.lifecycle("Downloading $url")
+            val partial = File(target.path + ".part")
+            URI(url).toURL().openStream().use { input -> partial.outputStream().use { input.copyTo(it) } }
+            val actual = sha256Of(partial)
+            if (actual != sha256) {
+                partial.delete()
+                throw GradleException("$url has SHA-256 $actual, expected $sha256")
+            }
+            partial.copyTo(target, overwrite = true)
+            partial.delete()
+            return target
+        }
+
+        private fun sha256Of(file: File): String =
+            MessageDigest
+                .getInstance("SHA-256")
+                .digest(file.readBytes())
+                .joinToString("") { "%02x".format(it) }
+
+        private fun sevenZip(): String =
+            (onPath("7z.exe", "7z", "7zz") ?: File("C:/Program Files/7-Zip/7z.exe").takeIf { it.isFile })
+                ?.absolutePath
+                ?: throw GradleException("Bundling Tesseract needs 7-Zip (7z) on PATH to unpack its installer")
+
+        private fun stripDebugInfo(dir: File) {
+            val strip =
+                onPath("strip.exe", "strip")
+                    ?: listOf("C:/mingw64/bin/strip.exe", "C:/msys64/mingw64/bin/strip.exe")
+                        .map(::File)
+                        .firstOrNull { it.isFile }
+            if (strip == null) {
+                logger.warn("No `strip` found: bundling Tesseract with its debug info (~100 MB more)")
+                return
+            }
+            execOps
+                .exec {
+                    executable = strip.absolutePath
+                    args = listOf("--strip-debug") + files.get().map { File(dir, it).absolutePath }
+                }.assertNormalExitValue()
+        }
+
+        private fun onPath(vararg names: String): File? =
+            System
+                .getenv("PATH")
+                .orEmpty()
+                .split(File.pathSeparator)
+                .filter { it.isNotBlank() }
+                .flatMap { dir -> names.map { File(dir, it) } }
+                .firstOrNull { it.isFile && it.canExecute() }
+    }
+
+val prepareWindowsTesseract =
+    tasks.register<PrepareWindowsTesseractTask>("prepareWindowsTesseract") {
+        group = "compose desktop"
+        description = "Stages the Tesseract binary and language models that Windows builds bundle."
+        installerUrl.set(tesseractWindowsInstallerUrl)
+        installerSha256.set(tesseractWindowsInstallerSha256)
+        files.set(tesseractWindowsFiles)
+        modelBaseUrl.set(tessdataFastBaseUrl)
+        models.set(tessdataFastModels)
+        downloadDir.set(layout.buildDirectory.dir("tesseract-windows/downloads"))
+        outDir.set(windowsAppResources)
+    }
+
+if (isWindowsHost) {
+    tasks.named("prepareAppResources") { dependsOn(prepareWindowsTesseract) }
+}
 
 // --- Linux tarball (Flatpak input) -------------------------------------------
 // The jpackage app image plus the files a desktop install needs, in the layout the Flatpak

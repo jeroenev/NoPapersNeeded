@@ -5,9 +5,11 @@ import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.app.desktop
 import dev.npn.core.app.jvmSessionDeps
 import dev.npn.core.app.toAiConfig
+import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.watch.JvmWatchedFolder
 import kotlinx.coroutines.flow.first
+import java.io.File
 import java.nio.file.Path
 import java.util.Locale
 
@@ -42,7 +44,21 @@ fun createAppEnvironment(): AppEnvironment {
                 // language, so it doubles as the effective app language here; read per call
                 // because it changes while the app runs.
                 aiConfig = { settings.settings.first().toAiConfig(Locale.getDefault().language) },
+                ocrEngine = bundledTesseract() ?: TesseractCliEngine(),
             )
         OpenedLibrary(deps) { deps.closeDb() }
     }
+}
+
+/**
+ * The Tesseract a Windows build ships in its app resources (`prepareWindowsTesseract` in
+ * `desktopApp/build.gradle.kts`), or null when this build has none and OCR falls back to a
+ * `tesseract` on PATH. Linux packages get theirs from the system or, in the Flatpak, the manifest.
+ */
+private fun bundledTesseract(): TesseractCliEngine? {
+    val resources = System.getProperty("compose.application.resources.dir") ?: return null
+    val home = File(resources, "tesseract")
+    val binary = File(home, "tesseract.exe")
+    if (!binary.isFile) return null
+    return TesseractCliEngine(binary = binary.absolutePath, tessdataDir = File(home, "tessdata").absolutePath)
 }

@@ -50,8 +50,9 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 - Android 11+ (API 30).
 - Desktop: Java 17 or newer. Packaged distributions bundle their own Java 25 runtime, so
   no system JVM is required to run them.
-- Optional on desktop: `tesseract-ocr` on `PATH` for OCR. Without it, only embedded
-  PDF text is indexed on desktop.
+- OCR on desktop: the Windows installers and the Flatpak bundle Tesseract with models for
+  every UI language. The other Linux packages need `tesseract-ocr` on `PATH`; without it,
+  only embedded PDF text is indexed.
 
 ## Building
 
@@ -216,7 +217,11 @@ which Debian/Ubuntu hosts get from the `rpm` package.
 On Windows, `./gradlew :desktopApp:packageDistributionForCurrentOS` produces `.msi`
 and `.exe` installers (via WiX, downloaded automatically at build time, so network
 access is needed) and uses `icon.ico`; that Windows path has not been built and
-verified yet.
+verified yet. They bundle Tesseract: `prepareWindowsTesseract` takes `tesseract.exe` and the
+DLLs it links from the pinned UB Mannheim installer, which needs 7-Zip on `PATH` to unpack,
+and adds the `tessdata_fast` models the Flatpak ships. A binutils `strip` (MinGW's, on the
+GitHub runners) removes ~100 MB of debug info from those DLLs. The Windows workflows run the
+bundled `tesseract --list-langs` after packaging, so a missing DLL fails the build.
 
 Desktop, build a Linux AppImage:
 
@@ -243,7 +248,7 @@ The manifest, `desktopApp/flatpak/io.github.jeroenev.NoPapersNeeded.yml`, instal
 Linux tarball layout (`./gradlew :desktopApp:packageLinuxTarball`: the jpackage app image plus
 the desktop entry, metainfo and icon) on the `org.freedesktop.Platform` runtime; Gradle does
 not run inside flatpak-builder. The sandbox cannot run a host `tesseract`, so the manifest
-builds Tesseract from source with fast models for English, Dutch, French and German. Only
+builds Tesseract from source with fast models for every UI language. Only
 the first run compiles it: flatpak-builder's state lives in
 `~/.cache/no-papers-needed/flatpak/`, outside the project, because its sandbox roots link
 into the host's `/run`. The task needs `flatpak-builder`, either the distro package or

@@ -66,8 +66,9 @@ modules:
         url: https://github.com/tesseract-ocr/tesseract/archive/refs/tags/5.5.3.tar.gz
         sha256: 9218e62793116d42a9f6d14cd9348518b27f382096eea3d0f2d1a24616bb5884
 
-  # Fast models for the languages the OCR language setting is most likely set to; found through
-  # TESSDATA_PREFIX in finish-args.
+  # Fast models for the languages the app UI is translated into, the ones the OCR language setting
+  # is most likely set to; found through TESSDATA_PREFIX in finish-args. Windows builds bundle the
+  # same set (prepareWindowsTesseract in desktopApp/build.gradle.kts).
   - name: tessdata
     buildsystem: simple
     build-commands:
@@ -85,6 +86,12 @@ modules:
       - type: file
         url: https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/deu.traineddata
         sha256: 19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d
+      - type: file
+        url: https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/spa.traineddata
+        sha256: 6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464
+      - type: file
+        url: https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/por.traineddata
+        sha256: c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb
 
   # Installs the Linux tarball layout (stageLinuxBundle in desktopApp/build.gradle.kts): app/ is
   # the jpackage app image, share/ the desktop entry, metainfo and icon. The Flathub manifest

@@ -10,10 +10,15 @@ import java.util.concurrent.TimeUnit
  * Desktop [OcrEngine] that shells out to the `tesseract` CLI. Detects the binary once, on the
  * first availability check. If tesseract is not on PATH, [available] is false and the pipeline
  * skips OCR for text-less pages. No JNI/native bindings, so it degrades gracefully.
+ *
+ * [tessdataDir], when set, is passed to the process as `TESSDATA_PREFIX`: a bundled binary
+ * (Windows builds ship one, see `desktopApp/build.gradle.kts`) must read its own language data,
+ * not whatever a separate install on the machine points that variable at.
  */
 class TesseractCliEngine(
     private val binary: String = "tesseract",
     private val timeoutSeconds: Long = 60,
+    private val tessdataDir: String? = null,
 ) : OcrEngine {
     override val name: String = OcrEngines.TESSERACT
 
@@ -22,10 +27,15 @@ class TesseractCliEngine(
 
     override suspend fun available(): Boolean = detected
 
+    private fun process(vararg command: String): ProcessBuilder =
+        ProcessBuilder(*command).apply {
+            tessdataDir?.let { environment()["TESSDATA_PREFIX"] = it }
+        }
+
     private fun detect(): Boolean =
         try {
             val proc =
-                ProcessBuilder(binary, "--version")
+                process(binary, "--version")
                     .redirectErrorStream(true)
                     .start()
             proc.inputStream.readBytes() // drain
@@ -51,7 +61,7 @@ class TesseractCliEngine(
                 temp.writeBytes(png)
                 // `tesseract <input> stdout -l <lang>` prints recognized text to stdout.
                 val proc =
-                    ProcessBuilder(binary, temp.absolutePath, "stdout", "-l", lang)
+                    process(binary, temp.absolutePath, "stdout", "-l", lang)
                         .redirectErrorStream(false)
                         .start()
 
