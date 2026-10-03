@@ -69,7 +69,7 @@ jobs:
           NPN_KEYSTORE_BASE64: ${{ secrets.NPN_KEYSTORE_BASE64 }}
         run: |
           if [ -z "$NPN_KEYSTORE_BASE64" ]; then
-            echo "::error::NPN_KEYSTORE_BASE64 secret is not set; see README 'Releases'."
+            echo "::error::NPN_KEYSTORE_BASE64 secret is not set; see DEVELOPMENT.md 'Releases'."
             exit 1
           fi
           echo "$NPN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/npn-release.jks"

@@ -1,333 +1,64 @@
 # No papers needed
 
-A local-first paperless document manager for Android and Linux desktop. Your files
-stay plain PDFs in a folder you own. There is no server, no account, and no
-proprietary database holding your documents hostage. Sync the folder with any file
-sync tool you already use (Syncthing, Nextcloud, etc.) and every device sees the
-same library.
+**Your paperwork, organized. Your files, still yours.**
 
-## Design
+No papers needed turns the pile of bills, contracts, receipts and letters into a
+searchable library on your phone and your computer. Scan a letter, drop in a
+download, and find it again in seconds by typing a word from the page.
 
-- Files are the source of truth. The library is a folder of PDFs plus a small
-  `.npn/` metadata directory. Any device with the folder has everything, and the
-  app can rebuild all of its state from the folder alone.
-- Documents are immutable. Once a PDF is in the library the app never rewrites its
-  bytes (rename/move only). The one exception is the explicit bake-in-place action.
-- Metadata is a journal. Changes (tags, properties, trash, relink) are stored as
-  immutable JSONL transactions under `.npn/journal/`. Transactions use their
-  complete-file SHA-256 as the filename. No published transaction is modified after
-  it is written. Merges are conflict-free:
-  OR-set semantics for tags, hybrid-logical-clock last-writer-wins for single-value
-  properties.
-- SQLite is a rebuildable cache. The index (search, thumbnails, source provenance,
-  and incremental metadata projection) lives in device-local storage, never inside
-  the library folder, and is never synced. Delete it and it rebuilds from the folder.
-- OCR travels as sidecars. Extracted text is written to `.npn/ocr/` keyed by file
-  hash and device id, so a device adopts another device's OCR instead of redoing it.
-- Identity is the SHA-256 of the file bytes. Renames and moves never detach
-  metadata, and imports dedup by hash.
-- XMP is baked on export. Exported/shared copies get `dc:subject` keywords and an
-  `npn:` namespace embedded for interoperability with other tools; the library file
-  is untouched unless you explicitly bake in place.
+There's no account to create and no server to run. Your documents stay ordinary PDFs in
+a folder you choose, readable by any other app, today and in ten years.
 
-## Features (v1)
+## Why you'll like it
 
-- Import and scan: MLKit document scanner on Android, file dialog and drag-and-drop
-  on desktop, plus an optional watched inbox folder.
-- Share-sheet import on Android (PDFs and images; images are converted to PDF).
-- Full-text search over filenames, content and tags using SQLite FTS5, with
-  filters and snippets.
-- Hierarchical tags with autocomplete, bulk tagging, rename/merge/delete.
-- Correspondents and document types managed like tags.
-- Saved views: named filter/sort/view combinations, pinnable.
-- Review queue with a choice of workflow (synced across devices): "untagged only" (documents just appear, needing review until tagged) or "inbox workflow" (an explicit reviewed marker you set by hand).
-- Trash with restore and configurable auto-purge.
-- Maintenance: duplicate detection, missing-file detection and relink flow.
-- Background OCR: MLKit on Android, Tesseract CLI on desktop. With an AI endpoint
-  configured, a vision model can read a page instead — per document ("Read text with
-  assistant", for handwriting, tables and faint scans) or as the device's default engine.
-  It costs one request per page, so it is never automatic unless you turn it on.
-- Cached first-page thumbnails; list and grid views.
+- **Find anything.** Search the full text of every document, scans included. Text
+  recognition runs in the background, so a photo of a letter becomes searchable too.
+- **Scan in seconds.** On Android, point your camera at a page and the scanner crops
+  and straightens it. Share a PDF or photo from any app straight into your library.
+- **Drag, drop, done.** On the desktop, drag files into the window or let the app watch
+  an inbox folder and pick up whatever lands there.
+- **Organize your way.** Tags (nested if you like), correspondents, document types,
+  dates, notes, and fields you define yourself. Rules can tag new documents
+  automatically based on their text.
+- **Stay on top of new arrivals.** A review queue shows what still needs sorting, and
+  saved views keep your favorite filters one tap away.
+- **Every device, one library.** Keep the folder in sync with the tool you already use,
+  such as Syncthing or Nextcloud, and every phone and computer sees the same documents,
+  tags and search results. Changes made on two devices at once merge cleanly.
+- **No lock-in.** Your files are never converted, renamed behind your back or locked in
+  a database. Stop using the app and you still have a tidy folder of PDFs.
+- **Safe by design.** Deleted documents go to a trash you can restore from, and the app
+  spots duplicates and files that went missing.
 
-## Requirements
+## Optional AI assistant
 
-- Android 8.0+ (API 26).
-- Desktop: Java 17 or newer. Packaged distributions bundle their own runtime, so no
-  system JVM is required to run them.
-- Optional on desktop: `tesseract-ocr` on `PATH` for OCR. Without it, only embedded
-  PDF text is indexed on desktop.
+Connect an AI provider of your choice and the assistant can:
 
-## Building
+- answer questions about your documents,
+- suggest tags and fill in titles, correspondents and dates for a batch of documents,
+- read handwriting, tables and faint scans that regular text recognition misses.
 
-The Gradle build uses a Java 17 toolchain provisioned via the foojay resolver, so a
-matching JDK is downloaded automatically if needed. The Android SDK is located via
-`local.properties` (`sdk.dir`) or the `ANDROID_HOME` / `ANDROID_SDK_ROOT`
-environment variable.
+It's off until you set it up, it asks before anything that sends documents to your
+provider, and nothing lands in your library until you've reviewed it.
 
-### Task runner (mise)
+## Get it
 
-Common build, run, test, and device-deploy commands are wrapped as
-[mise](https://mise.jdx.dev) tasks in `mise.toml` (plus file tasks in
-`.mise/tasks/`). Run `mise tasks` to list them, and `mise run <task>` (or just
-`mise <task>`) to execute one. The raw Gradle commands each task wraps are shown
-below if you prefer to run them directly.
+Download the latest version from the
+[releases page](https://github.com/jeroenev/NoPapersNeeded/releases):
 
-| Task | Wraps |
-|------|-------|
-| `mise apk` | `./gradlew :androidApp:assembleDebug` |
-| `mise apk-release` | `./gradlew :androidApp:assembleRelease` (signed only with `NPN_KEYSTORE_*` set, see [Releases](#releases)) |
-| `mise bundle` | `./gradlew :androidApp:bundleRelease` |
-| `mise deploy` | `installDebug` over adb, then launches the app (add `--release` for the release build) |
-| `mise uninstall` | `adb uninstall dev.npn.debug` (the debug build) |
-| `mise uninstall-release` | `adb uninstall dev.npn` (the release build) |
-| `mise pair` | one-time adb Wi-Fi pairing wizard (Android 11+) |
-| `mise connect <ip:port>` | `adb connect` for an already-paired device |
-| `mise devices` | `adb devices -l` |
-| `mise hot` | `./gradlew :desktopApp:hotRun --auto` (Compose Hot Reload) |
-| `mise desktop` | `./gradlew :desktopApp:run` |
-| `mise package-deb` | `./gradlew :desktopApp:packageDeb` |
-| `mise package-rpm` | `./gradlew :desktopApp:packageRpm` (needs `rpmbuild`) |
-| `mise package-appimage` | `./gradlew :desktopApp:packageAppImage` |
-| `mise package-flatpak` | Single-file `.flatpak` bundle (needs `flatpak-builder`) |
-| `mise flathub-manifest [version]` | Flathub manifest for a published release |
-| `mise package-jar` | `./gradlew :desktopApp:packageUberJarForCurrentOS` |
-| `mise release <version>` | Bumps the version, tags `v<version>` and pushes; CI publishes the release |
-| `mise icons` | Re-renders the desktop icon bitmaps from `design/branding/icon.svg` |
-| `mise test` | `./gradlew :core:desktopTest` |
-| `mise test-fast` | Core and shared UI desktop tests |
-| `mise test-all` | `./gradlew allTests :core:desktopTest` |
-| `mise check` | `./gradlew check` |
-| `mise hooks-install` | Enable the version-controlled Git hooks |
-| `mise build` | `./gradlew build` |
-| `mise clean` | `./gradlew clean` |
+- **Android** 8.0 or newer: the `.apk`.
+- **Linux**: AppImage, Flatpak, `.deb` or `.rpm`. Everything needed to run it is
+  included. For text recognition on the desktop, install `tesseract-ocr` (the Flatpak
+  already includes it).
 
-Formatting is enforced incrementally with Spotless and ktlint. Run
-`./gradlew spotlessCheck` to check it or `./gradlew spotlessApply` to format
-Kotlin and Gradle Kotlin scripts.
-Localization parity, XML placeholders, and obvious hardcoded strings in shared
-Compose UI are checked with `./gradlew checkLocalization`. The task also runs as
-part of `./gradlew check`; intentional language-neutral literals must be listed
-in `config/localization-hardcoded-allowlist.txt`.
-Run `mise hooks-install` once per clone to enable the pre-commit formatting and
-fast-test checks; the hook never formats or stages files. Commit messages are
-prefixed with the current branch name when needed.
+The app tells you when a new version is out.
 
-### Deploying to an Android device
+Available in English and Dutch.
 
-To iterate on a physical device without a cable, pair once over Wi-Fi
-(Android 11+, phone and workstation on the same network), then deploy with a
-single command:
+## For developers
 
-```
-mise pair      # one time: follow the prompts, uses the phone's Wireless debugging screen
-mise deploy    # every time: build + install over adb + launch dev.npn.debug/dev.npn.MainActivity
-```
-
-`mise deploy` runs the Android Gradle Plugin `installDebug` task (build + adb
-install) and then `adb shell am start -n dev.npn.debug/dev.npn.MainActivity`.
-
-The debug build is its own package, `dev.npn.debug`, so it installs next to the release
-build (`dev.npn`) rather than replacing it. It shows up as "NPN debug" with an amber
-icon and proposes `Documents/NoPapersNeeded-debug` as its library, so it only writes to
-your real library if you point it there; it then acts as a second device on that
-library. `mise deploy --release` installs the release build instead, which needs the
-`NPN_KEYSTORE_*` variables from [Releases](#releases). If the device
-drops off the network later, reconnect with `mise connect <ip:port>` (no
-re-pairing needed). A USB-connected device works too; skip `mise pair`.
-
-For fast UI iteration without a device, use `mise hot`: the Compose UI in
-`composeApp` runs on the desktop target with Compose Hot Reload, so edits to
-shared composables update live on save. Android-only code paths (document
-scanner, share intents, WorkManager) are not exercised there; use `mise deploy`
-for those.
-
-### Raw Gradle commands
-
-Android debug APK:
-
-```
-./gradlew :androidApp:assembleDebug
-# output: androidApp/build/outputs/apk/debug/androidApp-debug.apk
-```
-
-Desktop, run from source:
-
-```
-./gradlew :desktopApp:run
-```
-
-Desktop, build a Linux `.deb`:
-
-```
-./gradlew :desktopApp:packageDeb
-# output: desktopApp/build/compose/binaries/main/deb/no-papers-needed_<version>_amd64.deb
-```
-
-This task runs jpackage on the app image the Compose plugin builds, rather than
-letting the plugin produce the `.deb`. The reason is the desktop entry: jpackage
-generates it from a template that can be overridden with `--resource-dir`, but the
-plugin appends its own `--resource-dir` after any `freeArgs`, and jpackage keeps the
-last one ([#773](https://github.com/JetBrains/compose-multiplatform/issues/773),
-[CMP-9837](https://youtrack.jetbrains.com/projects/CMP/issues/CMP-9837/packageDeb-task-fails-to-include-custom-.desktop-files)).
-Without the override the entry has no `StartupWMClass`, so GNOME cannot match the
-running window to the installed app and shows a generic taskbar icon.
-
-`./gradlew :desktopApp:packageRpm` builds the `.rpm` the same way. It needs `rpmbuild`,
-which Debian/Ubuntu hosts get from the `rpm` package.
-
-On Windows, `./gradlew :desktopApp:packageDistributionForCurrentOS` produces `.msi`
-and `.exe` installers (via WiX, downloaded automatically at build time, so network
-access is needed) and uses `icon.ico`; that Windows path has not been built and
-verified yet.
-
-Desktop, build a Linux AppImage:
-
-```
-./gradlew :desktopApp:packageAppImage
-# output: desktopApp/build/appimage/no-papers-needed-<version>-x86_64.AppImage
-```
-
-jpackage cannot emit AppImage directly, so this task wraps the jpackage app-image
-(bundled JRE plus launcher) with `appimagetool`. `appimagetool` is downloaded
-automatically into `desktopApp/build/appimage/` on first run, so this task needs
-network access. It builds with `--appimage-extract-and-run` and therefore does not
-need FUSE on the build host; running the resulting AppImage still needs FUSE, or the
-end user can run it with `--appimage-extract-and-run`. The AppImage is x86_64 only.
-
-Desktop, build a Flatpak bundle:
-
-```
-mise package-flatpak
-# output: desktopApp/build/flatpak/no-papers-needed-<version>-x86_64.flatpak
-```
-
-The manifest, `desktopApp/flatpak/io.github.jeroenev.NoPapersNeeded.yml`, installs the
-Linux tarball layout (`./gradlew :desktopApp:packageLinuxTarball`: the jpackage app image plus
-the desktop entry, metainfo and icon) on the `org.freedesktop.Platform` runtime; Gradle does
-not run inside flatpak-builder. The sandbox cannot run a host `tesseract`, so the manifest
-builds Tesseract from source with fast models for English, Dutch, French and German. Only
-the first run compiles it: flatpak-builder's state lives in
-`~/.cache/no-papers-needed/flatpak/`, outside the project, because its sandbox roots link
-into the host's `/run`. The task needs `flatpak-builder`, either the distro package or
-`flatpak install flathub org.flatpak.Builder`, and installs the runtime and SDK from Flathub
-if they are missing.
-
-Install the bundle with `flatpak install --user no-papers-needed-<version>-x86_64.flatpak`;
-it fetches the runtime from Flathub if needed. The sandbox can only read and write
-`~/Documents`, so a Flatpak library lives there: the app opens its library by path on every
-start, and a folder picked elsewhere only comes back as a document-portal path. Settings and
-the index go to `~/.var/app/io.github.jeroenev.NoPapersNeeded/`, so a Flatpak install does
-not share them with a `.deb` or AppImage install on the same machine.
-
-The app ID follows Flathub's rule for GitHub-hosted apps, `io.github.<user>.<repo>`, which is
-why the repository is named `NoPapersNeeded`. To submit to Flathub, run `mise flathub-manifest
-<version>` after that version's release is published. It writes
-`desktopApp/build/flathub/` with the manifest pointing at the release's Linux tarball and a
-`flathub.json` limiting the build to x86_64. Its `x-checker-data` lets Flathub's bot open an
-update pull request for every later release, so the task is only needed again when the
-manifest itself changes. Flathub also wants screenshots in the metainfo before it accepts
-the app.
-
-### Updates
-
-Every desktop build except the Flatpak, and the APK, looks up the latest GitHub release once
-per start and shows a banner with a download link when it is newer (`dev.npn.core.update`).
-The check is a setting under About, on by default; dismissing the banner hides that version
-for good. Inside Flatpak the check is off and hidden, since Flathub delivers updates.
-
-The AppImage embeds update information pointing at the latest release's `.zsync`, so
-AppImageUpdate and launchers such as Gear Lever can update it in place; `packageAppImage`
-writes that `.zsync` next to the AppImage.
-
-On Windows, the release workflow submits each version's `.msi` to winget once the first
-version is in `microsoft/winget-pkgs` (submit that one by hand with `komac new`) and the
-`WINGET_TOKEN` secret holds a classic token with `public_repo`.
-
-### Releases
-
-The version lives in one place: `npn.version` in `gradle.properties`. The Android
-`versionName`, the Android `versionCode` (`major*10000 + minor*100 + patch`), the desktop
-package version and the About screen all read it. It must be plain `major.minor.patch`
-(jpackage/MSI accept nothing else; major ≤ 255, minor and patch ≤ 99).
-
-To release, from an up-to-date `main` that CI has passed:
-
-```
-mise release 1.2.0
-```
-
-That bumps `npn.version`, commits `[main] Release 1.2.0`, tags `v1.2.0` and pushes both.
-The tag starts `.github/workflows/release.yml`, which refuses a tag that does not match
-`npn.version`, builds the signed APK, AppImage (with its `.zsync`), `.deb`, `.rpm`,
-`.flatpak`, Linux tarball, `.msi` and `.exe` into a draft release, adds `SHA256SUMS` and
-publishes it. If a build job fails the draft stays
-unpublished: fix the problem, delete the draft and the tag, and release the next patch
-version.
-
-The APK is signed with the release key, read from the environment:
-`NPN_KEYSTORE_FILE`, `NPN_KEYSTORE_PASSWORD` and `NPN_KEY_ALIAS`. The workflow gets them
-from the repository secrets `NPN_KEYSTORE_BASE64` (the keystore, base64-encoded),
-`NPN_KEYSTORE_PASSWORD` and `NPN_KEY_ALIAS`. The keystore is never committed. Keep a
-backup: Android only installs an update signed with the same key, so losing it means
-users have to uninstall and reinstall. The committed `npn-debug.keystore` is for debug
-builds only.
-
-### App icon
-
-The artwork lives in `design/branding/icon.svg` (see `design/branding/README.md`).
-Android reads it as an adaptive icon built from vector drawables in
-`androidApp/src/main/res/`, so nothing needs rendering there. The desktop
-distributions need bitmaps, so `desktopApp/src/main/resources/icon.png` (window icon
-plus the Linux/AppImage icon) and `icon.ico` (Windows) are committed and regenerated
-from the SVG with `mise icons`.
-
-Run the tests:
-
-```
-./gradlew :core:desktopTest
-```
-
-## Library folder layout
-
-```
-Library/
-  ... your PDFs and subfolders ...
-  inbox/                                # optional import/scan target
-  .npn/
-    journal/objects-v2-<00..ff>/
-      <sha256>.jsonl                    # content-addressed metadata transactions
-    ocr/<sha256>.<deviceId>.<engine>.json # OCR sidecars, adopted across devices
-    trash/                              # soft-deleted files (synced, not indexed)
-```
-
-The `.npn/` directory syncs with the documents. The device-local index and cached
-thumbnails live outside the library folder and are never synced.
-
-Metadata uses content-addressed storage-v2 objects. Metadata writes require verified
-publication with atomic create-without-replacement semantics, supported by all current
-desktop and Android libraries. A future provider that cannot guarantee this is
-read-only for metadata rather than falling back to another storage format.
-
-### Android storage
-
-On Android the library is, by default, a plain folder on shared storage
-(`Documents/NoPapersNeeded` is proposed on first run) that the app reads and writes
-directly with the same filesystem implementation as the desktop app. That is what lets
-Syncthing (or any other sync tool that works with real paths) share the folder: the app
-watches it with inotify, rescans whenever it returns to the foreground, and its `.npn/`
-metadata syncs along with the PDFs. Seeing files those tools write requires the
-"All files access" grant (`MANAGE_EXTERNAL_STORAGE`), which onboarding asks for; without
-it the app can only see its own files. Shared storage has no hard links, so verified
-publication there uses `renameat2(RENAME_NOREPLACE)` through JNA to install the
-hash-verified staging object without replacing a concurrently synced file. If the
-filesystem lacks that primitive, the operation fails rather than risking replacement.
-Moves across mount points likewise fail without removing the source.
-
-The Storage Access Framework remains available as an advanced option
-(Settings → Library → Advanced → *Use Storage Access Framework*) for folders that have
-no path, such as cloud document providers, and every library chosen through SAF before
-the direct mode existed keeps opening that way. Direct cloud integrations
-(Dropbox, Drive, OneDrive, WebDAV) are planned as their own adapters, not via SAF.
+Building from source, packaging, releases and the library format are covered in
+[DEVELOPMENT.md](DEVELOPMENT.md). The code layout is in [ARCHITECTURE.md](ARCHITECTURE.md).
 
 ## License
 

@@ -1,7 +1,8 @@
 # AGENTS.md
 
 Kotlin/Compose Multiplatform paperless document manager (Android + Linux desktop).
-README covers the design, user-facing build/packaging details, and the library folder layout.
+README is the end-user promo page; keep technical detail out of it. DEVELOPMENT.md covers the
+design, build/packaging/release details, and the library folder layout.
 
 ## Modules
 
