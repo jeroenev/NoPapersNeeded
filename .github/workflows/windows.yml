@@ -52,8 +52,10 @@ jobs:
           --tests 'dev.npn.core.pdf.*'
           --tests 'dev.npn.core.xmp.*'
 
+      # packageMsi/packageExe go straight to installers; createDistributable also leaves the app
+      # image in build/compose/binaries/main/app for the Tesseract check below.
       - name: Package Windows installers (MSI + Exe)
-        run: ./gradlew.bat :desktopApp:packageDistributionForCurrentOS
+        run: ./gradlew.bat :desktopApp:createDistributable :desktopApp:packageDistributionForCurrentOS
 
       # The bundled Tesseract (prepareWindowsTesseract) has to start on Windows: a DLL missing
       # from the bundle would only show up as silently empty OCR on users' machines.
