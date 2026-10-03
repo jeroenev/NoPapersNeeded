@@ -2,7 +2,7 @@
 
 # JNA's native dispatch library looks its Java peers up by name through JNI (Native, Pointer,
 # NativeLong, LastErrorException, callbacks), and the AAR ships no consumer rules. Without these
-# the exclusive-rename syscall behind verified journal publication (LinuxNoReplaceMove) fails.
+# the exclusive-rename syscall behind verified journal publication (NoReplaceMove) fails.
 -keep class com.sun.jna.** { *; }
 -keepclassmembers class * extends com.sun.jna.** { public *; }
 # JNA's desktop window helpers (Native$AWT) reference AWT, which Android does not have.

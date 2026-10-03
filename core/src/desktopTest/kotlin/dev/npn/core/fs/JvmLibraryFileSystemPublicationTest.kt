@@ -103,7 +103,7 @@ class JvmLibraryFileSystemPublicationTest {
                         Callable {
                             barrier.await(10, TimeUnit.SECONDS)
                             try {
-                                LinuxNoReplaceMove.move(source, root.resolve("winner"))
+                                NoReplaceMove.move(source, root.resolve("winner"))
                                 index
                             } catch (_: java.nio.file.FileAlreadyExistsException) {
                                 null
@@ -128,7 +128,7 @@ class JvmLibraryFileSystemPublicationTest {
         val target = root.resolve("target")
         Files.write(source, "ours".encodeToByteArray())
         Files.createSymbolicLink(target, root.resolve("absent"))
-        assertFailsWith<java.nio.file.FileAlreadyExistsException> { LinuxNoReplaceMove.move(source, target) }
+        assertFailsWith<java.nio.file.FileAlreadyExistsException> { NoReplaceMove.move(source, target) }
         Files.isSymbolicLink(target) shouldBe true
         Files.readAllBytes(source).decodeToString() shouldBe "ours"
     }

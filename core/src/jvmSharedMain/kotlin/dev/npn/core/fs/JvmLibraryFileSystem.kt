@@ -37,7 +37,8 @@ enum class ObjectPublication {
     HARD_LINK_ONLY,
 
     /**
-     * Hard link, else renameat2(RENAME_NOREPLACE) of the verified staging file within its bucket.
+     * Hard link, else an exclusive rename ([NoReplaceMove]) of the verified staging file within
+     * its bucket.
      * Android's shared storage is a FUSE mount that refuses `link(2)` with EPERM, so this is the
      * exclusive rename primitive there. Both operations refuse an existing target atomically,
      * including one concurrently installed by a sync client. Unsupported filesystems fail closed.
@@ -296,7 +297,7 @@ class JvmLibraryFileSystem internal constructor(
             }
 
             ObjectPublication.HARD_LINK_OR_RENAME -> {
-                LinuxNoReplaceMove.move(staging, canonical)
+                NoReplaceMove.move(staging, canonical)
                 VerifiedPublicationResult.PUBLISHED
             }
         }
@@ -308,7 +309,7 @@ class JvmLibraryFileSystem internal constructor(
         fromRelPath: String,
         toRelPath: String,
     ) = withContext(Dispatchers.IO) {
-        LinuxNoReplaceMove.move(resolve(fromRelPath), resolve(toRelPath))
+        NoReplaceMove.move(resolve(fromRelPath), resolve(toRelPath))
     }
 
     override suspend fun sameFile(
@@ -360,7 +361,7 @@ class JvmLibraryFileSystem internal constructor(
      * step, so a crash in between leaves a spare copy at [from] rather than a lost object — the
      * trade the write-once invariant asks for.
      *
-     * Filesystems with no hard links use renameat2(RENAME_NOREPLACE). A filesystem without
+     * Filesystems with no hard links use [NoReplaceMove]'s exclusive rename. A filesystem without
      * either primitive, or a move across mount points, fails without touching either file.
      */
     private fun atomicMoveNoReplace(
@@ -373,7 +374,7 @@ class JvmLibraryFileSystem internal constructor(
         if (linkNoReplace(from, to, mayLatch = false)) {
             Files.delete(from)
         } else {
-            LinuxNoReplaceMove.move(from, to)
+            NoReplaceMove.move(from, to)
         }
     }
 

@@ -62,7 +62,7 @@ class DirectStorageDeviceTest {
     fun sharedStorageRenameRefusesForeignTarget() {
         val source = Files.write(root.resolve("source"), "ours".encodeToByteArray())
         val target = Files.write(root.resolve("target"), "synced".encodeToByteArray())
-        assertThrows(FileAlreadyExistsException::class.java) { LinuxNoReplaceMove.move(source, target) }
+        assertThrows(FileAlreadyExistsException::class.java) { NoReplaceMove.move(source, target) }
         assertEquals("synced", String(Files.readAllBytes(target)))
         assertTrue(Files.exists(source))
     }
