@@ -288,7 +288,7 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
  * Runs are cancellable via the shared [run] job and by leaving the screen (viewModelScope).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@Suppress("TooManyFunctions", "LongParameterList")
+@Suppress("TooManyFunctions")
 class AiEditViewModel(
     documents: DocumentRepository,
     meta: MetadataWriter,

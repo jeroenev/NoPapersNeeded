@@ -147,7 +147,6 @@ fun DocDetailScreen(
  * survives the narrower bar without obscuring content.
  */
 @Composable
-@Suppress("LongParameterList")
 private fun LoadedDocScreen(
     current: DocListItem,
     ui: DetailUiState,

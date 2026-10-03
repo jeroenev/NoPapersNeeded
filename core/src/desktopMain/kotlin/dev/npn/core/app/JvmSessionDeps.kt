@@ -28,7 +28,6 @@ import java.nio.file.Path
  * database is `index.db` under [AppDirs.dbDir] — two sessions over one folder (two "devices")
  * therefore need two [AppDirs], which is also what keeps their device identities apart.
  */
-@Suppress("LongParameterList")
 fun jvmSessionDeps(
     libraryRoot: Path,
     dirs: AppDirs,
