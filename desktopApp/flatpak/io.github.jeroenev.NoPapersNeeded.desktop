@@ -3,7 +3,7 @@ Type=Application
 Name=No papers needed
 Comment=Personal paperless document library
 Exec=no-papers-needed
-Icon=dev.npn.NoPapersNeeded
+Icon=io.github.jeroenev.NoPapersNeeded
 Categories=Office;Utility;
 Terminal=false
 # AWT's WM_CLASS for the main class dev.npn.desktop.MainKt; see npnWmClass in build.gradle.kts.

@@ -75,7 +75,7 @@ jobs:
           echo "$NPN_KEYSTORE_BASE64" | base64 --decode > "$RUNNER_TEMP/npn-release.jks"
           echo "NPN_KEYSTORE_FILE=$RUNNER_TEMP/npn-release.jks" >> "$GITHUB_ENV"
 
-      - name: Build APK, AppImage, deb and rpm
+      - name: Build APK, AppImage, deb, rpm and Linux tarball
         env:
           NPN_KEYSTORE_PASSWORD: ${{ secrets.NPN_KEYSTORE_PASSWORD }}
           NPN_KEY_ALIAS: ${{ secrets.NPN_KEY_ALIAS }}
@@ -85,6 +85,7 @@ jobs:
           :desktopApp:packageAppImage
           :desktopApp:packageDeb
           :desktopApp:packageRpm
+          :desktopApp:packageLinuxTarball
 
       # Reuses the app image built above; also downloads the Flatpak SDK and compiles Tesseract.
       - name: Build Flatpak bundle
@@ -96,10 +97,11 @@ jobs:
         run: |
           mkdir dist
           cp androidApp/build/outputs/apk/release/androidApp-release.apk "dist/no-papers-needed-${TAG#v}.apk"
-          cp desktopApp/build/appimage/*.AppImage dist/
+          cp desktopApp/build/appimage/*.AppImage desktopApp/build/appimage/*.AppImage.zsync dist/
           cp desktopApp/build/compose/binaries/main/deb/*.deb dist/
           cp desktopApp/build/compose/binaries/main/rpm/*.rpm dist/
           cp desktopApp/build/flatpak/*.flatpak dist/
+          cp desktopApp/build/linux-bundle/*.tar.gz dist/
           gh release upload "$TAG" dist/*
 
   windows:
@@ -145,3 +147,31 @@ jobs:
 
       - name: Publish
         run: gh release edit "$TAG" --repo "$GITHUB_REPOSITORY" --draft=false
+
+  # winget-pkgs takes a pull request per version. The first version has to be submitted by hand
+  # (`komac new`), and the WINGET_TOKEN secret (a classic token with public_repo, for the fork of
+  # microsoft/winget-pkgs that the PR comes from) must be set; without it this job only says so.
+  winget:
+    name: Submit to winget
+    needs: publish
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check token
+        id: token
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        run: |
+          if [ -n "$WINGET_TOKEN" ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::WINGET_TOKEN is not set; skipping the winget submission."
+          fi
+
+      - name: Open winget-pkgs pull request
+        if: steps.token.outputs.present == 'true'
+        uses: vedantmgoyal9/winget-releaser@v2
+        with:
+          identifier: jeroenev.NoPapersNeeded
+          release-tag: ${{ github.ref_name }}
+          installers-regex: '\.msi$'
+          token: ${{ secrets.WINGET_TOKEN }}

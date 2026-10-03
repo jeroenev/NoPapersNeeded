@@ -331,6 +331,10 @@ abstract class PackageAppImageTask
         @get:Input
         abstract val arch: Property<String>
 
+        /** AppImage update information; appimagetool embeds it and writes the matching .zsync. */
+        @get:Input
+        abstract val updateInfo: Property<String>
+
         @get:Internal
         abstract val appDir: DirectoryProperty
 
@@ -408,10 +412,20 @@ abstract class PackageAppImageTask
                 .exec {
                     executable = appImageTool.get().asFile.absolutePath
                     // --appimage-extract-and-run avoids needing host FUSE at build time.
-                    args = listOf("--appimage-extract-and-run", dir.absolutePath, out.absolutePath)
+                    args =
+                        listOf(
+                            "--appimage-extract-and-run",
+                            "--updateinformation",
+                            updateInfo.get(),
+                            dir.absolutePath,
+                            out.absolutePath,
+                        )
                     environment("ARCH", arch.get())
+                    // appimagetool writes the .zsync into its working directory.
+                    workingDir = out.parentFile
                 }.assertNormalExitValue()
             logger.lifecycle("AppImage written: ${out.absolutePath}")
+            require(File(out.path + ".zsync").exists()) { "appimagetool wrote no .zsync next to ${out.name}" }
         }
     }
 
@@ -425,9 +439,94 @@ val packageAppImage =
         displayName.set(npnDisplayName)
         wmClass.set(npnWmClass)
         arch.set(appImageArch)
+        // AppImageUpdate (and launchers such as Gear Lever) fetch the .zsync of the latest GitHub
+        // release, so the release has to upload it next to the AppImage.
+        updateInfo.set("gh-releases-zsync|jeroenev|NoPapersNeeded|latest|$npnAppName-*-$appImageArch.AppImage.zsync")
         appImageSrc.set(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName"))
         appImageTool.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
         iconFile.set(npnIconPng)
         appDir.set(layout.buildDirectory.dir("appimage/AppDir"))
         outFile.set(layout.buildDirectory.file("appimage/$npnAppName-$npnAppVersion-$appImageArch.AppImage"))
     }
+
+// --- Linux tarball (Flatpak input) -------------------------------------------
+// The jpackage app image plus the files a desktop install needs, in the layout the Flatpak
+// manifest (desktopApp/flatpak/) installs from: app/ is the app image, share/ holds the
+// desktop entry, metainfo and icon. `mise package-flatpak` builds from the staged directory;
+// releases publish the tarball, which is what Flathub builds from.
+val npnFlatpakId = "io.github.jeroenev.NoPapersNeeded"
+val linuxBundleName = "$npnAppName-$npnAppVersion-linux-x86_64"
+
+// Fills in the metainfo's release version and date. The date is the built commit's, which keeps
+// the tarball reproducible.
+abstract class RenderMetainfoTask : DefaultTask() {
+    @get:InputFile
+    abstract val template: RegularFileProperty
+
+    @get:Input
+    abstract val version: Property<String>
+
+    @get:Input
+    abstract val releaseDate: Property<String>
+
+    @get:OutputFile
+    abstract val outFile: RegularFileProperty
+
+    @TaskAction
+    fun render() {
+        val text =
+            template
+                .get()
+                .asFile
+                .readText()
+                .replace("@VERSION@", version.get())
+                .replace("@DATE@", releaseDate.get())
+        outFile
+            .get()
+            .asFile
+            .apply { parentFile.mkdirs() }
+            .writeText(text)
+    }
+}
+
+val renderMetainfo =
+    tasks.register<RenderMetainfoTask>("renderMetainfo") {
+        template.set(layout.projectDirectory.file("flatpak/$npnFlatpakId.metainfo.xml"))
+        version.set(npnAppVersion)
+        releaseDate.set(
+            providers
+                .exec { commandLine("git", "log", "-1", "--format=%cs") }
+                .standardOutput.asText
+                .map { it.trim() },
+        )
+        outFile.set(layout.buildDirectory.file("linux-bundle/metainfo/$npnFlatpakId.metainfo.xml"))
+    }
+
+val stageLinuxBundle =
+    tasks.register<Sync>("stageLinuxBundle") {
+        group = "compose desktop"
+        description = "Stages the app image with its desktop entry, metainfo and icon."
+        dependsOn("createDistributable")
+        into(layout.buildDirectory.dir("linux-bundle/stage"))
+        // jlink leaves the runtime's legal notices read-only, so the copy cannot overwrite them.
+        doFirst { (this as Sync).destinationDir.deleteRecursively() }
+        from(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName")) { into("app") }
+        from("flatpak/$npnFlatpakId.desktop") { into("share") }
+        from(renderMetainfo) { into("share") }
+        val iconName = "$npnFlatpakId.png"
+        from(npnIconPng) {
+            rename { iconName }
+            into("share")
+        }
+    }
+
+tasks.register<Tar>("packageLinuxTarball") {
+    group = "compose desktop"
+    description = "Builds the Linux .tar.gz that Flathub builds the Flatpak from."
+    from(stageLinuxBundle) { into(linuxBundleName) }
+    compression = Compression.GZIP
+    archiveFileName.set("$linuxBundleName.tar.gz")
+    destinationDirectory.set(layout.buildDirectory.dir("linux-bundle"))
+    isPreserveFileTimestamps = false
+    isReproducibleFileOrder = true
+}

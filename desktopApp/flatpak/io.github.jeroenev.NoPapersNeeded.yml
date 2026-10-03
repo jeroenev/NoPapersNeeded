@@ -1,12 +1,12 @@
 # Flatpak manifest, built by `mise package-flatpak` (.mise/tasks/package-flatpak).
 #
-# The app module repackages the jpackage app image (`:desktopApp:createDistributable`), with its
+# The app module repackages the jpackage app image (`:desktopApp:stageLinuxBundle`), with its
 # bundled runtime, the same way the AppImage, .deb and .rpm do; Gradle is not run inside
 # flatpak-builder. Tesseract is built from source because the sandbox cannot reach a host
 # install, and desktop OCR shells out to the `tesseract` CLI (TesseractCliEngine).
-app-id: dev.npn.NoPapersNeeded
+app-id: io.github.jeroenev.NoPapersNeeded
 runtime: org.freedesktop.Platform
-runtime-version: "25.08"
+runtime-version: "26.08"
 sdk: org.freedesktop.Sdk
 command: no-papers-needed
 
@@ -18,12 +18,10 @@ finish-args:
   # AI endpoints.
   - --share=network
   # The library is a user-chosen folder that the app reads and writes directly, by path, across
-  # restarts. Folders outside these are still reachable through the portal picker, but only as
-  # a document-portal path.
-  - --filesystem=home
-  - --filesystem=/media
-  - --filesystem=/run/media
-  - --filesystem=/mnt
+  # restarts, so it has to live under ~/Documents. A folder picked elsewhere comes back through the
+  # document portal as a /run/user/... path instead, which the journal's atomic publication is not
+  # verified on.
+  - --filesystem=xdg-documents
   # Tesseract's CMake build compiles in no data dir and would look in the working directory.
   - --env=TESSDATA_PREFIX=/app/share/tessdata
 
@@ -88,21 +86,19 @@ modules:
         url: https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0/deu.traineddata
         sha256: 19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d
 
+  # Installs the Linux tarball layout (stageLinuxBundle in desktopApp/build.gradle.kts): app/ is
+  # the jpackage app image, share/ the desktop entry, metainfo and icon. The Flathub manifest
+  # (`mise flathub-manifest`) swaps the dir source below for the released tarball.
   - name: no-papers-needed
     buildsystem: simple
     build-commands:
       - cp -a app /app/lib/no-papers-needed
       - ln -s /app/lib/no-papers-needed/bin/no-papers-needed /app/bin/no-papers-needed
-      - install -Dm644 dev.npn.NoPapersNeeded.desktop -t /app/share/applications
-      - install -Dm644 dev.npn.NoPapersNeeded.metainfo.xml -t /app/share/metainfo
-      - install -Dm644 icon.png /app/share/icons/hicolor/512x512/apps/dev.npn.NoPapersNeeded.png
+      - install -Dm644 share/io.github.jeroenev.NoPapersNeeded.desktop -t /app/share/applications
+      - install -Dm644 share/io.github.jeroenev.NoPapersNeeded.metainfo.xml -t /app/share/metainfo
+      - install -Dm644 share/io.github.jeroenev.NoPapersNeeded.png -t /app/share/icons/hicolor/512x512/apps
     sources:
+      # app-source-begin
       - type: dir
-        path: ../build/compose/binaries/main/app/no-papers-needed
-        dest: app
-      - type: file
-        path: dev.npn.NoPapersNeeded.desktop
-      - type: file
-        path: dev.npn.NoPapersNeeded.metainfo.xml
-      - type: file
-        path: ../src/main/resources/icon.png
+        path: ../build/linux-bundle/stage
+      # app-source-end

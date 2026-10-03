@@ -1,0 +1,51 @@
+#!/usr/bin/env bash
+#MISE description="Write the Flathub manifest for a published release (default: npn.version)"
+#USAGE arg "[version]" help="Released version, major.minor.patch"
+set -euo pipefail
+
+# The Flathub manifest is the local one (desktopApp/flatpak/) with the app module's dir source
+# replaced by the release's Linux tarball. Its x-checker-data lets Flathub's external data checker
+# open a pull request on the Flathub repo for every new GitHub release, so this only has to be run
+# for the first submission or after the manifest itself changes.
+
+cd "$(git rev-parse --show-toplevel)"
+
+app_id=io.github.jeroenev.NoPapersNeeded
+repo=jeroenev/NoPapersNeeded
+version="${usage_version:-$(sed -n 's/^npn\.version=//p' gradle.properties)}"
+version="${version#v}"
+tarball="no-papers-needed-$version-linux-x86_64.tar.gz"
+url="https://github.com/$repo/releases/download/v$version/$tarball"
+out=desktopApp/build/flathub
+
+mkdir -p "$out"
+tmp=$(mktemp -d)
+trap 'rm -rf "$tmp"' EXIT
+gh release download "v$version" --repo "$repo" --pattern "$tarball" --dir "$tmp"
+sha256=$(sha256sum "$tmp/$tarball" | cut -d' ' -f1)
+
+source_block=$(
+    cat <<EOF
+      - type: archive
+        url: $url
+        sha256: $sha256
+        x-checker-data:
+          type: json
+          url: https://api.github.com/repos/$repo/releases/latest
+          version-query: .tag_name | sub("^v"; "")
+          url-query: >-
+            .assets[] | select(.name | endswith("-linux-x86_64.tar.gz")) | .browser_download_url
+EOF
+)
+
+# Swap everything between the app-source markers for the archive source.
+block="$source_block" awk '
+    /# app-source-begin/ { print ENVIRON["block"]; skip = 1; next }
+    /# app-source-end/ { skip = 0; next }
+    !skip
+' "desktopApp/flatpak/$app_id.yml" >"$out/$app_id.yml"
+
+# The tarball and its bundled runtime are x86_64 only.
+echo '{ "only-arches": ["x86_64"] }' >"$out/flathub.json"
+
+echo "Wrote $out/$app_id.yml and $out/flathub.json for $version"

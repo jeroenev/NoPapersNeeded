@@ -14,7 +14,7 @@ plugins {
 }
 
 spotless {
-    ratchetFrom("a455ed19723be91ccba4c9274c731e58d910e508")
+    ratchetFrom("740ce4b2b71b44e202742dea883feb6d10a4c797")
 
     kotlin {
         target("**/*.kt")

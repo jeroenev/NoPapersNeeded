@@ -11,7 +11,9 @@ README covers the design, user-facing build/packaging details, and the library f
 - `androidApp` — Android entrypoint (`dev.npn`, launcher `dev.npn/.MainActivity`). The debug
   build is a separate package, `dev.npn.debug`, so it installs next to the release build.
 - `desktopApp` — desktop entrypoint + packaging (deb/rpm/AppImage/uber-jar; Flatpak manifest
-  in `desktopApp/flatpak/`, built by `mise package-flatpak`).
+  in `desktopApp/flatpak/`, built by `mise package-flatpak`; `mise flathub-manifest` derives the
+  Flathub one). The Flatpak app ID is `io.github.jeroenev.NoPapersNeeded`, which Flathub ties
+  to the GitHub repo `jeroenev/NoPapersNeeded`; the Android package stays `dev.npn`.
 - KMP JVM target is named `desktop` (not `jvm`); source sets are
   `desktopMain`/`desktopTest`, tasks are `:core:desktopTest`, `:composeApp:compileKotlinDesktop`, etc.
 - `core` and `composeApp` also run tests against the Android target on a host JVM

@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
+<!-- @VERSION@ and @DATE@ are filled in by the stageLinuxBundle task (desktopApp/build.gradle.kts). -->
 <component type="desktop-application">
-  <id>dev.npn.NoPapersNeeded</id>
+  <id>io.github.jeroenev.NoPapersNeeded</id>
   <name>No papers needed</name>
   <summary>Personal paperless document library</summary>
+  <developer id="io.github.jeroenev">
+    <name>Jeroen Evens</name>
+  </developer>
   <metadata_license>CC0-1.0</metadata_license>
   <project_license>Apache-2.0</project_license>
   <description>
@@ -12,9 +16,17 @@
       tool.
     </p>
   </description>
-  <launchable type="desktop-id">dev.npn.NoPapersNeeded.desktop</launchable>
+  <url type="homepage">https://github.com/jeroenev/NoPapersNeeded</url>
+  <url type="bugtracker">https://github.com/jeroenev/NoPapersNeeded/issues</url>
+  <url type="vcs-browser">https://github.com/jeroenev/NoPapersNeeded</url>
+  <launchable type="desktop-id">io.github.jeroenev.NoPapersNeeded.desktop</launchable>
   <categories>
     <category>Office</category>
   </categories>
   <content_rating type="oars-1.1"/>
+  <releases>
+    <release version="@VERSION@" date="@DATE@">
+      <url type="details">https://github.com/jeroenev/NoPapersNeeded/releases/tag/v@VERSION@</url>
+    </release>
+  </releases>
 </component>

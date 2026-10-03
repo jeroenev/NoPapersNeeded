@@ -89,6 +89,7 @@ below if you prefer to run them directly.
 | `mise package-rpm` | `./gradlew :desktopApp:packageRpm` (needs `rpmbuild`) |
 | `mise package-appimage` | `./gradlew :desktopApp:packageAppImage` |
 | `mise package-flatpak` | Single-file `.flatpak` bundle (needs `flatpak-builder`) |
+| `mise flathub-manifest [version]` | Flathub manifest for a published release |
 | `mise package-jar` | `./gradlew :desktopApp:packageUberJarForCurrentOS` |
 | `mise release <version>` | Bumps the version, tags `v<version>` and pushes; CI publishes the release |
 | `mise icons` | Re-renders the desktop icon bitmaps from `design/branding/icon.svg` |
@@ -200,21 +201,47 @@ mise package-flatpak
 # output: desktopApp/build/flatpak/no-papers-needed-<version>-x86_64.flatpak
 ```
 
-The manifest, `desktopApp/flatpak/dev.npn.NoPapersNeeded.yml`, repackages the same
-jpackage app image on the `org.freedesktop.Platform` runtime; Gradle does not run inside
-flatpak-builder. The sandbox cannot run a host `tesseract`, so the manifest builds
-Tesseract from source with fast models for English, Dutch, French and German. Only the
-first run compiles it; the builder state in `desktopApp/build/flatpak/` keeps it. The
-task needs `flatpak-builder`, either the distro package or
-`flatpak install flathub org.flatpak.Builder`, and installs the runtime and SDK from
-Flathub if they are missing.
+The manifest, `desktopApp/flatpak/io.github.jeroenev.NoPapersNeeded.yml`, installs the
+Linux tarball layout (`./gradlew :desktopApp:packageLinuxTarball`: the jpackage app image plus
+the desktop entry, metainfo and icon) on the `org.freedesktop.Platform` runtime; Gradle does
+not run inside flatpak-builder. The sandbox cannot run a host `tesseract`, so the manifest
+builds Tesseract from source with fast models for English, Dutch, French and German. Only
+the first run compiles it: flatpak-builder's state lives in
+`~/.cache/no-papers-needed/flatpak/`, outside the project, because its sandbox roots link
+into the host's `/run`. The task needs `flatpak-builder`, either the distro package or
+`flatpak install flathub org.flatpak.Builder`, and installs the runtime and SDK from Flathub
+if they are missing.
 
 Install the bundle with `flatpak install --user no-papers-needed-<version>-x86_64.flatpak`;
-it fetches the runtime from Flathub if needed. The sandbox can read and write your home
-folder, `/media`, `/run/media` and `/mnt`, which is where a library can live. Settings and
-the index go to `~/.var/app/dev.npn.NoPapersNeeded/`, so a Flatpak install does not share
-them with a `.deb` or AppImage install on the same machine. There is no update channel: a
-new version is installed the same way.
+it fetches the runtime from Flathub if needed. The sandbox can only read and write
+`~/Documents`, so a Flatpak library lives there: the app opens its library by path on every
+start, and a folder picked elsewhere only comes back as a document-portal path. Settings and
+the index go to `~/.var/app/io.github.jeroenev.NoPapersNeeded/`, so a Flatpak install does
+not share them with a `.deb` or AppImage install on the same machine.
+
+The app ID follows Flathub's rule for GitHub-hosted apps, `io.github.<user>.<repo>`, which is
+why the repository is named `NoPapersNeeded`. To submit to Flathub, run `mise flathub-manifest
+<version>` after that version's release is published. It writes
+`desktopApp/build/flathub/` with the manifest pointing at the release's Linux tarball and a
+`flathub.json` limiting the build to x86_64. Its `x-checker-data` lets Flathub's bot open an
+update pull request for every later release, so the task is only needed again when the
+manifest itself changes. Flathub also wants screenshots in the metainfo before it accepts
+the app.
+
+### Updates
+
+Every desktop build except the Flatpak, and the APK, looks up the latest GitHub release once
+per start and shows a banner with a download link when it is newer (`dev.npn.core.update`).
+The check is a setting under About, on by default; dismissing the banner hides that version
+for good. Inside Flatpak the check is off and hidden, since Flathub delivers updates.
+
+The AppImage embeds update information pointing at the latest release's `.zsync`, so
+AppImageUpdate and launchers such as Gear Lever can update it in place; `packageAppImage`
+writes that `.zsync` next to the AppImage.
+
+On Windows, the release workflow submits each version's `.msi` to winget once the first
+version is in `microsoft/winget-pkgs` (submit that one by hand with `komac new`) and the
+`WINGET_TOKEN` secret holds a classic token with `public_repo`.
 
 ### Releases
 
@@ -231,8 +258,9 @@ mise release 1.2.0
 
 That bumps `npn.version`, commits `[main] Release 1.2.0`, tags `v1.2.0` and pushes both.
 The tag starts `.github/workflows/release.yml`, which refuses a tag that does not match
-`npn.version`, builds the signed APK, AppImage, `.deb`, `.rpm`, `.flatpak`, `.msi` and `.exe` into a
-draft release, adds `SHA256SUMS` and publishes it. If a build job fails the draft stays
+`npn.version`, builds the signed APK, AppImage (with its `.zsync`), `.deb`, `.rpm`,
+`.flatpak`, Linux tarball, `.msi` and `.exe` into a draft release, adds `SHA256SUMS` and
+publishes it. If a build job fails the draft stays
 unpublished: fix the problem, delete the draft and the tag, and release the next patch
 version.
 
