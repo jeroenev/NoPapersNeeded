@@ -54,9 +54,10 @@ tasks.named("check") {
 //   compile classpath, so it is fast and runs before the tests. Baseline: detekt-baseline.xml.
 // - `detektTyped`: the per-compilation tasks below, with type resolution. Only these run the
 //   rules that need the Kotlin Analysis API (LongParameterList, UnusedPrivate*,
-//   SuspendFunSwallowedCancellation, ...); the source-only run skips them silently. They read the
-//   compiled classpath, so CI runs them after compiling. Baseline: detekt-baseline-typed.xml, which
-//   `detektTypedBaseline` rebuilds from all of a module's compilations.
+//   SuspendFunSwallowedCancellation, ...) and the Compose ruleset; the source-only run skips them
+//   silently. They read the compiled classpath, so CI runs them after compiling. Baseline:
+//   detekt-baseline-typed.xml, which `detektTypedBaseline` rebuilds from all of a module's
+//   compilations.
 // Device tests, release variants and :baselineprofile are left to the source-only run: typing
 // them would mean compiling builds CI otherwise never needs.
 val typedDetektCompilations =
@@ -104,11 +105,17 @@ allprojects {
     val typedBaselineTasks = typedCompilations.map { "detektBaseline$it" }
     val typedBaseline = file("detekt-baseline-typed.xml")
     val typedBaselineParts = layout.buildDirectory.dir("detekt-baseline-typed")
+    // The Compose ruleset resolves types for part of its checks, so only the typed run loads it.
+    val typedPlugins = configurations.create("detektTypedPlugins") { isCanBeConsumed = false }
+    if (typedCompilations.isNotEmpty()) {
+        dependencies.add(typedPlugins.name, rootProject.libs.compose.rules.detekt)
+    }
 
     tasks.withType<dev.detekt.gradle.Detekt>().configureEach {
         if (name in typedTasks) {
             // A compilation's sources include generated code (Compose resources, Room, BuildInfo).
             exclude { it.file.invariantSeparatorsPath.contains("/build/generated/") }
+            pluginClasspath.from(typedPlugins)
             // Without this, the plugin falls back to the source-only detekt-baseline.xml.
             if (typedBaseline.exists()) baseline.set(typedBaseline)
         }
@@ -117,6 +124,7 @@ allprojects {
     tasks.withType<dev.detekt.gradle.DetektCreateBaselineTask>().configureEach {
         if (name in typedBaselineTasks) {
             exclude { it.file.invariantSeparatorsPath.contains("/build/generated/") }
+            pluginClasspath.from(typedPlugins)
             baseline.set(typedBaselineParts.map { it.file("$name.xml") })
         }
     }

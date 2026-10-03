@@ -4,11 +4,35 @@
   <CurrentIssues>
     <ID>AbstractClassCanBeConcreteClass:MainDispatcherTest.kt:MainDispatcherTest$MainDispatcherTest</ID>
     <ID>AbstractClassCanBeConcreteClass:MessagesViewModel.kt:MessagesViewModel$MessagesViewModel</ID>
+    <ID>ComposableParamOrder:ConfirmDialog.kt:@Composable fun ConfirmDialog</ID>
+    <ID>ComposableParamOrder:FieldEditor.kt:@Composable fun CommitTextField</ID>
+    <ID>ComposableParamOrder:FilterSheet.kt:@Composable fun FilterPanel</ID>
+    <ID>ComposableParamOrder:LibraryDialogs.kt:@Composable fun TagPickerDialog</ID>
+    <ID>ComposableParamOrder:MetadataOcr.kt:@Composable internal fun OcrTextTab</ID>
+    <ID>ComposableParamOrder:NumericField.kt:@Composable fun NumericField</ID>
+    <ID>ComposableParamOrder:TagChip.kt:@Composable fun TagChip</ID>
+    <ID>ComposableParamOrder:TagDialogs.kt:@Composable fun TagFormDialog</ID>
+    <ID>ComposableParamOrder:TagDialogs.kt:@Composable fun TagPickDialog</ID>
+    <ID>ComposableParamOrder:TopBarAction.kt:@Composable fun TopBarActions</ID>
+    <ID>CompositionLocalAllowlist:DocumentDrafts.kt:internal val LocalDocumentDrafts = staticCompositionLocalOf&lt;DocumentDrafts&gt; { error("Document drafts not provided") }</ID>
+    <ID>CompositionLocalAllowlist:DocumentEditor.kt:/** * True while this document cannot be written: a save is in flight, or the draft is not writable * yet (an unparseable date). Only controls that *trigger* a write read it — editing itself stays * live, so a save in progress never disables the field the user is typing in. */ internal val LocalDocumentWriteBlocked = staticCompositionLocalOf { false }</ID>
+    <ID>CompositionLocalAllowlist:DocumentScanner.kt:val LocalDocumentScanner = staticCompositionLocalOf&lt;DocumentScanner&gt; { NoDocumentScanner }</ID>
+    <ID>CompositionLocalAllowlist:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
+    <ID>CompositionLocalNaming:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
+    <ID>ContentSlotReused:FilterSheet.kt:from: @Composable (Modifier) -&gt; Unit</ID>
+    <ID>ContentSlotReused:FilterSheet.kt:to: @Composable (Modifier) -&gt; Unit</ID>
+    <ID>ContentSlotReused:NavigationShell.kt:content: @Composable () -&gt; Unit</ID>
     <ID>InjectDispatcher:DefaultAppEnvironment.kt:DefaultAppEnvironment$Default</ID>
     <ID>InjectDispatcher:DocumentLayoutTest.kt:DocumentLayoutTest$Unconfined</ID>
     <ID>InjectDispatcher:PageViewer.kt:Default</ID>
     <ID>InjectDispatcher:PlatformHelpers.android.kt:IO</ID>
     <ID>InjectDispatcher:PlatformHelpers.desktop.kt:IO</ID>
+    <ID>LambdaParameterEventTrailing:FieldEditor.kt:onCommit: (String) -&gt; Unit</ID>
+    <ID>LambdaParameterInRestartableEffect:DocGrid.kt:onColumnWidthChange: (Int) -&gt; Unit</ID>
+    <ID>LambdaParameterInRestartableEffect:FilterSheet.kt:onValidity: (Boolean) -&gt; Unit</ID>
+    <ID>LambdaParameterInRestartableEffect:PageViewer.kt:onPageChange: (Int) -&gt; Unit</ID>
+    <ID>LambdaParameterInRestartableEffect:PageViewer.kt:render: suspend (pageIndex: Int, maxDim: Int) -&gt; ByteArray?</ID>
+    <ID>LambdaParameterInRestartableEffect:SettingsScreen.kt:onShown: () -&gt; Unit</ID>
     <ID>LongParameterList:AiChatScreen.kt:@Composable private fun AiChatTopBar</ID>
     <ID>LongParameterList:DocActions.kt:@Composable private fun DocActionsMenu</ID>
     <ID>LongParameterList:DocDetailScreen.kt:@Composable private fun LoadedDocScreen</ID>
@@ -18,9 +42,64 @@
     <ID>LongParameterList:LibraryScreen.kt:@Composable private fun LibraryContent</ID>
     <ID>LongParameterList:LibraryScreen.kt:@Composable private fun SelectionTopBar</ID>
     <ID>LongParameterList:LibraryViewsMenu.kt:@Composable internal fun LibraryViewsMenuButton</ID>
+    <ID>ModifierMissing:AiChatScreen.kt:@Composable fun AiChatScreen</ID>
+    <ID>ModifierMissing:AiEditReviewScreen.kt:@Composable fun AiEditReviewScreen</ID>
+    <ID>ModifierMissing:AiEditScreen.kt:@Composable fun AiEditScreen</ID>
+    <ID>ModifierMissing:App.kt:@Composable fun App</ID>
+    <ID>ModifierMissing:DocItems.kt:@Composable fun DocGridCard</ID>
+    <ID>ModifierMissing:DocItems.kt:@Composable fun DocListRow</ID>
+    <ID>ModifierMissing:FieldDefFormState.kt:@Composable fun FieldDefForm</ID>
+    <ID>ModifierMissing:LibraryScreen.kt:@Composable fun LibraryScreen</ID>
+    <ID>ModifierMissing:NavigationShell.kt:@Composable fun NavigationShell</ID>
+    <ID>ModifierMissing:OnboardingScreen.kt:@Composable @Suppress("CyclomaticComplexMethod") fun OnboardingScreen</ID>
+    <ID>ModifierMissing:QueueScreen.kt:@Composable fun QueueScreen</ID>
+    <ID>ModifierMissing:SafStorageSwitch.kt:@Composable fun SafStorageSwitch</ID>
+    <ID>ModifierMissing:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
+    <ID>ModifierMissing:TagSuggestionLabel.kt:@Composable fun TagSuggestionLabel</ID>
+    <ID>ModifierMissing:TooltipIconButton.kt:@Composable fun TooltipIconButton</ID>
+    <ID>ModifierMissing:TopBarAction.kt:@Composable fun TopBarActions</ID>
+    <ID>ModifierWithoutDefault:AiEditSetupControls.kt:modifier: Modifier</ID>
+    <ID>ModifierWithoutDefault:FieldEditor.kt:modifier: Modifier</ID>
+    <ID>ModifierWithoutDefault:FilterSheet.kt:modifier: Modifier</ID>
+    <ID>MultipleEmitters:AiEditReviewUi.kt:@Composable private fun RemovalChipsRow</ID>
+    <ID>MultipleEmitters:DocumentEditor.kt:@OptIn(ExperimentalLayoutApi::class) @Composable private fun EditorSaveBar</ID>
+    <ID>MultipleEmitters:FilterSheet.kt:@Composable private fun FilterFields</ID>
+    <ID>MultipleEmitters:FilterSheet.kt:@Composable private fun TagFilterSection</ID>
+    <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun OcrLanguageSettings</ID>
+    <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun WatchedFolderSettings</ID>
+    <ID>MultipleEmitters:OnboardingScreen.kt:@Composable private fun StorageAccessStep</ID>
+    <ID>MultipleEmitters:QueueScreen.kt:@Composable private fun EditRunTrouble</ID>
+    <ID>MultipleEmitters:QueueScreen.kt:@Composable private fun QueueRowTrouble</ID>
+    <ID>MultipleEmitters:TagManagementScreen.kt:@Composable private fun BulkMenuItems</ID>
+    <ID>MultipleEmitters:TagManagementScreen.kt:@Composable private fun SingleMenuItems</ID>
+    <ID>MutableStateAutoboxing:DocGrid.kt:mutableStateOf(0f)</ID>
+    <ID>MutableStateAutoboxing:FilterSheet.kt:mutableStateOf(0)</ID>
+    <ID>MutableStateAutoboxing:MetadataOcr.kt:mutableStateOf(0)</ID>
+    <ID>MutableStateAutoboxing:MetadataPanel.kt:mutableStateOf(0)</ID>
+    <ID>MutableStateAutoboxing:PageViewer.kt:mutableStateOf(0)</ID>
+    <ID>MutableStateAutoboxing:PageViewer.kt:mutableStateOf(0f)</ID>
+    <ID>MutableStateAutoboxing:SearchField.kt:mutableStateOf(0)</ID>
     <ID>NoNameShadowing:AiEditViewModel.kt:AiEditViewModel${ it.copy(phase = EditPhase.Queued(docIds.size)) }</ID>
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, from = it)) }</ID>
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, to = it)) }</ID>
+    <ID>ParameterNaming:AiChatScreen.kt:onOpenFiltered: (List&lt;String&gt;) -&gt; Unit</ID>
+    <ID>ParameterNaming:App.kt:onRepickReturned: (String) -&gt; Unit</ID>
+    <ID>ParameterNaming:DocActions.kt:onGone: () -&gt; Unit</ID>
+    <ID>ParameterNaming:DocPreviewPanel.kt:onReviewed: () -&gt; Unit</ID>
+    <ID>ParameterNaming:DocumentEditor.kt:onReviewed: (() -&gt; Unit)?</ID>
+    <ID>ParameterNaming:DocumentEditor.kt:onReviewed: (() -&gt; Unit)? = null</ID>
+    <ID>ParameterNaming:LibraryFolderPicker.android.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
+    <ID>ParameterNaming:LibraryFolderPicker.desktop.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
+    <ID>ParameterNaming:LibraryFolderPicker.kt:onPicked: (PlatformFile?) -&gt; Unit</ID>
+    <ID>ParameterNaming:LibraryFolderPicker.kt:onPicked: (String) -&gt; Unit</ID>
+    <ID>ParameterNaming:LibraryScreen.kt:onSetReviewed: (Boolean) -&gt; Unit</ID>
+    <ID>ParameterNaming:MetadataPanel.kt:onSetReviewed: (Boolean) -&gt; Unit</ID>
+    <ID>ParameterNaming:SearchField.kt:onSuggestionSelected: ((String) -&gt; Unit)? = null</ID>
+    <ID>ParameterNaming:SettingsScreen.kt:onShown: () -&gt; Unit</ID>
+    <ID>ParameterNaming:TagManagementScreen.kt:/** Pulls this card into the selection before a menu opens on it (see call site). */ onEnsureSelected: () -&gt; Unit</ID>
+    <ID>ParameterNaming:TagManagementScreen.kt:onDeleteSelected: () -&gt; Unit</ID>
+    <ID>ParameterNaming:TagManagementScreen.kt:onMergeSelected: () -&gt; Unit</ID>
+    <ID>ParameterNaming:TagManagementScreen.kt:onStyleSelected: () -&gt; Unit</ID>
     <ID>SpreadOperator:HistoryTextResources.kt:(key.resource, *arguments.toTypedArray())</ID>
     <ID>SpreadOperator:UiText.kt:(res, *args.renderAll())</ID>
     <ID>SpreadOperator:UiText.kt:(res, quantity, *args.renderAll())</ID>
@@ -50,5 +129,31 @@
     <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$filter.query ?: ""</ID>
     <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$view.filter.query ?: ""</ID>
     <ID>VarCouldBeVal:LocalAppLocale.kt:LocalAppLocale$private var default: Locale? = null</ID>
+    <ID>ViewModelForwarding:AiEditScreen.kt:AiEditSetup(ui, vm, session.content)</ID>
+    <ID>ViewModelForwarding:AiEditSetup.kt:AdvancedSection(ui, plan, vm)</ID>
+    <ID>ViewModelForwarding:AiEditSetup.kt:FieldSection(ui, vm)</ID>
+    <ID>ViewModelForwarding:AiEditSetup.kt:PromptField(ui, vm)</ID>
+    <ID>ViewModelForwarding:AiEditSetup.kt:RunSection(ui, plan, vm)</ID>
+    <ID>ViewModelForwarding:AiEditSetup.kt:SavedViewPicker(ui, vm)</ID>
+    <ID>ViewModelForwarding:AiEditSetup.kt:ScopeSection(ui, preview, vm, content)</ID>
+    <ID>ViewModelForwarding:AiEditSetup.kt:SetupForm(ui, preview, plan, vm, content, wide)</ID>
+    <ID>ViewModelForwarding:AiEditSetup.kt:TagSection(ui, vm)</ID>
+    <ID>ViewModelForwarding:DocActions.kt:BakeDialog(vm = vm, snackbar = snackbar, onDismiss = onDismiss)</ID>
+    <ID>ViewModelForwarding:DocActions.kt:DocActionDialogs( dialog = dialog, pageCount = ui.pageCount.count, aiOcr = ui.aiOcr, vm = vm, snackbar = snackbar, onGone = onGone, onDismiss = { dialog = null }, )</ID>
+    <ID>ViewModelForwarding:DocActions.kt:ShareOrExportButton(item = item, vm = vm, snackbar = snackbar)</ID>
+    <ID>ViewModelForwarding:DocActions.kt:SplitActionDialog( pageCount = pageCount, vm = vm, snackbar = snackbar, onGone = onGone, onDismiss = onDismiss, )</ID>
+    <ID>ViewModelForwarding:DocDetailScreen.kt:DocActions( item = current, vm = vm, snackbar = snackbar, onGone = onBack, compact = compact, )</ID>
+    <ID>ViewModelInjection:AiChatScreen.kt:val vm: AiChatViewModel = viewModel { AiChatViewModel(session) }</ID>
+    <ID>ViewModelInjection:AiEditReviewScreen.kt:val vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) }</ID>
+    <ID>ViewModelInjection:AiEditScreen.kt:val vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) }</ID>
+    <ID>ViewModelInjection:AutoMatchRulesScreen.kt:val vm: AutoMatchRulesViewModel = viewModel { AutoMatchRulesViewModel(session) }</ID>
+    <ID>ViewModelInjection:DocDetailScreen.kt:val vm: DocDetailViewModel = viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") { DocDetailViewModel(docId, session, searchQuery) }</ID>
+    <ID>ViewModelInjection:DocPreviewPanel.kt:val vm: DocDetailViewModel = viewModel { DocDetailViewModel(docId, session, initialItem = item) }</ID>
+    <ID>ViewModelInjection:LibraryScreen.kt:val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }</ID>
+    <ID>ViewModelInjection:QueueScreen.kt:val vm: QueueViewModel = viewModel { QueueViewModel(session) }</ID>
+    <ID>ViewModelInjection:SettingsScreen.kt:val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }</ID>
+    <ID>ViewModelInjection:TagManagementScreen.kt:val vm: TagManagementViewModel = viewModel { TagManagementViewModel(session) }</ID>
+    <ID>ViewModelInjection:TrashScreen.kt:val vm: TrashViewModel = viewModel { TrashViewModel(session) }</ID>
+    <ID>ViewModelInjection:UpdateBanner.kt:val vm: UpdateNoticeViewModel = viewModel { UpdateNoticeViewModel(settings, GitHubLatestRelease()) }</ID>
   </CurrentIssues>
 </SmellBaseline>

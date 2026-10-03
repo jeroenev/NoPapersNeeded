@@ -68,9 +68,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
     `detektMainAndroid`, `detektTestDesktop`, `detektHostTestAndroid` in `core`/`composeApp`;
     `detektDebug` in `androidApp`; `detektMain` in `desktopApp`). Only these run the rules that
     need the Analysis API (`LongParameterList`, `UnusedPrivate*`, `UnusedVariable`,
-    `SuspendFunSwallowedCancellation`, ...); the source-only run skips them silently. Baseline:
-    per-module `detekt-baseline-typed.xml`. Device tests, release variants and `baselineprofile`
-    only get the source-only run.
+    `SuspendFunSwallowedCancellation`, ...); the source-only run skips them silently. They also
+    load the Compose ruleset (`io.nlopez.compose.rules:detekt`, its default config): viewmodels
+    forwarded into child composables, composables without a `modifier`, parameter order and
+    naming. Baseline: per-module `detekt-baseline-typed.xml`. Device tests, release variants and
+    `baselineprofile` only get the source-only run.
 - Baselines grandfather old findings; CI fails on NEW issues only. Do not add to baselines; fix
   findings in code you touch. Baselines should shrink: after a cleanup, regenerate with
   `./gradlew :<module>:detektBaseline` or `./gradlew detektTypedBaseline` and check that the diff
