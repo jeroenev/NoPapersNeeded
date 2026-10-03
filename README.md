@@ -9,6 +9,8 @@ download, and find it again in seconds by typing a word from the page.
 There's no account to create and no server to run. Your documents stay ordinary PDFs in
 a folder you choose, readable by any other app, today and in ten years.
 
+![Your library at a glance](design/screenshots/library.png)
+
 ## Why you'll like it
 
 - **Find anything.** Search the full text of every document, scans included. Text
@@ -29,6 +31,25 @@ a folder you choose, readable by any other app, today and in ten years.
   a database. Stop using the app and you still have a tidy folder of PDFs.
 - **Safe by design.** Deleted documents go to a trash you can restore from, and the app
   spots duplicates and files that went missing.
+
+## A closer look
+
+| | |
+|---|---|
+| ![Search finds words inside your documents](design/screenshots/search.png) | ![Read a document right next to your library](design/screenshots/preview.png) |
+| **Search** finds the words inside your documents, not just their names. | **Preview** a document right next to your library. |
+| ![Title, correspondent, type, date and tags](design/screenshots/details.png) | ![Filter by tags, correspondent, type and more](design/screenshots/filters.png) |
+| **Details** such as correspondent, type and date, plus fields of your own. | **Filters** narrow the library down by tags, correspondent, type or any field. |
+
+### On your phone
+
+The same library, laid out for a small screen.
+
+<p>
+  <img src="design/screenshots/phone-library.png" alt="Library on a phone" width="250">
+  <img src="design/screenshots/phone-details.png" alt="Document details on a phone" width="250">
+  <img src="design/screenshots/phone-tags.png" alt="Tags on a phone" width="250">
+</p>
 
 ## Optional AI assistant
 
