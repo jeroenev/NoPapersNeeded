@@ -20,6 +20,7 @@ import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -174,7 +175,7 @@ class JournalCoordinator internal constructor(
      */
     suspend fun refreshState(preserveLifecycleDocs: Set<String> = emptySet()) =
         locked {
-            try {
+            blockingWritesOnFailure {
                 when (val outcome = accumulator.reconcileOnOpen()) {
                     is OpenReconciliation.ProjectionCurrent -> {
                         folded = null
@@ -191,9 +192,6 @@ class JournalCoordinator internal constructor(
                     }
                 }
                 writeBlockReason = null
-            } catch (failure: Throwable) {
-                blockWrites(failure)
-                throw failure
             }
         }
 
@@ -223,7 +221,7 @@ class JournalCoordinator internal constructor(
     /** Strictly reconcile metadata before touching the document projection. */
     suspend fun rescan(): ScanReport =
         locked {
-            try {
+            blockingWritesOnFailure {
                 val current = foldedState()
                 val reconciled = accumulator.reconcile(current).state ?: current
                 folded = reconciled
@@ -233,15 +231,12 @@ class JournalCoordinator internal constructor(
                 accumulator.markReady(reconciled.maxHlc)
                 writeBlockReason = null
                 report
-            } catch (failure: Throwable) {
-                blockWrites(failure)
-                throw failure
             }
         }
 
     suspend fun reconcileMetadata() =
         locked {
-            try {
+            blockingWritesOnFailure {
                 val reconciliation = accumulator.reconcile(folded)
                 val current = reconciliation.state
                 if (current == null) {
@@ -263,9 +258,6 @@ class JournalCoordinator internal constructor(
                 }
                 accumulator.markReady(current.maxHlc)
                 writeBlockReason = null
-            } catch (failure: Throwable) {
-                blockWrites(failure)
-                throw failure
             }
         }
 
@@ -484,6 +476,26 @@ class JournalCoordinator internal constructor(
     }
 
     /**
+     * Run a fold or reconcile pass, refusing later writes if it fails: a failed pass can leave the
+     * live fold out of step with the journal, and building OR-set ops on it would be wrong.
+     *
+     * Cancellation is not such a failure. A rescan whose caller left the screen says nothing about
+     * the journal, so it blocks nothing. The pass may still have stopped between ingesting a
+     * source and folding it, so the live fold is dropped and refolded from the store when next
+     * needed.
+     */
+    private inline fun <T> blockingWritesOnFailure(pass: () -> T): T =
+        try {
+            pass()
+        } catch (cancelled: CancellationException) {
+            folded = null
+            throw cancelled
+        } catch (failure: Throwable) {
+            blockWrites(failure)
+            throw failure
+        }
+
+    /**
      * Seed both write clocks past [maxHlc]. Takes the watermark explicitly rather than reading it
      * off the folded state, so the open path can pass the value its stored projection recorded
      * without folding anything.
@@ -508,11 +520,16 @@ class JournalCoordinator internal constructor(
      *    and is attached as suppressed to the rethrown original.
      *
      * This mirrors the latch-then-rethrow contract of [refreshState]/[rescan]/[reconcileMetadata]
-     * so every entry point behaves uniformly.
+     * so every entry point behaves uniformly, cancellation included (see [blockingWritesOnFailure]).
      */
     private suspend fun <T> withDurableProjectionRecovery(attempt: suspend () -> T): T =
         try {
             attempt()
+        } catch (cancelled: CancellationException) {
+            // The projection transaction rolled back; the live fold may hold events it did not
+            // keep. Refold from the store on next use rather than block writes.
+            folded = null
+            throw cancelled
         } catch (failure: Throwable) {
             blockWrites(failure)
             try {
