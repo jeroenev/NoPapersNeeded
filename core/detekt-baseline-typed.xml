@@ -1,0 +1,206 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>AbstractClassCanBeConcreteClass:WorkQueueReaderTest.kt:WorkQueueReaderFixture$WorkQueueReaderFixture</ID>
+    <ID>AbstractClassCanBeInterface:JournalOp.kt:JournalOp$JournalOp</ID>
+    <ID>AbstractClassCanBeInterface:SegmentWriter.kt:ForkCheck$ForkCheck</ID>
+    <ID>CyclomaticComplexMethod:FoldedState.kt:FoldedState$fun apply</ID>
+    <ID>CyclomaticComplexMethod:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$override fun watch: Flow&lt;FsEvent&gt;</ID>
+    <ID>DoubleMutabilityForCollection:LibrarySessionImpl.kt:LibrarySessionImpl$private var jobs: MutableList&lt;Job&gt; = ArrayList()</ID>
+    <ID>EmptyWhileBlock:DocumentFilterTest.kt:DocumentFilterTest${}</ID>
+    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.ALL))</ID>
+    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.MISSING_FIELDS, missing = missing))</ID>
+    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.REVIEW_QUEUE))</ID>
+    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.SAVED_VIEW, savedView = view))</ID>
+    <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.UNTAGGED))</ID>
+    <ID>ImplicitDefaultLocale:JvmLibraryFileSystemTest.kt:JvmLibraryFileSystemTest$"%02x".format(it)</ID>
+    <ID>InjectDispatcher:DirThumbnailStore.kt:DirThumbnailStore$IO</ID>
+    <ID>InjectDispatcher:DocumentRepositoryImpl.kt:DocumentRepositoryImpl$Default</ID>
+    <ID>InjectDispatcher:Indexer.kt:Indexer$Default</ID>
+    <ID>InjectDispatcher:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$IO</ID>
+    <ID>InjectDispatcher:JvmLibraryFileSystemNoReplaceTest.kt:JvmLibraryFileSystemNoReplaceTest$IO</ID>
+    <ID>InjectDispatcher:JvmLibraryFileSystemTest.kt:JvmLibraryFileSystemTest$IO</ID>
+    <ID>InjectDispatcher:JvmWatchedFolder.kt:JvmWatchedFolder$IO</ID>
+    <ID>InjectDispatcher:LocalLibraryFolders.kt:LocalLibraryFolders$IO</ID>
+    <ID>InjectDispatcher:NpnDatabase.android.kt:IO</ID>
+    <ID>InjectDispatcher:NpnDatabase.desktop.kt:IO</ID>
+    <ID>InjectDispatcher:PdfBoxAndroidEngine.kt:PdfBoxAndroidEngine$IO</ID>
+    <ID>InjectDispatcher:PdfBoxAndroidXmpIO.kt:PdfBoxAndroidXmpIO$IO</ID>
+    <ID>InjectDispatcher:PdfBoxEngine.kt:PdfBoxEngine$IO</ID>
+    <ID>InjectDispatcher:PdfBoxXmpIO.kt:PdfBoxXmpIO$IO</ID>
+    <ID>InjectDispatcher:RenderGate.android.kt:Default</ID>
+    <ID>InjectDispatcher:RenderGate.desktop.kt:Default</ID>
+    <ID>InjectDispatcher:SafLibraryFileSystem.kt:SafLibraryFileSystem$IO</ID>
+    <ID>InjectDispatcher:SafWatchedFolder.kt:SafWatchedFolder$IO</ID>
+    <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
+    <ID>InjectDispatcher:TesseractCliEngine.kt:TesseractCliEngine$IO</ID>
+    <ID>LongParameterList:LibrarySessionImpl.kt:LibrarySessionImpl</ID>
+    <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
+    <ID>LoopWithTooManyJumpStatements:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$while</ID>
+    <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
+    <ID>LoopWithTooManyJumpStatements:SavedViewRepositoryImpl.kt:SavedViewRepositoryImpl$for</ID>
+    <ID>LoopWithTooManyJumpStatements:XmpParser.kt:XmpParser$while</ID>
+    <ID>MapGetWithNotNullAssertionOperator:AdaptersTest.kt:AdaptersTest$byDevice["devA"]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:AdaptersTest.kt:AdaptersTest$byDevice["devB"]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:NpnDatabaseTest.kt:NpnDatabaseTest$counts["empty"]!!</ID>
+    <ID>MapGetWithNotNullAssertionOperator:NpnDatabaseTest.kt:NpnDatabaseTest$counts["invoice"]!!</ID>
+    <ID>MatchingDeclarationName:ExternalSource.desktop.kt:ExternalSource</ID>
+    <ID>NoNameShadowing:AiOcr.kt:{ if (it is CancellationException) throw it }</ID>
+    <ID>NoNameShadowing:AiOcr.kt:{ return it }</ID>
+    <ID>RedundantSuspendModifier:LibrarySessionImpl.kt:LibrarySessionImpl$suspend</ID>
+    <ID>ReturnCount:FoldedState.kt:FoldedState$fun apply</ID>
+    <ID>ReturnCount:NpnPaths.kt:NpnPaths$fun indexable: Boolean</ID>
+    <ID>SpreadOperator:DebouncedTest.kt:DebouncedTest$(*churn, gapMillis = 20)</ID>
+    <ID>SpreadOperator:IndexerWriteSettleTest.kt:IndexerWriteSettleTest$(p, content.encodeToByteArray(), *options)</ID>
+    <ID>SuspendFunSwallowedCancellation:AiEditApply.kt:AiEditApply$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:AiEditQueue.kt:AiEditQueue$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:AiEditReview.kt:ReviewProjector$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:AiEditRun.kt:AiEditRun$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:AiEditRunTest.kt:AiEditRunSuggestTest$catch (e: CancellationException) { cancelled = true throw e }</ID>
+    <ID>SuspendFunSwallowedCancellation:AiOcr.kt:runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:AiRuntimeTransportTest.kt:AiRuntimeTransportTest$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:BakeService.kt:BakeService$catch (_: Throwable) { false }</ID>
+    <ID>SuspendFunSwallowedCancellation:BakeService.kt:BakeService$catch (e: Throwable) { // Restore from the temp file, which still holds the baked bytes. runCatching { val recovered = fs.readBytes(tmpPath) if (!fs.exists(norm)) fs.writeBytesOnce(norm, recovered) } runCatching { fs.delete(tmpPath) } throw e }</ID>
+    <ID>SuspendFunSwallowedCancellation:BakeService.kt:BakeService$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:ContentAddressedJournalWriter.kt:catch (failure: Throwable) { runCatching { fs.delete(stagingPath) } throw failure }</ID>
+    <ID>SuspendFunSwallowedCancellation:ContentAddressedJournalWriter.kt:runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:DocContentFacadeImpl.kt:DocContentFacadeImpl$catch (t: Throwable) { logFailure("bakeInPlace failed for $docId", t) false }</ID>
+    <ID>SuspendFunSwallowedCancellation:DocContentFacadeImpl.kt:DocContentFacadeImpl$catch (t: Throwable) { logFailure("bakedCopyBytes failed for $docId", t) null }</ID>
+    <ID>SuspendFunSwallowedCancellation:DocContentFacadeImpl.kt:DocContentFacadeImpl$catch (t: Throwable) { logFailure("pageCount failed for $docId", t) null }</ID>
+    <ID>SuspendFunSwallowedCancellation:DocContentFacadeImpl.kt:DocContentFacadeImpl$catch (t: Throwable) { logFailure("rawBytes failed for $docId", t) null }</ID>
+    <ID>SuspendFunSwallowedCancellation:DocContentFacadeImpl.kt:DocContentFacadeImpl$catch (t: Throwable) { logFailure("renderPage failed for $docId p$pageIndex", t) null }</ID>
+    <ID>SuspendFunSwallowedCancellation:DocContentFacadeImpl.kt:DocContentFacadeImpl$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:ImportService.kt:ImportService$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:JournalCoordinator.kt:JournalCoordinator$catch (failure: Throwable) { blockWrites(failure) try { recoverDurableProjection() } catch (recoveryFailure: Throwable) { blockWrites(recoveryFailure) failure.addSuppressed(recoveryFailure) throw failure } throw failure }</ID>
+    <ID>SuspendFunSwallowedCancellation:JournalCoordinator.kt:JournalCoordinator$catch (recoveryFailure: Throwable) { blockWrites(recoveryFailure) failure.addSuppressed(recoveryFailure) throw failure }</ID>
+    <ID>SuspendFunSwallowedCancellation:JvmLibraryFileSystemNoReplaceTest.kt:JvmLibraryFileSystemNoReplaceTest$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:KoogChatAgent.kt:KoogChatAgent$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:LibrarySessionImpl.kt:LibrarySessionImpl$catch (e: CancellationException) { work.cancel() // The caller was cancelled: let its own cancellation propagate. Otherwise the session // closed under the call, which is a failure the caller should see, not a cancellation. currentCoroutineContext().ensureActive() throw IllegalStateException("Library session is closed", e) }</ID>
+    <ID>SuspendFunSwallowedCancellation:LibrarySessionImpl.kt:LibrarySessionImpl$catch (t: Throwable) { ImportOutcome.Failed(t.message ?: "image conversion failed") }</ID>
+    <ID>SuspendFunSwallowedCancellation:LibrarySessionImpl.kt:LibrarySessionImpl$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:MaintenanceService.kt:MaintenanceService$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:MetadataAccumulator.kt:MetadataAccumulator$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:MetadataWriterImpl.kt:MetadataWriterImpl$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:OcrPipeline.kt:OcrPipeline$catch (t: Throwable) { // Already exists for this device+engine: keep the published file. if (decode(doc.docId, writerKey) == null) { fail(doc.docId, "sidecar write/read failed for $writerKey", t) OwnOcr.FAILED } else { OwnOcr.ADOPTED } }</ID>
+    <ID>SuspendFunSwallowedCancellation:OcrPipeline.kt:OcrPipeline$catch (t: Throwable) { fail(doc.docId, "ocr failed", t) return OwnOcr.FAILED }</ID>
+    <ID>SuspendFunSwallowedCancellation:OcrPipeline.kt:OcrPipeline$catch (t: Throwable) { fail(doc.docId, "read failed", t) return OwnOcr.FAILED }</ID>
+    <ID>SuspendFunSwallowedCancellation:PdfBoxAndroidXmpIO.kt:PdfBoxAndroidXmpIO$catch (_: Throwable) { false }</ID>
+    <ID>SuspendFunSwallowedCancellation:PdfBoxXmpIO.kt:PdfBoxXmpIO$catch (_: Throwable) { false }</ID>
+    <ID>SuspendFunSwallowedCancellation:SafLibraryFileSystem.kt:SafLibraryFileSystem$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:SessionSmokeTest.kt:SessionSmokeTest$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:SnapshotSupport.kt:SnapshotSupport$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:SplitService.kt:SplitService$catch (t: Throwable) { Result.Failed("Could not read the PDF: ${t.message}") }</ID>
+    <ID>SuspendFunSwallowedCancellation:SplitService.kt:SplitService$catch (t: Throwable) { return Result.Failed("Splitting failed on part ${i + 1}: ${t.message}") }</ID>
+    <ID>SuspendFunSwallowedCancellation:ThumbnailService.kt:ThumbnailService$catch (_: Throwable) { return null }</ID>
+    <ID>SuspendFunSwallowedCancellation:ThumbnailService.kt:ThumbnailService$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:WatchedFolderImporter.kt:WatchedFolderImporter$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:WriteSettle.kt:WriteSettle$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:ZenGoResponsesStreamTest.kt:ZenGoResponsesStreamTest$runCatching</ID>
+    <ID>SwallowedException:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$e: java.nio.file.FileAlreadyExistsException</ID>
+    <ID>TooGenericExceptionThrown:OcrPipelineTest.kt:ThrowingOcrEngine$throw RuntimeException("boom")</ID>
+    <ID>TooManyFunctions:DocumentDao.kt:DocumentDao</ID>
+    <ID>TooManyFunctions:NpnDatabaseTest.kt:NpnDatabaseTest</ID>
+    <ID>UnsafeCallOnNullableType:AdaptersTest.kt:AdaptersTest$byDevice["devA"]!!</ID>
+    <ID>UnsafeCallOnNullableType:AdaptersTest.kt:AdaptersTest$byDevice["devB"]!!</ID>
+    <ID>UnsafeCallOnNullableType:AiAutoEnricherRig.kt:Rig$db.documentDao().getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:AiOcrPipelineTest.kt:AiOcrPipelineTest$db.documentDao().getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:AiOcrPipelineTest.kt:AiOcrPipelineTest$db.ocrQueueDao().getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:CompactionReconcileTest.kt:CompactionReconcileTest$db.documentDao().rowAtPath("a.pdf")!!</ID>
+    <ID>UnsafeCallOnNullableType:CompactionReconcileTest.kt:CompactionReconcileTest$db.metadataProjectionDao().state()!!</ID>
+    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$a.db .documentDao() .getByDocId(hash)!!</ID>
+    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$b.db .documentDao() .getByDocId(hash)!!</ID>
+    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$rebuilt.db .documentDao() .getByDocId(hash)!!</ID>
+    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$rig.db .documentDao() .getByDocId(blocker)!!</ID>
+    <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$rig.db .documentDao() .getByDocId(hash)!!</ID>
+    <ID>UnsafeCallOnNullableType:ExternalDocumentMovesTest.kt:ExternalDocumentMovesTest$a.db .documentDao() .getByDocId(hash)!!</ID>
+    <ID>UnsafeCallOnNullableType:ExternalDocumentMovesTest.kt:ExternalDocumentMovesTest$b.db .documentDao() .getByDocId(hash)!!</ID>
+    <ID>UnsafeCallOnNullableType:ExternalDocumentMovesTest.kt:ExternalDocumentMovesTest$rig.db .documentDao() .getByDocId(hash)!!</ID>
+    <ID>UnsafeCallOnNullableType:FieldModelAcceptanceTest.kt:FieldModelAcceptanceTest$rig.session.documents .observeDoc(a) .first()!!</ID>
+    <ID>UnsafeCallOnNullableType:FoldedState.kt:FoldedState$claims.maxByOrNull { it.hlc }!!</ID>
+    <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$db2.documentDao().getByDocId(id)!!</ID>
+    <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$rig.db .documentDao() .getByDocId(id)!!</ID>
+    <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$rig.session.documents .observeDoc(id) .first()!!</ID>
+    <ID>UnsafeCallOnNullableType:HlcSeedingTest.kt:HlcSeedingTest$session2.documents .observeDoc(id) .first()!!</ID>
+    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db .documentDao() .getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db .documentDao() .getByDocId(oldId)!!</ID>
+    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db .documentDao() .getByDocId(pm.docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db .documentDao() .rowAtPath("a.pdf")!!</ID>
+    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db .ocrQueueDao() .nextPending()!!</ID>
+    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db.documentDao().getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:IndexerTest.kt:IndexerTest$rig.db.documentDao().rowAtPath("archive/a.pdf")!!</ID>
+    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["dev"]!!</ID>
+    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["hlc"]!!</ID>
+    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["op"]!!</ID>
+    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$obj["seq"]!!</ID>
+    <ID>UnsafeCallOnNullableType:JournalEventSerializer.kt:JournalEventSerializer$this[name]!!</ID>
+    <ID>UnsafeCallOnNullableType:JvmLibraryFileSystemNoReplaceTest.kt:JvmLibraryFileSystemNoReplaceTest$runCatching { Files.createLink(b, c) }.exceptionOrNull()!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterBatchTest.kt:MetadataWriterBatchTest$rig.db.documentDao().getByDocId(a)!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterBatchTest.kt:MetadataWriterBatchTest$rig.db.documentDao().getByDocId(b)!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterBatchTest.kt:MetadataWriterBatchTest$rig.db.documentDao().getByDocId(id)!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$compactor.publish(candidates)!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$db2.documentDao().getByDocId(id)!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$db2.metadataProjectionDao().state()!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$rig.db .documentDao() .getByDocId(id)!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$rig.db .metadataProjectionDao() .state()!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$rig.db.documentDao().getByDocId(id)!!</ID>
+    <ID>UnsafeCallOnNullableType:MetadataWriterTest.kt:MetadataWriterTest$rig.session.documents .observeDoc(id) .first()!!</ID>
+    <ID>UnsafeCallOnNullableType:NpnDatabaseTest.kt:NpnDatabaseTest$counts["empty"]!!</ID>
+    <ID>UnsafeCallOnNullableType:NpnDatabaseTest.kt:NpnDatabaseTest$counts["invoice"]!!</ID>
+    <ID>UnsafeCallOnNullableType:NpnDatabaseTest.kt:NpnDatabaseTest$dao.getByDocId("a".repeat(64))!!</ID>
+    <ID>UnsafeCallOnNullableType:NpnDatabaseTest.kt:NpnDatabaseTest$dao.nextPending()!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrPipelineForeignEmbeddedTest.kt:OcrPipelineForeignEmbeddedTest$rig.db .documentDao() .getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrPipelineHookTest.kt:OcrPipelineHookTest$rig.db .documentDao() .getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrPipelineRerunTest.kt:OcrPipelineRerunTest$rig.db .ocrQueueDao() .getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrPipelineStaleFileTest.kt:OcrPipelineStaleFileTest$rig.db .documentDao() .getByDocId(realId)!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$db.documentDao().getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$dbB.documentDao().getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$repo .observeDoc(docId) .first()!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$repo.observeDoc(docId).first()!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrQueueRecoveryTest.kt:OcrQueueRecoveryTest$db.documentDao().getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:OcrQueueRecoveryTest.kt:OcrQueueRecoveryTest$db.ocrQueueDao().getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().getByDocId(a)!!</ID>
+    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().getByDocId(b)!!</ID>
+    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().rowAtPath("a.pdf")!!</ID>
+    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().rowAtPath("b.pdf")!!</ID>
+    <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.metadataProjectionDao().state()!!</ID>
+    <ID>UnsafeCallOnNullableType:SplitPdfTest.kt:SplitPdfTest$rig.session.documents .observeDoc(done.partDocIds[0]) .first()!!</ID>
+    <ID>UnsafeCallOnNullableType:StoragePathRuleIntegrationTest.kt:StoragePathRuleIntegrationTest$rig.db .documentDao() .getByDocId(imported.docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:StoragePathRuleIntegrationTest.kt:StoragePathRuleIntegrationTest$rig.db.documentDao().getByDocId(imported.docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:ThumbnailServiceTest.kt:ThumbnailServiceTest$db.documentDao().getByDocId(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:ThumbnailServiceTest.kt:ThumbnailServiceTest$db.thumbnailDao().get(docId)!!</ID>
+    <ID>UnsafeCallOnNullableType:ThumbnailServiceTest.kt:ThumbnailServiceTest$store.lastPng!!</ID>
+    <ID>UnsafeCallOnNullableType:TrashLifecycleTest.kt:TrashLifecycleTest$rig.db .documentDao() .getByDocId(id)!!</ID>
+    <ID>UnsafeCallOnNullableType:TrashLifecycleTest.kt:TrashLifecycleTest$rig.db.documentDao().getByDocId(id)!!</ID>
+    <ID>UnusedPrivateFunction:AiText.kt:AiText$private fun JsonObject.stringAt: String?</ID>
+    <ID>UnusedPrivateProperty:AiAutoEnricher.kt:AiAutoEnricher$private val meta: MetadataWriter</ID>
+    <ID>UnusedPrivateProperty:AiEditQueue.kt:AiEditQueue$private val content: DocContentFacade</ID>
+    <ID>UnusedPrivateProperty:AiEditQueue.kt:AiEditQueue$private val fieldRegistry: FieldRegistry</ID>
+    <ID>UnusedPrivateProperty:AiEditQueue.kt:AiEditQueue$private val meta: MetadataWriter</ID>
+    <ID>UnusedPrivateProperty:AiEditRun.kt:AiEditRun$private val content: DocContentFacade</ID>
+    <ID>UnusedPrivateProperty:AiEditRun.kt:AiEditRun$private val fieldRegistry: FieldRegistry</ID>
+    <ID>UnusedPrivateProperty:AiEditRun.kt:AiEditRun$private val meta: MetadataWriter</ID>
+    <ID>UnusedPrivateProperty:EventHistoryGen.kt:EventHistoryGen$private val deviceCount: Int</ID>
+    <ID>UnusedPrivateProperty:EventHistoryGen.kt:EventHistoryGen$private val seed: Long</ID>
+    <ID>UnusedPrivateProperty:KoogChatAgent.kt:KoogChatAgent$private val db: NpnDatabase</ID>
+    <ID>UnusedPrivateProperty:WorkQueueReader.kt:WorkQueueReader$private val editJobDao: AiEditJobDao</ID>
+    <ID>UnusedPrivateProperty:WorkQueueReader.kt:WorkQueueReader$private val enrichQueueDao: AiEnrichQueueDao</ID>
+    <ID>UnusedPrivateProperty:WorkQueueReader.kt:WorkQueueReader$private val ocrQueueDao: OcrQueueDao</ID>
+    <ID>UnusedVariable:LibrarySessionImpl.kt:LibrarySessionImpl$val doc = db.documentDao().getByDocId(docId) ?: return</ID>
+    <ID>UnusedVariable:MetadataWriterTest.kt:MetadataWriterTest$val published = compactor.publish(candidates)!!</ID>
+    <ID>UseCheckOrError:InMemorySegmentStore.kt:InMemorySegmentStore$throw IllegalStateException("No such segment: ${ref.deviceId}/${ref.fileName}")</ID>
+    <ID>UseIsNullOrEmpty:WorkQueueReader.kt:WorkQueueReader$progress == null || progress.total == 0</ID>
+    <ID>UseOrEmpty:AiEditQueueTest.kt:title?.let { mapOf(FieldKeys.TITLE to it) } ?: emptyMap()</ID>
+    <ID>UseOrEmpty:AiText.kt:AiText$(this[key] as? JsonArray) ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -&gt; p.isString }?.contentOrNull } ?.map { it.trim() } ?.filter { it.isNotEmpty() } ?: emptyList()</ID>
+    <ID>UseOrEmpty:AutoMatchRuleEntity.kt:tags?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()</ID>
+    <ID>UseOrEmpty:FoldedState.kt:FoldedState$props[doc]?.mapValues { it.value.value } ?: emptyMap()</ID>
+    <ID>UseOrEmpty:Indexer.kt:Indexer$freshContent[row.docId] ?: ""</ID>
+    <ID>UseOrEmpty:RoomChatHistoryProvider.kt:RoomChatHistoryProvider$db.keyValueDao().get(key(conversationId))?.let { runCatching { json.decodeFromString(ListSerializer(Message.serializer()), it).let(::sanitize) }.getOrDefault(emptyList()) } ?: emptyList()</ID>
+    <ID>UseOrEmpty:RoomChatSessionStore.kt:RoomChatSessionStore$db.keyValueDao().get(KEY)?.let { runCatching { json.decodeFromString(ListSerializer(AiChatSession.serializer()), it) } .getOrDefault(emptyList()) } ?: emptyList()</ID>
+    <ID>UseOrEmpty:StoragePathTemplate.kt:StoragePathTemplate$value ?: ""</ID>
+    <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(supersedes != null) { "Snapshot manifest supersedes must be an array" }</ID>
+    <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(version != null) { "Snapshot manifest version must be an integer" }</ID>
+    <ID>VarCouldBeVal:HlcTest.kt:HlcTest$var now = 1000L</ID>
+    <ID>VarCouldBeVal:LibrarySessionImpl.kt:LibrarySessionImpl$private var jobs: MutableList&lt;Job&gt; = ArrayList()</ID>
+  </CurrentIssues>
+</SmellBaseline>

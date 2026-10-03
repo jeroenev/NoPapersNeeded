@@ -1,0 +1,54 @@
+<?xml version="1.0" ?>
+<SmellBaseline>
+  <ManuallySuppressedIssues/>
+  <CurrentIssues>
+    <ID>AbstractClassCanBeConcreteClass:MainDispatcherTest.kt:MainDispatcherTest$MainDispatcherTest</ID>
+    <ID>AbstractClassCanBeConcreteClass:MessagesViewModel.kt:MessagesViewModel$MessagesViewModel</ID>
+    <ID>InjectDispatcher:DefaultAppEnvironment.kt:DefaultAppEnvironment$Default</ID>
+    <ID>InjectDispatcher:DocumentLayoutTest.kt:DocumentLayoutTest$Unconfined</ID>
+    <ID>InjectDispatcher:PageViewer.kt:Default</ID>
+    <ID>InjectDispatcher:PlatformHelpers.android.kt:IO</ID>
+    <ID>InjectDispatcher:PlatformHelpers.desktop.kt:IO</ID>
+    <ID>LongParameterList:AiChatScreen.kt:@Composable private fun AiChatTopBar</ID>
+    <ID>LongParameterList:DocActions.kt:@Composable private fun DocActionsMenu</ID>
+    <ID>LongParameterList:DocDetailScreen.kt:@Composable private fun LoadedDocScreen</ID>
+    <ID>LongParameterList:DocGrid.kt:@Composable private fun DocGridCards</ID>
+    <ID>LongParameterList:DocGrid.kt:@OptIn(FlowPreview::class) @Composable internal fun DocGrid</ID>
+    <ID>LongParameterList:LibraryDialogState.kt:@Composable fun LibraryDialogHost</ID>
+    <ID>LongParameterList:LibraryScreen.kt:@Composable private fun LibraryContent</ID>
+    <ID>LongParameterList:LibraryScreen.kt:@Composable private fun SelectionTopBar</ID>
+    <ID>LongParameterList:LibraryViewsMenu.kt:@Composable internal fun LibraryViewsMenuButton</ID>
+    <ID>NoNameShadowing:AiEditViewModel.kt:AiEditViewModel${ it.copy(phase = EditPhase.Queued(docIds.size)) }</ID>
+    <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, from = it)) }</ID>
+    <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, to = it)) }</ID>
+    <ID>SpreadOperator:HistoryTextResources.kt:(key.resource, *arguments.toTypedArray())</ID>
+    <ID>SpreadOperator:UiText.kt:(res, *args.renderAll())</ID>
+    <ID>SpreadOperator:UiText.kt:(res, quantity, *args.renderAll())</ID>
+    <ID>SuspendFunSwallowedCancellation:AiChatViewModel.kt:AiChatViewModel$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:AiConfigured.kt:runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:AiEditReviewViewModel.kt:AiEditReviewViewModel$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:AiEditViewModel.kt:AiEditViewModel$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:App.kt:runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:DefaultAppEnvironment.kt:DefaultAppEnvironment$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:DocActions.kt:runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:DocDetailViewModel.kt:DocDetailViewModel$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:DocThumbnail.kt:runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:DocumentDrafts.kt:DocumentDrafts$catch (cancelled: CancellationException) { // Clear the saving flag even while cancelling, so the draft is not stuck. withContext(NonCancellable + Dispatchers.Main) { edit(docId) { it.copy(saving = false) } } throw cancelled }</ID>
+    <ID>SuspendFunSwallowedCancellation:LibraryViewModel.kt:LibraryViewModel$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:MessagesViewModel.kt:MessagesViewModel$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:PageViewer.kt:runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:QueueViewModel.kt:QueueViewModel$runCatching</ID>
+    <ID>SuspendFunSwallowedCancellation:TrashViewModel.kt:TrashViewModel$runCatching</ID>
+    <ID>UnsafeCallOnNullableType:App.kt:restoreError!!</ID>
+    <ID>UnsafeCallOnNullableType:LocalAppLocale.kt:LocalAppLocale$default!!</ID>
+    <ID>UnsafeCallOnNullableType:OnboardingScreen.kt:error!!</ID>
+    <ID>UnsafeCallOnNullableType:PageViewer.kt:parsed!!</ID>
+    <ID>UnsafeCallOnNullableType:TagDialogs.kt:selected!!</ID>
+    <ID>UnusedPrivateProperty:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
+    <ID>UnusedPrivateProperty:LocalAppLocale.kt:LocalAppLocale$private var default: Locale? = null</ID>
+    <ID>UseOrEmpty:AutoMatchRulesScreen.kt:rule?.id ?: ""</ID>
+    <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$filter.query ?: ""</ID>
+    <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$view.filter.query ?: ""</ID>
+    <ID>VarCouldBeVal:LocalAppLocale.kt:LocalAppLocale$private var default: Locale? = null</ID>
+  </CurrentIssues>
+</SmellBaseline>

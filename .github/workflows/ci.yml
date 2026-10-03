@@ -59,12 +59,15 @@ jobs:
           :core:testAndroidHostTest
           :composeApp:testAndroidHostTest
 
-      - name: Compile (Android and desktop)
+      # detektTyped is detekt with type resolution: it needs the compiled classpaths, so it shares
+      # this invocation instead of running with the source-only detekt above.
+      - name: Compile (Android and desktop) and typed static analysis
         run: >-
           ./gradlew
           :core:compileAndroidMain
           :composeApp:compileKotlinDesktop
           :composeApp:compileAndroidMain
+          detektTyped
 
       - name: Assemble APK, build and package desktop app
         if: github.event_name != 'pull_request'

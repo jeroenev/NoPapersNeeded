@@ -43,15 +43,17 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Live AI endpoint checks are opt-in and skipped by default (they cost money):
   `NPN_LIVE_AI=1 ./gradlew :core:desktopTest --tests 'dev.npn.core.ai.LiveEndpointProbeTest'`.
   Never add a live-endpoint call to a normal test — CI has no credentials.
-- Formatting and lint: `./gradlew spotlessCheck detekt`.
+- Formatting and lint: `./gradlew spotlessCheck detekt`, then `./gradlew detektTyped` (see
+  Detekt below; it compiles first, so keep it a separate invocation from spotless).
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
 - CI (`.github/workflows/ci.yml`) runs: spotlessCheck → shellcheck → checkLocalization →
   detekt → tests+coverage (kover drives both desktop test suites) → Android-target host tests →
-  compile android+desktop → assembleDebug → desktopApp build → packageAppImage. Match that order
-  when verifying larger changes. Actions minutes and artifact storage are metered (private repo):
-  PRs stop after compile, packaging runs on `main` only, binaries upload only on a manual run, and
-  the Windows build (`windows.yml`) and CodeQL run weekly or on demand. Keep it that way.
+  compile android+desktop + `detektTyped` → assembleDebug → desktopApp build → packageAppImage.
+  Match that order when verifying larger changes. Actions minutes and artifact storage are
+  metered (private repo): PRs stop after compile, packaging runs on `main` only, binaries upload
+  only on a manual run, and the Windows build (`windows.yml`) and CodeQL run weekly or on demand.
+  Keep it that way.
 - Version: `npn.version` in `gradle.properties` is the only version; everything else derives
   from it (`buildSrc` `NpnVersion`, generated `dev.npn.app.BuildInfo`). Never hardcode a version
   or bump it by hand: `mise release <version>` bumps, commits and tags together, and
@@ -59,9 +61,24 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 
 ## Detekt
 
-- Source-only (no type resolution), config at `config/detekt/detekt.yml`.
-- Per-module `detekt-baseline.xml` grandfathers old findings; CI fails on NEW issues only.
-  Do not add to baselines; fix findings in code you touch. Baselines should shrink.
+- One config, `config/detekt/detekt.yml`, two runs; `check` runs both:
+  - `./gradlew detekt`: source-only (no type resolution) over every source set. Fast, needs no
+    compile. Baseline: per-module `detekt-baseline.xml`.
+  - `./gradlew detektTyped`: the type-resolved per-compilation tasks (`detektMainDesktop`,
+    `detektMainAndroid`, `detektTestDesktop`, `detektHostTestAndroid` in `core`/`composeApp`;
+    `detektDebug` in `androidApp`; `detektMain` in `desktopApp`). Only these run the rules that
+    need the Analysis API (`LongParameterList`, `UnusedPrivate*`, `UnusedVariable`,
+    `SuspendFunSwallowedCancellation`, ...); the source-only run skips them silently. Baseline:
+    per-module `detekt-baseline-typed.xml`. Device tests, release variants and `baselineprofile`
+    only get the source-only run.
+- Baselines grandfather old findings; CI fails on NEW issues only. Do not add to baselines; fix
+  findings in code you touch. Baselines should shrink: after a cleanup, regenerate with
+  `./gradlew :<module>:detektBaseline` or `./gradlew detektTypedBaseline` and check that the diff
+  only removes lines.
+- The typed analysis runs without compiler plugins (kotlinx.serialization, Compose), so it logs
+  "compiler errors found during analysis" and can misreport code next to `serializer()` calls or
+  `actual` declarations. Suppress a new false positive with a one-line reason that says so;
+  don't contort the code around it.
 - A complexity `@Suppress` (`LongMethod`, `LongParameterList`, `TooManyFunctions`,
   `CyclomaticComplexMethod`, ...) counts as baseline growth: a new one needs a one-line reason
   next to it and is called out in the PR. Prefer the real fix.

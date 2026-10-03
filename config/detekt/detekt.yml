@@ -50,6 +50,12 @@ naming:
     ignoreAnnotated: ["Composable"]
     excludes: ["**/commonTest/**", "**/desktopTest/**", "**/androidUnitTest/**", "**/test/**"]
 
+coroutines:
+  SuspendFunSwallowedCancellation:
+    # A catch-all around a suspend call also catches CancellationException and so breaks
+    # structured cancellation. Needs type resolution, so only the typed tasks run it.
+    active: true
+
 exceptions:
   TooGenericExceptionCaught:
     active: false
