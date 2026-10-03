@@ -62,6 +62,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Source-only (no type resolution), config at `config/detekt/detekt.yml`.
 - Per-module `detekt-baseline.xml` grandfathers old findings; CI fails on NEW issues only.
   Do not add to baselines; fix findings in code you touch. Baselines should shrink.
+- A complexity `@Suppress` (`LongMethod`, `LongParameterList`, `TooManyFunctions`,
+  `CyclomaticComplexMethod`, ...) counts as baseline growth: a new one needs a one-line reason
+  next to it and is called out in the PR. Prefer the real fix.
+- `LongMethod` ignores `@Composable` functions: their length measures UI-tree depth, not
+  complexity.
 
 ## Architecture invariants (do not break)
 

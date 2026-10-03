@@ -4,6 +4,8 @@
 complexity:
   LongMethod:
     allowedLines: 80
+    # A composable's length measures the depth of its UI tree, not its complexity.
+    ignoreAnnotated: ["Composable"]
   LongParameterList:
     # Compose composables and DI wiring legitimately take many parameters.
     allowedFunctionParameters: 9

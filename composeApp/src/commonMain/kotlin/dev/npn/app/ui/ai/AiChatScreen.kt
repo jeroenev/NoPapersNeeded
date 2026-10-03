@@ -112,7 +112,6 @@ private const val DOC_REF_LABEL_HEX = 8
 private const val BUBBLE_MAX_WIDTH_FRACTION = 0.85f
 
 @Composable
-@Suppress("LongMethod")
 fun AiChatScreen(
     session: LibrarySession,
     onBack: () -> Unit,
@@ -222,7 +221,6 @@ fun AiChatScreen(
 }
 
 @Composable
-@Suppress("LongMethod")
 private fun AiChatTopBar(
     clearEnabled: Boolean,
     newSessionEnabled: Boolean,

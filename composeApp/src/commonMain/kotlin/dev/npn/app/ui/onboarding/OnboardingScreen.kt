@@ -64,7 +64,7 @@ import org.jetbrains.compose.resources.stringResource
  * path (cloud document providers) and is the only way to reach the SAF library implementation.
  */
 @Composable
-@Suppress("LongMethod", "CyclomaticComplexMethod")
+@Suppress("CyclomaticComplexMethod")
 fun OnboardingScreen(env: AppEnvironment) {
     val opening by env.opening.collectAsStateWithLifecycle()
     val error by env.openError.collectAsStateWithLifecycle()

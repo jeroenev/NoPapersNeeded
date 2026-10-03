@@ -95,7 +95,6 @@ import org.jetbrains.compose.resources.stringResource
  * (MetadataPanel's Ctrl+F) move focus into the find field when this tab is active.
  */
 @Composable
-@Suppress("LongMethod")
 internal fun OcrTextTab(
     text: String?,
     ocrState: OcrState,

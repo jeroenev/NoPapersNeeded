@@ -67,7 +67,6 @@ import org.jetbrains.compose.resources.stringResource
  * panel carries the same content there.
  */
 @Composable
-@Suppress("LongMethod")
 fun DocDetailScreen(
     docId: String,
     session: LibrarySession,
