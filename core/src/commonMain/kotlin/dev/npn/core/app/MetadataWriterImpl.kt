@@ -15,6 +15,9 @@ import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /**
  * Journal-backed write side. Every metadata change is one or more [PendingOp]s committed through
@@ -200,19 +203,43 @@ class MetadataWriterImpl(
     override suspend fun trashDoc(docId: String) {
         val doc = documentDao.getByDocId(docId) ?: return
         if (doc.trashed || doc.deleted) return
+        // A trash entry with no doc-trash event is invisible: the next rescan marks the document
+        // missing and there is nothing to restore. So refuse before the move, not after it.
+        coordinator.checkWritable()
         val origPath = doc.relPath
-        if (fs.exists(origPath)) {
-            trashOps.moveToTrash(origPath, docId)
+        val trashPath = if (fs.exists(origPath)) trashOps.moveToTrash(origPath, docId) else null
+        try {
+            // Immediate DB sync so the UI hides it now; the event carries origPath for cross-device
+            // restore. The optimistic row write runs under the coordinator mutex, atomically with
+            // the committing fold, so a concurrent reconcile cannot clobber the trashed flag before
+            // the journal event is folded (see JournalCoordinator.commitWithOptimisticLifecycle).
+            coordinator.commitWithOptimisticLifecycle(
+                ops = listOf(PendingOp.docTrash(docId, origPath)),
+                lifecycleDocs = setOf(docId),
+            ) {
+                documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
+            }
+        } catch (failure: Throwable) {
+            if (trashPath != null) moveBack(trashPath, origPath, failure)
+            throw failure
         }
-        // Immediate DB sync so the UI hides it now; the event carries origPath for cross-device
-        // restore. The optimistic row write runs under the coordinator mutex, atomically with the
-        // committing fold, so a concurrent reconcile cannot clobber the trashed flag before the
-        // journal event is folded (see JournalCoordinator.commitWithOptimisticLifecycle).
-        coordinator.commitWithOptimisticLifecycle(
-            ops = listOf(PendingOp.docTrash(docId, origPath)),
-            lifecycleDocs = setOf(docId),
-        ) {
-            documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
+    }
+
+    /**
+     * Best-effort undo of a move whose commit failed. [failure] stays what the caller sees; an undo
+     * that fails too is attached to it.
+     */
+    private suspend fun moveBack(
+        from: String,
+        to: String,
+        failure: Throwable,
+    ) = withContext(NonCancellable) {
+        try {
+            fs.move(from, to)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (undoFailure: Exception) {
+            failure.addSuppressed(undoFailure)
         }
     }
 
@@ -241,18 +268,19 @@ class MetadataWriterImpl(
 
     override suspend fun deleteDocPermanently(docId: String) {
         val doc = documentDao.getByDocId(docId) ?: return
-        val trashEntry = findTrashEntry(docId)
-        when {
-            trashEntry != null -> runCatching { fs.delete(trashEntry) }
-            fs.exists(doc.relPath) -> runCatching { fs.delete(doc.relPath) }
-        }
-        // Tombstone in DB immediately; keep it hidden (deleted flag) after any rescan. The
-        // optimistic row write is serialized with the committing fold under the coordinator mutex.
+        // Tombstone first, bytes second: a refused commit must leave the file where it was. The
+        // optimistic row write keeps it hidden (deleted flag) after any rescan, and is serialized
+        // with the committing fold under the coordinator mutex.
         coordinator.commitWithOptimisticLifecycle(
             ops = listOf(PendingOp.docDelete(docId)),
             lifecycleDocs = setOf(docId),
         ) {
             documentDao.upsert(doc.copy(deleted = true, trashed = false, missing = false))
+        }
+        val trashEntry = findTrashEntry(docId)
+        when {
+            trashEntry != null -> runCatching { fs.delete(trashEntry) }
+            fs.exists(doc.relPath) -> runCatching { fs.delete(doc.relPath) }
         }
     }
 

@@ -6,7 +6,9 @@ import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 class TrashLifecycleTest {
     @Test
@@ -140,4 +142,56 @@ class TrashLifecycleTest {
                 rig.close()
             }
         }
+
+    @Test
+    fun trashingWhileWritesAreBlockedLeavesThePdfWhereItWas() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                blockMetadataWrites(rig)
+
+                assertFailsWith<IllegalStateException> { rig.session.docLifecycle.trashDoc(id) }
+
+                rig.exists("a.pdf").shouldBeTrue()
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)!!
+                    .trashed
+                    .shouldBeFalse()
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun deletingWhileWritesAreBlockedKeepsTheFile() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                blockMetadataWrites(rig)
+
+                assertFailsWith<IllegalStateException> { rig.session.docLifecycle.deleteDocPermanently(id) }
+
+                rig.exists("a.pdf").shouldBeTrue()
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)!!
+                    .deleted
+                    .shouldBeFalse()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A journal store from a newer build makes the rescan refuse, which blocks metadata writes. */
+    private suspend fun blockMetadataWrites(rig: AppSessionRig) {
+        Files.createDirectories(rig.libRoot.resolve("${NpnPaths.JOURNAL_DIR}/objects-v9-00"))
+        assertFailsWith<IllegalStateException> { rig.session.rescan() }
+    }
 }

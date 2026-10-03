@@ -360,6 +360,12 @@ class JournalCoordinator internal constructor(
     suspend fun commitAndApply(ops: List<PendingOp>): Boolean = commitBuilt { ops }
 
     /**
+     * Throw now if a commit would be refused. For callers that change the filesystem before they
+     * commit, so a refused commit does not strand a moved PDF with no journal record of the move.
+     */
+    suspend fun checkWritable() = locked { ensureWritable() }
+
+    /**
      * Apply an immediate, optimistic DB mutation for [lifecycleDocs] and commit [ops] atomically
      * under the single-writer mutex.
      *
