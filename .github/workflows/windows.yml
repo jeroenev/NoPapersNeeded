@@ -86,3 +86,10 @@ jobs:
           name: windows-core-test-reports
           path: core/build/reports/tests/desktopTest
           retention-days: 7
+
+      # Windows will not let another process read a file the Gradle daemon holds open, so with the
+      # daemon still running setup-gradle's post step cannot archive the Gradle User Home and the
+      # cache is never saved.
+      - name: Stop the Gradle daemon
+        if: always()
+        run: ./gradlew.bat --stop
