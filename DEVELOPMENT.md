@@ -78,6 +78,7 @@ below if you prefer to run them directly.
 | `mise apk` | `./gradlew :androidApp:assembleDebug` |
 | `mise apk-release` | `./gradlew :androidApp:assembleRelease` (signed only with `NPN_KEYSTORE_*` set, see [Releases](#releases)) |
 | `mise bundle` | `./gradlew :androidApp:bundleRelease` |
+| `mise baseline-profile` | `./gradlew :androidApp:generateBaselineProfile` (needs a device on Android 13+, see [Release builds: R8 and baseline profiles](#release-builds-r8-and-baseline-profiles)) |
 | `mise deploy` | `installDebug` over adb, then launches the app (add `--release` for the release build) |
 | `mise uninstall` | `adb uninstall dev.npn.debug` (the debug build) |
 | `mise uninstall-release` | `adb uninstall dev.npn` (the release build) |
@@ -150,6 +151,33 @@ For fast UI iteration without a device, use `mise hot`: the Compose UI in
 shared composables update live on save. Android-only code paths (document
 scanner, share intents, WorkManager) are not exercised there; use `mise deploy`
 for those.
+
+### Release builds: R8 and baseline profiles
+
+The release APK is shrunk and optimized by R8 (`isMinifyEnabled` and `isShrinkResources`).
+Libraries ship their own keep rules; `androidApp/proguard-rules.pro` holds the few that are
+missing, each with the failure it prevents (JNA's native lookups, ML Kit's reflective
+component discovery, optional classes that are referenced but never shipped). R8 problems
+only show at runtime, so after changing dependencies or reflective code, install
+`installBenchmarkRelease` (a minified build with the release rules, see below) and check that a
+library opens, a tag can be added, OCR runs and the AI settings can load models.
+
+The APK also ships a baseline profile: `androidApp/src/main/generated/baselineProfiles/`, which
+lists the code to compile ahead of time at install, so startup and the first scrolls do not wait
+for the JIT. `profileinstaller` applies it on sideloaded installs. The `:baselineprofile` module
+generates it by driving the app on a connected device:
+
+```
+mise baseline-profile   # Android 13+ device; takes about 10 minutes; leave the phone alone
+```
+
+It installs `dev.npn.benchmark` (debug-signed, next to any other build), which proposes its own
+library folder, `Documents/NoPapersNeeded-benchmark`. The generator seeds demo PDFs there,
+grants all-files access through the system settings switch, and records cold start
+(`startup-prof.txt`, which also orders the DEX) and browsing (`baseline-prof.txt`). Gradle
+uninstalls the app afterwards; delete the folder if you like. Regenerate the profile and commit
+it when startup or the library screens change substantially; a stale profile still works, it
+just covers less.
 
 ### Raw Gradle commands
 

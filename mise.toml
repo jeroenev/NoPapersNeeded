@@ -17,6 +17,10 @@ uv = "latest"
 
 # --- Android build ---------------------------------------------------------
 
+[tasks.baseline-profile]
+description = "Regenerate the Android baseline profile on the connected device (Android 13+)"
+run = "./gradlew :androidApp:generateBaselineProfile"
+
 [tasks.apk]
 description = "Build the Android debug APK"
 run = "./gradlew :androidApp:assembleDebug"

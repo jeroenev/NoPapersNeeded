@@ -3,6 +3,7 @@ import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 plugins {
     alias(libs.plugins.androidApplication)
     alias(libs.plugins.composeCompiler)
+    alias(libs.plugins.androidxBaselineProfile)
 }
 
 dependencies {
@@ -11,6 +12,10 @@ dependencies {
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.work.runtime)
     implementation(libs.mlkit.document.scanner)
+    // Installs the baseline profile (and the ones the libraries ship) on sideloaded installs, which
+    // Play would otherwise do: the APK comes from GitHub releases.
+    implementation(libs.androidx.profileinstaller)
+    baselineProfile(projects.baselineprofile)
 }
 
 val npnVersion = NpnVersion.of(project)
@@ -72,7 +77,11 @@ android {
             versionNameSuffix = "-debug"
         }
         getByName("release") {
-            isMinifyEnabled = false
+            // R8 drops unused code and resources and optimizes the rest. Libraries ship their own
+            // keep rules; proguard-rules.pro only covers what reflects into code without them.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             if (releaseKeystore != null) {
                 signingConfig = signingConfigs.getByName("release")
             }
@@ -90,6 +99,19 @@ android {
                     .get(),
             )
     }
+}
+
+// `mise baseline-profile` regenerates the committed profile; builds only package it.
+baselineProfile {
+    mergeIntoMain = true
+}
+
+// The baseline profile plugin adds release-like build types to profile and benchmark. Give them
+// their own package, like debug, so they install next to the release build instead of colliding
+// with its signature, and propose their own library folder.
+androidComponents {
+    onVariants(selector().withBuildType("nonMinifiedRelease")) { it.applicationId.set("dev.npn.benchmark") }
+    onVariants(selector().withBuildType("benchmarkRelease")) { it.applicationId.set("dev.npn.benchmark") }
 }
 
 kotlin {

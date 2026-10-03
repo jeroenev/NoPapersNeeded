@@ -19,6 +19,10 @@ design, build/packaging/release details, and the library folder layout.
   desktop runtime. Bytecode stays at `jvm-target` 17, with `-Xjdk-release` on desktop
   compilations, because Android shares it and minSdk 30 lacks newer library APIs. Raising
   `jdk` never raises the target; raising the target is a separate, Android-driven decision.
+- `baselineprofile` — generates androidApp's baseline profile on a device (`mise baseline-profile`);
+  never runs in CI. The release build is R8-minified: reflective code or new native/reflection-heavy
+  dependencies may need rules in `androidApp/proguard-rules.pro`, and need a check on a device
+  with `installBenchmarkRelease` (see DEVELOPMENT.md).
 - KMP JVM target is named `desktop` (not `jvm`); source sets are
   `desktopMain`/`desktopTest`, tasks are `:core:desktopTest`, `:composeApp:compileKotlinDesktop`, etc.
 - `core` and `composeApp` also run tests against the Android target on a host JVM
