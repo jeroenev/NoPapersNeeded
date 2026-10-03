@@ -35,7 +35,21 @@ enum class VerifiedPublicationResult {
     ALREADY_PRESENT,
 }
 
+/**
+ * This filesystem can never publish without replacement: the platform or mount has no primitive
+ * for it. A capability, not an incident, so the journal may stop trying for the session.
+ */
 class VerifiedPublicationUnavailableException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
+
+/**
+ * One publication attempt failed on a filesystem that can publish: a provider rename that threw or
+ * landed under another name, a staging file that vanished. Only this write fails; the next one
+ * tries again the same way.
+ */
+class VerifiedPublicationFailedException(
     message: String,
     cause: Throwable? = null,
 ) : IllegalStateException(message, cause)

@@ -288,7 +288,7 @@ class SafLibraryFileSystem(
      *
      * Failure handling: on any rename failure the staging file is left in place (it is classified
      * as [NpnPaths.JournalPath.Staging] and ignored by readers, then GC'd by the accumulator) and a
-     * retryable [VerifiedPublicationUnavailableException] is thrown, so a wrongly-named file is
+     * retryable [VerifiedPublicationFailedException] is thrown, so a wrongly-named file is
      * never installed in the published objects directory. If the canonical object already exists
      * (same hash ⇒ same content), the staging file is deleted and the call reports
      * [VerifiedPublicationResult.ALREADY_PRESENT].
@@ -319,7 +319,7 @@ class SafLibraryFileSystem(
 
             val staging =
                 resolveEntry(stagingPath)
-                    ?: throw VerifiedPublicationUnavailableException("Staging object is missing: $stagingPath")
+                    ?: throw VerifiedPublicationFailedException("Staging object is missing: $stagingPath")
             check(!staging.isDir) { "Staging object path is a directory: $stagingPath" }
             check(sha256OfEntry(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
 
@@ -358,8 +358,8 @@ class SafLibraryFileSystem(
     private fun retryablePublish(
         canonicalPath: String,
         cause: Throwable?,
-    ): VerifiedPublicationUnavailableException =
-        VerifiedPublicationUnavailableException("Verified publication failed: $canonicalPath", cause)
+    ): VerifiedPublicationFailedException =
+        VerifiedPublicationFailedException("Verified publication failed: $canonicalPath", cause)
 
     private fun sha256OfEntry(entry: Entry): String = digestSha256(docUri(entry.docId), entry.docId)
 

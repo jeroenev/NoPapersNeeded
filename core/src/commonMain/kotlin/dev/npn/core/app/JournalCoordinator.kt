@@ -462,6 +462,12 @@ class JournalCoordinator internal constructor(
             }
         })
 
+    /**
+     * Publish [ops] as one storage-v2 object, or as a v1 segment once this filesystem has shown it
+     * can never publish without replacement. Only that capability error switches formats; any other
+     * failure, a [dev.npn.core.fs.VerifiedPublicationFailedException] included, fails this write and
+     * leaves the next one on v2.
+     */
     private suspend fun writeTransaction(ops: List<PendingOp>): Pair<PublishedTransaction?, List<JournalEvent>> {
         val contentWriter = objectWriter ?: return null to writer.commit(ops)
         return try {
