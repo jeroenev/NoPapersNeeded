@@ -1,5 +1,10 @@
 [versions]
 agp = "9.3.1"
+# The JDK that runs Gradle, compiles everything and is bundled with the desktop app.
+jdk = "25"
+# The bytecode every module targets. Android shares it and only offers newer Java library APIs on
+# newer OS versions, so this stays below `jdk`; -Xjdk-release keeps desktop code from using them.
+jvm-target = "17"
 android-compileSdk = "37"
 android-minSdk = "30"
 android-targetSdk = "37"

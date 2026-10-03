@@ -55,12 +55,13 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 
 ## Building
 
-The Gradle build uses Java toolchains provisioned via the foojay resolver, so a matching
-JDK is downloaded automatically if needed. All code compiles for Java 17, which Android
-shares; the desktop packages bundle a Java 25 runtime, built with that JDK's jlink and
-jpackage. Raising the bytecode target above 17 is a separate decision: Android only
-provides newer Java library APIs on newer OS versions, and the app supports API 30. The
-Android SDK is located via
+The build needs one JDK, Java 25 (`jdk` in `gradle/libs.versions.toml`). It runs the
+Gradle daemon (pinned in `gradle/gradle-daemon-jvm.properties`), compiles every module and
+is bundled as the desktop app's runtime. Gradle downloads it via the foojay resolver if no
+matching JDK is installed. All code still compiles to Java 17 bytecode (`jvm-target`):
+Android only provides newer Java library APIs on newer OS versions, and the app supports
+API 30. Desktop compilations also pass `-Xjdk-release=17`, so they cannot call a newer API
+either. The Android SDK is located via
 `local.properties` (`sdk.dir`) or the `ANDROID_HOME` / `ANDROID_SDK_ROOT`
 environment variable.
 

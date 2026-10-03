@@ -42,8 +42,21 @@ val generateBuildInfo =
     }
 
 kotlin {
-    jvmToolchain(17)
-    jvm("desktop")
+    jvmToolchain(
+        libs.versions.jdk
+            .get()
+            .toInt(),
+    )
+    jvm("desktop") {
+        compilerOptions {
+            jvmTarget =
+                JvmTarget.fromTarget(
+                    libs.versions.jvm.target
+                        .get(),
+                )
+            freeCompilerArgs.add("-Xjdk-release=${libs.versions.jvm.target.get()}")
+        }
+    }
 
     androidLibrary {
         namespace = "dev.npn.app"
@@ -57,7 +70,11 @@ kotlin {
                 .toInt()
 
         compilerOptions {
-            jvmTarget = JvmTarget.JVM_17
+            jvmTarget =
+                JvmTarget.fromTarget(
+                    libs.versions.jvm.target
+                        .get(),
+                )
         }
         androidResources {
             enable = true

@@ -31,15 +31,11 @@ jobs:
         with:
           fetch-depth: 0
 
-      # 17 builds and runs Gradle (the last version listed is the default); 25 is the runtime
-      # jlink/jpackage bundle with the desktop app, found by Gradle's toolchain detection.
-      - name: Set up JDK 17 and 25
+      - name: Set up JDK 25
         uses: actions/setup-java@v5
         with:
           distribution: temurin
-          java-version: |
-            25
-            17
+          java-version: "25"
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v6

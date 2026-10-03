@@ -79,14 +79,30 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_17
-        targetCompatibility = JavaVersion.VERSION_17
+        sourceCompatibility =
+            JavaVersion.toVersion(
+                libs.versions.jvm.target
+                    .get(),
+            )
+        targetCompatibility =
+            JavaVersion.toVersion(
+                libs.versions.jvm.target
+                    .get(),
+            )
     }
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(
+        libs.versions.jdk
+            .get()
+            .toInt(),
+    )
     compilerOptions {
-        jvmTarget = JvmTarget.JVM_17
+        jvmTarget =
+            JvmTarget.fromTarget(
+                libs.versions.jvm.target
+                    .get(),
+            )
     }
 }

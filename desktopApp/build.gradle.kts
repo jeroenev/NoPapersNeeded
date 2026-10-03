@@ -1,6 +1,7 @@
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.process.ExecOperations
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
 import java.net.URI
 import javax.inject.Inject
@@ -11,13 +12,13 @@ plugins {
     alias(libs.plugins.composeCompiler)
 }
 
-// The JDK that jlink/jpackage bundle as the app's runtime. It is newer than the JDK 17 the code
-// is compiled for (which Android shares), so the desktop app gets current AWT/HiDPI fixes without
-// raising the bytecode target. It must be a toolchain JDK, not the system JVM: a system JDK
-// without jlink/jpackage fails compose.desktop's checkRuntime.
+// The JDK that jlink/jpackage bundle as the app's runtime: the build JDK, which is newer than the
+// bytecode target (see libs.versions.toml), so the desktop app gets current AWT/HiDPI fixes. It
+// must be a toolchain JDK, not the system JVM: a system JDK without jlink/jpackage fails
+// compose.desktop's checkRuntime.
 val runtimeJdk =
     javaToolchains.launcherFor {
-        languageVersion.set(JavaLanguageVersion.of(25))
+        languageVersion.set(JavaLanguageVersion.of(libs.versions.jdk.get()))
     }
 
 dependencies {
@@ -29,7 +30,27 @@ dependencies {
 }
 
 kotlin {
-    jvmToolchain(17)
+    jvmToolchain(
+        libs.versions.jdk
+            .get()
+            .toInt(),
+    )
+    compilerOptions {
+        jvmTarget =
+            JvmTarget.fromTarget(
+                libs.versions.jvm.target
+                    .get(),
+            )
+        freeCompilerArgs.add("-Xjdk-release=${libs.versions.jvm.target.get()}")
+    }
+}
+
+tasks.withType<JavaCompile>().configureEach {
+    options.release.set(
+        libs.versions.jvm.target
+            .get()
+            .toInt(),
+    )
 }
 
 val npnAppName = "no-papers-needed"

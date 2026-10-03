@@ -10,8 +10,21 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(17)
-    jvm("desktop")
+    jvmToolchain(
+        libs.versions.jdk
+            .get()
+            .toInt(),
+    )
+    jvm("desktop") {
+        compilerOptions {
+            jvmTarget =
+                JvmTarget.fromTarget(
+                    libs.versions.jvm.target
+                        .get(),
+                )
+            freeCompilerArgs.add("-Xjdk-release=${libs.versions.jvm.target.get()}")
+        }
+    }
 
     // `jvmShared` is what Android and desktop have in common beyond commonMain: java.nio and
     // java.security. The direct-filesystem library implementation lives there so Android's
@@ -37,7 +50,11 @@ kotlin {
                 .toInt()
 
         compilerOptions {
-            jvmTarget = JvmTarget.JVM_17
+            jvmTarget =
+                JvmTarget.fromTarget(
+                    libs.versions.jvm.target
+                        .get(),
+                )
         }
 
         // Runs commonTest against the Android target on a host JVM, and gives androidMain code

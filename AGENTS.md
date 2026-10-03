@@ -15,9 +15,10 @@ design, build/packaging/release details, and the library folder layout.
   in `desktopApp/flatpak/`, built by `mise package-flatpak`; `mise flathub-manifest` derives the
   Flathub one). The Flatpak app ID is `io.github.jeroenev.NoPapersNeeded`, which Flathub ties
   to the GitHub repo `jeroenev/NoPapersNeeded`; the Android package stays `dev.npn`.
-- Java: every module compiles for JVM 17 (Android shares the bytecode; minSdk 30 lacks newer
-  library APIs). Only the desktop runtime that jlink/jpackage bundle is newer: `runtimeJdk` (25)
-  in `desktopApp/build.gradle.kts`. Raise one without assuming the other follows.
+- Java: one JDK, 25 (`jdk` in `libs.versions.toml`), runs Gradle, compiles everything and is the
+  desktop runtime. Bytecode stays at `jvm-target` 17, with `-Xjdk-release` on desktop
+  compilations, because Android shares it and minSdk 30 lacks newer library APIs. Raising
+  `jdk` never raises the target; raising the target is a separate, Android-driven decision.
 - KMP JVM target is named `desktop` (not `jvm`); source sets are
   `desktopMain`/`desktopTest`, tasks are `:core:desktopTest`, `:composeApp:compileKotlinDesktop`, etc.
 - `core` and `composeApp` also run tests against the Android target on a host JVM
