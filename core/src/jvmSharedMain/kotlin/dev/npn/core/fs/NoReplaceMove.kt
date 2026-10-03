@@ -42,7 +42,6 @@ internal object NoReplaceMove {
 
     // Linux UAPI: arch/{arm,x86}/ syscall tables and include/uapi/asm-generic/unistd.h.
     // Unknown ABIs fail closed instead of risking a call to a different syscall.
-    @Suppress("MagicNumber")
     private fun renameNumber(): Long =
         when (Platform.ARCH) {
             "aarch64", "riscv64" -> 276L

@@ -65,9 +65,7 @@ class DefaultAppEnvironment(
 
     private val _session = MutableStateFlow<LibrarySessionImpl?>(null)
 
-    @Suppress("UNCHECKED_CAST")
-    override val session: StateFlow<dev.npn.core.app.LibrarySession?> =
-        _session.asStateFlow() as StateFlow<dev.npn.core.app.LibrarySession?>
+    override val session: StateFlow<dev.npn.core.app.LibrarySession?> = _session.asStateFlow()
 
     // Serializes open/close so two overlapping opens (e.g. requestOpenLibrary on appScope racing
     // openPersistedLibrary) cannot interleave closeCurrentInternal with _session assignment and

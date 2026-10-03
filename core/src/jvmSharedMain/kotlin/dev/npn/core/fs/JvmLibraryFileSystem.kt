@@ -551,7 +551,6 @@ class JvmLibraryFileSystem internal constructor(
                                 trySend(FsEvent.Changed(null))
                                 continue
                             }
-                            @Suppress("UNCHECKED_CAST")
                             val ctx = event.context() as? Path
                             val child = if (dir != null && ctx != null) dir.resolve(ctx) else null
                             val createdDirectory =

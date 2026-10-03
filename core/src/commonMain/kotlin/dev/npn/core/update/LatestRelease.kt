@@ -55,7 +55,6 @@ class GitHubLatestRelease(
     private val repository: String = "jeroenev/NoPapersNeeded",
     private val client: () -> HttpClient = { HttpClient() },
 ) : LatestReleaseSource {
-    @Suppress("TooGenericExceptionCaught") // Any failure means "unknown", see the class doc.
     override suspend fun latest(): AppRelease? =
         try {
             client().use { http ->
