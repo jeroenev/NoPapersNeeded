@@ -266,6 +266,12 @@ class FoldedState {
         return if (t.trashed) t.origPath else null
     }
 
+    /** Wall time of the winning doc-trash's HLC, if currently trashed. */
+    fun trashedAtMillis(doc: String): Long? {
+        val t = trash[doc] ?: return null
+        return if (t.trashed) t.hlc.physicalMillis else null
+    }
+
     /**
      * Resolve the effective (current) document id by following the relink chain from [doc].
      * a->b->c yields c. Concurrent relinks for the same old doc resolve to the highest-HLC

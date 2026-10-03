@@ -258,6 +258,7 @@ class MetadataWriterImpl(
                 doc.copy(
                     trashed = false,
                     trashedOrigPath = null,
+                    trashedAt = null,
                     relPath = finalPath,
                     fileName = finalPath.substringAfterLast('/'),
                     missing = false,
@@ -275,7 +276,7 @@ class MetadataWriterImpl(
             ops = listOf(PendingOp.docDelete(docId)),
             lifecycleDocs = setOf(docId),
         ) {
-            documentDao.upsert(doc.copy(deleted = true, trashed = false, missing = false))
+            documentDao.upsert(doc.copy(deleted = true, trashed = false, trashedAt = null, missing = false))
         }
         val trashEntry = findTrashEntry(docId)
         when {

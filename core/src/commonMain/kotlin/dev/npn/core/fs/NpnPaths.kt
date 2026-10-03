@@ -34,6 +34,8 @@ object NpnPaths {
 
     private val objectBucketPattern = Regex("^objects-v([1-9][0-9]*)-([0-9a-fA-F]{2})$")
 
+    private val trashNamePattern = Regex("__([0-9a-f]{$TRASH_HASH_PREFIX_LENGTH})(-[0-9]+)?(\\.[^.]*)?$")
+
     // Snapshots use a DISTINCT bucket namespace so pre-snapshot readers classify them as Unknown
     // (ignored) rather than as an object they must fold or an unsupported store that blocks writes.
     // See docs/METADATA_STORAGE_PLAN.md §5 "Compaction".
@@ -229,6 +231,12 @@ object NpnPaths {
             "$TRASH_DIR/${originalName}__$hashPrefix"
         }
     }
+
+    /**
+     * The document hash prefix in a [trashPath] file name, past any `-N` collision suffix, or null
+     * when [fileName] is not one of those names.
+     */
+    fun trashHashPrefix(fileName: String): String? = trashNamePattern.find(fileName)?.groupValues?.get(1)
 
     /** The staging path for one import attempt; [nonce] keeps concurrent imports apart. */
     fun importStagingPath(nonce: String): String = "$TMP_DIR/$nonce.part"

@@ -46,12 +46,36 @@ class TrashOps(
                 it.relPath != NpnPaths.TRASH_DIR
         }
 
-    /** Permanently delete trash entries whose mtime is strictly older than [cutoffMillis]. */
-    suspend fun purgeOlderThan(cutoffMillis: Long) {
+    /**
+     * Permanently delete trash entries trashed strictly before [cutoffMillis].
+     *
+     * [documents] maps each live document id to the time it was trashed, or to null while it is
+     * not in trash. An entry belongs to the documents whose id starts with the hash prefix in its
+     * name ([NpnPaths.trashHashPrefix]):
+     * - a trashed document: its trash time decides. The entry's mtime cannot, because a move into
+     *   trash keeps the PDF's own mtime, so a document imported long ago would go the moment it
+     *   was trashed.
+     * - a document not in trash yet: kept. Trashing moves the PDF before it commits the event.
+     * - no document: the mtime decides, as nothing better is known.
+     */
+    suspend fun purgeOlderThan(
+        cutoffMillis: Long,
+        documents: Map<String, Long?> = emptyMap(),
+    ) {
+        val byPrefix =
+            documents.entries.groupBy(
+                keySelector = { it.key.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH) },
+                valueTransform = { it.value },
+            )
         for (meta in listTrash()) {
-            if (meta.mtimeMillis < cutoffMillis) {
-                fs.delete(meta.relPath)
-            }
+            val owners = NpnPaths.trashHashPrefix(meta.name)?.let(byPrefix::get)
+            val trashedAt =
+                when {
+                    owners == null -> meta.mtimeMillis
+                    null in owners -> continue
+                    else -> owners.maxOf { checkNotNull(it) }
+                }
+            if (trashedAt < cutoffMillis) fs.delete(meta.relPath)
         }
     }
 

@@ -7,6 +7,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
+import java.nio.file.attribute.FileTime
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -193,5 +194,41 @@ class TrashLifecycleTest {
     private suspend fun blockMetadataWrites(rig: AppSessionRig) {
         Files.createDirectories(rig.libRoot.resolve("${NpnPaths.JOURNAL_DIR}/objects-v9-00"))
         assertFailsWith<IllegalStateException> { rig.session.rescan() }
+    }
+
+    @Test
+    fun autoPurgeCountsRetentionFromTheTrashNotFromTheFile() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val now = 400 * DAY
+                rig.clock.now = now - 60 * DAY
+                rig.writePdf("today.pdf", PdfFixtures.embeddedTextPdf("today"))
+                rig.writePdf("long-ago.pdf", PdfFixtures.embeddedTextPdf("long ago"))
+                // Both PDFs were imported long ago; a move into trash keeps that mtime.
+                for (name in listOf("today.pdf", "long-ago.pdf")) {
+                    Files.setLastModifiedTime(rig.libRoot.resolve(name), FileTime.fromMillis(now - 90 * DAY))
+                }
+                rig.session.rescan()
+                val today = rig.docId("today.pdf")
+                val longAgo = rig.docId("long-ago.pdf")
+
+                rig.session.docLifecycle.trashDoc(longAgo)
+                rig.clock.now = now
+                rig.session.docLifecycle.trashDoc(today)
+
+                rig.session.purgeTrash(olderThanDays = 30)
+
+                val left = rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }.map { it.name }
+                left shouldBe listOf("today__${today.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}.pdf")
+                rig.session.docLifecycle.restoreDoc(today)
+                rig.exists("today.pdf").shouldBeTrue()
+            } finally {
+                rig.close()
+            }
+        }
+
+    private companion object {
+        const val DAY = 24L * 60L * 60L * 1000L
     }
 }

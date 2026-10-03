@@ -59,6 +59,12 @@ data class DocumentEntity(
     val notes: String? = null,
     val trashed: Boolean = false,
     val trashedOrigPath: String? = null,
+    /**
+     * While [trashed]: the wall time, in epoch millis, of the winning doc-trash event's HLC. The
+     * trash auto-purge counts retention from it, because a move into trash keeps the PDF's own
+     * mtime, which says when it was imported, not when it was trashed.
+     */
+    val trashedAt: Long? = null,
     /** Tombstone: doc-delete journal event applied. */
     val deleted: Boolean = false,
     /** File disappeared from library, awaiting relink. */

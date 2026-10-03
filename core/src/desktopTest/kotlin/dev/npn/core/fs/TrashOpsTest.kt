@@ -82,4 +82,60 @@ class TrashOpsTest {
         trash.listTrash() shouldHaveSize 1
         fs.exists(oldTrash).shouldBeFalse()
     }
+
+    @Test
+    fun purgeMeasuresATrashedDocumentFromWhenItWasTrashed() = runTest {
+        // Both PDFs are old; moving into trash keeps their mtime.
+        val recent = trashWithMtime("x/recent.pdf", "aaaaaaaa11111111", mtime = 1_000)
+        val longAgo = trashWithMtime("y/longago.pdf", "bbbbbbbb22222222", mtime = 1_000)
+
+        trash.purgeOlderThan(
+            cutoffMillis = 500_000,
+            documents = mapOf("aaaaaaaa11111111" to 900_000L, "bbbbbbbb22222222" to 100_000L),
+        )
+
+        fs.exists(recent).shouldBeTrue()
+        fs.exists(longAgo).shouldBeFalse()
+    }
+
+    @Test
+    fun purgeKeepsAnEntryWhoseDocumentIsNotTrashedYet() = runTest {
+        // The move into trash runs before its doc-trash commit: the row is still live.
+        val moving = trashWithMtime("x/moving.pdf", "cccccccc33333333", mtime = 1_000)
+
+        trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf("cccccccc33333333" to null))
+
+        fs.exists(moving).shouldBeTrue()
+    }
+
+    @Test
+    fun purgeFallsBackToMtimeForAnEntryWithNoDocument() = runTest {
+        val orphan = trashWithMtime("x/orphan.pdf", "dddddddd44444444", mtime = 1_000)
+        val unrelated = trashWithMtime("x/unrelated.pdf", "eeeeeeee55555555", mtime = 1_000)
+
+        trash.purgeOlderThan(cutoffMillis = 500_000, documents = mapOf("eeeeeeee55555555" to 900_000L))
+
+        fs.exists(orphan).shouldBeFalse()
+        fs.exists(unrelated).shouldBeTrue()
+    }
+
+    @Test
+    fun trashedNamesCarryTheirHashPrefix() {
+        NpnPaths.trashHashPrefix("doc__deadbeef.pdf") shouldBe "deadbeef"
+        NpnPaths.trashHashPrefix("doc__deadbeef-2.pdf") shouldBe "deadbeef"
+        NpnPaths.trashHashPrefix("a__b.c__deadbeef.pdf") shouldBe "deadbeef"
+        NpnPaths.trashHashPrefix("noext__deadbeef-1") shouldBe "deadbeef"
+        NpnPaths.trashHashPrefix("doc.pdf") shouldBe null
+    }
+
+    private suspend fun trashWithMtime(
+        relPath: String,
+        sha256: String,
+        mtime: Long,
+    ): String {
+        fs.writeBytesOnce(relPath, relPath.encodeToByteArray())
+        val trashed = trash.moveToTrash(relPath, sha256)
+        Files.setLastModifiedTime(root.resolve(trashed), java.nio.file.attribute.FileTime.fromMillis(mtime))
+        return trashed
+    }
 }

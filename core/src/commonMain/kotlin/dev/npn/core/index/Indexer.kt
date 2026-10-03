@@ -549,7 +549,7 @@ class Indexer(
      * - Fields: every doc's document_fields is replaced with its effective field map (own values
      *   over inherited predecessor values); the well-known five are additionally cached on the
      *   doc row. reviewed/ocrEngineOverride come from the system props.
-     * - Trash: the trashed flag + trashedOrigPath come from the fold's trash state. Resurrection:
+     * - Trash: the trashed flag, trashedOrigPath and trashedAt come from the fold's trash state. Resurrection:
      *   if the journal says trashed/deleted but the file exists at the original path, prefer the
      *   file (clear missing, do NOT set trashed) and report it. This keeps the file authoritative.
      * - Delete: a delete tombstone sets `deleted = true`. File cleanup is a separate user action;
@@ -920,6 +920,7 @@ class Indexer(
                 ocrEngineOverride = meta.ocrEngineOverride,
                 trashed = lifecycle.trashed,
                 trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
+                trashedAt = if (lifecycle.trashed) state.trashedAtMillis(doc) ?: row.trashedAt else null,
                 deleted = lifecycle.deleted,
                 missing = lifecycle.missing,
             )

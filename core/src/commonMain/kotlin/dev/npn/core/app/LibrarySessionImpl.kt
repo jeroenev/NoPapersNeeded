@@ -289,9 +289,10 @@ class LibrarySessionImpl private constructor(
     }
 
     /** Internal auto-purge, run after watch-triggered rescans; not part of any public facet. */
-    private suspend fun purgeTrash(olderThanDays: Int) {
+    internal suspend fun purgeTrash(olderThanDays: Int) {
         val cutoff = deps.clock.nowMillis() - olderThanDays.toLong() * MILLIS_PER_DAY
-        trashOps().purgeOlderThan(cutoff)
+        val trashTimes = db.documentDao().trashTimes().associate { it.docId to it.trashedAt }
+        trashOps().purgeOlderThan(cutoff, trashTimes)
     }
 
     override suspend fun reOcr(docId: String) {

@@ -153,6 +153,10 @@ interface DocumentDao {
     @Query("SELECT relPath, docId, size, mtime FROM documents WHERE deleted = 0")
     suspend fun allPathsAndMeta(): List<PathMeta>
 
+    /** Every live (not deleted) document's trash time, for the trash auto-purge. */
+    @Query("SELECT docId, trashedAt FROM documents WHERE deleted = 0")
+    suspend fun trashTimes(): List<DocTrashTime>
+
     /** All document tags for a set of docIds, for grouping list items. */
     @Query("SELECT docId, tag FROM document_tags WHERE docId IN (:docIds)")
     suspend fun tagsForDocsChunk(docIds: List<String>): List<DocumentTagEntity>

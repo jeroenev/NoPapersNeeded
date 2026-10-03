@@ -8,6 +8,12 @@ data class PathMeta(
     val mtime: Long,
 )
 
+/** A live document's trash time ([DocumentEntity.trashedAt]), null while it is not in trash. */
+data class DocTrashTime(
+    val docId: String,
+    val trashedAt: Long?,
+)
+
 /** Tag with its live document count, for the tag management screen. */
 data class TagWithCount(
     val name: String,
