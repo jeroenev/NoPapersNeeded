@@ -62,6 +62,7 @@ data class SettingsUiState(
     val aiOcrAuto: Boolean = false,
     /** Whether the endpoint is complete enough to call — what gates the self-test button. */
     val aiConfigured: Boolean = false,
+    val updateCheckEnabled: Boolean = true,
 )
 
 /**
@@ -162,6 +163,7 @@ class SettingsViewModel(
                     aiAutoOnOcr = snapshot.aiAutoOnOcr,
                     aiOcrAuto = snapshot.aiOcrAuto,
                     aiConfigured = snapshot.toAiConfig().configured,
+                    updateCheckEnabled = snapshot.updateCheckEnabled,
                 )
             }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 

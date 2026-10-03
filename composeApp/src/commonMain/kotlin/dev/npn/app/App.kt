@@ -72,6 +72,7 @@ import dev.npn.app.ui.settings.SettingsScreen
 import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.trash.TrashScreen
+import dev.npn.app.ui.update.WithUpdateBanner
 import dev.npn.core.app.LibraryLocations
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
@@ -200,39 +201,41 @@ private fun MainNav(
     val libraryFilterHandoff = remember { LibraryFilterHandoff() }
 
     DriveWindowTitle(nav)
-    WithDraftResumeBanner(
-        onOpen = { docId ->
-            browse.setOrder(listOf(docId), null)
-            nav.navigate(Route.DocDetail(docId)) {
-                popUpTo(Route.Library)
-                launchSingleTop = true
-            }
-        },
-    ) {
-        BoxWithConstraints(Modifier.fillMaxSize()) {
-            val aiEditInSidebar = maxWidth > WideLayoutBreakpoint
-            NavigationShell(
-                current = nav.currentTopLevelDestination(),
-                aiCurrent = nav.currentAiDestination(),
-                aiProbe = aiProbe,
-                queue = queue,
-                onNavigate = { dest -> nav.navigateTopLevel(dest) },
-                onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
-                onAiEdit = {
-                    aiSelection.set(emptyList())
-                    nav.navigateAi(Route.AiEdit)
-                },
-            ) {
-                MainNavHost(
-                    nav = nav,
-                    env = env,
-                    session = session,
-                    browse = browse,
-                    aiConfigured = aiConfigured,
-                    aiSelection = aiSelection,
-                    libraryFilterHandoff = libraryFilterHandoff,
-                    showAiEditTopBar = !aiEditInSidebar,
-                )
+    WithUpdateBanner(env.settings) {
+        WithDraftResumeBanner(
+            onOpen = { docId ->
+                browse.setOrder(listOf(docId), null)
+                nav.navigate(Route.DocDetail(docId)) {
+                    popUpTo(Route.Library)
+                    launchSingleTop = true
+                }
+            },
+        ) {
+            BoxWithConstraints(Modifier.fillMaxSize()) {
+                val aiEditInSidebar = maxWidth > WideLayoutBreakpoint
+                NavigationShell(
+                    current = nav.currentTopLevelDestination(),
+                    aiCurrent = nav.currentAiDestination(),
+                    aiProbe = aiProbe,
+                    queue = queue,
+                    onNavigate = { dest -> nav.navigateTopLevel(dest) },
+                    onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
+                    onAiEdit = {
+                        aiSelection.set(emptyList())
+                        nav.navigateAi(Route.AiEdit)
+                    },
+                ) {
+                    MainNavHost(
+                        nav = nav,
+                        env = env,
+                        session = session,
+                        browse = browse,
+                        aiConfigured = aiConfigured,
+                        aiSelection = aiSelection,
+                        libraryFilterHandoff = libraryFilterHandoff,
+                        showAiEditTopBar = !aiEditInSidebar,
+                    )
+                }
             }
         }
     }

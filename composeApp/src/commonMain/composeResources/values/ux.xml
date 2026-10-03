@@ -26,4 +26,6 @@
     <string name="ux_show_suggestions">Show suggestions</string>
     <string name="ux_discard_short">Discard</string>
     <string name="ux_library_draft_warning">Save or discard your document drafts before opening another library.</string>
+    <string name="ux_update_available">Version %1$s is available</string>
+    <string name="ux_update_download">Download</string>
 </resources>

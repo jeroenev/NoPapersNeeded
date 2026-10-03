@@ -52,6 +52,8 @@
     <string name="common_settings_about">Over</string>
     <string name="common_settings_product_version">%1$s %2$s</string>
     <string name="common_settings_about_help">Persoonlijke, opensource-app voor papierloos documentbeheer. Bestanden zijn de bron.</string>
+    <string name="common_settings_update_check">Controleren op updates</string>
+    <string name="common_settings_update_check_help">Vraag bij elke start aan GitHub of er een nieuwere versie is uitgebracht.</string>
 
     <string name="common_settings_storage_organize_paths">Documentpaden automatisch ordenen</string>
     <string name="common_settings_storage_organize_help">Verplaatst pdf-bestanden na het importeren en na wijzigingen in metagegevens; bestanden worden nooit overschreven.</string>

@@ -40,6 +40,10 @@ data class SettingsSnapshot(
     val aiMaxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
     val aiAutoOnOcr: Boolean = false,
     val aiOcrAuto: Boolean = false,
+    /** Look up the latest published release once per start and offer it when newer. */
+    val updateCheckEnabled: Boolean = true,
+    /** A release version the user dismissed the update notice for; it is not offered again. */
+    val dismissedUpdateVersion: String? = null,
 )
 
 /**
@@ -207,6 +211,8 @@ object SettingsCodec {
                 aiMaxNewTagsPerDoc = reader.int(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC) ?: DEFAULTS.aiMaxNewTagsPerDoc,
                 aiAutoOnOcr = reader.boolean(SettingsKeys.AI_AUTO_ON_OCR) ?: DEFAULTS.aiAutoOnOcr,
                 aiOcrAuto = reader.boolean(SettingsKeys.AI_OCR_AUTO) ?: DEFAULTS.aiOcrAuto,
+                updateCheckEnabled = reader.boolean(SettingsKeys.UPDATE_CHECK_ENABLED) ?: DEFAULTS.updateCheckEnabled,
+                dismissedUpdateVersion = reader.string(SettingsKeys.DISMISSED_UPDATE_VERSION),
             ),
         )
 
@@ -248,6 +254,8 @@ object SettingsCodec {
         writer.putInt(SettingsKeys.AI_MAX_NEW_TAGS_PER_DOC, s.aiMaxNewTagsPerDoc)
         writer.putBoolean(SettingsKeys.AI_AUTO_ON_OCR, s.aiAutoOnOcr)
         writer.putBoolean(SettingsKeys.AI_OCR_AUTO, s.aiOcrAuto)
+        writer.putBoolean(SettingsKeys.UPDATE_CHECK_ENABLED, s.updateCheckEnabled)
+        writer.putOptional(SettingsKeys.DISMISSED_UPDATE_VERSION, s.dismissedUpdateVersion)
     }
 
     private fun Writer.putOptional(
@@ -295,6 +303,8 @@ internal object SettingsKeys {
     const val AI_MAX_NEW_TAGS_PER_DOC = "aiMaxNewTagsPerDoc"
     const val AI_AUTO_ON_OCR = "aiAutoOnOcr"
     const val AI_OCR_AUTO = "aiOcrAuto"
+    const val UPDATE_CHECK_ENABLED = "updateCheckEnabled"
+    const val DISMISSED_UPDATE_VERSION = "dismissedUpdateVersion"
 }
 
 /**

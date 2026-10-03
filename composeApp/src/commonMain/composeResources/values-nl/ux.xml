@@ -26,4 +26,6 @@
     <string name="ux_show_suggestions">Suggesties tonen</string>
     <string name="ux_discard_short">Verwerpen</string>
     <string name="ux_library_draft_warning">Sla je documentconcepten op of verwerp ze voordat je een andere bibliotheek opent.</string>
+    <string name="ux_update_available">Versie %1$s is beschikbaar</string>
+    <string name="ux_update_download">Downloaden</string>
 </resources>

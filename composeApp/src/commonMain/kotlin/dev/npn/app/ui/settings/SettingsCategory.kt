@@ -47,6 +47,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_storage_o
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_path_template
 import no_papers_needed.composeapp.generated.resources.common_settings_trash
 import no_papers_needed.composeapp.generated.resources.common_settings_trash_retention_days
+import no_papers_needed.composeapp.generated.resources.common_settings_update_check
 import no_papers_needed.composeapp.generated.resources.common_settings_use_saf
 import no_papers_needed.composeapp.generated.resources.common_settings_views
 import no_papers_needed.composeapp.generated.resources.common_settings_watched_folder
@@ -197,8 +198,8 @@ internal val SettingsCategories: List<SettingsCategory> =
             id = SettingsCategoryId.ABOUT,
             title = Res.string.common_settings_about,
             icon = Icons.Outlined.Info,
-            keywords = listOf(Res.string.common_settings_about_help),
-            content = { AboutSettingsPane() },
+            keywords = listOf(Res.string.common_settings_about_help, Res.string.common_settings_update_check),
+            content = { AboutSettingsPane(it) },
         ),
     )
 

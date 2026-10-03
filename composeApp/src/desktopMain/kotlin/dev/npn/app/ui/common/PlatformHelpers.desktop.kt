@@ -42,6 +42,9 @@ actual fun defaultLibraryLocation(): String? = null
 
 actual fun supportsSharing(): Boolean = false
 
+/** Flatpak sets FLATPAK_ID inside the sandbox; Flathub ships the updates there. */
+actual fun checksForUpdates(): Boolean = System.getenv("FLATPAK_ID").isNullOrBlank()
+
 actual fun supportsLibraryFolderCreation(): Boolean = true
 
 actual suspend fun createLibraryFolder(

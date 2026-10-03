@@ -65,6 +65,12 @@ expect fun defaultLibraryLocation(): String?
 expect fun supportsSharing(): Boolean
 
 /**
+ * Whether the app should look for a newer release itself. False where a package manager already
+ * keeps it up to date (the desktop app inside Flatpak).
+ */
+expect fun checksForUpdates(): Boolean
+
+/**
  * Whether the platform can create a new library folder inside a [FolderAccess.DIRECT] parent.
  * True everywhere now that Android has plain paths; SAF parents are still refused by
  * [createLibraryFolder].
