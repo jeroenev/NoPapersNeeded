@@ -675,8 +675,10 @@ val prepareWindowsTesseract =
         outDir.set(windowsAppResources)
     }
 
+// Compose registers prepareAppResources after this script is evaluated, so match it by name
+// lazily instead of looking it up now.
 if (isWindowsHost) {
-    tasks.named("prepareAppResources") { dependsOn(prepareWindowsTesseract) }
+    tasks.named { it == "prepareAppResources" }.configureEach { dependsOn(prepareWindowsTesseract) }
 }
 
 // --- Linux tarball (Flatpak input) -------------------------------------------
