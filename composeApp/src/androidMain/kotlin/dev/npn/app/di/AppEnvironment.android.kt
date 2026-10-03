@@ -101,7 +101,7 @@ private fun libraryFileSystem(
     // "every document was deleted": the folder may be on an unmounted SD card, or the all-files
     // grant may have been revoked in system settings since the library was chosen.
     if (!Files.isDirectory(root)) throw IOException("Library folder not found: $location")
-    if (!hasDirectStorageAccess(context)) {
+    if (!hasDirectStorageAccess()) {
         throw IOException(
             "Storage access was revoked; allow \"All files access\" for No Papers Needed to open $location",
         )

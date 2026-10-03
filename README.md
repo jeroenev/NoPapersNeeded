@@ -67,7 +67,7 @@ provider, and nothing lands in your library until you've reviewed it.
 Download the latest version from the
 [releases page](https://github.com/jeroenev/NoPapersNeeded/releases):
 
-- **Android** 8.0 or newer: the `.apk`.
+- **Android** 11 or newer: the `.apk`.
 - **Linux**: AppImage, Flatpak, `.deb` or `.rpm`. Everything needed to run it is
   included. For text recognition on the desktop, install `tesseract-ocr` (the Flatpak
   already includes it).

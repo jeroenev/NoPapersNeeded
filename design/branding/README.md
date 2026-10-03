@@ -25,7 +25,7 @@ and contains no font dependencies or external assets.
 
 | Target | Files | How |
 | --- | --- | --- |
-| Android | `androidApp/src/main/res/drawable/ic_launcher_foreground.xml`, `ic_launcher_monochrome.xml`, `values/ic_launcher_background.xml`, `mipmap-anydpi-v26/ic_launcher.xml` | Adaptive icon: teal background layer, the mark as the foreground, plus a monochrome layer for Android 13+ themed icons. Hand-ported vector drawables — no rendering step. minSdk is 26, so no density PNG fallbacks are needed. |
+| Android | `androidApp/src/main/res/drawable/ic_launcher_foreground.xml`, `ic_launcher_monochrome.xml`, `values/ic_launcher_background.xml`, `mipmap-anydpi/ic_launcher.xml` | Adaptive icon: teal background layer, the mark as the foreground, plus a monochrome layer for Android 13+ themed icons. Hand-ported vector drawables — no rendering step. Every supported device (minSdk 30) reads adaptive icons, so no density PNG fallbacks are needed. |
 | Desktop | `desktopApp/src/main/resources/icon.png`, `icon.ico` | The PNG is the Compose window icon, the jpackage `.deb` icon, and the AppImage AppDir icon. The `.ico` is the jpackage Windows icon. Both are committed and generated. |
 
 A window icon alone is not enough on Linux: shells such as GNOME identify a window by

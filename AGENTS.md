@@ -15,7 +15,7 @@ design, build/packaging/release details, and the library folder layout.
   in `desktopApp/flatpak/`, built by `mise package-flatpak`; `mise flathub-manifest` derives the
   Flathub one). The Flatpak app ID is `io.github.jeroenev.NoPapersNeeded`, which Flathub ties
   to the GitHub repo `jeroenev/NoPapersNeeded`; the Android package stays `dev.npn`.
-- Java: every module compiles for JVM 17 (Android shares the bytecode; minSdk 26 lacks newer
+- Java: every module compiles for JVM 17 (Android shares the bytecode; minSdk 30 lacks newer
   library APIs). Only the desktop runtime that jlink/jpackage bundle is newer: `runtimeJdk` (25)
   in `desktopApp/build.gradle.kts`. Raise one without assuming the other follows.
 - KMP JVM target is named `desktop` (not `jvm`); source sets are

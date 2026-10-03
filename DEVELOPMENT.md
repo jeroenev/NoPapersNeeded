@@ -47,7 +47,7 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 
 ## Requirements
 
-- Android 8.0+ (API 26).
+- Android 11+ (API 30).
 - Desktop: Java 17 or newer. Packaged distributions bundle their own Java 25 runtime, so
   no system JVM is required to run them.
 - Optional on desktop: `tesseract-ocr` on `PATH` for OCR. Without it, only embedded
@@ -59,7 +59,7 @@ The Gradle build uses Java toolchains provisioned via the foojay resolver, so a 
 JDK is downloaded automatically if needed. All code compiles for Java 17, which Android
 shares; the desktop packages bundle a Java 25 runtime, built with that JDK's jlink and
 jpackage. Raising the bytecode target above 17 is a separate decision: Android only
-provides newer Java library APIs on newer OS versions, and the app supports API 26. The
+provides newer Java library APIs on newer OS versions, and the app supports API 30. The
 Android SDK is located via
 `local.properties` (`sdk.dir`) or the `ANDROID_HOME` / `ANDROID_SDK_ROOT`
 environment variable.

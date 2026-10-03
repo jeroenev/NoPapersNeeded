@@ -5,26 +5,18 @@
     <!--
         The library is a plain folder on shared storage (Documents/NoPapersNeeded by default) that
         the app reads and writes directly, so sync tools such as Syncthing can share it. Seeing the
-        files those tools write requires "All files access" from Android 11 on, and the legacy
-        storage permission (plus legacy external storage on Android 10) before that. Cloud document
-        providers stay reachable through the Storage Access Framework, which needs no permission.
+        files those tools write requires "All files access". Cloud document providers stay
+        reachable through the Storage Access Framework, which needs no permission.
     -->
     <uses-permission
         android:name="android.permission.MANAGE_EXTERNAL_STORAGE"
         tools:ignore="ScopedStorage" />
-    <uses-permission
-        android:name="android.permission.READ_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
-    <uses-permission
-        android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="29" />
 
     <application
         android:name=".NpnApplication"
         android:label="@string/app_name"
         android:icon="@mipmap/ic_launcher"
         android:theme="@android:style/Theme.Material.Light.NoActionBar"
-        android:requestLegacyExternalStorage="true"
         android:enableOnBackInvokedCallback="true"
         android:supportsRtl="true">
 
