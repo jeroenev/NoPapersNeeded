@@ -10,8 +10,7 @@ import androidx.room3.PrimaryKey
  * Materialized document row. This is a disposable cache: it is a fold of the file library
  * plus the metadata journals and can be rebuilt from the folder alone.
  *
- * docId is the SHA-256 hex of the file bytes (stable identity). Stored as a plain TEXT column;
- * the DocId value class is only used at higher layers.
+ * docId is the SHA-256 hex of the file bytes (stable identity), stored as a plain TEXT column.
  */
 @Entity(
     tableName = "documents",

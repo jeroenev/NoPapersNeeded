@@ -39,7 +39,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Same suites on the Android target: `./gradlew :core:testAndroidHostTest
   :composeApp:testAndroidHostTest`. Both are in `check`/`allTests`, so `mise test-all` and
   `mise check` cover them; `mise test-fast` deliberately does not.
-- Single test class: `./gradlew :core:desktopTest --tests 'dev.npn.core.journal.FoldTest'`.
+- Single test class: `./gradlew :core:desktopTest --tests 'dev.npn.core.journal.OrSetTest'`.
 - Live AI endpoint checks are opt-in and skipped by default (they cost money):
   `NPN_LIVE_AI=1 ./gradlew :core:desktopTest --tests 'dev.npn.core.ai.LiveEndpointProbeTest'`.
   Never add a live-endpoint call to a normal test — CI has no credentials.
