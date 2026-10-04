@@ -72,54 +72,6 @@ class AiTextTest {
         AiText.parseTranscription("The form says ${AiText.BLANK_PAGE_MARKER} here") shouldBe
             "The form says ${AiText.BLANK_PAGE_MARKER} here"
     }
-
-    @Test
-    fun parseTagSuggestionsPlainJsonArray() {
-        AiText.parseTagSuggestions("[\"tax\", \"invoice\"]", emptyList()) shouldContainExactly
-            listOf("tax", "invoice")
-    }
-
-    @Test
-    fun parseTagSuggestionsArrayWrappedInProseAndCodeFences() {
-        val response = "Here you go:\n```json\n[\"tax\", \"invoice\"]\n```"
-        AiText.parseTagSuggestions(response, emptyList()) shouldContainExactly listOf("tax", "invoice")
-    }
-
-    @Test
-    fun parseTagSuggestionsFiltersAlreadyPresentTagsCaseInsensitively() {
-        AiText.parseTagSuggestions("[\"Tax\", \"invoice\"]", listOf("TAX")) shouldContainExactly
-            listOf("invoice")
-    }
-
-    @Test
-    fun parseTagSuggestionsCaseInsensitiveDedupeWithinSuggestions() {
-        AiText.parseTagSuggestions("[\"tax\", \"Tax\", \"TAX\"]", emptyList()) shouldContainExactly
-            listOf("tax")
-    }
-
-    @Test
-    fun parseTagSuggestionsDropsBlankEntries() {
-        AiText.parseTagSuggestions("[\"\", \"  \", \"invoice\"]", emptyList()) shouldContainExactly
-            listOf("invoice")
-    }
-
-    @Test
-    fun parseTagSuggestionsDoesNotCap() {
-        val many = (1..20).joinToString(", ", prefix = "[", postfix = "]") { "\"tag$it\"" }
-        AiText.parseTagSuggestions(many, emptyList()).size shouldBe 20
-    }
-
-    @Test
-    fun parseTagSuggestionsNonJsonReturnsEmpty() {
-        AiText.parseTagSuggestions("no arrays here, sorry", emptyList()) shouldContainExactly
-            emptyList()
-    }
-
-    @Test
-    fun parseTagSuggestionsSkipsNonArrayBracketAndFindsRealArray() {
-        AiText.parseTagSuggestions("[see above] then [\"tax\", \"invoice\"]", emptyList()) shouldContainExactly
-            listOf("tax", "invoice")
-    }
 }
 
 /**

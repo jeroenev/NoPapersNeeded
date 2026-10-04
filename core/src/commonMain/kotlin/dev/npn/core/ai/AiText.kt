@@ -7,7 +7,6 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
-import kotlinx.serialization.json.jsonPrimitive
 
 /** Pure text helpers for the AI layer, split out so they are unit-testable without a model. */
 object AiText {
@@ -61,22 +60,6 @@ object AiText {
             .map { it.groupValues[1].lowercase() }
             .distinct()
             .toList()
-
-    /**
-     * Parse raw tag strings out of a model response: the first JSON string array found wins
-     * (models often wrap it in prose or code fences). Suggestions already on the document and
-     * case-insensitive duplicates are dropped. No cap is applied here — see [parseEditSuggestion].
-     */
-    fun parseTagSuggestions(
-        response: String,
-        currentTags: List<String>,
-    ): List<String> {
-        val current = currentTags.map { it.lowercase() }.toHashSet()
-        return firstStringArray(response)
-            .map { it.trim() }
-            .filter { it.isNotEmpty() && it.lowercase() !in current }
-            .distinctBy { it.lowercase() }
-    }
 
     /**
      * Parse a combined edit suggestion object out of a model [response] (first JSON object wins):
@@ -214,18 +197,12 @@ object AiText {
             ?.filter { it.isNotEmpty() }
             ?: emptyList()
 
-    private fun JsonObject.stringAt(key: String): String? =
-        (this[key] as? JsonPrimitive)
-            ?.takeIf { it.isString }
-            ?.contentOrNull
-            ?.trim()
-            ?.takeIf { it.isNotEmpty() }
-
     private fun firstJsonObject(text: String): JsonObject? {
         var start = text.indexOf('{')
         while (start >= 0) {
-            // Try every candidate close brace: the first parseable substring wins. Suggestion
-            // objects are small and flat, so this stays cheap even on prose-wrapped output.
+            // Try every candidate close brace: the first parseable substring wins, which also steps
+            // past the close braces of the nested "fields" object. Quadratic in the braces of a
+            // reply, which one document's suggestion keeps to a handful.
             var end = text.indexOf('}', startIndex = start)
             while (end >= 0) {
                 val parsed =
@@ -238,21 +215,5 @@ object AiText {
             start = text.indexOf('{', startIndex = start + 1)
         }
         return null
-    }
-
-    private fun firstStringArray(text: String): List<String> {
-        var start = text.indexOf('[')
-        while (start >= 0) {
-            val end = text.indexOf(']', startIndex = start)
-            if (end < 0) return emptyList()
-            val candidate = text.substring(start, end + 1)
-            val parsed =
-                runCatching {
-                    json.decodeFromString<JsonArray>(candidate).map { it.jsonPrimitive.content }
-                }.getOrNull()
-            if (parsed != null) return parsed
-            start = text.indexOf('[', startIndex = start + 1)
-        }
-        return emptyList()
     }
 }

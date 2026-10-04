@@ -388,7 +388,7 @@ internal object AiPrompts {
      * from a real one, so it will happily date a doctor's note to 2087. But clamping to the past
      * would be just as wrong — archives hold decades-old paperwork and tickets for next year's
      * concert — so today is given as a plausibility check the model may overrule from the text, not
-     * as a bound. Nothing here is enforced after the fact: [AiText.parseMetadataSuggestion] does
+     * as a bound. Nothing here is enforced after the fact: [AiText.parseFieldSuggestion] does
      * not reject a date for being far away, because it cannot tell which far-away dates are real.
      *
      * The second mode is dd/mm vs mm/dd, which is why this text insists the *document* decides.
