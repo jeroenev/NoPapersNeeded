@@ -124,3 +124,10 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Shared Flow subscriptions use the named `WhileSubscribed(5_000)` constant instead of
   inline timeouts.
 - Use `material-icons-extended` for semantically correct icons (already a dependency).
+- Around suspend code use `runCatchingCancellable` (`core.util`), never `runCatching` or a bare
+  `catch (Throwable)`: cancellation must propagate, not be recorded as a failure. Typed detekt's
+  `SuspendFunSwallowedCancellation` enforces it. Error text is `Throwable.reason()`.
+- Background work nobody awaits reports failures through `NpnLog` (`SessionDeps.log`) with
+  `log.runLogged("what") { … }`, never `println` or a silent `runCatching`.
+- JSON goes through `NpnJson.Persisted` (what the app writes and reads back) or `NpnJson.Lenient`
+  (model output, third-party responses), never a new `Json {}`. Only `JournalCodec` keeps its own.
