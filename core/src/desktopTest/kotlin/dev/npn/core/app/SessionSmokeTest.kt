@@ -183,7 +183,7 @@ class SessionSmokeTest {
                     .getByDocId(id)
                     ?.ocrEngineOverride shouldBe null
                 (
-                    rig.db
+                    rig.deviceDb
                         .ocrQueueDao()
                         .getByDocId(id)
                         ?.aiRequested == true
@@ -225,7 +225,7 @@ class SessionSmokeTest {
                 rig.session.content.pageCount(id) shouldBe null
                 // The re-OCR request never reached the queue.
                 (
-                    rig.db
+                    rig.deviceDb
                         .ocrQueueDao()
                         .getByDocId(id)
                         ?.rerun == true

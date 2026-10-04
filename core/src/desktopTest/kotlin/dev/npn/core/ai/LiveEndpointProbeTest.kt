@@ -159,7 +159,7 @@ class LiveEndpointProbeTest {
         val dir = Files.createTempDirectory("npn-live-probe").toFile()
         val db = npnDatabase(File(dir, "index.db"))
         try {
-            block(AiFacadeImpl(db) { config })
+            block(AiFacadeImpl(db, db.keyValueDao()) { config })
         } finally {
             db.close()
             dir.deleteRecursively()

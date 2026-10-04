@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiConfig
+import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -57,6 +58,8 @@ class AppSessionRig private constructor(
     val dbDir: File,
     val fs: LibraryFileSystem,
     val db: NpnDatabase,
+    /** This device's own state: queues, edit runs, device id, chats. */
+    val deviceDb: DeviceDatabase,
     val clock: MutableClock,
     val scope: CoroutineScope,
     val session: LibrarySessionImpl,
@@ -81,9 +84,14 @@ class AppSessionRig private constructor(
             .listAllUnder(NpnPaths.JOURNAL_DIR)
             .count { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
 
+    /** Device databases of the [secondSession]s, closed with this rig. */
+    private val otherDeviceDbs = ArrayList<DeviceDatabase>()
+
     suspend fun close() {
         session.close()
         db.close()
+        deviceDb.close()
+        otherDeviceDbs.forEach { it.close() }
         libRoot.toFile().deleteRecursively()
         dbDir.deleteRecursively()
     }
@@ -120,7 +128,7 @@ class AppSessionRig private constructor(
                 session.storagePath.setStoragePathTemplate(it.template)
                 session.storagePath.setStoragePathEnabled(it.enabled)
             }
-            return AppSessionRig(libRoot, dbDir, deps.fs, deps.db, clock, scope, session)
+            return AppSessionRig(libRoot, dbDir, deps.fs, deps.db, deps.deviceDb, clock, scope, session)
         }
 
         /** One device's app-local dirs; each session over the folder gets its own. */
@@ -136,7 +144,7 @@ class AppSessionRig private constructor(
     /**
      * Build a SECOND session over the SAME library folder but a fresh, separate DB cache and a
      * distinct deviceId (simulating another device syncing the same folder). Returns the session
-     * plus its db so the caller can close it.
+     * plus its index db so the caller can close it; its device db closes with this rig.
      */
     suspend fun secondSession(
         scope: CoroutineScope,
@@ -159,7 +167,8 @@ class AppSessionRig private constructor(
                 thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
             )
         // Force a distinct deviceId by seeding the kv before openSession.
-        deps.db.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
+        deps.deviceDb.keyValueDao().put(DeviceIdentity.KEY_DEVICE_ID, "device-two")
+        otherDeviceDbs += deps.deviceDb
         return LibrarySessionImpl.openSession(deps) to deps.db
     }
 }

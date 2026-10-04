@@ -9,6 +9,7 @@ import dev.npn.core.app.LibraryLocations
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.app.toAiConfig
+import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.ContentResolverExternalIo
 import dev.npn.core.fs.JvmLibraryFileSystem
@@ -36,8 +37,8 @@ import java.util.Locale
  * ([LibraryLocations]): a plain path opens the same direct [JvmLibraryFileSystem] the desktop app
  * uses, which is what lets Syncthing share the folder; a `content://` tree uri opens the
  * [SafLibraryFileSystem], kept for cloud document providers and for libraries chosen before the
- * direct mode existed. The Room database name is suffixed with a stable hash of the location so
- * each library gets its own cache; thumbnails live under the app cache dir.
+ * direct mode existed. The Room database names are suffixed with a stable hash of the location so
+ * each library gets its own index and device state; thumbnails live under the app cache dir.
  */
 fun createAppEnvironment(context: Context): AppEnvironment {
     val appContext = context.applicationContext
@@ -50,6 +51,7 @@ fun createAppEnvironment(context: Context): AppEnvironment {
         val key = AppDirs.libraryKey(location)
         val fs = libraryFileSystem(appContext, location)
         val db = npnDatabase(appContext, "npn-index-$key.db")
+        val deviceDb = deviceDatabase(appContext, "npn-device-$key.db")
 
         val thumbsDir = File(appContext.cacheDir, "thumbs/$key").apply { mkdirs() }
 
@@ -57,6 +59,7 @@ fun createAppEnvironment(context: Context): AppEnvironment {
             SessionDeps(
                 fs = fs,
                 db = db,
+                deviceDb = deviceDb,
                 pdfEngine = PdfBoxAndroidEngine(appContext),
                 ocrEngine = MlKitOcrEngine(),
                 xmpIO = PdfBoxAndroidXmpIO(appContext),

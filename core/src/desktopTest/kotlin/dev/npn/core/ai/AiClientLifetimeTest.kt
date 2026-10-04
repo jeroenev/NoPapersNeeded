@@ -49,7 +49,7 @@ class AiClientLifetimeTest {
             val closed = AtomicInteger()
             val transport = probedClient(closed)
             try {
-                val facade = AiFacadeImpl(db, transport) { custom(gateway.baseUrl) }
+                val facade = AiFacadeImpl(db, db.keyValueDao(), transport) { custom(gateway.baseUrl) }
                 // Any call that reaches the endpoint builds the runtime; how this one ends does not matter.
                 runCatchingCancellable { facade.transcribePage(ByteArray(1), "eng") }
                 closed.get() shouldBe 0

@@ -3,12 +3,14 @@ package dev.npn.core.db
 import android.content.Context
 import androidx.room3.Room
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
 /**
  * Build the local index database on Android. The DB file lives in app-local storage
  * (never inside the synced library folder). Destructive migration is the intended fallback:
- * the cache is rebuildable from files and journals.
+ * the cache is rebuildable from files and journals. This device's own state is in
+ * [deviceDatabase], which has none.
  */
 fun npnDatabase(context: Context): NpnDatabase = npnDatabase(context, NPN_DATABASE_NAME)
 
@@ -20,6 +22,7 @@ fun npnDatabase(context: Context): NpnDatabase = npnDatabase(context, NPN_DATABA
 fun npnDatabase(
     context: Context,
     name: String,
+    queryDispatcher: CoroutineDispatcher = Dispatchers.IO,
 ): NpnDatabase {
     val dbFile = context.getDatabasePath(name)
     return Room
@@ -27,7 +30,7 @@ fun npnDatabase(
             context = context.applicationContext,
             name = dbFile.absolutePath,
         ).setDriver(BundledSQLiteDriver())
-        .setQueryCoroutineContext(Dispatchers.IO)
+        .setQueryCoroutineContext(queryDispatcher)
         .addMigrations(*NpnDatabase.MIGRATIONS)
         .fallbackToDestructiveMigration(dropAllTables = true)
         .build()

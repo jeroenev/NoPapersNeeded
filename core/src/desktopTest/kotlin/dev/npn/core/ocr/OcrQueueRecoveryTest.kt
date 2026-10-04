@@ -66,7 +66,7 @@ class OcrQueueRecoveryTest {
             hanging.started.await()
             job.cancelAndJoin()
 
-            val entry = db.ocrQueueDao().getByDocId(docId)!!
+            val entry = rig.deviceDb.ocrQueueDao().getByDocId(docId)!!
             entry.state shouldBe OcrPipeline.STATE_PENDING
             // Cancellation is not the document's fault, so it costs it nothing: three interrupted
             // app sessions must not spend the attempt cap on a scan that was never even read.
@@ -75,7 +75,7 @@ class OcrQueueRecoveryTest {
 
             rig.pipeline("devA", workingEngine()).processNext() shouldBe true
 
-            db.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
+            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
             db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
         }
 
@@ -86,11 +86,11 @@ class OcrQueueRecoveryTest {
             // and a drain matching on "pending" alone walked past them for good. They arrive as
             // ordinary outstanding work now.
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            db.ocrQueueDao().upsert(OcrQueueEntity(docId, "running", attempts = 1, updatedAt = 1))
+            rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, "running", attempts = 1, updatedAt = 1))
 
             rig.pipeline("devA", workingEngine()).processNext() shouldBe true
 
-            db.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
+            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
         }
 
     @Test
@@ -104,7 +104,7 @@ class OcrQueueRecoveryTest {
 
             assertFailsWith<CancellationException> { pipe.processNext() }
 
-            val entry = db.ocrQueueDao().getByDocId(docId)!!
+            val entry = rig.deviceDb.ocrQueueDao().getByDocId(docId)!!
             entry.state shouldBe OcrPipeline.STATE_PENDING
             entry.attempts shouldBe 0
             entry.lastError shouldBe null
@@ -116,7 +116,7 @@ class OcrQueueRecoveryTest {
             // The other side of "anything not terminal is owed": `failed` is a decision, and a
             // drain that reclaimed it too would retry a hopeless document on every start.
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            db.ocrQueueDao().upsert(
+            rig.deviceDb.ocrQueueDao().upsert(
                 OcrQueueEntity(docId, OcrPipeline.STATE_FAILED, attempts = 3, updatedAt = 1),
             )
 
@@ -124,7 +124,7 @@ class OcrQueueRecoveryTest {
             rig.pipeline("devA", engine).processNext() shouldBe false
 
             engine.calls shouldBe 0
-            db.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_FAILED
+            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_FAILED
         }
 }
 

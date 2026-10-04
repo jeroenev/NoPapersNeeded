@@ -1,8 +1,11 @@
 package dev.npn.core.ocr
 
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
@@ -25,10 +28,14 @@ internal class OcrPipelineRig {
     val fs = JvmLibraryFileSystem(libRoot)
     val db: NpnDatabase = npnDatabase(File(dbDir, "index.db"))
 
+    /** This device's OCR queue and page cache live here, apart from the index. */
+    val deviceDb: DeviceDatabase = deviceDatabase(File(dbDir, "device.db"))
+
     fun pipeline(
         deviceId: String,
         ocr: OcrEngine,
         database: NpnDatabase = db,
+        queue: OcrQueueDao = deviceDb.ocrQueueDao(),
         engines: OcrEngineSelector = OcrEngineSelector(local = ocr),
         config: OcrConfig = OcrConfig(),
         clock: EpochClock = SystemEpochClock,
@@ -40,7 +47,7 @@ internal class OcrPipelineRig {
         engines = engines,
         documentDao = database.documentDao(),
         ftsDao = database.ftsDao(),
-        ocrQueueDao = database.ocrQueueDao(),
+        ocrQueueDao = queue,
         tagDao = database.tagDao(),
         fieldDao = database.documentFieldDao(),
         deviceId = deviceId,
@@ -50,9 +57,12 @@ internal class OcrPipelineRig {
 
     /**
      * A second, independent index over the same library folder — how another device sees a library
-     * whose sidecars are already there. Caller closes it.
+     * whose sidecars are already there, or this one after its index was rebuilt. Caller closes it.
      */
     fun openSecondIndex(name: String = "indexB.db"): NpnDatabase = npnDatabase(File(dbDir, name))
+
+    /** Another device's own state, for a pipeline over [openSecondIndex] as that device. Caller closes it. */
+    fun openSecondDevice(name: String = "deviceB.db"): DeviceDatabase = deviceDatabase(File(dbDir, name))
 
     /** Write [bytes] into the library and index it as an OCR-pending document. */
     suspend fun stageDoc(
@@ -71,7 +81,7 @@ internal class OcrPipelineRig {
                 addedAt = 1000,
             ),
         )
-        db.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
+        deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
         return docId
     }
 
@@ -96,6 +106,7 @@ internal class OcrPipelineRig {
 
     fun close() {
         db.close()
+        deviceDb.close()
         libRoot.toFile().deleteRecursively()
         dbDir.deleteRecursively()
     }

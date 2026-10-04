@@ -411,7 +411,7 @@ class DocumentFilterTest {
                     .OcrEngineSelector(local = NoopOcrEngine()),
             documentDao = rig.db.documentDao(),
             ftsDao = rig.db.ftsDao(),
-            ocrQueueDao = rig.db.ocrQueueDao(),
+            ocrQueueDao = rig.deviceDb.ocrQueueDao(),
             tagDao = rig.db.tagDao(),
             fieldDao = rig.db.documentFieldDao(),
             deviceId = rig.session.deviceId,

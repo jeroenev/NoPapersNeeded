@@ -16,7 +16,9 @@ import androidx.sqlite.execSQL
  * Local index database. This is a disposable cache: a materialized view of the file library
  * plus the metadata journals. It lives in app-local storage, is never synced,
  * and is fully rebuildable from the folder alone. Because of that, destructive migration is the
- * correct fallback (see the platform builders): a schema bump just drops and rebuilds.
+ * correct fallback (see the platform builders): a schema bump without a migration drops it and
+ * the next open rebuilds it. What this device knows that the folder does not lives in
+ * [DeviceDatabase] instead, which is never dropped.
  */
 @Database(
     // v2: documents.status (enum) replaced by documents.reviewed (boolean).
@@ -41,7 +43,9 @@ import androidx.sqlite.execSQL
     // v21: adds ocr_page_cache (pages a failed OCR run read, so its retry does not pay for them).
     // v22: adds fts_keys, the rowid of each document's FTS row.
     // v23: saved_views leaves the schema; saved views are library data in the journal now.
-    version = 23,
+    // v24: device-local state leaves for DeviceDatabase: ocr_queue, ocr_page_cache, ai_enrich_queue,
+    //      ai_edit_jobs, ai_edit_job_docs and documents.aiEnrichedAt.
+    version = 24,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -74,11 +78,6 @@ import androidx.sqlite.execSQL
         FtsKeyEntity::class,
         ThumbnailEntity::class,
         DuplicateEntity::class,
-        OcrQueueEntity::class,
-        OcrPageCacheEntity::class,
-        AiEnrichQueueEntity::class,
-        AiEditJobEntity::class,
-        AiEditJobDocEntity::class,
         KeyValueEntity::class,
         MetadataSourceEntity::class,
         MetadataEventEntity::class,
@@ -104,12 +103,6 @@ abstract class NpnDatabase : RoomDatabase() {
     abstract fun thumbnailDao(): ThumbnailDao
 
     abstract fun duplicateDao(): DuplicateDao
-
-    abstract fun ocrQueueDao(): OcrQueueDao
-
-    abstract fun aiEnrichQueueDao(): AiEnrichQueueDao
-
-    abstract fun aiEditJobDao(): AiEditJobDao
 
     abstract fun keyValueDao(): KeyValueDao
 
@@ -173,12 +166,32 @@ abstract class NpnDatabase : RoomDatabase() {
         override suspend fun migrate(connection: SQLiteConnection) = Unit
     }
 
+    /**
+     * v23 -> v24: device-local state moves to [DeviceDatabase]. Its tables stay behind, outside the
+     * schema, until the session has copied them there and dropped them ([LegacyIndexTables]).
+     * `documents.aiEnrichedAt` cannot wait in a table the schema keeps, so its values move to an
+     * `ai_enriched` table shaped like the device database's first.
+     */
+    private object DeviceStateLeaves : Migration(23, 24) {
+        override suspend fun migrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "CREATE TABLE IF NOT EXISTS ${LegacyIndexTables.AI_ENRICHED} " +
+                    "(docId TEXT NOT NULL PRIMARY KEY, enrichedAt INTEGER NOT NULL)",
+            )
+            connection.execSQL(
+                "INSERT OR REPLACE INTO ${LegacyIndexTables.AI_ENRICHED} (docId, enrichedAt) " +
+                    "SELECT docId, aiEnrichedAt FROM documents WHERE aiEnrichedAt IS NOT NULL",
+            )
+            connection.execSQL("ALTER TABLE documents DROP COLUMN aiEnrichedAt")
+        }
+    }
+
     companion object {
         /**
          * The migrations Room cannot generate, which every builder adds. Without one for a version
          * step, the builders' destructive fallback would drop the whole index instead.
          */
-        val MIGRATIONS: Array<Migration> = arrayOf(SavedViewsLeave)
+        val MIGRATIONS: Array<Migration> = arrayOf(SavedViewsLeave, DeviceStateLeaves)
     }
 }
 

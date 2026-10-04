@@ -143,7 +143,7 @@ class AiOcrPipelineTest {
 
             pipe.reconcileSidecars()
 
-            db.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
+            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
         }
 
     @Test
@@ -169,7 +169,7 @@ class AiOcrPipelineTest {
             pipe.reconcileSidecars()
 
             ai.calls shouldBe 3
-            db.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
+            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
         }
 
     @Test
@@ -321,7 +321,9 @@ class AiOcrPipelineTest {
      */
     private suspend fun askForAi(docId: String) {
         setOverride(docId, OcrEngines.AI)
-        db.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, aiRequested = true))
+        rig.deviceDb
+            .ocrQueueDao()
+            .upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, aiRequested = true))
         db.documentDao().updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
     }
 

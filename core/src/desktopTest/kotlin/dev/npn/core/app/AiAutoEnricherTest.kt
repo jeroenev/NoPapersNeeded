@@ -107,7 +107,7 @@ class AiAutoEnricherTest {
                 rig.config = rig.config.copy(autoOnOcr = false)
                 rig.insert("off")
                 rig.enricher.enqueue("off") shouldBe false
-                rig.db.aiEnrichQueueDao().countPending() shouldBe 1
+                rig.deviceDb.aiEnrichQueueDao().countPending() shouldBe 1
             }
         }
 

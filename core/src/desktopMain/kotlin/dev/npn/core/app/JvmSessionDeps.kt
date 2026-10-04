@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiConfig
+import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.journal.EpochClock
@@ -27,8 +28,9 @@ import java.nio.file.Path
  * the pieces that legitimately vary (a test's no-op OCR engine, a fixed clock, the app's
  * [DesktopLog] in place of plain stderr); the behaviour knobs mirror [SessionDeps] and are read
  * live for the same reason it documents. The index
- * database is `index.db` under [AppDirs.dbDir] — two sessions over one folder (two "devices")
- * therefore need two [AppDirs], which is also what keeps their device identities apart.
+ * database is `index.db` under [AppDirs.dbDir], with this device's own state in `device.db` beside
+ * it — two sessions over one folder (two "devices") therefore need two [AppDirs], which is also
+ * what keeps their device identities apart.
  */
 fun jvmSessionDeps(
     libraryRoot: Path,
@@ -49,6 +51,7 @@ fun jvmSessionDeps(
     return SessionDeps(
         fs = JvmLibraryFileSystem(libraryRoot),
         db = npnDatabase(File(dirs.dbDir, "index.db")),
+        deviceDb = deviceDatabase(File(dirs.dbDir, "device.db")),
         pdfEngine = PdfBoxEngine(),
         ocrEngine = ocrEngine,
         xmpIO = PdfBoxXmpIO(),

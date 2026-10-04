@@ -9,8 +9,8 @@ import dev.npn.core.ai.FakeAiSuggest
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.AiEditJobDocEntity
-import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.DeviceDatabase
+import dev.npn.core.db.deviceDatabase
 import dev.npn.core.index.MutableClock
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.work.backoffMs
@@ -30,11 +30,11 @@ import java.nio.file.Files
 import kotlin.test.Test
 
 /**
- * Real Room index (the queue owns job and document rows) + the shared AI-edit fakes for the model,
- * the writes and the document text.
+ * Real device database (the queue owns job and document rows) + the shared AI-edit fakes for the
+ * model, the writes and the document text.
  */
 private class QueueRig(
-    val db: NpnDatabase,
+    val db: DeviceDatabase,
     private val dbDir: File,
 ) {
     val documents = FakeDocuments()
@@ -105,7 +105,7 @@ private const val DRAIN_ROUNDS = AiEditQueue.MAX_JOB_ATTEMPTS + AiEditQueue.MAX_
 
 private suspend fun TestScope.withQueue(block: suspend (QueueRig) -> Unit) {
     val dbDir = Files.createTempDirectory("npn-edit-queue-db").toFile()
-    val rig = QueueRig(npnDatabase(File(dbDir, "index.db")), dbDir)
+    val rig = QueueRig(deviceDatabase(File(dbDir, "device.db")), dbDir)
     try {
         block(rig)
     } finally {

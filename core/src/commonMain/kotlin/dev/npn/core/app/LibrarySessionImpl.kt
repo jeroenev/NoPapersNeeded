@@ -7,6 +7,9 @@ import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiOcrEngine
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.UnattendedAiPolicy
+import dev.npn.core.ai.RoomChatHistoryProvider
+import dev.npn.core.db.DeviceDatabase
+import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.fieldTypes
@@ -117,6 +120,7 @@ class LibrarySessionImpl private constructor(
     AiEditQueueFacade {
     private val fs get() = deps.fs
     private val db get() = deps.db
+    private val deviceDb get() = deps.deviceDb
     private val log get() = deps.log
 
     // The session implements every facet itself; the facet properties only narrow the type a
@@ -147,16 +151,16 @@ class LibrarySessionImpl private constructor(
     // the endpoint is down) — and inferring it made the indicator claim work was under way whenever
     // anything was owed, including for rows no drain would ever pick up.
     override val ocrStatus: Flow<OcrStatus> =
-        combine(db.ocrQueueDao().countActive(), ocrPipeline.inFlight) { owed, inFlight ->
+        combine(deviceDb.ocrQueueDao().countActive(), ocrPipeline.inFlight) { owed, inFlight ->
             OcrStatus(pending = owed, running = inFlight != null)
         }
 
     private val workQueueReader =
         WorkQueueReader(
             db.documentDao(),
-            db.ocrQueueDao(),
-            db.aiEnrichQueueDao(),
-            db.aiEditJobDao(),
+            deviceDb.ocrQueueDao(),
+            deviceDb.aiEnrichQueueDao(),
+            deviceDb.aiEditJobDao(),
             ocrPipeline.inFlight,
         )
 
@@ -473,7 +477,7 @@ class LibrarySessionImpl private constructor(
 
         // OCR worker drain loop: kick on each queue change.
         scope.launch {
-            db.ocrQueueDao().countActive().collect { active ->
+            deviceDb.ocrQueueDao().countActive().collect { active ->
                 if (active > 0) ocrWorker.kick()
             }
         }
@@ -647,16 +651,22 @@ class LibrarySessionImpl private constructor(
         }
     }
 
-    /** Queue OCR for any live doc that has not been processed yet. */
+    /**
+     * Queue OCR for any live doc that has not been processed yet. A run this device's queue still
+     * owes it keeps its attempts and requests (the queue outlives a rebuilt index); the doc row
+     * only learns where that run stands.
+     */
     private suspend fun queuePendingOcr() {
         val dao = db.documentDao()
         // One bulk read for the whole projection instead of a query per document; this runs after
         // every rescan, so the per-row read was an N+1 across the library.
         val docs = dao.getByDocIds(dao.allPathsAndMeta().map { it.docId })
-        for (doc in docs) {
+        for (doc in docs.filter { it.ocrState == OcrPipeline.OCR_NONE }) {
             if (doc.trashed || doc.deleted || doc.missing) continue
-            if (doc.ocrState == OcrPipeline.OCR_NONE) {
-                enqueuePendingOcr(doc.docId)
+            when (deviceDb.ocrQueueDao().getByDocId(doc.docId)?.state) {
+                null, OcrPipeline.STATE_DONE -> enqueuePendingOcr(doc.docId)
+                OcrPipeline.STATE_FAILED -> dao.updateOcrState(doc.docId, OcrPipeline.OCR_FAILED, null, null)
+                else -> dao.updateOcrState(doc.docId, OcrPipeline.OCR_PENDING, null, null)
             }
         }
     }
@@ -674,8 +684,8 @@ class LibrarySessionImpl private constructor(
         rerun: Boolean = false,
         aiRequested: Boolean = false,
     ) {
-        val existing = db.ocrQueueDao().getByDocId(docId)
-        db.ocrQueueDao().upsert(
+        val existing = deviceDb.ocrQueueDao().getByDocId(docId)
+        deviceDb.ocrQueueDao().upsert(
             OcrQueueEntity(
                 docId = docId,
                 state = OcrPipeline.STATE_PENDING,
@@ -694,24 +704,37 @@ class LibrarySessionImpl private constructor(
         private const val SETTLE_RESCAN_MARGIN_MS = 500L
         private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
 
+        /** The `kv` keys an index from before [DeviceDatabase] kept for this device. */
+        private val DEVICE_KEYS =
+            listOf(
+                DeviceIdentity.KEY_DEVICE_ID,
+                DbLocalJournalState.KEY_LAST_SEQ,
+                DbLocalJournalState.KEY_KNOWN_SEGMENTS,
+            )
+
         /**
-         * Boot a session over [deps]: get-or-create the deviceId, run the single-writer fork check
-         * (rebuilding the writer under a fresh id if a fork is detected), wire the journal engine,
-         * repositories, pipelines, then do the initial fold so [documents] is populated before the
-         * caller's initial rescan.
+         * Boot a session over [deps]: move device state an older index still holds into the device
+         * database, get-or-create the deviceId, run the single-writer fork check (rebuilding the
+         * writer under a fresh id if a fork is detected), wire the journal engine, repositories,
+         * pipelines, then do the initial fold so [documents] is populated before the caller's
+         * initial rescan.
          */
         @Suppress("LongMethod")
         suspend fun openSession(deps: SessionDeps): LibrarySessionImpl {
             val db = deps.db
+            val deviceDb = deps.deviceDb
             val fs = deps.fs
             val lifetime = SessionLifetime(deps.scope)
+
+            // Before anything reads the device id: an index from before device.db holds it.
+            LegacyIndexTables.moveDeviceState(db, deviceDb, DEVICE_KEYS, RoomChatHistoryProvider.KEY_PREFIX)
 
             val segmentStore = FsSegmentStore(fs)
             val indexer = Indexer(fs, db, deps.clock)
 
-            val identity = DeviceIdentity(db.keyValueDao())
+            val identity = DeviceIdentity(deviceDb.keyValueDao())
             val initialDeviceId = identity.getOrCreate()
-            val localState = DbLocalJournalState(db.keyValueDao())
+            val localState = DbLocalJournalState(deviceDb.keyValueDao())
 
             // Build a provisional writer to run the fork check.
             val provisional =
@@ -752,7 +775,7 @@ class LibrarySessionImpl private constructor(
                 ImportService(
                     fs = fs,
                     documentDao = db.documentDao(),
-                    ocrQueueDao = db.ocrQueueDao(),
+                    ocrQueueDao = deviceDb.ocrQueueDao(),
                     clock = deps.clock,
                     ruleProvider = storagePath::rule,
                     fieldTypes = { db.fieldDefDao().fieldTypes() },
@@ -764,7 +787,13 @@ class LibrarySessionImpl private constructor(
 
             // Built before the OCR pipeline because it is also the pipeline's AI engine: one
             // facade, so the vision calls share the cached endpoint client with chat and edits.
-            val ai = AiFacadeImpl(db, ownWrite = { lifetime.owned(it) }, configProvider = deps.aiConfig)
+            val ai =
+                AiFacadeImpl(
+                    db,
+                    chats = deviceDb.keyValueDao(),
+                    ownWrite = { lifetime.owned(it) },
+                    configProvider = deps.aiConfig,
+                )
             val ocrEngines =
                 OcrEngineSelector(
                     local = deps.ocrEngine,
@@ -779,7 +808,7 @@ class LibrarySessionImpl private constructor(
                     engines = ocrEngines,
                     documentDao = db.documentDao(),
                     ftsDao = db.ftsDao(),
-                    ocrQueueDao = db.ocrQueueDao(),
+                    ocrQueueDao = deviceDb.ocrQueueDao(),
                     tagDao = db.tagDao(),
                     fieldDao = db.documentFieldDao(),
                     deviceId = effectiveDeviceId,
@@ -848,7 +877,7 @@ class LibrarySessionImpl private constructor(
             val autoEnricher =
                 AiAutoEnricher(
                     documentDao = db.documentDao(),
-                    queueDao = db.aiEnrichQueueDao(),
+                    queueDao = deviceDb.aiEnrichQueueDao(),
                     ai = ai,
                     meta = meta,
                     fieldRegistry = fieldRegistry,
@@ -859,7 +888,7 @@ class LibrarySessionImpl private constructor(
                 QueueDrainer(lifetime.scope, "AI enrichment queue", deps.log) { autoEnricher.processNext() }
             val editQueue =
                 AiEditQueue(
-                    dao = db.aiEditJobDao(),
+                    dao = deviceDb.aiEditJobDao(),
                     documents = documents,
                     content = content,
                     meta = meta,
@@ -950,7 +979,10 @@ class LibrarySessionImpl private constructor(
  */
 class SessionDeps(
     val fs: LibraryFileSystem,
+    /** The disposable index: dropped and rebuilt from the library whenever it must be. */
     val db: NpnDatabase,
+    /** This device's own state for the library, which nothing could rebuild ([DeviceDatabase]). */
+    val deviceDb: DeviceDatabase,
     val pdfEngine: PdfEngine,
     val ocrEngine: OcrEngine,
     val xmpIO: PdfXmpIO,
@@ -973,9 +1005,12 @@ class SessionDeps(
     val installationId: String = "local-installation",
 ) {
     /**
-     * Close the underlying index database. Exposed here so the composeApp DI layer (which does not
-     * depend on the androidx.room3 runtime directly) can free the cache on a library swap without
-     * touching [NpnDatabase]'s room supertype.
+     * Close the index and device databases. Exposed here so the composeApp DI layer (which does not
+     * depend on the androidx.room3 runtime directly) can free them on a library swap without
+     * touching their room supertype.
      */
-    fun closeDb() = db.close()
+    fun closeDb() {
+        db.close()
+        deviceDb.close()
+    }
 }

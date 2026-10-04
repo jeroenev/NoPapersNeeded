@@ -8,7 +8,8 @@ break.
 
 Local-first paperless document manager. A *library* is a plain folder of PDFs
 plus a `.npn/` metadata directory; everything else is derived state that can be
-rebuilt from the folder. The app runs on Android and Linux desktop from one code
+rebuilt from the folder, except what one device alone knows (its journal identity, its
+queues of work owed, chats), which it keeps in its own `device.db`. The app runs on Android and Linux desktop from one code
 base:
 
 ```
@@ -47,8 +48,8 @@ source sets hold implementations. Key packages:
 | `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `FieldRegistry.kt` (the library's field definitions, values vocabulary and usage), `Ingest.kt`, `Ocr.kt`, `ReviewConfigFacade.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`, `Settings.kt`. Consumers depend on the facets they use, not on `LibrarySession`. `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events, enforced at the type level: the writers it wraps are `internal` to `core` and its `writer` is not public. |
 | `core.journal` | The metadata journal: content-addressed JSONL transactions (`JournalEvent`, `JournalOp`), segments (`Segment`, `SegmentWriter`), codec (`JournalCodec`), HLC (`Hlc`), snapshot compaction (`SnapshotCompactor`, `SnapshotFormat`), and the HLC/OR-set fold (`FoldedState`; its convergence is property-tested by `FoldConvergencePropertyTest`). |
 | `core.fs` | Filesystem abstraction over the library folder: `LibraryFileSystem` (platform impl), `NpnPaths` (`.npn/` layout, path classification, and the path-safety gate: every path reaches disk through `NpnPaths.normalize`, which refuses traversal; observation-side predicates use `isSafe` to ignore rather than throw), `ContentIdentity`/`HexEncoding` (hash handling), `OcrSidecarFiles`, `TrashOps`. |
-| `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsRows`, `DbLocalJournalState`, `DeviceIdentity`, `ScanReport`. |
-| `core.db` | Room entities and DAOs (`NpnDatabase`, `DocumentDao`, `TagDao`, `FtsDao`, `MetadataProjectionDao`, `MiscDaos`, `Projections`). Schema files in `core/schemas`. Platform `NpnDatabase.android/desktop.kt` build the instance. |
+| `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsRows`, `ScanReport`; and `DeviceIdentity` and `DbLocalJournalState`, this device's journal identity, which they keep in the device database. |
+| `core.db` | Room entities and DAOs for two databases per library. `NpnDatabase` (`index.db`) is the disposable index (`DocumentDao`, `TagDao`, `FtsDao`, `MetadataProjectionDao`, `MiscDaos`, `Projections`); its builders fall back to a destructive migration, and anything a migration cannot rebuild must not live there. `DeviceDatabase` (`device.db`) is this device's own state, which nothing could rebuild: the `kv` device id, v1 journal state and chats, the OCR queue and paid-for OCR pages, the enrichment queue and its marks, queued AI edit runs. It has real migrations only, never a destructive fallback. `LegacyIndexTables` moves what older index schemas held into the journal or `device.db` on open. Schema files in `core/schemas/<database>/`. Platform `NpnDatabase.*.kt` / `DeviceDatabase.*.kt` build them. |
 | `core.pdf` | PDF rendering/thumbnails: `PdfEngine` (platform impl), `RenderGate`, `ThumbnailService`. |
 | `core.ocr` | OCR pipeline and sidecars: `OcrEngine` (the engine interface; `MlKitOcrEngine` on android, `TesseractCliEngine` on desktop, `core.ai.AiOcrEngine` for a vision model), `OcrEngines` (the engine vocabulary + ranking), `OcrEngineSelector` (which engine a document's run may use, given `core.ai.UnattendedAiPolicy`'s permission to spend), `OcrPipeline`, `OcrSidecar`. |
 | `core.util` | Shared primitives every layer uses: `runCatchingCancellable` (a `runCatching` that rethrows cancellation; use it, never `runCatching`, around suspend code) and `Throwable.reason()` (the message, else the class name). `NpnLog`, carried on `SessionDeps.log`, is where work nobody awaits reports a failure, through `runLogged("what") { }`: `AndroidLog` writes to logcat, desktop's `JvmLog` to stderr plus a file rolled over at 1 MB (the app's one `DesktopLog`, `npn.log` in the app directory under the platform data home). `NpnJson` holds the JSON configurations: `Persisted` for anything the app writes and reads back (tolerates other builds' records), `Lenient` for model output and third-party responses; only the journal codec keeps its own, pinned. |
@@ -148,7 +149,9 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
    writes in one transaction (`Indexer.projection`, which a commit's journal bookkeeping joins), so
    no reader sees a row before its tags and fields; moving a PDF to its intended path and recording
    where documents were seen is filesystem work, and runs after that transaction commits. The db
-   lives device-local, outside the library folder, and is rebuildable from the folder.
+   lives device-local, outside the library folder, and is rebuildable from the folder: delete
+   `index.db` and the next open refolds the journal and rescans. Its neighbour `device.db` holds
+   what a rebuild could not bring back, keyed by document hash, so it survives one.
    The projection is a pure function of the applied source set, so
    `MetadataAccumulator` fingerprints that set and records it alongside the ready
    marker: opening a library whose fingerprint still matches reuses the stored
@@ -186,6 +189,11 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
 - A new per-document *system* marker (something the app owns, not the user) → a
   `SystemProperty` + `prop-set` event + `FoldedState` + `Projections` + the matching
   `core.app` contract file.
+- New persisted state → decide where it lives by who could rebuild it. Library data every
+  device must agree on goes in the journal (a `setting-set` key or an op); anything the
+  folder and journal can recreate goes in the index; what only this device knows and
+  nothing could recreate (a request made here, work already paid for) goes in
+  `DeviceDatabase`, with a real migration for every schema change.
 - New screen → package under `app/ui/`, viewmodel + screen in `commonMain`,
   route in `app/ui/nav/Route.kt`.
 - New value or action in the document metadata panel → a field on `MetadataUiState`
@@ -235,9 +243,9 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
   quietly bill a whole library. Its page threshold binds the *unattended* path only; an
   asked-for run (`OcrFacade.ocrWithAi`) runs at any length, and `OcrFacade.aiOcrOffer` is what
   warns the user first. "Asked for" means asked on this device: `ocrWithAi` writes the engine pin,
-  which syncs and only selects which version is searched, plus `ocr_queue.aiRequested`, the local
-  request to pay. An `ai` pin synced from another replica selects that replica's sidecar, or runs
-  the model here only as unattended work (policy plus threshold).
+  which syncs and only selects which version is searched, plus `ocr_queue.aiRequested` in
+  `device.db`, the local request to pay. An `ai` pin synced from another replica selects that
+  replica's sidecar, or runs the model here only as unattended work (policy plus threshold).
 - Follow-up work after OCR → `OcrPipeline.onTextIndexed` fires whenever text is indexed,
   including on every index rebuild, so hang free/idempotent work there (auto-match rules).
   `OcrPipeline.onOcrProduced` fires only when this device just wrote a sidecar; anything

@@ -5,6 +5,7 @@ import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
 import dev.npn.core.app.AiTagging
+import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.toFieldDef
 import io.ktor.client.HttpClient
@@ -28,19 +29,22 @@ import kotlin.uuid.Uuid
  *  see or shape those calls (metering, logging, a test recorder); see [AiRuntime.build]. It
  *  outlives every runtime this facade builds and stays the host's to close. Null means each
  *  runtime owns a plain client of its own.
+ * @param chats where chat sessions and conversations are kept: this device's own state, which an
+ *  index rebuild must not take (the session passes `DeviceDatabase.keyValueDao`).
  * @param ownWrite runs each write to the chat stores as work the session owns, so closing the
  *  session waits for it instead of closing the database under it.
  */
 class AiFacadeImpl(
     private val db: NpnDatabase,
+    chats: KeyValueDao,
     private val transport: HttpClient? = null,
     ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
     AiSuggest,
     AiOcr {
-    private val chatHistoryStore = RoomChatHistoryProvider(db, ownWrite)
-    private val chatSessionStore = RoomChatSessionStore(db, ownWrite)
+    private val chatHistoryStore = RoomChatHistoryProvider(chats, ownWrite)
+    private val chatSessionStore = RoomChatSessionStore(chats, ownWrite)
 
     /** Serializes the read-modify-write of the session list across ask, create, clear and delete. */
     private val sessionsMutex = Mutex()

@@ -3,9 +3,11 @@ package dev.npn.core.index
 import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.StatementLog
 import dev.npn.core.db.fieldTypes
+import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
@@ -27,6 +29,7 @@ class IndexRig private constructor(
     val dbDir: File,
     val fs: JvmLibraryFileSystem,
     val db: NpnDatabase,
+    val deviceDb: DeviceDatabase,
     val clock: MutableClock,
 ) {
     val fsSegmentStore = FsSegmentStore(fs)
@@ -37,7 +40,13 @@ class IndexRig private constructor(
     val accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
 
     val importService =
-        ImportService(fs, db.documentDao(), db.ocrQueueDao(), clock, fieldTypes = { db.fieldDefDao().fieldTypes() })
+        ImportService(
+            fs,
+            db.documentDao(),
+            deviceDb.ocrQueueDao(),
+            clock,
+            fieldTypes = { db.fieldDefDao().fieldTypes() },
+        )
 
     val maintenance =
         MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
@@ -114,6 +123,7 @@ class IndexRig private constructor(
 
     fun close() {
         db.close()
+        deviceDb.close()
         libRoot.toFile().deleteRecursively()
         dbDir.deleteRecursively()
     }
@@ -126,7 +136,7 @@ class IndexRig private constructor(
             val fs = JvmLibraryFileSystem(libRoot)
             val dbFile = File(dbDir, "index.db")
             val db = if (statements == null) npnDatabase(dbFile) else recordingDatabase(dbFile, statements)
-            return IndexRig(libRoot, dbDir, fs, db, MutableClock(1_000L))
+            return IndexRig(libRoot, dbDir, fs, db, deviceDatabase(File(dbDir, "device.db")), MutableClock(1_000L))
         }
     }
 }

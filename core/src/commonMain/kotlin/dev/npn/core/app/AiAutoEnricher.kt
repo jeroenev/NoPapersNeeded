@@ -8,6 +8,7 @@ import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
+import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.util.reason
@@ -46,9 +47,10 @@ import dev.npn.core.work.backoffMs
  *
  * ## Completion and retries
  *
- * A successful pass stamps [DocumentDao.markAiEnriched] and deletes the row — the stamp, not the
+ * A successful pass stamps [AiEnrichQueueDao.markEnriched] and deletes the row — the stamp, not the
  * queue, is what stops a later re-OCR of the same document (an upgrade run under a better engine)
- * from re-spending the user's quota. A failed call backs off exponentially up to a daily ceiling
+ * from re-spending the user's quota. Both live in the device database, keyed by hash, so a rebuilt
+ * index forgets neither. A failed call backs off exponentially up to a daily ceiling
  * and is retried indefinitely; the feature being off or the endpoint unconfigured is not a failure
  * at all, since the drain simply does not run.
  *
@@ -127,8 +129,8 @@ class AiAutoEnricher(
      * document the poison row's escalating delay would let a single bad document stall the queue
      * for a day; a flat minute makes the worst case of guessing wrong a minute of latency.
      *
-     * The write, the stamp and the row delete are three steps across two stores (journal, index) and
-     * cannot be made atomic. Dying between them costs one repeat call on the next drain, whose
+     * The write, the stamp and the row delete are three steps across two stores (journal, device
+     * database) and cannot be made atomic. Dying between them costs one repeat call on the next drain, whose
      * suggestion then lands on already-filled fields and already-present tags and so changes
      * nothing. That is deliberately the direction to fail in: stamping first would make the same
      * crash lose the enrichment outright, with nothing left to say it was owed.
@@ -145,7 +147,7 @@ class AiAutoEnricher(
         }
         return runCatchingCancellable {
             write(entry.docId, ai.suggestEdits(entry.docId, request()))
-            documentDao.markAiEnriched(entry.docId, clock.nowMillis())
+            queueDao.markEnriched(AiEnrichedEntity(entry.docId, clock.nowMillis()))
             queueDao.delete(entry.docId)
             cooldownUntil = 0L
         }.fold(
@@ -165,14 +167,14 @@ class AiAutoEnricher(
      * document the user removed from being retried forever.
      *
      * Note that a manual [AiEditRun] over the same document does not stamp
-     * [dev.npn.core.db.DocumentEntity.aiEnrichedAt] and so does not cancel a queued pass. The pass is then largely
+     * [AiEnrichQueueDao.markEnriched] and so does not cancel a queued pass. The pass is then largely
      * wasted (the fields it would fill are no longer `UNFILLED`), but only for documents edited
      * inside the queue window, and letting a partial manual selection suppress it would be the
      * worse guess.
      */
     private suspend fun isEnrichable(docId: String): Boolean {
         val doc = documentDao.getByDocId(docId) ?: return false
-        return doc.aiEnrichedAt == null && !doc.trashed && !doc.deleted && !doc.missing
+        return !doc.trashed && !doc.deleted && !doc.missing && queueDao.enrichedAt(docId) == null
     }
 
     /** Bump attempts and push the retry out by the backoff, recording why for diagnostics. */

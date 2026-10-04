@@ -94,6 +94,7 @@ class OcrPipelineTest {
 
             // Device B: fresh DB, SAME library dir (so the sidecar is visible).
             val dbB = rig.openSecondIndex()
+            val deviceB = rig.openSecondDevice()
             try {
                 dbB.documentDao().upsert(
                     DocumentEntity(
@@ -105,16 +106,17 @@ class OcrPipelineTest {
                         addedAt = 1000,
                     ),
                 )
-                dbB.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
+                deviceB.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
 
                 val fakeB = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "should-not-run")
-                rig.pipeline("devB", fakeB, dbB).processDoc(docId)
+                rig.pipeline("devB", fakeB, dbB, deviceB.ocrQueueDao()).processDoc(docId)
 
                 fakeB.calls shouldBe 0
                 dbB.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_ADOPTED
                 dbB.ftsDao().searchDocIds("alpha") shouldContainExactly listOf(docId)
             } finally {
                 dbB.close()
+                deviceB.close()
             }
         }
 
@@ -126,7 +128,7 @@ class OcrPipelineTest {
 
             rig.pipeline("devA", fake).processNext() shouldBe true
             val entry =
-                db
+                rig.deviceDb
                     .ocrQueueDao()
                     .observeQueue()
                     .first()
@@ -146,7 +148,7 @@ class OcrPipelineTest {
             // attempt 1 -> pending (attempts=1)
             pipe.processDoc(docId)
             var entry =
-                db
+                rig.deviceDb
                     .ocrQueueDao()
                     .observeQueue()
                     .first()
@@ -164,7 +166,7 @@ class OcrPipelineTest {
             clock.advance(backoffMs(1))
             pipe.processNext() shouldBe true
             entry =
-                db
+                rig.deviceDb
                     .ocrQueueDao()
                     .observeQueue()
                     .first()
@@ -176,7 +178,7 @@ class OcrPipelineTest {
             clock.advance(backoffMs(2))
             pipe.processNext() shouldBe true
             entry =
-                db
+                rig.deviceDb
                     .ocrQueueDao()
                     .observeQueue()
                     .first()
@@ -202,11 +204,11 @@ class OcrPipelineTest {
                     addedAt = 1,
                 ),
             )
-            db.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
+            rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
 
             rig.pipeline("devA", fake).processDoc(docId)
             val entry =
-                db
+                rig.deviceDb
                     .ocrQueueDao()
                     .observeQueue()
                     .first()
@@ -228,7 +230,7 @@ class OcrPipelineTest {
             db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_ADOPTED
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
             db.ftsDao().searchDocIds("charlie") shouldContainExactly listOf(docId)
-            db
+            rig.deviceDb
                 .ocrQueueDao()
                 .observeQueue()
                 .first()
@@ -248,7 +250,7 @@ class OcrPipelineTest {
             db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_ADOPTED
             db.ftsDao().searchDocIds("charlie") shouldContainExactly listOf(docId)
             val entry =
-                db
+                rig.deviceDb
                     .ocrQueueDao()
                     .observeQueue()
                     .first()
@@ -358,7 +360,7 @@ class OcrPipelineTest {
 
             fake.calls shouldBe 0
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
-            db
+            rig.deviceDb
                 .ocrQueueDao()
                 .observeQueue()
                 .first()
@@ -415,7 +417,7 @@ class OcrPipelineTest {
             val worker = QueueDrainer(this) { p.processNext() }
             try {
                 worker.drain() shouldBe 2
-                db
+                rig.deviceDb
                     .ocrQueueDao()
                     .observeQueue()
                     .first()

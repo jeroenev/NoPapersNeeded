@@ -299,6 +299,13 @@ interface AiEnrichQueueDao {
 
     @Query("DELETE FROM ai_enrich_queue WHERE docId = :docId")
     suspend fun delete(docId: String)
+
+    /** When this device enriched [docId], or null when it has not ([AiEnrichedEntity]). */
+    @Query("SELECT enrichedAt FROM ai_enriched WHERE docId = :docId")
+    suspend fun enrichedAt(docId: String): Long?
+
+    @Upsert
+    suspend fun markEnriched(entry: AiEnrichedEntity)
 }
 
 /**

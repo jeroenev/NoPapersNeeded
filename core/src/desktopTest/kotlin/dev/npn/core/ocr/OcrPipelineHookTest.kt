@@ -41,7 +41,7 @@ class OcrPipelineHookTest {
             var stateDuringHook: String? = null
             pipeline.onTextIndexed = { id, _ ->
                 stateDuringHook =
-                    rig.db
+                    rig.deviceDb
                         .ocrQueueDao()
                         .getByDocId(id)
                         ?.state
@@ -52,7 +52,7 @@ class OcrPipelineHookTest {
             // Still owed while the hook runs — the queue has no "being worked on" state, only the
             // in-process [OcrPipeline.inFlight] does.
             stateDuringHook shouldBe OcrPipeline.STATE_PENDING
-            rig.db
+            rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)
                 ?.state shouldBe OcrPipeline.STATE_DONE
@@ -94,7 +94,8 @@ class OcrPipelineHookTest {
                         .getByDocId(docId)!!
                         .copy(ocrState = OcrPipeline.OCR_NONE),
                 )
-                rebuilt.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 1))
+                // The queue is this device's and outlives the index; re-queued as a rebuild's rescan would.
+                rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 1))
                 val pipeline =
                     rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"), rebuilt)
                 val indexed = mutableListOf<String>()
@@ -126,7 +127,7 @@ class OcrPipelineHookTest {
             try {
                 worker.drain() shouldBe 2
                 val rows =
-                    rig.db
+                    rig.deviceDb
                         .ocrQueueDao()
                         .observeQueue()
                         .first()
@@ -151,7 +152,7 @@ class OcrPipelineHookTest {
             val worker = QueueDrainer(this) { pipeline.processNext() }
             try {
                 worker.drain() shouldBe 1
-                rig.db
+                rig.deviceDb
                     .ocrQueueDao()
                     .observeQueue()
                     .first()

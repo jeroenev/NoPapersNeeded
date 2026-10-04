@@ -40,7 +40,6 @@ class DocumentMappingTest {
         ocrState = ocrState,
         ocrEngine = ocrEngine,
         ocrEngineOverride = ocrEngineOverride,
-        aiEnrichedAt = 7L,
     )
 
     @Test

@@ -21,6 +21,9 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 - SQLite is a rebuildable cache. The index (search, thumbnails, source provenance,
   and incremental metadata projection) lives in device-local storage, never inside
   the library folder, and is never synced. Delete it and it rebuilds from the folder.
+  What only this device knows (its journal device id, its OCR and AI queues, AI edit
+  runs awaiting review, assistant chats) sits beside it in a separate `device.db`,
+  which is never dropped.
 - OCR travels as sidecars. Extracted text is written to `.npn/ocr/` keyed by file
   hash and device id, so a device adopts another device's OCR instead of redoing it.
   The best-ranked engine is indexed (ai > mlkit > tesseract > embedded text layer);

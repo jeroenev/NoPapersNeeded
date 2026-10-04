@@ -84,6 +84,7 @@ class HlcSeedingTest {
                     SessionDeps(
                         fs = rig.fs,
                         db = rig.db,
+                        deviceDb = rig.deviceDb,
                         pdfEngine = PdfBoxEngine(),
                         ocrEngine = NoopOcrEngine(),
                         xmpIO = PdfBoxXmpIO(),

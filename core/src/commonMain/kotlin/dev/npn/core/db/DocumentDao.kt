@@ -81,23 +81,6 @@ interface DocumentDao {
     )
 
     /**
-     * Stamp the post-OCR AI enrichment marker. A partial UPDATE for the same reason as
-     * [updateOcrState]: enrichment runs off the OCR thread, so a row upsert could clobber metadata
-     * columns a concurrent journal fold just projected — including the ones enrichment itself
-     * wrote.
-     *
-     * This protects the fold from the stamp, not the stamp from the fold: a fold that preloaded
-     * this row before the stamp and flushes its full-row upsert after will reset the column, same
-     * as it can for `ocrState`. Harmless here — the marker only suppresses repeat model calls, so
-     * losing it costs at most one extra pass if the document is ever re-OCR'd.
-     */
-    @Query("UPDATE documents SET aiEnrichedAt = :at WHERE docId = :docId")
-    suspend fun markAiEnriched(
-        docId: String,
-        at: Long,
-    )
-
-    /**
      * Point a document at the place its bytes were just moved to. A partial UPDATE, not a row
      * upsert, so columns another writer set since the fold read the row survive the move.
      */

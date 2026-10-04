@@ -56,13 +56,13 @@ class OcrPageResumeTest {
             local.calls shouldBe 0
             val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(rig.fs).read(docId, "devA.ai"))
             sidecar.pages shouldContainExactly listOf("read 1", "read 2", "read 4", "read 5")
-            db
+            rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldNotBeNull()
                 .state shouldBe OcrPipeline.STATE_DONE
             // Published, so nothing is kept for a run that is no longer owed.
-            db.ocrQueueDao().cachedPages(docId, OcrEngines.AI, "eng").shouldBeEmpty()
+            rig.deviceDb.ocrQueueDao().cachedPages(docId, OcrEngines.AI, "eng").shouldBeEmpty()
         }
 
     @Test
@@ -110,7 +110,7 @@ class OcrPageResumeTest {
             val first = PageCountingEngine("mlkit").apply { failOnCall = 2 }
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
             rig.pipeline("devA", first).processDoc(docId)
-            db.ocrQueueDao().cachedPages(docId, "mlkit", "eng").map { it.page } shouldContainExactly listOf(0)
+            rig.deviceDb.ocrQueueDao().cachedPages(docId, "mlkit", "eng").map { it.page } shouldContainExactly listOf(0)
 
             // The retry reads in other languages: the cached page says nothing about those.
             val second = PageCountingEngine("mlkit")
@@ -125,22 +125,24 @@ class OcrPageResumeTest {
             val engine = PageCountingEngine("mlkit").apply { failOnCall = 2 }
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
             rig.pipeline("devA", engine).processDoc(docId)
-            db
+            rig.deviceDb
                 .ocrQueueDao()
                 .cachedPages(docId, "mlkit", "eng")
                 .shouldNotBeNull()
                 .size shouldBe 1
 
-            db.ocrQueueDao().delete(docId)
+            rig.deviceDb.ocrQueueDao().delete(docId)
 
-            db.ocrQueueDao().cachedPages(docId, "mlkit", "eng").shouldBeEmpty()
+            rig.deviceDb.ocrQueueDao().cachedPages(docId, "mlkit", "eng").shouldBeEmpty()
         }
 
     /** What `OcrFacade.ocrWithAi` leaves behind on this device: the folded pin and the request. */
     private suspend fun askForAi(docId: String) {
         val doc = db.documentDao().getByDocId(docId).shouldNotBeNull()
         db.documentDao().upsert(doc.copy(ocrEngineOverride = OcrEngines.AI))
-        db.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, aiRequested = true))
+        rig.deviceDb
+            .ocrQueueDao()
+            .upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, aiRequested = true))
     }
 }
 

@@ -66,7 +66,7 @@ class KoogChatAgentTest {
     ) = KoogChatAgent(
         executor,
         model,
-        RoomChatHistoryProvider(db),
+        RoomChatHistoryProvider(db.keyValueDao()),
         LibraryAiTools.toolSetFor(db, FieldKeys.seedDefinitions()),
         null,
         "system",
@@ -150,7 +150,7 @@ class KoogChatAgentTest {
                 KoogChatAgent(
                     executor,
                     model,
-                    RoomChatHistoryProvider(db),
+                    RoomChatHistoryProvider(db.keyValueDao()),
                     LibraryToolSet(library.tools, cancelled),
                     null,
                     "system",
@@ -308,7 +308,7 @@ class KoogChatAgentTest {
                 )
             agent(executor).run("hi", "session-1").collectList()
 
-            RoomChatHistoryProvider(db)
+            RoomChatHistoryProvider(db.keyValueDao())
                 .load("session-1")
                 .filterIsInstance<Message.Assistant>()
                 .map { it.textContent() } shouldContainExactly listOf("Hi there")
@@ -362,7 +362,7 @@ class KoogChatAgentTest {
                             Message.Assistant("answer $n", ResponseMetaInfo.Empty),
                         )
                     }
-            RoomChatHistoryProvider(db).store("session-1", earlier)
+            RoomChatHistoryProvider(db.keyValueDao()).store("session-1", earlier)
             val executor = scriptedExecutor(listOf(textFrames("answer 4")))
 
             agent(executor).run("question 4", "session-1").collectList()
@@ -375,7 +375,7 @@ class KoogChatAgentTest {
                 .filterIsInstance<MessagePart.Tool.Result>()
                 .map { it.output == output } shouldContainExactly listOf(false, false, true)
             // Kept: every result as it was.
-            RoomChatHistoryProvider(db)
+            RoomChatHistoryProvider(db.keyValueDao())
                 .load("session-1")
                 .flatMap { it.parts }
                 .filterIsInstance<MessagePart.Tool.Result>()

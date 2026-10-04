@@ -333,7 +333,7 @@ class IndexerTest {
             result.shouldBeInstanceOfImported()
             val imported = result as ImportResult.Imported
             imported.relPath shouldBe "inbox/invoice.pdf"
-            rig.db
+            rig.deviceDb
                 .ocrQueueDao()
                 .nextPending(now = Long.MAX_VALUE)
                 ?.docId shouldBe imported.docId

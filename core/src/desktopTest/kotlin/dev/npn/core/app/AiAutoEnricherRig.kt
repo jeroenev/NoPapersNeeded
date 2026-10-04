@@ -5,8 +5,11 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.FakeAiSuggest
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.AiEnrichQueueEntity
+import dev.npn.core.db.AiEnrichedEntity
+import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.index.MutableClock
 import dev.npn.core.model.FieldKeys
@@ -99,9 +102,13 @@ internal class RecordingMeta : MetadataWriter {
     ) = error("must batch through applyEdits")
 }
 
-/** Real Room index (the enricher owns queue rows and document stamps) + fakes for AI and writes. */
+/**
+ * Real Room index and device database (the enricher reads documents from one and owns queue rows
+ * and stamps in the other) + fakes for AI and writes.
+ */
 internal class Rig(
     val db: NpnDatabase,
+    val deviceDb: DeviceDatabase,
     val dbDir: File,
     private val scope: CoroutineScope,
 ) {
@@ -120,7 +127,7 @@ internal class Rig(
     fun newEnricher() =
         AiAutoEnricher(
             documentDao = db.documentDao(),
-            queueDao = db.aiEnrichQueueDao(),
+            queueDao = deviceDb.aiEnrichQueueDao(),
             ai = ai,
             meta = meta,
             fieldRegistry = fieldRegistry,
@@ -153,37 +160,41 @@ internal class Rig(
         docId: String,
         trashed: Boolean = false,
         aiEnrichedAt: Long? = null,
-    ) = db.documentDao().upsert(
-        DocumentEntity(
-            docId = docId,
-            relPath = "$docId.pdf",
-            fileName = "$docId.pdf",
-            size = 0L,
-            mtime = 0L,
-            addedAt = 0L,
-            trashed = trashed,
-            aiEnrichedAt = aiEnrichedAt,
-        ),
-    )
+    ) {
+        db.documentDao().upsert(
+            DocumentEntity(
+                docId = docId,
+                relPath = "$docId.pdf",
+                fileName = "$docId.pdf",
+                size = 0L,
+                mtime = 0L,
+                addedAt = 0L,
+                trashed = trashed,
+            ),
+        )
+        aiEnrichedAt?.let { deviceDb.aiEnrichQueueDao().markEnriched(AiEnrichedEntity(docId, it)) }
+    }
 
     suspend fun trash(docId: String) {
         val doc = db.documentDao().getByDocId(docId)!!
         db.documentDao().upsert(doc.copy(trashed = true))
     }
 
-    suspend fun enrichedAt(docId: String): Long? = db.documentDao().getByDocId(docId)?.aiEnrichedAt
+    suspend fun enrichedAt(docId: String): Long? = deviceDb.aiEnrichQueueDao().enrichedAt(docId)
 
-    suspend fun row(docId: String): AiEnrichQueueEntity? = db.aiEnrichQueueDao().getByDocId(docId)
+    suspend fun row(docId: String): AiEnrichQueueEntity? = deviceDb.aiEnrichQueueDao().getByDocId(docId)
 
     fun close() {
         db.close()
+        deviceDb.close()
         dbDir.deleteRecursively()
     }
 }
 
 internal suspend fun TestScope.withRig(block: suspend (Rig) -> Unit) {
     val dbDir = Files.createTempDirectory("npn-enrich-db").toFile()
-    val rig = Rig(npnDatabase(File(dbDir, "index.db")), dbDir, backgroundScope)
+    val rig =
+        Rig(npnDatabase(File(dbDir, "index.db")), deviceDatabase(File(dbDir, "device.db")), dbDir, backgroundScope)
     try {
         block(rig)
     } finally {

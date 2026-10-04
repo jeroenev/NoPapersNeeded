@@ -48,7 +48,7 @@ class OcrPipelineStaleFileTest {
             stale shouldContainExactly listOf(docId)
             indexed.shouldBeEmpty()
             // Not charged as a failure, and not left for the drain to spin on.
-            rig.db
+            rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldBeNull()
@@ -64,7 +64,7 @@ class OcrPipelineStaleFileTest {
 
             pipeline.processNext()
 
-            rig.db
+            rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldBeNull()
@@ -94,7 +94,7 @@ class OcrPipelineStaleFileTest {
                         ocrState = OcrPipeline.OCR_NONE,
                     ),
             )
-            rig.db.ocrQueueDao().upsert(OcrQueueEntity(EMPTY, "pending", updatedAt = 1))
+            rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(EMPTY, "pending", updatedAt = 1))
 
             pipeline.reconcileSidecars()
             pipeline.processDoc(EMPTY)
@@ -103,7 +103,7 @@ class OcrPipelineStaleFileTest {
                 .documentDao()
                 .getByDocId(EMPTY)
                 ?.ocrState shouldBe OcrPipeline.OCR_NONE
-            rig.db
+            rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(EMPTY)
                 .shouldBeNull()

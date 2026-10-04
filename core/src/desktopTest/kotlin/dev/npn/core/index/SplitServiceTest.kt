@@ -77,7 +77,7 @@ class SplitServiceTest {
                 .documentDao()
                 .getAllLive()
                 .map { it.docId } shouldBe listOf(original.docId)
-            rig.db
+            rig.deviceDb
                 .ocrQueueDao()
                 .observeQueue()
                 .first()

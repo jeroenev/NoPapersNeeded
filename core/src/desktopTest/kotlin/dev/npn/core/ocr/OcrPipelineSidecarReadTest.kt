@@ -45,7 +45,7 @@ class OcrPipelineSidecarReadTest {
 
             assertFailsWith<CancellationException> { pipeline.processDoc(docId) }
 
-            db
+            rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldNotBeNull()

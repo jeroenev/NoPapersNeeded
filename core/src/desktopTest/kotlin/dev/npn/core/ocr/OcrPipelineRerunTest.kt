@@ -50,7 +50,7 @@ class OcrPipelineRerunTest {
             keys[1] shouldMatch Regex("""devA\.r\d+\.mlkit""")
             rig.db.ftsDao().searchDocIds("second") shouldContainExactly listOf(docId)
             rig.db.ftsDao().searchDocIds("first") shouldContainExactly emptyList()
-            rig.db
+            rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)!!
                 .rerun shouldBe false
@@ -110,7 +110,7 @@ class OcrPipelineRerunTest {
 
             failing.calls shouldBe 1
             val row =
-                rig.db
+                rig.deviceDb
                     .ocrQueueDao()
                     .getByDocId(docId)
                     .shouldNotBeNull()
@@ -127,7 +127,7 @@ class OcrPipelineRerunTest {
 
             // Nor does the next reconcile take the owed re-run for an adoption and drop it.
             pipe.reconcileSidecars()
-            rig.db
+            rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)
                 ?.rerun shouldBe true
@@ -145,6 +145,7 @@ class OcrPipelineRerunTest {
                 ).processDoc(docId)
 
             val dbB = rig.openSecondIndex()
+            val queueB = rig.openSecondDevice()
             try {
                 dbB.documentDao().upsert(
                     DocumentEntity(
@@ -156,7 +157,8 @@ class OcrPipelineRerunTest {
                         addedAt = 1000,
                     ),
                 )
-                val deviceB = rig.pipeline("devB", FakeOcrEngine(isAvailable = false, name = "mlkit"), dbB)
+                val deviceB =
+                    rig.pipeline("devB", FakeOcrEngine(isAvailable = false, name = "mlkit"), dbB, queueB.ocrQueueDao())
                 deviceB.reconcileSidecars()
                 dbB.ftsDao().searchDocIds("first") shouldContainExactly listOf(docId)
 
@@ -171,10 +173,11 @@ class OcrPipelineRerunTest {
                 dbB.ftsDao().searchDocIds("second") shouldContainExactly listOf(docId)
             } finally {
                 dbB.close()
+                queueB.close()
             }
         }
 
     private suspend fun requestRerun(docId: String) {
-        rig.db.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, rerun = true))
+        rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, rerun = true))
     }
 }

@@ -3,17 +3,18 @@ package dev.npn.core.ai
 import ai.koog.agents.chatMemory.feature.ChatHistoryProvider
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
+import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.KeyValueEntity
-import dev.npn.core.db.NpnDatabase
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.builtins.ListSerializer
 
 /**
- * Device-local chat history stored in the library's disposable Room cache. Writes go through
+ * Device-local chat history, kept in [kv]: the library's device database, which an index rebuild
+ * leaves alone, since a conversation is user content nothing could recreate. Writes go through
  * [ownWrite], so the session can wait them out before it closes the database.
  */
 class RoomChatHistoryProvider(
-    private val db: NpnDatabase,
+    private val kv: KeyValueDao,
     private val ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
 ) : ChatHistoryProvider {
     private val json = NpnJson.Persisted
@@ -24,7 +25,7 @@ class RoomChatHistoryProvider(
     ) {
         val cleanMessages = sanitize(messages)
         ownWrite {
-            db.keyValueDao().put(
+            kv.put(
                 KeyValueEntity(
                     key = key(conversationId),
                     value = json.encodeToString(ListSerializer(Message.serializer()), cleanMessages),
@@ -34,18 +35,20 @@ class RoomChatHistoryProvider(
     }
 
     override suspend fun load(conversationId: String): List<Message> =
-        db.keyValueDao().get(key(conversationId))?.let {
-            runCatching {
-                json.decodeFromString(ListSerializer(Message.serializer()), it).let(::sanitize)
-            }.getOrDefault(emptyList())
-        } ?: emptyList()
+        kv
+            .get(key(conversationId))
+            ?.let {
+                runCatching {
+                    json.decodeFromString(ListSerializer(Message.serializer()), it).let(::sanitize)
+                }.getOrDefault(emptyList())
+            }.orEmpty()
 
     /** Whether [conversationId] has anything stored, without decoding it. */
-    suspend fun has(conversationId: String): Boolean = db.keyValueDao().get(key(conversationId)) != null
+    suspend fun has(conversationId: String): Boolean = kv.get(key(conversationId)) != null
 
-    suspend fun delete(conversationId: String) = ownWrite { db.keyValueDao().delete(key(conversationId)) }
+    suspend fun delete(conversationId: String) = ownWrite { kv.delete(key(conversationId)) }
 
-    private fun key(conversationId: String): String = "ai-chat:$conversationId"
+    private fun key(conversationId: String): String = "$KEY_PREFIX$conversationId"
 
     /** Remove malformed blank-name tool parts already written by older agent runs. */
     private fun sanitize(messages: List<Message>): List<Message> =
@@ -72,4 +75,9 @@ class RoomChatHistoryProvider(
                 }
             }
         }
+
+    companion object {
+        /** Every chat key starts with this, the session list's included ([RoomChatSessionStore]). */
+        const val KEY_PREFIX = "ai-chat:"
+    }
 }

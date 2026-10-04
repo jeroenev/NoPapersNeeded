@@ -4,8 +4,10 @@ import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.ocr.OcrPipeline
 import io.kotest.matchers.collections.shouldContainExactly
@@ -23,6 +25,7 @@ import kotlin.test.Test
 internal abstract class WorkQueueReaderFixture {
     private lateinit var dbDir: File
     protected lateinit var db: NpnDatabase
+    protected lateinit var deviceDb: DeviceDatabase
     protected lateinit var reader: WorkQueueReader
 
     /** Stands in for the live pipeline's `inFlight`; tests set it to name the document being run. */
@@ -32,12 +35,13 @@ internal abstract class WorkQueueReaderFixture {
     fun setup() {
         dbDir = Files.createTempDirectory("npn-queue-test").toFile()
         db = npnDatabase(File(dbDir, "index.db"))
+        deviceDb = deviceDatabase(File(dbDir, "device.db"))
         reader =
             WorkQueueReader(
                 db.documentDao(),
-                db.ocrQueueDao(),
-                db.aiEnrichQueueDao(),
-                db.aiEditJobDao(),
+                deviceDb.ocrQueueDao(),
+                deviceDb.aiEnrichQueueDao(),
+                deviceDb.aiEditJobDao(),
                 ocrInFlight,
             )
     }
@@ -45,6 +49,7 @@ internal abstract class WorkQueueReaderFixture {
     @AfterTest
     fun teardown() {
         db.close()
+        deviceDb.close()
         dbDir.deleteRecursively()
     }
 }
@@ -80,7 +85,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         updatedAt: Long = 1,
         lastError: String? = null,
         nextAttemptAt: Long = 0,
-    ) = db.ocrQueueDao().upsert(
+    ) = deviceDb.ocrQueueDao().upsert(
         OcrQueueEntity(id, state, attempts, updatedAt, lastError, nextAttemptAt = nextAttemptAt),
     )
 
@@ -89,7 +94,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         attempts: Int = 0,
         nextAttemptAt: Long = 1,
         lastError: String? = null,
-    ) = db.aiEnrichQueueDao().upsert(AiEnrichQueueEntity(id, attempts, nextAttemptAt, 1, lastError))
+    ) = deviceDb.aiEnrichQueueDao().upsert(AiEnrichQueueEntity(id, attempts, nextAttemptAt, 1, lastError))
 
     private suspend fun queue(): List<QueuedWork> = reader.queue.first()
 
@@ -246,7 +251,7 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
         createdAt: Long = 1,
         updatedAt: Long = 1,
     ) {
-        db.aiEditJobDao().upsertJob(
+        deviceDb.aiEditJobDao().upsertJob(
             AiEditJobEntity(
                 jobId = jobId,
                 requestJson = "{}",
@@ -256,7 +261,7 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
                 nextAttemptAt = 9_000,
             ),
         )
-        db.aiEditJobDao().upsertDocs(
+        deviceDb.aiEditJobDao().upsertDocs(
             docIds.mapIndexed { index, docId ->
                 AiEditJobDocEntity(
                     jobId = jobId,
@@ -312,7 +317,7 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
     @Test
     fun `a run with no documents left is not reported at all`() =
         runTest {
-            db.aiEditJobDao().upsertJob(
+            deviceDb.aiEditJobDao().upsertJob(
                 AiEditJobEntity(jobId = "empty", requestJson = "{}", createdAt = 1, updatedAt = 1, nextAttemptAt = 1),
             )
 

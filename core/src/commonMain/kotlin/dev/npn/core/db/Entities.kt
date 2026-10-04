@@ -79,17 +79,6 @@ data class DocumentEntity(
      */
     val ocrEngineOverride: String? = null,
     /**
-     * Epoch millis of the automatic post-OCR AI enrichment pass, or null when it has not run.
-     * Device-local by nature (it guards spend on *this* device's endpoint), so it stays out of the
-     * journal.
-     *
-     * Losing it to an index rebuild is safe rather than expensive: enrichment is queued from
-     * [dev.npn.core.ocr.OcrPipeline.onOcrProduced], which a rebuild does not fire, so nothing
-     * re-enqueues those documents. This guards the narrower case of the same document being OCR'd
-     * again on this device under a better engine.
-     */
-    val aiEnrichedAt: Long? = null,
-    /**
      * Writer key of the OCR sidecar currently indexed for search. [ocrEngine] alone cannot tell two
      * versions from the same engine apart, and a re-run adds exactly that.
      */
@@ -226,7 +215,10 @@ data class DuplicateEntity(
 )
 
 /**
- * Work list for the OCR pipeline. A row means "this document is owed an OCR pass". Unlike
+ * Work list for the OCR pipeline, in [DeviceDatabase]. A row means "this document is owed an OCR
+ * pass" on this device, and also holds what only this device knows about that pass: a re-run or an
+ * AI run asked for here, the attempts and backoff spent, and (in [OcrPageCacheEntity]) the pages
+ * already paid for. Unlike
  * [AiEnrichQueueEntity] it does keep terminal states: `done` is the history
  * `OcrPipeline.maybeQueueUpgrade` reads to decide whether a better engine is worth re-queueing,
  * and `failed` is the attempt cap being spent.
@@ -294,9 +286,9 @@ data class OcrPageCacheEntity(
 )
 
 /**
- * Work list for the automatic post-OCR AI enrichment pass. A row means "this document is owed an
- * enrichment call"; the completed fact lives on [DocumentEntity.aiEnrichedAt], so a successful pass
- * deletes the row rather than keeping a terminal state.
+ * Work list for the automatic post-OCR AI enrichment pass, in [DeviceDatabase]. A row means "this
+ * document is owed an enrichment call"; the completed fact lives in [AiEnrichedEntity], so a
+ * successful pass deletes the row rather than keeping a terminal state.
  *
  * The row has no state column at all. There is no `running` — the drain is single-flight in-process
  * and a row stays as it is while being worked on, so a process death mid-call leaves it due rather
@@ -319,8 +311,21 @@ data class AiEnrichQueueEntity(
 )
 
 /**
- * A bulk AI edit the user handed to the background: the run's configuration, plus the retry
- * bookkeeping of its suggestion pass. The documents it covers live in [AiEditJobDocEntity].
+ * A document the automatic post-OCR AI enrichment pass already enriched on this device, by hash.
+ * Device-local by nature (it guards spend on *this* device's endpoint), and kept out of the index
+ * so that a rebuild does not let the same document cost again when it is OCR'd anew under a better
+ * engine.
+ */
+@Entity(tableName = "ai_enriched")
+data class AiEnrichedEntity(
+    @PrimaryKey val docId: String,
+    val enrichedAt: Long,
+)
+
+/**
+ * A bulk AI edit the user handed to the background, in [DeviceDatabase]: the run's configuration,
+ * plus the retry bookkeeping of its suggestion pass. The documents it covers live in
+ * [AiEditJobDocEntity].
  *
  * Like [AiEnrichQueueEntity] there is no state column — a job's state is derived from its document
  * rows (all suggested = ready for review, some suggested = in progress, none = waiting) so the two
@@ -367,7 +372,11 @@ data class AiEditJobDocEntity(
     val lastError: String? = null,
 )
 
-/** Small local state: deviceId, last journal seq, known own segments as JSON, schema markers. */
+/**
+ * Small key/value state. In [DeviceDatabase]: the journal device id, the v1 writer's last sequence
+ * and known segments, and the assistant's chats. In the index: where each document was last seen,
+ * observations a rebuild makes again.
+ */
 @Entity(tableName = "kv")
 data class KeyValueEntity(
     @PrimaryKey val key: String,
