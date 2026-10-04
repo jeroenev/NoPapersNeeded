@@ -208,6 +208,3 @@ abstract class NpnDatabase : RoomDatabase() {
 expect object NpnDatabaseConstructor : RoomDatabaseConstructor<NpnDatabase> {
     override fun initialize(): NpnDatabase
 }
-
-/** Database file name used by the platform builders. */
-const val NPN_DATABASE_NAME: String = "npn-index.db"

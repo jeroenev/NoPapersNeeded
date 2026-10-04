@@ -22,13 +22,6 @@ interface DocumentFieldDao {
     suspend fun fieldsForDocs(docIds: List<String>): List<DocumentFieldEntity> =
         docIds.chunkedBind { fieldsForDocsChunk(it) }
 
-    /**
-     * Distinct field keys in use across the library, for add-field key autocomplete. Observed so
-     * suggestions stay fresh as fields are added elsewhere.
-     */
-    @Query("SELECT DISTINCT fieldKey FROM document_fields ORDER BY fieldKey COLLATE NOCASE")
-    fun observeDistinctKeys(): Flow<List<String>>
-
     /** All custom-field rows, for the AI's field search tools. */
     @Query("SELECT * FROM document_fields")
     suspend fun all(): List<DocumentFieldEntity>
@@ -71,17 +64,6 @@ interface DocumentFieldDao {
     @Query("SELECT docId FROM document_fields WHERE fieldKey = :key")
     suspend fun docIdsWithKey(key: String): List<String>
 
-    /** Number of documents carrying a value for [key]. */
-    @Query("SELECT COUNT(*) FROM document_fields WHERE fieldKey = :key")
-    fun observeUsageCount(key: String): Flow<Int>
-
-    /** Distinct field keys with their document counts, for the AI's list_fields tool. */
-    @Query(
-        "SELECT fieldKey, COUNT(*) AS count FROM document_fields " +
-            "GROUP BY fieldKey ORDER BY fieldKey COLLATE NOCASE",
-    )
-    suspend fun keysWithCounts(): List<FieldKeyCount>
-
     /** Distinct field keys with counts limited to documents the AI search tools can reach. */
     @Query(
         "SELECT f.fieldKey, COUNT(*) AS count FROM document_fields f " +
@@ -108,14 +90,8 @@ interface DocumentFieldDao {
         upsertAll(updates.values.flatten())
     }
 
-    @Query("DELETE FROM document_fields WHERE docId = :docId")
-    suspend fun deleteForDoc(docId: String)
-
     @Query("DELETE FROM document_fields WHERE docId IN (:docIds)")
     suspend fun clearFieldsFor(docIds: List<String>)
-
-    @Query("DELETE FROM document_fields")
-    suspend fun clearAll()
 }
 
 @Dao
@@ -128,9 +104,6 @@ interface ThumbnailDao {
 
     @Upsert
     suspend fun upsert(thumbnail: ThumbnailEntity)
-
-    @Query("DELETE FROM thumbnails WHERE docId = :docId")
-    suspend fun delete(docId: String)
 
     @Query("DELETE FROM thumbnails")
     suspend fun deleteAll()

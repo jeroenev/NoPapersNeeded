@@ -7,17 +7,10 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 
 /**
- * Build the local index database on Android. The DB file lives in app-local storage
- * (never inside the synced library folder). Destructive migration is the intended fallback:
- * the cache is rebuildable from files and journals. This device's own state is in
- * [deviceDatabase], which has none.
- */
-fun npnDatabase(context: Context): NpnDatabase = npnDatabase(context, NPN_DATABASE_NAME)
-
-/**
- * Build the index database with an explicit file [name], so each opened library can have its own
- * cache (the service layer suffixes the name with a stable hash of the library location). Additive
- * overload; the no-name variant delegates here with [NPN_DATABASE_NAME].
+ * Build the local index database on Android, in the app's databases directory under [name] (never
+ * inside the synced library folder); each opened library has its own, named after a stable hash of
+ * its location. Destructive migration is the intended fallback: the cache is rebuildable from files
+ * and journals. This device's own state is in [deviceDatabase], which has none.
  */
 fun npnDatabase(
     context: Context,

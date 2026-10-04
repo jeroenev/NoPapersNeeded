@@ -1,7 +1,6 @@
 package dev.npn.core.db
 
 import androidx.room3.Dao
-import androidx.room3.Delete
 import androidx.room3.Insert
 import androidx.room3.OnConflictStrategy
 import androidx.room3.Query
@@ -16,9 +15,6 @@ interface TagDao {
 
     @Upsert
     suspend fun upsertAll(tags: List<TagEntity>)
-
-    @Delete
-    suspend fun delete(tag: TagEntity)
 
     @Query("SELECT * FROM tags")
     suspend fun all(): List<TagEntity>

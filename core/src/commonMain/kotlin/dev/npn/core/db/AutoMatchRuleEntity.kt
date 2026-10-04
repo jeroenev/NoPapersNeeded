@@ -2,7 +2,6 @@ package dev.npn.core.db
 
 import androidx.room3.ColumnInfo
 import androidx.room3.Dao
-import androidx.room3.Delete
 import androidx.room3.Entity
 import androidx.room3.PrimaryKey
 import androidx.room3.Query
@@ -44,9 +43,6 @@ interface AutoMatchRuleDao {
     suspend fun getAll(): List<AutoMatchRuleEntity>
 
     @Upsert
-    suspend fun upsert(rule: AutoMatchRuleEntity)
-
-    @Upsert
     suspend fun upsertAll(rules: List<AutoMatchRuleEntity>)
 
     /**
@@ -58,18 +54,6 @@ interface AutoMatchRuleDao {
         clearAll()
         if (rules.isNotEmpty()) upsertAll(rules)
     }
-
-    @Delete
-    suspend fun delete(rule: AutoMatchRuleEntity)
-
-    @Query("DELETE FROM auto_match_rules WHERE id = :id")
-    suspend fun deleteById(id: String)
-
-    @Query("UPDATE auto_match_rules SET enabled = :enabled WHERE id = :id")
-    suspend fun setEnabled(
-        id: String,
-        enabled: Boolean,
-    )
 
     @Query("DELETE FROM auto_match_rules")
     suspend fun clearAll()
