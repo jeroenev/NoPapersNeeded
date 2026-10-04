@@ -6,8 +6,8 @@ import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.queueState
 import dev.npn.core.journal.EpochClock
-import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.work.QueueDrainer

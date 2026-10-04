@@ -14,6 +14,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.CanonicalJournalEvent
+import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
@@ -24,7 +25,6 @@ import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotV2Reader
 import dev.npn.core.journal.StorageV1Reader
 import dev.npn.core.journal.StorageV2Reader
-import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 

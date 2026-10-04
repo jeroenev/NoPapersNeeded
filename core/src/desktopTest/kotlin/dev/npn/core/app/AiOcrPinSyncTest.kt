@@ -1,11 +1,11 @@
 package dev.npn.core.app
 
-import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.FakeSseGateway
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.ocr.FakeOcrEngine
+import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty

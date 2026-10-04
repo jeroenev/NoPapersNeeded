@@ -157,7 +157,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             (model.metadata.value.history as HistoryUiState.Loaded).items shouldHaveSize 1
 
             // A field edit lands: the journal gains an event and the row changes with it.
-            session.documents.historyList = listOf(tagged, historyRecord(2, HistoryEntry.FieldSet(FieldKeys.TITLE, "X")))
+            session.documents.historyList =
+                listOf(tagged, historyRecord(2, HistoryEntry.FieldSet(FieldKeys.TITLE, "X")))
             session.documents.singleDoc.value = listItem("doc-1", tags = listOf("invoice"))
             advanceUntilIdle()
 

@@ -117,25 +117,55 @@ object HistoryMapper {
 
     private fun kind(entry: HistoryEntry): HistoryEventKind =
         when (entry) {
-            is HistoryEntry.TagAdded -> HistoryEventKind.TAG_ADD
-            is HistoryEntry.TagRemoved -> HistoryEventKind.TAG_REMOVE
-            is HistoryEntry.Reviewed, is HistoryEntry.ReviewUnreadable -> HistoryEventKind.PROP_REVIEWED
-            is HistoryEntry.OcrEnginePinned -> HistoryEventKind.PROP_OCR_ENGINE
-            is HistoryEntry.StoragePathSet -> HistoryEventKind.PROP_STORAGE_PATH
+            is HistoryEntry.TagAdded -> {
+                HistoryEventKind.TAG_ADD
+            }
+
+            is HistoryEntry.TagRemoved -> {
+                HistoryEventKind.TAG_REMOVE
+            }
+
+            is HistoryEntry.Reviewed, is HistoryEntry.ReviewUnreadable -> {
+                HistoryEventKind.PROP_REVIEWED
+            }
+
+            is HistoryEntry.OcrEnginePinned -> {
+                HistoryEventKind.PROP_OCR_ENGINE
+            }
+
+            is HistoryEntry.StoragePathSet -> {
+                HistoryEventKind.PROP_STORAGE_PATH
+            }
+
             is HistoryEntry.FieldSet -> {
                 if (entry.value == null) HistoryEventKind.FIELD_REMOVE else HistoryEventKind.FIELD_SET
             }
-            is HistoryEntry.Trashed -> HistoryEventKind.TRASH
-            HistoryEntry.Restored -> HistoryEventKind.RESTORE
-            HistoryEntry.Deleted -> HistoryEventKind.DELETE
-            is HistoryEntry.Relinked -> HistoryEventKind.RELINK
+
+            is HistoryEntry.Trashed -> {
+                HistoryEventKind.TRASH
+            }
+
+            HistoryEntry.Restored -> {
+                HistoryEventKind.RESTORE
+            }
+
+            HistoryEntry.Deleted -> {
+                HistoryEventKind.DELETE
+            }
+
+            is HistoryEntry.Relinked -> {
+                HistoryEventKind.RELINK
+            }
+
             is HistoryEntry.TagRenamed,
             is HistoryEntry.TagMerged,
             is HistoryEntry.TagStyled,
             is HistoryEntry.SettingChanged,
             is HistoryEntry.Unknown,
             is HistoryEntry.Undecodable,
-            -> HistoryEventKind.UNKNOWN
+            -> {
+                HistoryEventKind.UNKNOWN
+            }
         }
 
     private fun reviewedText(reviewed: Boolean?): HistoryDescription =

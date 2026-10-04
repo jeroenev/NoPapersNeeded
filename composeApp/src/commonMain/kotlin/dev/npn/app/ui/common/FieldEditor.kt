@@ -329,7 +329,13 @@ fun fieldTypeLabel(type: FieldType): String =
 @Composable
 internal fun invalidNumberText(type: FieldType): String =
     stringResource(
-        if (type == FieldType.DECIMAL) Res.string.common_field_invalid_decimal else Res.string.common_field_invalid_number,
+        if (type ==
+            FieldType.DECIMAL
+        ) {
+            Res.string.common_field_invalid_decimal
+        } else {
+            Res.string.common_field_invalid_number
+        },
     )
 
 private const val LONG_TEXT_MIN_LINES = 4

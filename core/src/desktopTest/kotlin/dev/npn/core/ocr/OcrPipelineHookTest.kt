@@ -1,7 +1,7 @@
 package dev.npn.core.ocr
 
-import dev.npn.core.db.QueueState
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.QueueState
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.work.QueueDrainer
 import io.kotest.matchers.collections.shouldBeEmpty
