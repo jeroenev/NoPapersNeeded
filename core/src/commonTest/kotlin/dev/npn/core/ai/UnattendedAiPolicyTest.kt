@@ -18,7 +18,7 @@ class UnattendedAiPolicyTest {
     fun devicePolicyFollowsTheUsersTogglesOnlyWhileConfigured() =
         runTest {
             var config = configured.copy(ocrAuto = true, autoOnOcr = true)
-            val policy = UnattendedAiPolicy.fromConfig { config }
+            val policy = UnattendedAiPolicy { config }
             assertTrue(policy.autoOcr())
             assertTrue(policy.autoEnrich())
 
@@ -37,7 +37,7 @@ class UnattendedAiPolicyTest {
     fun devicePolicyReadsLive() =
         runTest {
             var config = configured
-            val policy = UnattendedAiPolicy.fromConfig { config }
+            val policy = UnattendedAiPolicy { config }
             assertFalse(policy.autoOcr())
             config = configured.copy(ocrAuto = true)
             assertTrue(policy.autoOcr())
@@ -46,7 +46,10 @@ class UnattendedAiPolicyTest {
     @Test
     fun neverSpends() =
         runTest {
-            assertFalse(UnattendedAiPolicy.NEVER.autoOcr())
-            assertFalse(UnattendedAiPolicy.NEVER.autoEnrich())
+            assertFalse(NEVER_SPENDS.autoOcr())
+            assertFalse(NEVER_SPENDS.autoEnrich())
         }
 }
+
+/** A policy that never spends unattended: AI is not even configured. */
+internal val NEVER_SPENDS = UnattendedAiPolicy { AiConfig.DISABLED }

@@ -99,18 +99,20 @@ internal class AiRuntime(
         private const val OPENCODE_SESSION_HEADER = "x-opencode-session"
 
         /**
-         * Build the runtime for [config] over [transport], the base Ktor client every request to
-         * the endpoint goes through. Koog layers its own plugins on a derived copy, so plugins
-         * installed on [transport] — a metering interceptor, request logging, a test's recorder —
-         * see every call the runtime makes, whichever provider it is for. Provider-specific wire
-         * requirements (the OpenCode Go session header) are added on top here, never in place of
-         * what the caller installed.
+         * Build the runtime for [config]. Every endpoint client the app makes comes from here: the
+         * facade's cached one ([AiRuntimeCache]) and the short-lived ones of [AiSelfTest] and
+         * [AiModelCatalog].
+         *
+         * [transport] is the base Ktor client every request to the endpoint goes through, and the
+         * test seam: Koog layers its own plugins on a derived copy, so plugins installed on it (a
+         * test's recorder or redirect) see every call the runtime makes, whichever provider it is
+         * for. Provider-specific wire requirements (the OpenCode Go session header) are added on
+         * top here, never in place of what the caller installed.
          *
          * A null [transport] means "a plain client, owned by the runtime": [newTransport] creates it
          * here and [close] releases it — or this does, when a provider factory throws (a malformed
          * base URL does), since no runtime then exists to release it. A supplied one stays the
-         * caller's to close, because it outlives any one runtime by design (the facade rebuilds
-         * runtimes when the config changes).
+         * caller's to close.
          */
         fun build(
             config: AiConfig,

@@ -138,7 +138,7 @@ internal class Rig(
             ai = ai,
             meta = meta,
             fieldRegistry = fieldRegistry,
-            policy = UnattendedAiPolicy.fromConfig { config },
+            policy = UnattendedAiPolicy { config },
             clock = clock,
             health = health,
             onEnqueued = { kicks++ },

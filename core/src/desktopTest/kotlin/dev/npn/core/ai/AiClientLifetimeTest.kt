@@ -43,22 +43,49 @@ class AiClientLifetimeTest {
     }
 
     @Test
-    fun closingTheFacadeReleasesItsRuntimesClient() =
+    fun closingTheCacheReleasesItsRuntimesClient() =
+        runTest {
+            val closed = AtomicInteger()
+            val runtimes = AiRuntimeCache { AiRuntime.build(it, newTransport = { probedClient(closed) }) }
+            runtimes.runtimeFor(custom("http://localhost:1"))
+            closed.get() shouldBe 0
+
+            runtimes.close()
+
+            (closed.get() > 0) shouldBe true
+        }
+
+    @Test
+    fun anEndpointChangeReleasesTheStaleRuntimesClient() =
+        runTest {
+            val closed = AtomicInteger()
+            val runtimes = AiRuntimeCache { AiRuntime.build(it, newTransport = { probedClient(closed) }) }
+            val first = runtimes.runtimeFor(custom("http://localhost:1"))
+            runtimes.runtimeFor(custom("http://localhost:1").copy(maxTagsPerDoc = 3)) shouldBe first
+            closed.get() shouldBe 0
+
+            runtimes.runtimeFor(custom("http://localhost:2"))
+
+            (closed.get() > 0) shouldBe true
+            runtimes.close()
+        }
+
+    @Test
+    fun aFacadeCallAfterCloseBuildsAFreshRuntime() =
         runTest {
             val gateway = FakeSseGateway(FakeSseGateway.zenGoResponsesStream()).start()
-            val closed = AtomicInteger()
-            val transport = probedClient(closed)
             try {
-                val facade = AiFacadeImpl(db, db.keyValueDao(), transport) { custom(gateway.baseUrl) }
+                val facade = AiFacadeImpl(db, db.keyValueDao()) { custom(gateway.baseUrl) }
                 // Any call that reaches the endpoint builds the runtime; how this one ends does not matter.
                 runCatchingCancellable { facade.transcribePage(ByteArray(1), "eng") }
-                closed.get() shouldBe 0
+                val before = gateway.requestedPaths.size
+                (before > 0) shouldBe true
 
                 facade.close()
+                runCatchingCancellable { facade.transcribePage(ByteArray(1), "eng") }
 
-                (closed.get() > 0) shouldBe true
+                (gateway.requestedPaths.size > before) shouldBe true
             } finally {
-                transport.close()
                 gateway.stop()
             }
         }

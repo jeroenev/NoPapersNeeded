@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiOcrEngine
 import dev.npn.core.ai.RoomChatHistoryProvider
+import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.fieldTypes
@@ -211,7 +212,7 @@ internal fun buildEnrichment(
             ai = ai,
             meta = library.writer,
             fieldRegistry = library.fieldRegistry,
-            policy = deps.unattendedAi,
+            policy = UnattendedAiPolicy(deps.settings.aiConfig),
             clock = deps.clock,
             health = ai.endpointHealth,
             onEnqueued = onEnqueued,
@@ -259,7 +260,7 @@ internal suspend fun buildOcr(
         OcrEngineSelector(
             local = deps.ocrEngine,
             ai = AiOcrEngine(ai),
-            aiAuto = deps.unattendedAi::autoOcr,
+            aiAuto = UnattendedAiPolicy(deps.settings.aiConfig)::autoOcr,
         )
     val pipeline =
         OcrPipeline(

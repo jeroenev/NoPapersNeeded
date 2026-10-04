@@ -3,7 +3,6 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiSuggest
-import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.ExternalSource
@@ -398,11 +397,6 @@ class SessionDeps(
     val settings: SessionSettings,
     /** Where the session reports what fails in the background, with no caller to tell. */
     val log: NpnLog,
-    /**
-     * Who may spend on AI unattended. Defaults to the user's own AI settings — the device policy; a
-     * host with a different answer (a server running on a library's behalf) supplies its own.
-     */
-    val unattendedAi: UnattendedAiPolicy = UnattendedAiPolicy.fromConfig(settings.aiConfig),
     val clock: EpochClock = SystemEpochClock,
     val installationId: String = "local-installation",
 ) {

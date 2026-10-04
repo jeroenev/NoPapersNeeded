@@ -9,7 +9,6 @@ import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.toFieldDef
 import dev.npn.core.work.EndpointHealth
-import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
 import kotlinx.coroutines.flow.flow
@@ -26,10 +25,6 @@ import kotlin.uuid.Uuid
  * runtime while the config is unchanged. Purely a read-side consumer of the Room index; all
  * writes stay with MetadataWriter/JournalCoordinator.
  *
- * @param transport the base Ktor client every endpoint call goes through, when the host wants to
- *  see or shape those calls (metering, logging, a test recorder); see [AiRuntime.build]. It
- *  outlives every runtime this facade builds and stays the host's to close. Null means each
- *  runtime owns a plain client of its own.
  * @param chats where chat sessions and conversations are kept: this device's own state, which an
  *  index rebuild must not take (the session passes `DeviceDatabase.keyValueDao`).
  * @param ownWrite runs each write to the chat stores as work the session owns, so closing the
@@ -38,7 +33,6 @@ import kotlin.uuid.Uuid
 class AiFacadeImpl(
     private val db: NpnDatabase,
     chats: KeyValueDao,
-    private val transport: HttpClient? = null,
     ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
@@ -56,24 +50,7 @@ class AiFacadeImpl(
     /** Serializes the read-modify-write of the session list across ask, create, clear and delete. */
     private val sessionsMutex = Mutex()
 
-    private val runtimeMutex = Mutex()
-    private var cachedRuntime: Pair<RuntimeKey, AiRuntime>? = null
-
-    /**
-     * The subset of [AiConfig] that actually shapes the built [AiRuntime] (endpoint client + model
-     * — see [AiRuntime.build]). Cache identity is keyed on this so tuning a runtime-irrelevant
-     * setting like [AiConfig.maxTagsPerDoc], [AiConfig.maxNewTagsPerDoc] or the reasoning levels
-     * (applied per call, not per client) does NOT rebuild the client and abort in-flight requests.
-     */
-    private data class RuntimeKey(
-        val enabled: Boolean,
-        val provider: AiProvider,
-        val baseUrl: String,
-        val apiKey: String,
-        val model: String,
-    )
-
-    private fun AiConfig.runtimeKey() = RuntimeKey(enabled, provider, baseUrl, apiKey, model)
+    private val runtimes = AiRuntimeCache()
 
     override suspend fun configured(): Boolean = configProvider().configured
 
@@ -87,7 +64,7 @@ class AiFacadeImpl(
             // the cold flow, so config errors surface on collection (as flow exceptions), matching
             // the "throws on endpoint errors" contract.
             val config = configProvider()
-            val runtime = runtimeFor(config)
+            val runtime = runtimes.runtimeFor(config)
             // The field vocabulary is read per turn so a field defined a minute ago is already known.
             val fields = db.fieldDefDao().all().mapNotNull { it.toFieldDef() }
             emitAll(
@@ -159,7 +136,7 @@ class AiFacadeImpl(
         request: AiEditRequest,
     ): AiEditSuggestion {
         val config = configProvider()
-        val runtime = runtimeFor(config)
+        val runtime = runtimes.runtimeFor(config)
         val doc = db.documentDao().getByDocId(docId) ?: return AiEditSuggestion.EMPTY
         val text = db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() }
         // No OCR text yet: field extraction is impossible, but a tag-only run can still work off
@@ -266,33 +243,10 @@ class AiFacadeImpl(
             }
         }
 
-    private suspend fun runtime(): AiRuntime = runtimeFor(configProvider())
+    private suspend fun runtime(): AiRuntime = runtimes.runtimeFor(configProvider())
 
-    private suspend fun runtimeFor(config: AiConfig): AiRuntime {
-        check(config.configured) { "AI endpoint is not configured (see Settings > AI assistant)" }
-        val key = config.runtimeKey()
-        return runtimeMutex.withLock {
-            val cached = cachedRuntime
-            cached?.takeIf { it.first == key }?.second ?: run {
-                // Runtime-relevant config changed: close the stale runtime's HTTP client before
-                // swapping. Any in-flight request still holding the old runtime will fail once its
-                // client is closed — acceptable, since the endpoint changed out from under it.
-                cached?.second?.close()
-                AiRuntime.build(config, transport).also { cachedRuntime = key to it }
-            }
-        }
-    }
-
-    /**
-     * Release the cached runtime's HTTP client. The session calls this when it closes; without it
-     * every library swap would leave a client and its engine behind. A call after this simply
-     * builds a fresh runtime.
-     */
-    suspend fun close() =
-        runtimeMutex.withLock {
-            cachedRuntime?.second?.close()
-            cachedRuntime = null
-        }
+    /** Release the cached endpoint client; see [AiRuntimeCache.close]. */
+    suspend fun close() = runtimes.close()
 
     /**
      * The language + date facts the prompts need (see [AiPromptContext]). Derived from the live
