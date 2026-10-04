@@ -30,14 +30,14 @@ class FakeAiChat : AiChat {
     var failAskAfter: Int? = null
 
     var savedChatSessions: List<AiChatSession> = emptyList()
-    var createdChatSession: AiChatSession? = null
+    var createdChatSession: AiChatSession = AiChatSession("created", null, 0L)
     var chatTranscripts: Map<String, List<AiChatHistoryItem>> = emptyMap()
 
     override suspend fun configured(): Boolean = configuredValue
 
     override suspend fun chatSessions(): List<AiChatSession> = savedChatSessions
 
-    override suspend fun createChatSession(): AiChatSession? = createdChatSession
+    override suspend fun createChatSession(): AiChatSession = createdChatSession
 
     /** If set, [deleteChatSession] throws this. */
     var failDeleteChatSession: (() -> Nothing)? = null

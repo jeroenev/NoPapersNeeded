@@ -5,28 +5,45 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.builtins.ListSerializer
 
-/** Device-local metadata for the conversations stored by [RoomChatHistoryProvider]. */
+/**
+ * Device-local metadata for the conversations stored by [RoomChatHistoryProvider]. Writes go
+ * through [ownWrite], so the session can wait them out before it closes the database.
+ */
 class RoomChatSessionStore(
     private val db: NpnDatabase,
+    private val ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
     private val json = NpnJson.Persisted
 
     suspend fun load(): List<AiChatSession> =
-        db.keyValueDao().get(KEY)?.let {
-            runCatching { json.decodeFromString(ListSerializer(AiChatSession.serializer()), it) }
-                .getOrDefault(emptyList())
-        } ?: emptyList()
+        db
+            .keyValueDao()
+            .get(KEY)
+            ?.let {
+                runCatching { json.decodeFromString(ListSerializer(AiChatSession.serializer()), it) }
+                    .getOrDefault(emptyList())
+            }.orEmpty()
+            .map { it.untitledIfPlaceholder() }
 
-    suspend fun save(sessions: List<AiChatSession>) {
-        db.keyValueDao().put(
-            KeyValueEntity(
-                key = KEY,
-                value = json.encodeToString(ListSerializer(AiChatSession.serializer()), sessions),
-            ),
-        )
-    }
+    suspend fun save(sessions: List<AiChatSession>) =
+        ownWrite {
+            db.keyValueDao().put(
+                KeyValueEntity(
+                    key = KEY,
+                    value = json.encodeToString(ListSerializer(AiChatSession.serializer()), sessions),
+                ),
+            )
+        }
+
+    /**
+     * Builds before nullable titles stored English placeholders in place of "untitled"; they read
+     * as untitled, so the UI names them in the user's language.
+     */
+    private fun AiChatSession.untitledIfPlaceholder(): AiChatSession =
+        if (title in LEGACY_PLACEHOLDER_TITLES) copy(title = null) else this
 
     private companion object {
         const val KEY = "ai-chat:session-metadata"
+        val LEGACY_PLACEHOLDER_TITLES = setOf("New chat", "Assistant chat")
     }
 }

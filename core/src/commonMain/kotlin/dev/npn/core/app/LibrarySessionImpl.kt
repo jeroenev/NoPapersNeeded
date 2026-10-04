@@ -756,7 +756,7 @@ class LibrarySessionImpl private constructor(
 
             // Built before the OCR pipeline because it is also the pipeline's AI engine: one
             // facade, so the vision calls share the cached endpoint client with chat and edits.
-            val ai = AiFacadeImpl(db, configProvider = deps.aiConfig)
+            val ai = AiFacadeImpl(db, ownWrite = { lifetime.owned(it) }, configProvider = deps.aiConfig)
             val ocrEngines =
                 OcrEngineSelector(
                     local = deps.ocrEngine,

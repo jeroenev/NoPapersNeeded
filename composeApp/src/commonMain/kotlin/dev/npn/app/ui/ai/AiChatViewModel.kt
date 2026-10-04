@@ -67,16 +67,10 @@ class AiChatViewModel(
         }
         viewModelScope.launch {
             val sessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(emptyList())
-            val session =
-                runCatchingCancellable { ai.createChatSession() }.getOrNull()
-                    ?: sessions.firstOrNull()
-                    ?: AiChatSession(LEGACY_SESSION_ID, "Assistant chat", 0L)
+            val session = ai.createChatSession()
             _ui.update {
                 it.copy(
-                    sessions =
-                        (listOf(session) + sessions).distinctBy { item ->
-                            item.id
-                        },
+                    sessions = (listOf(session) + sessions).distinctBy { item -> item.id },
                     currentSessionId = session.id,
                 )
             }
@@ -120,10 +114,11 @@ class AiChatViewModel(
             it.copy(
                 transcript = it.transcript.plusUser(trimmed),
                 busy = true,
+                // The title core gives the session from this question, shown before ask stores it.
                 sessions =
                     it.sessions.map { session ->
-                        if (session.id == sessionId && session.title == NEW_SESSION_TITLE) {
-                            session.copy(title = trimmed.replace(Regex("\\s+"), " ").take(MAX_SESSION_TITLE_CHARS))
+                        if (session.id == sessionId && session.title == null) {
+                            session.copy(title = AiChatSession.titleFrom(trimmed))
                         } else {
                             session
                         }
@@ -160,7 +155,7 @@ class AiChatViewModel(
                 busy = false,
                 sessions =
                     it.sessions.map { session ->
-                        if (session.id == it.currentSessionId) session.copy(title = NEW_SESSION_TITLE) else session
+                        if (session.id == it.currentSessionId) session.copy(title = null) else session
                     },
             )
         }
@@ -182,15 +177,14 @@ class AiChatViewModel(
     fun newSession() {
         if (_ui.value.busy) return
         launchReporting({ reason -> uiText(Res.string.ai_chat_new_failed, reason) }) {
-            ai.createChatSession()?.let { session ->
-                val savedSessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(_ui.value.sessions)
-                _ui.update {
-                    it.copy(
-                        sessions = (listOf(session) + savedSessions).distinctBy { item -> item.id },
-                        currentSessionId = session.id,
-                        transcript = ChatTranscript.EMPTY,
-                    )
-                }
+            val session = ai.createChatSession()
+            val savedSessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(_ui.value.sessions)
+            _ui.update {
+                it.copy(
+                    sessions = (listOf(session) + savedSessions).distinctBy { item -> item.id },
+                    currentSessionId = session.id,
+                    transcript = ChatTranscript.EMPTY,
+                )
             }
         }
     }
@@ -206,18 +200,8 @@ class AiChatViewModel(
                 return@launchReporting
             }
             val next = remaining.firstOrNull() ?: ai.createChatSession()
-            if (next == null) {
-                _ui.update {
-                    it.copy(
-                        sessions = emptyList(),
-                        currentSessionId = null,
-                        transcript = ChatTranscript.EMPTY,
-                    )
-                }
-            } else {
-                _ui.update { it.copy(sessions = (remaining + next).distinctBy { item -> item.id }) }
-                loadSession(next.id)
-            }
+            _ui.update { it.copy(sessions = (remaining + next).distinctBy { item -> item.id }) }
+            loadSession(next.id)
         }
     }
 
@@ -253,9 +237,4 @@ class AiChatViewModel(
         }
     }
 
-    private companion object {
-        const val NEW_SESSION_TITLE = "New chat"
-        const val MAX_SESSION_TITLE_CHARS = 60
-        const val LEGACY_SESSION_ID = "main"
-    }
 }

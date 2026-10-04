@@ -238,12 +238,12 @@ private fun AiChatTopBar(
     TopAppBar(
         title = {
             Text(
-                sessions.firstOrNull { it.id == currentSessionId }?.title
-                    ?: if (currentSessionId != null) {
-                        stringResource(Res.string.ai_new_chat)
-                    } else {
-                        stringResource(Res.string.ai_assistant_title)
-                    },
+                if (currentSessionId == null) {
+                    stringResource(Res.string.ai_assistant_title)
+                } else {
+                    // A session is untitled until its first question names it.
+                    sessions.firstOrNull { it.id == currentSessionId }?.title ?: stringResource(Res.string.ai_new_chat)
+                },
                 maxLines = 1,
             )
         },
@@ -276,7 +276,7 @@ private fun AiChatTopBar(
                     DropdownMenuItem(
                         text = {
                             Text(
-                                session.title,
+                                session.title ?: stringResource(Res.string.ai_new_chat),
                                 fontWeight = if (session.id == currentSessionId) FontWeight.Bold else null,
                                 maxLines = 1,
                             )

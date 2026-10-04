@@ -66,7 +66,7 @@ class KoogChatAgentTest {
     ) = KoogChatAgent(
         executor,
         model,
-        db,
+        RoomChatHistoryProvider(db),
         LibraryAiTools.toolSetFor(db, FieldKeys.seedDefinitions()),
         null,
         "system",
@@ -147,7 +147,15 @@ class KoogChatAgentTest {
             val events = mutableListOf<AiChatEvent>()
 
             assertFails {
-                KoogChatAgent(executor, model, db, LibraryToolSet(library.tools, cancelled), null, "system", 15)
+                KoogChatAgent(
+                    executor,
+                    model,
+                    RoomChatHistoryProvider(db),
+                    LibraryToolSet(library.tools, cancelled),
+                    null,
+                    "system",
+                    15,
+                )
                     .run("find tax", "session-1")
                     .collect { events += it }
             }

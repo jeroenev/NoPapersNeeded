@@ -20,13 +20,29 @@ sealed interface AiChatHistoryItem {
     ) : AiChatHistoryItem
 }
 
-/** Metadata for one persisted assistant conversation. */
+/**
+ * Metadata for one persisted assistant conversation. [title] is null while the conversation is
+ * untitled (nothing asked yet, or cleared): the UI names that state in the user's language.
+ */
 @Serializable
 data class AiChatSession(
     val id: String,
-    val title: String,
+    val title: String?,
     val updatedAt: Long,
-)
+) {
+    companion object {
+        private const val MAX_TITLE_CHARS = 60
+        private val whitespace = Regex("\\s+")
+
+        /** The title a conversation takes from its first question, or null for a blank one. */
+        fun titleFrom(question: String): String? =
+            question
+                .replace(whitespace, " ")
+                .trim()
+                .take(MAX_TITLE_CHARS)
+                .ifBlank { null }
+    }
+}
 
 /**
  * Streaming event from [AiChat.ask]. The cold flow emits any number of [TextDelta] and
@@ -82,11 +98,17 @@ interface AiChat : AiAvailability {
     /** Persisted transcript items for a session, including completed tool uses. */
     suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem>
 
-    /** All sessions, newest first. */
+    /**
+     * All sessions that hold a conversation, newest first. A read: it never writes, and never
+     * decodes a conversation to answer.
+     */
     suspend fun chatSessions(): List<AiChatSession>
 
-    /** Create a new empty session. */
-    suspend fun createChatSession(): AiChatSession?
+    /**
+     * A new untitled session. It is stored once something is asked in it, so a session nobody
+     * used leaves nothing behind.
+     */
+    suspend fun createChatSession(): AiChatSession
 
     /** Delete a session and its stored conversation. */
     suspend fun deleteChatSession(sessionId: String)

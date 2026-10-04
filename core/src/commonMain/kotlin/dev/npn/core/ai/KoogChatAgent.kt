@@ -1,5 +1,6 @@
 package dev.npn.core.ai
 
+import ai.koog.agents.chatMemory.feature.ChatHistoryProvider
 import ai.koog.agents.chatMemory.feature.ChatMemory
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.functionalStrategy
@@ -11,7 +12,6 @@ import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponse
-import dev.npn.core.db.NpnDatabase
 import dev.npn.core.util.NpnJson
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
@@ -24,13 +24,13 @@ import kotlinx.serialization.json.JsonObject
 class KoogChatAgent(
     private val executor: PromptExecutor,
     private val model: LLModel,
-    db: NpnDatabase,
+    /** Where the conversation is loaded from and stored back to, keyed by conversation id. */
+    private val historyProvider: ChatHistoryProvider,
     private val toolSet: LibraryToolSet,
     private val params: LLMParams?,
     private val systemPrompt: String,
     private val maxIterations: Int,
 ) {
-    private val historyProvider = RoomChatHistoryProvider(db)
     private val toolRegistry = ToolRegistry { toolSet.tools.forEach(::tool) }
 
     fun run(

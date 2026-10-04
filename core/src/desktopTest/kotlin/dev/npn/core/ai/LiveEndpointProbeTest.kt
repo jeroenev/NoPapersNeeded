@@ -79,7 +79,7 @@ class LiveEndpointProbeTest {
         withFacade(config) { facade ->
             val events =
                 runBlocking {
-                    val session = requireNotNull(facade.createChatSession()) { "no chat session" }
+                    val session = facade.createChatSession()
                     facade.ask(session.id, "How many documents do I have? Use your tools.").toList()
                 }
 

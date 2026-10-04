@@ -28,16 +28,22 @@ import kotlin.uuid.Uuid
  *  see or shape those calls (metering, logging, a test recorder); see [AiRuntime.build]. It
  *  outlives every runtime this facade builds and stays the host's to close. Null means each
  *  runtime owns a plain client of its own.
+ * @param ownWrite runs each write to the chat stores as work the session owns, so closing the
+ *  session waits for it instead of closing the database under it.
  */
 class AiFacadeImpl(
     private val db: NpnDatabase,
     private val transport: HttpClient? = null,
+    ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
     AiSuggest,
     AiOcr {
-    private val chatHistoryStore = RoomChatHistoryProvider(db)
-    private val chatSessionStore = RoomChatSessionStore(db)
+    private val chatHistoryStore = RoomChatHistoryProvider(db, ownWrite)
+    private val chatSessionStore = RoomChatSessionStore(db, ownWrite)
+
+    /** Serializes the read-modify-write of the session list across ask, create, clear and delete. */
+    private val sessionsMutex = Mutex()
 
     private val runtimeMutex = Mutex()
     private var cachedRuntime: Pair<RuntimeKey, AiRuntime>? = null
@@ -66,20 +72,22 @@ class AiFacadeImpl(
     ): Flow<AiChatEvent> =
         flow {
             touchChatSession(sessionId, question)
-            // Resolve the runtime lazily inside the cold flow so config errors surface on collection
-            // (as flow exceptions), matching the "throws on endpoint errors" contract.
-            val runtime = runtime()
+            // One config read for the whole turn, so the client, prompt and parameters agree. Inside
+            // the cold flow, so config errors surface on collection (as flow exceptions), matching
+            // the "throws on endpoint errors" contract.
+            val config = configProvider()
+            val runtime = runtimeFor(config)
             // The field vocabulary is read per turn so a field defined a minute ago is already known.
             val fields = db.fieldDefDao().all().mapNotNull { it.toFieldDef() }
             emitAll(
                 KoogChatAgent(
                     executor = runtime.executor,
                     model = runtime.model,
-                    db = db,
+                    historyProvider = chatHistoryStore,
                     toolSet = LibraryAiTools.toolSetFor(db, fields),
-                    systemPrompt = AiPrompts.chatSystem(promptContext(configProvider()), fields),
+                    systemPrompt = AiPrompts.chatSystem(promptContext(config), fields),
                     maxIterations = MAX_AGENT_ITERATIONS,
-                    params = AiRuntime.chatParams(configProvider()),
+                    params = AiRuntime.chatParams(config),
                 ).run(question, sessionId),
             )
             // Endpoints that want a conversation id per request (the OpenCode Go gateway's
@@ -92,58 +100,46 @@ class AiFacadeImpl(
         KoogChatHistoryMapper.map(chatHistoryStore.load(sessionId))
 
     override suspend fun chatSessions(): List<AiChatSession> {
-        val sessions = chatSessionStore.load()
-        val nonEmpty = sessions.filter { chatHistoryStore.load(it.id).isNotEmpty() }
-        if (nonEmpty.size != sessions.size) chatSessionStore.save(nonEmpty)
-        if (nonEmpty.isNotEmpty()) return nonEmpty.sortedByDescending { it.updatedAt }
-        if (chatHistoryStore.load(CHAT_CONVERSATION_ID).isEmpty()) return emptyList()
-        val legacy = AiChatSession(CHAT_CONVERSATION_ID, "Assistant chat", 0L)
-        chatSessionStore.save(listOf(legacy))
-        return listOf(legacy)
+        // An untitled session was never asked in, or was cleared: listed only while it still has
+        // a conversation, which is a cheap existence check rather than a decode.
+        val listed = chatSessionStore.load().filter { it.title != null || chatHistoryStore.has(it.id) }
+        if (listed.isNotEmpty() || !chatHistoryStore.has(LEGACY_CONVERSATION_ID)) {
+            return listed.sortedByDescending { it.updatedAt }
+        }
+        // The one conversation of a build from before sessions existed, offered untitled until it
+        // is next used (ask stores it then).
+        return listOf(AiChatSession(LEGACY_CONVERSATION_ID, title = null, updatedAt = 0L))
     }
 
     @OptIn(ExperimentalUuidApi::class)
-    override suspend fun createChatSession(): AiChatSession {
-        val session = AiChatSession(Uuid.random().toString(), NEW_SESSION_TITLE, now())
-        chatSessionStore.save((chatSessionStore.load() + session).sortedByDescending { it.updatedAt })
-        return session
-    }
+    override suspend fun createChatSession(): AiChatSession = AiChatSession(Uuid.random().toString(), null, now())
 
     override suspend fun deleteChatSession(sessionId: String) {
         chatHistoryStore.delete(sessionId)
-        chatSessionStore.save(chatSessionStore.load().filterNot { it.id == sessionId })
+        editSessions { sessions -> sessions.filterNot { it.id == sessionId } }
     }
 
     override suspend fun clearChatSession(sessionId: String) {
         chatHistoryStore.delete(sessionId)
-        val sessions = chatSessionStore.load()
-        chatSessionStore.save(
-            sessions.map { session ->
-                if (session.id == sessionId) session.copy(title = NEW_SESSION_TITLE, updatedAt = now()) else session
-            },
-        )
+        editSessions { sessions ->
+            sessions.map { if (it.id == sessionId) it.copy(title = null, updatedAt = now()) else it }
+        }
     }
 
+    /** Store [sessionId] as just used, titled by its first question while it has no title yet. */
     private suspend fun touchChatSession(
         sessionId: String,
         question: String,
-    ) {
-        val sessions = chatSessionStore.load()
-        val existing = sessions.firstOrNull { it.id == sessionId }
-        val title =
-            existing?.title?.takeUnless { it == NEW_SESSION_TITLE }
-                ?: question
-                    .replace(Regex("\\s+"), " ")
-                    .trim()
-                    .take(MAX_SESSION_TITLE_CHARS)
-                    .ifBlank { NEW_SESSION_TITLE }
-        val touched =
-            (
-                sessions.filterNot { it.id == sessionId } +
-                    AiChatSession(sessionId, title, now())
-            ).sortedByDescending { it.updatedAt }
-        chatSessionStore.save(touched)
+    ) = editSessions { sessions ->
+        val title = sessions.firstOrNull { it.id == sessionId }?.title ?: AiChatSession.titleFrom(question)
+        sessions.filterNot { it.id == sessionId } + AiChatSession(sessionId, title, now())
     }
+
+    /** Read, change and store the session list as one step, newest first. */
+    private suspend fun editSessions(change: (List<AiChatSession>) -> List<AiChatSession>) =
+        sessionsMutex.withLock {
+            chatSessionStore.save(change(chatSessionStore.load()).sortedByDescending { it.updatedAt })
+        }
 
     private fun now(): Long = Clock.System.now().toEpochMilliseconds()
 
@@ -151,8 +147,8 @@ class AiFacadeImpl(
         docId: String,
         request: AiEditRequest,
     ): AiEditSuggestion {
-        val runtime = runtime()
         val config = configProvider()
+        val runtime = runtimeFor(config)
         val doc = db.documentDao().getByDocId(docId) ?: return AiEditSuggestion.EMPTY
         val text = db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() }
         // No OCR text yet: field extraction is impossible, but a tag-only run can still work off
@@ -259,8 +255,9 @@ class AiFacadeImpl(
             }
         }
 
-    private suspend fun runtime(): AiRuntime {
-        val config = configProvider()
+    private suspend fun runtime(): AiRuntime = runtimeFor(configProvider())
+
+    private suspend fun runtimeFor(config: AiConfig): AiRuntime {
         check(config.configured) { "AI endpoint is not configured (see Settings > AI assistant)" }
         val key = config.runtimeKey()
         return runtimeMutex.withLock {
@@ -296,9 +293,8 @@ class AiFacadeImpl(
     private companion object {
         const val MAX_AGENT_ITERATIONS = 15
 
-        const val CHAT_CONVERSATION_ID = "main"
-        const val NEW_SESSION_TITLE = "New chat"
-        const val MAX_SESSION_TITLE_CHARS = 60
+        /** The conversation id builds from before sessions existed stored their one chat under. */
+        const val LEGACY_CONVERSATION_ID = "main"
 
         /**
          * Calls one page may cost per attempt at its document: the call plus a single retry (see

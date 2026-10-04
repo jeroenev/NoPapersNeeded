@@ -68,7 +68,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
     fun startupOpensNewChatInsteadOfNewestSavedSession() =
         runTest(dispatcher) {
             val saved = AiChatSession("saved", "Previous chat", 2L)
-            val fresh = AiChatSession("fresh", "New chat", 3L)
+            val fresh = AiChatSession("fresh", null, 3L)
             val session =
                 FakeLibrarySession().apply {
                     aiChat.savedChatSessions = listOf(saved)
@@ -88,6 +88,30 @@ class AiChatViewModelTest : MainDispatcherTest() {
                 .map { it.id } shouldContainExactly listOf(fresh.id, saved.id)
             job.cancel()
         }
+
+    /** Untitled is null, named by the screen in the user's language; the first question titles it. */
+    @Test
+    fun aNewChatIsUntitledUntilItsFirstQuestionAndAgainAfterClear() =
+        runTest(dispatcher) {
+            val model = vm()
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.currentTitle() shouldBe null
+
+            model.send("  Which   invoices are overdue?")
+            advanceUntilIdle()
+            model.currentTitle() shouldBe "Which invoices are overdue?"
+
+            model.clear()
+            advanceUntilIdle()
+            model.currentTitle() shouldBe null
+            job.cancel()
+        }
+
+    private fun AiChatViewModel.currentTitle(): String? =
+        ui.value.sessions
+            .single { it.id == ui.value.currentSessionId }
+            .title
 
     @Test
     fun sendAppendsUserTurnAndClearsBusy() =
