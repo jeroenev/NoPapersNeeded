@@ -768,7 +768,7 @@ class LibrarySessionImpl private constructor(
                     ftsWriteGate = ftsWriteGate,
                     clock = deps.clock,
                 )
-            val ocrWorker = QueueDrainer(deps.scope) { ocrPipeline.processNext() }
+            val ocrWorker = QueueDrainer(deps.scope, "OCR queue", deps.log) { ocrPipeline.processNext() }
 
             // Single shared gate so thumbnail + page rendering share one bounded concurrency
             // budget and a first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
@@ -834,7 +834,7 @@ class LibrarySessionImpl private constructor(
                     policy = deps.unattendedAi,
                     clock = deps.clock,
                 )
-            val enrichWorker = QueueDrainer(deps.scope) { autoEnricher.processNext() }
+            val enrichWorker = QueueDrainer(deps.scope, "AI enrichment queue", deps.log) { autoEnricher.processNext() }
             val editQueue =
                 AiEditQueue(
                     dao = db.aiEditJobDao(),
@@ -846,7 +846,7 @@ class LibrarySessionImpl private constructor(
                     readConfig = deps.aiConfig,
                     clock = deps.clock,
                 )
-            val editWorker = QueueDrainer(deps.scope) { editQueue.processNext() }
+            val editWorker = QueueDrainer(deps.scope, "AI edit queue", deps.log) { editQueue.processNext() }
             // Deterministic local rules run on any newly indexed text, including a re-index.
             ocrPipeline.onTextIndexed = { docId, text -> ruleApplier.applyToDoc(docId, text) }
             // The paid pass runs only on text this device just produced. It fires after the rules
