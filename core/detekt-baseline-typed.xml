@@ -39,7 +39,6 @@
     <ID>MapGetWithNotNullAssertionOperator:NpnDatabaseTest.kt:NpnDatabaseTest$counts["empty"]!!</ID>
     <ID>MapGetWithNotNullAssertionOperator:NpnDatabaseTest.kt:NpnDatabaseTest$counts["invoice"]!!</ID>
     <ID>MatchingDeclarationName:ExternalSource.desktop.kt:ExternalSource</ID>
-    <ID>NoNameShadowing:AiOcr.kt:{ return it }</ID>
     <ID>ReturnCount:FoldedState.kt:FoldedState$fun apply</ID>
     <ID>ReturnCount:NpnPaths.kt:NpnPaths$fun indexable: Boolean</ID>
     <ID>SpreadOperator:DebouncedTest.kt:DebouncedTest$(*churn, gapMillis = 20)</ID>

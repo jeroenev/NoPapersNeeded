@@ -28,7 +28,7 @@ internal suspend fun transcribeWithRetry(
     var failure: Throwable? = null
     repeat(attempts) {
         val outcome = runCatchingCancellable { attempt() }
-        outcome.getOrNull()?.let { return it }
+        outcome.getOrNull()?.let { text -> return text }
         failure = outcome.exceptionOrNull() ?: failure
     }
     failure?.let { throw it }

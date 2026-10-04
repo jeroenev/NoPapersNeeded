@@ -110,12 +110,11 @@
     <ID>ViewModelForwarding:AiEditSetup.kt:ScopeSection(ui, preview, vm, content)</ID>
     <ID>ViewModelForwarding:AiEditSetup.kt:SetupForm(ui, preview, plan, vm, content, wide)</ID>
     <ID>ViewModelForwarding:AiEditSetup.kt:TagSection(ui, vm)</ID>
-    <ID>ViewModelInjection:AiChatScreen.kt:val vm: AiChatViewModel = viewModel { AiChatViewModel(session) }</ID>
     <ID>ViewModelInjection:AiEditReviewScreen.kt:val vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) }</ID>
     <ID>ViewModelInjection:AiEditScreen.kt:val vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) }</ID>
     <ID>ViewModelInjection:AutoMatchRulesScreen.kt:val vm: AutoMatchRulesViewModel = viewModel { AutoMatchRulesViewModel(session) }</ID>
-    <ID>ViewModelInjection:DocDetailScreen.kt:val vm: DocDetailViewModel = viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") { DocDetailViewModel(docId, session, searchQuery) }</ID>
-    <ID>ViewModelInjection:DocPreviewPanel.kt:val vm: DocDetailViewModel = viewModel { DocDetailViewModel(docId, session, initialItem = item) }</ID>
+    <ID>ViewModelInjection:DocDetailScreen.kt:val vm: DocDetailViewModel = viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") { DocDetailViewModel(docId, session, settings, searchQuery) }</ID>
+    <ID>ViewModelInjection:DocPreviewPanel.kt:val vm: DocDetailViewModel = viewModel { DocDetailViewModel(docId, session, settings, initialItem = item) }</ID>
     <ID>ViewModelInjection:LibraryScreen.kt:val vm: LibraryViewModel = viewModel { LibraryViewModel(session, env.settings) }</ID>
     <ID>ViewModelInjection:QueueScreen.kt:val vm: QueueViewModel = viewModel { QueueViewModel(session) }</ID>
     <ID>ViewModelInjection:SettingsScreen.kt:val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }</ID>

@@ -124,8 +124,8 @@ fun AiChatScreen(
     showAiEdit: Boolean,
     /** Hands off to the AI-edit page without preselection. */
     onAiEdit: () -> Unit,
+    vm: AiChatViewModel = viewModel { AiChatViewModel(session, settings) },
 ) {
-    val vm: AiChatViewModel = viewModel { AiChatViewModel(session, settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
