@@ -16,8 +16,8 @@ import kotlin.uuid.Uuid
 /**
  * Desktop [SettingsRepository] persisted to a `settings.properties` file under
  * the platform config dir (`no-papers-needed/` in XDG_CONFIG_HOME on Unix,
- * %APPDATA% on Windows). Values are held in a [MutableStateFlow] loaded at init; writes
- * update the flow and persist synchronously on [Dispatchers.IO].
+ * %APPDATA% on Windows). Values are held in a [MutableStateFlow] loaded at init; a write
+ * persists synchronously on [Dispatchers.IO], then updates the flow.
  *
  * A plain properties file sidesteps okio/path
  * fiddling on desktop and is enough for a handful of app-global settings.
@@ -119,8 +119,9 @@ class SettingsRepositoryImpl(
     override suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
         persistMutex.withLock {
             val next = SettingsCodec.normalise(transform(state.value))
-            state.value = next
+            // Persist first: a write that fails leaves the flow showing what is on disk.
             persist(next)
+            state.value = next
         }
 
     override suspend fun legacyLibrarySettings(): LegacyLibrarySettings = SettingsCodec.legacyLibrarySettings(reader)

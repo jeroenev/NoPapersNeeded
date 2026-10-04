@@ -7,9 +7,11 @@ import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermission
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 class SettingsRepositoryImplTest {
     @Test
@@ -55,6 +57,24 @@ class SettingsRepositoryImplTest {
                 snapshot.aiBaseUrl shouldBe "https://example.test"
                 snapshot.aiApiKey shouldBe "secret"
                 snapshot.aiModel shouldBe "model"
+            } finally {
+                directory.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
+    fun aFailedWriteLeavesTheSettingsAsTheyAreOnDisk() =
+        runTest {
+            val directory = Files.createTempDirectory("npn-settings-test")
+            try {
+                // A directory where the file belongs: every write fails.
+                val file = Files.createDirectory(directory.resolve("settings.properties")).toFile()
+                val repository = SettingsRepositoryImpl(file)
+                val before = repository.settings.first()
+
+                assertFailsWith<IOException> { repository.edit { it.copy(aiModel = "model") } }
+
+                repository.settings.first() shouldBe before
             } finally {
                 directory.toFile().deleteRecursively()
             }
