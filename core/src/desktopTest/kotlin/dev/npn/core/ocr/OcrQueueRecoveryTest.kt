@@ -2,6 +2,7 @@ package dev.npn.core.ocr
 
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.pdf.PdfFixtures
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
@@ -66,7 +67,7 @@ class OcrQueueRecoveryTest {
             hanging.started.await()
             job.cancelAndJoin()
 
-            val entry = rig.deviceDb.ocrQueueDao().getByDocId(docId)!!
+            val entry = rig.deviceDb.ocrQueueDao().getByDocId(docId).shouldNotBeNull()
             entry.state shouldBe OcrPipeline.STATE_PENDING
             // Cancellation is not the document's fault, so it costs it nothing: three interrupted
             // app sessions must not spend the attempt cap on a scan that was never even read.
@@ -77,7 +78,7 @@ class OcrQueueRecoveryTest {
 
             rig.deviceDb
                 .ocrQueueDao()
-                .getByDocId(docId)!!
+                .getByDocId(docId).shouldNotBeNull()
                 .state shouldBe OcrPipeline.STATE_DONE
             db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
         }
@@ -95,7 +96,7 @@ class OcrQueueRecoveryTest {
 
             rig.deviceDb
                 .ocrQueueDao()
-                .getByDocId(docId)!!
+                .getByDocId(docId).shouldNotBeNull()
                 .state shouldBe OcrPipeline.STATE_DONE
         }
 
@@ -110,7 +111,7 @@ class OcrQueueRecoveryTest {
 
             assertFailsWith<CancellationException> { pipe.processNext() }
 
-            val entry = rig.deviceDb.ocrQueueDao().getByDocId(docId)!!
+            val entry = rig.deviceDb.ocrQueueDao().getByDocId(docId).shouldNotBeNull()
             entry.state shouldBe OcrPipeline.STATE_PENDING
             entry.attempts shouldBe 0
             entry.lastError shouldBe null
@@ -132,7 +133,7 @@ class OcrQueueRecoveryTest {
             engine.calls shouldBe 0
             rig.deviceDb
                 .ocrQueueDao()
-                .getByDocId(docId)!!
+                .getByDocId(docId).shouldNotBeNull()
                 .state shouldBe OcrPipeline.STATE_FAILED
         }
 }

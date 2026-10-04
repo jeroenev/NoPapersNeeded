@@ -8,7 +8,6 @@
     <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
     <ID>LoopWithTooManyJumpStatements:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$while</ID>
     <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
-    <ID>LoopWithTooManyJumpStatements:SavedViewRepositoryImpl.kt:SavedViewRepositoryImpl$for</ID>
     <ID>LoopWithTooManyJumpStatements:XmpParser.kt:XmpParser$while</ID>
     <ID>MatchingDeclarationName:ExternalSource.desktop.kt:ExternalSource</ID>
     <ID>ReturnCount:FoldedState.kt:FoldedState$fun apply</ID>

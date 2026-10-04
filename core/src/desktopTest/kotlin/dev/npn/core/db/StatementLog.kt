@@ -61,7 +61,7 @@ fun recordingDatabase(
     return Room
         .databaseBuilder<NpnDatabase>(name = file.absolutePath)
         .setDriver(log)
-        .addMigrations(*NpnDatabase.MIGRATIONS)
+        .let(NpnDatabase::withMigrations)
         .build()
 }
 

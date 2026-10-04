@@ -22,8 +22,6 @@
     <ID>InjectDispatcher:JvmLibraryFileSystemTest.kt:JvmLibraryFileSystemTest$IO</ID>
     <ID>InjectDispatcher:JvmWatchedFolder.kt:JvmWatchedFolder$IO</ID>
     <ID>InjectDispatcher:LocalLibraryFolders.kt:LocalLibraryFolders$IO</ID>
-    <ID>InjectDispatcher:NpnDatabase.android.kt:IO</ID>
-    <ID>InjectDispatcher:NpnDatabase.desktop.kt:IO</ID>
     <ID>InjectDispatcher:PdfBoxAndroidEngine.kt:PdfBoxAndroidEngine$IO</ID>
     <ID>InjectDispatcher:PdfBoxAndroidXmpIO.kt:PdfBoxAndroidXmpIO$IO</ID>
     <ID>InjectDispatcher:PdfBoxEngine.kt:PdfBoxEngine$IO</ID>
@@ -37,7 +35,6 @@
     <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
     <ID>LoopWithTooManyJumpStatements:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$while</ID>
     <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
-    <ID>LoopWithTooManyJumpStatements:SavedViewRepositoryImpl.kt:SavedViewRepositoryImpl$for</ID>
     <ID>LoopWithTooManyJumpStatements:XmpParser.kt:XmpParser$while</ID>
     <ID>MapGetWithNotNullAssertionOperator:AdaptersTest.kt:AdaptersTest$byDevice["devA"]!!</ID>
     <ID>MapGetWithNotNullAssertionOperator:AdaptersTest.kt:AdaptersTest$byDevice["devB"]!!</ID>
@@ -57,7 +54,6 @@
     <ID>UnsafeCallOnNullableType:AdaptersTest.kt:AdaptersTest$byDevice["devB"]!!</ID>
     <ID>UnsafeCallOnNullableType:AiAutoEnricherRig.kt:Rig$db.documentDao().getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:AiOcrPipelineTest.kt:AiOcrPipelineTest$db.documentDao().getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:AiOcrPipelineTest.kt:AiOcrPipelineTest$db.ocrQueueDao().getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:CompactionReconcileTest.kt:CompactionReconcileTest$db.documentDao().rowAtPath("a.pdf")!!</ID>
     <ID>UnsafeCallOnNullableType:CompactionReconcileTest.kt:CompactionReconcileTest$db.metadataProjectionDao().state()!!</ID>
     <ID>UnsafeCallOnNullableType:DocumentPathReplicationTest.kt:DocumentPathReplicationTest$a.db .documentDao() .getByDocId(hash)!!</ID>
@@ -101,14 +97,12 @@
     <ID>UnsafeCallOnNullableType:NpnDatabaseTest.kt:NpnDatabaseTest$dao.getByDocId("a".repeat(64))!!</ID>
     <ID>UnsafeCallOnNullableType:OcrPipelineForeignEmbeddedTest.kt:OcrPipelineForeignEmbeddedTest$rig.db .documentDao() .getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:OcrPipelineHookTest.kt:OcrPipelineHookTest$rig.db .documentDao() .getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrPipelineRerunTest.kt:OcrPipelineRerunTest$rig.db .ocrQueueDao() .getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:OcrPipelineStaleFileTest.kt:OcrPipelineStaleFileTest$rig.db .documentDao() .getByDocId(realId)!!</ID>
     <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$db.documentDao().getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$dbB.documentDao().getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$repo .observeDoc(docId) .first()!!</ID>
     <ID>UnsafeCallOnNullableType:OcrPipelineTest.kt:OcrPipelineTest$repo.observeDoc(docId).first()!!</ID>
     <ID>UnsafeCallOnNullableType:OcrQueueRecoveryTest.kt:OcrQueueRecoveryTest$db.documentDao().getByDocId(docId)!!</ID>
-    <ID>UnsafeCallOnNullableType:OcrQueueRecoveryTest.kt:OcrQueueRecoveryTest$db.ocrQueueDao().getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().getByDocId(a)!!</ID>
     <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().getByDocId(b)!!</ID>
     <ID>UnsafeCallOnNullableType:ReconcilePerfTest.kt:ReconcilePerfTest$db.documentDao().rowAtPath("a.pdf")!!</ID>
@@ -142,7 +136,6 @@
     <ID>UseOrEmpty:AiText.kt:AiText$(this[key] as? JsonArray) ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -&gt; p.isString }?.contentOrNull } ?.map { it.trim() } ?.filter { it.isNotEmpty() } ?: emptyList()</ID>
     <ID>UseOrEmpty:AutoMatchRuleEntity.kt:tags?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()</ID>
     <ID>UseOrEmpty:FoldedState.kt:FoldedState$props[doc]?.mapValues { it.value.value } ?: emptyMap()</ID>
-    <ID>UseOrEmpty:RoomChatHistoryProvider.kt:RoomChatHistoryProvider$db.keyValueDao().get(key(conversationId))?.let { runCatching { json.decodeFromString(ListSerializer(Message.serializer()), it).let(::sanitize) }.getOrDefault(emptyList()) } ?: emptyList()</ID>
     <ID>UseOrEmpty:StoragePathTemplate.kt:StoragePathTemplate$value ?: ""</ID>
     <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(supersedes != null) { "Snapshot manifest supersedes must be an array" }</ID>
     <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(version != null) { "Snapshot manifest version must be an integer" }</ID>

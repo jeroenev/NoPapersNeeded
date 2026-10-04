@@ -52,7 +52,7 @@ class OcrPipelineRerunTest {
             rig.db.ftsDao().searchDocIds("first") shouldContainExactly emptyList()
             rig.deviceDb
                 .ocrQueueDao()
-                .getByDocId(docId)!!
+                .getByDocId(docId).shouldNotBeNull()
                 .rerun shouldBe false
         }
 

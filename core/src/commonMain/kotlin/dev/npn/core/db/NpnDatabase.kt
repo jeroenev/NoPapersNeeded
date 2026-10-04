@@ -188,10 +188,11 @@ abstract class NpnDatabase : RoomDatabase() {
 
     companion object {
         /**
-         * The migrations Room cannot generate, which every builder adds. Without one for a version
+         * Add the migrations Room cannot generate; every builder must. Without one for a version
          * step, the builders' destructive fallback would drop the whole index instead.
          */
-        val MIGRATIONS: Array<Migration> = arrayOf(SavedViewsLeave, DeviceStateLeaves)
+        fun withMigrations(builder: Builder<NpnDatabase>): Builder<NpnDatabase> =
+            builder.addMigrations(SavedViewsLeave, DeviceStateLeaves)
     }
 }
 

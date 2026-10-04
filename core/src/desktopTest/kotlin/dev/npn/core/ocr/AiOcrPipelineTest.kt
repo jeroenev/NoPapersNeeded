@@ -4,6 +4,7 @@ import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.AfterTest
@@ -145,7 +146,7 @@ class AiOcrPipelineTest {
 
             rig.deviceDb
                 .ocrQueueDao()
-                .getByDocId(docId)!!
+                .getByDocId(docId).shouldNotBeNull()
                 .state shouldBe OcrPipeline.STATE_DONE
         }
 
@@ -174,7 +175,7 @@ class AiOcrPipelineTest {
             ai.calls shouldBe 3
             rig.deviceDb
                 .ocrQueueDao()
-                .getByDocId(docId)!!
+                .getByDocId(docId).shouldNotBeNull()
                 .state shouldBe OcrPipeline.STATE_DONE
         }
 

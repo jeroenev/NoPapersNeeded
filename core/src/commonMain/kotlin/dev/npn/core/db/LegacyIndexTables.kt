@@ -10,7 +10,7 @@ import androidx.sqlite.SQLiteStatement
 
 /**
  * Tables older index schemas held that the current one does not: data the index used to keep but
- * cannot rebuild. A migration leaves them in place (see [NpnDatabase.MIGRATIONS]), since it sees
+ * cannot rebuild. A migration leaves them in place (see [NpnDatabase.withMigrations]), since it sees
  * only this database; the session moves their rows to where that data lives now, then drops them.
  * Read as plain SQL, because they are no longer part of the schema Room knows.
  */
