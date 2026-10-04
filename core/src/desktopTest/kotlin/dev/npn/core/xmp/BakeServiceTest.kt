@@ -120,7 +120,7 @@ class BakeServiceTest {
                 }
 
             var relinkCalled = false
-            assertFailsWith<IllegalStateException> {
+            assertFailsWith<BakeRefusedException> {
                 BakeService(fs, brokenIo).bakeInPlace("doc.pdf", xmp(tags = listOf("t"))) { _, _ ->
                     relinkCalled = true
                 }
@@ -167,7 +167,7 @@ class BakeServiceTest {
             fs.writeBytesOnce("doc.pdf", "not a pdf".encodeToByteArray())
             val before = fs.readBytes("doc.pdf")
 
-            assertFailsWith<Throwable> {
+            assertFailsWith<BakeRefusedException> {
                 BakeService(fs, io).bakeInPlace("doc.pdf", xmp(tags = listOf("t"))) { _, _ -> }
             }
             fs.readBytes("doc.pdf") shouldBe before

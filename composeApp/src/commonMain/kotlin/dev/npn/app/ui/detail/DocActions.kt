@@ -38,11 +38,9 @@ import no_papers_needed.composeapp.generated.resources.detail_ai_ocr
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_confirm
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large_prompt
-import no_papers_needed.composeapp.generated.resources.detail_bake_failed
 import no_papers_needed.composeapp.generated.resources.detail_bake_in_place
 import no_papers_needed.composeapp.generated.resources.detail_bake_metadata_in_place
 import no_papers_needed.composeapp.generated.resources.detail_bake_prompt
-import no_papers_needed.composeapp.generated.resources.detail_baked_in_place
 import no_papers_needed.composeapp.generated.resources.detail_baking
 import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_copy
 import no_papers_needed.composeapp.generated.resources.detail_export_baked_copy
@@ -311,7 +309,16 @@ private fun DocActionDialogs(
         }
 
         DocActionDialog.BAKE -> {
-            BakeDialog(vm = vm, snackbar = snackbar, onDismiss = onDismiss)
+            ConfirmDialog(
+                title = stringResource(Res.string.detail_bake_metadata_in_place),
+                message = stringResource(Res.string.detail_bake_prompt),
+                confirmLabel = stringResource(Res.string.detail_bake_in_place),
+                onConfirm = {
+                    onDismiss()
+                    vm.bakeInPlace()
+                },
+                onDismiss = onDismiss,
+            )
         }
 
         DocActionDialog.AI_OCR -> {
@@ -343,35 +350,6 @@ private fun DocActionDialogs(
 
         null -> {}
     }
-}
-
-@Composable
-private fun BakeDialog(
-    vm: DocDetailViewModel,
-    snackbar: SnackbarHostState,
-    onDismiss: () -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    ConfirmDialog(
-        title = stringResource(Res.string.detail_bake_metadata_in_place),
-        message = stringResource(Res.string.detail_bake_prompt),
-        confirmLabel = stringResource(Res.string.detail_bake_in_place),
-        onConfirm = {
-            onDismiss()
-            vm.bakeInPlace { ok ->
-                scope.launch {
-                    snackbar.showSnackbar(
-                        if (ok) {
-                            getString(Res.string.detail_baked_in_place)
-                        } else {
-                            getString(Res.string.detail_bake_failed)
-                        },
-                    )
-                }
-            }
-        },
-        onDismiss = onDismiss,
-    )
 }
 
 internal fun exportName(item: DocListItem): String {

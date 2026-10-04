@@ -1,11 +1,12 @@
 package dev.npn.app
 
+import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.DocContentFacade
 
 class FakeDocContentFacade : DocContentFacade {
     var pageCountValue: Int? = null
     var failPageCount: (() -> Nothing)? = null
-    var bakeResult: Boolean = true
+    var bakeResult: BakeOutcome = BakeOutcome.Baked
     var failBake: (() -> Nothing)? = null
     var bakedBytes: ByteArray? = null
     val bakedInPlace = mutableListOf<String>()
@@ -25,7 +26,7 @@ class FakeDocContentFacade : DocContentFacade {
 
     override suspend fun bakedCopyBytes(docId: String): ByteArray? = bakedBytes
 
-    override suspend fun bakeInPlace(docId: String): Boolean {
+    override suspend fun bakeInPlace(docId: String): BakeOutcome {
         failBake?.invoke()
         bakedInPlace += docId
         return bakeResult

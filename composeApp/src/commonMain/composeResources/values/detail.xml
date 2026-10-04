@@ -17,7 +17,7 @@
     <string name="detail_bake_prompt">This rewrites the library file itself to embed tags and properties as XMP. The file's content hash changes and the rewrite syncs to other devices. Prefer Export for a portable copy that leaves the library untouched. Continue?</string>
     <string name="detail_bake_in_place">Update original PDF</string>
     <string name="detail_baked_in_place">Original PDF updated</string>
-    <string name="detail_bake_failed">Bake failed</string>
+    <string name="detail_bake_failed">Could not update the original PDF: %1$s</string>
     <string name="detail_document_position">%1$d of %2$d</string>
     <string name="detail_previous_document">Previous document</string>
     <string name="detail_next_document">Next document</string>
@@ -163,4 +163,7 @@
     <string name="detail_split_failed_invalid_parts">Could not split the document: the parts must cover every page once, in order.</string>
     <string name="detail_split_failed_unreadable">Could not split the document: the PDF could not be read.</string>
     <string name="detail_split_failed_not_completed">Could not split the document. The library was left as it was.</string>
+    <string name="detail_bake_failed_unavailable">Could not update the original PDF: the document is no longer in the library.</string>
+    <string name="detail_bake_failed_unsupported">Could not update the original PDF: this PDF cannot carry the tags and details. It was left unchanged.</string>
+    <string name="detail_bake_failed_not_saved">Could not save the updated PDF to the library.</string>
 </resources>

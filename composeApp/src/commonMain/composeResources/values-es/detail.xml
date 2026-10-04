@@ -17,7 +17,7 @@
     <string name="detail_bake_prompt">Esto reescribe el propio archivo de la biblioteca para incrustar etiquetas y propiedades como XMP. El hash del contenido del archivo cambia y la reescritura se sincroniza con otros dispositivos. Para una copia portátil sin tocar la biblioteca, usa Exportar. ¿Continuar?</string>
     <string name="detail_bake_in_place">Actualizar PDF original</string>
     <string name="detail_baked_in_place">PDF original actualizado</string>
-    <string name="detail_bake_failed">Falló la incrustación</string>
+    <string name="detail_bake_failed">No se pudo actualizar el PDF original: %1$s</string>
     <string name="detail_document_position">%1$d de %2$d</string>
     <string name="detail_previous_document">Documento anterior</string>
     <string name="detail_next_document">Documento siguiente</string>
@@ -158,4 +158,7 @@
     <string name="detail_split_failed_invalid_parts">No se pudo dividir el documento: las partes deben cubrir cada página una sola vez y en orden.</string>
     <string name="detail_split_failed_unreadable">No se pudo dividir el documento: no se pudo leer el PDF.</string>
     <string name="detail_split_failed_not_completed">No se pudo dividir el documento. La biblioteca no ha cambiado.</string>
+    <string name="detail_bake_failed_unavailable">No se pudo actualizar el PDF original: el documento ya no está en la biblioteca.</string>
+    <string name="detail_bake_failed_unsupported">No se pudo actualizar el PDF original: este PDF no puede contener las etiquetas y los detalles. No se ha modificado.</string>
+    <string name="detail_bake_failed_not_saved">No se pudo guardar el PDF actualizado en la biblioteca.</string>
 </resources>

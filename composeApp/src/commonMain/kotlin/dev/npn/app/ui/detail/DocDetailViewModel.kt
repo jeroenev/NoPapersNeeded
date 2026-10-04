@@ -19,6 +19,8 @@ import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
+import dev.npn.core.app.BakeFailure
+import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
@@ -51,6 +53,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.detail_bake_failed
+import no_papers_needed.composeapp.generated.resources.detail_bake_failed_not_saved
+import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unavailable
+import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unsupported
+import no_papers_needed.composeapp.generated.resources.detail_baked_in_place
 import no_papers_needed.composeapp.generated.resources.detail_split_failed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_invalid_parts
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_not_completed
@@ -553,15 +560,23 @@ class DocDetailViewModel(
         }
     }
 
-    // Failure is reported through onResult(false); the screen owns the message.
-    fun bakeInPlace(onResult: (Boolean) -> Unit) {
-        viewModelScope.launch {
+    /** Rewrite the library file with this document's metadata, and say how that went. */
+    fun bakeInPlace() =
+        launchReporting({ reason -> uiText(Res.string.detail_bake_failed, reason) }) {
             _ui.update { it.copy(baking = true) }
-            val ok = runCatchingCancellable { content.bakeInPlace(docId) }.getOrDefault(false)
-            _ui.update { it.copy(baking = false) }
-            onResult(ok)
+            val outcome =
+                try {
+                    content.bakeInPlace(docId)
+                } finally {
+                    _ui.update { it.copy(baking = false) }
+                }
+            message(
+                when (outcome) {
+                    BakeOutcome.Baked -> uiText(Res.string.detail_baked_in_place)
+                    is BakeOutcome.Failed -> outcome.reason.text()
+                },
+            )
         }
-    }
 
     suspend fun bakedCopyBytes(): ByteArray? = runCatchingCancellable { content.bakedCopyBytes(docId) }.getOrNull()
 
@@ -570,6 +585,13 @@ class DocDetailViewModel(
         maxDim: Int,
     ): ByteArray? = runCatchingCancellable { content.renderPage(docId, pageIndex, maxDim) }.getOrNull()
 }
+
+private fun BakeFailure.text(): UiText =
+    when (this) {
+        BakeFailure.DOCUMENT_UNAVAILABLE -> uiText(Res.string.detail_bake_failed_unavailable)
+        BakeFailure.UNSUPPORTED_PDF -> uiText(Res.string.detail_bake_failed_unsupported)
+        BakeFailure.NOT_SAVED -> uiText(Res.string.detail_bake_failed_not_saved)
+    }
 
 private fun SplitFailure.text(): UiText =
     when (this) {

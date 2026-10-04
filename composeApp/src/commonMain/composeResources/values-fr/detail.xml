@@ -17,7 +17,7 @@
     <string name="detail_bake_prompt">Cela réécrit le fichier de la bibliothèque pour y intégrer les étiquettes et les informations au format XMP. L’empreinte du fichier change et la réécriture est synchronisée avec vos autres appareils. Préférez l’export pour obtenir une copie portable qui laisse la bibliothèque intacte. Continuer ?</string>
     <string name="detail_bake_in_place">Mettre à jour le PDF</string>
     <string name="detail_baked_in_place">PDF d’origine mis à jour</string>
-    <string name="detail_bake_failed">Échec de l’intégration</string>
+    <string name="detail_bake_failed">Impossible de mettre à jour le PDF d’origine : %1$s</string>
     <string name="detail_document_position">%1$d sur %2$d</string>
     <string name="detail_previous_document">Document précédent</string>
     <string name="detail_next_document">Document suivant</string>
@@ -158,4 +158,7 @@
     <string name="detail_split_failed_invalid_parts">Impossible de diviser le document : les parties doivent couvrir chaque page une seule fois, dans l’ordre.</string>
     <string name="detail_split_failed_unreadable">Impossible de diviser le document : le PDF n’a pas pu être lu.</string>
     <string name="detail_split_failed_not_completed">Impossible de diviser le document. La bibliothèque est restée inchangée.</string>
+    <string name="detail_bake_failed_unavailable">Impossible de mettre à jour le PDF d’origine : le document n’est plus dans la bibliothèque.</string>
+    <string name="detail_bake_failed_unsupported">Impossible de mettre à jour le PDF d’origine : ce PDF ne peut pas contenir les étiquettes et les informations. Il est resté inchangé.</string>
+    <string name="detail_bake_failed_not_saved">Impossible d’enregistrer le PDF mis à jour dans la bibliothèque.</string>
 </resources>

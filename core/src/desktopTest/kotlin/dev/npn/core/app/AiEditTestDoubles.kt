@@ -176,7 +176,7 @@ internal class FakeContent : DocContentFacade {
 
     override suspend fun bakedCopyBytes(docId: String): ByteArray? = error("unused")
 
-    override suspend fun bakeInPlace(docId: String): Boolean = error("unused")
+    override suspend fun bakeInPlace(docId: String): BakeOutcome = error("unused")
 
     override suspend fun rawBytes(docId: String): ByteArray? = error("unused")
 

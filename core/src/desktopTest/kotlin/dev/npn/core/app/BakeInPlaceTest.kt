@@ -2,7 +2,8 @@ package dev.npn.core.app
 
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
-import io.kotest.matchers.booleans.shouldBeTrue
+import dev.npn.core.util.RecordingLog
+import dev.npn.core.xmp.BakeRefusedException
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
@@ -24,9 +25,7 @@ class BakeInPlaceTest {
                     fields = mapOf(FieldKeys.TITLE to "Water bill", FieldKeys.CORRESPONDENT to "Aquafin"),
                 )
 
-                rig.session.content
-                    .bakeInPlace(before)
-                    .shouldBeTrue()
+                rig.session.content.bakeInPlace(before) shouldBe BakeOutcome.Baked
 
                 val after = rig.docId("a.pdf")
                 after shouldNotBe before
@@ -46,6 +45,42 @@ class BakeInPlaceTest {
                     .documentDao()
                     .getByDocId(before)
                     ?.deleted shouldBe true
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun aDocumentThatIsGoneIsNotBaked() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+
+                rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun aFileThatCannotCarryMetadataIsRefusedAndLeftAlone() =
+        runTest {
+            val log = RecordingLog()
+            val rig = AppSessionRig.create(backgroundScope, log = log)
+            try {
+                val bytes = "not really a pdf".encodeToByteArray()
+                rig.writePdf("broken.pdf", bytes)
+                rig.session.rescan()
+                val id = rig.docId("broken.pdf")
+
+                rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Failed(BakeFailure.UNSUPPORTED_PDF)
+
+                rig.docId("broken.pdf") shouldBe id
+                log.entries.any { it.error is BakeRefusedException } shouldBe true
             } finally {
                 rig.close()
             }

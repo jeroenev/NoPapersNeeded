@@ -8,6 +8,12 @@ import dev.npn.core.util.runLogged
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
+/** The PDF cannot carry baked metadata, or the rewrite did not verify; the library file is untouched. */
+class BakeRefusedException(
+    message: String,
+    cause: Throwable? = null,
+) : IllegalStateException(message, cause)
+
 /** Outcome of [BakeService.bakeInPlace]. */
 data class BakeResult(
     val oldSha256: String,
@@ -73,7 +79,8 @@ class BakeService(
      * inside that window leaves the temp file (`*.npnbake.tmp`, the baked bytes) next to the
      * missing original as recovery material.
      *
-     * On verification failure the temp file is removed and the original is left untouched.
+     * A PDF that cannot carry the metadata, or a rewrite that does not verify, throws
+     * [BakeRefusedException]: the temp file is removed and the original is left untouched.
      */
     suspend fun bakeInPlace(
         relPath: String,
@@ -86,7 +93,10 @@ class BakeService(
         val src = fs.readBytes(norm)
         // Ensure documentId reflects the pre-bake identity when the caller did not set one.
         val effectiveData = if (data.documentId == null) data.copy(documentId = oldSha) else data
-        val bakedBytes = bake(src, effectiveData)
+        val bakedBytes =
+            runCatchingCancellable { bake(src, effectiveData) }.getOrElse {
+                throw BakeRefusedException("$norm cannot carry baked metadata", it)
+            }
 
         val tmpPath = norm + tmpSuffix
         // Clean any stale temp from a prior interrupted bake so writeBytesOnce does not fail.
@@ -98,7 +108,7 @@ class BakeService(
         if (!verified) {
             // Left behind, the next bake of this document removes it first.
             log.runLogged("Removing the unverified bake of $norm") { fs.delete(tmpPath) }
-            error("Bake verification failed for $norm; original left untouched")
+            throw BakeRefusedException("Bake verification failed for $norm; original left untouched")
         }
 
         // Non-atomic replace: delete original, then move temp into place.

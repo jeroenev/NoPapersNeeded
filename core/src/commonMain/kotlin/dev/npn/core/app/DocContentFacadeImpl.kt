@@ -7,7 +7,10 @@ import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.warn
+import dev.npn.core.xmp.BakeRefusedException
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.NpnXmpData
 
@@ -21,9 +24,9 @@ import dev.npn.core.xmp.NpnXmpData
  *   bake. In-place bake relinks the new hash through [RelinkService], whose rescan carries the
  *   document's tags and fields onto it and marks the old row superseded.
  *
- * All failure paths return null/false and are logged to [log]. The calls that write (the
- * thumbnail cache, the page-count backfill, an in-place bake) run as the session's owned work, so
- * closing the session waits for them before its database is closed.
+ * Reads return null on failure and an in-place bake a [BakeOutcome.Failed]; both log the cause to
+ * [log]. The calls that write (the thumbnail cache, the page-count backfill, an in-place bake) run
+ * as the session's owned work, so closing the session waits for them before its database is closed.
  */
 class DocContentFacadeImpl internal constructor(
     private val lifetime: SessionLifetime,
@@ -94,17 +97,23 @@ class DocContentFacadeImpl internal constructor(
         return log.runLogged("Baking a copy of $docId") { bakeService.bakeToBytes(doc.relPath, buildXmpData(docId)) }
     }
 
-    override suspend fun bakeInPlace(docId: String): Boolean = lifetime.owned { bake(docId) }
+    override suspend fun bakeInPlace(docId: String): BakeOutcome = lifetime.owned { bake(docId) }
 
-    private suspend fun bake(docId: String): Boolean {
-        val doc = documentDao.getByDocId(docId) ?: return false
-        return log.runLogged("Baking $docId in place") {
+    private suspend fun bake(docId: String): BakeOutcome {
+        val doc =
+            documentDao.getByDocId(docId)?.takeUnless { it.trashed || it.deleted || it.missing }
+                ?: return BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
+        return runCatchingCancellable {
             // Rewritten bytes whose relink is then refused would orphan the metadata on the old hash.
             coordinator.checkWritable()
             bakeService.bakeInPlace(doc.relPath, buildXmpData(docId)) { oldSha, newSha ->
                 relinkService.applyRelink(oldSha, newSha)
             }
-        } != null
+            BakeOutcome.Baked
+        }.getOrElse { failure ->
+            log.warn("Baking $docId in place failed", failure)
+            BakeOutcome.Failed(if (failure is BakeRefusedException) BakeFailure.UNSUPPORTED_PDF else BakeFailure.NOT_SAVED)
+        }
     }
 
     /** Assemble the XMP payload from the current DB row, its tags and its field rows. */

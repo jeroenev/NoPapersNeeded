@@ -5,6 +5,8 @@ import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
+import dev.npn.core.app.BakeFailure
+import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.SplitFailure
@@ -444,26 +446,53 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun bakeInPlaceReturnsResultAndClearsBusy() =
+    fun aBakeThatWorkedSaysSo() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { content.bakeResult = true }
+            val session = FakeLibrarySession()
             val model = vm(session = session)
-            var result: Boolean? = null
-            model.bakeInPlace { result = it }
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+
+            model.bakeInPlace()
             advanceUntilIdle()
-            result shouldBe true
+            collector.cancel()
+
+            messages shouldContainExactly listOf("Original PDF updated")
+            session.content.bakedInPlace shouldContainExactly listOf("doc-1")
             model.ui.value.baking shouldBe false
         }
 
     @Test
-    fun bakeInPlaceFailureReturnsFalse() =
+    fun aBakeThatWasRefusedSaysWhy() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { content.failBake = { error("no perms") } }
+            val session =
+                FakeLibrarySession().apply { content.bakeResult = BakeOutcome.Failed(BakeFailure.UNSUPPORTED_PDF) }
             val model = vm(session = session)
-            var result: Boolean? = null
-            model.bakeInPlace { result = it }
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+
+            model.bakeInPlace()
             advanceUntilIdle()
-            result shouldBe false
+            collector.cancel()
+
+            val refused = "Could not update the original PDF: this PDF cannot carry the tags and details."
+            messages shouldContainExactly listOf("$refused It was left unchanged.")
+            model.ui.value.baking shouldBe false
+        }
+
+    @Test
+    fun aBakeThatThrewIsReported() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { content.failBake = { error("Library session is closed") } }
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+
+            model.bakeInPlace()
+            advanceUntilIdle()
+            collector.cancel()
+
+            messages shouldContainExactly listOf("Could not update the original PDF: Library session is closed")
             model.ui.value.baking shouldBe false
         }
 
