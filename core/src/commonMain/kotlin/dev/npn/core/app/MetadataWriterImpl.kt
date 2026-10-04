@@ -293,8 +293,7 @@ class MetadataWriterImpl(
         relocate(docId) { doc ->
             val clean = NpnPaths.sanitizeFileName(newFileName.trim()).ifEmpty { return@relocate null }
             val dir = NpnPaths.parentDir(doc.relPath)
-            val target = if (dir.isEmpty()) clean else "$dir/$clean"
-            target to clean
+            if (dir.isEmpty()) clean else "$dir/$clean"
         }
     }
 
@@ -304,18 +303,17 @@ class MetadataWriterImpl(
     ) {
         relocate(docId) { doc ->
             val dir = NpnPaths.normalize(newDirRelPath)
-            val target = if (dir.isEmpty()) doc.fileName else "$dir/${doc.fileName}"
-            target to NpnPaths.fileName(target)
+            if (dir.isEmpty()) doc.fileName else "$dir/${doc.fileName}"
         }
     }
 
     private suspend fun relocate(
         docId: String,
-        destination: (DocumentEntity) -> Pair<String, String>?,
+        destination: (DocumentEntity) -> String?,
     ) {
         val doc = documentDao.getByDocId(docId) ?: return
         if (doc.trashed || doc.deleted || doc.missing) return
-        val (target, _) = destination(doc) ?: return
+        val target = destination(doc) ?: return
         if (NpnPaths.normalize(target) == NpnPaths.normalize(doc.relPath)) return
         require(DocumentPaths.isDocumentPath(target)) { "Invalid document path: $target" }
         check(!fs.exists(target)) { "Target already exists: $target" }
