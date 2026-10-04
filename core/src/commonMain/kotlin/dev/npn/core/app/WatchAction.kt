@@ -71,9 +71,17 @@ internal fun watchAction(
 
         NpnPaths.JournalPath.Unknown -> {
             when {
-                rel == NpnPaths.JOURNAL_DIR || rel.startsWith("${NpnPaths.JOURNAL_DIR}/") -> WatchAction.ReconcileJournal
-                rel.startsWith("${NpnPaths.OCR_DIR}/") -> WatchAction.ReconcileOcr
-                else -> WatchAction.Rescan
+                rel == NpnPaths.JOURNAL_DIR || rel.startsWith("${NpnPaths.JOURNAL_DIR}/") -> {
+                    WatchAction.ReconcileJournal
+                }
+
+                rel.startsWith("${NpnPaths.OCR_DIR}/") -> {
+                    WatchAction.ReconcileOcr
+                }
+
+                else -> {
+                    WatchAction.Rescan
+                }
             }
         }
     }
