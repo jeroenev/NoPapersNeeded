@@ -85,7 +85,7 @@ data class AiConfig(
      */
     val autoOnOcr: Boolean = false,
     /**
-     * Whether the endpoint is this device's *automatic* OCR engine ([AiOcr]), i.e. every document
+     * Whether the endpoint is this device's *automatic* OCR engine (`AiFacadeImpl.ocrEngine`), i.e. every document
      * this device OCRs is transcribed by the vision model — including documents a lower-ranked
      * engine already did, which the pipeline then upgrades.
      *

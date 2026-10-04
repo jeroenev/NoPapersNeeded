@@ -125,7 +125,7 @@ internal object AiProviderClients {
      * included so the Anthropic/Google clients accept reasoning content on replayed assistant
      * messages (Google injects its fallback thought signature only for Thinking-capable models).
      *
-     * [LLMCapability.Vision.Image] is included because page-image OCR ([AiOcr]) sends image
+     * [LLMCapability.Vision.Image] is included because page-image OCR ([AiFacadeImpl.ocrEngine]) sends image
      * parts, and the clients reject an image for a model that does not declare it. Like Tools
      * and Thinking above, this is a claim rather than a fact: the model id is free text the
      * user typed, so nothing here can know what it really supports. A model without vision

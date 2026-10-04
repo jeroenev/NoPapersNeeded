@@ -1,7 +1,6 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiFacadeImpl
-import dev.npn.core.ai.AiOcrEngine
 import dev.npn.core.ai.RoomChatHistoryProvider
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
@@ -259,7 +258,7 @@ internal suspend fun buildOcr(
     val engines =
         OcrEngineSelector(
             local = deps.ocrEngine,
-            ai = AiOcrEngine(ai),
+            ai = ai.ocrEngine,
             aiAuto = UnattendedAiPolicy(deps.settings.aiConfig)::autoOcr,
         )
     val pipeline =

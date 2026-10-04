@@ -8,6 +8,8 @@ import dev.npn.core.app.AiTagging
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.toFieldDef
+import dev.npn.core.ocr.OcrEngine
+import dev.npn.core.ocr.OcrEngines
 import dev.npn.core.work.EndpointHealth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -20,7 +22,8 @@ import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 /**
- * Koog-backed implementation of the AI facets ([AiChat], [AiSuggest], [AiOcr]). Reads the endpoint
+ * Koog-backed implementation of the AI facets ([AiChat], [AiSuggest]) and of the vision OCR engine
+ * ([ocrEngine]). Reads the endpoint
  * configuration live on every call (settings can change between calls) and caches the built
  * runtime while the config is unchanged. Purely a read-side consumer of the Room index; all
  * writes stay with MetadataWriter/JournalCoordinator.
@@ -36,8 +39,7 @@ class AiFacadeImpl(
     ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
-    AiSuggest,
-    AiOcr {
+    AiSuggest {
     /**
      * The one cooldown of this facade's endpoint, shared by every queue that calls it (automatic
      * enrichment and queued edit runs), so they do not each probe an endpoint that is down.
@@ -208,15 +210,37 @@ class AiFacadeImpl(
         }
     }
 
-    override suspend fun ocrConfigured(): Boolean = configProvider().configured
+    /**
+     * Page transcription by the endpoint's vision model: OCR done by the LLM instead of a local
+     * engine, for scans a local engine reads badly (handwriting, tables, poor contrast, scripts the
+     * bundled models do not cover). The OCR pipeline ranks and selects it like any other engine, so
+     * its sidecar (`.npn/ocr/<hash>.<device>.ai.json`) is a normal OCR version that other replicas
+     * adopt without an endpoint of their own; and it shares this facade's cached client.
+     *
+     * A different bargain from [suggestEdits], not just a different prompt: suggestions cost one
+     * call per document off already-extracted text, this costs one call per *page* and produces the
+     * text everything else reads. That is why nothing starts it unattended without
+     * [UnattendedAiPolicy] (see `OcrEngineSelector`).
+     *
+     * [OcrEngine.recognizePng] returns the page's text, or `""` for a page the model reports as
+     * carrying none; `lang` is a hint only, since the model reads whatever the page is written in.
+     * It throws on endpoint and network errors, so a failed page fails its document's OCR run rather
+     * than silently storing a hole in the archive's text.
+     */
+    val ocrEngine: OcrEngine =
+        object : OcrEngine {
+            override val name: String = OcrEngines.AI
 
-    override suspend fun transcribePage(
-        png: ByteArray,
-        lang: String,
-    ): String {
-        val thePrompt = pagePrompt(png, lang, configProvider())
-        return transcribeWithRetry(PAGE_ATTEMPTS) { executePage(thePrompt) }
-    }
+            override suspend fun available(): Boolean = configured()
+
+            override suspend fun recognizePng(
+                png: ByteArray,
+                lang: String,
+            ): String {
+                val thePrompt = pagePrompt(png, lang, configProvider())
+                return transcribeWithRetry(PAGE_ATTEMPTS) { executePage(thePrompt) }
+            }
+        }
 
     private suspend fun executePage(thePrompt: Prompt): String? {
         val runtime = runtime()

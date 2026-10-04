@@ -2,7 +2,7 @@ package dev.npn.core.ocr
 
 /**
  * One text-recognition engine this device can run: MLKit on Android, the Tesseract CLI on desktop,
- * or the LLM vision engine (`dev.npn.core.ai.AiOcrEngine`) when an AI endpoint is configured.
+ * or the LLM vision engine (`dev.npn.core.ai.AiFacadeImpl.ocrEngine`) when an AI endpoint is configured.
  *
  * Engines are interchangeable and ranked against each other by [OcrEngines.rank]; which one a
  * given document's run actually uses is [OcrPipeline]'s decision, not the engine's.

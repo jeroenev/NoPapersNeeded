@@ -77,12 +77,12 @@ class AiClientLifetimeTest {
             try {
                 val facade = AiFacadeImpl(db, db.keyValueDao()) { custom(gateway.baseUrl) }
                 // Any call that reaches the endpoint builds the runtime; how this one ends does not matter.
-                runCatchingCancellable { facade.transcribePage(ByteArray(1), "eng") }
+                runCatchingCancellable { facade.ocrEngine.recognizePng(ByteArray(1), "eng") }
                 val before = gateway.requestedPaths.size
                 (before > 0) shouldBe true
 
                 facade.close()
-                runCatchingCancellable { facade.transcribePage(ByteArray(1), "eng") }
+                runCatchingCancellable { facade.ocrEngine.recognizePng(ByteArray(1), "eng") }
 
                 (gateway.requestedPaths.size > before) shouldBe true
             } finally {

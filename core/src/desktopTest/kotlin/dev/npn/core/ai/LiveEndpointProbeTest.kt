@@ -99,7 +99,7 @@ class LiveEndpointProbeTest {
     fun visionModelTranscribesAPage() {
         val config = liveConfig()
         withFacade(config) { facade ->
-            val text = runBlocking { facade.transcribePage(pagePng(), "eng") }
+            val text = runBlocking { facade.ocrEngine.recognizePng(pagePng(), "eng") }
             println("PROBE ocr=$text")
 
             // Graded against text this test drew itself, so a plausible-but-invented transcription

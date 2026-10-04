@@ -75,7 +75,7 @@ internal class AiRuntime(
         private const val ANTHROPIC_ANSWER_HEADROOM = 4_096
 
         /**
-         * Output budget for one page transcription ([AiOcr]). Comfortably more than any single
+         * Output budget for one page transcription ([AiFacadeImpl.ocrEngine]). Comfortably more than any single
          * scanned page holds, and the ceiling every Claude 3+ model accepts — raising it further
          * would be an API error on the older ones, and costs nothing to leave here since output
          * tokens are billed as produced, not as reserved.
@@ -196,7 +196,7 @@ internal class AiRuntime(
             reasoningParams(config.provider, config.model, config.reasoningEdit, toolLoop = false) ?: LLMParams()
 
         /**
-         * Params for one page transcription ([AiOcr]).
+         * Params for one page transcription ([AiFacadeImpl.ocrEngine]).
          *
          * Deliberately not [suggestionParams]. That maps [AiConfig.reasoningEdit], and neither
          * half of it suits OCR: reasoning buys nothing on a verbatim transcription, and it would
