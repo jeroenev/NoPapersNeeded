@@ -9,10 +9,10 @@ package dev.npn.core.fs
  */
 class OcrSidecarFiles(private val fs: LibraryFileSystem) {
 
-    /** All sidecar files in `.npn/ocr/` (files only). */
+    /** All sidecar files in `.npn/ocr/` (files only). Walks that directory alone, not the library. */
     suspend fun list(): List<FileMeta> {
         val prefix = "${NpnPaths.OCR_DIR}/"
-        return fs.listAll().filter { meta ->
+        return fs.listAllUnder(NpnPaths.OCR_DIR).filter { meta ->
             if (meta.isDirectory || !meta.relPath.startsWith(prefix)) return@filter false
             // Only direct children of .npn/ocr are sidecars (no nested dirs).
             !meta.relPath.removePrefix(prefix).contains('/')

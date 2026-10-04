@@ -38,13 +38,8 @@ class TrashOps(
         return target
     }
 
-    /** All entries currently in `.npn/trash/` (files only). */
-    suspend fun listTrash(): List<FileMeta> =
-        fs.listAll().filter {
-            !it.isDirectory &&
-                (it.relPath == NpnPaths.TRASH_DIR || it.relPath.startsWith("${NpnPaths.TRASH_DIR}/")) &&
-                it.relPath != NpnPaths.TRASH_DIR
-        }
+    /** All entries currently in `.npn/trash/` (files only). Walks that directory alone, not the library. */
+    suspend fun listTrash(): List<FileMeta> = fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }
 
     /**
      * Permanently delete trash entries trashed strictly before [cutoffMillis].
