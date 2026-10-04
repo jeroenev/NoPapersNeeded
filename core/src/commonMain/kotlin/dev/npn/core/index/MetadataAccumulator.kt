@@ -519,13 +519,14 @@ class MetadataAccumulator(
 
     /**
      * A transaction this device just wrote, staged for [recordLocalSource]: its source row, canonical
-     * events and actor. Staging stats the written file, so it happens before the transaction that
-     * records it.
+     * events and actor, and the [written] events themselves. Staging stats the written file, so it
+     * happens before the transaction that records it.
      */
     class LocalSource internal constructor(
         internal val source: MetadataSourceEntity,
         internal val events: List<MetadataEventEntity>,
         internal val actor: MetadataTransactionActorEntity?,
+        internal val written: List<dev.npn.core.journal.JournalEvent>,
     )
 
     suspend fun localSource(published: PublishedTransaction): LocalSource {
@@ -544,7 +545,7 @@ class MetadataAccumulator(
                 status = MetadataProjectionDao.STATUS_APPLIED,
             )
         val actor = MetadataTransactionActorEntity(events.first().dev, published.contentHash)
-        return LocalSource(source, canonical.map(::eventEntity), actor)
+        return LocalSource(source, canonical.map(::eventEntity), actor, events)
     }
 
     suspend fun recordLocalSource(local: LocalSource) {

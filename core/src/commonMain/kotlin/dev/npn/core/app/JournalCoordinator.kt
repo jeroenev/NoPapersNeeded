@@ -226,23 +226,19 @@ class JournalCoordinator internal constructor(
      */
     suspend fun refreshState(preserveLifecycleDocs: Set<String> = emptySet()) =
         locked {
-            blockingWritesOnFailure {
+            latching {
                 when (val outcome = accumulator.reconcileOnOpen()) {
                     is OpenReconciliation.ProjectionCurrent -> {
                         folded = null
                         observeSourceHlc(outcome.maxHlc)
                         syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
+                        writeBlockReason = null
                     }
 
                     is OpenReconciliation.Refolded -> {
-                        folded = outcome.state
-                        observeSourceHlc(outcome.state.maxHlc)
-                        syncedSettings.seed(outcome.state)
-                        indexer.refreshState(outcome.state, preserveLifecycleDocs)
-                        accumulator.markReady(outcome.state.maxHlc)
+                        adopt(outcome.state) { indexer.refreshState(outcome.state, preserveLifecycleDocs) }
                     }
                 }
-                writeBlockReason = null
             }
         }
 
@@ -271,24 +267,11 @@ class JournalCoordinator internal constructor(
         }
 
     /** Strictly reconcile metadata before touching the document projection. */
-    suspend fun rescan(): ScanReport =
-        locked {
-            blockingWritesOnFailure {
-                val current = foldedState()
-                val reconciled = accumulator.reconcile(current).state ?: current
-                folded = reconciled
-                observeSourceHlc(reconciled.maxHlc)
-                syncedSettings.seed(reconciled)
-                val report = rescanWithExternalMoves(reconciled)
-                accumulator.markReady(reconciled.maxHlc)
-                writeBlockReason = null
-                report
-            }
-        }
+    suspend fun rescan(): ScanReport = locked { latching { rescanFrom(foldedState()) } }
 
     suspend fun reconcileMetadata() =
         locked {
-            blockingWritesOnFailure {
+            latching {
                 val reconciliation = accumulator.reconcile(folded)
                 val current = reconciliation.state
                 if (current == null) {
@@ -298,18 +281,16 @@ class JournalCoordinator internal constructor(
                     writeBlockReason = null
                     return@locked
                 }
-                folded = current
-                observeSourceHlc(current.maxHlc)
-                syncedSettings.seed(current)
-                // Bounded projection when reconcile only ADDED events onto the prior state; otherwise
-                // full reproject (source removed/invalidated, mutation, full refold, first load).
-                if (reconciliation.incremental) {
-                    indexer.refreshEvents(current, reconciliation.newEvents)
-                } else if (reconciliation.sourcesRead > 0) {
-                    indexer.refreshState(current)
+                adopt(current) {
+                    // Bounded projection when reconcile only ADDED events onto the prior state;
+                    // otherwise full reproject (source removed/invalidated, mutation, full refold,
+                    // first load).
+                    if (reconciliation.incremental) {
+                        indexer.refreshEvents(current, reconciliation.newEvents)
+                    } else if (reconciliation.sourcesRead > 0) {
+                        indexer.refreshState(current)
+                    }
                 }
-                accumulator.markReady(current.maxHlc)
-                writeBlockReason = null
             }
         }
 
@@ -368,35 +349,29 @@ class JournalCoordinator internal constructor(
             val current = foldedState()
             val ops = block(current)
             if (ops.isEmpty()) return@locked false
-            // Once the write-once object exists, cancellation must not leave the disposable DB
-            // projection stale until the next rescan or edit.
-            withContext(NonCancellable) {
-                projectWrittenTransaction(current, writeTransaction(ops))
-            }
+            commitOnto(current, ops)
             true
         }
 
     /**
-     * Shared projection pipeline for an ALREADY-published transaction: record the local source,
-     * fold the frozen events into the live state, and incrementally project one DB transaction
-     * under the durable-recovery and projection-transaction wrappers, then update synced settings.
-     * Callers own the enclosing mutex + [NonCancellable] scope.
+     * Publish non-empty [ops] and project them incrementally onto [current], the live fold they
+     * were built on. Once the write-once object exists, cancellation must not leave the disposable
+     * DB projection stale until the next rescan or edit, so the whole of it is [NonCancellable].
+     * Callers hold the mutex.
      */
-    private suspend fun projectWrittenTransaction(
+    private suspend fun commitOnto(
         current: FoldedState,
-        published: PublishedTransaction,
+        ops: List<PendingOp>,
         preserveLifecycleDocs: Set<String> = emptySet(),
-    ) {
-        val written = published.events
+    ) = withContext(NonCancellable) {
+        val published = writeTransaction(ops)
         withDurableProjectionRecovery {
             val local = accumulator.localSource(published)
             indexer.projection {
-                accumulator.recordLocalSource(local)
-                written.forEach(current::apply)
-                observeSourceHlc(current.maxHlc)
-                indexer.refreshEvents(current, written, preserveLifecycleDocs = preserveLifecycleDocs)
+                recordWritten(current, local)
+                indexer.refreshEvents(current, published.events, preserveLifecycleDocs = preserveLifecycleDocs)
             }
-            syncedSettings.update(current, written)
+            syncedSettings.update(current, published.events)
             // This commit added a source and projected it incrementally, so the projection matches
             // the new source set. Recording that is what lets the next open skip the refold; without
             // it, any edit in one session would cost a full replay in the next.
@@ -420,7 +395,7 @@ class JournalCoordinator internal constructor(
             val ops = current.restoreOps(doc, relPath)
             if (ops.isEmpty()) return@locked false
             ensureWritable()
-            withContext(NonCancellable) { projectWrittenTransaction(current, writeTransaction(ops)) }
+            commitOnto(current, ops)
             true
         }
 
@@ -462,9 +437,7 @@ class JournalCoordinator internal constructor(
             val current = foldedState()
             optimisticWrite()
             if (ops.isEmpty()) return@locked false
-            withContext(NonCancellable) {
-                projectWrittenTransaction(current, writeTransaction(ops), preserveLifecycleDocs = lifecycleDocs)
-            }
+            commitOnto(current, ops, preserveLifecycleDocs = lifecycleDocs)
             true
         }
 
@@ -485,41 +458,35 @@ class JournalCoordinator internal constructor(
             ensureWritable()
             val current = foldedState()
             withContext(NonCancellable) {
-                if (ops.isNotEmpty()) {
-                    val published = writeTransaction(ops)
-                    accumulator.recordLocalSource(accumulator.localSource(published))
-                    // Fold the freshly-written events into the live state up front. reconcile()'s
-                    // fast path returns currentState unchanged when it read no new sources (the events
-                    // were just recorded directly), so the projection rescan below must see them here.
-                    published.events.forEach(current::apply)
-                }
-                val reconciled = accumulator.reconcile(current).state ?: current
-                folded = reconciled
-                observeSourceHlc(reconciled.maxHlc)
-                syncedSettings.seed(reconciled)
-                val report = rescanWithExternalMoves(reconciled)
-                accumulator.markReady(reconciled.maxHlc)
-                report
+                // Fold the freshly-written events into the live state up front. reconcile()'s fast
+                // path returns the state unchanged when it read no new sources (the events were just
+                // recorded directly), so the projection rescan must see them here.
+                if (ops.isNotEmpty()) recordProjected(current, ops)
+                rescanFrom(current)
             }
         }
 
-    /** Called under the coordinator mutex, which the external-move and restore callbacks rely on too. */
-    private suspend fun rescanWithExternalMoves(state: FoldedState): ScanReport =
-        indexer.rescan(
-            metadataState = state,
-            onExternalMoves = { ops -> withContext(NonCancellable) { recordProjected(state, ops) } },
-            onResurrected = { resurrected -> recordRestores(state, resurrected) },
-        )
+    /**
+     * Reconcile the journal onto [current], adopt the result and rescan the library against it.
+     * Called under the coordinator mutex, which the external-move and restore callbacks rely on too.
+     */
+    private suspend fun rescanFrom(current: FoldedState): ScanReport {
+        val reconciled = accumulator.reconcile(current).state ?: current
+        return adopt(reconciled) {
+            indexer.rescan(
+                metadataState = reconciled,
+                onExternalMoves = { ops -> withContext(NonCancellable) { recordProjected(reconciled, ops) } },
+                onResurrected = { resurrected -> recordRestores(reconciled, resurrected) },
+            )
+        }
+    }
 
-    /** Publish [ops] and fold them into [state], for a rescan that has already projected what they say. */
+    /** Publish [ops] and fold them into [state], for a pass that projects what they say itself. */
     private suspend fun recordProjected(
         state: FoldedState,
         ops: List<PendingOp>,
     ) {
-        val published = writeTransaction(ops)
-        accumulator.recordLocalSource(accumulator.localSource(published))
-        published.events.forEach(state::apply)
-        observeSourceHlc(state.maxHlc)
+        recordWritten(state, accumulator.localSource(writeTransaction(ops)))
     }
 
     /**
@@ -569,7 +536,7 @@ class JournalCoordinator internal constructor(
      * source and folding it, so the live fold is dropped and refolded from the store when next
      * needed.
      */
-    private inline fun <T> blockingWritesOnFailure(pass: () -> T): T =
+    private inline fun <T> latching(pass: () -> T): T =
         try {
             pass()
         } catch (cancelled: CancellationException) {
@@ -579,6 +546,40 @@ class JournalCoordinator internal constructor(
             blockWrites(failure)
             throw failure
         }
+
+    /**
+     * Make [state], freshly reconciled from the store, this session's live fold: seed the write
+     * clock and the synced settings from it, let [project] bring the index in step with it, then
+     * record the projection as ready for the next open and allow writes again. A new entry point
+     * that adopts a state goes through here, so none of these steps can be forgotten.
+     */
+    private suspend inline fun <T> adopt(
+        state: FoldedState,
+        project: () -> T,
+    ): T {
+        folded = state
+        observeSourceHlc(state.maxHlc)
+        syncedSettings.seed(state)
+        val result = project()
+        // Read after projecting: a rescan's own writes (external moves, restores) raise it.
+        accumulator.markReady(state.maxHlc)
+        writeBlockReason = null
+        return result
+    }
+
+    /**
+     * Record [local], a transaction this session just published, as an applied source and fold its
+     * events into [state], so the store and the live fold both hold the write. Projecting it is the
+     * caller's.
+     */
+    private suspend fun recordWritten(
+        state: FoldedState,
+        local: MetadataAccumulator.LocalSource,
+    ) {
+        accumulator.recordLocalSource(local)
+        local.written.forEach(state::apply)
+        observeSourceHlc(state.maxHlc)
+    }
 
     /**
      * Seed the write clock past [maxHlc] and persist its watermark. Takes the watermark explicitly
@@ -603,7 +604,7 @@ class JournalCoordinator internal constructor(
      *    and is attached as suppressed to the rethrown original.
      *
      * This mirrors the latch-then-rethrow contract of [refreshState]/[rescan]/[reconcileMetadata]
-     * so every entry point behaves uniformly, cancellation included (see [blockingWritesOnFailure]).
+     * so every entry point behaves uniformly, cancellation included (see [latching]).
      */
     private suspend fun <T> withDurableProjectionRecovery(attempt: suspend () -> T): T =
         // Cancellation is not a failure, so nothing is latched for it. A rolled-back ingest can
@@ -623,12 +624,7 @@ class JournalCoordinator internal constructor(
         // Recovery must reproject unconditionally, so it always needs a materialized fold even
         // when the reconcile itself read nothing.
         val current = accumulator.reconcile().state ?: accumulator.loadState()
-        folded = current
-        observeSourceHlc(current.maxHlc)
-        indexer.refreshState(current)
-        accumulator.markReady(current.maxHlc)
-        syncedSettings.seed(current)
-        writeBlockReason = null
+        adopt(current) { indexer.refreshState(current) }
     }
 
     companion object {
