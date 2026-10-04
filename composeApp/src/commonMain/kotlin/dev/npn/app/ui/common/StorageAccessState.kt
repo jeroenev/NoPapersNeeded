@@ -2,6 +2,7 @@ package dev.npn.app.ui.common
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Stable
+import dev.npn.app.platform.FolderAccess
 
 /**
  * Whether the app may read and write plain folders on device storage ([FolderAccess.DIRECT]).

@@ -17,12 +17,12 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.common.SafStorageSwitch
 import dev.npn.app.ui.common.StorageAccessState
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.common.rememberStorageAccess
-import dev.npn.app.ui.common.supportsSafStorage
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced

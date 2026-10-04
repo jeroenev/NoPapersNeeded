@@ -20,6 +20,8 @@ import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import dev.npn.app.platform.loadImageBitmap
+import dev.npn.app.platform.thumbCacheMaxEntries
 import dev.npn.core.app.DocContentFacade
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock

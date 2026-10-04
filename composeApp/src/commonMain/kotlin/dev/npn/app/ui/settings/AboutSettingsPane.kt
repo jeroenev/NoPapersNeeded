@@ -4,7 +4,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import dev.npn.app.BuildInfo
-import dev.npn.app.ui.common.checksForUpdates
+import dev.npn.app.platform.checksForUpdates
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help

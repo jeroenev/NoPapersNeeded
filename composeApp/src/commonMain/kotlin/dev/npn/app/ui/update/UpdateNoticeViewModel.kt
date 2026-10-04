@@ -3,8 +3,8 @@ package dev.npn.app.ui.update
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.BuildInfo
+import dev.npn.app.platform.checksForUpdates
 import dev.npn.app.ui.common.WhileSubscribedTimeout
-import dev.npn.app.ui.common.checksForUpdates
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.update.AppRelease
 import dev.npn.core.update.AppVersions

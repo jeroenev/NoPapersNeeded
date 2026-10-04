@@ -6,9 +6,9 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
-import dev.npn.app.ui.common.supportsSafStorage
 import dev.npn.core.app.LibraryLocations
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType

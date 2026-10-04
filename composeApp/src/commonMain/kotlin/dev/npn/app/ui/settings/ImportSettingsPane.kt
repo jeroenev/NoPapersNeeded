@@ -27,10 +27,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.common.FolderAccess
+import dev.npn.app.platform.FolderAccess
+import dev.npn.app.platform.ocrHasLanguageSetting
+import dev.npn.app.platform.persistDirectoryAccess
 import dev.npn.app.ui.common.LocalAppLocale
-import dev.npn.app.ui.common.ocrHasLanguageSetting
-import dev.npn.app.ui.common.persistDirectoryAccess
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.core.ocr.OcrLanguages
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher

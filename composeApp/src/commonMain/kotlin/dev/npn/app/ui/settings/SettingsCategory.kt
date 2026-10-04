@@ -11,7 +11,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.vector.ImageVector
-import dev.npn.app.ui.common.ocrHasLanguageSetting
+import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res

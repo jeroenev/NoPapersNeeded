@@ -1,4 +1,4 @@
-package dev.npn.app.ui.common
+package dev.npn.app.platform
 
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.toComposeImageBitmap

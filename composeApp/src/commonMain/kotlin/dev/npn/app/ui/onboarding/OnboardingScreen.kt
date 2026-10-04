@@ -23,10 +23,10 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import dev.npn.app.OpenFailure
+import dev.npn.app.platform.defaultLibraryLocation
+import dev.npn.app.platform.supportsLibraryFolderCreation
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.TextInputDialog
-import dev.npn.app.ui.common.defaultLibraryLocation
-import dev.npn.app.ui.common.supportsLibraryFolderCreation
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_choose_library_folder

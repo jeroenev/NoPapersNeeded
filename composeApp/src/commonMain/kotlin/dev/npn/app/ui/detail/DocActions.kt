@@ -15,13 +15,13 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.npn.app.platform.sharePdfBytes
+import dev.npn.app.platform.supportsSharing
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TextInputDialog
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
-import dev.npn.app.ui.common.sharePdfBytes
-import dev.npn.app.ui.common.supportsSharing
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import io.github.vinceglb.filekit.PlatformFile

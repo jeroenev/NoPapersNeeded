@@ -1,4 +1,4 @@
-package dev.npn.app.ui.common
+package dev.npn.app.platform
 
 import android.content.Intent
 import android.graphics.BitmapFactory

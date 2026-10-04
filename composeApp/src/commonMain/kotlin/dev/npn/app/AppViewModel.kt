@@ -4,12 +4,12 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
+import dev.npn.app.platform.createLibraryFolder
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.clearThumbCache
-import dev.npn.app.ui.common.createLibraryFolder
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.asUiText
 import dev.npn.core.app.LibrarySession
