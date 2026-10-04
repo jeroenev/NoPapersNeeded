@@ -304,6 +304,7 @@ class ReconcilePerfTest {
             listOf(
                 PendingOp.tagAdd(docId, "invoice"),
                 PendingOp.settingSet(ReviewMode.WIRE_KEY, ReviewMode.UNTAGGED_ONLY.wire),
+                PendingOp.settingSet("someLaterSetting", "on"),
             ),
         )
         return docId
@@ -353,29 +354,15 @@ class ReconcilePerfTest {
 
             // The document projection survived untouched...
             db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("invoice")
-            // ...the synced settings were seeded without folding the whole journal...
+            // ...the synced settings were seeded without folding the whole journal, every one of
+            // them rather than a list of known keys...
             reopened.settingFlow(ReviewMode.WIRE_KEY).first() shouldBe ReviewMode.UNTAGGED_ONLY.wire
+            reopened.settingFlow("someLaterSetting").first() shouldBe "on"
             // ...and the ready marker (with its watermark) was left as the last session wrote it.
             val after = db.metadataProjectionDao().state()!!
             after.migrationState shouldBe MetadataAccumulator.MIGRATION_READY
             after.sourceMaxPhysical shouldBe expectedHlc.sourceMaxPhysical
             after.sourceSetFingerprint shouldBe expectedHlc.sourceSetFingerprint
-        }
-
-    /** Any synced setting reads its value after an open, not only the ones a list names. */
-    @Test
-    fun everySyncedSettingIsSeededOnOpen() =
-        runTest {
-            seedReadyLibrary()
-            val coordinator = reopen()
-            coordinator.refreshState()
-            clock.advance()
-            coordinator.commitAndApply(listOf(PendingOp.settingSet("someLaterSetting", "on")))
-
-            val reopened = reopen()
-            reopened.refreshState()
-
-            reopened.settingFlow("someLaterSetting").first() shouldBe "on"
         }
 
     /**
