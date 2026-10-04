@@ -1,33 +1,19 @@
 package dev.npn.core.ai
 
-import ai.koog.http.client.KoogHttpClient
 import ai.koog.http.client.ktor.KtorKoogHttpClient
 import ai.koog.prompt.executor.clients.LLMClient
-import ai.koog.prompt.executor.clients.anthropic.AnthropicClientSettings
-import ai.koog.prompt.executor.clients.anthropic.AnthropicLLMClient
 import ai.koog.prompt.executor.clients.anthropic.AnthropicParams
 import ai.koog.prompt.executor.clients.anthropic.models.AnthropicThinking
-import ai.koog.prompt.executor.clients.deepseek.DeepSeekClientSettings
-import ai.koog.prompt.executor.clients.deepseek.DeepSeekLLMClient
-import ai.koog.prompt.executor.clients.google.GoogleClientSettings
-import ai.koog.prompt.executor.clients.google.GoogleLLMClient
 import ai.koog.prompt.executor.clients.google.GoogleParams
 import ai.koog.prompt.executor.clients.google.models.GoogleThinkingConfig
-import ai.koog.prompt.executor.clients.mistralai.MistralAIClientSettings
-import ai.koog.prompt.executor.clients.mistralai.MistralAILLMClient
 import ai.koog.prompt.executor.clients.openai.OpenAIChatParams
-import ai.koog.prompt.executor.clients.openai.OpenAIClientSettings
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.executor.clients.openai.models.ReasoningConfig
-import ai.koog.prompt.executor.clients.openrouter.OpenRouterClientSettings
-import ai.koog.prompt.executor.clients.openrouter.OpenRouterLLMClient
 import ai.koog.prompt.executor.llms.MultiLLMPromptExecutor
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.executor.ollama.client.OllamaClient
 import ai.koog.prompt.executor.ollama.client.OllamaParams
-import ai.koog.prompt.llm.LLMCapability
-import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.params.LLMParams
 import io.ktor.client.HttpClient
@@ -121,26 +107,20 @@ internal class AiRuntime(
         ): AiRuntime {
             val owned = if (transport == null) newTransport() else null
             val base = transport ?: checkNotNull(owned)
-            val built =
+            val factory = AiProviderClients.of(config.provider)
+            val model = LLModel(factory.provider, config.model, factory.capabilities(config), DEFAULT_CONTEXT_LENGTH)
+            val client =
                 try {
                     val http =
                         KtorKoogHttpClient.Factory(
                             if (config.provider == AiProvider.OPENCODE_GO) base.withOpenCodeSession() else base,
                         )
-                    when (config.provider) {
-                        AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> openAiRuntime(config, http)
-                        AiProvider.ANTHROPIC -> anthropicRuntime(config, http)
-                        AiProvider.GOOGLE -> googleRuntime(config, http)
-                        AiProvider.MISTRAL -> mistralRuntime(config, http)
-                        AiProvider.DEEPSEEK -> deepSeekRuntime(config, http)
-                        AiProvider.OPENROUTER -> openRouterRuntime(config, http)
-                        AiProvider.OLLAMA -> ollamaRuntime(config, http)
-                    }
+                    factory.client(config.apiKey, config.effectiveBaseUrl, model, http)
                 } catch (failure: Throwable) {
                     owned?.close()
                     throw failure
                 }
-            return AiRuntime(built.executor, built.model, built.client, ownedTransport = owned)
+            return AiRuntime(MultiLLMPromptExecutor(factory.provider to client), model, client, ownedTransport = owned)
         }
 
         /**
@@ -341,197 +321,5 @@ internal class AiRuntime(
                 AiReasoningLevel.MEDIUM -> THINKING_BUDGET_MEDIUM
                 AiReasoningLevel.HIGH -> THINKING_BUDGET_HIGH
             }
-
-        private fun openAiRuntime(
-            config: AiConfig,
-            httpFactory: KoogHttpClient.Factory,
-        ): AiRuntime {
-            // TolerantOpenAILLMClient subclasses OpenAILLMClient to skip non-standard trailing SSE
-            // chunks (cost/usage frames) that would otherwise abort streaming after real frames but
-            // before Koog's terminal End frame. See TolerantOpenAILLMClient for the Koog seam facts.
-            val client =
-                TolerantOpenAILLMClient(
-                    apiKey = config.apiKey.ifBlank { "unused" },
-                    settings = OpenAIClientSettings(baseUrl = normalizeBaseUrl(config.effectiveBaseUrl)),
-                    httpClientFactory = httpFactory,
-                )
-            val model =
-                LLModel(
-                    provider = LLMProvider.OpenAI,
-                    id = config.model,
-                    capabilities =
-                        listOf(
-                            // Without an OpenAIEndpoint capability the client cannot pick a request
-                            // shape and fails with "Cannot determine proper LLM params". Exactly one
-                            // is declared, never both: given a choice Koog's `determineParams`
-                            // always prefers chat/completions, which is the wrong half of the
-                            // OpenCode Go split (see usesResponsesApi). Compatible third-party
-                            // servers implement chat/completions, not the Responses API, so that
-                            // stays the default.
-                            if (usesResponsesApi(config.provider, config.model)) {
-                                LLMCapability.OpenAIEndpoint.Responses
-                            } else {
-                                LLMCapability.OpenAIEndpoint.Completions
-                            },
-                            LLMCapability.Completion,
-                            LLMCapability.Temperature,
-                            LLMCapability.Tools,
-                            LLMCapability.ToolChoice,
-                            LLMCapability.Vision.Image,
-                        ),
-                    contextLength = DEFAULT_CONTEXT_LENGTH,
-                )
-            return AiRuntime(MultiLLMPromptExecutor(LLMProvider.OpenAI to client), model, client)
-        }
-
-        private fun anthropicRuntime(
-            config: AiConfig,
-            httpFactory: KoogHttpClient.Factory,
-        ): AiRuntime {
-            val model =
-                LLModel(
-                    provider = LLMProvider.Anthropic,
-                    id = config.model,
-                    capabilities = standardCapabilities(),
-                    contextLength = DEFAULT_CONTEXT_LENGTH,
-                )
-            // The Anthropic client resolves the wire model name through modelVersionsMap and
-            // throws "Unsupported model" for anything absent, so the user's model must be mapped
-            // explicitly (the default map only covers Koog's predefined AnthropicModels).
-            val settings =
-                AnthropicClientSettings(
-                    modelVersionsMap = mapOf(model to config.model),
-                    baseUrl = trimBaseUrl(config.effectiveBaseUrl),
-                )
-            val client = AnthropicLLMClient(config.apiKey, settings, httpFactory)
-            return AiRuntime(MultiLLMPromptExecutor(LLMProvider.Anthropic to client), model, client)
-        }
-
-        private fun googleRuntime(
-            config: AiConfig,
-            httpFactory: KoogHttpClient.Factory,
-        ): AiRuntime {
-            val settings = GoogleClientSettings(baseUrl = trimBaseUrl(config.effectiveBaseUrl))
-            val client = GoogleLLMClient(config.apiKey, settings, httpFactory)
-            val model =
-                LLModel(
-                    provider = LLMProvider.Google,
-                    id = config.model,
-                    capabilities = standardCapabilities(),
-                    contextLength = DEFAULT_CONTEXT_LENGTH,
-                )
-            return AiRuntime(MultiLLMPromptExecutor(LLMProvider.Google to client), model, client)
-        }
-
-        private fun mistralRuntime(
-            config: AiConfig,
-            httpFactory: KoogHttpClient.Factory,
-        ): AiRuntime {
-            val settings = MistralAIClientSettings(baseUrl = trimBaseUrl(config.effectiveBaseUrl))
-            val client = MistralAILLMClient(config.apiKey, settings, httpFactory)
-            val model =
-                LLModel(
-                    provider = LLMProvider.MistralAI,
-                    id = config.model,
-                    capabilities = standardCapabilities(),
-                    contextLength = DEFAULT_CONTEXT_LENGTH,
-                )
-            return AiRuntime(MultiLLMPromptExecutor(LLMProvider.MistralAI to client), model, client)
-        }
-
-        private fun deepSeekRuntime(
-            config: AiConfig,
-            httpFactory: KoogHttpClient.Factory,
-        ): AiRuntime {
-            val settings = DeepSeekClientSettings(baseUrl = trimBaseUrl(config.effectiveBaseUrl))
-            val client = DeepSeekLLMClient(config.apiKey, settings, httpFactory)
-            val model =
-                LLModel(
-                    provider = LLMProvider.DeepSeek,
-                    id = config.model,
-                    capabilities = standardCapabilities(),
-                    contextLength = DEFAULT_CONTEXT_LENGTH,
-                )
-            return AiRuntime(MultiLLMPromptExecutor(LLMProvider.DeepSeek to client), model, client)
-        }
-
-        private fun openRouterRuntime(
-            config: AiConfig,
-            httpFactory: KoogHttpClient.Factory,
-        ): AiRuntime {
-            val settings = OpenRouterClientSettings(baseUrl = trimBaseUrl(config.effectiveBaseUrl))
-            val client = OpenRouterLLMClient(config.apiKey, settings, httpFactory)
-            val model =
-                LLModel(
-                    provider = LLMProvider.OpenRouter,
-                    id = config.model,
-                    capabilities = standardCapabilities(),
-                    contextLength = DEFAULT_CONTEXT_LENGTH,
-                )
-            return AiRuntime(MultiLLMPromptExecutor(LLMProvider.OpenRouter to client), model, client)
-        }
-
-        private fun ollamaRuntime(
-            config: AiConfig,
-            httpFactory: KoogHttpClient.Factory,
-        ): AiRuntime {
-            val client =
-                OllamaClient(
-                    httpClientFactory = httpFactory,
-                    baseUrl = trimBaseUrl(config.effectiveBaseUrl),
-                )
-            val model =
-                LLModel(
-                    provider = LLMProvider.Ollama,
-                    id = config.model,
-                    capabilities =
-                        listOf(
-                            LLMCapability.Completion,
-                            LLMCapability.Temperature,
-                            LLMCapability.Tools,
-                            LLMCapability.Vision.Image,
-                        ),
-                    contextLength = DEFAULT_CONTEXT_LENGTH,
-                )
-            return AiRuntime(MultiLLMPromptExecutor(LLMProvider.Ollama to client), model, client)
-        }
-
-        /**
-         * Capabilities for the native (non-OpenAI-shaped) clients. [LLMCapability.Thinking] is
-         * included so the Anthropic/Google clients accept reasoning content on replayed assistant
-         * messages (Google injects its fallback thought signature only for Thinking-capable models).
-         *
-         * [LLMCapability.Vision.Image] is included because page-image OCR ([AiOcr]) sends image
-         * parts, and the clients reject an image for a model that does not declare it. Like Tools
-         * and Thinking above, this is a claim rather than a fact: the model id is free text the
-         * user typed, so nothing here can know what it really supports. A model without vision
-         * fails the OCR call at the endpoint with a message the user can act on, which is strictly
-         * better than the client refusing to send it and every model needing a capability probe.
-         */
-        private fun standardCapabilities(): List<LLMCapability> =
-            listOf(
-                LLMCapability.Completion,
-                LLMCapability.Temperature,
-                LLMCapability.Tools,
-                LLMCapability.ToolChoice,
-                LLMCapability.Thinking,
-                LLMCapability.Vision.Image,
-            )
-
-        /**
-         * Reduce a pasted endpoint to the server root. Koog appends `v1/chat/completions`
-         * itself, so the full endpoint URL (as printed by most provider docs) and a bare
-         * `/v1` suffix both have to be stripped or the path doubles up.
-         */
-        internal fun normalizeBaseUrl(raw: String): String =
-            raw
-                .trim()
-                .trimEnd('/')
-                .removeSuffix("/chat/completions")
-                .trimEnd('/')
-                .removeSuffix("/v1")
-
-        /** Trim variant for clients with provider-specific request paths (no `/v1` stripping). */
-        internal fun trimBaseUrl(raw: String): String = raw.trim().trimEnd('/')
     }
 }
