@@ -144,7 +144,6 @@
     <ID>UseOrEmpty:FoldedState.kt:FoldedState$props[doc]?.mapValues { it.value.value } ?: emptyMap()</ID>
     <ID>UseOrEmpty:Indexer.kt:Indexer$freshContent[row.docId] ?: ""</ID>
     <ID>UseOrEmpty:RoomChatHistoryProvider.kt:RoomChatHistoryProvider$db.keyValueDao().get(key(conversationId))?.let { runCatching { json.decodeFromString(ListSerializer(Message.serializer()), it).let(::sanitize) }.getOrDefault(emptyList()) } ?: emptyList()</ID>
-    <ID>UseOrEmpty:RoomChatSessionStore.kt:RoomChatSessionStore$db.keyValueDao().get(KEY)?.let { runCatching { json.decodeFromString(ListSerializer(AiChatSession.serializer()), it) } .getOrDefault(emptyList()) } ?: emptyList()</ID>
     <ID>UseOrEmpty:StoragePathTemplate.kt:StoragePathTemplate$value ?: ""</ID>
     <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(supersedes != null) { "Snapshot manifest supersedes must be an array" }</ID>
     <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(version != null) { "Snapshot manifest version must be an integer" }</ID>

@@ -30,14 +30,11 @@
     <ID>LambdaParameterEventTrailing:FieldEditor.kt:onCommit: (String) -&gt; Unit</ID>
     <ID>LambdaParameterInRestartableEffect:DocGrid.kt:onColumnWidthChange: (Int) -&gt; Unit</ID>
     <ID>LambdaParameterInRestartableEffect:FilterSheet.kt:onValidity: (Boolean) -&gt; Unit</ID>
-    <ID>LambdaParameterInRestartableEffect:PageViewer.kt:onPageChange: (Int) -&gt; Unit</ID>
     <ID>LambdaParameterInRestartableEffect:PageViewer.kt:render: suspend (pageIndex: Int, maxDim: Int) -&gt; ByteArray?</ID>
     <ID>LongParameterList:AiChatScreen.kt:@Composable private fun AiChatTopBar</ID>
     <ID>LongParameterList:DocActions.kt:@Composable private fun DocActionsMenu</ID>
-    <ID>LongParameterList:DocDetailScreen.kt:@Composable private fun LoadedDocScreen</ID>
     <ID>LongParameterList:DocGrid.kt:@Composable private fun DocGridCards</ID>
     <ID>LongParameterList:DocGrid.kt:@OptIn(FlowPreview::class) @Composable internal fun DocGrid</ID>
-    <ID>LongParameterList:LibraryDialogState.kt:@Composable fun LibraryDialogHost</ID>
     <ID>LongParameterList:LibraryScreen.kt:@Composable private fun SelectionTopBar</ID>
     <ID>LongParameterList:LibraryViewsMenu.kt:@Composable internal fun LibraryViewsMenuButton</ID>
     <ID>ModifierMissing:AiChatScreen.kt:@Composable fun AiChatScreen</ID>
