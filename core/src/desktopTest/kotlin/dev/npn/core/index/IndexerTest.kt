@@ -495,8 +495,9 @@ class IndexerTest {
             rig.clock.advance()
             writer.commit(listOf(PendingOp.docTrash(docId, "a.pdf")))
 
-            val report = rig.rescan()
-            report.resurrected.any { it.docId == docId }.shouldBeTrue()
+            val resurrected = ArrayList<Resurrected>()
+            rig.rescan { resurrected += it }
+            resurrected.map { it.docId } shouldContainExactly listOf(docId)
             val row = rig.db.documentDao().getByDocId(docId)!!
             row.trashed.shouldBeFalse()
             row.missing.shouldBeFalse()

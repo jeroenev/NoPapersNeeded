@@ -50,6 +50,7 @@ class CanonicalEventTest {
                 doc = null,
             ),
             event(16, JournalOp.FieldDefSet("gone", null), doc = null),
+            event(17, JournalOp.DocUndelete),
         )
 
     @Test

@@ -117,7 +117,7 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   "Journal storage").
 - Document identity = SHA-256 of bytes; duplicates are forbidden (one canonical path per hash).
 - Merge semantics: OR-set for tags, HLC last-writer-wins for single-value fields, system
-  properties, settings and field definitions.
+  properties, settings and field definitions, and for trash/restore and delete/undelete.
 - Document fields are registry data, not code. Title, correspondent, docType, docDate and notes
   are ordinary `field-set` fields whose definitions the library seeds; there is no per-field
   Kotlin. An exhaustive `when (FieldType)` belongs only in `FieldValues` (canonical form) and in

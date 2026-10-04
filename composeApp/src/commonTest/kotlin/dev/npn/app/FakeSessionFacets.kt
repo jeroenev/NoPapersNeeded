@@ -273,7 +273,6 @@ fun emptyScanReport(): ScanReport =
         missingCount = 0,
         duplicates = emptyList(),
         conflictFiles = emptyList(),
-        resurrected = emptyList(),
         relinkCandidates = emptyList(),
         hashedCount = 0,
         durationMillis = 0L,

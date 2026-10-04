@@ -68,6 +68,7 @@ class WireFormatTest {
                 event(sha, JournalOp.DocTrash("/lib/x.pdf")),
                 event(sha, JournalOp.DocRestore),
                 event(sha, JournalOp.DocDelete),
+                event(sha, JournalOp.DocUndelete),
                 event(sha, JournalOp.Relink(sha2)),
                 event(null, JournalOp.TagRename("a", "b")),
                 event(null, JournalOp.TagMerge("a", "b")),

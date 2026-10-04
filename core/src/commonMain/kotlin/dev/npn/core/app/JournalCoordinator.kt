@@ -3,8 +3,10 @@ package dev.npn.core.app
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.OpenReconciliation
+import dev.npn.core.index.Resurrected
 import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.ContentAddressedJournalWriter
+import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalEvent
@@ -12,6 +14,7 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotCompactor
+import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -110,6 +113,8 @@ class JournalCoordinator internal constructor(
     private val compactionStabilityWindowMs: Long = DEFAULT_COMPACTION_STABILITY_WINDOW_MS,
     /** Where folds and writes run, whatever dispatcher the caller is on. */
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
+    /** How long ago a document was hidden, when a rescan finds its file back (see [recordRestores]). */
+    private val clock: EpochClock = SystemEpochClock,
 ) {
     private val mutex = Mutex()
     private var writeBlockReason: String? = null
@@ -183,7 +188,12 @@ class JournalCoordinator internal constructor(
      */
     suspend fun journalTrashTimes(): Map<String, Long?> =
         accumulator
-            .loadStateOf(JournalOp.DocTrash.WIRE, JournalOp.DocRestore.wire, JournalOp.DocDelete.wire)
+            .loadStateOf(
+                JournalOp.DocTrash.WIRE,
+                JournalOp.DocRestore.wire,
+                JournalOp.DocDelete.wire,
+                JournalOp.DocUndelete.WIRE,
+            )
             .trashTimes()
 
     /**
@@ -398,6 +408,24 @@ class JournalCoordinator internal constructor(
     suspend fun commitAndApply(ops: List<PendingOp>): Boolean = commitBuilt { ops }
 
     /**
+     * Record that [doc]'s bytes are in the library again, at [relPath], when the journal still has
+     * it deleted or trashed: an import of those bytes. Writes nothing, and needs no write access,
+     * for a document nothing hides. Returns whether a restore was written.
+     */
+    suspend fun restoreReturned(
+        doc: String,
+        relPath: String,
+    ): Boolean =
+        locked {
+            val current = foldedState()
+            val ops = current.restoreOps(doc, relPath)
+            if (ops.isEmpty()) return@locked false
+            ensureWritable()
+            withContext(NonCancellable) { projectWrittenTransaction(current, writeTransaction(ops)) }
+            true
+        }
+
+    /**
      * Throw now if a commit would be refused. For callers that change the filesystem before they
      * commit, so a refused commit does not strand a moved PDF with no journal record of the move.
      */
@@ -476,16 +504,46 @@ class JournalCoordinator internal constructor(
             }
         }
 
-    /** Called under the coordinator mutex, which the external-move callback relies on too. */
+    /** Called under the coordinator mutex, which the external-move and restore callbacks rely on too. */
     private suspend fun rescanWithExternalMoves(state: FoldedState): ScanReport =
-        indexer.rescan(metadataState = state, onExternalMoves = { ops ->
-            withContext(NonCancellable) {
-                val published = writeTransaction(ops)
-                accumulator.recordLocalSource(accumulator.localSource(published))
-                published.events.forEach(state::apply)
-                observeSourceHlc(state.maxHlc)
-            }
-        })
+        indexer.rescan(
+            metadataState = state,
+            onExternalMoves = { ops -> withContext(NonCancellable) { recordProjected(state, ops) } },
+            onResurrected = { resurrected -> recordRestores(state, resurrected) },
+        )
+
+    /** Publish [ops] and fold them into [state], for a rescan that has already projected what they say. */
+    private suspend fun recordProjected(
+        state: FoldedState,
+        ops: List<PendingOp>,
+    ) {
+        val published = writeTransaction(ops)
+        accumulator.recordLocalSource(accumulator.localSource(published))
+        published.events.forEach(state::apply)
+        observeSourceHlc(state.maxHlc)
+    }
+
+    /**
+     * Record as a restore the rescan's preference for a file that is back in the library, so the next
+     * fold that is not a rescan does not hide the document again (and every replica shows it).
+     *
+     * Only for a document hidden at least [RESTORE_SETTLE_MS] ago. Sooner, a file still in place may
+     * be one a sync tool has not taken away yet: it delivers another device's trash or delete event
+     * before the file move that went with it, and writing a restore then would undo that device's
+     * decision and leave the document pointing at a file about to disappear. Such a file is shown
+     * for this scan only, as before, and restored for good by a rescan once the window has passed.
+     */
+    private suspend fun recordRestores(
+        state: FoldedState,
+        resurrected: List<Resurrected>,
+    ) {
+        val settled = clock.nowMillis() - RESTORE_SETTLE_MS
+        val ops =
+            resurrected
+                .filter { it.hiddenAtMillis <= settled }
+                .flatMap { state.restoreOps(it.docId, it.relPath) }
+        if (ops.isNotEmpty()) withContext(NonCancellable) { recordProjected(state, ops) }
+    }
 
     /**
      * Publish a non-empty [ops] as one storage-v2 object. Any failure fails this write and leaves
@@ -580,5 +638,8 @@ class JournalCoordinator internal constructor(
 
         /** Only compact objects whose mtime is older than this, to avoid racing an in-flight sync. */
         const val DEFAULT_COMPACTION_STABILITY_WINDOW_MS = 24L * 60L * 60L * 1000L
+
+        /** How long a document must have been hidden before a rescan records its file's return. */
+        const val RESTORE_SETTLE_MS = 24L * 60L * 60L * 1000L
     }
 }

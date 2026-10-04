@@ -14,8 +14,9 @@ import dev.npn.core.model.SystemProperty
  *   late-arriving add whose dot was already removed stays dead. Re-adding produces a new dot.
  * - Renames/merges are library-wide and applied in HLC order to every add whose HLC is <= the
  *   rename's HLC (chained). Adds strictly after a rename keep their literal name.
- * - Props are last-writer-wins by HLC. Trash/restore is LWW; doc-delete is a permanent
- *   tombstone that wins forever. Relinks resolve to the highest-HLC winner per old doc.
+ * - Props are last-writer-wins by HLC. Trash/restore is LWW, and so is delete/undelete; an
+ *   undelete also takes the document out of the trash, and a delete that wins hides the document
+ *   whatever its trash state. Relinks resolve to the highest-HLC winner per old doc.
  *
  * Instances are mutable accumulators; [copy]-style snapshotting is not needed because folding
  * is deterministic regardless of the order events were applied.
@@ -56,9 +57,10 @@ class FoldedState {
     // --- raw custom-field data: doc -> free-string key -> winning (value, hlc) ---
     private val fields = HashMap<String, HashMap<String, PropVal>>()
 
-    // --- trash state: doc -> latest (trashed?, origPath, hlc); plus permanent delete tombstones ---
+    // --- trash state: doc -> latest (trashed?, origPath, hlc); plus delete and undelete, LWW ---
     private val trash = HashMap<String, TrashVal>()
-    private val deleted = HashMap<String, Hlc>() // doc -> hlc of the delete tombstone
+    private val deleted = HashMap<String, Hlc>() // doc -> hlc of the latest delete
+    private val undeleted = HashMap<String, Hlc>() // doc -> hlc of the latest undelete
 
     data class TrashVal(
         val trashed: Boolean,
@@ -144,8 +146,13 @@ class FoldedState {
 
             JournalOp.DocDelete -> {
                 val doc = event.doc ?: return
-                val existing = deleted[doc]
-                if (existing == null || event.hlc > existing) deleted[doc] = event.hlc
+                deleted.keepLatest(doc, event.hlc)
+            }
+
+            JournalOp.DocUndelete -> {
+                val doc = event.doc ?: return
+                undeleted.keepLatest(doc, event.hlc)
+                mergeTrash(doc, TrashVal(trashed = false, origPath = null, hlc = event.hlc))
             }
 
             is JournalOp.Relink -> {
@@ -186,6 +193,14 @@ class FoldedState {
     ) {
         val existing = trash[doc]
         if (existing == null || incoming.hlc > existing.hlc) trash[doc] = incoming
+    }
+
+    private fun HashMap<String, Hlc>.keepLatest(
+        doc: String,
+        hlc: Hlc,
+    ) {
+        val existing = this[doc]
+        if (existing == null || hlc > existing) this[doc] = hlc
     }
 
     // ---------------- effective views (computed lazily from raw data) ----------------
@@ -252,8 +267,20 @@ class FoldedState {
         return out
     }
 
-    /** True if the document is permanently deleted (delete tombstone present). Wins forever. */
-    fun isDeleted(doc: String): Boolean = deleted.containsKey(doc)
+    /** True if the document is deleted: its latest delete is newer than its latest undelete. */
+    fun isDeleted(doc: String): Boolean {
+        val delete = deleted[doc] ?: return false
+        val undelete = undeleted[doc] ?: return true
+        return delete > undelete
+    }
+
+    /** The winning event that hides [doc] (its delete, else its trash), or null when nothing does. */
+    fun hiddenBy(doc: String): Hlc? =
+        when {
+            isDeleted(doc) -> deleted[doc]
+            trash[doc]?.trashed == true -> trash[doc]?.hlc
+            else -> null
+        }
 
     /** True if the document is currently in trash (and not deleted). */
     fun isTrashed(doc: String): Boolean {
@@ -376,6 +403,24 @@ class FoldedState {
             val dots = liveTagDots(docId, tag)
             if (dots.isEmpty()) null else PendingOp.tagRemove(docId, tag, dots)
         }
+
+    /**
+     * The ops that bring [doc] back once its file is in the library again at [relPath]: a
+     * `doc-undelete` when it is deleted, else a `doc-restore` when it is trashed, each with where
+     * the file now is, as a restore from the trash records it. Empty when nothing hides it.
+     */
+    fun restoreOps(
+        doc: String,
+        relPath: String,
+    ): List<PendingOp> {
+        val restore =
+            when {
+                isDeleted(doc) -> PendingOp.docUndelete(doc)
+                isTrashed(doc) -> PendingOp.docRestore(doc)
+                else -> return emptyList()
+            }
+        return listOf(restore, PendingOp.propSet(doc, SystemProperty.STORAGE_PATH, relPath))
+    }
 
     /** All documents this state has any tag, prop, or custom-field data for (before resolveDocId). */
     fun docsWithMetadata(): Set<String> =

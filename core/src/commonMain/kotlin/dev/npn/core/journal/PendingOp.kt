@@ -50,6 +50,8 @@ data class PendingOp(
 
         fun docDelete(doc: String) = PendingOp(doc, JournalOp.DocDelete)
 
+        fun docUndelete(doc: String) = PendingOp(doc, JournalOp.DocUndelete)
+
         fun relink(
             oldDoc: String,
             newDoc: String,

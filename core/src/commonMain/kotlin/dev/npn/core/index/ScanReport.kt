@@ -30,14 +30,15 @@ data class RelinkCandidate(
 )
 
 /**
- * A document whose journal state says trashed/deleted but whose file still exists at the
- * original path (resurrected by sync or the user). The indexer prefers the file (clears
- * missing) and reports it so the UI can offer to re-trash.
+ * A document whose journal state says trashed/deleted but whose file is in the library at
+ * [relPath] (put back by a sync tool or the user). A rescan prefers the file and reports it, so
+ * the coordinator can record a restore; [hiddenAtMillis] is the wall time of the event that hid it.
  */
 data class Resurrected(
     val docId: String,
     val relPath: String,
     val wasDeleted: Boolean,
+    val hiddenAtMillis: Long,
 )
 
 /** Result of a full rescan. All counts are for this scan only. */
@@ -48,7 +49,6 @@ data class ScanReport(
     val missingCount: Int,
     val duplicates: List<DuplicateReport>,
     val conflictFiles: List<String>,
-    val resurrected: List<Resurrected>,
     val relinkCandidates: List<RelinkCandidate>,
     val hashedCount: Int,
     val durationMillis: Long,

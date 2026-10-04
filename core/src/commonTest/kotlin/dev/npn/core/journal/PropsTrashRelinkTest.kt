@@ -113,6 +113,42 @@ class PropsTrashRelinkTest {
         assertTrue(JournalFolder.fold(listOf(r, d)).isDeleted(doc))
     }
 
+    private fun undelete(
+        seq: Long,
+        t: Long,
+        dev: String = "d1",
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.DocUndelete)
+
+    @Test
+    fun undelete_newer_than_delete_brings_the_doc_back_out_of_the_trash() {
+        val t = trash(1, "/x.pdf", 5)
+        val d = delete(2, 10)
+        val u = undelete(3, 20)
+        for (events in listOf(listOf(t, d, u), listOf(u, d, t))) {
+            val state = JournalFolder.fold(events)
+            assertFalse(state.isDeleted(doc))
+            assertFalse(state.isTrashed(doc))
+        }
+    }
+
+    @Test
+    fun delete_newer_than_undelete_wins() {
+        val u = undelete(1, 10)
+        val d = delete(2, 20)
+        assertTrue(JournalFolder.fold(listOf(u, d)).isDeleted(doc))
+        assertTrue(JournalFolder.fold(listOf(d, u)).isDeleted(doc))
+    }
+
+    @Test
+    fun trash_after_undelete_trashes_again() {
+        val d = delete(1, 10)
+        val u = undelete(2, 20)
+        val t = trash(3, "/x.pdf", 30)
+        val state = JournalFolder.fold(listOf(t, u, d))
+        assertFalse(state.isDeleted(doc))
+        assertTrue(state.isTrashed(doc))
+    }
+
     private fun relink(
         seq: Long,
         old: String,

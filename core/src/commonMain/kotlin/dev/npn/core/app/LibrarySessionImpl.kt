@@ -755,6 +755,7 @@ class LibrarySessionImpl private constructor(
                     ruleProvider = storagePath::rule,
                     fieldTypes = { db.fieldDefDao().fieldTypes() },
                     serialize = { coordinator.serialized(it) },
+                    restore = { docId, relPath -> coordinator.restoreReturned(docId, relPath) },
                 )
             val maintenance = MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
             val relinkService = RelinkService(coordinator)
@@ -944,6 +945,7 @@ class LibrarySessionImpl private constructor(
                 indexer = indexer,
                 accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId),
                 compactor = SnapshotCompactor(deps.fs, deps.installationId),
+                clock = deps.clock,
             )
     }
 }

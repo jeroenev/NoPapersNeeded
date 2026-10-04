@@ -142,7 +142,8 @@ object EventDecoderRegistry {
         val documentOperation: Boolean? =
             when (event.op) {
                 is JournalOp.TagAdd, is JournalOp.TagRemove, is JournalOp.PropSet, is JournalOp.FieldSet,
-                is JournalOp.DocTrash, JournalOp.DocRestore, JournalOp.DocDelete, is JournalOp.Relink,
+                is JournalOp.DocTrash, JournalOp.DocRestore, JournalOp.DocDelete, JournalOp.DocUndelete,
+                is JournalOp.Relink,
                 -> true
 
                 is JournalOp.Unknown -> null

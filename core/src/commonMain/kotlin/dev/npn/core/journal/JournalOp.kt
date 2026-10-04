@@ -93,14 +93,26 @@ sealed class JournalOp {
         }
     }
 
-    /** {}; doc required. */
+    /** {}; doc required. Takes the document out of the trash: last-writer-wins against [DocTrash]. */
     data object DocRestore : JournalOp() {
         override val wire get() = "doc-restore"
     }
 
-    /** {}; permanent tombstone. doc required. */
+    /** {}; doc required. Deletes the document: last-writer-wins against [DocUndelete]. */
     data object DocDelete : JournalOp() {
         override val wire get() = "doc-delete"
+    }
+
+    /**
+     * {}; doc required. Brings a deleted document back, once its file is in the library again (a
+     * re-import, or a sync tool restoring it): it wins over an older [DocDelete] and, like
+     * [DocRestore], over an older [DocTrash]. Builds that predate it read it as [Unknown] and keep
+     * the document deleted until they update.
+     */
+    data object DocUndelete : JournalOp() {
+        override val wire get() = WIRE
+
+        const val WIRE = "doc-undelete"
     }
 
     /** {"newDoc": sha256}; doc = old id. */

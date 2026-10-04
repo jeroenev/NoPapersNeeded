@@ -103,6 +103,10 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
                 JsonObject(emptyMap())
             }
 
+            JournalOp.DocUndelete -> {
+                JsonObject(emptyMap())
+            }
+
             is JournalOp.Relink -> {
                 obj("newDoc" to JsonPrimitive(op.newDoc))
             }
@@ -230,6 +234,10 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
 
             "doc-delete" -> {
                 JournalOp.DocDelete
+            }
+
+            JournalOp.DocUndelete.WIRE -> {
+                JournalOp.DocUndelete
             }
 
             "relink" -> {

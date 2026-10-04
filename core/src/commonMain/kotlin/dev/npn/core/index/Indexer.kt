@@ -40,7 +40,7 @@ import kotlinx.coroutines.sync.withLock
  *  3. reconciles hashed files against the DB projection (move / external duplicate / external edit /
  *     brand-new),
  *  4. flags disappeared files as missing and builds relink candidates,
- *  5. handles trash resurrection,
+ *  5. handles trash resurrection (reported through `onResurrected` once the fold has committed),
  *  6. folds the journals and applies effective views (tags, props, trash, deletes, relinks) into the
  *     DB, then updates FTS,
  *  7. moves documents to the paths their intents name, and records where each was seen,
@@ -87,6 +87,7 @@ class Indexer(
         fullHash: Boolean = false,
         onProgress: (IndexProgress) -> Unit = {},
         onExternalMoves: (suspend (List<PendingOp>) -> Unit)? = null,
+        onResurrected: suspend (List<Resurrected>) -> Unit = {},
     ): ScanReport {
         check(!documentPaths.collecting) { "A rescan does filesystem work, so it cannot run inside a projection" }
         val started = clock.nowMillis()
@@ -212,6 +213,7 @@ class Indexer(
                     }
                 }
             val recon = pass.recon
+            if (pass.resurrected.isNotEmpty()) onResurrected(pass.resurrected)
 
             if (recon.duplicates.isNotEmpty()) {
                 val duplicateDocs = recon.duplicates.mapTo(LinkedHashSet()) { it.docId }
@@ -231,7 +233,6 @@ class Indexer(
                 missingCount = pass.missingCount,
                 duplicates = recon.duplicates,
                 conflictFiles = conflictFiles,
-                resurrected = pass.resurrected,
                 relinkCandidates = recon.relinkCandidates,
                 hashedCount = hashedCount,
                 durationMillis = clock.nowMillis() - started,
@@ -528,12 +529,11 @@ class Indexer(
      * - Fields: every doc's document_fields is replaced with its effective field map (own values
      *   over inherited predecessor values); the well-known five are additionally cached on the
      *   doc row. reviewed/ocrEngineOverride come from the system props.
-     * - Trash: the trashed flag, trashedOrigPath and trashedAt come from the fold's trash state. Resurrection:
-     *   if the journal says trashed/deleted but the file exists at the original path, prefer the
-     *   file (clear missing, do NOT set trashed) and report it. This keeps the file authoritative.
-     * - Delete: a delete tombstone sets `deleted = true`. File cleanup is a separate user action;
-     *   a deleted doc whose file still exists keeps the flag (documented divergence: the tombstone
-     *   is authoritative for identity, the leftover file is surfaced for manual cleanup elsewhere).
+     * - Trash and delete: the trashed and deleted flags, trashedOrigPath and trashedAt come from the
+     *   fold's lifecycle state. Resurrection, on a full rescan only: when the journal says trashed
+     *   or deleted but the file exists at its original or current path, the file wins (flags and
+     *   missing cleared) and the document is reported, so the caller can record a restore; until
+     *   one is recorded, any other fold hides it again (see [projectLifecycle]).
      * - Relinks: fold resolves old->new; the effective views are already keyed on ids. For a folded
      *   relink where both ids are known, the OLD doc is marked deleted/superseded and the NEW doc
      *   carries the metadata (fold exposes effective views on the resolved id).
@@ -828,7 +828,8 @@ class Indexer(
                 relPath = origOnDisk
                 fileName = origOnDisk.substringAfterLast('/')
             }
-            resurrected.add(Resurrected(doc, relPath, wasDeleted = journalDeleted))
+            val hiddenAt = state.hiddenBy(doc)?.physicalMillis ?: 0L
+            resurrected.add(Resurrected(doc, relPath, wasDeleted = journalDeleted, hiddenAtMillis = hiddenAt))
         }
         return Lifecycle(trashed, deleted, missing, relPath, fileName, origPath)
     }

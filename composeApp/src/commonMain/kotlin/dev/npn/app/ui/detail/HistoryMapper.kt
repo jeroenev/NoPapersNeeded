@@ -122,7 +122,7 @@ object HistoryMapper {
                     historyText(HistoryTextKey.DOCUMENT_TRASHED, op.origPath)
                 }
 
-                JournalOp.DocRestore -> {
+                JournalOp.DocRestore, JournalOp.DocUndelete -> {
                     historyText(HistoryTextKey.DOCUMENT_RESTORED)
                 }
 
@@ -197,7 +197,7 @@ object HistoryMapper {
                 HistoryEventKind.TRASH
             }
 
-            JournalOp.DocRestore -> {
+            JournalOp.DocRestore, JournalOp.DocUndelete -> {
                 HistoryEventKind.RESTORE
             }
 

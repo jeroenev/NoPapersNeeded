@@ -49,6 +49,10 @@ class EmptyImportException : IllegalArgumentException("The file is empty")
  * bytes both pass the check and place two files for one hash, and a rescan listing the library
  * between the move and the row write inserts a row of its own that the import then overwrites
  * (or that overwrites the import's).
+ *
+ * Bytes the journal had deleted or trashed come back through [restore], which records that they
+ * are back (`JournalCoordinator.restoreReturned`); without that record, the next fold would hide
+ * the document again.
  */
 @OptIn(ExperimentalUuidApi::class)
 class ImportService(
@@ -60,6 +64,8 @@ class ImportService(
     /** The registry's field types by key, which decide where a template accepts a date pattern. */
     private val fieldTypes: suspend () -> Map<String, FieldType>,
     private val serialize: suspend (suspend () -> Unit) -> Unit = { it() },
+    /** Record that the document is back at the path, when the journal still hides it. */
+    private val restore: suspend (docId: String, relPath: String) -> Unit = { _, _ -> },
 ) {
     suspend fun importPdf(
         source: ExternalSource,
@@ -99,15 +105,24 @@ class ImportService(
         val hash = fs.sha256(tmpPath)
         var result: ImportResult? = null
         serialize { result = place(tmpPath, hash, suggestedName, toDir) }
-        return checkNotNull(result)
+        val placed = checkNotNull(result)
+        // After [serialize]: the restore is a journal write, which takes the same lock.
+        if (placed is ImportResult.Imported) {
+            runCatchingCancellable { restore(placed.docId, placed.relPath) }.onFailure { failure ->
+                undoImport(placed)
+                throw failure
+            }
+        }
+        return placed
     }
 
     /**
      * Take back an import this service just made, for a caller whose larger operation failed after
-     * it: a split whose later part could not be made. An import writes no journal event, so taking
-     * it back is removing the file and its rows, not a trash or a tombstone; a tombstone would hide
-     * the same bytes when the caller retries and makes the same part again. Leaves alone a document
-     * that no longer sits where the import put it.
+     * it: a split whose later part could not be made. An import writes no journal event beyond the
+     * restore of bytes the journal had hidden, so taking it back is removing the file and its rows,
+     * not a trash or a tombstone; a tombstone would hide the same bytes when the caller retries and
+     * makes the same part again. Leaves alone a document that no longer sits where the import put
+     * it.
      */
     suspend fun undoImport(imported: ImportResult.Imported) =
         serialize {

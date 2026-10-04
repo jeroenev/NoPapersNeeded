@@ -59,11 +59,11 @@ class IndexRig private constructor(
      * Reconcile metadata through the persisted accumulator, then rescan the file tree. Mirrors
      * what [JournalCoordinator.rescan] does in production, so tests keep calling a single method.
      */
-    suspend fun rescan(): ScanReport {
+    suspend fun rescan(onResurrected: suspend (List<Resurrected>) -> Unit = {}): ScanReport {
         // A rescan always projects, so it always needs a fold — reconcile returns null when it
         // read nothing and had nothing handed in, which is a no-op only the metadata paths can use.
         val state = accumulator.reconcile().state ?: accumulator.loadState()
-        val report = indexer.rescan(metadataState = state)
+        val report = indexer.rescan(metadataState = state, onResurrected = onResurrected)
         accumulator.markReady(state.maxHlc)
         return report
     }

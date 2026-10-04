@@ -201,6 +201,15 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
   found out at the first open. A fresh id costs nothing: the old id's sidecars are adopted as
   another device's.
 
+- **Delete and restore.** `doc-trash`/`doc-restore` and `doc-delete`/`doc-undelete` are
+  last-writer-wins pairs by HLC; an undelete also takes the document out of the trash. When the
+  bytes of a deleted or trashed document come back, the return is recorded in the journal, or the
+  next fold would hide the document again: an import of them writes it
+  (`JournalCoordinator.restoreReturned`), and a rescan that finds the file back in the library
+  writes it once the event that hid the document is a day old (`RESTORE_SETTLE_MS`). Sooner, the
+  file may be one a sync tool has not taken away yet, so the rescan shows it for that scan only.
+  Builds from before `doc-undelete` ignore it and keep the document deleted until they update.
+
 ## Where to look for common tasks
 
 - A new library-wide synced setting → a `setting-set` op under a new key, read through

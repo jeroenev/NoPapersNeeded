@@ -96,8 +96,12 @@ class EventHistoryGen(
                     JournalOp.DocRestore
                 }
 
-                choice < 77 -> {
+                choice < 76 -> {
                     JournalOp.DocDelete
+                }
+
+                choice < 77 -> {
+                    JournalOp.DocUndelete
                 }
 
                 choice < 82 -> { // relink to another doc id
