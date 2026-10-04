@@ -69,7 +69,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
@@ -526,7 +525,7 @@ class LibrarySessionImpl private constructor(
 
         // Another device's rule list arrives as a journal setting; the rules table only caches it.
         scope.launch {
-            coordinator.settingFlow(LibrarySettingKeys.AUTO_MATCH_RULES).distinctUntilChanged().collect {
+            coordinator.settingFlow(LibrarySettingKeys.AUTO_MATCH_RULES).collect {
                 log.runLogged("Caching the auto-match rules") { rules.mirror() }
             }
         }

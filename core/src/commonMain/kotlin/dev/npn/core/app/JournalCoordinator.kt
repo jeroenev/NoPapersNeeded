@@ -25,6 +25,7 @@ import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -43,7 +44,8 @@ private class SyncedSettings {
     /** Every key ever written, null for a cleared one (see [FoldedState.settings]). */
     private val values = MutableStateFlow<Map<String, String?>>(emptyMap())
 
-    fun flow(key: String): kotlinx.coroutines.flow.Flow<String?> = values.map { it[key] }
+    /** [key]'s value as it changes; a write to any other setting does not re-emit it. */
+    fun flow(key: String): kotlinx.coroutines.flow.Flow<String?> = values.map { it[key] }.distinctUntilChanged()
 
     /** Every setting, cleared ones as null. */
     fun all(): kotlinx.coroutines.flow.Flow<Map<String, String?>> = values
