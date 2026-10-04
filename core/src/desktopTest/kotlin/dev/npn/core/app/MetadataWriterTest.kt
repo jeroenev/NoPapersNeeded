@@ -18,6 +18,7 @@ import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineStart
 import kotlinx.coroutines.async
@@ -501,7 +502,7 @@ class MetadataWriterTest {
                 val compactor =
                     dev.npn.core.journal
                         .SnapshotCompactor(rig.fs, "test-installation")
-                val published = compactor.publish(candidates)!!
+                compactor.publish(candidates).shouldNotBeNull()
                 objects.forEach { rig.fs.delete(it.relPath) }
 
                 // Device 2 rescans: applies the snapshot, tolerates the now-missing objects.

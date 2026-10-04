@@ -18,8 +18,8 @@ import kotlin.random.Random
  * shuffle it and/or partition it into segments to check order independence.
  */
 class EventHistoryGen(
-    private val seed: Long,
-    private val deviceCount: Int,
+    seed: Long,
+    deviceCount: Int,
     private val eventCount: Int,
 ) {
     private val rng = Random(seed)
