@@ -42,6 +42,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Single test class: `./gradlew :core:desktopTest --tests 'dev.npn.core.journal.OrSetTest'`.
 - Build logic tests (`buildSrc`, e.g. the `checkLocalization` guard): `./gradlew :buildSrc:test`.
   They are not part of `check`; CI runs them with the other tests.
+- Desktop shell tests (`desktopApp`, e.g. the single-instance lock): `./gradlew :desktopApp:test`.
+  CI runs them with the other tests too.
 - Live AI endpoint checks are opt-in and skipped by default (they cost money):
   `NPN_LIVE_AI=1 ./gradlew :core:desktopTest --tests 'dev.npn.core.ai.LiveEndpointProbeTest'`.
   Never add a live-endpoint call to a normal test — CI has no credentials.

@@ -51,7 +51,8 @@ jobs:
 
       # Desktop suites with coverage, then the same commonTest suites against the Android target
       # plus whatever only exists there (androidHostTest). Coverage stays on the desktop run.
-      # buildSrc's own tests (the localization guard) never run as part of the main build.
+      # buildSrc's own tests (the localization guard) never run as part of the main build, and
+      # desktopApp's (the single-instance lock) would otherwise only run in the main-only build below.
       - name: Tests and coverage
         run: >-
           ./gradlew
@@ -60,6 +61,7 @@ jobs:
           :core:testAndroidHostTest
           :composeApp:testAndroidHostTest
           :buildSrc:test
+          :desktopApp:test
 
       # detektTyped is detekt with type resolution: it needs the compiled classpaths, so it shares
       # this invocation instead of running with the source-only detekt above.
