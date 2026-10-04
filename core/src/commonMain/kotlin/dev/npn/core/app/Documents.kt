@@ -111,6 +111,12 @@ interface DocumentRepository {
      * it was selected from, which a filter change can swap out from under it.
      */
     suspend fun tagsForDocuments(docIds: List<String>): Map<String, List<String>>
+
+    /**
+     * The live documents among [docIds] with their tags and fields, read once and in no particular
+     * order; an id whose document is not live is left out. Takes any number of ids.
+     */
+    suspend fun liveDocuments(docIds: List<String>): List<DocListItem>
 }
 
 interface TagRepository {

@@ -122,11 +122,7 @@ internal class WorkQueueReader(
     }
 
     private suspend fun displayTitles(docIds: List<String>): Map<String, String> =
-        docIds
-            .distinct()
-            .chunked(TITLE_LOOKUP_CHUNK)
-            .flatMap { documentDao.titlesFor(it) }
-            .associate { it.docId to displayTitleOf(it.title, it.fileName) }
+        documentDao.titlesFor(docIds.distinct()).associate { it.docId to displayTitleOf(it.title, it.fileName) }
 
     private fun OcrQueueEntity.toQueuedWork(
         title: String,
@@ -169,9 +165,4 @@ internal class WorkQueueReader(
             nextAttemptAt = nextAttemptAt,
             lastError = lastError,
         )
-
-    private companion object {
-        /** Keeps the expanded `IN (...)` list clear of SQLite's bound-variable ceiling. */
-        const val TITLE_LOOKUP_CHUNK = 400
-    }
 }

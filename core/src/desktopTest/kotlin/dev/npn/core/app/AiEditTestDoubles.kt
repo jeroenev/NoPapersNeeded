@@ -92,6 +92,10 @@ internal class FakeDocuments : DocumentRepository {
     override suspend fun history(docId: String): List<DocumentHistoryRecord> = error("unused")
 
     override suspend fun tagsForDocuments(docIds: List<String>): Map<String, List<String>> = error("unused")
+
+    /** Every document in [documents] is live; one a test removed from it is not. */
+    override suspend fun liveDocuments(docIds: List<String>): List<DocListItem> =
+        documents.value.filter { it.doc.docId in docIds }
 }
 
 internal class FakeMeta : MetadataWriter {

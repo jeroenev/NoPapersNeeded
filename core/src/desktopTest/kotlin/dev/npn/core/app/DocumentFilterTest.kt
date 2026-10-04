@@ -50,6 +50,31 @@ class DocumentFilterTest {
         }
 
     @Test
+    fun liveDocumentsReadsTheLiveOnesAmongTheIdsWithTheirTags() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("bravo"))
+                rig.writePdf("c.pdf", PdfFixtures.embeddedTextPdf("charlie"))
+                rig.session.rescan()
+                val a = rig.fs.sha256("a.pdf")
+                val b = rig.fs.sha256("b.pdf")
+                val c = rig.fs.sha256("c.pdf")
+                rig.session.meta.addTag(listOf(a), "x")
+                rig.session.docLifecycle.trashDoc(b)
+
+                val live = DocumentRepositoryImpl(rig.db).liveDocuments(listOf(a, b, a, "f".repeat(64)))
+
+                ids(live) shouldContainExactly listOf(a)
+                live.single().tags shouldContainExactly listOf("x")
+                ids(DocumentRepositoryImpl(rig.db).liveDocuments(listOf(c))) shouldContainExactly listOf(c)
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
     fun reviewedAndUntaggedAndFolder() =
         runTest {
             val rig = AppSessionRig.create(backgroundScope)

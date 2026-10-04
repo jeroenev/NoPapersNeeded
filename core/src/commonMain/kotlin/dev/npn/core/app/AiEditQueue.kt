@@ -14,7 +14,6 @@ import dev.npn.core.work.QueueRetryPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -369,16 +368,9 @@ class AiEditQueue(
         return true
     }
 
-    /**
-     * The live documents behind [docIds], keyed by id. Chunked to keep the expanded `IN (...)`
-     * list clear of SQLite's bound-variable ceiling; a queued run can cover the whole library.
-     */
+    /** The live documents behind [docIds], keyed by id; a queued run can cover the whole library. */
     private suspend fun liveItems(docIds: List<String>): Map<String, DocListItem> =
-        docIds
-            .distinct()
-            .chunked(DOC_LOOKUP_CHUNK)
-            .flatMap { documents.observeDocuments(LibraryFilter(docIds = it), SORT).first() }
-            .associateBy { it.doc.docId }
+        documents.liveDocuments(docIds).associateBy { it.doc.docId }
 
     private fun AiEditJobEntity.request(): AiEditRequest? =
         runCatching { json.decodeFromString<AiEditRequest>(requestJson) }.getOrNull()
@@ -387,13 +379,8 @@ class AiEditQueue(
         suggestionJson?.let { runCatching { json.decodeFromString<AiEditSuggestion>(it) }.getOrNull() }
 
     internal companion object {
-        private val SORT = LibrarySort()
-
         /** Lenient so a suggestion stored by a newer build still opens under an older one. */
         private val json = NpnJson.Persisted
-
-        /** Keeps the expanded `IN (...)` list clear of SQLite's bound-variable ceiling. */
-        private const val DOC_LOOKUP_CHUNK = 400
 
         /**
          * Failed calls one document gets before the run gives up on it. Small because a document

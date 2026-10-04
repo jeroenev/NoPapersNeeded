@@ -6,6 +6,7 @@ import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.LIVE_DOCUMENT
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.isLive
 import dev.npn.core.db.toFieldDef
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
@@ -90,13 +91,7 @@ class DocumentRepositoryImpl(
             .conflate()
             .mapLatest { docs ->
                 if (queryText == null) {
-                    // Attach tags and custom fields for all docs in one pass.
-                    val ids = docs.map { it.docId }
-                    val tagsByDoc = tagsForDocuments(ids)
-                    val fieldsByDoc = fieldsFor(ids)
-                    docs.map {
-                        DocListItem(it.toDoc(fieldsByDoc[it.docId].orEmpty()), tagsByDoc[it.docId].orEmpty())
-                    }
+                    listItems(docs)
                 } else {
                     // FTS-first: the base flow stays authoritative for the WHERE clause (all filter
                     // predicates + trashed/deleted/missing), so intersect it with the FTS match set
@@ -170,6 +165,17 @@ class DocumentRepositoryImpl(
                 index++
             }
         }.distinctBy { it.lowercase() }.take(limit)
+    }
+
+    override suspend fun liveDocuments(docIds: List<String>): List<DocListItem> =
+        listItems(documentDao.getByDocIds(docIds.distinct()).filter { it.isLive })
+
+    /** [docs] with their tags and custom fields, each attached in one pass. */
+    private suspend fun listItems(docs: List<DocumentEntity>): List<DocListItem> {
+        val ids = docs.map { it.docId }
+        val tagsByDoc = tagsForDocuments(ids)
+        val fieldsByDoc = fieldsFor(ids)
+        return docs.map { DocListItem(it.toDoc(fieldsByDoc[it.docId].orEmpty()), tagsByDoc[it.docId].orEmpty()) }
     }
 
     private suspend fun fieldsFor(docIds: List<String>): Map<String, Map<String, String>> {

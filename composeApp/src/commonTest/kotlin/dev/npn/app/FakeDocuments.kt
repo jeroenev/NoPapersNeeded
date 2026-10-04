@@ -124,6 +124,9 @@ class FakeDocumentRepository : DocumentRepository {
         documents.value
             .filter { it.doc.docId in docIds }
             .associate { it.doc.docId to it.tags }
+
+    override suspend fun liveDocuments(docIds: List<String>): List<DocListItem> =
+        documents.value.filter { it.doc.docId in docIds }
 }
 
 class FakeTagRepository : TagRepository {
