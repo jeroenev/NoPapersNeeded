@@ -9,11 +9,8 @@ import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.util.NpnJson
-import dev.npn.core.util.runCatchingCancellable
-import dev.npn.core.work.backoffMs
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
+import dev.npn.core.work.EndpointHealth
+import dev.npn.core.work.QueueRetryPolicy
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -133,9 +130,9 @@ interface AiEditQueueFacade {
  *
  * ## Failure: systemic versus per-document
  *
- * [processNext] works one chunk of at most [CHUNK_DOCS] documents per step, concurrently. What it
- * does about failure depends on how much of the chunk failed, because the two causes want opposite
- * treatment:
+ * [processNext] works one chunk of documents per step, as many as [SuggestionRunner] asks about at
+ * once. What it does about failure depends on how much of the chunk failed, because the two causes
+ * want opposite treatment:
  *
  * - **Part of the chunk failed** — the endpoint is clearly alive, so this is about those documents.
  *   They carry the attempt, and at [MAX_DOC_ATTEMPTS] they are given up on and reported as
@@ -144,8 +141,8 @@ interface AiEditQueueFacade {
  * - **The whole chunk failed** — overwhelmingly an endpoint down, no network, bad credentials.
  *   Nothing is held against the documents (charging them attempts would let one afternoon of
  *   airplane mode silently destroy a run the user is waiting on); the *job* backs off exponentially
- *   and the drain parks for [AiAutoEnricher.FAILURE_COOLDOWN_MS], which caps an outage at one
- *   chunk a minute however many runs are queued.
+ *   and the endpoint goes on its cooldown ([EndpointHealth]), which caps an outage at one chunk a
+ *   minute however many runs are queued, and holds automatic enrichment back as well.
  *
  * That second rule cannot hold forever, because "the whole chunk failed" stops being evidence of
  * anything once the chunk is one document: the last poison document of a run is always alone in
@@ -166,12 +163,14 @@ interface AiEditQueueFacade {
 class AiEditQueue(
     private val dao: AiEditJobDao,
     private val documents: DocumentRepository,
-    private val content: DocContentFacade,
-    private val meta: MetadataWriter,
-    private val ai: AiSuggest,
-    private val fieldRegistry: FieldRegistry,
+    content: DocContentFacade,
+    meta: MetadataWriter,
+    ai: AiSuggest,
+    fieldRegistry: FieldRegistry,
     private val readConfig: suspend () -> AiConfig,
     private val clock: EpochClock,
+    /** The endpoint's cooldown, shared with every other queue that calls it. */
+    private val health: EndpointHealth,
     /** Asks for a drain of this queue; called once a run is queued. */
     private val onEnqueued: () -> Unit,
     /** Runs the queue's writes as work the session owns, so closing it waits for them. */
@@ -180,6 +179,11 @@ class AiEditQueue(
 ) : AiEditQueueFacade {
     private val projector = ReviewProjector(content, fieldRegistry)
     private val reviewApply = ReviewApply(meta)
+    private val runner = SuggestionRunner(ai)
+
+    /** A document is given up on at [MAX_DOC_ATTEMPTS]; a job's own backoff has no cap. */
+    private val docRetry = QueueRetryPolicy(MAX_DOC_ATTEMPTS)
+    private val jobRetry = QueueRetryPolicy()
 
     /**
      * Serialises the drain against the user's cancels. The drain steps themselves are already
@@ -192,15 +196,6 @@ class AiEditQueue(
      * back.
      */
     private val drainLock = Mutex()
-
-    /**
-     * When the next chunk may be attempted after a systemic failure. In memory rather than on a
-     * row, for the same reason as [AiAutoEnricher.cooldownUntil]: it is a statement about the
-     * endpoint, not about a run, and an app relaunch is the one moment where retrying immediately
-     * is most likely to be right. Only touched from inside [processNext], which [drainLock]
-     * serialises.
-     */
-    private var cooldownUntil = 0L
 
     override suspend fun enqueueEditRun(
         docIds: List<String>,
@@ -283,7 +278,7 @@ class AiEditQueue(
     private suspend fun dueJob(): AiEditJobEntity? {
         if (!readConfig().configured) return null
         val now = clock.nowMillis()
-        if (now < cooldownUntil) return null
+        if (health.coolingDown(now)) return null
         return dao.nextDueJob(now)
     }
 
@@ -291,7 +286,7 @@ class AiEditQueue(
         job: AiEditJobEntity,
         request: AiEditRequest,
     ): Boolean {
-        val pending = dao.nextPendingDocs(job.jobId, CHUNK_DOCS)
+        val pending = dao.nextPendingDocs(job.jobId, SuggestionRunner.CONCURRENCY)
         if (pending.isEmpty()) return true
         val items = liveItems(pending.map { it.docId })
         // Documents trashed or deleted since the run was queued are dropped rather than asked
@@ -299,21 +294,8 @@ class AiEditQueue(
         val (live, gone) = pending.partition { it.docId in items }
         if (gone.isNotEmpty()) dao.deleteDocs(job.jobId, gone.map { it.docId })
         if (live.isEmpty()) return dropIfEmptied(job)
-        return recordChunk(job, live, suggestChunk(live, request))
+        return recordChunk(job, live, runner.suggest(live.map { it.docId }, request) { _, suggestion -> suggestion })
     }
-
-    /** One model call per document, bounded by the chunk size, each result kept with its row. */
-    private suspend fun suggestChunk(
-        rows: List<AiEditJobDocEntity>,
-        request: AiEditRequest,
-    ): List<Result<AiEditSuggestion>> =
-        coroutineScope {
-            rows
-                .map { row ->
-                    // Cancellation tears the whole scope down; it is not a failed suggestion.
-                    async { runCatchingCancellable { ai.suggestEdits(row.docId, request) } }
-                }.awaitAll()
-        }
 
     /** Persist a chunk's outcomes and decide what its failures mean; see the class docs. */
     private suspend fun recordChunk(
@@ -338,7 +320,7 @@ class AiEditQueue(
         // spent while it was not are both stale; clearing them lets the next kick carry straight on.
         val now = clock.nowMillis()
         dao.upsertJob(job.copy(attempts = 0, nextAttemptAt = now, updatedAt = now, lastError = null))
-        cooldownUntil = 0L
+        health.answered()
         return true
     }
 
@@ -351,13 +333,13 @@ class AiEditQueue(
                 val tried = attempts + 1
                 copy(
                     attempts = tried,
-                    failed = tried >= MAX_DOC_ATTEMPTS,
+                    failed = docRetry.givesUp(tried),
                     lastError = cause.message ?: cause::class.simpleName,
                 )
             },
         )
 
-    /** Push the whole run's next attempt out by the shared model-failure backoff. */
+    /** Push the whole run's next attempt out by the shared backoff, and put the endpoint on its cooldown. */
     private suspend fun parkJob(
         job: AiEditJobEntity,
         cause: Throwable?,
@@ -367,14 +349,12 @@ class AiEditQueue(
         dao.upsertJob(
             job.copy(
                 attempts = attempts,
-                // The same ramp as automatic enrichment: both are "an endpoint just refused a
-                // model call", and the cost of guessing the interval wrong is identical.
-                nextAttemptAt = now + backoffMs(attempts),
+                nextAttemptAt = jobRetry.nextAttemptAt(now, attempts),
                 updatedAt = now,
                 lastError = cause?.let { it.message ?: it::class.simpleName },
             ),
         )
-        cooldownUntil = now + AiAutoEnricher.FAILURE_COOLDOWN_MS
+        health.failed(now)
     }
 
     /**
@@ -422,14 +402,6 @@ class AiEditQueue(
 
         /** Keeps the expanded `IN (...)` list clear of SQLite's bound-variable ceiling. */
         private const val DOC_LOOKUP_CHUNK = 400
-
-        /**
-         * Documents suggested per drain step, all concurrently. Matches the interactive run's
-         * bounded concurrency: the calls are mostly IO-bound, so overlapping them is a large
-         * speedup, and the same ceiling keeps a background run from hitting the endpoint harder
-         * than a user watching one would.
-         */
-        internal const val CHUNK_DOCS = 12
 
         /**
          * Failed calls one document gets before the run gives up on it. Small because a document

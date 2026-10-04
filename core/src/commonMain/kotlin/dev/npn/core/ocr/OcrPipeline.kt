@@ -18,7 +18,7 @@ import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
-import dev.npn.core.work.backoffMs
+import dev.npn.core.work.QueueRetryPolicy
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -34,7 +34,8 @@ import kotlinx.coroutines.sync.withLock
  *  not rendered and OCR'd.
  * @param renderDpiDim max longer-side pixel dimension used when rendering a page for OCR.
  * @param maxAttempts attempts before a queue entry is marked permanently failed. Each failed
- *  attempt first waits out [backoffMs], so a failing document is not retried at once.
+ *  attempt first waits out the [QueueRetryPolicy] backoff, so a failing document is not retried at
+ *  once.
  */
 data class OcrConfig(
     val lang: String = "eng",
@@ -125,6 +126,8 @@ class OcrPipeline(
         val lang: String,
         val createdAt: Long,
     )
+
+    private val retry = QueueRetryPolicy(config.maxAttempts)
 
     /** Engine label per `<hash>.<writerKey>`, so legacy sidecars are decoded at most once. */
     private val engineCache = SidecarFacts<String>()
@@ -547,7 +550,7 @@ class OcrPipeline(
         if (doc.trashed || doc.deleted || doc.missing) return
         if (!canImprove(doc, versions)) return
         val entry = ocrQueueDao.getByDocId(doc.docId)
-        if (entry != null && (entry.state != STATE_DONE || entry.attempts >= config.maxAttempts)) return
+        if (entry != null && (entry.state != STATE_DONE || retry.givesUp(entry.attempts))) return
         ocrQueueDao.upsert(
             OcrQueueEntity(
                 docId = doc.docId,
@@ -673,7 +676,7 @@ class OcrPipeline(
     ) {
         val entry = ocrQueueDao.getByDocId(docId)
         val attempts = (entry?.attempts ?: 0) + 1
-        val state = if (attempts >= config.maxAttempts) STATE_FAILED else STATE_PENDING
+        val state = if (retry.givesUp(attempts)) STATE_FAILED else STATE_PENDING
         val now = clock.nowMillis()
         ocrQueueDao.upsert(
             OcrQueueEntity(
@@ -681,7 +684,7 @@ class OcrPipeline(
                 state = state,
                 attempts = attempts,
                 updatedAt = now,
-                nextAttemptAt = now + backoffMs(attempts),
+                nextAttemptAt = retry.nextAttemptAt(now, attempts),
                 lastError = error,
                 // A retry of a requested run is still that request.
                 rerun = entry?.rerun ?: false,

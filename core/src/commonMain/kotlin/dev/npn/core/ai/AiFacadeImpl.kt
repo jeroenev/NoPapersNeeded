@@ -8,6 +8,7 @@ import dev.npn.core.app.AiTagging
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.toFieldDef
+import dev.npn.core.work.EndpointHealth
 import io.ktor.client.HttpClient
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -43,6 +44,12 @@ class AiFacadeImpl(
 ) : AiChat,
     AiSuggest,
     AiOcr {
+    /**
+     * The one cooldown of this facade's endpoint, shared by every queue that calls it (automatic
+     * enrichment and queued edit runs), so they do not each probe an endpoint that is down.
+     */
+    val endpointHealth = EndpointHealth()
+
     private val chatHistoryStore = RoomChatHistoryProvider(chats, ownWrite)
     private val chatSessionStore = RoomChatSessionStore(chats, ownWrite)
 

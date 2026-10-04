@@ -2,7 +2,6 @@ package dev.npn.core.app
 
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiOcrEngine
-import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.RoomChatHistoryProvider
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
@@ -203,7 +202,7 @@ internal fun buildEnrichment(
     deps: SessionDeps,
     lifetime: SessionLifetime,
     library: Library,
-    ai: AiSuggest,
+    ai: AiFacadeImpl,
 ): DrainedQueue<AiAutoEnricher> =
     drainedQueue(lifetime.scope, "AI enrichment queue", deps.log, build = { onEnqueued ->
         AiAutoEnricher(
@@ -214,6 +213,7 @@ internal fun buildEnrichment(
             fieldRegistry = library.fieldRegistry,
             policy = deps.unattendedAi,
             clock = deps.clock,
+            health = ai.endpointHealth,
             onEnqueued = onEnqueued,
         )
     }) { it.processNext() }
@@ -223,7 +223,7 @@ internal fun buildEditQueue(
     deps: SessionDeps,
     lifetime: SessionLifetime,
     library: Library,
-    ai: AiSuggest,
+    ai: AiFacadeImpl,
 ): DrainedQueue<AiEditQueue> =
     drainedQueue(lifetime.scope, "AI edit queue", deps.log, build = { onEnqueued ->
         AiEditQueue(
@@ -235,6 +235,7 @@ internal fun buildEditQueue(
             fieldRegistry = library.fieldRegistry,
             readConfig = deps.settings.aiConfig,
             clock = deps.clock,
+            health = ai.endpointHealth,
             onEnqueued = onEnqueued,
             ownWrite = { lifetime.owned(it) },
         )

@@ -8,8 +8,8 @@ private const val BACKOFF_MAX_SHIFT = 20
 
 /**
  * How long a persisted queue's row waits after its [attempts]th failure before it may be tried
- * again: 1m, 2m, 4m, 8m … 17h, then a day forever. Shared by every queue that retries (OCR,
- * automatic enrichment, queued edit runs), so a failing endpoint is asked again on one schedule.
+ * again: 1m, 2m, 4m, 8m … 17h, then a day forever. The ramp of every [QueueRetryPolicy], so a
+ * failing endpoint is asked again on one schedule.
  *
  * Plain doubling rather than a coarser ramp: the interval is also how long a *recovered* endpoint
  * goes unnoticed, so overshooting costs latency on the common case (a blip, a tunnel, a laptop that

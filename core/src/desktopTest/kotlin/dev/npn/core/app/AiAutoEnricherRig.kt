@@ -13,6 +13,7 @@ import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.index.MutableClock
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueDrainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.TestScope
@@ -121,13 +122,16 @@ internal class Rig(
     /** How often the enricher asked for its drain; the session's drainer would run once per kick. */
     var kicks = 0
 
-    val enricher: AiAutoEnricher by lazy { newEnricher() }
+    /** The endpoint's cooldown, as the session's AI facade holds it for every queue. */
+    val health = EndpointHealth()
+
+    val enricher: AiAutoEnricher by lazy { newEnricher(health) }
 
     /**
      * A fresh enricher over the same database, which is also how "the app was restarted" is
-     * expressed: nothing but the queue rows carries over.
+     * expressed: nothing but the queue rows carries over, not even the endpoint's cooldown.
      */
-    fun newEnricher() =
+    fun newEnricher(health: EndpointHealth = EndpointHealth()) =
         AiAutoEnricher(
             documentDao = db.documentDao(),
             queueDao = deviceDb.aiEnrichQueueDao(),
@@ -136,6 +140,7 @@ internal class Rig(
             fieldRegistry = fieldRegistry,
             policy = UnattendedAiPolicy.fromConfig { config },
             clock = clock,
+            health = health,
             onEnqueued = { kicks++ },
         )
 

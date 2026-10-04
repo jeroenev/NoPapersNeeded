@@ -13,6 +13,8 @@ import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.deviceDatabase
 import dev.npn.core.index.MutableClock
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.work.EndpointHealth
+import dev.npn.core.work.QueueRetryPolicy
 import dev.npn.core.work.backoffMs
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -49,13 +51,16 @@ private class QueueRig(
     /** How often a queue asked for its drain; the session's drainer would run once per kick. */
     var kicks = 0
 
-    val queue: AiEditQueue by lazy { newQueue() }
+    /** The endpoint's cooldown, as the session's AI facade holds it for every queue. */
+    val health = EndpointHealth()
+
+    val queue: AiEditQueue by lazy { newQueue(health) }
 
     /**
      * A fresh queue over the same database, which is also how "the app was restarted" is
-     * expressed: nothing but the job rows carries over.
+     * expressed: nothing but the job rows carries over, not even the endpoint's cooldown.
      */
-    fun newQueue() =
+    fun newQueue(health: EndpointHealth = EndpointHealth()) =
         AiEditQueue(
             dao = db.aiEditJobDao(),
             documents = documents,
@@ -65,6 +70,7 @@ private class QueueRig(
             fieldRegistry = fieldRegistry,
             readConfig = { config },
             clock = clock,
+            health = health,
             onEnqueued = { kicks++ },
             newJobId = { "job-${++ids}" },
         )
@@ -131,15 +137,15 @@ class AiEditQueueSuggestionTest {
         runTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
-                val docIds = (1..AiEditQueue.CHUNK_DOCS + 3).map { "d$it" }
+                val docIds = (1..SuggestionRunner.CONCURRENCY + 3).map { "d$it" }
                 rig.documents.documents.value = docIds.map { item(it) }
                 val jobId = rig.queue.enqueueEditRun(docIds, AiEditRequest())
 
                 rig.queue.processNext() shouldBe true
 
                 // One chunk only: the drainer loops, so a step must not swallow the whole run.
-                rig.ai.suggestEditsCalls shouldContainExactly docIds.take(AiEditQueue.CHUNK_DOCS)
-                rig.rows(jobId).count { it.suggestionJson != null } shouldBe AiEditQueue.CHUNK_DOCS
+                rig.ai.suggestEditsCalls shouldContainExactly docIds.take(SuggestionRunner.CONCURRENCY)
+                rig.rows(jobId).count { it.suggestionJson != null } shouldBe SuggestionRunner.CONCURRENCY
 
                 rig.queue.processNext() shouldBe true
                 rig.ai.suggestEditsCalls shouldContainExactly docIds
@@ -292,7 +298,7 @@ class AiEditQueueFailureTest {
 
                 rig.ai.suggestEditsCalls shouldHaveSize 1
 
-                rig.clock.advance(AiAutoEnricher.FAILURE_COOLDOWN_MS)
+                rig.clock.advance(QueueRetryPolicy.ENDPOINT_COOLDOWN_MS)
                 rig.ai.failWith = null
                 rig.ai.edit = suggestion()
                 rig.queue.processNext() shouldBe true
@@ -376,7 +382,7 @@ class AiEditQueueFailureTest {
 
                 rig.ai.failWith = null
                 rig.ai.edit = suggestion()
-                rig.clock.advance(AiAutoEnricher.FAILURE_COOLDOWN_MS + backoffMs(1))
+                rig.clock.advance(QueueRetryPolicy.ENDPOINT_COOLDOWN_MS + backoffMs(1))
                 rig.queue.processNext() shouldBe true
 
                 val job = rig.job(jobId).shouldNotBeNull()

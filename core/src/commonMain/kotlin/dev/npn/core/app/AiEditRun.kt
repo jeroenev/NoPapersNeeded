@@ -2,10 +2,6 @@ package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiSuggest
-import dev.npn.core.util.runCatchingCancellable
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -14,10 +10,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.sync.withPermit
 
 /**
  * Document scope for a bulk AI-edit run.
@@ -151,9 +143,9 @@ sealed interface ApplyOutcome {
  * follow-up batches (and the caller's preview) exclude them.
  *
  * - [suggestNextBatch] runs [AiSuggest.suggestEdits] over the next [ScopeKey.batchSize] unprocessed
- *   documents with bounded concurrency ([SUGGEST_CONCURRENCY]); each document is ONE model request
- *   covering every requested section. Progress is reported as each document completes; results are
- *   re-ordered to match the original batch order. Cancellation propagates (nothing is written).
+ *   documents with the bounded concurrency of [SuggestionRunner]; each document is ONE model
+ *   request covering every requested section. Progress is reported as each document completes;
+ *   results keep the original batch order. Cancellation propagates (nothing is written).
  * - Review pre-selection is [ReviewProjector]'s: existing-vocabulary tag additions pre-selected,
  *   new tags and removals pre-deselected; field fill-ins pre-selected, overwrites pre-deselected.
  * - [apply] delegates the write and the retry rebuild to [ReviewApply] (per-tag transactions, one
@@ -167,10 +159,10 @@ sealed interface ApplyOutcome {
  */
 class AiEditRun(
     private val documents: DocumentRepository,
-    private val meta: MetadataWriter,
-    private val content: DocContentFacade,
-    private val ai: AiSuggest,
-    private val fieldRegistry: FieldRegistry,
+    meta: MetadataWriter,
+    content: DocContentFacade,
+    ai: AiSuggest,
+    fieldRegistry: FieldRegistry,
     /** Documents handed over from the library's selection mode; empty when opened standalone. */
     private val selection: List<String> = emptyList(),
 ) {
@@ -179,6 +171,8 @@ class AiEditRun(
 
     /** The shared pre-select policy, applied to each answered document. */
     private val projector = ReviewProjector(content, fieldRegistry)
+
+    private val runner = SuggestionRunner(ai)
 
     /** Documents already reviewed in this run; excluded from every later batch. */
     private val _processed = MutableStateFlow(emptySet<String>())
@@ -263,35 +257,18 @@ class AiEditRun(
         if (batch.isEmpty()) return BatchResult.Empty
         val first = batch.first().doc
         onProgress(EditProgress(0, batch.size, first.title, first.fileName))
-        // Results are indexed by their original batch position so the completion order (which is
-        // non-deterministic under bounded concurrency) never leaks into the Review order.
-        val results = arrayOfNulls<ReviewDoc>(batch.size)
-        val failures = mutableListOf<String>()
-        val semaphore = Semaphore(SUGGEST_CONCURRENCY)
-        val progress = Mutex()
         var done = 0
-        coroutineScope {
-            batch
-                .mapIndexed { index, item ->
-                    async {
-                        semaphore.withPermit {
-                            // Cancellation tears the whole scope down; it is not a failed suggestion.
-                            val outcome =
-                                runCatchingCancellable {
-                                    projector.project(item, ai.suggestEdits(item.doc.docId, request))
-                                }
-                            progress.withLock {
-                                outcome
-                                    .onSuccess { results[index] = it }
-                                    .onFailure { failures += item.doc.docId }
-                                done++
-                                onProgress(EditProgress(done, batch.size, item.doc.title, item.doc.fileName))
-                            }
-                        }
-                    }
-                }.awaitAll()
-        }
-        return enterReview(results.filterNotNull(), failures.size, batch.size)
+        val outcomes =
+            runner.suggest(
+                batch.map { it.doc.docId },
+                request,
+                onEach = { index, _ ->
+                    done++
+                    val doc = batch[index].doc
+                    onProgress(EditProgress(done, batch.size, doc.title, doc.fileName))
+                },
+            ) { index, suggestion -> projector.project(batch[index], suggestion) }
+        return enterReview(outcomes.mapNotNull { it.getOrNull() }, outcomes.count { it.isFailure }, batch.size)
     }
 
     private fun enterReview(
@@ -349,12 +326,5 @@ class AiEditRun(
 
     private companion object {
         val SORT = LibrarySort()
-
-        /**
-         * Max concurrently processed documents (each runs its single `suggestEdits` LLM call).
-         * Bounds load on the model/backend while still overlapping the mostly-IO-bound calls for a
-         * large speedup over serial execution.
-         */
-        const val SUGGEST_CONCURRENCY = 12
     }
 }

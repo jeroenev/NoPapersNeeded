@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.work.QueueRetryPolicy
 import dev.npn.core.work.backoffMs
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -170,7 +171,7 @@ class AiAutoEnricherRetryTest {
                 rig.ai.suggestEditsCalls shouldContainExactly listOf("bad")
 
                 // Once it lifts, "good" is served: "bad" has been pushed out to its own retry time.
-                rig.clock.advance(AiAutoEnricher.FAILURE_COOLDOWN_MS)
+                rig.clock.advance(QueueRetryPolicy.ENDPOINT_COOLDOWN_MS)
                 rig.drain() shouldBe 1
 
                 rig.enrichedAt("good").shouldNotBeNull()
@@ -214,7 +215,7 @@ class AiAutoEnricherRetryTest {
                 rig.ai.failWith = { if (it == "bad") error("bad doc") }
                 rig.drain() shouldBe 0
 
-                rig.clock.advance(AiAutoEnricher.FAILURE_COOLDOWN_MS)
+                rig.clock.advance(QueueRetryPolicy.ENDPOINT_COOLDOWN_MS)
 
                 // Both good documents in one drain: the first success lifts the cooldown, so the
                 // second is not made to wait out another one.

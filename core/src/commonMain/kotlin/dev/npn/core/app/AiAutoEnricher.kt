@@ -13,7 +13,8 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
-import dev.npn.core.work.backoffMs
+import dev.npn.core.work.EndpointHealth
+import dev.npn.core.work.QueueRetryPolicy
 
 /**
  * Unattended AI enrichment of documents whose OCR text was just indexed, run as a persisted queue.
@@ -50,9 +51,9 @@ import dev.npn.core.work.backoffMs
  * A successful pass stamps [AiEnrichQueueDao.markEnriched] and deletes the row — the stamp, not the
  * queue, is what stops a later re-OCR of the same document (an upgrade run under a better engine)
  * from re-spending the user's quota. Both live in the device database, keyed by hash, so a rebuilt
- * index forgets neither. A failed call backs off exponentially up to a daily ceiling
- * and is retried indefinitely; the feature being off or the endpoint unconfigured is not a failure
- * at all, since the drain simply does not run.
+ * index forgets neither. A failed call backs off along the shared [QueueRetryPolicy] ramp up to a
+ * daily ceiling and is retried indefinitely; the feature being off or the endpoint unconfigured is
+ * not a failure at all, since the drain simply does not run.
  *
  * Nothing here gives up on a document. An attempt cap would have to be a bet on *why* the call
  * failed, and the likely reasons — endpoint down, device offline, misconfigured URL — are ones that
@@ -69,21 +70,16 @@ class AiAutoEnricher(
     private val fieldRegistry: FieldRegistry,
     private val policy: UnattendedAiPolicy,
     private val clock: EpochClock,
+    /** The endpoint's cooldown, shared with every other queue that calls it. */
+    private val health: EndpointHealth,
     /** Asks for a drain of this queue; called whenever [enqueue] writes a new row. */
     private val onEnqueued: () -> Unit,
 ) {
     /** The shared write mechanics; this pass only projects the suggestion onto what it may write. */
     private val editApply = AiEditApply(meta)
 
-    /**
-     * When the next call may be attempted after a failure. In memory rather than on a row: it is a
-     * statement about the endpoint, not about a document, and it must not survive a restart — an
-     * app relaunch is the one moment where retrying immediately is most likely to be right.
-     *
-     * Only ever read and written from inside [processNext], which the
-     * [dev.npn.core.work.QueueDrainer] mutex serialises.
-     */
-    private var cooldownUntil = 0L
+    /** Retried for ever: see the class docs for why nothing here gives up on a document. */
+    private val retry = QueueRetryPolicy()
 
     /**
      * Record that [docId] is owed an enrichment pass. Called from the OCR pipeline's
@@ -123,13 +119,8 @@ class AiAutoEnricher(
      * Stopping the drain is not enough on its own, because each newly OCR'd document kicks a fresh
      * one and [AiEnrichQueueDao.nextDue] hands out never-tried rows first: importing a folder
      * against a dead endpoint would spend one failed call per document anyway. So a failure also
-     * parks this instance for [FAILURE_COOLDOWN_MS], which caps a systemic outage at one call a
-     * minute however fast documents arrive.
-     *
-     * The cooldown is a short constant rather than the failed row's own backoff precisely because
-     * it cannot tell an outage from one document the endpoint always rejects. Charging every later
-     * document the poison row's escalating delay would let a single bad document stall the queue
-     * for a day; a flat minute makes the worst case of guessing wrong a minute of latency.
+     * puts the endpoint on its cooldown ([EndpointHealth]), which caps a systemic outage at one
+     * call a minute however fast documents arrive, here and on every other queue that calls it.
      *
      * The write, the stamp and the row delete are three steps across two stores (journal, device
      * database) and cannot be made atomic. Dying between them costs one repeat call on the next drain, whose
@@ -140,7 +131,7 @@ class AiAutoEnricher(
     suspend fun processNext(): Boolean {
         if (!policy.autoEnrich()) return false
         val now = clock.nowMillis()
-        if (now < cooldownUntil) return false
+        if (health.coolingDown(now)) return false
         val entry = queueDao.nextDue(now) ?: return false
         if (!isEnrichable(entry.docId)) {
             // Enriched by another path, trashed, or gone since it was queued.
@@ -151,12 +142,12 @@ class AiAutoEnricher(
             write(entry.docId, ai.suggestEdits(entry.docId, request()))
             queueDao.markEnriched(AiEnrichedEntity(entry.docId, clock.nowMillis()))
             queueDao.delete(entry.docId)
-            cooldownUntil = 0L
+            health.answered()
         }.fold(
             onSuccess = { true },
             onFailure = { cause ->
                 reschedule(entry, cause)
-                cooldownUntil = clock.nowMillis() + FAILURE_COOLDOWN_MS
+                health.failed(clock.nowMillis())
                 false
             },
         )
@@ -189,7 +180,7 @@ class AiAutoEnricher(
         queueDao.upsert(
             entry.copy(
                 attempts = attempts,
-                nextAttemptAt = now + backoffMs(attempts),
+                nextAttemptAt = retry.nextAttemptAt(now, attempts),
                 updatedAt = now,
                 lastError = cause.reason(),
             ),
@@ -263,9 +254,4 @@ class AiAutoEnricher(
             tagRemovals = false,
             maxNewTags = 0,
         )
-
-    companion object {
-        /** How long a failed call parks the whole queue, regardless of which document failed. */
-        internal const val FAILURE_COOLDOWN_MS = 60L * 1000L
-    }
 }
