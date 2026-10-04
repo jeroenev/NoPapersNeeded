@@ -338,6 +338,7 @@ class LibrarySessionImpl private constructor(
                     deps.db,
                     chats = deps.deviceDb.keyValueDao(),
                     ownWrite = { lifetime.owned(it) },
+                    clock = deps.clock,
                     configProvider = deps.settings.aiConfig,
                 )
             val enrichment = buildEnrichment(deps, lifetime, library, ai)

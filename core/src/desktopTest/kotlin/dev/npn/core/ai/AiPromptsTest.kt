@@ -1,5 +1,6 @@
 package dev.npn.core.ai
 
+import dev.npn.core.journal.EpochClock
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -8,14 +9,10 @@ import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldMatch
 import io.kotest.matchers.string.shouldNotContain
 import kotlin.test.Test
-import kotlin.time.Clock
 import kotlin.time.Instant
 
 // A prompt's date must be assertable, so every context in this file is built on a fixed clock.
-private val FIXED_CLOCK =
-    object : Clock {
-        override fun now(): Instant = Instant.parse("2026-09-07T10:15:00Z")
-    }
+private val FIXED_CLOCK = EpochClock { Instant.parse("2026-09-07T10:15:00Z").toEpochMilliseconds() }
 
 private fun context(languageTag: String?) = AiPromptContext.of(languageTag, FIXED_CLOCK)
 

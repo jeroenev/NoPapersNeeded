@@ -24,7 +24,8 @@ import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotV2Reader
 import dev.npn.core.journal.StorageV1Reader
 import dev.npn.core.journal.StorageV2Reader
-import dev.npn.core.journal.systemNowMillis
+import dev.npn.core.journal.EpochClock
+import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
 
 class MetadataWriteBlocked(
@@ -88,6 +89,7 @@ class MetadataAccumulator(
     private val fs: LibraryFileSystem,
     db: NpnDatabase,
     private val installationId: String? = null,
+    private val clock: EpochClock = SystemEpochClock,
 ) {
     private val dao = db.metadataProjectionDao()
     private var stagingCleaned = false
@@ -371,7 +373,7 @@ class MetadataAccumulator(
         if (stagingCleaned) return
         stagingCleaned = true
         val marker = installationId?.let { ".$it." } ?: return
-        val cutoff = systemNowMillis() - STAGING_MAX_AGE_MS
+        val cutoff = clock.nowMillis() - STAGING_MAX_AGE_MS
         entries
             .asSequence()
             .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.Staging }

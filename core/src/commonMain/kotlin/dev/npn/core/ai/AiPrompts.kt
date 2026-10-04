@@ -1,11 +1,13 @@
 package dev.npn.core.ai
 
+import dev.npn.core.journal.EpochClock
+import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import kotlinx.datetime.TimeZone
-import kotlinx.datetime.todayIn
-import kotlin.time.Clock
+import kotlinx.datetime.toLocalDateTime
+import kotlin.time.Instant
 
 /**
  * The ambient facts every prompt needs from outside the model call: which language the app runs in,
@@ -36,11 +38,16 @@ internal data class AiPromptContext(
          */
         fun of(
             languageTag: String?,
-            clock: Clock = Clock.System,
+            clock: EpochClock = SystemEpochClock,
         ): AiPromptContext =
             AiPromptContext(
                 appLanguage = languageLabel(languageTag),
-                today = clock.todayIn(TimeZone.currentSystemDefault()).toString(),
+                today =
+                    Instant
+                        .fromEpochMilliseconds(clock.nowMillis())
+                        .toLocalDateTime(TimeZone.currentSystemDefault())
+                        .date
+                        .toString(),
             )
 
         private fun languageLabel(languageTag: String?): String? {

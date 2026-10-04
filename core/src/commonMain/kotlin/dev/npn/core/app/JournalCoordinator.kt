@@ -15,7 +15,6 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
-import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.runCatchingCancellable
@@ -308,7 +307,7 @@ class JournalCoordinator internal constructor(
      *
      * Returns the snapshot's content hash if one was published, else null.
      */
-    suspend fun compact(nowMillis: Long = systemNowMillis()): String? =
+    suspend fun compact(nowMillis: Long = clock.nowMillis()): String? =
         locked {
             val activeCompactor = compactor ?: return@locked null
             if (!activeCompactor.supported || writeBlockReason != null) return@locked null

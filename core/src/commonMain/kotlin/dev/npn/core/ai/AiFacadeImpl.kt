@@ -8,6 +8,8 @@ import dev.npn.core.app.AiTagging
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.toFieldDef
+import dev.npn.core.journal.EpochClock
+import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.work.EndpointHealth
@@ -17,7 +19,6 @@ import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOn
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.time.Clock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -37,6 +38,7 @@ class AiFacadeImpl(
     private val db: NpnDatabase,
     chats: KeyValueDao,
     ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
+    private val clock: EpochClock = SystemEpochClock,
     private val configProvider: suspend () -> AiConfig,
 ) : AiChat,
     AiSuggest {
@@ -131,7 +133,7 @@ class AiFacadeImpl(
             chatSessionStore.save(change(chatSessionStore.load()).sortedByDescending { it.updatedAt })
         }
 
-    private fun now(): Long = Clock.System.now().toEpochMilliseconds()
+    private fun now(): Long = clock.nowMillis()
 
     override suspend fun suggestEdits(
         docId: String,
@@ -277,7 +279,7 @@ class AiFacadeImpl(
      * config on every call for the same reason the runtime is: the user can switch the app's
      * language between two calls, and a run started yesterday must not keep yesterday's date.
      */
-    private fun promptContext(config: AiConfig): AiPromptContext = AiPromptContext.of(config.appLanguage)
+    private fun promptContext(config: AiConfig): AiPromptContext = AiPromptContext.of(config.appLanguage, clock)
 
     private companion object {
         const val MAX_AGENT_ITERATIONS = 15

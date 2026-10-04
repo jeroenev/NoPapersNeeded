@@ -80,7 +80,7 @@ internal suspend fun createCoordinator(
     JournalCoordinator(
         writer = createObjectWriter(deps),
         indexer = indexer,
-        accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId),
+        accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId, deps.clock),
         compactor = SnapshotCompactor(deps.fs, deps.installationId),
         clock = deps.clock,
     )
@@ -181,6 +181,7 @@ private fun buildContent(
             thumbnailDao = deps.db.thumbnailDao(),
             documentDao = deps.db.documentDao(),
             renderGate = renderGate,
+            clock = deps.clock,
         )
     return DocContentFacadeImpl(
         lifetime,

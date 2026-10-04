@@ -4,8 +4,9 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.ThumbnailDao
 import dev.npn.core.db.ThumbnailEntity
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.journal.EpochClock
+import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.util.runCatchingCancellable
-import kotlin.time.Clock
 
 /**
  * Writes/reads first-page thumbnail PNGs into an app-local cache directory (never inside the
@@ -32,6 +33,7 @@ class ThumbnailService(
     private val thumbnailDao: ThumbnailDao,
     private val documentDao: DocumentDao,
     private val renderGate: RenderGate = RenderGate(),
+    private val clock: EpochClock = SystemEpochClock,
 ) {
     /**
      * Return the cache path of [docId]'s thumbnail, generating it from the first page if
@@ -64,7 +66,7 @@ class ThumbnailService(
             ThumbnailEntity(
                 docId = docId,
                 cachePath = cachePath,
-                generatedAt = Clock.System.now().toEpochMilliseconds(),
+                generatedAt = clock.nowMillis(),
             ),
         )
 
