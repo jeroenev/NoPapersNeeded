@@ -41,6 +41,28 @@ class DocumentPathReplicationTest {
         }
 
     @Test
+    fun relocationMovesTheFileAfterOneHashWithoutACopy() =
+        runTest {
+            val rig = IndexRig.create()
+            try {
+                rig.writePdf("old.pdf", "document")
+                val hash = rig.fs.sha256("old.pdf")
+                val watched = WatchedFileSystem(rig.fs).also { it.db = rig.db }
+
+                DocumentPaths(watched).reconcile(hash, "old.pdf", "archive/new.pdf") shouldBe "archive/new.pdf"
+
+                watched.calls("sha256").size shouldBe 1
+                watched.calls("copy") shouldBe emptyList()
+                watched.calls("publish") shouldBe emptyList()
+                rig.fs.sha256("archive/new.pdf") shouldBe hash
+                rig.exists("old.pdf") shouldBe false
+                rig.fs.listAll().filter { it.name.startsWith("npn-recovery-") } shouldBe emptyList()
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
     fun replicasConvergeOnWinningRenameAndFreshIndexReplaysIntent() =
         runTest {
             val a = IndexRig.create()
@@ -154,7 +176,7 @@ class DocumentPathReplicationTest {
         }
 
     @Test
-    fun cleanupPreservesSourceReplacedDuringClaim() =
+    fun aSourceReplacedBeforeTheClaimIsPutBackAndNothingMoves() =
         runTest {
             val rig = IndexRig.create()
             try {
@@ -170,9 +192,63 @@ class DocumentPathReplicationTest {
                             rig.fs.claimDocument(fromRelPath, toRelPath)
                         }
                     }
-                DocumentPaths(racing).reconcile(hash, "old.pdf", "new.pdf") shouldBe "new.pdf"
-                rig.fs.sha256("new.pdf") shouldBe hash
+                // The claimed bytes are not the document's, so they go back where they were.
+                DocumentPaths(racing).reconcile(hash, "old.pdf", "new.pdf") shouldBe "old.pdf"
+                rig.exists("new.pdf") shouldBe false
                 rig.fs.readBytes("old.pdf").decodeToString() shouldBe "replacement"
+                rig.fs.listAll().filter { it.name.startsWith(DocumentPaths.RECOVERY_PREFIX) } shouldBe emptyList()
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun aMoveThatFailsPutsTheSourceBack() =
+        runTest {
+            val rig = IndexRig.create()
+            try {
+                rig.writePdf("old.pdf", "document")
+                val hash = rig.fs.sha256("old.pdf")
+                val failing =
+                    object : LibraryFileSystem by rig.fs {
+                        override suspend fun move(
+                            fromRelPath: String,
+                            toRelPath: String,
+                        ): Unit = error("refused")
+
+                        override suspend fun copyOnce(
+                            fromRelPath: String,
+                            toRelPath: String,
+                        ): Unit = error("refused")
+                    }
+                assertFailsWith<IllegalStateException> { DocumentPaths(failing).reconcile(hash, "old.pdf", "new.pdf") }
+                rig.fs.sha256("old.pdf") shouldBe hash
+                rig.exists("new.pdf") shouldBe false
+                rig.fs.listAll().filter { it.name.startsWith(DocumentPaths.RECOVERY_PREFIX) } shouldBe emptyList()
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun aTargetTheFileCannotBeMovedToGetsAVerifiedCopy() =
+        runTest {
+            val rig = IndexRig.create()
+            try {
+                rig.writePdf("old.pdf", "document")
+                val hash = rig.fs.sha256("old.pdf")
+                // As across volumes: neither a link nor a rename reaches the target.
+                val otherVolume =
+                    object : LibraryFileSystem by rig.fs {
+                        override suspend fun move(
+                            fromRelPath: String,
+                            toRelPath: String,
+                        ): Unit = throw java.nio.file.FileSystemException(fromRelPath, toRelPath, "EXDEV")
+                    }
+                DocumentPaths(otherVolume).reconcile(hash, "old.pdf", "archive/new.pdf") shouldBe "archive/new.pdf"
+                rig.fs.sha256("archive/new.pdf") shouldBe hash
+                rig.exists("old.pdf") shouldBe false
+                rig.fs.listAll().filter { it.name.startsWith(DocumentPaths.RECOVERY_PREFIX) } shouldBe emptyList()
             } finally {
                 rig.close()
             }
@@ -239,7 +315,7 @@ class DocumentPathReplicationTest {
         }
 
     @Test
-    fun interruptedCleanupRecoversAndLateOldCopyIsRemoved() =
+    fun anInterruptedClaimRetriesAndALateOldCopyIsRemoved() =
         runTest {
             val rig = IndexRig.create()
             try {
@@ -256,9 +332,10 @@ class DocumentPathReplicationTest {
                             rig.fs.claimDocument(fromRelPath, toRelPath)
                         }
                     }
+                // A claim that fails moves nothing: the source stays where it was.
                 assertFailsWith<IllegalStateException> { DocumentPaths(failing).reconcile(hash, "old.pdf", "new.pdf") }
                 rig.fs.sha256("old.pdf") shouldBe hash
-                rig.fs.sha256("new.pdf") shouldBe hash
+                rig.exists("new.pdf") shouldBe false
                 rig.coordinator(rig.writer("remote")).commitAndApply(
                     listOf(PendingOp.propSet(hash, SystemProperty.STORAGE_PATH, "new.pdf")),
                 )
