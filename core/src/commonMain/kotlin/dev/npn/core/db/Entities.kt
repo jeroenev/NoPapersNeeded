@@ -205,16 +205,6 @@ data class FtsKeyEntity(
     val docId: String,
 )
 
-@Entity(tableName = "saved_views")
-data class SavedViewEntity(
-    @PrimaryKey val id: String,
-    val name: String,
-    /** filter + sort + view-type serialized by the upper layer. */
-    val json: String,
-    val pinned: Boolean = false,
-    val position: Int = 0,
-)
-
 @Entity(tableName = "thumbnails")
 data class ThumbnailEntity(
     @PrimaryKey val docId: String,

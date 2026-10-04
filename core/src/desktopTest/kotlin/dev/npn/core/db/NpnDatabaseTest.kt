@@ -535,15 +535,6 @@ class NpnDatabaseTest {
         }
 
     @Test
-    fun savedViewsObserve() =
-        runTest {
-            val dao = db.savedViewDao()
-            dao.upsert(SavedViewEntity("id2", "Second", "{}", pinned = false, position = 1))
-            dao.upsert(SavedViewEntity("id1", "First", "{}", pinned = true, position = 0))
-            dao.observeAll().first().map { it.name } shouldContainExactly listOf("First", "Second")
-        }
-
-    @Test
     fun clearAllWipesDocuments() =
         runTest {
             val dao = db.documentDao()

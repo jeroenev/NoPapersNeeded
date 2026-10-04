@@ -123,7 +123,8 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
    identity), dedups, moves the file into the library, writes OCR sidecars, and
    appends metadata to the journal.
 2. **Journal is source of truth for metadata**: every change (tags, field values,
-    field definitions, system properties, settings, trash, relink) is an immutable,
+    field definitions, system properties, library settings — review mode, storage-path
+    rule, auto-match rules, saved views — trash, relink) is an immutable,
     content-addressed JSONL transaction written by
     `JournalCoordinator`. You cannot write to the journal directly: the underlying
     `SegmentWriter`/`ContentAddressedJournalWriter` and the coordinator's held

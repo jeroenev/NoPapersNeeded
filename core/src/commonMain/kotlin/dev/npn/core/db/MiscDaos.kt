@@ -9,18 +9,6 @@ import androidx.room3.Upsert
 import kotlinx.coroutines.flow.Flow
 
 @Dao
-interface SavedViewDao {
-    @Query("SELECT * FROM saved_views ORDER BY position, name")
-    fun observeAll(): Flow<List<SavedViewEntity>>
-
-    @Upsert
-    suspend fun upsert(view: SavedViewEntity)
-
-    @Query("DELETE FROM saved_views WHERE id = :id")
-    suspend fun delete(id: String)
-}
-
-@Dao
 interface DocumentFieldDao {
     /** All custom fields for a document, ordered by key. Observed for live UI updates. */
     @Query("SELECT * FROM document_fields WHERE docId = :docId ORDER BY fieldKey COLLATE NOCASE")

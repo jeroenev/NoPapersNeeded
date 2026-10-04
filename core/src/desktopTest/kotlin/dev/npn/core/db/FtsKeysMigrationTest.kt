@@ -1,16 +1,10 @@
 package dev.npn.core.db
 
-import androidx.sqlite.SQLiteConnection
-import androidx.sqlite.driver.bundled.BundledSQLiteDriver
 import androidx.sqlite.execSQL
 import dev.npn.core.index.FtsRows
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.jsonArray
-import kotlinx.serialization.json.jsonObject
-import kotlinx.serialization.json.jsonPrimitive
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -41,7 +35,7 @@ class FtsKeysMigrationTest {
         runTest {
             val a = "a".repeat(64)
             val b = "b".repeat(64)
-            createVersion(21) { connection ->
+            createFromSchema(file, version = 21) { connection ->
                 connection.execSQL(
                     "INSERT INTO documents (docId, relPath, fileName, size, mtime, addedAt, reviewed, trashed, " +
                         "deleted, missing, ocrState) VALUES ('$a', 'a.pdf', 'a.pdf', 1, 1, 1, 0, 0, 0, 0, 'done')",
@@ -78,38 +72,4 @@ class FtsKeysMigrationTest {
                 db.close()
             }
         }
-
-    /** Create [file] as Room's exported schema [version] describes it, then let [seed] fill it. */
-    private fun createVersion(
-        version: Int,
-        seed: (SQLiteConnection) -> Unit,
-    ) {
-        val schema =
-            Json
-                .parseToJsonElement(File("schemas/dev.npn.core.db.NpnDatabase/$version.json").readText())
-                .jsonObject
-                .getValue("database")
-                .jsonObject
-        val connection = BundledSQLiteDriver().open(file.absolutePath)
-        try {
-            for (entity in schema.getValue("entities").jsonArray.map { it.jsonObject }) {
-                val table = entity.getValue("tableName").jsonPrimitive.content
-
-                fun create(sql: String) = connection.execSQL(sql.replace("\${TABLE_NAME}", table))
-                create(entity.getValue("createSql").jsonPrimitive.content)
-                entity["indices"]?.jsonArray?.forEach { index ->
-                    create(
-                        index.jsonObject
-                            .getValue("createSql")
-                            .jsonPrimitive.content,
-                    )
-                }
-            }
-            schema.getValue("setupQueries").jsonArray.forEach { connection.execSQL(it.jsonPrimitive.content) }
-            connection.execSQL("PRAGMA user_version = $version")
-            seed(connection)
-        } finally {
-            connection.close()
-        }
-    }
 }

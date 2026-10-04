@@ -45,6 +45,9 @@ private class SyncedSettings {
 
     fun flow(key: String): kotlinx.coroutines.flow.Flow<String?> = values.map { it[key] }
 
+    /** Every setting, cleared ones as null. */
+    fun all(): kotlinx.coroutines.flow.Flow<Map<String, String?>> = values
+
     /** The current value of a key, without touching the fold. */
     fun current(key: String): String? = values.value[key]
 
@@ -148,6 +151,9 @@ class JournalCoordinator internal constructor(
 
     fun settingFlow(key: String): kotlinx.coroutines.flow.Flow<String?> = syncedSettings.flow(key)
 
+    /** Every synced setting the journal holds, a cleared one as null; for keys a reader enumerates. */
+    fun settings(): kotlinx.coroutines.flow.Flow<Map<String, String?>> = syncedSettings.all()
+
     /** The current value of the synced setting [key], without touching the fold. */
     fun setting(key: String): String? = syncedSettings.current(key)
 
@@ -156,13 +162,18 @@ class JournalCoordinator internal constructor(
      * one-time adoption of what this device had, which must not overwrite what any replica already
      * decided. Like [seedFieldRegistryIfNeeded], the in-memory check runs first, so only an open
      * that has something to adopt pays for the fold.
+     *
+     * Returns whether the journal now holds every key, false when writes are blocked and nothing was
+     * adopted, so a caller keeps its copy for the next attempt.
      */
-    suspend fun adoptSettings(values: Map<String, String>) {
-        if (values.keys.all(syncedSettings::written) || writeBlockReason != null) return
+    suspend fun adoptSettings(values: Map<String, String>): Boolean {
+        if (values.keys.all(syncedSettings::written)) return true
+        if (writeBlockReason != null) return false
         commitBuilt { state ->
             val held = state.settings()
             values.filterKeys { it !in held }.map { (key, value) -> PendingOp.settingSet(key, value) }
         }
+        return true
     }
 
     /**

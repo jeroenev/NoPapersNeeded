@@ -805,7 +805,8 @@ class LibrarySessionImpl private constructor(
             val documents = DocumentRepositoryImpl(db)
             val fieldRegistry = FieldRegistryImpl(db, coordinator)
             val tags = TagRepositoryImpl(db.tagDao())
-            val savedViews = SavedViewRepositoryImpl(db.savedViewDao())
+            val savedViews = SavedViewRepositoryImpl(coordinator) { lifetime.owned(it) }
+            deps.log.runLogged("Moving saved views into the journal") { savedViews.adoptIndexViews(db) }
             val content =
                 DocContentFacadeImpl(
                     lifetime,

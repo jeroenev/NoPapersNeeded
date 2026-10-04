@@ -8,6 +8,7 @@ import androidx.room3.DeleteTable
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import androidx.room3.migration.AutoMigrationSpec
+import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 
@@ -39,7 +40,8 @@ import androidx.sqlite.execSQL
     // v20: adds ocr_queue.nextAttemptAt (retry backoff for failed OCR runs).
     // v21: adds ocr_page_cache (pages a failed OCR run read, so its retry does not pay for them).
     // v22: adds fts_keys, the rowid of each document's FTS row.
-    version = 22,
+    // v23: saved_views leaves the schema; saved views are library data in the journal now.
+    version = 23,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -70,7 +72,6 @@ import androidx.sqlite.execSQL
         FieldDefEntity::class,
         FtsDocumentEntity::class,
         FtsKeyEntity::class,
-        SavedViewEntity::class,
         ThumbnailEntity::class,
         DuplicateEntity::class,
         OcrQueueEntity::class,
@@ -99,8 +100,6 @@ abstract class NpnDatabase : RoomDatabase() {
     abstract fun documentFieldDao(): DocumentFieldDao
 
     abstract fun fieldDefDao(): FieldDefDao
-
-    abstract fun savedViewDao(): SavedViewDao
 
     abstract fun thumbnailDao(): ThumbnailDao
 
@@ -163,6 +162,23 @@ abstract class NpnDatabase : RoomDatabase() {
             )
             connection.execSQL("DELETE FROM fts_documents WHERE rowid NOT IN (SELECT ftsRowid FROM fts_keys)")
         }
+    }
+
+    /**
+     * v22 -> v23: saved views move into the journal. Their table stays behind, outside the schema,
+     * until the session has adopted its rows ([LegacyIndexTables.savedViews]) and dropped it: a
+     * migration only sees this database, and the journal is written through the session.
+     */
+    private object SavedViewsLeave : Migration(22, 23) {
+        override suspend fun migrate(connection: SQLiteConnection) = Unit
+    }
+
+    companion object {
+        /**
+         * The migrations Room cannot generate, which every builder adds. Without one for a version
+         * step, the builders' destructive fallback would drop the whole index instead.
+         */
+        val MIGRATIONS: Array<Migration> = arrayOf(SavedViewsLeave)
     }
 }
 

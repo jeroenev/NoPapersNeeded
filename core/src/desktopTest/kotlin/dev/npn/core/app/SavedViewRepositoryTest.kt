@@ -48,7 +48,7 @@ class SavedViewRepositoryTest {
         }
 
     @Test
-    fun importSkipsBrokenEntriesAndDedupsById() =
+    fun importSkipsBrokenEntriesAndKeepsTheFirstOfEachId() =
         runTest {
             val rig = AppSessionRig.create(backgroundScope)
             try {
@@ -65,8 +65,36 @@ class SavedViewRepositoryTest {
                 n shouldBe 2 // a (once), b; broken skipped, dup deduped
                 rig.session.savedViews
                     .observeSavedViews()
-                    .first() shouldHaveSize 2
+                    .first()
+                    .map { it.name } shouldBe listOf("A", "B")
             } finally {
+                rig.close()
+            }
+        }
+
+    /** Saved views are library data: what one device saves or deletes, every device sees. */
+    @Test
+    fun savedViewsSyncBetweenDevices() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            val (second, secondDb) = rig.secondSession(backgroundScope)
+            try {
+                val invoices = SavedView("a", "Invoices", LibraryFilter(tagsAll = listOf("invoice")))
+                val receipts = SavedView("b", "Receipts", viewType = ViewType.GRID)
+                rig.session.savedViews.save(invoices)
+                second.savedViews.save(receipts)
+                rig.session.rescan()
+                second.rescan()
+
+                rig.session.savedViews.observeSavedViews().first() shouldBe listOf(invoices, receipts)
+                second.savedViews.observeSavedViews().first() shouldBe listOf(invoices, receipts)
+
+                second.savedViews.delete("a")
+                rig.session.rescan()
+                rig.session.savedViews.observeSavedViews().first() shouldBe listOf(receipts)
+            } finally {
+                second.close()
+                secondDb.close()
                 rig.close()
             }
         }

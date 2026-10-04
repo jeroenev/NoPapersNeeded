@@ -1,7 +1,6 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.AutoMatchRuleEntity
-import dev.npn.core.index.MutableClock
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
@@ -11,12 +10,10 @@ import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.MatchAlgorithm
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
-import java.nio.file.Path
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -90,7 +87,7 @@ class LibrarySettingsTest {
             val library = Files.createTempDirectory("npn-rules-lib")
             val data = Files.createTempDirectory("npn-rules-data").toFile()
             try {
-                open(backgroundScope, library, data).use { session, deps ->
+                openSession(backgroundScope, library, data).use { session, deps ->
                     session.rules.save(rule("r1", "Invoice rule"))
                     // Rows the journal never held, in place of the ones it does.
                     deps.db.autoMatchRuleDao().replaceAll(listOf(junkRow()))
@@ -108,7 +105,7 @@ class LibrarySettingsTest {
                 }
 
                 // The next open puts the journal's list back.
-                open(backgroundScope, library, data).use { session, _ ->
+                openSession(backgroundScope, library, data).use { session, _ ->
                     session.rules
                         .observeRules()
                         .first()
@@ -174,40 +171,4 @@ class LibrarySettingsTest {
             sets = "{}",
             position = 0,
         )
-
-    /** A session over [library] whose app-local state lives in [data], as one device reopens it. */
-    private suspend fun open(
-        scope: CoroutineScope,
-        library: Path,
-        data: File,
-    ): OpenSession {
-        val deps =
-            jvmSessionDeps(
-                libraryRoot = library,
-                dirs = AppDirs(dbDir = data.path, thumbsDir = "$data/thumbs", tmpDir = "$data/tmp"),
-                scope = scope,
-                ocrLanguage = { "eng" },
-                trashRetentionDays = { 30 },
-                // Far behind the files' real mtimes, so a just-written PDF counts as settled.
-                clock = MutableClock(autoTick = true),
-                installationId = "test-installation",
-                ocrEngine = NoopOcrEngine(),
-                thumbnailStore = FakeThumbStore(File(data, "thumbs")),
-            )
-        return OpenSession(LibrarySessionImpl.openSession(deps), deps)
-    }
-
-    private class OpenSession(
-        val session: LibrarySessionImpl,
-        private val deps: SessionDeps,
-    ) {
-        suspend fun use(block: suspend (LibrarySessionImpl, SessionDeps) -> Unit) {
-            try {
-                block(session, deps)
-            } finally {
-                session.close()
-                deps.closeDb()
-            }
-        }
-    }
 }

@@ -163,3 +163,43 @@ class AppSessionRig private constructor(
         return LibrarySessionImpl.openSession(deps) to deps.db
     }
 }
+
+/**
+ * A session over [library] whose app-local state lives in [data], as one device opens it, and
+ * again after the last one closed: the index and device databases stay in [data] between opens.
+ */
+suspend fun openSession(
+    scope: CoroutineScope,
+    library: Path,
+    data: File,
+): OpenSession {
+    val deps =
+        jvmSessionDeps(
+            libraryRoot = library,
+            dirs = AppDirs(dbDir = data.path, thumbsDir = "$data/thumbs", tmpDir = "$data/tmp"),
+            scope = scope,
+            ocrLanguage = { "eng" },
+            trashRetentionDays = { 30 },
+            // Far behind the files' real mtimes, so a just-written PDF counts as settled.
+            clock = MutableClock(autoTick = true),
+            installationId = "test-installation",
+            ocrEngine = NoopOcrEngine(),
+            thumbnailStore = FakeThumbStore(File(data, "thumbs")),
+        )
+    return OpenSession(LibrarySessionImpl.openSession(deps), deps)
+}
+
+/** An [openSession] result: [use] it, and it closes the session and its databases afterwards. */
+class OpenSession(
+    val session: LibrarySessionImpl,
+    private val deps: SessionDeps,
+) {
+    suspend fun use(block: suspend (LibrarySessionImpl, SessionDeps) -> Unit) {
+        try {
+            block(session, deps)
+        } finally {
+            session.close()
+            deps.closeDb()
+        }
+    }
+}

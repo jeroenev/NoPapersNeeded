@@ -28,6 +28,7 @@ fun npnDatabase(
             name = dbFile.absolutePath,
         ).setDriver(BundledSQLiteDriver())
         .setQueryCoroutineContext(Dispatchers.IO)
+        .addMigrations(*NpnDatabase.MIGRATIONS)
         .fallbackToDestructiveMigration(dropAllTables = true)
         .build()
 }
