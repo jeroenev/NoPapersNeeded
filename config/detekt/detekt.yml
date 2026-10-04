@@ -66,3 +66,15 @@ exceptions:
 
 comments:
   active: false
+
+config:
+  # The Compose section below is read by the typed run, which loads the Compose ruleset; the
+  # source-only run does not have it and could not validate its keys.
+  excludes: ["Compose.*"]
+
+# The Compose ruleset, loaded by the typed run only.
+Compose:
+  CompositionLocalAllowlist:
+    # Deliberate implicit dependencies: the window's width class, decided once at the root.
+    allowedCompositionLocals:
+      - LocalWindowWidthClass
