@@ -18,14 +18,24 @@ internal class DocumentPaths(
         target: String,
     ): String {
         if (source == target || !isDocumentPath(target) || !fs.supportsDocumentRelocation) return source
-        if (fs.exists(target)) {
-            if (fs.stat(target)?.isDirectory != false || fs.sha256(target) != docId) return source
-            if (fs.exists(source) && fs.sameFile(source, target)) return source
-            if (fs.exists(source)) retireSource(docId, source, target)
-            return target
-        }
-        if (!fs.exists(source)) return source
-        return if (relocate(docId, source, target)) target else source
+        val placed = if (fs.exists(target)) alreadyPlaced(docId, source, target) else relocate(docId, source, target)
+        return if (placed) target else source
+    }
+
+    /**
+     * Whether [target], which exists, already holds [docId]'s bytes, as a file other than [source].
+     * The copy at [source] is then retired.
+     */
+    private suspend fun alreadyPlaced(
+        docId: String,
+        source: String,
+        target: String,
+    ): Boolean {
+        if (fs.stat(target)?.isDirectory != false || fs.sha256(target) != docId) return false
+        if (!fs.exists(source)) return true
+        if (fs.sameFile(source, target)) return false
+        retireSource(docId, source, target)
+        return true
     }
 
     /** Move [source]'s bytes to [target]; false, with the file back at [source], when they are not [docId]'s. */
@@ -34,6 +44,7 @@ internal class DocumentPaths(
         source: String,
         target: String,
     ): Boolean {
+        if (!fs.exists(source)) return false
         // Claim the source name before checking identity: the bytes checked are then the bytes
         // moved, and an unrelated PDF an external writer installs at the old name is never touched.
         val recovery = claim(source)

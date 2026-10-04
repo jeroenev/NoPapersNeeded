@@ -438,7 +438,9 @@ class JournalCoordinator internal constructor(
                 val (published, written) = writeTransaction(ops)
                 if (written.isNotEmpty()) {
                     val (path, version) = sourcePathAndVersion(published, written)
-                    accumulator.recordLocalSource(path, version, published?.contentHash, written)
+                    accumulator.recordLocalSource(
+                        accumulator.localSource(path, version, published?.contentHash, written),
+                    )
                     // Fold the freshly-written events into the live state up front. reconcile()'s
                     // fast path returns currentState unchanged when it read no new sources (the events
                     // were just recorded directly), so the projection rescan below must see them here.
@@ -479,7 +481,7 @@ class JournalCoordinator internal constructor(
             withContext(NonCancellable) {
                 val (published, written) = writeTransaction(ops)
                 val (path, version) = sourcePathAndVersion(published, written)
-                accumulator.recordLocalSource(path, version, published?.contentHash, written)
+                accumulator.recordLocalSource(accumulator.localSource(path, version, published?.contentHash, written))
                 written.forEach(state::apply)
                 observeSourceHlc(state.maxHlc)
             }

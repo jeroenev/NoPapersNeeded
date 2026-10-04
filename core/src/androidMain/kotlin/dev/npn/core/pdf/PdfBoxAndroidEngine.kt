@@ -48,30 +48,22 @@ class PdfBoxAndroidEngine(
         return PdfBoxTextBackend(document)
     }
 
+    /** Stage [bytes] in the cache directory, where `PdfRenderer` can seek, and open the renderer. */
     private fun openPages(bytes: ByteArray): PdfPageBackend {
         val temp = File.createTempFile("npn-pdf-", ".pdf", context.cacheDir)
+        var pfd: ParcelFileDescriptor? = null
         try {
             temp.writeBytes(bytes)
+            val descriptor = ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY).also { pfd = it }
+            return RendererPageBackend(PdfRenderer(descriptor), descriptor, temp)
         } catch (t: Throwable) {
+            try {
+                pfd?.close()
+            } catch (_: Throwable) {
+            }
             temp.delete()
-            throw PdfOpenException("Failed to stage PDF for rendering", t)
+            throw PdfOpenException("Failed to stage or open PDF for rendering", t)
         }
-        val pfd =
-            try {
-                ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY)
-            } catch (t: Throwable) {
-                temp.delete()
-                throw PdfOpenException("Failed to open PDF for rendering", t)
-            }
-        val renderer =
-            try {
-                PdfRenderer(pfd)
-            } catch (t: Throwable) {
-                pfd.close()
-                temp.delete()
-                throw PdfOpenException("Failed to create renderer", t)
-            }
-        return RendererPageBackend(renderer, pfd, temp)
     }
 
     override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray =

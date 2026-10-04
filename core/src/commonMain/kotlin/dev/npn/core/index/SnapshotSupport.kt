@@ -54,18 +54,17 @@ class SnapshotSupport(
      */
     suspend fun compactionSources(): Pair<List<CompactionSource>, List<CompactionSource>> {
         val superseded = dao.appliedSupersededHashes().toHashSet()
-        val objects = ArrayList<CompactionSource>()
-        val snapshots = ArrayList<CompactionSource>()
-        for (source in dao.allSources()) {
-            if (source.status != MetadataProjectionDao.STATUS_APPLIED) continue
-            val hash = source.contentHash?.takeIf { it !in superseded } ?: continue
-            val mtime = recordedMtime(source) ?: continue
-            when (source.storageVersion) {
-                NpnPaths.STORAGE_SNAPSHOT -> snapshots.add(CompactionSource(source.path, hash, mtime))
-                NpnPaths.STORAGE_V2 -> objects.add(CompactionSource(source.path, hash, mtime))
+        val live =
+            dao.allSources().filter { source ->
+                source.status == MetadataProjectionDao.STATUS_APPLIED && source.contentHash !in superseded
             }
-        }
-        return objects to snapshots
+
+        fun ofVersion(storageVersion: Int): List<CompactionSource> =
+            live.filter { it.storageVersion == storageVersion }.mapNotNull { source ->
+                val hash = source.contentHash ?: return@mapNotNull null
+                recordedMtime(source)?.let { CompactionSource(source.path, hash, it) }
+            }
+        return ofVersion(NpnPaths.STORAGE_V2) to ofVersion(NpnPaths.STORAGE_SNAPSHOT)
     }
 
     /**

@@ -439,7 +439,7 @@ class MetadataAccumulator(
                 is NpnPaths.JournalPath.ObjectV2 -> NpnPaths.STORAGE_V2
                 else -> NpnPaths.STORAGE_V1
             }
-        val result = readSource(meta.relPath, path, loaded)
+        val result = readSource(meta.relPath, path, loaded.bytes, loaded.contentHash)
         if (result is JournalSourceRead.Retryable && alreadyApplied) {
             fail("Previously applied metadata source is no longer valid: ${meta.relPath} (${result.message})")
         }
@@ -452,18 +452,6 @@ class MetadataAccumulator(
             }
         applyReadResult(meta.relPath, storageVersion, loaded.fingerprint, loaded.contentHash, result, batch, supersedes)
     }
-
-    /** Read a source whose bytes [prepareSource] loaded and hashed; the readers take that hash. */
-    private fun readSource(
-        relPath: String,
-        path: NpnPaths.JournalPath,
-        loaded: PreparedSource.Loaded,
-    ): JournalSourceRead =
-        when (path) {
-            is NpnPaths.JournalPath.SnapshotV2 -> SnapshotV2Reader.read(relPath, loaded.bytes, loaded.contentHash)
-            is NpnPaths.JournalPath.ObjectV2 -> StorageV2Reader.read(relPath, loaded.bytes, loaded.contentHash)
-            else -> StorageV1Reader.read(loaded.bytes)
-        }
 
     private suspend fun applyReadResult(
         path: String,
@@ -571,13 +559,6 @@ class MetadataAccumulator(
         dao.ingestSource(local.source, local.events, local.actor)
     }
 
-    suspend fun recordLocalSource(
-        path: String,
-        storageVersion: Int,
-        contentHash: String?,
-        events: List<dev.npn.core.journal.JournalEvent>,
-    ) = recordLocalSource(localSource(path, storageVersion, contentHash, events))
-
     suspend fun loadState(): FoldedState =
         FoldedState().also { state ->
             dao.allEvents().forEach { stored -> state.apply(EventDecoderRegistry.decodeStored(stored.canonicalJson)) }
@@ -665,3 +646,16 @@ private fun unseen(
     val keys = inserted.mapTo(HashSet()) { it.deviceId to it.sequence }
     return read.filter { (it.event.dev to it.event.seq) in keys }.map { it.event }
 }
+
+/** Read a source whose bytes the accumulator loaded and hashed; the v2 readers take that hash. */
+private fun readSource(
+    relPath: String,
+    path: NpnPaths.JournalPath,
+    bytes: ByteArray,
+    contentHash: String,
+): JournalSourceRead =
+    when (path) {
+        is NpnPaths.JournalPath.SnapshotV2 -> SnapshotV2Reader.read(relPath, bytes, contentHash)
+        is NpnPaths.JournalPath.ObjectV2 -> StorageV2Reader.read(relPath, bytes, contentHash)
+        else -> StorageV1Reader.read(bytes)
+    }
