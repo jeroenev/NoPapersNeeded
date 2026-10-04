@@ -32,7 +32,6 @@
     <ID>LambdaParameterInRestartableEffect:FilterSheet.kt:onValidity: (Boolean) -&gt; Unit</ID>
     <ID>LambdaParameterInRestartableEffect:PageViewer.kt:onPageChange: (Int) -&gt; Unit</ID>
     <ID>LambdaParameterInRestartableEffect:PageViewer.kt:render: suspend (pageIndex: Int, maxDim: Int) -&gt; ByteArray?</ID>
-    <ID>LambdaParameterInRestartableEffect:SettingsScreen.kt:onShown: () -&gt; Unit</ID>
     <ID>LongParameterList:AiChatScreen.kt:@Composable private fun AiChatTopBar</ID>
     <ID>LongParameterList:DocActions.kt:@Composable private fun DocActionsMenu</ID>
     <ID>LongParameterList:DocDetailScreen.kt:@Composable private fun LoadedDocScreen</ID>
@@ -95,7 +94,6 @@
     <ID>ParameterNaming:LibraryScreen.kt:onSetReviewed: (Boolean) -&gt; Unit</ID>
     <ID>ParameterNaming:MetadataPanel.kt:onSetReviewed: (Boolean) -&gt; Unit</ID>
     <ID>ParameterNaming:SearchField.kt:onSuggestionSelected: ((String) -&gt; Unit)? = null</ID>
-    <ID>ParameterNaming:SettingsScreen.kt:onShown: () -&gt; Unit</ID>
     <ID>ParameterNaming:TagManagementScreen.kt:/** Pulls this card into the selection before a menu opens on it (see call site). */ onEnsureSelected: () -&gt; Unit</ID>
     <ID>ParameterNaming:TagManagementScreen.kt:onDeleteSelected: () -&gt; Unit</ID>
     <ID>ParameterNaming:TagManagementScreen.kt:onMergeSelected: () -&gt; Unit</ID>
@@ -123,11 +121,6 @@
     <ID>ViewModelForwarding:AiEditSetup.kt:ScopeSection(ui, preview, vm, content)</ID>
     <ID>ViewModelForwarding:AiEditSetup.kt:SetupForm(ui, preview, plan, vm, content, wide)</ID>
     <ID>ViewModelForwarding:AiEditSetup.kt:TagSection(ui, vm)</ID>
-    <ID>ViewModelForwarding:DocActions.kt:BakeDialog(vm = vm, snackbar = snackbar, onDismiss = onDismiss)</ID>
-    <ID>ViewModelForwarding:DocActions.kt:DocActionDialogs( dialog = dialog, pageCount = ui.pageCount.count, aiOcr = ui.aiOcr, vm = vm, snackbar = snackbar, onGone = onGone, onDismiss = { dialog = null }, )</ID>
-    <ID>ViewModelForwarding:DocActions.kt:ShareOrExportButton(item = item, vm = vm, snackbar = snackbar)</ID>
-    <ID>ViewModelForwarding:DocActions.kt:SplitActionDialog( pageCount = pageCount, vm = vm, snackbar = snackbar, onGone = onGone, onDismiss = onDismiss, )</ID>
-    <ID>ViewModelForwarding:DocDetailScreen.kt:DocActions( item = current, vm = vm, snackbar = snackbar, onGone = onBack, compact = compact, )</ID>
     <ID>ViewModelInjection:AiChatScreen.kt:val vm: AiChatViewModel = viewModel { AiChatViewModel(session) }</ID>
     <ID>ViewModelInjection:AiEditReviewScreen.kt:val vm: AiEditReviewViewModel = viewModel(key = jobId) { AiEditReviewViewModel(session, jobId) }</ID>
     <ID>ViewModelInjection:AiEditScreen.kt:val vm: AiEditViewModel = viewModel { AiEditViewModel(session, settings, selection) }</ID>
