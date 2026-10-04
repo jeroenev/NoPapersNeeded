@@ -88,20 +88,12 @@ class Indexer(
     @Suppress("LongMethod")
     suspend fun rescan(
         metadataState: FoldedState,
-        fullHash: Boolean = false,
-        onProgress: (IndexProgress) -> Unit = {},
         onExternalMoves: (suspend (List<PendingOp>) -> Unit)? = null,
         onResurrected: suspend (List<Resurrected>) -> Unit = {},
     ): ScanReport {
         check(!documentPaths.collecting) { "A rescan does filesystem work, so it cannot run inside a projection" }
         val started = clock.nowMillis()
-
-        fun report(p: IndexProgress) {
-            _scanState.value = p
-            onProgress(p)
-        }
-
-        report(IndexProgress(IndexProgress.Phase.LISTING))
+        _scanState.value = IndexProgress(IndexProgress.Phase.LISTING)
         return try {
             // Indexable walk: `.npn/` (journal, OCR sidecars, trash) is never indexed, so skip
             // it instead of traversing the whole metadata tree on every rescan.
@@ -114,7 +106,7 @@ class Indexer(
             val changed =
                 indexable.filter { meta ->
                     val known = byPath[meta.relPath]
-                    fullHash || known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
+                    known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
                 }
             // A file still being written is left for a later scan rather than given the
             // identity of a partial file. A known path keeps its old row meanwhile.
@@ -138,7 +130,7 @@ class Indexer(
                     }
                 }
 
-            report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
+            _scanState.value = IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size)
             val hashes = HashMap<String, String>() // relPath -> sha256
             val progressMutex = Mutex()
             var hashedCount = 0
@@ -172,20 +164,15 @@ class Indexer(
                                     deferred.add(meta.relPath, WriteSettle.QUIET_MILLIS)
                                 }
                                 hashedCount++
-                                report(
-                                    IndexProgress(
-                                        IndexProgress.Phase.HASHING,
-                                        hashed = hashedCount,
-                                        total = toHash.size,
-                                    ),
-                                )
+                                _scanState.value =
+                                    IndexProgress(IndexProgress.Phase.HASHING, hashed = hashedCount, total = toHash.size)
                             }
                         }
                     }
                 }
             }
 
-            report(IndexProgress(IndexProgress.Phase.RECONCILING))
+            _scanState.value = IndexProgress(IndexProgress.Phase.RECONCILING)
             if (onExternalMoves != null) {
                 val moves =
                     ExternalDocumentMoves(
@@ -208,7 +195,7 @@ class Indexer(
                                 RelinkPairing.pair(missing, recon.newDocs, recon.relinkCandidates),
                             )
 
-                            report(IndexProgress(IndexProgress.Phase.FOLDING))
+                            _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
                             recon.resurrected = applyFold(metadataState, FoldScope.FullRescan(diskPaths))
                         }
                     }
@@ -227,7 +214,7 @@ class Indexer(
             // The listing is at hand: clear away what a crash left of the app's own temporary files.
             tempFiles.sweep(all, started)
 
-            report(IndexProgress(IndexProgress.Phase.DONE))
+            _scanState.value = IndexProgress(IndexProgress.Phase.DONE)
 
             ScanReport(
                 added = recon.added,
