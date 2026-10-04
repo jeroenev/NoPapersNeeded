@@ -106,6 +106,9 @@ import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.platformFileToExternalSource
 import dev.npn.app.ui.queue.QueueCounts
+import dev.npn.app.platform.LocalDocumentScanner
+import dev.npn.core.app.DocContentFacade
+import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
@@ -202,106 +205,35 @@ fun LibraryScreen(
     }
     val tags by vm.tags.collectAsStateWithLifecycle()
     val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
-    val needsReview by vm.needsReviewCount.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
-    val savedViews by vm.savedViews.collectAsStateWithLifecycle()
-    val scanProgress by vm.scanProgress.collectAsStateWithLifecycle()
-    val lastScan by vm.lastScanReport.collectAsStateWithLifecycle()
-    val ocr by vm.ocrStatus.collectAsStateWithLifecycle()
-    val queueCounts by vm.queueCounts.collectAsStateWithLifecycle()
 
-    val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
     var dialog by rememberLibraryDialog()
 
-    val tagColors = remember(tags) { TagColors(tags.associate { it.name to it.color }) }
-
-    val importPicker =
-        rememberFilePickerLauncher(
-            type = FileKitType.File("pdf"),
-            mode = FileKitMode.Multiple(),
-        ) { files ->
-            if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
-            val sources = files.map { platformFileToExternalSource(it) to it.name }
-            vm.import(sources)
-        }
-
-    val scanner = dev.npn.app.platform.LocalDocumentScanner.current
-    val onScan: () -> Unit = { vm.scan(scanner::scanToPdf) }
-
     BoxWithConstraints(Modifier.fillMaxSize()) {
         val wide = maxWidth > WideLayoutBreakpoint
-        // The navigation rail already carries the AI entries on wide layouts, so the top bar only
-        // needs them below the wide breakpoint; they stay as direct icons until the window is too
-        // tight for them, collapsing into the overflow menu only then.
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
         var previewDocId by remember { mutableStateOf<String?>(null) }
         val onDocClick: (String) -> Unit = { docId -> if (wide) previewDocId = docId else openDoc(docId) }
 
-        val topBarExtras: @Composable () -> Unit = {
-            LibraryViewsMenuButton(
-                reviewMode = reviewMode,
-                reviewBadge = needsReview,
-                savedViews = savedViews,
-                onAllDocuments = vm::clearFilter,
-                onReviewQueue = vm::applyReviewPreset,
-                onSaveCurrentView = { dialog = LibraryDialog.SaveView },
-                onSavedView = vm::applySavedView,
-                onRenameSavedView = { dialog = LibraryDialog.RenameView(it) },
-                onDeleteSavedView = vm::deleteSavedView,
-                onTogglePinSavedView = vm::toggleSavedViewPin,
-            )
-        }
-
-        val content: @Composable () -> Unit = {
-            LibraryContent(
-                vm = vm,
-                ui = ui,
-                session = session,
-                results = results,
-                tagColors = tagColors,
-                reviewMode = reviewMode,
-                wide = wide,
-                previewOnClick = wide,
-                scanProgress = scanProgress,
-                lastScan = lastScan,
-                ocr = ocr,
-                queueCounts = queueCounts,
-                onOpenQueue = onOpenQueue,
-                snackbar = snackbar,
-                topBarExtras = topBarExtras,
-                onOpenDoc = onDocClick,
-                onTrashBanner = onTrash,
-                onImport = { importPicker.launch() },
-                onScan = onScan,
-                scanAvailable = scanner.available,
-                onOpenFilter = { dialog = LibraryDialog.Filter },
-                // Hand the selection to the AI-edit page and leave selection mode behind.
-                onAiEdit =
-                    if (!aiConfigured) {
-                        null
-                    } else {
-                        {
-                            val selected = ui.selected.toList()
-                            vm.clearSelection()
-                            onAiEdit(selected)
-                        }
-                    },
-                onAddTag = { dialog = LibraryDialog.AddTag },
-                onRemoveTag = {
-                    // Only the tags the selection actually carries: removing any other is a no-op.
-                    scope.launch { dialog = LibraryDialog.RemoveTag(vm.tagsInSelection()) }
-                },
-                onRequestTrash = { dialog = LibraryDialog.ConfirmTrash },
-            )
-        }
-
         val sidePanelWidth = (maxWidth * SIDE_PANEL_FRACTION).coerceIn(SidePanelMinWidth, SidePanelMaxWidth)
         val panel = Modifier.width(sidePanelWidth).fillMaxHeight()
         Row(Modifier.fillMaxSize()) {
-            Box(Modifier.weight(1f)) { content() }
+            Box(Modifier.weight(1f)) {
+                LibraryContent(
+                    vm = vm,
+                    content = session.content,
+                    wide = wide,
+                    snackbar = snackbar,
+                    onOpenDoc = onDocClick,
+                    onOpenQueue = onOpenQueue,
+                    onOpenTrash = onTrash,
+                    onAiEdit = onAiEdit.takeIf { aiConfigured },
+                    onDialog = { dialog = it },
+                )
+            }
             // Wide layouts give the side panel to the filter editor when it is open, else to the
             // tapped document's preview, which vanishes when its document leaves the current result
             // set (trashed, filtered out, library rescan). Compact layouts edit the filter in a sheet.
@@ -309,7 +241,7 @@ fun LibraryScreen(
             val previewItem = items.firstOrNull { it.doc.docId == previewDocId }.takeIf { wide }
             when {
                 dialog == LibraryDialog.Filter -> {
-                    val apply = { applied: dev.npn.core.app.LibraryFilter ->
+                    val apply = { applied: LibraryFilter ->
                         vm.setFilter(applied)
                         dialog = null
                     }
@@ -357,7 +289,7 @@ fun LibraryScreen(
         LibraryDialogHost(
             dialog = dialog,
             selectedCount = ui.selected.size,
-            tagNames = tags.map { it.name },
+            tagNames = remember(tags) { tags.map { it.name } },
             onSaveView = vm::saveCurrentView,
             onRenameView = vm::renameSavedView,
             onAddTag = vm::bulkAddTag,
@@ -415,46 +347,72 @@ private fun KeyEvent.toLibraryKey(): LibraryKey? =
         else -> null
     }
 
+/**
+ * The library list with its bars, search, chips and banners. Collects what it shows from [vm]
+ * itself; the screen hands over only what the list cannot know: the layout width, the snackbar it
+ * shares with the preview panel, where navigation goes, and [onDialog] for the dialogs the screen
+ * hosts. [onAiEdit] is null while no AI endpoint is configured.
+ */
 @Composable
 private fun LibraryContent(
     vm: LibraryViewModel,
-    ui: LibraryUiState,
-    session: LibrarySession,
-    results: DocumentResults?,
-    tagColors: TagColors,
-    reviewMode: ReviewMode,
-    // Wide layouts have room to show more top-bar actions as direct icons before spilling them into
-    // the overflow menu.
+    content: DocContentFacade,
+    // Wide layouts show more top-bar actions as direct icons before spilling them into the overflow
+    // menu, and preview a tapped document in the side panel, so its click label reads "Preview"
+    // where compact layouts open it and read "Open".
     wide: Boolean,
-    // Wide layouts preview a tapped document in the side panel, so its click label reads "Preview";
-    // compact layouts open it and read "Open".
-    previewOnClick: Boolean,
-    scanProgress: dev.npn.core.app.ScanProgressUi?,
-    lastScan: dev.npn.core.index.ScanReport?,
-    ocr: dev.npn.core.app.OcrStatus,
-    queueCounts: QueueCounts,
-    onOpenQueue: () -> Unit,
     snackbar: SnackbarHostState,
-    topBarExtras: @Composable () -> Unit,
     onOpenDoc: (String) -> Unit,
-    onTrashBanner: () -> Unit,
-    onImport: () -> Unit,
-    onScan: () -> Unit,
-    scanAvailable: Boolean,
-    onOpenFilter: () -> Unit,
-    onAiEdit: (() -> Unit)?,
-    onAddTag: () -> Unit,
-    onRemoveTag: () -> Unit,
-    onRequestTrash: () -> Unit,
+    onOpenQueue: () -> Unit,
+    onOpenTrash: () -> Unit,
+    onAiEdit: ((selection: List<String>) -> Unit)?,
+    onDialog: (LibraryDialog) -> Unit,
 ) {
+    val ui by vm.ui.collectAsStateWithLifecycle()
+    // Read once, not delegated: the empty and loading branches below smart-cast it.
+    val results = vm.documents.collectAsStateWithLifecycle().value
+    val tags by vm.tags.collectAsStateWithLifecycle()
+    val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
     val reviewCount by vm.needsReviewCount.collectAsStateWithLifecycle()
+    val savedViews by vm.savedViews.collectAsStateWithLifecycle()
+    val scanProgress by vm.scanProgress.collectAsStateWithLifecycle()
+    val lastScan by vm.lastScanReport.collectAsStateWithLifecycle()
+    val ocr by vm.ocrStatus.collectAsStateWithLifecycle()
+    val queueCounts by vm.queueCounts.collectAsStateWithLifecycle()
     val sortableFields by vm.sortableFields.collectAsStateWithLifecycle()
     val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
     val queryText by vm.queryText.collectAsStateWithLifecycle()
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
     val landscapeListColumns by vm.landscapeListColumns.collectAsStateWithLifecycle()
-    val allDocIds = results?.items.orEmpty().map { it.doc.docId }
+    val tagColors = remember(tags) { TagColors(tags.associate { it.name to it.color }) }
+    val allDocIds = remember(results) { results?.items.orEmpty().map { it.doc.docId } }
+
+    val importPicker =
+        rememberFilePickerLauncher(
+            type = FileKitType.File("pdf"),
+            mode = FileKitMode.Multiple(),
+        ) { files ->
+            if (files.isNullOrEmpty()) return@rememberFilePickerLauncher
+            vm.import(files.map { platformFileToExternalSource(it) to it.name })
+        }
+    val onImport: () -> Unit = { importPicker.launch() }
+    val scanner = LocalDocumentScanner.current
+
+    val scope = rememberCoroutineScope()
+    val onAddTag = { onDialog(LibraryDialog.AddTag) }
+    // Only the tags the selection actually carries: removing any other is a no-op.
+    val onRemoveTag: () -> Unit = { scope.launch { onDialog(LibraryDialog.RemoveTag(vm.tagsInSelection())) } }
+    val onRequestTrash = { onDialog(LibraryDialog.ConfirmTrash) }
+    // Hand the selection to the AI-edit page and leave selection mode behind.
+    val aiEditSelection: (() -> Unit)? =
+        onAiEdit?.let { open ->
+            {
+                val selected = ui.selected.toList()
+                vm.clearSelection()
+                open(selected)
+            }
+        }
     val searchFocus = remember { FocusRequester() }
     val contentFocus = remember { FocusRequester() }
     var searchFocused by remember { mutableStateOf(false) }
@@ -505,7 +463,7 @@ private fun LibraryContent(
                     onSelectAll = { vm.selectAll(allDocIds) },
                     onAddTag = onAddTag,
                     onRemoveTag = onRemoveTag,
-                    onAiEdit = onAiEdit,
+                    onAiEdit = aiEditSelection,
                     onSetReviewed = vm::bulkSetReviewed,
                     onRequestTrash = onRequestTrash,
                 )
@@ -515,8 +473,21 @@ private fun LibraryContent(
                     sort = ui.sort,
                     sortableFields = sortableFields,
                     wide = wide,
-                    extras = topBarExtras,
-                    onOpenFilter = onOpenFilter,
+                    extras = {
+                        LibraryViewsMenuButton(
+                            reviewMode = reviewMode,
+                            reviewBadge = reviewCount,
+                            savedViews = savedViews,
+                            onAllDocuments = vm::clearFilter,
+                            onReviewQueue = vm::applyReviewPreset,
+                            onSaveCurrentView = { onDialog(LibraryDialog.SaveView) },
+                            onSavedView = vm::applySavedView,
+                            onRenameSavedView = { onDialog(LibraryDialog.RenameView(it)) },
+                            onDeleteSavedView = vm::deleteSavedView,
+                            onTogglePinSavedView = vm::toggleSavedViewPin,
+                        )
+                    },
+                    onOpenFilter = { onDialog(LibraryDialog.Filter) },
                     onSetSort = vm::setSort,
                     onSetView = vm::setViewType,
                     onRefresh = vm::refresh,
@@ -526,9 +497,9 @@ private fun LibraryContent(
         floatingActionButton = {
             if (!ui.selectionMode) {
                 LibraryFab(
-                    scanAvailable = scanAvailable,
+                    scanAvailable = scanner.available,
                     onImport = onImport,
-                    onScan = onScan,
+                    onScan = { vm.scan(scanner::scanToPdf) },
                 )
             }
         },
@@ -610,7 +581,7 @@ private fun LibraryContent(
                 queueCounts = queueCounts,
                 dismissed = ui.bannerDismissed,
                 onDismiss = vm::dismissBanner,
-                onGoToTrash = onTrashBanner,
+                onGoToTrash = onOpenTrash,
                 onOpenQueue = onOpenQueue,
             )
 
@@ -658,7 +629,7 @@ private fun LibraryContent(
                         ViewType.GRID -> {
                             DocGrid(
                                 results = results,
-                                content = session.content,
+                                content = content,
                                 tagColors = tagColors,
                                 reviewMode = reviewMode,
                                 ui = ui,
@@ -668,14 +639,14 @@ private fun LibraryContent(
                                 onToggleSelect = vm::toggleSelection,
                                 onStartSelection = vm::startSelection,
                                 contextActionsFor = contextActionsFor,
-                                previewOnClick = previewOnClick,
+                                previewOnClick = wide,
                             )
                         }
 
                         ViewType.LIST -> {
                             DocList(
                                 results = results,
-                                content = session.content,
+                                content = content,
                                 tagColors = tagColors,
                                 reviewMode = reviewMode,
                                 ui = ui,
@@ -684,7 +655,7 @@ private fun LibraryContent(
                                 onToggleSelect = vm::toggleSelection,
                                 onStartSelection = vm::startSelection,
                                 contextActionsFor = contextActionsFor,
-                                previewOnClick = previewOnClick,
+                                previewOnClick = wide,
                             )
                         }
                     }

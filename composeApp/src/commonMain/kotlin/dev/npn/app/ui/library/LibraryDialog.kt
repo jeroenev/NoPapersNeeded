@@ -141,7 +141,8 @@ internal fun LibraryDialogHost(
         LibraryDialog.ConfirmTrash -> {
             ConfirmDialog(
                 title = stringResource(Res.string.library_trash_documents),
-                message = pluralStringResource(Res.plurals.library_move_to_trash_question, selectedCount, selectedCount),
+                message =
+                    pluralStringResource(Res.plurals.library_move_to_trash_question, selectedCount, selectedCount),
                 confirmLabel = stringResource(Res.string.library_trash),
                 destructive = true,
                 onConfirm = { confirmed(onTrash) },
