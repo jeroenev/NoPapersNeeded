@@ -121,7 +121,7 @@ class IndexerTest {
                 .relPath shouldBe "a.pdf"
             rig.db.duplicateDao().forDoc(docId) shouldHaveSize 1
 
-            rig.maintenance.resolveDuplicate(docId, "copies/a-copy.pdf", keepCanonical = true)
+            rig.maintenance.resolveDuplicate(docId, "copies/a-copy.pdf")
             rig.exists("copies/a-copy.pdf").shouldBeFalse()
             rig.db.duplicateDao().forDoc(docId) shouldHaveSize 0
         }

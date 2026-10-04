@@ -54,7 +54,7 @@ class IndexRig private constructor(
         )
 
     val maintenance =
-        MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
+        MaintenanceService(fs, db.duplicateDao(), importService)
 
     /**
      * Reconcile metadata through the persisted accumulator, then rescan the file tree. Mirrors

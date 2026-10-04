@@ -180,7 +180,6 @@ class FakeMaintenanceFacade : MaintenanceFacade {
     override suspend fun resolveDuplicate(
         docId: String,
         extraRelPath: String,
-        keepCanonical: Boolean,
     ) {
         resolvedDuplicates += docId to extraRelPath
     }

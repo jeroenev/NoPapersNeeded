@@ -30,8 +30,7 @@ internal class MaintenanceFacadeImpl(
     override suspend fun resolveDuplicate(
         docId: String,
         extraRelPath: String,
-        keepCanonical: Boolean,
-    ) = lifetime.owned { maintenance.resolveDuplicate(docId, extraRelPath, keepCanonical) }
+    ) = lifetime.owned { maintenance.resolveDuplicate(docId, extraRelPath) }
 
     override suspend fun applyRelink(
         oldDocId: String,

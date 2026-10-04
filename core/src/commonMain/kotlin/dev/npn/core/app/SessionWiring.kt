@@ -304,7 +304,7 @@ internal fun buildMaintenance(
     MaintenanceFacadeImpl(
         lifetime = lifetime,
         db = deps.db,
-        maintenance = MaintenanceService(deps.fs, deps.db.documentDao(), deps.db.duplicateDao(), library.imports),
+        maintenance = MaintenanceService(deps.fs, deps.db.duplicateDao(), library.imports),
         relink = relink,
         splitter = SplitService(deps.fs, deps.pdfEngine, library.imports, deps.db.documentDao(), deps.log),
         writer = library.writer,

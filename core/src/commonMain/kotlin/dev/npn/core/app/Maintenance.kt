@@ -5,7 +5,6 @@ interface MaintenanceFacade {
     suspend fun resolveDuplicate(
         docId: String,
         extraRelPath: String,
-        keepCanonical: Boolean,
     )
 
     suspend fun applyRelink(

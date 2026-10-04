@@ -1,6 +1,5 @@
 package dev.npn.core.index
 
-import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DuplicateDao
 import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.fs.LibraryFileSystem
@@ -23,37 +22,18 @@ sealed interface ConflictAction {
  */
 class MaintenanceService(
     private val fs: LibraryFileSystem,
-    private val documentDao: DocumentDao,
     private val duplicateDao: DuplicateDao,
     private val importService: ImportService,
 ) {
     /**
-     * Resolve an external duplicate recorded at [extraRelPath] for [docId].
-     *
-     * - [keepCanonical] true: delete the extra copy, keep the canonical path unchanged.
-     * - [keepCanonical] false: make the extra path canonical (delete the current canonical file,
-     *   point the doc row at the extra path). Used when the user prefers the other location.
-     *
-     * The duplicates table row for [extraRelPath] is removed either way.
+     * Resolve an external duplicate recorded at [extraRelPath] for [docId]: delete the extra copy
+     * and its duplicates row, keeping the document's canonical path unchanged.
      */
     suspend fun resolveDuplicate(
         docId: String,
         extraRelPath: String,
-        keepCanonical: Boolean,
     ) {
-        val doc = documentDao.getByDocId(docId)
-        if (keepCanonical || doc == null) {
-            if (fs.exists(extraRelPath)) runCatchingCancellable { fs.delete(extraRelPath) }
-        } else {
-            // Swap: delete the old canonical file, adopt the extra path as canonical.
-            if (fs.exists(doc.relPath)) runCatchingCancellable { fs.delete(doc.relPath) }
-            documentDao.upsert(
-                doc.copy(
-                    relPath = extraRelPath,
-                    fileName = NpnPaths.fileName(extraRelPath),
-                ),
-            )
-        }
+        if (fs.exists(extraRelPath)) runCatchingCancellable { fs.delete(extraRelPath) }
         val remaining = duplicateDao.forDoc(docId).filter { it.relPath != extraRelPath }
         duplicateDao.replaceAll(docId, remaining)
     }

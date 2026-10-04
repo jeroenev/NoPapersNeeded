@@ -82,7 +82,7 @@ class TrashViewModel(
         docId: String,
         extraRelPath: String,
     ) = launchReporting(UiAction.REMOVE_DUPLICATE) {
-        maintenance.resolveDuplicate(docId, extraRelPath, keepCanonical = true)
+        maintenance.resolveDuplicate(docId, extraRelPath)
     }
 
     fun applyRelink(
