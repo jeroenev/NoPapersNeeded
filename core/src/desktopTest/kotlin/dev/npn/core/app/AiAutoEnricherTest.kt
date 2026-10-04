@@ -108,7 +108,11 @@ class AiAutoEnricherTest {
                 rig.config = rig.config.copy(autoOnOcr = false)
                 rig.insert("off")
                 rig.enricher.enqueue("off") shouldBe false
-                rig.deviceDb.aiEnrichQueueDao().observeQueue().first().size shouldBe 1
+                rig.deviceDb
+                    .aiEnrichQueueDao()
+                    .observeQueue()
+                    .first()
+                    .size shouldBe 1
                 rig.kicks shouldBe 1
             }
         }

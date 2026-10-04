@@ -166,7 +166,11 @@ class Indexer(
                                 }
                                 hashedCount++
                                 _scanState.value =
-                                    IndexProgress(IndexProgress.Phase.HASHING, hashed = hashedCount, total = toHash.size)
+                                    IndexProgress(
+                                        IndexProgress.Phase.HASHING,
+                                        hashed = hashedCount,
+                                        total = toHash.size,
+                                    )
                             }
                         }
                     }

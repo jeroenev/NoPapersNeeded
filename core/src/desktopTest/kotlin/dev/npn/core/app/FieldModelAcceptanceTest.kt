@@ -59,7 +59,9 @@ class FieldModelAcceptanceTest {
                     .observeDoc(a)
                     .first()!!
                     .doc.fields["amount"] shouldBe "4210"
-                rig.session.fieldRegistry.distinctValues("amount").first() shouldContainExactly listOf("4210")
+                rig.session.fieldRegistry
+                    .distinctValues("amount")
+                    .first() shouldContainExactly listOf("4210")
                 rig.session.fieldRegistry
                     .usageCounts()
                     .first()["amount"] shouldBe 1

@@ -31,7 +31,12 @@ class PerDocumentColumnMigrationTest {
             val db = npnDatabase(file)
             try {
                 // A destructive fallback would have emptied the table.
-                val title = db.fieldDefDao().all().firstOrNull { it.fieldKey == "title" }?.toFieldDef()
+                val title =
+                    db
+                        .fieldDefDao()
+                        .all()
+                        .firstOrNull { it.fieldKey == "title" }
+                        ?.toFieldDef()
                 title?.label shouldBe "Title"
                 title?.perDocument shouldBe false
             } finally {
