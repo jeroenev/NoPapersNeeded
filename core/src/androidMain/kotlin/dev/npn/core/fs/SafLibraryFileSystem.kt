@@ -1,6 +1,5 @@
 package dev.npn.core.fs
 
-import android.content.ContentResolver
 import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
@@ -273,7 +272,8 @@ class SafLibraryFileSystem(
         }
         val name = splitSegments(relPath).last()
         val parentId = resolveParentDir(relPath, create = true)
-        writeBytesInDir(parentId, name, bytes, relPath)
+        copyIntoNewFile(parentId, name, relPath) { bytes.inputStream() }
+        Unit
     }
 
     /**
@@ -323,26 +323,15 @@ class SafLibraryFileSystem(
         check(!staging.isDir) { "Staging object path is a directory: $stagingPath" }
         check(sha256OfEntry(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
 
-        // Rename the complete staging file to its canonical name within the same bucket. SAF
-        // rename can throw or return null on some providers; treat that as retryable and leave the
-        // staging file for a later attempt / GC.
-        val renamedUri =
-            try {
-                DocumentsContract.renameDocument(resolver, docUri(staging.docId), canonicalName)
-            } catch (e: Exception) {
-                throw retryablePublish(canonicalPath, e)
-            } ?: throw retryablePublish(canonicalPath, null)
-
-        // Some providers ignore the requested name and dedup (e.g. "<hash> (1).jsonl"), which would
-        // leave a wrongly-named file in the published directory. Detect that, remove the stray, and
-        // fail retryably. The original staging file is gone (renamed), so re-staging happens above.
-        val actualName = DocumentFile.fromSingleUri(context, renamedUri)?.name
-        if (actualName != null && actualName != canonicalName) {
-            deleteQuietly(renamedUri)
-            throw retryablePublish(
-                canonicalPath,
-                IOException("Provider renamed publish target to '$actualName'"),
-            )
+        // Rename the complete staging file to its canonical name within the same bucket. A rename
+        // the provider refuses fails retryably and leaves the staging file for a later attempt / GC.
+        // One that lands under another name (e.g. "<hash> (1).jsonl") fails retryably too, and the
+        // misnamed file is removed so it never sits among the published objects; the staging file
+        // is gone then (renamed), so the next attempt stages afresh.
+        try {
+            renameExact(docUri(staging.docId), canonicalName, canonicalPath, discardMisnamed = true)
+        } catch (e: Exception) {
+            throw retryablePublish(canonicalPath, e)
         }
 
         // Confirm the published object is intact and correctly named before reporting success.
@@ -391,56 +380,29 @@ class SafLibraryFileSystem(
 
         if (sameDir) {
             // Pure rename within the same directory.
-            if (fromName != toName) {
-                val renamed =
-                    DocumentsContract.renameDocument(resolver, docUri(source.docId), toName)
-                        ?: throw IOException("Rename failed: $fromRelPath -> $toRelPath")
-                val actual = DocumentFile.fromSingleUri(context, renamed)?.name
-                if (actual != null && actual != toName) {
-                    throw IOException("Rename collided (got '$actual'): $toRelPath")
-                }
-            }
+            if (fromName != toName) renameExact(docUri(source.docId), toName, toRelPath, discardMisnamed = false)
             return@withContext
         }
 
         val fromParentId = resolveParentDir(fromRelPath, create = false)
         val toParentId = resolveParentDir(toRelPath, create = true)
 
-        // Try a same-tree native move first (fast, atomic on the provider side).
-        var moved = false
-        if (fromName == toName) {
-            try {
-                val result =
-                    DocumentsContract.moveDocument(
-                        resolver,
-                        docUri(source.docId),
-                        docUri(fromParentId),
-                        docUri(toParentId),
-                    )
-                moved = result != null
-            } catch (_: Exception) {
-                moved = false
+        // A same-tree native move first (fast, atomic on the provider side), which keeps the name.
+        val moved =
+            if (fromName != toName) {
+                null
+            } else {
+                try {
+                    DocumentsContract.moveDocument(resolver, docUri(source.docId), docUri(fromParentId), docUri(toParentId))
+                } catch (_: Exception) {
+                    null
+                }
             }
-        }
-
-        if (!moved) {
+        if (moved == null) {
             streamMoveFallback(source, fromRelPath, toRelPath, toParentId, toName)
-            return@withContext
-        }
-
-        // Native move landed the file under its original name in the target dir; rename if needed.
-        if (fromName != toName) {
-            val movedEntry =
-                resolveEntry(
-                    (toSegments.dropLast(1) + fromName).joinToString("/"),
-                ) ?: throw IOException("Post-move lookup failed: $toRelPath")
-            val renamed =
-                DocumentsContract.renameDocument(resolver, docUri(movedEntry.docId), toName)
-                    ?: throw IOException("Post-move rename failed: $toRelPath")
-            val actual = DocumentFile.fromSingleUri(context, renamed)?.name
-            if (actual != null && actual != toName) {
-                throw IOException("Post-move rename collided (got '$actual'): $toRelPath")
-            }
+        } else {
+            // The document has moved; a provider that dodged a clash by renaming it leaves it there.
+            misnamed(moved, toName)?.let { throw IOException("Move collided (got '$it'): $toRelPath") }
         }
         Unit
     }
@@ -460,62 +422,24 @@ class SafLibraryFileSystem(
                 resolver.openInputStream(docUri(source.docId))
                     ?: throw IOException("Cannot read source for move: $fromRelPath")
             }
-        val renamedUri = publishMovedCopy(stagingUri, fromRelPath, toRelPath, toName)
-        val renamedId = DocumentsContract.getDocumentId(renamedUri)
-        val actualName = DocumentFile.fromSingleUri(context, renamedUri)?.name
-        val published = resolveEntry(toRelPath)
-        if ((actualName != null && actualName != toName) || published?.docId != renamedId) {
-            deleteQuietly(renamedUri)
+        val renamed =
+            try {
+                renameExact(stagingUri, toName, toRelPath, discardMisnamed = true)
+            } catch (e: Exception) {
+                deleteQuietly(stagingUri)
+                throw IOException("Move publish failed: $fromRelPath -> $toRelPath", e)
+            }
+        if (resolveEntry(toRelPath)?.docId != DocumentsContract.getDocumentId(renamed)) {
+            deleteQuietly(renamed)
             throw IOException("Move target collided: $toRelPath")
         }
         DocumentsContract.deleteDocument(resolver, docUri(source.docId))
     }
 
-    private fun publishMovedCopy(
-        stagingUri: Uri,
-        fromRelPath: String,
-        toRelPath: String,
-        toName: String,
-    ): Uri =
-        try {
-            DocumentsContract.renameDocument(resolver, stagingUri, toName)
-                ?: throw IOException("Provider did not rename the staging copy")
-        } catch (e: Exception) {
-            deleteQuietly(stagingUri)
-            throw IOException("Move publish failed: $fromRelPath -> $toRelPath", e)
-        }
-
     /**
-     * Create a file with an exact name inside [parentId] and write [bytes] once. SAF may silently
-     * dedup a name collision by renaming to "name (1).ext"; that violates write-once, so on such a
-     * mismatch the stray file is deleted and the call fails. If the write itself throws, the
-     * just-created file is removed so no partial object is left behind.
-     */
-    private fun writeBytesInDir(
-        parentId: String,
-        name: String,
-        bytes: ByteArray,
-        relForError: String,
-    ) {
-        val createdUri =
-            DocumentsContract.createDocument(
-                resolver,
-                docUri(parentId),
-                mimeForName(name),
-                name,
-            ) ?: throw IOException("Failed to create file: $relForError")
-        assertExactCreatedName(createdUri, name, relForError)
-        try {
-            writeCreatedFile(createdUri, bytes, relForError)
-        } catch (e: Throwable) {
-            deleteQuietly(createdUri)
-            throw e
-        }
-    }
-
-    /**
-     * Create an exact-name file and stream [openInput] into it, removing partial output on error.
-     * With [verify], the file must also read back as exactly the bytes that were read.
+     * Create [name] in [parentId] ([createExact]) and stream [openInput] into it, removing the file
+     * again on any error, so no partial one is left behind. With [verify], the file must also read
+     * back as exactly the bytes that were read.
      */
     private fun copyIntoNewFile(
         parentId: String,
@@ -525,11 +449,10 @@ class SafLibraryFileSystem(
         verify: Boolean = false,
         openInput: () -> InputStream,
     ): Uri {
-        val createdUri = createDocument(parentId, name, mime, relForError)
-        assertExactCreatedName(createdUri, name, relForError)
+        val createdUri = createExact(parentId, name, mime, relForError)
         try {
             val read = if (verify) MessageDigest.getInstance("SHA-256") else null
-            streamInto(resolver, createdUri, relForError) {
+            streamInto(createdUri, relForError) {
                 if (read != null) DigestInputStream(openInput(), read) else openInput()
             }
             if (read != null && digestSha256(createdUri, relForError) != read.digest().toHexLower()) {
@@ -542,44 +465,67 @@ class SafLibraryFileSystem(
         return createdUri
     }
 
-    private fun createDocument(
+    /** Write everything [openInput] yields into the existing file at [target], from its start. */
+    private fun streamInto(
+        target: Uri,
+        relForError: String,
+        openInput: () -> InputStream,
+    ) {
+        openInput().use { input ->
+            resolver.openOutputStream(target, "w")?.use { output ->
+                input.copyTo(output, STREAM_BUFFER_SIZE)
+            } ?: throw IOException("Cannot open for write: $relForError")
+        }
+    }
+
+    /**
+     * Create an empty file named exactly [name] in [parentId]. A provider may settle a clash by
+     * naming the file "name (1).ext" instead of failing, which would break write-once: that file is
+     * deleted again, and the call fails as if [name] already existed.
+     */
+    private fun createExact(
         parentId: String,
         name: String,
         mime: String,
         relForError: String,
-    ): Uri =
-        DocumentsContract.createDocument(
-            resolver,
-            docUri(parentId),
-            mime,
-            name,
-        ) ?: throw IOException("Failed to create file: $relForError")
-
-    private fun writeCreatedFile(
-        uri: Uri,
-        bytes: ByteArray,
-        relForError: String,
-    ) {
-        resolver.openOutputStream(uri, "w")?.use { it.write(bytes) }
-            ?: throw IOException("Cannot open for write: $relForError")
+    ): Uri {
+        val created =
+            DocumentsContract.createDocument(resolver, docUri(parentId), mime, name)
+                ?: throw IOException("Failed to create file: $relForError")
+        misnamed(created, name)?.let { actual ->
+            deleteQuietly(created)
+            error("Target already exists (SAF renamed to '$actual'): $relForError")
+        }
+        return created
     }
 
     /**
-     * Guard against SAF's silent rename-dedup: if the provider gave [createdUri] a name other than
-     * [expected] (e.g. "name (1).ext"), delete the stray file and fail write-once. A null actual
-     * name is treated as "unknown, assume ok" to match prior behaviour.
+     * Rename [uri] to exactly [name] and return the renamed document. A provider that settles a
+     * clash with another name ("name (1).ext") fails the rename just like one that refuses it. With
+     * [discardMisnamed] the misnamed document is deleted first: right for a copy whose source is
+     * still there, never for the user's own file.
      */
-    private fun assertExactCreatedName(
-        createdUri: Uri,
-        expected: String,
+    private fun renameExact(
+        uri: Uri,
+        name: String,
         relForError: String,
-    ) {
-        val actualName = DocumentFile.fromSingleUri(context, createdUri)?.name
-        if (actualName != null && actualName != expected) {
-            deleteQuietly(createdUri)
-            error("Target already exists (SAF renamed to '$actualName'): $relForError")
+        discardMisnamed: Boolean,
+    ): Uri {
+        val renamed =
+            DocumentsContract.renameDocument(resolver, uri, name)
+                ?: throw IOException("Provider did not rename to '$name': $relForError")
+        misnamed(renamed, name)?.let { actual ->
+            if (discardMisnamed) deleteQuietly(renamed)
+            throw IOException("Provider renamed to '$actual' instead of '$name': $relForError")
         }
+        return renamed
     }
+
+    /** The name the provider gave [uri] if it is not [expected]; null if it is, or the provider cannot say. */
+    private fun misnamed(
+        uri: Uri,
+        expected: String,
+    ): String? = DocumentFile.fromSingleUri(context, uri)?.name?.takeIf { it != expected }
 
     /** Best-effort delete that never throws (used to clean up stray/partial files). */
     private fun deleteQuietly(uri: Uri) {
@@ -632,17 +578,4 @@ class SafLibraryFileSystem(
 
     /** SAF provides no reliable change notifications; indexing is rescan-driven. */
     override fun watch(): Flow<FsEvent> = emptyFlow()
-}
-
-private fun streamInto(
-    resolver: ContentResolver,
-    target: Uri,
-    relForError: String,
-    openInput: () -> InputStream,
-) {
-    openInput().use { input ->
-        resolver.openOutputStream(target, "w")?.use { output ->
-            input.copyTo(output, STREAM_BUFFER_SIZE)
-        } ?: throw IOException("Cannot open for write: $relForError")
-    }
 }
