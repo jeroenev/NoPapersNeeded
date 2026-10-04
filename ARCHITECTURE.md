@@ -101,8 +101,9 @@ Shared Compose Multiplatform UI + viewmodels + dependency wiring.
 ### `androidApp` — `dev.npn.*`
 
 Android entrypoint (`MainActivity`, `NpnApplication`), plus Android-only features:
-`MlKitDocumentScanner`, `IntentImport` (share-sheet import), `NpnWork` (WorkManager
-background OCR).
+`MlKitDocumentScanner`, `IntentImport` (share-sheet import, reported as soon as it is done),
+`NpnWork` (WorkManager: the periodic rescan and OCR, and the one-time drain of the OCR and
+enrichment a share import queued).
 
 ### `desktopApp` — `dev.npn.desktop`
 

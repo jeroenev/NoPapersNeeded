@@ -7,8 +7,6 @@ import android.net.Uri
 import android.os.Build
 import android.os.Parcelable
 import android.provider.OpenableColumns
-import dev.npn.app.di.AppEnvironment
-import dev.npn.app.platform.withLibraryForForegroundImport
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.fs.ExternalSource
@@ -19,8 +17,8 @@ import kotlinx.coroutines.withContext
 /**
  * Reads content URIs delivered by ACTION_SEND / ACTION_SEND_MULTIPLE / ACTION_VIEW intents and
  * imports them through the opened [LibrarySession]. PDFs import as-is; images are combined into a
- * single PDF via the core PdfEngine (importImagesAsPdf). Import only happens when a library is
- * configured; otherwise the caller shows onboarding and the intent is ignored.
+ * single PDF via the core PdfEngine (importImagesAsPdf). Finding the library is the caller's
+ * ([dev.npn.app.platform.importIntoLibrary]).
  */
 object IntentImport {
     private const val MIME_PDF = "application/pdf"
@@ -91,44 +89,41 @@ object IntentImport {
         }
 
     /**
-     * Import all content URIs in [intent]. Returns null if no library is configured (caller shows a
-     * toast / onboarding), otherwise a [Result] summary. Images across the intent are merged into a
-     * single PDF; PDFs are imported one per file.
+     * Import all content URIs in [intent] into [session] and summarise what became of them. Images
+     * across the intent are merged into a single PDF; PDFs are imported one per file.
      */
     suspend fun import(
         context: Context,
-        env: AppEnvironment,
+        session: LibrarySession,
         intent: Intent,
-    ): Result? {
-        return env.withLibraryForForegroundImport { session ->
-            val uris = extractUris(intent)
-            if (uris.isEmpty()) return@withLibraryForForegroundImport Result(0, 0, 0, 0)
+    ): Result {
+        val uris = extractUris(intent)
+        if (uris.isEmpty()) return Result(0, 0, 0, 0)
 
-            val resolver = context.contentResolver
-            val (pdfUris, imageBytes) = partitionUris(resolver, uris)
+        val resolver = context.contentResolver
+        val (pdfUris, imageBytes) = partitionUris(resolver, uris)
 
-            val tally = Tally()
-            var total = 0
+        val tally = Tally()
+        var total = 0
 
-            // An import reports what went wrong with the file as an outcome; it throws only when
-            // the session closed under it, which still counts against this file.
-            for (uri in pdfUris) {
-                total++
-                tally.record(
-                    runCatchingCancellable {
-                        session.ingest.importPdf(ExternalSource(uri), displayName(resolver, uri) ?: FALLBACK_SHARED_PDF)
-                    }.getOrNull(),
-                )
-            }
-
-            if (imageBytes.isNotEmpty()) {
-                total++
-                val outcome = runCatchingCancellable { session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF) }
-                tally.record(outcome.getOrNull())
-            }
-
-            Result(tally.imported, tally.duplicates, tally.failed, total)
+        // An import reports what went wrong with the file as an outcome; it throws only when
+        // the session closed under it, which still counts against this file.
+        for (uri in pdfUris) {
+            total++
+            tally.record(
+                runCatchingCancellable {
+                    session.ingest.importPdf(ExternalSource(uri), displayName(resolver, uri) ?: FALLBACK_SHARED_PDF)
+                }.getOrNull(),
+            )
         }
+
+        if (imageBytes.isNotEmpty()) {
+            total++
+            val outcome = runCatchingCancellable { session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF) }
+            tally.record(outcome.getOrNull())
+        }
+
+        return Result(tally.imported, tally.duplicates, tally.failed, total)
     }
 
     /**

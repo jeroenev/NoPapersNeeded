@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">No papers needed</string>
     <string name="import_library_required">Stel eerst een bibliotheek in en deel daarna opnieuw</string>
+    <string name="import_failed">Importeren mislukt. Probeer opnieuw te delen.</string>
     <string name="import_nothing_found">Niets om te importeren</string>
     <string name="import_complete">Importeren voltooid</string>
     <string name="import_summary_separator">", "</string>

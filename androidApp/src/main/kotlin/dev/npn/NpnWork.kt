@@ -1,18 +1,25 @@
 package dev.npn
 
 import android.content.Context
-import android.util.Log
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
 import androidx.work.ExistingPeriodicWorkPolicy
+import androidx.work.ExistingWorkPolicy
+import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
+import dev.npn.app.di.AppEnvironment
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.util.runCatchingCancellable
-import kotlinx.coroutines.flow.first
+import dev.npn.core.util.AndroidLog
+import dev.npn.core.util.runLogged
+import dev.npn.core.util.warn
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.TimeUnit
+import kotlin.coroutines.cancellation.CancellationException
+
+/** 8 min: how long a worker waits on the queues, under WorkManager's 10 min limit. */
+private const val DRAIN_TIMEOUT_MS = 8L * 60L * 1000L
 
 /**
  * Periodic background maintenance: rescan the library folder (picks up externally synced files and
@@ -30,18 +37,11 @@ class RescanOcrWorker(
 ) : CoroutineWorker(context, params) {
     override suspend fun doWork(): Result {
         val env = NpnApplication.environment(applicationContext)
-
-        // Restore the persisted library if the UI hasn't opened it yet (e.g. worker runs while the
-        // app process was cold-started just for this job).
-        if (env.session.first() == null) {
-            runCatchingCancellable { env.openPersistedLibrary() }
-        }
-        val session = env.session.first() ?: return Result.success() // no library configured
-
-        return runCatchingCancellable {
+        val session = env.openedLibrary() ?: return Result.success() // no library to maintain
+        return try {
             // Sweep the watched folder first so freshly scanned PDFs are part of this run's
             // rescan + OCR drain (no-op when no watched folder is configured).
-            runCatchingCancellable { env.scanWatchedFolder() }
+            AndroidLog.runLogged("Watched-folder sweep") { env.scanWatchedFolder() }
 
             session.ingest.rescan()
 
@@ -58,20 +58,50 @@ class RescanOcrWorker(
                 session.work.drainEditRuns()
             }
             Result.success()
-        }.getOrElse { t ->
-            Log.w(TAG, "rescan/OCR maintenance failed; retrying", t)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            AndroidLog.warn("Background rescan and OCR failed; retrying", e)
             Result.retry()
         }
     }
+}
 
-    companion object {
-        private const val TAG = "npn"
-        private const val DRAIN_TIMEOUT_MS = 8L * 60L * 1000L // 8 min, under WM's 10 min limit
+/**
+ * Finishes the OCR and automatic AI enrichment a foreground import (a share, an open with) queued,
+ * once that import has already told the user how it went. The work runs on the session either way;
+ * this keeps the process alive for it after the user leaves the app.
+ */
+class QueueDrainWorker(
+    context: Context,
+    params: WorkerParameters,
+) : CoroutineWorker(context, params) {
+    override suspend fun doWork(): Result {
+        val session = NpnApplication.environment(applicationContext).openedLibrary() ?: return Result.success()
+        // Whatever is left when this gives up stays queued for the next drain or maintenance run.
+        AndroidLog.runLogged("Draining the queues after an import") {
+            withTimeoutOrNull(DRAIN_TIMEOUT_MS) {
+                session.work.drainOcr()
+                session.work.drainEnrichment()
+            }
+        }
+        return Result.success()
     }
+}
+
+/**
+ * The open library, restoring the saved one when the process was started just for this work; null
+ * when none is set up or it does not open, which is logged.
+ */
+private suspend fun AppEnvironment.openedLibrary(): LibrarySession? {
+    session.value?.let { return it }
+    AndroidLog.runLogged("Opening the library for background work") { openPersistedLibrary() }
+    return session.value
 }
 
 object NpnWork {
     private const val PERIODIC_NAME = "npn-rescan-ocr"
+    private const val DRAIN_NAME = "npn-drain-queues"
 
     /**
      * Schedule the unique periodic rescan+OCR job (idempotent). UPDATE (not KEEP) so an interval
@@ -95,6 +125,19 @@ object NpnWork {
             PERIODIC_NAME,
             ExistingPeriodicWorkPolicy.UPDATE,
             request,
+        )
+    }
+
+    /**
+     * Drain the OCR and enrichment queues once, now, under WorkManager ([QueueDrainWorker]). A newer
+     * request replaces a pending or running one: the drains themselves run on the session, so only
+     * the wait restarts, and it then covers what the newer import queued too.
+     */
+    fun drainQueues(context: Context) {
+        WorkManager.getInstance(context).enqueueUniqueWork(
+            DRAIN_NAME,
+            ExistingWorkPolicy.REPLACE,
+            OneTimeWorkRequestBuilder<QueueDrainWorker>().build(),
         )
     }
 }

@@ -1,50 +1,78 @@
 package dev.npn.app
 
-import dev.npn.app.di.AppEnvironment
-import dev.npn.app.platform.withLibraryForForegroundImport
-import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.SettingsRepository
+import dev.npn.app.platform.ForegroundImport
+import dev.npn.app.platform.importIntoLibrary
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
+/** A share or open-with import: one outcome, reported as soon as the import itself is done. */
 class ForegroundImportTest {
     @Test
-    fun coldShareRestoresLibraryAndFinishesItsFollowUpWork() =
+    fun aColdShareRestoresTheLibraryAndReturnsWithoutWaitingForItsFollowUpWork() =
         runTest {
-            val library = FakeLibrarySession()
-            val environment = FakeImportEnvironment(this, library)
+            val env = FakeAppEnvironment(backgroundScope, savedLocation = "/lib")
 
-            val result = environment.withLibraryForForegroundImport { "imported" }
+            val result = env.importIntoLibrary { "imported" }
 
-            result shouldBe "imported"
-            environment.restoreCalls shouldBe 1
-            library.work.ocrDrains shouldBe 1
-            library.work.enrichmentDrains shouldBe 1
+            result shouldBe ForegroundImport.Done("imported")
+            env.opened shouldContainExactly listOf("/lib")
+            // OCR and enrichment are left to the background drain the caller schedules.
+            val library = env.sessions.getValue("/lib")
+            library.work.ocrDrains shouldBe 0
+            library.work.enrichmentDrains shouldBe 0
         }
 
-    private class FakeImportEnvironment(
-        override val appScope: CoroutineScope,
-        private val restoredLibrary: LibrarySession,
-    ) : AppEnvironment {
-        override val settings: SettingsRepository = FakeSettingsRepository()
-        private val mutableSession = MutableStateFlow<LibrarySession?>(null)
-        override val session: StateFlow<LibrarySession?> = mutableSession
-        override val opening: StateFlow<Boolean> = MutableStateFlow(false)
-        var restoreCalls = 0
+    @Test
+    fun anOpenLibraryIsUsedAsItIs() =
+        runTest {
+            val env = FakeAppEnvironment(backgroundScope, savedLocation = "/lib")
+            env.openPersistedLibrary()
 
-        override suspend fun openLibrary(location: String) = Unit
-
-        override suspend fun closeLibrary() = Unit
-
-        override suspend fun openPersistedLibrary() {
-            restoreCalls++
-            mutableSession.value = restoredLibrary
+            env.importIntoLibrary { "imported" } shouldBe ForegroundImport.Done("imported")
+            env.opened shouldContainExactly listOf("/lib")
         }
 
-        override suspend fun scanWatchedFolder(): Int = 0
-    }
+    @Test
+    fun withNoLibrarySetUpThereIsNothingToImportInto() =
+        runTest {
+            var imported = false
+
+            val result = FakeAppEnvironment(backgroundScope).importIntoLibrary { imported = true }
+
+            result shouldBe ForegroundImport.NoLibrary
+            imported shouldBe false
+        }
+
+    @Test
+    fun aSavedLibraryThatWillNotOpenIsAFailureNotAMissingLibrary() =
+        runTest {
+            val broken = IllegalStateException("Library folder not found: /usb/lib")
+            val env = FakeAppEnvironment(backgroundScope, savedLocation = "/usb/lib")
+            env.failures["/usb/lib"] = broken
+
+            env.importIntoLibrary { "imported" } shouldBe ForegroundImport.Failed(broken)
+        }
+
+    @Test
+    fun anImportThatThrowsIsAFailure() =
+        runTest {
+            val closed = IllegalStateException("Library session is closed")
+            val env = FakeAppEnvironment(backgroundScope, savedLocation = "/lib")
+
+            env.importIntoLibrary { throw closed } shouldBe ForegroundImport.Failed(closed)
+        }
+
+    @Test
+    fun cancellationIsNotReportedAsAFailure() =
+        runTest {
+            val env = FakeAppEnvironment(backgroundScope, savedLocation = "/lib")
+
+            assertFailsWith<CancellationException> {
+                env.importIntoLibrary { throw CancellationException("left") }
+            }
+        }
 }

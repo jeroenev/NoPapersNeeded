@@ -2,6 +2,7 @@
 <resources>
     <string name="app_name">No papers needed</string>
     <string name="import_library_required">Richte zuerst eine Bibliothek ein und teile dann erneut</string>
+    <string name="import_failed">Import fehlgeschlagen. Versuche es erneut zu teilen.</string>
     <string name="import_nothing_found">Nichts zu importieren</string>
     <string name="import_complete">Import abgeschlossen</string>
     <string name="import_summary_separator">", "</string>
