@@ -11,7 +11,6 @@ import dev.npn.core.db.QueueState
 import dev.npn.core.db.TagDao
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.FtsRows
@@ -25,8 +24,6 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Tunables for the hybrid extract-or-OCR pipeline.
@@ -96,39 +93,12 @@ class OcrPipeline(
          * written by an older build for a file indexed before its bytes arrived.
          */
         private const val EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
-
-        /** The device part of a re-run writer key: `<deviceId>.r<runMillis>`. */
-        private val RERUN_WRITER = Regex("""(.+)\.r(\d+)""")
     }
-
-    /** One stored OCR version of a document: a sidecar identified by its writer key. */
-    data class Version(
-        val writerKey: String,
-        val deviceId: String,
-        val engine: String,
-        /** Run stamp of a re-run ([NpnPaths.ocrRerunWriterKey]); 0 for a device's first run. */
-        val run: Long = 0,
-    )
-
-    /** A fully decoded stored version, for UI listing. */
-    data class StoredVersion(
-        val writerKey: String,
-        val deviceId: String,
-        val engine: String,
-        val lang: String,
-        val createdAt: Long,
-    )
 
     private val retry = QueueRetryPolicy(config.maxAttempts)
 
-    /** Engine label per `<hash>.<writerKey>`, so legacy sidecars are decoded at most once. */
-    private val engineCache = SidecarFacts<String>()
-
-    /**
-     * Whether an `embedded` sidecar has a usable text layer on every page, per
-     * `<hash>.<writerKey>` (see [canImprove]). Sidecars are write-once, so the answer holds.
-     */
-    private val fullTextLayerCache = SidecarFacts<Boolean>()
+    /** What is stored for each document, and which version of it to index. */
+    private val versions = OcrVersions(sidecars, config.minEmbeddedCharsPerPage)
 
     private val _inFlight = MutableStateFlow<String?>(null)
 
@@ -184,12 +154,12 @@ class OcrPipeline(
             return
         }
 
-        var versions = loadVersions(docId)
+        var stored = versions.of(docId)
         var own: OwnOcr? = null
         val entry = ocrQueueDao.getByDocId(docId)
         val aiRequested = entry?.aiRequested == true
-        if (versions.isEmpty() || canImprove(doc, versions, rerun = entry?.rerun == true, aiRequested)) {
-            own = runOwnOcr(doc, versions, aiRequested)
+        if (stored.isEmpty() || canImprove(doc, stored, rerun = entry?.rerun == true, aiRequested)) {
+            own = runOwnOcr(doc, stored, aiRequested)
             if (own == OwnOcr.Stale) {
                 // Not this document's bytes, so not its failure either. Left out of the queue: the
                 // rescan replaces the row, or refreshes it if the file turns out unchanged.
@@ -197,12 +167,12 @@ class OcrPipeline(
                 onStaleFile(docId)
                 return
             }
-            versions = loadVersions(docId)
+            stored = versions.of(docId)
         }
         val failure = (own as? OwnOcr.Failed)?.error
 
-        val desired = select(versions, doc.ocrEngineOverride)
-        val sidecar = desired?.let { decode(docId, it.writerKey) }
+        val desired = versions.select(stored, doc.ocrEngineOverride)
+        val sidecar = desired?.let { versions.read(docId, it.writerKey) }
         if (desired == null || sidecar == null) {
             fail(docId, failure ?: "no readable ocr version for $docId", textIndexed = false)
             return
@@ -278,7 +248,7 @@ class OcrPipeline(
      */
     private suspend fun runOwnOcr(
         doc: DocumentEntity,
-        stored: List<Version>,
+        stored: List<OcrVersions.Version>,
         aiRequested: Boolean,
     ): OwnOcr {
         var step = "read failed"
@@ -293,13 +263,8 @@ class OcrPipeline(
             }.getOrElse { return OwnOcr.Failed(describe(step, it)) }
         val sameEngine = stored.filter { it.engine == result.engine }
         // A re-run that read the same text again adds nothing; keep the library free of copies.
-        if (sameEngine.any { decode(doc.docId, it.writerKey)?.pages == result.pages }) return OwnOcr.Adopted
-        val writerKey =
-            if (sameEngine.any { it.deviceId == deviceId }) {
-                NpnPaths.ocrRerunWriterKey(deviceId, clock.nowMillis(), result.engine)
-            } else {
-                NpnPaths.ocrWriterKey(deviceId, result.engine)
-            }
+        if (sameEngine.any { versions.read(doc.docId, it.writerKey)?.pages == result.pages }) return OwnOcr.Adopted
+        val writerKey = versions.newWriterKey(stored, deviceId, result.engine, clock.nowMillis())
         val sidecar =
             OcrSidecar(
                 doc = doc.docId,
@@ -314,7 +279,7 @@ class OcrPipeline(
             onSuccess = { OwnOcr.Published },
             onFailure = { failure ->
                 // Already exists for this device+engine: keep the published file.
-                if (decode(doc.docId, writerKey) == null) {
+                if (versions.read(doc.docId, writerKey) == null) {
                     OwnOcr.Failed(describe("sidecar write/read failed for $writerKey", failure))
                 } else {
                     OwnOcr.Adopted
@@ -403,13 +368,13 @@ class OcrPipeline(
      * watch events, and after journal ingestion (override changes sync as journal events).
      */
     suspend fun reconcileSidecars() {
-        for ((hash, writerKeys) in sidecarsByHash()) {
+        for ((hash, writerKeys) in versions.writerKeysByHash()) {
             if (hash == EMPTY_SHA256) continue
             val doc = documentDao.getByDocId(hash) ?: continue
-            val versions = writerKeys.mapNotNull { versionFor(hash, it) }
-            if (versions.isEmpty()) continue
-            applySelection(doc, versions)
-            maybeQueueUpgrade(doc, versions)
+            val stored = versions.of(hash, writerKeys)
+            if (stored.isEmpty()) continue
+            applySelection(doc, stored)
+            maybeQueueUpgrade(doc, stored)
         }
     }
 
@@ -419,49 +384,26 @@ class OcrPipeline(
      */
     suspend fun reselect(docId: String) {
         val doc = documentDao.getByDocId(docId) ?: return
-        val versions = loadVersions(docId)
-        if (versions.isEmpty()) return
-        applySelection(doc, versions)
-        maybeQueueUpgrade(doc, versions)
+        val stored = versions.of(docId)
+        if (stored.isEmpty()) return
+        applySelection(doc, stored)
+        maybeQueueUpgrade(doc, stored)
     }
 
     /** All stored OCR versions of [docId], decoded, best-ranked first. For UI listing. */
-    suspend fun listVersions(docId: String): List<StoredVersion> =
-        loadVersions(docId)
-            .mapNotNull { v ->
-                decode(docId, v.writerKey)?.let {
-                    StoredVersion(v.writerKey, v.deviceId, it.engine, it.lang, it.createdAt)
-                }
-            }.sortedWith(compareByDescending<StoredVersion> { OcrEngineId.rank(it.engine) }.thenBy { it.writerKey })
+    suspend fun listVersions(docId: String): List<OcrVersions.StoredVersion> = versions.list(docId)
 
     // --- selection ---
 
-    /**
-     * Pick the version to index: among versions matching the override engine (all versions
-     * when no override or no match), the highest-ranked engine, then the newest re-run of it, then
-     * the lowest writer key, so every device converges on the same choice.
-     */
-    private fun select(
-        versions: List<Version>,
-        override: String?,
-    ): Version? {
-        val pool = versions.filter { it.engine == override }.ifEmpty { versions }
-        return pool.maxWithOrNull(
-            compareBy<Version> { OcrEngineId.rank(it.engine) }
-                .thenBy { it.run }
-                .thenByDescending { it.writerKey },
-        )
-    }
-
-    /** Index [versions]' selected sidecar when the doc is un-OCR'd or indexed with another engine. */
+    /** Index [stored]'s selected sidecar when the doc is un-OCR'd or indexed with another engine. */
     private suspend fun applySelection(
         doc: DocumentEntity,
-        versions: List<Version>,
+        stored: List<OcrVersions.Version>,
     ) {
-        val desired = select(versions, doc.ocrEngineOverride) ?: return
+        val desired = versions.select(stored, doc.ocrEngineOverride) ?: return
         val needsIndex = OcrState.fromColumn(doc.ocrState) in UNPROCESSED_STATES || doc.ocrSource != desired.writerKey
         if (!needsIndex) return
-        val sidecar = decode(doc.docId, desired.writerKey) ?: return
+        val sidecar = versions.read(doc.docId, desired.writerKey) ?: return
         indexAndMarkSelected(doc.docId, desired, sidecar)
         // Adoption or re-selection of a stored sidecar: no new text, so no enrichment. A hook
         // failure is discarded rather than recorded, unlike in processDoc: the row is not marked
@@ -498,18 +440,18 @@ class OcrPipeline(
      */
     private suspend fun canImprove(
         doc: DocumentEntity,
-        versions: List<Version>,
+        stored: List<OcrVersions.Version>,
         rerun: Boolean = false,
         aiRequested: Boolean = false,
     ): Boolean {
         val engine = engines.forDocument(doc.ocrEngineOverride, doc.pageCount, aiRequested)
         if (!engine.available()) return false
-        if (versions.isEmpty()) return true
+        if (stored.isEmpty()) return true
         val ownRank = OcrEngineId.rank(engine.name)
-        if (rerun) return ownRank >= OcrEngineId.rank(select(versions, doc.ocrEngineOverride)?.engine)
-        val outranksStored = ownRank > versions.maxOf { OcrEngineId.rank(it.engine) }
+        if (rerun) return ownRank >= OcrEngineId.rank(versions.select(stored, doc.ocrEngineOverride)?.engine)
+        val outranksStored = ownRank > stored.maxOf { OcrEngineId.rank(it.engine) }
         val triedHere =
-            versions.any {
+            stored.any {
                 it.deviceId == deviceId && (it.engine == engine.name || it.engine == OcrEngineId.EMBEDDED.column)
             }
         if (!outranksStored || triedHere) return false
@@ -517,16 +459,7 @@ class OcrPipeline(
         // device's run would OCR no page and publish the same text again: without this, a library
         // opened on a new device re-extracts every born-digital document. One with a thin page does
         // not count, since it may come from a device that had no OCR engine to run.
-        val fullTextLayer =
-            versions.any { version ->
-                version.engine == OcrEngineId.EMBEDDED.column &&
-                    fullTextLayerCache.getOrCompute("${doc.docId}.${version.writerKey}") {
-                        decode(doc.docId, version.writerKey)?.let { sidecar ->
-                            sidecar.pages.all { it.trim().length >= config.minEmbeddedCharsPerPage }
-                        }
-                    } == true
-            }
-        return !fullTextLayer
+        return stored.none { versions.hasFullTextLayer(doc.docId, it) }
     }
 
     /**
@@ -539,10 +472,10 @@ class OcrPipeline(
      */
     private suspend fun maybeQueueUpgrade(
         doc: DocumentEntity,
-        versions: List<Version>,
+        stored: List<OcrVersions.Version>,
     ) {
         if (doc.trashed || doc.deleted || doc.missing) return
-        if (!canImprove(doc, versions)) return
+        if (!canImprove(doc, stored)) return
         val entry = ocrQueueDao.getByDocId(doc.docId)
         if (entry != null && (entry.queueState != QueueState.DONE || retry.givesUp(entry.attempts))) return
         ocrQueueDao.upsert(
@@ -555,60 +488,6 @@ class OcrPipeline(
         )
     }
 
-    // --- stored version discovery ---
-
-    /** Hash -> writer keys for every well-formed sidecar in `.npn/ocr/`. */
-    private suspend fun sidecarsByHash(): Map<String, List<String>> {
-        val prefix = "${NpnPaths.OCR_DIR}/"
-        return sidecars
-            .list()
-            .mapNotNull { meta ->
-                val fileName = meta.relPath.removePrefix(prefix)
-                // Shared lenient parser; additionally require a full 64-char SHA-256 hash here so
-                // reconciliation only ever keys off a canonical content hash.
-                val (hash, dev) = OcrSidecarFiles.parseSidecarName(fileName) ?: return@mapNotNull null
-                if (hash.length != NpnPaths.SHA256_HEX_LENGTH) return@mapNotNull null
-                hash to dev
-            }.groupBy({ it.first }, { it.second })
-    }
-
-    private suspend fun loadVersions(hash: String): List<Version> =
-        sidecars.listForHash(hash).mapNotNull { versionFor(hash, it) }
-
-    /**
-     * Resolve a writer key to a [Version]. Engine-qualified keys (`<deviceId>.<engine>`)
-     * resolve without I/O; legacy keys (`<deviceId>`) decode the sidecar once to learn its
-     * engine (cached). Returns null for unreadable sidecars.
-     */
-    private suspend fun versionFor(
-        hash: String,
-        writerKey: String,
-    ): Version? {
-        val suffix = writerKey.substringAfterLast('.', "")
-        if (OcrEngineId.fromColumn(suffix) != null) {
-            val writer = writerKey.removeSuffix(".$suffix")
-            val rerun = RERUN_WRITER.matchEntire(writer)
-            val run = rerun?.groupValues?.get(2)?.toLongOrNull()
-            return if (rerun != null && run != null) {
-                Version(writerKey, rerun.groupValues[1], suffix, run)
-            } else {
-                Version(writerKey, writer, suffix)
-            }
-        }
-        val engine = engineCache.getOrCompute("$hash.$writerKey") { decode(hash, writerKey)?.engine } ?: return null
-        return Version(writerKey, writerKey, engine)
-    }
-
-    /**
-     * Read and decode one sidecar, or null when missing/corrupt. Cancellation is rethrown: read as
-     * "unreadable", it would charge the document a failed attempt for a drain that was only
-     * stopped (see [fail]).
-     */
-    private suspend fun decode(
-        hash: String,
-        writerKey: String,
-    ): OcrSidecar? = runCatchingCancellable { OcrSidecarCodec.decode(sidecars.read(hash, writerKey)) }.getOrNull()
-
     // --- indexing / state helpers ---
 
     /**
@@ -619,7 +498,7 @@ class OcrPipeline(
      */
     private suspend fun indexAndMarkSelected(
         docId: String,
-        desired: Version,
+        desired: OcrVersions.Version,
         sidecar: OcrSidecar,
     ) {
         // Only the content column is this pipeline's; the fold writes the others. The projection's
@@ -694,26 +573,3 @@ private fun describe(
     what: String,
     cause: Throwable,
 ): String = "$what: ${cause.reason()}"
-
-/**
- * A memo of facts about write-once sidecars, shared by every coroutine that drives the pipeline:
- * the queue drain, and the reconcile that rescans, watch events and engine pins run alongside it.
- * The map is only touched under [lock]; the fact itself is computed outside it, so a slow read
- * never holds up the others. Two callers computing the same fact at once get the same answer,
- * since the sidecar it comes from never changes.
- */
-private class SidecarFacts<V : Any> {
-    private val lock = Mutex()
-    private val facts = HashMap<String, V>()
-
-    /** The fact under [key], computing and remembering it first; null (not remembered) if [compute] has none. */
-    suspend fun getOrCompute(
-        key: String,
-        compute: suspend () -> V?,
-    ): V? {
-        lock.withLock { facts[key] }?.let { return it }
-        val fact = compute() ?: return null
-        lock.withLock { facts[key] = fact }
-        return fact
-    }
-}
