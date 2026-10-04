@@ -291,71 +291,68 @@ class SafLibraryFileSystem(
      * as [NpnPaths.JournalPath.Staging] and ignored by readers, then GC'd by the accumulator) and a
      * retryable [VerifiedPublicationFailedException] is thrown, so a wrongly-named file is
      * never installed in the published objects directory. If the canonical object already exists
-     * (same hash ⇒ same content), the staging file is deleted and the call reports
-     * [VerifiedPublicationResult.ALREADY_PRESENT].
+     * (same hash ⇒ same content), the staging file is deleted and the call succeeds.
      */
     override suspend fun publishVerifiedObjectOnce(
         stagingPath: String,
         canonicalPath: String,
         expectedHash: String,
-    ): VerifiedPublicationResult =
-        withContext(Dispatchers.IO) {
-            val stagingSegments = splitSegments(stagingPath)
-            val canonicalSegments = splitSegments(canonicalPath)
-            require(stagingSegments.dropLast(1) == canonicalSegments.dropLast(1)) {
-                "Object staging must be in the canonical bucket"
-            }
-            val canonicalName = canonicalSegments.last()
-
-            // A canonical object already present means the content was published earlier (content
-            // addressed: same hash ⇒ same bytes). Verify its bytes and drop our staging copy.
-            resolveEntry(canonicalPath)?.let { existing ->
-                check(!existing.isDir) { "Canonical object path is a directory: $canonicalPath" }
-                check(sha256OfEntry(existing) == expectedHash) {
-                    "Canonical object exists with invalid bytes: $canonicalPath"
-                }
-                // Best effort: an orphaned staging file is never read as an object.
-                runCatchingCancellable { delete(stagingPath) }
-                return@withContext VerifiedPublicationResult.ALREADY_PRESENT
-            }
-
-            val staging =
-                resolveEntry(stagingPath)
-                    ?: throw VerifiedPublicationFailedException("Staging object is missing: $stagingPath")
-            check(!staging.isDir) { "Staging object path is a directory: $stagingPath" }
-            check(sha256OfEntry(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
-
-            // Rename the complete staging file to its canonical name within the same bucket. SAF
-            // rename can throw or return null on some providers; treat that as retryable and leave the
-            // staging file for a later attempt / GC.
-            val renamedUri =
-                try {
-                    DocumentsContract.renameDocument(resolver, docUri(staging.docId), canonicalName)
-                } catch (e: Exception) {
-                    throw retryablePublish(canonicalPath, e)
-                } ?: throw retryablePublish(canonicalPath, null)
-
-            // Some providers ignore the requested name and dedup (e.g. "<hash> (1).jsonl"), which would
-            // leave a wrongly-named file in the published directory. Detect that, remove the stray, and
-            // fail retryably. The original staging file is gone (renamed), so re-staging happens above.
-            val actualName = DocumentFile.fromSingleUri(context, renamedUri)?.name
-            if (actualName != null && actualName != canonicalName) {
-                deleteQuietly(renamedUri)
-                throw retryablePublish(
-                    canonicalPath,
-                    IOException("Provider renamed publish target to '$actualName'"),
-                )
-            }
-
-            // Confirm the published object is intact and correctly named before reporting success.
-            val published =
-                resolveEntry(canonicalPath)
-                    ?: throw retryablePublish(canonicalPath, IOException("Published object not found after rename"))
-            check(sha256OfEntry(published) == expectedHash) {
-                "Published object hash mismatch: $canonicalPath"
-            }
-            VerifiedPublicationResult.PUBLISHED
+    ) = withContext(Dispatchers.IO) {
+        val stagingSegments = splitSegments(stagingPath)
+        val canonicalSegments = splitSegments(canonicalPath)
+        require(stagingSegments.dropLast(1) == canonicalSegments.dropLast(1)) {
+            "Object staging must be in the canonical bucket"
         }
+        val canonicalName = canonicalSegments.last()
+
+        // A canonical object already present means the content was published earlier (content
+        // addressed: same hash ⇒ same bytes). Verify its bytes and drop our staging copy.
+        resolveEntry(canonicalPath)?.let { existing ->
+            check(!existing.isDir) { "Canonical object path is a directory: $canonicalPath" }
+            check(sha256OfEntry(existing) == expectedHash) {
+                "Canonical object exists with invalid bytes: $canonicalPath"
+            }
+            // Best effort: an orphaned staging file is never read as an object.
+            runCatchingCancellable { delete(stagingPath) }
+            return@withContext
+        }
+
+        val staging =
+            resolveEntry(stagingPath)
+                ?: throw VerifiedPublicationFailedException("Staging object is missing: $stagingPath")
+        check(!staging.isDir) { "Staging object path is a directory: $stagingPath" }
+        check(sha256OfEntry(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
+
+        // Rename the complete staging file to its canonical name within the same bucket. SAF
+        // rename can throw or return null on some providers; treat that as retryable and leave the
+        // staging file for a later attempt / GC.
+        val renamedUri =
+            try {
+                DocumentsContract.renameDocument(resolver, docUri(staging.docId), canonicalName)
+            } catch (e: Exception) {
+                throw retryablePublish(canonicalPath, e)
+            } ?: throw retryablePublish(canonicalPath, null)
+
+        // Some providers ignore the requested name and dedup (e.g. "<hash> (1).jsonl"), which would
+        // leave a wrongly-named file in the published directory. Detect that, remove the stray, and
+        // fail retryably. The original staging file is gone (renamed), so re-staging happens above.
+        val actualName = DocumentFile.fromSingleUri(context, renamedUri)?.name
+        if (actualName != null && actualName != canonicalName) {
+            deleteQuietly(renamedUri)
+            throw retryablePublish(
+                canonicalPath,
+                IOException("Provider renamed publish target to '$actualName'"),
+            )
+        }
+
+        // Confirm the published object is intact and correctly named before reporting success.
+        val published =
+            resolveEntry(canonicalPath)
+                ?: throw retryablePublish(canonicalPath, IOException("Published object not found after rename"))
+        check(sha256OfEntry(published) == expectedHash) {
+            "Published object hash mismatch: $canonicalPath"
+        }
+    }
 
     private fun retryablePublish(
         canonicalPath: String,

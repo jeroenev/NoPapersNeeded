@@ -47,18 +47,17 @@ class JvmLibraryFileSystemPublicationTest {
     }
 
     @Test
-    fun renameFallbackPublishesVerifiedBytesAndReportsALaterDuplicate() {
+    fun renameFallbackPublishesVerifiedBytesAndAcceptsALaterDuplicate() {
         val fs = fs()
         val bytes = "tx".encodeToByteArray()
         val hash = sha256Bytes(bytes)
 
-        val first = runBlocking { fs.publishVerifiedObjectOnce(stage("s1.part", bytes), "bucket/obj", hash) }
-        first shouldBe VerifiedPublicationResult.PUBLISHED
+        runBlocking { fs.publishVerifiedObjectOnce(stage("s1.part", bytes), "bucket/obj", hash) }
         Files.readAllBytes(root.resolve("bucket/obj")) shouldBe bytes
         Files.exists(root.resolve("bucket/s1.part")) shouldBe false
 
-        val second = runBlocking { fs.publishVerifiedObjectOnce(stage("s2.part", bytes), "bucket/obj", hash) }
-        second shouldBe VerifiedPublicationResult.ALREADY_PRESENT
+        runBlocking { fs.publishVerifiedObjectOnce(stage("s2.part", bytes), "bucket/obj", hash) }
+        Files.readAllBytes(root.resolve("bucket/obj")) shouldBe bytes
         Files.exists(root.resolve("bucket/s2.part")) shouldBe false
     }
 
@@ -124,6 +123,7 @@ class JvmLibraryFileSystemPublicationTest {
         // filesystem whose bucket-local hard links otherwise work fine: the failure must be
         // call-specific, never latched into "this filesystem has no link(2)" (see linksUnavailable).
         var crossDirectoryFailureUsed = false
+        val linked = mutableListOf<String>()
         val flaky =
             NoReplaceLinker { from, to ->
                 if (!crossDirectoryFailureUsed && from.parent != to.parent) {
@@ -131,6 +131,7 @@ class JvmLibraryFileSystemPublicationTest {
                     false
                 } else {
                     Files.createLink(to, from)
+                    linked += to.name
                     true
                 }
             }
@@ -144,8 +145,8 @@ class JvmLibraryFileSystemPublicationTest {
             // A same-bucket publish afterwards must still use link(2) rather than having been
             // permanently downgraded by the cross-directory move's failure above.
             val bytes = "tx".encodeToByteArray()
-            val result = fs.publishVerifiedObjectOnce(stage("s1.part", bytes), "bucket/obj", sha256Bytes(bytes))
-            result shouldBe VerifiedPublicationResult.PUBLISHED
+            fs.publishVerifiedObjectOnce(stage("s1.part", bytes), "bucket/obj", sha256Bytes(bytes))
+            linked.last() shouldBe "obj"
         }
     }
 

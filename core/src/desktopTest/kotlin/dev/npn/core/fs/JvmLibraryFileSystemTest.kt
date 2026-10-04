@@ -158,14 +158,15 @@ class JvmLibraryFileSystemTest {
             val canonical = NpnPaths.journalObjectPath(hash)
             val staging = NpnPaths.journalStagingPath(hash, "installation", "one")
             fs.writeBytesOnce(staging, bytes)
-            fs.publishVerifiedObjectOnce(staging, canonical, hash) shouldBe VerifiedPublicationResult.PUBLISHED
+            fs.publishVerifiedObjectOnce(staging, canonical, hash)
             fs.exists(staging).shouldBeFalse()
             fs.readBytes(canonical).contentEquals(bytes).shouldBeTrue()
 
             val retry = NpnPaths.journalStagingPath(hash, "installation", "two")
             fs.writeBytesOnce(retry, bytes)
-            fs.publishVerifiedObjectOnce(retry, canonical, hash) shouldBe VerifiedPublicationResult.ALREADY_PRESENT
+            fs.publishVerifiedObjectOnce(retry, canonical, hash)
             fs.exists(retry).shouldBeFalse()
+            fs.readBytes(canonical).contentEquals(bytes).shouldBeTrue()
 
             val other = "other".encodeToByteArray()
             val otherHash = sha256Bytes(other)

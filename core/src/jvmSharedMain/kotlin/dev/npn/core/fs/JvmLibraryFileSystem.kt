@@ -228,26 +228,23 @@ class JvmLibraryFileSystem internal constructor(
         stagingPath: String,
         canonicalPath: String,
         expectedHash: String,
-    ): VerifiedPublicationResult =
-        withContext(Dispatchers.IO) {
-            val staging = resolve(stagingPath)
-            val canonical = resolve(canonicalPath)
-            require(staging.parent == canonical.parent) { "Object staging must be in the canonical bucket" }
-            check(Files.isRegularFile(staging)) { "Staging object is missing: $stagingPath" }
-            check(hashPath(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
-            val result =
-                try {
-                    publishObject(staging, canonical)
-                } catch (_: java.nio.file.FileAlreadyExistsException) {
-                    check(Files.isRegularFile(canonical) && hashPath(canonical) == expectedHash) {
-                        "Canonical object exists with invalid bytes: $canonicalPath"
-                    }
-                    VerifiedPublicationResult.ALREADY_PRESENT
-                }
-            check(hashPath(canonical) == expectedHash) { "Published object hash mismatch: $canonicalPath" }
-            Files.deleteIfExists(staging)
-            result
+    ) = withContext(Dispatchers.IO) {
+        val staging = resolve(stagingPath)
+        val canonical = resolve(canonicalPath)
+        require(staging.parent == canonical.parent) { "Object staging must be in the canonical bucket" }
+        check(Files.isRegularFile(staging)) { "Staging object is missing: $stagingPath" }
+        check(hashPath(staging) == expectedHash) { "Staging object hash mismatch: $stagingPath" }
+        try {
+            publishObject(staging, canonical)
+        } catch (_: java.nio.file.FileAlreadyExistsException) {
+            check(Files.isRegularFile(canonical) && hashPath(canonical) == expectedHash) {
+                "Canonical object exists with invalid bytes: $canonicalPath"
+            }
         }
+        check(hashPath(canonical) == expectedHash) { "Published object hash mismatch: $canonicalPath" }
+        Files.deleteIfExists(staging)
+        Unit
+    }
 
     /**
      * Install the verified [staging] object as [canonical] without ever replacing an existing
@@ -261,14 +258,13 @@ class JvmLibraryFileSystem internal constructor(
     private fun publishObject(
         staging: Path,
         canonical: Path,
-    ): VerifiedPublicationResult {
+    ) {
         // mayLatch = true (the default): staging and canonical always share a bucket directory, so
         // a refusal here is the filesystem's, safe to remember for the rest of the session.
-        if (linkNoReplace(staging, canonical)) return VerifiedPublicationResult.PUBLISHED
+        if (linkNoReplace(staging, canonical)) return
         // A generic failure with the target in place is a lost race, not a missing primitive.
         if (Files.isRegularFile(canonical)) throw java.nio.file.FileAlreadyExistsException(canonical.toString())
         NoReplaceMove.move(staging, canonical)
-        return VerifiedPublicationResult.PUBLISHED
     }
 
     override val supportsDocumentRelocation: Boolean get() = true

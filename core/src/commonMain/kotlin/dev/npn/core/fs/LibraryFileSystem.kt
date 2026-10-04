@@ -30,11 +30,6 @@ enum class VerifiedPublicationCapability {
     UNSUPPORTED,
 }
 
-enum class VerifiedPublicationResult {
-    PUBLISHED,
-    ALREADY_PRESENT,
-}
-
 /**
  * This filesystem can never publish without replacement: the platform or mount has no primitive
  * for it. A capability, not an incident, so the journal may stop trying for the session.
@@ -208,13 +203,15 @@ interface LibraryFileSystem {
 
     /**
      * Atomically expose [stagingPath] as [canonicalPath], refusing replacement. Both paths must be
-     * in the same directory and the bytes at both boundaries must hash to [expectedHash].
+     * in the same directory and the bytes at both boundaries must hash to [expectedHash]. A
+     * canonical object already holding those bytes counts as published; the staging file is
+     * removed either way.
      */
     suspend fun publishVerifiedObjectOnce(
         stagingPath: String,
         canonicalPath: String,
         expectedHash: String,
-    ): VerifiedPublicationResult
+    )
 
     /** Move/rename, creating parent dirs of the target. Fails if the target already exists. */
     suspend fun move(

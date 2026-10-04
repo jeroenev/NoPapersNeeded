@@ -42,15 +42,9 @@ class DirectStorageDeviceTest {
             val bytes = "transaction".encodeToByteArray()
             val hash = sha256Bytes(bytes)
             fs.writeBytesOnce("bucket/first.part", bytes)
-            assertEquals(
-                VerifiedPublicationResult.PUBLISHED,
-                fs.publishVerifiedObjectOnce("bucket/first.part", "bucket/object", hash),
-            )
+            fs.publishVerifiedObjectOnce("bucket/first.part", "bucket/object", hash)
             fs.writeBytesOnce("bucket/second.part", bytes)
-            assertEquals(
-                VerifiedPublicationResult.ALREADY_PRESENT,
-                fs.publishVerifiedObjectOnce("bucket/second.part", "bucket/object", hash),
-            )
+            fs.publishVerifiedObjectOnce("bucket/second.part", "bucket/object", hash)
             assertArrayEquals(bytes, fs.readBytes("bucket/object"))
             assertFalse(fs.exists("bucket/first.part"))
             assertFalse(fs.exists("bucket/second.part"))

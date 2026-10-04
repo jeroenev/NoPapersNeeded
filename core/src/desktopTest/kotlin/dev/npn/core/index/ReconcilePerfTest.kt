@@ -12,7 +12,6 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.fs.VerifiedPublicationCapability
-import dev.npn.core.fs.VerifiedPublicationResult
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
@@ -73,7 +72,7 @@ private class CountingFileSystem(
         stagingPath: String,
         canonicalPath: String,
         expectedHash: String,
-    ): VerifiedPublicationResult = delegate.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
+    ) = delegate.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
 
     override suspend fun move(
         fromRelPath: String,

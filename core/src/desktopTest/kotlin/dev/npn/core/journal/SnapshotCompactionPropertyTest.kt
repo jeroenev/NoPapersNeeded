@@ -9,7 +9,6 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.VerifiedPublicationCapability
-import dev.npn.core.fs.VerifiedPublicationResult
 import dev.npn.core.fs.sha256Bytes
 import io.kotest.common.ExperimentalKotest
 import io.kotest.property.Arb
@@ -45,7 +44,7 @@ private object NoPublishFs : LibraryFileSystem {
         stagingPath: String,
         canonicalPath: String,
         expectedHash: String,
-    ): VerifiedPublicationResult = VerifiedPublicationResult.PUBLISHED
+    ) = Unit
 
     override suspend fun move(
         fromRelPath: String,

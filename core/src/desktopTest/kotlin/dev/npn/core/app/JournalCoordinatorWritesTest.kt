@@ -4,7 +4,6 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationFailedException
-import dev.npn.core.fs.VerifiedPublicationResult
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.Indexer
@@ -67,9 +66,9 @@ class JournalCoordinatorWritesTest {
                         stagingPath: String,
                         canonicalPath: String,
                         expectedHash: String,
-                    ): VerifiedPublicationResult {
+                    ) {
                         if (failures-- > 0) throw VerifiedPublicationFailedException("rename failed")
-                        return rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
+                        rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
                     }
                 }
             val coordinator =
@@ -100,7 +99,7 @@ class JournalCoordinatorWritesTest {
                         stagingPath: String,
                         canonicalPath: String,
                         expectedHash: String,
-                    ): VerifiedPublicationResult = throw VerifiedPublicationUnavailableException("no link, no rename")
+                    ): Unit = throw VerifiedPublicationUnavailableException("no link, no rename")
                 }
             val coordinator =
                 JournalCoordinator(

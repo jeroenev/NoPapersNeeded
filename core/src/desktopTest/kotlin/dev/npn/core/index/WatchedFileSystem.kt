@@ -6,7 +6,6 @@ import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.VerifiedPublicationResult
 
 /**
  * A [LibraryFileSystem] over a real one that records every call it makes and whether the calling
@@ -82,9 +81,9 @@ internal class WatchedFileSystem(
         stagingPath: String,
         canonicalPath: String,
         expectedHash: String,
-    ): VerifiedPublicationResult {
+    ) {
         record("publish", canonicalPath)
-        return delegate.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
+        delegate.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
     }
 
     override suspend fun claimDocument(

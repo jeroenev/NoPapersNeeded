@@ -102,12 +102,11 @@ class JvmLibraryFileSystemNoReplaceTest {
         val stagings = (0 until WRITERS).map { i -> NpnPaths.journalStagingPath(hash, "installation", "s$i") }
         runBlocking { stagings.forEach { fs.writeBytesOnce(it, bytes) } }
         val published = AtomicInteger()
-        val winners =
-            raceWriters(WRITERS) { i ->
-                if (fs.publishVerifiedObjectOnce(stagings[i], canonical, hash) == VerifiedPublicationResult.PUBLISHED) {
-                    published.incrementAndGet()
-                }
+        val counting =
+            JvmLibraryFileSystem(root, PathExternalIo) { from, to ->
+                HardLinkLinker.link(from, to).also { if (it) published.incrementAndGet() }
             }
+        val winners = raceWriters(WRITERS) { i -> counting.publishVerifiedObjectOnce(stagings[i], canonical, hash) }
         // Exactly one publisher installs the object; the rest observe it as already present.
         winners.size shouldBe WRITERS
         published.get() shouldBe 1
