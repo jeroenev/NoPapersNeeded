@@ -22,8 +22,6 @@ class FakeFieldRegistry : FieldRegistry {
     val reorders = mutableListOf<List<String>>()
 
     override val fields: Flow<List<FieldDef>> get() = defs
-    override val visible: Flow<List<FieldDef>> get() = defs.map { list -> list.filter { it.showByDefault } }
-    override val aiFields: Flow<List<FieldDef>> get() = defs.map { list -> list.filter { it.aiEnabled } }
 
     override fun orphanKeys(): Flow<List<FieldKeyCount>> = orphans
 
@@ -35,21 +33,6 @@ class FakeFieldRegistry : FieldRegistry {
         key: String,
         limit: Int,
     ): Flow<List<String>> = values.map { it[key].orEmpty().take(limit) }
-
-    override suspend fun distinctValuesNow(
-        key: String,
-        limit: Int,
-    ): List<String> = values.value[key].orEmpty().take(limit)
-
-    override suspend fun valuesForPrefix(
-        key: String,
-        prefix: String,
-        limit: Int,
-    ): List<String> =
-        values.value[key]
-            .orEmpty()
-            .filter { it.startsWith(prefix, ignoreCase = true) }
-            .take(limit)
 
     override suspend fun current(): List<FieldDef> = defs.value
 

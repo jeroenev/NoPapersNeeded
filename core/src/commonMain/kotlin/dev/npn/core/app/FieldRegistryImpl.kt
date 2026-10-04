@@ -26,12 +26,6 @@ class FieldRegistryImpl(
     override val fields: Flow<List<FieldDef>> =
         defDao.observeAll().map { rows -> rows.mapNotNull { it.toFieldDef() } }.distinctUntilChanged()
 
-    override val visible: Flow<List<FieldDef>> =
-        fields.map { defs -> defs.filter { it.showByDefault } }.distinctUntilChanged()
-
-    override val aiFields: Flow<List<FieldDef>> =
-        fields.map { defs -> defs.filter { it.aiEnabled } }.distinctUntilChanged()
-
     override fun orphanKeys(): Flow<List<FieldKeyCount>> = defDao.observeOrphanKeys()
 
     override fun usageCounts(): Flow<Map<String, Int>> =
@@ -41,19 +35,6 @@ class FieldRegistryImpl(
         key: String,
         limit: Int,
     ): Flow<List<String>> = fieldDao.observeDistinctValues(key, limit)
-
-    override suspend fun distinctValuesNow(
-        key: String,
-        limit: Int,
-    ): List<String> = fieldDao.distinctValues(key, limit)
-
-    override suspend fun valuesForPrefix(
-        key: String,
-        prefix: String,
-        limit: Int,
-    ): List<String> = fieldDao.valuesForPrefix(key, escapeLike(prefix) + "%", limit)
-
-    private fun escapeLike(s: String): String = s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
     override suspend fun current(): List<FieldDef> = defDao.all().mapNotNull { it.toFieldDef() }
 

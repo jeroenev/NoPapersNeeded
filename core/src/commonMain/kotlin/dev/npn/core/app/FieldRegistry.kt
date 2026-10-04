@@ -14,12 +14,6 @@ interface FieldRegistry {
     /** Every live definition, in registry order (position, then key). */
     val fields: Flow<List<FieldDef>>
 
-    /** Definitions with [FieldDef.showByDefault], registry order. */
-    val visible: Flow<List<FieldDef>>
-
-    /** Definitions with [FieldDef.aiEnabled], registry order. */
-    val aiFields: Flow<List<FieldDef>>
-
     /** Keys that carry values on some document but have no definition, with document counts. */
     fun orphanKeys(): Flow<List<FieldKeyCount>>
 
@@ -31,19 +25,6 @@ interface FieldRegistry {
         key: String,
         limit: Int = DEFAULT_VALUE_LIMIT,
     ): Flow<List<String>>
-
-    /** One-shot form of [distinctValues]. */
-    suspend fun distinctValuesNow(
-        key: String,
-        limit: Int = DEFAULT_VALUE_LIMIT,
-    ): List<String>
-
-    /** Distinct stored values for [key] starting with [prefix] (case-insensitive). */
-    suspend fun valuesForPrefix(
-        key: String,
-        prefix: String,
-        limit: Int = DEFAULT_VALUE_LIMIT,
-    ): List<String>
 
     /** The current registry, read once. */
     suspend fun current(): List<FieldDef>
