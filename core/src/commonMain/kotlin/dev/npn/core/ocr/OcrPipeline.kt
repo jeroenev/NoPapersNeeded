@@ -22,6 +22,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /**
  * Tunables for the hybrid extract-or-OCR pipeline.
@@ -136,13 +138,13 @@ class OcrPipeline(
     )
 
     /** Engine label per `<hash>.<writerKey>`, so legacy sidecars are decoded at most once. */
-    private val engineCache = HashMap<String, String>()
+    private val engineCache = SidecarFacts<String>()
 
     /**
      * Whether an `embedded` sidecar has a usable text layer on every page, per
      * `<hash>.<writerKey>` (see [canImprove]). Sidecars are write-once, so the answer holds.
      */
-    private val fullTextLayerCache = HashMap<String, Boolean>()
+    private val fullTextLayerCache = SidecarFacts<Boolean>()
 
     private val _inFlight = MutableStateFlow<String?>(null)
 
@@ -544,11 +546,12 @@ class OcrPipeline(
         // not count, since it may come from a device that had no OCR engine to run.
         val fullTextLayer =
             versions.any { version ->
-                if (version.engine != ENGINE_EMBEDDED) return@any false
-                fullTextLayerCache.getOrPut("${doc.docId}.${version.writerKey}") {
-                    val sidecar = decode(doc.docId, version.writerKey) ?: return@any false
-                    sidecar.pages.all { it.trim().length >= config.minEmbeddedCharsPerPage }
-                }
+                version.engine == ENGINE_EMBEDDED &&
+                    fullTextLayerCache.getOrCompute("${doc.docId}.${version.writerKey}") {
+                        decode(doc.docId, version.writerKey)?.let { sidecar ->
+                            sidecar.pages.all { it.trim().length >= config.minEmbeddedCharsPerPage }
+                        }
+                    } == true
             }
         return !fullTextLayer
     }
@@ -619,11 +622,7 @@ class OcrPipeline(
                 Version(writerKey, writer, suffix)
             }
         }
-        val cacheKey = "$hash.$writerKey"
-        val engine =
-            engineCache[cacheKey]
-                ?: decode(hash, writerKey)?.engine?.also { engineCache[cacheKey] = it }
-                ?: return null
+        val engine = engineCache.getOrCompute("$hash.$writerKey") { decode(hash, writerKey)?.engine } ?: return null
         return Version(writerKey, writerKey, engine)
     }
 
@@ -725,3 +724,26 @@ private fun describe(
     what: String,
     cause: Throwable,
 ): String = cause.message?.let { "$what: $it" } ?: what
+
+/**
+ * A memo of facts about write-once sidecars, shared by every coroutine that drives the pipeline:
+ * the queue drain, and the reconcile that rescans, watch events and engine pins run alongside it.
+ * The map is only touched under [lock]; the fact itself is computed outside it, so a slow read
+ * never holds up the others. Two callers computing the same fact at once get the same answer,
+ * since the sidecar it comes from never changes.
+ */
+private class SidecarFacts<V : Any> {
+    private val lock = Mutex()
+    private val facts = HashMap<String, V>()
+
+    /** The fact under [key], computing and remembering it first; null (not remembered) if [compute] has none. */
+    suspend fun getOrCompute(
+        key: String,
+        compute: suspend () -> V?,
+    ): V? {
+        lock.withLock { facts[key] }?.let { return it }
+        val fact = compute() ?: return null
+        lock.withLock { facts[key] = fact }
+        return fact
+    }
+}

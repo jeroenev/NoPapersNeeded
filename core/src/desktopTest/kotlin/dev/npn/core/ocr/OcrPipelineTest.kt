@@ -15,8 +15,12 @@ import dev.npn.core.work.backoffMs
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -400,6 +404,31 @@ class OcrPipelineTest {
             val pinned = repo.observeDoc(docId).first()!!.doc
             pinned.ocrEngineOverride shouldBe OcrEngineRef.Unknown("mixed")
             pinned.ocrEngineOverride?.label shouldBe "mixed"
+        }
+
+    /**
+     * The drain and the reconciles that rescans, watch events and engine pins start all run on
+     * Dispatchers.Default and share the pipeline's caches of sidecar facts. A guard rather than a
+     * reproduction: a plain HashMap raced like this fails only now and then.
+     */
+    @Test
+    fun concurrentReconcilesAgreeOnEveryLegacySidecar() =
+        runTest {
+            val docIds =
+                (1..40).map { i ->
+                    rig.stageDoc("docs/doc$i.pdf", PdfFixtures.embeddedTextPdf("document number $i")).also {
+                        writeForeignSidecar(it, dev = "olddev$i", engine = "mixed", text = "legacy words $i")
+                    }
+                }
+            val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = false, name = "mlkit"))
+
+            withContext(Dispatchers.Default) {
+                (1..8).map { async { pipeline.reconcileSidecars() } }.awaitAll()
+            }
+
+            for ((i, docId) in docIds.withIndex()) {
+                db.documentDao().getByDocId(docId)!!.ocrSource shouldBe "olddev${i + 1}"
+            }
         }
 
     /** Publish a sidecar as if another device produced it (legacy, non-engine-qualified name). */
