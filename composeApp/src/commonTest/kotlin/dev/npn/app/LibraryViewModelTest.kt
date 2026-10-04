@@ -376,7 +376,11 @@ class LibraryViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             // Only the successfully trashed ids are offered for undo; d2 failed and stays selected.
-            messages.single { it.action != null }.action?.onPerform?.invoke()
+            messages
+                .single { it.action != null }
+                .action
+                ?.onPerform
+                ?.invoke()
             advanceUntilIdle()
             session.docLifecycle.restoredDocs shouldContainExactly listOf("d1", "d3")
         }

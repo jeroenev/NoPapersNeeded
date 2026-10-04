@@ -114,7 +114,9 @@ class DocContentFacadeImpl internal constructor(
             BakeOutcome.Baked
         }.getOrElse { failure ->
             log.warn("Baking $docId in place failed", failure)
-            BakeOutcome.Failed(if (failure is BakeRefusedException) BakeFailure.UNSUPPORTED_PDF else BakeFailure.NOT_SAVED)
+            BakeOutcome.Failed(
+                if (failure is BakeRefusedException) BakeFailure.UNSUPPORTED_PDF else BakeFailure.NOT_SAVED,
+            )
         }
     }
 

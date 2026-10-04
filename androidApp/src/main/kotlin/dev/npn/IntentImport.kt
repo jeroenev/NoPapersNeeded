@@ -123,9 +123,8 @@ object IntentImport {
 
             if (imageBytes.isNotEmpty()) {
                 total++
-                tally.record(
-                    runCatchingCancellable { session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF) }.getOrNull(),
-                )
+                val outcome = runCatchingCancellable { session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF) }
+                tally.record(outcome.getOrNull())
             }
 
             Result(tally.imported, tally.duplicates, tally.failed, total)

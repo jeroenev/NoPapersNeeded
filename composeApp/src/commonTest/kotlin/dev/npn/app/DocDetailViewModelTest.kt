@@ -423,7 +423,13 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun aSplitThatWorkedLeavesTheScreenWithoutAMessage() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { maintenance.splitOutcome = SplitOutcome.Done(listOf("p1", "p2")) }
+            val session =
+                FakeLibrarySession().apply {
+                    maintenance.splitOutcome =
+                        SplitOutcome.Done(
+                            listOf("p1", "p2"),
+                        )
+                }
             val model = vm(session = session)
             val messages = mutableListOf<String>()
             val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }

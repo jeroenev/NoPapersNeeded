@@ -175,7 +175,8 @@ class FakeSavedViewRepository : SavedViewRepository {
     /** If set, the saved-views flow throws this when collected. */
     var failObserve: Throwable? = null
 
-    override fun observeSavedViews(): Flow<List<SavedView>> = failObserve?.let { failure -> flow { throw failure } } ?: views
+    override fun observeSavedViews(): Flow<List<SavedView>> =
+        failObserve?.let { failure -> flow { throw failure } } ?: views
 
     override suspend fun save(view: SavedView) {
         failSave?.invoke()

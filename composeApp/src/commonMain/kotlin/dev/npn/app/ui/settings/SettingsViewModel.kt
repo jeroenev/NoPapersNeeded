@@ -318,7 +318,8 @@ class SettingsViewModel(
         }
 
     /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */
-    fun setUntaggedOnlyMode() = launchReporting(UiAction.UPDATE) { reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY) }
+    fun setUntaggedOnlyMode() =
+        launchReporting(UiAction.UPDATE) { reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY) }
 
     /**
      * Switch to INBOX_WORKFLOW, running the chosen one-shot migration of the reviewed marker.

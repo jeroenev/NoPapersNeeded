@@ -39,7 +39,10 @@ fun SnackbarMessages(
     // Resolved here, in composition, so the text follows the app's locale override.
     val current = showing ?: return
     val text = current.message.text.resolve()
-    val actionLabel = current.message.action?.label?.resolve()
+    val actionLabel =
+        current.message.action
+            ?.label
+            ?.resolve()
     LaunchedEffect(current) {
         val result = snackbar.showSnackbar(text, actionLabel, withDismissAction = actionLabel != null)
         if (result == SnackbarResult.ActionPerformed) current.message.action?.onPerform()

@@ -590,11 +590,19 @@ class DocDetailViewModel(
 
     /** Write a copy carrying this document's metadata through [write] (a file the user picked). */
     fun exportBakedCopy(write: suspend (ByteArray) -> Unit) =
-        deliverBakedCopy(write, delivered = Res.string.detail_exported_baked_copy, failed = Res.string.detail_export_failed)
+        deliverBakedCopy(
+            write,
+            delivered = Res.string.detail_exported_baked_copy,
+            failed = Res.string.detail_export_failed,
+        )
 
     /** Hand a copy carrying this document's metadata to the platform's share sheet through [share]. */
     fun shareBakedCopy(share: suspend (ByteArray) -> Unit) =
-        deliverBakedCopy(share, delivered = Res.string.detail_shared_baked_copy, failed = Res.string.detail_share_failed)
+        deliverBakedCopy(
+            share,
+            delivered = Res.string.detail_shared_baked_copy,
+            failed = Res.string.detail_share_failed,
+        )
 
     private fun deliverBakedCopy(
         deliver: suspend (ByteArray) -> Unit,
