@@ -7,12 +7,9 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.ExternalSource
-import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
-import dev.npn.core.fs.debounced
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.ImportResult
@@ -38,8 +35,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.filter
-import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
@@ -211,24 +206,13 @@ class LibrarySessionImpl private constructor(
         // was down, a run left half-suggested. Each costs a single query when its queue is empty.
         queues.kickAll()
 
-        // Metadata paths are routed separately so journal sync never scans or hashes PDFs.
+        // Journal changes are routed apart from PDFs, so journal sync never scans or hashes PDFs.
         scope.launch {
             fs
                 .watch()
-                .filterNot { event ->
-                    val rel = (event as? FsEvent.Changed)?.relPath
-                    rel != null && NpnPaths.isOwnDeviceWrite(rel, deviceId)
-                }.filter { event -> routeWatchEvent(event) == WatchRoute.PassToRescan }
-                .debounced()
-                .collect { event ->
-                    val rel = (event as? FsEvent.Changed)?.relPath
-                    if (rel != null && rel.startsWith("${NpnPaths.OCR_DIR}/")) {
-                        log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
-                    } else {
-                        log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
-                        log.runLogged("Watch-triggered rescan") { doWatchTriggeredRescan() }
-                    }
-                }
+                .map { watchAction(it, deviceId) }
+                .settled()
+                .collect { act(it) }
         }
 
         // Initial rescan.
@@ -258,70 +242,32 @@ class LibrarySessionImpl private constructor(
         }
     }
 
-    /**
-     * How a watch event should be handled once its journal side effect (if any) has run.
-     * [PassToRescan] events fall through the flow to the debounced rescan/OCR collector; the
-     * rest are fully handled by their side effect and must not trigger a PDF rescan.
-     */
-    private enum class WatchRoute { HandledByMetadata, PassToRescan }
+    /** Carry out one [WatchAction] of the folder watch; a failure is logged, never thrown. */
+    private suspend fun act(action: WatchAction) {
+        when (action) {
+            WatchAction.Ignore -> {}
 
-    /**
-     * Pure classification of a watch event into a [WatchRoute]. No side effects: it only decides
-     * how the event should be routed, so the routing itself ([routeWatchEvent]) stays explicit and
-     * this decision is independently testable. A non-journal (or non-Changed) event always passes
-     * through to the rescan collector.
-     */
-    private fun classifyWatchEvent(event: FsEvent): WatchRoute {
-        val rel = (event as? FsEvent.Changed)?.relPath ?: return WatchRoute.PassToRescan
-        return when (NpnPaths.journalPath(rel)) {
-            is NpnPaths.JournalPath.ObjectV2,
-            is NpnPaths.JournalPath.SnapshotV2,
-            is NpnPaths.JournalPath.Legacy,
-            is NpnPaths.JournalPath.UnsupportedObjectStore,
-            NpnPaths.JournalPath.Staging,
-            -> {
-                WatchRoute.HandledByMetadata
-            }
-
-            NpnPaths.JournalPath.Unknown -> {
-                if (rel == NpnPaths.JOURNAL_DIR || rel.startsWith("${NpnPaths.JOURNAL_DIR}/")) {
-                    WatchRoute.HandledByMetadata
-                } else {
-                    WatchRoute.PassToRescan
-                }
-            }
-        }
-    }
-
-    /**
-     * Run the metadata side effect for a journal watch event and return its [WatchRoute]. A single
-     * content-addressed object gets the cheap single-object ingest; snapshots, legacy segments and
-     * unrecognized journal writes go through the full metadata reconcile (a snapshot may supersede
-     * already-applied objects and carries multi-actor events, so the single-object path is unsafe);
-     * staging files are ignored. Everything else passes through to the PDF rescan.
-     */
-    private suspend fun routeWatchEvent(event: FsEvent): WatchRoute {
-        val route = classifyWatchEvent(event)
-        if (route == WatchRoute.PassToRescan) return route
-        val rel = (event as? FsEvent.Changed)?.relPath
-        when (rel?.let(NpnPaths::journalPath)) {
-            is NpnPaths.JournalPath.ObjectV2 -> {
-                log.runLogged("Journal object ingest") { coordinator.ingestObject(rel) }
+            is WatchAction.IngestObject -> {
+                log.runLogged("Journal object ingest") { coordinator.ingestObject(action.relPath) }
                 // A remote OCR-engine override may have just folded in; re-select promptly
                 // instead of waiting for the next rescan.
                 log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
             }
 
-            // A staging file is a write in progress, and a null path means the event was not a
-            // change under `.npn/` at all. Neither has anything to ingest.
-            NpnPaths.JournalPath.Staging, null -> {}
-
-            else -> {
+            WatchAction.ReconcileJournal -> {
                 log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
                 log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
             }
+
+            WatchAction.ReconcileOcr -> {
+                log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
+            }
+
+            WatchAction.Rescan -> {
+                log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
+                log.runLogged("Watch-triggered rescan") { doWatchTriggeredRescan() }
+            }
         }
-        return route
     }
 
     private suspend fun doWatchTriggeredRescan() {

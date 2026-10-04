@@ -74,13 +74,24 @@ sealed interface FsEvent {
  * A burst that touched more than one path emits `Changed(null)`, so no path in it is lost to the
  * collapse.
  */
-@OptIn(ExperimentalCoroutinesApi::class) // select's onTimeout
 fun Flow<FsEvent>.debounced(
     quietMillis: Long = 500L,
     maxWaitMillis: Long = 5_000L,
 ): Flow<FsEvent> =
+    debounced(quietMillis, maxWaitMillis) { burst, next -> if (next == burst) burst else FsEvent.Changed(null) }
+
+/**
+ * [debounced] for any kind of event: a burst becomes one emission once quiet for [quietMillis], or
+ * after [maxWaitMillis] of continuous churn, with every event of the burst folded in by [merge].
+ */
+@OptIn(ExperimentalCoroutinesApi::class) // select's onTimeout
+fun <T : Any> Flow<T>.debounced(
+    quietMillis: Long = 500L,
+    maxWaitMillis: Long = 5_000L,
+    merge: (burst: T, next: T) -> T,
+): Flow<T> =
     channelFlow {
-        val events = Channel<FsEvent>(Channel.UNLIMITED)
+        val events = Channel<T>(Channel.UNLIMITED)
         launch {
             collect { events.send(it) }
             events.close()
@@ -91,7 +102,7 @@ fun Flow<FsEvent>.debounced(
             val wait = minOf(quietMillis.milliseconds, -deadline.elapsedNow())
             // select, not withTimeout around a receive: a timeout racing a receive cannot drop
             // the event. Null means the burst is over: quiet, or at its deadline.
-            val next: ChannelResult<FsEvent>? =
+            val next: ChannelResult<T>? =
                 if (wait.isPositive()) {
                     select {
                         events.onReceiveCatching { it }
@@ -112,8 +123,8 @@ fun Flow<FsEvent>.debounced(
                     return@channelFlow
                 }
 
-                next.getOrNull() != burst -> {
-                    burst = FsEvent.Changed(null)
+                else -> {
+                    burst = merge(burst, next.getOrThrow())
                 }
             }
         }
