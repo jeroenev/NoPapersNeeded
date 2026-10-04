@@ -18,8 +18,9 @@ data class PathConflict(
  * indexer's heuristics. Not auto-applied: the UI presents these and the user confirms via
  * [RelinkService.applyRelink].
  *
- * [reason] is a short machine tag ("path-match", "name+size", "name", "size", "fuzzy-name").
- * [score] is a rough confidence (higher is stronger); ordering only, not a probability.
+ * [reason] is a short machine tag: "path-match", or the evidence joined by `+` ("name" or
+ * "fuzzy-name", "size", "dir"; "dir" never alone). [score] is a rough confidence (higher is
+ * stronger); ordering only, not a probability.
  */
 data class RelinkCandidate(
     val oldDocId: String,

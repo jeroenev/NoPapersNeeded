@@ -1,31 +1,50 @@
 package dev.npn.core.index
 
+import kotlin.math.abs
+
 /**
  * Small, dependency-free name similarity helpers for relink candidate scoring.
  */
 internal object NameSimilarity {
-    /** True if either name is a prefix of the other after stripping the extension (case-insensitive). */
-    fun prefixMatch(
-        a: String,
-        b: String,
+    /** What [similar] compares of a file name: the name without its extension, in lower case. */
+    fun stem(name: String): String = stripExt(name).lowercase()
+
+    /**
+     * True when two [stem]s are alike: one is a prefix of the other, or they are within a small edit
+     * distance relative to their length.
+     */
+    fun similar(
+        x: String,
+        y: String,
+    ): Boolean = prefixMatch(x, y) || fuzzyMatch(x, y)
+
+    private fun prefixMatch(
+        x: String,
+        y: String,
     ): Boolean {
-        val x = stripExt(a).lowercase()
-        val y = stripExt(b).lowercase()
         if (x.isEmpty() || y.isEmpty()) return false
         return x.startsWith(y) || y.startsWith(x)
+    }
+
+    private fun fuzzyMatch(
+        x: String,
+        y: String,
+    ): Boolean {
+        val threshold = maxOf(2, minOf(x.length, y.length) / 4)
+        // The edit distance is at least the length difference, so this decides most pairs cheaply.
+        if (abs(x.length - y.length) > threshold) return false
+        return levenshtein(x, y, threshold) <= threshold
     }
 
     /**
      * Levenshtein edit distance, bounded early once it exceeds [max] (returns [max]+1). Used only
      * on short file names, so the full O(n*m) table is fine.
      */
-    fun levenshtein(
-        a: String,
-        b: String,
-        max: Int = Int.MAX_VALUE,
+    private fun levenshtein(
+        s: String,
+        t: String,
+        max: Int,
     ): Int {
-        val s = a.lowercase()
-        val t = b.lowercase()
         if (s == t) return 0
         if (s.isEmpty()) return t.length
         if (t.isEmpty()) return s.length
@@ -50,17 +69,6 @@ internal object NameSimilarity {
             cur = tmp
         }
         return prev[t.length]
-    }
-
-    /** True when [a] and [b] are within a small edit distance relative to their length. */
-    fun fuzzyMatch(
-        a: String,
-        b: String,
-    ): Boolean {
-        val x = stripExt(a)
-        val y = stripExt(b)
-        val threshold = maxOf(2, minOf(x.length, y.length) / 4)
-        return levenshtein(x, y, threshold) <= threshold
     }
 
     private fun stripExt(name: String): String {

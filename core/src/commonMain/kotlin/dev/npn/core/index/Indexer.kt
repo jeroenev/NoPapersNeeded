@@ -47,7 +47,7 @@ import kotlinx.coroutines.sync.withLock
  * Not safe for concurrent calls: [dev.npn.core.app.JournalCoordinator] makes every call under its
  * single-writer lock, and nothing else calls in.
  */
-@Suppress("TooManyFunctions", "LargeClass")
+@Suppress("LargeClass")
 class Indexer(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
@@ -178,7 +178,9 @@ class Indexer(
             val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
 
             val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
-            recon.relinkCandidates.addAll(pairRelinks(missing.missingDocs, recon.newDocs, recon.relinkCandidates))
+            recon.relinkCandidates.addAll(
+                RelinkPairing.pair(missing.missingDocs, recon.newDocs, recon.relinkCandidates),
+            )
 
             report(IndexProgress(IndexProgress.Phase.FOLDING))
             val resurrected =
@@ -295,7 +297,7 @@ class Indexer(
                 recon.added++
                 recon.changed++
                 recon.relinkCandidates.add(
-                    RelinkCandidate(docAtPath.docId, hash, reason = "path-match", score = RELINK_SCORE_PATH_MATCH),
+                    RelinkCandidate(docAtPath.docId, hash, reason = "path-match", score = RelinkPairing.SCORE_PATH_MATCH),
                 )
             } else {
                 recon.existingByDocId[hash] = insertNewDocument(hash, meta, now)
@@ -369,26 +371,6 @@ class Indexer(
         }
         if (nowMissing.isNotEmpty()) documentDao.upsertAll(nowMissing)
         return MissingResult(missingCount, missingDocs)
-    }
-
-    /** Pair each missing doc against brand-new docs to produce relink candidates. */
-    private fun pairRelinks(
-        missingDocs: List<DocumentEntity>,
-        newDocs: Map<String, FileMeta>,
-        existing: List<RelinkCandidate>,
-    ): List<RelinkCandidate> {
-        val out = ArrayList<RelinkCandidate>()
-        for (missing in missingDocs) {
-            for ((newDocId, newMeta) in newDocs) {
-                if (existing.any { it.oldDocId == missing.docId && it.newDocId == newDocId }) continue
-                if (out.any { it.oldDocId == missing.docId && it.newDocId == newDocId }) continue
-                val score = scoreRelink(missing, newMeta)
-                if (score.first > 0) {
-                    out.add(RelinkCandidate(missing.docId, newDocId, score.second, score.first))
-                }
-            }
-        }
-        return out
     }
 
     /**
@@ -498,36 +480,6 @@ class Indexer(
             )
         documentDao.upsert(row)
         return row
-    }
-
-    /** Returns (score, reason). score 0 means no candidate. */
-    private fun scoreRelink(
-        missing: DocumentEntity,
-        newMeta: FileMeta,
-    ): Pair<Int, String> {
-        var score = 0
-        val reasons = ArrayList<String>()
-        if (missing.fileName.equals(newMeta.name, ignoreCase = true)) {
-            score += RELINK_SCORE_NAME
-            reasons.add("name")
-        }
-        if (missing.size == newMeta.size) {
-            score += RELINK_SCORE_SIZE
-            reasons.add("size")
-        }
-        if (NameSimilarity.parentDir(missing.relPath) == NameSimilarity.parentDir(newMeta.relPath)) {
-            score += RELINK_SCORE_DIR
-            reasons.add("dir")
-        }
-        if (score == 0) {
-            if (NameSimilarity.prefixMatch(missing.fileName, newMeta.name) ||
-                NameSimilarity.fuzzyMatch(missing.fileName, newMeta.name)
-            ) {
-                score += RELINK_SCORE_FUZZY
-                reasons.add("fuzzy-name")
-            }
-        }
-        return score to reasons.joinToString("+")
     }
 
     /**
@@ -908,16 +860,6 @@ class Indexer(
     }
 
     private companion object {
-        const val RELINK_SCORE_NAME = 50
-
-        const val RELINK_SCORE_SIZE = 40
-
-        const val RELINK_SCORE_DIR = 10
-
-        const val RELINK_SCORE_FUZZY = 15
-
-        const val RELINK_SCORE_PATH_MATCH = 100
-
         const val HASH_CONCURRENCY = 4
     }
 }
