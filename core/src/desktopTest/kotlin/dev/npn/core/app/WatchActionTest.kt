@@ -14,7 +14,7 @@ import kotlin.test.Test
 class WatchActionTest {
     private val hash = "ab".repeat(32)
 
-    private fun action(relPath: String?) = watchAction(FsEvent.Changed(relPath), DEVICE)
+    private fun action(relPath: String?) = watchAction(FsEvent(relPath), DEVICE)
 
     @Test
     fun aPublishedJournalObjectIsIngestedOnItsOwn() {

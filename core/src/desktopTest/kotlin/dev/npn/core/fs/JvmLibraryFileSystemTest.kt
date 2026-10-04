@@ -216,7 +216,7 @@ class JvmLibraryFileSystemTest {
                 kotlinx.coroutines.delay(500)
                 Files.write(root.resolve("watched.pdf"), "x".encodeToByteArray())
                 val event = deferred.await()
-                (event is FsEvent.Changed).shouldBeTrue()
+                event.relPath shouldBe "watched.pdf"
                 job.cancel()
             }
             Unit

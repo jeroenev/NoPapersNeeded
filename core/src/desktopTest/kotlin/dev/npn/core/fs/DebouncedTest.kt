@@ -19,7 +19,7 @@ class DebouncedTest {
         gapMillis: Long = 20,
     ) = flow {
         for (path in paths) {
-            emit(FsEvent.Changed(path))
+            emit(FsEvent(path))
             delay(gapMillis)
         }
     }
@@ -41,7 +41,7 @@ class DebouncedTest {
                     },
                 ).first()
 
-            first shouldBe FsEvent.Changed("a.pdf")
+            first shouldBe FsEvent("a.pdf")
             // Four events 20 ms apart, then the quiet window: never on the first event.
             testScheduler.currentTime shouldBe 3 * 20 + QUIET
         }
@@ -49,7 +49,7 @@ class DebouncedTest {
     @Test
     fun burstOverSeveralPathsEmitsAPathlessChange() =
         runTest {
-            debounce(events("a.pdf", ".npn/ocr/x.json")).toList() shouldContainExactly listOf(FsEvent.Changed(null))
+            debounce(events("a.pdf", ".npn/ocr/x.json")).toList() shouldContainExactly listOf(FsEvent(null))
         }
 
     @Test
@@ -68,13 +68,13 @@ class DebouncedTest {
             val out =
                 debounce(
                     flow {
-                        emit(FsEvent.Changed("a.pdf"))
+                        emit(FsEvent("a.pdf"))
                         delay(QUIET * 3)
-                        emit(FsEvent.Changed("b.pdf"))
+                        emit(FsEvent("b.pdf"))
                     },
                 ).toList()
 
-            out shouldContainExactly listOf(FsEvent.Changed("a.pdf"), FsEvent.Changed("b.pdf"))
+            out shouldContainExactly listOf(FsEvent("a.pdf"), FsEvent("b.pdf"))
         }
 
     private companion object {

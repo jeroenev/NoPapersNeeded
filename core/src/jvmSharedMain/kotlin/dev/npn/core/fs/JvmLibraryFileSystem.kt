@@ -504,7 +504,7 @@ class JvmLibraryFileSystem internal constructor(
                         for (event in key.pollEvents()) {
                             val kind = event.kind()
                             if (kind == StandardWatchEventKinds.OVERFLOW) {
-                                trySend(FsEvent.Changed(null))
+                                trySend(FsEvent(null))
                                 continue
                             }
                             val ctx = event.context() as? Path
@@ -518,7 +518,7 @@ class JvmLibraryFileSystem internal constructor(
                                 registerRecursive(child)
                             }
                             val rel = child?.let { relOf(it) }
-                            trySend(FsEvent.Changed(rel))
+                            trySend(FsEvent(rel))
                         }
                         val valid = key.reset()
                         if (!valid) {

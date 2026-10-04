@@ -55,16 +55,14 @@ class VerifiedPublicationFailedException(
 ) : IllegalStateException(message, cause)
 
 /**
- * A coarse change signal from the platform watcher. Coarse granularity is intentional: the
- * indexer reacts by rescanning (fast-path mtime+size), so exact per-file precision is not
- * required.
+ * A coarse change signal from the platform watcher: something changed at or under [relPath]. Coarse
+ * granularity is intentional: the indexer reacts by rescanning (fast-path mtime+size), so exact
+ * per-file precision is not required.
  */
-sealed interface FsEvent {
-    /** Something changed at or under [relPath]; `null` means the watcher lost track and a full rescan is advised. */
-    data class Changed(
-        val relPath: String?,
-    ) : FsEvent
-}
+data class FsEvent(
+    /** Where the change happened; `null` means the watcher lost track and a full rescan is advised. */
+    val relPath: String?,
+)
 
 /**
  * Debounce a coarse [FsEvent] flow: a burst becomes one emission once the folder has been quiet
@@ -80,7 +78,7 @@ fun Flow<FsEvent>.debounced(
     timeSource: TimeSource = TimeSource.Monotonic,
 ): Flow<FsEvent> =
     debounced(quietMillis, maxWaitMillis, timeSource) { burst, next ->
-        if (next == burst) burst else FsEvent.Changed(null)
+        if (next == burst) burst else FsEvent(null)
     }
 
 /**

@@ -52,7 +52,7 @@ internal fun watchAction(
     event: FsEvent,
     deviceId: String,
 ): WatchAction {
-    val rel = (event as? FsEvent.Changed)?.relPath ?: return WatchAction.Rescan
+    val rel = event.relPath ?: return WatchAction.Rescan
     if (NpnPaths.isOwnDeviceWrite(rel, deviceId)) return WatchAction.Ignore
     return when (NpnPaths.journalPath(rel)) {
         is NpnPaths.JournalPath.ObjectV2 -> {
