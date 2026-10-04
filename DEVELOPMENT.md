@@ -348,8 +348,10 @@ Library/
     trash/                              # soft-deleted files (synced, not indexed)
 ```
 
-The `.npn/` directory syncs with the documents. The device-local index and cached
-thumbnails live outside the library folder and are never synced.
+The `.npn/` directory syncs with the documents. The device-local index (`index.db`), this
+device's own state (`device.db`) and cached thumbnails live outside the library folder and
+are never synced. Library settings (review mode, storage-path rule, auto-match rules, saved
+views) are journal transactions like any other metadata, so every device shares them.
 
 Metadata uses content-addressed storage-v2 objects. Metadata writes require verified
 publication with atomic create-without-replacement semantics, supported by all current
