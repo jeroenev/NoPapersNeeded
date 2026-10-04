@@ -39,7 +39,7 @@ import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.channels.Channel
@@ -394,7 +394,7 @@ class LibraryViewModel(
     fun refresh() {
         viewModelScope.launch {
             _ui.update { it.copy(refreshing = true) }
-            runCatching { ingest.rescan() }
+            runCatchingCancellable { ingest.rescan() }
             _ui.update { it.copy(refreshing = false) }
         }
     }
@@ -434,7 +434,7 @@ class LibraryViewModel(
         val ids = _ui.value.selected.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            val trashed = ids.filter { runCatching { docLifecycle.trashDoc(it) }.isSuccess }
+            val trashed = ids.filter { runCatchingCancellable { docLifecycle.trashDoc(it) }.isSuccess }
             val failed = ids - trashed.toSet()
             if (failed.isEmpty()) {
                 clearSelection()
@@ -450,7 +450,7 @@ class LibraryViewModel(
     fun undoTrash(ids: List<String>) {
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            val failed = ids.count { runCatching { docLifecycle.restoreDoc(it) }.isFailure }
+            val failed = ids.count { runCatchingCancellable { docLifecycle.restoreDoc(it) }.isFailure }
             if (failed > 0) {
                 message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, UiAction.RESTORE_DOCUMENT, failed, ids.size))
             }
@@ -470,7 +470,7 @@ class LibraryViewModel(
         val ids = _ui.value.selected.toList()
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            if (runCatching { block(ids) }.isSuccess) {
+            if (runCatchingCancellable { block(ids) }.isSuccess) {
                 clearSelection()
             } else {
                 message(uiText(UiTextKey.COULD_NOT_DOCUMENTS, action, ids.size))
@@ -485,7 +485,7 @@ class LibraryViewModel(
             var duplicate = 0
             var failed = 0
             sources.forEach { (src, name) ->
-                val outcome = runCatching { ingest.importPdf(src, name) }.getOrNull()
+                val outcome = runCatchingCancellable { ingest.importPdf(src, name) }.getOrNull()
                 when (outcome) {
                     is ImportOutcome.Imported -> imported++
                     is ImportOutcome.Duplicate -> duplicate++
@@ -505,11 +505,7 @@ class LibraryViewModel(
     fun scan(scanToPdf: suspend () -> ScannedPdf?) {
         viewModelScope.launch {
             val scanned =
-                try {
-                    scanToPdf()
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Throwable) {
+                runCatchingCancellable { scanToPdf() }.getOrElse {
                     message(uiText(UiTextKey.SCAN_CAPTURE_FAILED))
                     return@launch
                 }
@@ -528,7 +524,7 @@ class LibraryViewModel(
 
     private suspend fun reportScanImport(import: suspend () -> ImportOutcome) {
         val msg =
-            runCatching { import() }.fold(
+            runCatchingCancellable { import() }.fold(
                 onSuccess = ::scanOutcomeMessage,
                 onFailure = { uiText(UiTextKey.SCAN_IMPORT_FAILED, reasonOf(it)) },
             )

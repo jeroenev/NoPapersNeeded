@@ -24,7 +24,6 @@ import dev.npn.core.app.EditScope
 import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.MetadataWriter
-import dev.npn.core.app.ReviewChip
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.ReviewDoc
 import dev.npn.core.app.SavedView
@@ -33,6 +32,7 @@ import dev.npn.core.app.ScopeKey
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -402,12 +402,12 @@ class AiEditViewModel(
 
     init {
         viewModelScope.launch {
-            val mode = runCatching { reviewConfig.reviewMode.first() }.getOrDefault(ReviewMode.DEFAULT)
+            val mode = runCatchingCancellable { reviewConfig.reviewMode.first() }.getOrDefault(ReviewMode.DEFAULT)
             _ui.update { it.copy(reviewQueueAvailable = mode == ReviewMode.INBOX_WORKFLOW) }
         }
         // Saved views double as AI-edit scopes, so keep the list live and preselect the first one.
         viewModelScope.launch {
-            runCatching {
+            runCatchingCancellable {
                 savedViewRepository.observeSavedViews().collect { views ->
                     _ui.update { it.copy(savedViews = views, savedViewId = it.savedViewId ?: views.firstOrNull()?.id) }
                 }
@@ -416,7 +416,7 @@ class AiEditViewModel(
         // Seed the per-run overrides from the persisted Settings defaults (once); keep the
         // AiTagging defaults on failure.
         viewModelScope.launch {
-            val snapshot = runCatching { settings.settings.first() }.getOrNull()
+            val snapshot = runCatchingCancellable { settings.settings.first() }.getOrNull()
             _ui.update {
                 it.copy(
                     maxTags = snapshot?.aiMaxTagsPerDoc ?: AiTagging.DEFAULT_TAGS_PER_DOC,
@@ -583,7 +583,7 @@ class AiEditViewModel(
             _ui.update { it.copy(phase = EditPhase.Done(ApplyResult(0, 0, moreRemain = false))) }
             return
         }
-        runCatching { editQueue.enqueueEditRun(docIds, buildRequest()) }
+        runCatchingCancellable { editQueue.enqueueEditRun(docIds, buildRequest()) }
             .onSuccess {
                 // Queued documents are spent as far as this page is concerned: the preview and any
                 // later batch must not offer them again while the run is still out there.

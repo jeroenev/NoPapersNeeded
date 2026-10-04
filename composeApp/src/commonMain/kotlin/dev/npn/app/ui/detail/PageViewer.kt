@@ -51,6 +51,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.detectDragWhenZoomed
 import dev.npn.app.ui.common.detectPinchTransform
 import dev.npn.app.ui.common.viewerScroll
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -347,11 +348,11 @@ private fun PageSlide(
         if (existing != null) {
             state = PageState.Ready(existing)
         } else {
-            val bytes = runCatching { render(page, BASE_MAX_DIM * bucket) }.getOrNull()
+            val bytes = runCatchingCancellable { render(page, BASE_MAX_DIM * bucket) }.getOrNull()
             // Decode the possibly-large PNG off the composition/main thread.
             val bmp =
                 bytes?.let {
-                    runCatching { withContext(Dispatchers.Default) { it.decodeToImageBitmap() } }.getOrNull()
+                    runCatchingCancellable { withContext(Dispatchers.Default) { it.decodeToImageBitmap() } }.getOrNull()
                 }
             if (bmp != null) {
                 cache.put(page, bucket, bmp)

@@ -9,6 +9,7 @@ import androidx.work.PeriodicWorkRequestBuilder
 import androidx.work.WorkManager
 import androidx.work.WorkerParameters
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withTimeoutOrNull
 import java.util.concurrent.TimeUnit
@@ -33,14 +34,14 @@ class RescanOcrWorker(
         // Restore the persisted library if the UI hasn't opened it yet (e.g. worker runs while the
         // app process was cold-started just for this job).
         if (env.session.first() == null) {
-            runCatching { env.openPersistedLibrary() }
+            runCatchingCancellable { env.openPersistedLibrary() }
         }
         val session = env.session.first() ?: return Result.success() // no library configured
 
-        return try {
+        return runCatchingCancellable {
             // Sweep the watched folder first so freshly scanned PDFs are part of this run's
             // rescan + OCR drain (no-op when no watched folder is configured).
-            runCatching { env.scanWatchedFolder() }
+            runCatchingCancellable { env.scanWatchedFolder() }
 
             session.ingest.rescan()
 
@@ -57,7 +58,7 @@ class RescanOcrWorker(
                 session.work.drainEditRuns()
             }
             Result.success()
-        } catch (t: Throwable) {
+        }.getOrElse { t ->
             Log.w(TAG, "rescan/OCR maintenance failed; retrying", t)
             Result.retry()
         }

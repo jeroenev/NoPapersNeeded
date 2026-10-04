@@ -25,7 +25,8 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathTemplate
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.reason
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -257,13 +258,11 @@ class SettingsViewModel(
             viewModelScope.launch {
                 _aiModels.value = AiModelListState(loading = true)
                 val config = settings.settings.first().toAiConfig()
-                try {
-                    _aiModels.value = AiModelListState(models = AiModelCatalog.listModels(config))
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (e: Exception) {
-                    _aiModels.value = AiModelListState(error = e.message ?: e::class.simpleName ?: "error")
-                }
+                _aiModels.value =
+                    runCatchingCancellable { AiModelCatalog.listModels(config) }.fold(
+                        onSuccess = { AiModelListState(models = it) },
+                        onFailure = { AiModelListState(error = it.reason()) },
+                    )
             }
     }
 

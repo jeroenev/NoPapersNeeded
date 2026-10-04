@@ -11,6 +11,7 @@ import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkFacade
 import dev.npn.core.app.WorkStage
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -47,7 +48,7 @@ class QueueViewModel(
 
     /** Abandon a queued edit run and the suggestions it has bought so far. */
     fun discardEditRun(jobId: String) {
-        viewModelScope.launch { runCatching { editQueue.discardEditRun(jobId) } }
+        viewModelScope.launch { runCatchingCancellable { editQueue.discardEditRun(jobId) } }
     }
 
     /** Reset a terminal OCR failure to pending and kick its worker through the normal OCR seam. */

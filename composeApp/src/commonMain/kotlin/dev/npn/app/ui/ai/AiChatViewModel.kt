@@ -10,7 +10,7 @@ import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibrarySession
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -61,9 +61,9 @@ class AiChatViewModel(
             _ui.update { it.copy(configured = configured) }
         }
         viewModelScope.launch {
-            val sessions = runCatching { ai.chatSessions() }.getOrDefault(emptyList())
+            val sessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(emptyList())
             val session =
-                runCatching { ai.createChatSession() }.getOrNull()
+                runCatchingCancellable { ai.createChatSession() }.getOrNull()
                     ?: sessions.firstOrNull()
                     ?: AiChatSession(LEGACY_SESSION_ID, "Assistant chat", 0L)
             _ui.update {
@@ -97,7 +97,7 @@ class AiChatViewModel(
         docRefs
             .filterNot { it in _ui.value.docTitles }
             .forEach { docId ->
-                runCatching { documents.observeDoc(docId).first() }
+                runCatchingCancellable { documents.observeDoc(docId).first() }
                     .getOrNull()
                     ?.let { item ->
                         _ui.update { it.copy(docTitles = it.docTitles + (docId to item.doc.displayTitle)) }
@@ -128,9 +128,8 @@ class AiChatViewModel(
 
         job =
             viewModelScope.launch {
-                runCatching { collectAnswer(sessionId, trimmed) }
+                runCatchingCancellable { collectAnswer(sessionId, trimmed) }
                     .onFailure { e ->
-                        if (e is CancellationException) throw e
                         finishStreaming()
                         _ui.update { it.copy(busy = false) }
                         message(uiText(UiTextKey.AI_ASSISTANT_UNREACHABLE, reasonOf(e)))
@@ -177,7 +176,7 @@ class AiChatViewModel(
         if (_ui.value.busy) return
         viewModelScope.launch {
             ai.createChatSession()?.let { session ->
-                val savedSessions = runCatching { ai.chatSessions() }.getOrDefault(_ui.value.sessions)
+                val savedSessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(_ui.value.sessions)
                 _ui.update {
                     it.copy(
                         sessions = (listOf(session) + savedSessions).distinctBy { item -> item.id },
@@ -194,7 +193,7 @@ class AiChatViewModel(
         if (_ui.value.busy) return
         viewModelScope.launch {
             ai.deleteChatSession(sessionId)
-            val remaining = runCatching { ai.chatSessions() }.getOrDefault(emptyList())
+            val remaining = runCatchingCancellable { ai.chatSessions() }.getOrDefault(emptyList())
             if (sessionId != _ui.value.currentSessionId) {
                 _ui.update { it.copy(sessions = remaining) }
                 return@launch
@@ -237,7 +236,7 @@ class AiChatViewModel(
     private fun finishStreaming() = _ui.update { it.copy(transcript = it.transcript.finalized()) }
 
     private suspend fun loadSession(sessionId: String) {
-        val history = runCatching { ai.chatTranscriptFor(sessionId) }.getOrDefault(emptyList())
+        val history = runCatchingCancellable { ai.chatTranscriptFor(sessionId) }.getOrDefault(emptyList())
         _ui.update {
             it.copy(
                 currentSessionId = sessionId,

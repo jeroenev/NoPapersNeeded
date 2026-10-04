@@ -14,6 +14,7 @@ import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.MaintenanceFacade
 import dev.npn.core.index.RelinkCandidate
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
@@ -77,7 +78,7 @@ class TrashViewModel(
         val ids = trashed.value.map { it.doc.docId }
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            val failed = ids.count { runCatching { op(it) }.isFailure }
+            val failed = ids.count { runCatchingCancellable { op(it) }.isFailure }
             if (failed > 0) {
                 message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, action, failed, ids.size))
             }

@@ -32,8 +32,8 @@ import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.TagAdmin
 import dev.npn.core.app.TagRepository
 import dev.npn.core.model.FieldDef
-import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -218,7 +218,7 @@ class DocDetailViewModel(
         doc
             .map { it?.doc?.ocrState }
             .distinctUntilChanged()
-            .map { runCatching { content.extractedText(docId) }.getOrNull() }
+            .map { runCatchingCancellable { content.extractedText(docId) }.getOrNull() }
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /**
@@ -229,7 +229,7 @@ class DocDetailViewModel(
         doc
             .map { it?.doc?.ocrState to it?.doc?.ocrEngine }
             .distinctUntilChanged()
-            .map { runCatching { ocr.ocrVersions(docId) }.getOrDefault(emptyList()) }
+            .map { runCatchingCancellable { ocr.ocrVersions(docId) }.getOrDefault(emptyList()) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     private val history = MutableStateFlow<HistoryUiState>(HistoryUiState.NotLoaded)
@@ -306,7 +306,7 @@ class DocDetailViewModel(
             aiTags.update { it.copy(available = configured) }
         }
         viewModelScope.launch {
-            val offer = runCatching { ocr.aiOcrOffer(docId) }.getOrDefault(AiOcrOffer.Unavailable)
+            val offer = runCatchingCancellable { ocr.aiOcrOffer(docId) }.getOrDefault(AiOcrOffer.Unavailable)
             _ui.update { it.copy(aiOcr = offer) }
         }
     }
@@ -318,7 +318,7 @@ class DocDetailViewModel(
     private fun loadPageCount() {
         _ui.update { it.copy(pageCount = PageCountState.Loading) }
         viewModelScope.launch {
-            val count = runCatching { content.pageCount(docId) }.getOrNull()
+            val count = runCatchingCancellable { content.pageCount(docId) }.getOrNull()
             _ui.update { it.copy(pageCount = pageCountStateOf(count)) }
         }
     }
@@ -339,7 +339,7 @@ class DocDetailViewModel(
         history.value = HistoryUiState.Loading
         viewModelScope.launch {
             history.value =
-                runCatching {
+                runCatchingCancellable {
                     val labels = fieldRegistry.current().associate { it.key to it.label }
                     HistoryMapper.toHistoryItems(documents.history(docId)) { key -> labels[key] ?: key }
                 }.fold(
@@ -375,7 +375,7 @@ class DocDetailViewModel(
         if (aiTags.value.suggesting) return
         aiTags.update { it.copy(suggesting = true) }
         viewModelScope.launch {
-            runCatching { ai.suggestEdits(docId, AiEditRequest(tags = true)).addTags }.fold(
+            runCatchingCancellable { ai.suggestEdits(docId, AiEditRequest(tags = true)).addTags }.fold(
                 onSuccess = { suggestions ->
                     if (suggestions.isEmpty()) {
                         message(uiText(UiTextKey.NO_AI_TAG_SUGGESTIONS))
@@ -428,7 +428,7 @@ class DocDetailViewModel(
                             )
                         },
                 )
-            runCatching { ai.suggestEdits(docId, request).metadata }.fold(
+            runCatchingCancellable { ai.suggestEdits(docId, request).metadata }.fold(
                 onSuccess = { suggestion ->
                     if (suggestion.isEmpty) {
                         message(uiText(UiTextKey.NO_AI_METADATA_SUGGESTIONS))
@@ -534,7 +534,7 @@ class DocDetailViewModel(
         viewModelScope.launch {
             _ui.update { it.copy(splitting = true) }
             val outcome =
-                runCatching { maintenance.splitPdf(docId, segments) }
+                runCatchingCancellable { maintenance.splitPdf(docId, segments) }
                     .getOrElse { SplitOutcome.Failed(it.message.orEmpty()) }
             _ui.update { it.copy(splitting = false) }
             onResult(outcome)
@@ -545,16 +545,16 @@ class DocDetailViewModel(
     fun bakeInPlace(onResult: (Boolean) -> Unit) {
         viewModelScope.launch {
             _ui.update { it.copy(baking = true) }
-            val ok = runCatching { content.bakeInPlace(docId) }.getOrDefault(false)
+            val ok = runCatchingCancellable { content.bakeInPlace(docId) }.getOrDefault(false)
             _ui.update { it.copy(baking = false) }
             onResult(ok)
         }
     }
 
-    suspend fun bakedCopyBytes(): ByteArray? = runCatching { content.bakedCopyBytes(docId) }.getOrNull()
+    suspend fun bakedCopyBytes(): ByteArray? = runCatchingCancellable { content.bakedCopyBytes(docId) }.getOrNull()
 
     suspend fun renderPage(
         pageIndex: Int,
         maxDim: Int,
-    ): ByteArray? = runCatching { content.renderPage(docId, pageIndex, maxDim) }.getOrNull()
+    ): ByteArray? = runCatchingCancellable { content.renderPage(docId, pageIndex, maxDim) }.getOrNull()
 }

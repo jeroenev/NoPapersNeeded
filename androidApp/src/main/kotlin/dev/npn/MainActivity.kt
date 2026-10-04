@@ -12,7 +12,9 @@ import androidx.lifecycle.lifecycleScope
 import dev.npn.app.App
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.LocalDocumentScanner
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.AndroidLog
+import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import kotlinx.coroutines.launch
 
 class MainActivity : ComponentActivity() {
@@ -55,7 +57,7 @@ class MainActivity : ComponentActivity() {
         val now = SystemClock.elapsedRealtime()
         if (now - lastResumeRescan < RESUME_RESCAN_MIN_INTERVAL_MS) return
         lastResumeRescan = now
-        env.appScope.launch { runCatching { session.ingest.rescan() } }
+        env.appScope.launch { AndroidLog.runLogged("Rescan on resume") { session.ingest.rescan() } }
     }
 
     private fun handleIntent(intent: Intent?) {
@@ -63,13 +65,7 @@ class MainActivity : ComponentActivity() {
         val importIntent = intent ?: return
         lifecycleScope.launch {
             val result =
-                try {
-                    IntentImport.import(this@MainActivity, env, importIntent)
-                } catch (e: CancellationException) {
-                    throw e
-                } catch (_: Exception) {
-                    null
-                }
+                runCatchingCancellable { IntentImport.import(this@MainActivity, env, importIntent) }.getOrNull()
             when {
                 result == null -> {
                     toast(getString(R.string.import_library_required))

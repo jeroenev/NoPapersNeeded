@@ -12,6 +12,7 @@ import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import dev.npn.app.platform.DocumentScanner
 import dev.npn.app.platform.ScannedPdf
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CompletableDeferred
 
 /**
@@ -61,7 +62,7 @@ class MlKitDocumentScanner(
         pending = deferred
 
         val started =
-            runCatching {
+            runCatchingCancellable {
                 val intentSender =
                     GmsDocumentScanning
                         .getClient(options)

@@ -11,6 +11,7 @@ import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.EditRunReview
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ReviewDoc
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -78,7 +79,7 @@ class AiEditReviewViewModel(
 
     init {
         viewModelScope.launch {
-            val opened = runCatching { queue.openEditRun(jobId) }.getOrNull()
+            val opened = runCatchingCancellable { queue.openEditRun(jobId) }.getOrNull()
             review = opened
             _phase.value =
                 opened?.let { QueuedReviewPhase.Review(it.docs, it.emptyDocs) }
@@ -130,7 +131,7 @@ class AiEditReviewViewModel(
         if (run?.isActive == true) return
         run =
             viewModelScope.launch {
-                runCatching { opened.discard() }
+                runCatchingCancellable { opened.discard() }
                 _phase.value = QueuedReviewPhase.Done(ApplyResult(0, 0, moreRemain = false))
             }
     }

@@ -11,7 +11,6 @@ import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
 import dev.npn.core.watch.WatchedFolder
 import dev.npn.core.watch.WatchedFolderImporter
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -147,13 +146,8 @@ class DefaultAppEnvironment(
         // Run on the process-lived appScope, not the caller's (composable) scope, which can be
         // cancelled by recomposition while a picker dismisses.
         appScope.launch {
-            try {
-                openLibrary(location)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (_: Throwable) {
-                // Already published as openError.
-            }
+            // A failure is already published as openError.
+            runCatchingCancellable { openLibrary(location) }
         }
     }
 
@@ -170,11 +164,7 @@ class DefaultAppEnvironment(
         try {
             val previous = currentLocation
             closeCurrentInternal()
-            try {
-                startSession(location)
-            } catch (failure: CancellationException) {
-                throw failure
-            } catch (failure: Throwable) {
+            runCatchingCancellable { startSession(location) }.onFailure { failure ->
                 _openError.value = failure.message?.let(UiText::Dynamic) ?: uiText(UiTextKey.COULD_NOT_OPEN_LIBRARY)
                 if (previous != null && previous != location) reopen(previous)
                 throw failure

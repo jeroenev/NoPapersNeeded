@@ -27,6 +27,7 @@ import dev.npn.app.ui.common.supportsSharing
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.SplitOutcome
+import dev.npn.core.util.runCatchingCancellable
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
 import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
@@ -141,7 +142,7 @@ private fun ShareOrExportButton(
                 scope.launch {
                     val bytes = vm.bakedCopyBytes()
                     if (bytes != null) {
-                        runCatching { file.write(bytes) }
+                        runCatchingCancellable { file.write(bytes) }
                             .onSuccess { snackbar.showSnackbar(exportedBakedCopy) }
                             .onFailure {
                                 snackbar.showSnackbar(
@@ -163,7 +164,7 @@ private fun ShareOrExportButton(
                 scope.launch {
                     val bytes = vm.bakedCopyBytes()
                     if (bytes != null) {
-                        runCatching { sharePdfBytes(exportName(item) + ".pdf", bytes) }
+                        runCatchingCancellable { sharePdfBytes(exportName(item) + ".pdf", bytes) }
                             .onSuccess { snackbar.showSnackbar(sharedBakedCopy) }
                             .onFailure {
                                 snackbar.showSnackbar(

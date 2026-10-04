@@ -79,6 +79,7 @@ import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.trash.TrashScreen
 import dev.npn.app.ui.update.WithUpdateBanner
 import dev.npn.core.app.LibraryLocations
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
@@ -127,7 +128,7 @@ private fun AppRoot(env: AppEnvironment) {
 
     LaunchedEffect(Unit) {
         restoreError = null
-        runCatching { env.openPersistedLibrary() }
+        runCatchingCancellable { env.openPersistedLibrary() }
             .onFailure { restoreError = it.message ?: defaultRestoreError }
         restoreAttempted = true
     }
@@ -143,7 +144,7 @@ private fun AppRoot(env: AppEnvironment) {
                 onRetry = {
                     scope.launch {
                         restoreError = null
-                        runCatching { env.openPersistedLibrary() }
+                        runCatchingCancellable { env.openPersistedLibrary() }
                             .onFailure { restoreError = it.message ?: defaultRestoreError }
                     }
                 },

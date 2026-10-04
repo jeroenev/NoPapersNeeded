@@ -8,7 +8,7 @@ import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
 import dev.npn.core.util.NpnJson
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
@@ -227,27 +227,30 @@ internal class DocumentDrafts(
             // Dispatchers.Default and JournalCoordinator does no dispatcher switching of its own.
             // State mutation, by contrast, is main-thread-only by construction (the plain
             // mutableStateOf relies on it), so every touch of [drafts] hops to Main.
-            val saved =
+            var finished = false
+            val outcome =
                 try {
-                    // Every edited field in one transaction: a failure retains the whole draft. The
-                    // reviewed marker is deliberately last, after the fields have succeeded.
-                    if (captured.fields.isNotEmpty()) writer.applyEdits(listOf(docId), fields = captured.fields)
-                    if (reviewed != null) writer.setReviewed(listOf(docId), reviewed)
-                    withContext(Dispatchers.Main) { settle(docId, captured.fields) }
-                    true
-                } catch (cancelled: CancellationException) {
-                    // Clear the saving flag even while cancelling, so the draft is not stuck.
-                    withContext(NonCancellable + Dispatchers.Main) { edit(docId) { it.copy(saving = false) } }
-                    throw cancelled
-                } catch (error: Exception) {
-                    withContext(Dispatchers.Main) {
-                        mutate { all ->
-                            all + (docId to all.getValue(docId).copy(saving = false, error = error.message.orEmpty()))
-                        }
+                    runCatchingCancellable {
+                        // Every edited field in one transaction: a failure retains the whole draft.
+                        // The reviewed marker is deliberately last, after the fields have succeeded.
+                        if (captured.fields.isNotEmpty()) writer.applyEdits(listOf(docId), fields = captured.fields)
+                        if (reviewed != null) writer.setReviewed(listOf(docId), reviewed)
+                        withContext(Dispatchers.Main) { settle(docId, captured.fields) }
+                    }.also { finished = true }
+                } finally {
+                    // Cancelled: clear the saving flag even while cancelling, so the draft is not stuck.
+                    if (!finished) {
+                        withContext(NonCancellable + Dispatchers.Main) { edit(docId) { it.copy(saving = false) } }
                     }
-                    false
                 }
-            if (!saved) return@launch
+            outcome.onFailure { error ->
+                withContext(Dispatchers.Main) {
+                    mutate { all ->
+                        all + (docId to all.getValue(docId).copy(saving = false, error = error.message.orEmpty()))
+                    }
+                }
+                return@launch
+            }
             // Deliberately outside the try: callers navigate from here, and a navigation that
             // throws must not be reported to the user as a failed save — the write already landed.
             withContext(Dispatchers.Main) { onSaved() }

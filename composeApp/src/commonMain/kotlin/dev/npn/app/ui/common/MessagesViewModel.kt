@@ -2,7 +2,7 @@ package dev.npn.app.ui.common
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.asSharedFlow
@@ -35,8 +35,7 @@ abstract class MessagesViewModel : ViewModel() {
         block: suspend () -> Unit,
     ) {
         viewModelScope.launch {
-            runCatching { block() }.onFailure { e ->
-                if (e is CancellationException) throw e
+            runCatchingCancellable { block() }.onFailure { e ->
                 message(uiText(UiTextKey.COULD_NOT_ACTION, action, reasonOf(e)))
             }
         }
