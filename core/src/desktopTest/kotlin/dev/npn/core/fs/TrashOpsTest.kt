@@ -20,7 +20,7 @@ class TrashOpsTest {
     @BeforeTest
     fun setup() {
         root = Files.createTempDirectory("npn-trash-test")
-        fs = JvmLibraryFileSystem(root)
+        fs = JvmLibraryFileSystem(root, PathExternalIo)
         trash = TrashOps(fs)
     }
 

@@ -63,11 +63,6 @@ private object NoPublishFs : LibraryFileSystem {
         toRelPath: String,
     ) = Unit
 
-    override suspend fun copyOut(
-        relPath: String,
-        target: ExternalSource,
-    ) = Unit
-
     override fun watch(): Flow<FsEvent> = emptyFlow()
 }
 

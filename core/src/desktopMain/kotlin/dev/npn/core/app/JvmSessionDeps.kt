@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
@@ -44,7 +45,7 @@ fun jvmSessionDeps(
     File(dirs.thumbsDir).mkdirs()
     File(dirs.tmpDir).mkdirs()
     return SessionDeps(
-        fs = JvmLibraryFileSystem(libraryRoot),
+        fs = JvmLibraryFileSystem(libraryRoot, PathExternalIo),
         db = npnDatabase(File(dirs.dbDir, "index.db")),
         deviceDb = deviceDatabase(File(dirs.dbDir, "device.db")),
         pdfEngine = PdfBoxEngine(),

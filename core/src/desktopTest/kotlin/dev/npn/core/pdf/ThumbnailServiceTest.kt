@@ -5,6 +5,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.PathExternalIo
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -28,7 +29,7 @@ class ThumbnailServiceTest {
     fun setup() {
         libRoot = Files.createTempDirectory("npn-thumb-lib")
         dbDir = Files.createTempDirectory("npn-thumb-db").toFile()
-        fs = JvmLibraryFileSystem(libRoot)
+        fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
         db = npnDatabase(File(dbDir, "index.db"))
     }
 

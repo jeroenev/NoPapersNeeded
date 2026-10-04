@@ -7,7 +7,6 @@ import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertArrayEquals
 import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertThrows
@@ -107,23 +106,6 @@ class SafLibraryFileSystemDeviceTest {
             assertNotNull(TestDocumentsProvider.idForName("source.part"))
             assertArrayEquals("foreign".encodeToByteArray(), TestDocumentsProvider.bytesForName("final.pdf"))
             assertNull(TestDocumentsProvider.idForName("final (1).pdf"))
-        }
-
-    @Test
-    fun failedCopyOutDoesNotDeleteCallerOwnedTarget() =
-        runBlocking {
-            TestDocumentsProvider.addFile(name = "library.pdf", bytes = ByteArray(128 * 1024))
-            val targetId = TestDocumentsProvider.addFile(name = "existing.pdf", bytes = "existing".encodeToByteArray())
-            TestDocumentsProvider.failWritesAfterBytes = 16 * 1024
-
-            assertThrowsBlocking(IOException::class.java) {
-                fs.copyOut("library.pdf", ExternalSource(documentUri(targetId)))
-            }
-
-            assertTrue(TestDocumentsProvider.idForName("existing.pdf") != null)
-            assertFalse(
-                TestDocumentsProvider.bytesForName("existing.pdf")!!.contentEquals("existing".encodeToByteArray()),
-            )
         }
 
     private fun documentUri(documentId: String): Uri = DocumentsContract.buildDocumentUriUsingTree(treeUri, documentId)

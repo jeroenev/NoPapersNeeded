@@ -53,7 +53,7 @@ class MetadataListingTest {
         write("${NpnPaths.OCR_DIR}/${"b".repeat(64)}.dev-a.json")
         write(NpnPaths.trashPath("old.pdf", hash))
         write("${NpnPaths.JOURNAL_DIR}/objects/x.json")
-        fs = ListingCounter(JvmLibraryFileSystem(root))
+        fs = ListingCounter(JvmLibraryFileSystem(root, PathExternalIo))
     }
 
     @AfterTest

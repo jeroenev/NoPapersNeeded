@@ -10,6 +10,7 @@ import dev.npn.core.db.queryPlan
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
@@ -47,7 +48,7 @@ class CompactionPlanCostTest {
     fun setup() {
         libRoot = Files.createTempDirectory("npn-compact-cost-lib")
         dbDir = Files.createTempDirectory("npn-compact-cost-db").toFile()
-        fs = WatchedFileSystem(JvmLibraryFileSystem(libRoot))
+        fs = WatchedFileSystem(JvmLibraryFileSystem(libRoot, PathExternalIo))
         db = recordingDatabase(File(dbDir, "index.db"), log)
         fs.db = db
         indexer = Indexer(fs, db, clock)

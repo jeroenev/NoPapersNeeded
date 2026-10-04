@@ -61,7 +61,7 @@ internal object HardLinkLinker : NoReplaceLinker {
  * file in the same directory and then install it under its final name with a primitive that
  * cannot replace an existing entry ([atomicMoveNoReplace]). Never appends or overwrites.
  *
- * [externalIo] opens the platform's external files for import/export (see [ExternalIo]).
+ * [externalIo] opens the platform's external files for import (see [ExternalIo]).
  */
 class JvmLibraryFileSystem internal constructor(
     private val root: Path,
@@ -70,7 +70,7 @@ class JvmLibraryFileSystem internal constructor(
 ) : LibraryFileSystem {
     constructor(
         root: Path,
-        externalIo: ExternalIo = defaultExternalIo(),
+        externalIo: ExternalIo,
     ) : this(root, externalIo, HardLinkLinker)
 
     override val verifiedPublicationCapability: VerifiedPublicationCapability =
@@ -442,18 +442,6 @@ class JvmLibraryFileSystem internal constructor(
                 Files.deleteIfExists(tmp)
             } catch (_: IOException) {
             }
-        }
-        Unit
-    }
-
-    override suspend fun copyOut(
-        relPath: String,
-        target: ExternalSource,
-    ) = withContext(Dispatchers.IO) {
-        Files.newInputStream(resolve(relPath)).use { input ->
-            // The external target belongs to the caller and may have existed before this copy;
-            // close it on failure but never delete it.
-            externalIo.openOutput(target).use { output -> input.copyTo(output, STREAM_BUFFER_SIZE) }
         }
         Unit
     }

@@ -10,6 +10,7 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.pdf.PdfBoxEngine
@@ -25,7 +26,7 @@ import java.nio.file.Path
 internal class OcrPipelineRig {
     val libRoot: Path = Files.createTempDirectory("npn-ocr-lib")
     private val dbDir: File = Files.createTempDirectory("npn-ocr-db").toFile()
-    val fs = JvmLibraryFileSystem(libRoot)
+    val fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
     val db: NpnDatabase = npnDatabase(File(dbDir, "index.db"))
 
     /** This device's OCR queue and page cache live here, apart from the index. */

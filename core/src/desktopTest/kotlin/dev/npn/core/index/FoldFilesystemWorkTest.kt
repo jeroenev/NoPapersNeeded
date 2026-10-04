@@ -5,6 +5,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.StatementLog
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
@@ -40,7 +41,7 @@ class FoldFilesystemWorkTest {
     fun setup() {
         libRoot = Files.createTempDirectory("npn-fold-fs-lib")
         dbDir = Files.createTempDirectory("npn-fold-fs-db").toFile()
-        fs = WatchedFileSystem(JvmLibraryFileSystem(libRoot))
+        fs = WatchedFileSystem(JvmLibraryFileSystem(libRoot, PathExternalIo))
         db = recordingDatabase(File(dbDir, "index.db"), log)
         fs.db = db
         indexer = Indexer(fs, db, clock)

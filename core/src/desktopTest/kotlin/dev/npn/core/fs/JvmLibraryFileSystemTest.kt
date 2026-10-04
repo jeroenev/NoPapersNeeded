@@ -26,7 +26,7 @@ class JvmLibraryFileSystemTest {
     @BeforeTest
     fun setup() {
         root = Files.createTempDirectory("npn-fs-test")
-        fs = JvmLibraryFileSystem(root)
+        fs = JvmLibraryFileSystem(root, PathExternalIo)
     }
 
     @AfterTest
@@ -189,7 +189,7 @@ class JvmLibraryFileSystemTest {
         }
 
     @Test
-    fun importAndCopyOut() =
+    fun importExternalRefusesAnExistingTarget() =
         runTest {
             val ext = Files.createTempFile("npn-ext", ".pdf")
             Files.write(ext, "external".encodeToByteArray())
@@ -198,10 +198,6 @@ class JvmLibraryFileSystemTest {
             assertFailsWith<IllegalStateException> {
                 fs.importExternal(ExternalSource(ext), "imported/x.pdf")
             }
-
-            val out = Files.createTempDirectory("npn-out").resolve("out.pdf")
-            fs.copyOut("imported/x.pdf", ExternalSource(out))
-            Files.readAllBytes(out).decodeToString() shouldBe "external"
             Files.deleteIfExists(ext)
         }
 

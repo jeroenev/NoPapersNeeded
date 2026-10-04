@@ -29,7 +29,7 @@ class JvmLibraryFileSystemNoReplaceTest {
     @BeforeTest
     fun setup() {
         root = Files.createTempDirectory("npn-noreplace-test")
-        fs = JvmLibraryFileSystem(root)
+        fs = JvmLibraryFileSystem(root, PathExternalIo)
     }
 
     @AfterTest

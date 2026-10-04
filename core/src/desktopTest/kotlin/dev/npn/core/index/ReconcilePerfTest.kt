@@ -10,6 +10,7 @@ import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.fs.VerifiedPublicationCapability
 import dev.npn.core.fs.VerifiedPublicationResult
 import dev.npn.core.journal.ContentAddressedJournalWriter
@@ -90,11 +91,6 @@ private class CountingFileSystem(
         toRelPath: String,
     ) = delegate.importExternal(source, toRelPath)
 
-    override suspend fun copyOut(
-        relPath: String,
-        target: ExternalSource,
-    ) = delegate.copyOut(relPath, target)
-
     override fun watch(): Flow<FsEvent> = emptyFlow()
 }
 
@@ -118,7 +114,7 @@ class ReconcilePerfTest {
     fun setup() {
         libRoot = Files.createTempDirectory("npn-reconcile-lib")
         dbDir = Files.createTempDirectory("npn-reconcile-db").toFile()
-        delegate = JvmLibraryFileSystem(libRoot)
+        delegate = JvmLibraryFileSystem(libRoot, PathExternalIo)
         fs = CountingFileSystem(delegate)
         db = npnDatabase(File(dbDir, "index.db"))
         clock = MutableClock(1_000L)

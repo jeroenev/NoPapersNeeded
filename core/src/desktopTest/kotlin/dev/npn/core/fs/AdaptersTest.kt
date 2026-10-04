@@ -19,7 +19,7 @@ class AdaptersTest {
     @BeforeTest
     fun setup() {
         root = Files.createTempDirectory("npn-adapters-test")
-        fs = JvmLibraryFileSystem(root)
+        fs = JvmLibraryFileSystem(root, PathExternalIo)
     }
 
     @AfterTest

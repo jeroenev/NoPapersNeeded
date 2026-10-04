@@ -2,6 +2,7 @@ package dev.npn.core.xmp
 
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.PathExternalIo
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -26,7 +27,7 @@ class BakeServiceTest {
     @BeforeTest
     fun setup() {
         root = Files.createTempDirectory("npn-bake-test")
-        fs = JvmLibraryFileSystem(root)
+        fs = JvmLibraryFileSystem(root, PathExternalIo)
     }
 
     @AfterTest

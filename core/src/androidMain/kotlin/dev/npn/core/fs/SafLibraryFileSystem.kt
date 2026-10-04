@@ -645,22 +645,6 @@ class SafLibraryFileSystem(
         Unit
     }
 
-    override suspend fun copyOut(
-        relPath: String,
-        target: ExternalSource,
-    ) = withContext(Dispatchers.IO) {
-        val entry = resolveEntry(relPath) ?: throw IOException("Not found: $relPath")
-        resolver.openInputStream(docUri(entry.docId))?.use { input ->
-            val output =
-                resolver.openOutputStream(target.uri, "w")
-                    ?: throw IOException("Cannot open external target: ${target.uri}")
-            // The external URI belongs to the caller and may have existed before this copy. SAF
-            // has no portable rollback for a partial overwrite, so close it but never delete it.
-            output.use { input.copyTo(it, STREAM_BUFFER_SIZE) }
-        } ?: throw IOException("Cannot read: $relPath")
-        Unit
-    }
-
     /** SAF provides no reliable change notifications; indexing is rescan-driven. */
     override fun watch(): Flow<FsEvent> = emptyFlow()
 }

@@ -184,22 +184,6 @@ class JvmLibraryFileSystemPublicationTest {
         }
     }
 
-    @Test
-    fun copyOutOverwritesTheCallerOwnedTarget() {
-        val fs = fs()
-        val target = Files.createTempFile("npn-export", ".pdf")
-        try {
-            Files.write(target, "stale and longer than the new content".encodeToByteArray())
-            runBlocking {
-                fs.writeBytesOnce("doc.pdf", "fresh".encodeToByteArray())
-                fs.copyOut("doc.pdf", ExternalSource(target))
-            }
-            Files.readAllBytes(target).decodeToString() shouldBe "fresh"
-        } finally {
-            Files.deleteIfExists(target)
-        }
-    }
-
     private fun leftoverTempFiles(): List<Path> =
         Files.walk(root).use { stream -> stream.filter { it.name.startsWith(".npn-tmp-") }.toList() }
 }

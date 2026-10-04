@@ -1,6 +1,5 @@
 package dev.npn.core.fs
 
-import android.net.Uri
 import androidx.test.platform.app.InstrumentationRegistry
 import kotlinx.coroutines.runBlocking
 import org.junit.After
@@ -65,13 +64,4 @@ class DirectStorageDeviceTest {
         assertEquals("synced", String(Files.readAllBytes(target)))
         assertTrue(Files.exists(source))
     }
-
-    @Test
-    fun directExportTruncatesAnExistingTarget() =
-        runBlocking {
-            fs.writeBytesOnce("source.pdf", "new".encodeToByteArray())
-            val target = Files.write(root.resolve("export.pdf"), "older and longer".encodeToByteArray())
-            fs.copyOut("source.pdf", ExternalSource(Uri.fromFile(target.toFile())))
-            assertEquals("new", String(Files.readAllBytes(target)))
-        }
 }

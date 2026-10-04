@@ -137,7 +137,7 @@ fun <T : Any> Flow<T>.debounced(
     }
 
 /**
- * An external location outside the library (a file to import from or export to).
+ * An external location outside the library: a file to import from.
  *
  * The desktop actual wraps a [java.nio.file.Path]; the android actual wraps an
  * [android.net.Uri]. The android [LibraryFileSystem] implementation carries the [Context]
@@ -249,12 +249,6 @@ interface LibraryFileSystem {
     suspend fun importExternal(
         source: ExternalSource,
         toRelPath: String,
-    )
-
-    /** Export a library file to an external location. */
-    suspend fun copyOut(
-        relPath: String,
-        target: ExternalSource,
     )
 
     /**

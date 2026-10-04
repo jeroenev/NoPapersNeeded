@@ -13,6 +13,7 @@ import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.EpochClock
@@ -139,7 +140,7 @@ class IndexRig private constructor(
         fun create(statements: StatementLog? = null): IndexRig {
             val libRoot = Files.createTempDirectory("npn-index-lib")
             val dbDir = Files.createTempDirectory("npn-index-db").toFile()
-            val fs = JvmLibraryFileSystem(libRoot)
+            val fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
             val dbFile = File(dbDir, "index.db")
             val db = if (statements == null) npnDatabase(dbFile) else recordingDatabase(dbFile, statements)
             return IndexRig(libRoot, dbDir, fs, db, deviceDatabase(File(dbDir, "device.db")), MutableClock(1_000L))

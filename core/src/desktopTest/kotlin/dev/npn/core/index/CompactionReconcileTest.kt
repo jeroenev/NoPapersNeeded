@@ -6,6 +6,7 @@ import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
@@ -46,7 +47,7 @@ class CompactionReconcileTest {
     fun setup() {
         libRoot = Files.createTempDirectory("npn-compact-lib")
         dbDir = Files.createTempDirectory("npn-compact-db").toFile()
-        fs = JvmLibraryFileSystem(libRoot)
+        fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
         db = npnDatabase(File(dbDir, "index.db"))
         clock = MutableClock(1_000L)
         indexer = Indexer(fs, db, clock)
