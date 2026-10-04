@@ -71,13 +71,7 @@ class DocContentFacadeImpl internal constructor(
             val doc = documentDao.getByDocId(docId) ?: return@runLogged null
             val bytes = fs.readBytes(doc.relPath)
             renderGate.render {
-                pdfEngine.open(bytes).use { handle ->
-                    if (pageIndex < 0 || pageIndex >= handle.pageCount) {
-                        null
-                    } else {
-                        handle.renderPagePng(pageIndex, maxDim)
-                    }
-                }
+                pdfEngine.open(bytes).use { handle -> handle.renderPagePngOrNull(pageIndex, maxDim) }
             }
         }
 

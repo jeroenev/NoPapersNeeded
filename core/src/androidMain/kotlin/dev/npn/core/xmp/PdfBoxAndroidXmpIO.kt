@@ -1,9 +1,9 @@
 package dev.npn.core.xmp
 
 import android.content.Context
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.common.PDMetadata
+import dev.npn.core.pdf.PdfBoxAndroidInit
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -18,15 +18,19 @@ import java.io.ByteArrayOutputStream
  * parsing stay in commonMain, sidestepping pdfbox-android's xmpbox gaps (PLAN section 2 / risks
  * table).
  *
- * pdfbox-android needs [PDFBoxResourceLoader.init] before some operations (font/resource
- * loading). The constructor initializes it once, guarded by a static flag and try/catch so a
- * failure here never blocks baking (which does not touch fonts).
+ * pdfbox-android needs its resource loader before some operations (font/resource loading). The
+ * constructor sets it up through the guard the PDF engine shares ([PdfBoxAndroidInit]). A failure
+ * here never blocks baking, which does not touch fonts; the next user of the library tries again.
  */
 class PdfBoxAndroidXmpIO(
     context: Context,
 ) : PdfXmpIO {
     init {
-        ensureResourceLoader(context.applicationContext)
+        try {
+            PdfBoxAndroidInit.ensure(context)
+        } catch (_: Throwable) {
+            // Non-fatal: see the class comment.
+        }
     }
 
     override suspend fun readXmp(pdfBytes: ByteArray): String? =
@@ -75,23 +79,4 @@ class PdfBoxAndroidXmpIO(
                 data.documentId != null || data.tags.isNotEmpty()
             }.getOrDefault(false)
         }
-
-    private companion object {
-        @Volatile
-        private var initialized = false
-
-        fun ensureResourceLoader(context: Context) {
-            if (initialized) return
-            synchronized(this) {
-                if (initialized) return
-                try {
-                    PDFBoxResourceLoader.init(context)
-                } catch (_: Throwable) {
-                    // Resource loader is only needed for font-heavy operations; baking does not
-                    // rely on it, so a failure here is non-fatal.
-                }
-                initialized = true
-            }
-        }
-    }
 }

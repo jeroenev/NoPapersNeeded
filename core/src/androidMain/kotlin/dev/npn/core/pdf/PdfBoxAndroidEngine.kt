@@ -7,7 +7,6 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
-import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
@@ -18,7 +17,6 @@ import com.tom_roush.pdfbox.pdmodel.graphics.image.PDImageXObject
 import com.tom_roush.pdfbox.text.PDFTextStripper
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
 import java.io.File
 
@@ -27,56 +25,58 @@ import java.io.File
  * `PDDocument.load(bytes)`, not the 3.x `Loader`). Rendering uses the platform
  * `android.graphics.pdf.PdfRenderer` instead because pdfbox-android's renderer is unreliable.
  *
- * App-wiring caveats:
- * - `PDFBoxResourceLoader.init(context)` must run once before any pdfbox-android use; done
- *   lazily here (guarded by a flag).
- * - `PdfRenderer` needs a seekable file, so bytes are written to a cache temp file that is
- *   deleted when the handle is closed.
+ * A handle opens each backend only when a call needs it ([LazyPdfDocumentHandle]): drawing a page
+ * never parses the document with pdfbox-android, and counting pages or reading text never writes
+ * the copy `PdfRenderer` needs (it wants a seekable file, so the bytes are staged in the cache
+ * directory and deleted when the handle closes). pdfbox-android's resource loader is set up once,
+ * through [PdfBoxAndroidInit].
  */
 class PdfBoxAndroidEngine(
     private val context: Context,
 ) : PdfEngine {
     override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
-        withContext(Dispatchers.IO) {
-            ensureInit(context)
-            val pdDoc =
-                try {
-                    PDDocument.load(bytes)
-                } catch (t: Throwable) {
-                    throw PdfOpenException("Failed to load PDF", t)
-                }
-            // Temp file for the platform PdfRenderer.
-            val temp = File.createTempFile("npn-pdf-", ".pdf", context.cacheDir)
+        LazyPdfDocumentHandle(openText = { openText(bytes) }, openPages = { openPages(bytes) })
+
+    private fun openText(bytes: ByteArray): PdfTextBackend {
+        PdfBoxAndroidInit.ensure(context)
+        val document =
             try {
-                temp.writeBytes(bytes)
+                PDDocument.load(bytes)
             } catch (t: Throwable) {
-                pdDoc.close()
-                temp.delete()
-                throw PdfOpenException("Failed to stage PDF for rendering", t)
+                throw PdfOpenException("Failed to load PDF", t)
             }
-            val pfd =
-                try {
-                    ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY)
-                } catch (t: Throwable) {
-                    pdDoc.close()
-                    temp.delete()
-                    throw PdfOpenException("Failed to open PDF for rendering", t)
-                }
-            val renderer =
-                try {
-                    PdfRenderer(pfd)
-                } catch (t: Throwable) {
-                    pfd.close()
-                    pdDoc.close()
-                    temp.delete()
-                    throw PdfOpenException("Failed to create renderer", t)
-                }
-            AndroidPdfDocumentHandle(pdDoc, renderer, pfd, temp)
+        return PdfBoxTextBackend(document)
+    }
+
+    private fun openPages(bytes: ByteArray): PdfPageBackend {
+        val temp = File.createTempFile("npn-pdf-", ".pdf", context.cacheDir)
+        try {
+            temp.writeBytes(bytes)
+        } catch (t: Throwable) {
+            temp.delete()
+            throw PdfOpenException("Failed to stage PDF for rendering", t)
         }
+        val pfd =
+            try {
+                ParcelFileDescriptor.open(temp, ParcelFileDescriptor.MODE_READ_ONLY)
+            } catch (t: Throwable) {
+                temp.delete()
+                throw PdfOpenException("Failed to open PDF for rendering", t)
+            }
+        val renderer =
+            try {
+                PdfRenderer(pfd)
+            } catch (t: Throwable) {
+                pfd.close()
+                temp.delete()
+                throw PdfOpenException("Failed to create renderer", t)
+            }
+        return RendererPageBackend(renderer, pfd, temp)
+    }
 
     override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray =
         withContext(Dispatchers.IO) {
-            ensureInit(context)
+            PdfBoxAndroidInit.ensure(context)
             val doc = PDDocument()
             try {
                 for (imageBytes in images) {
@@ -108,7 +108,7 @@ class PdfBoxAndroidEngine(
         pageIndices: List<Int>,
     ): ByteArray =
         withContext(Dispatchers.IO) {
-            ensureInit(context)
+            PdfBoxAndroidInit.ensure(context)
             require(pageIndices.isNotEmpty()) { "pageIndices must not be empty" }
             val source =
                 try {
@@ -133,37 +133,34 @@ class PdfBoxAndroidEngine(
                 source.close()
             }
         }
-
-    companion object {
-        @Volatile
-        private var initialized = false
-
-        private fun ensureInit(context: Context) {
-            if (initialized) return
-            synchronized(this) {
-                if (!initialized) {
-                    PDFBoxResourceLoader.init(context.applicationContext)
-                    initialized = true
-                }
-            }
-        }
-    }
 }
 
-private class AndroidPdfDocumentHandle(
-    private val pdDoc: PDDocument,
-    private val renderer: PdfRenderer,
-    private val pfd: ParcelFileDescriptor,
-    private val tempFile: File,
-) : PdfDocumentHandle {
-    override val pageCount: Int get() = pdDoc.numberOfPages
+private class PdfBoxTextBackend(
+    private val document: PDDocument,
+) : PdfTextBackend {
+    override val pageCount: Int get() = document.numberOfPages
 
     override fun extractText(pageIndex: Int): String {
         val stripper = PDFTextStripper()
         stripper.startPage = pageIndex + 1
         stripper.endPage = pageIndex + 1
-        return stripper.getText(pdDoc).trim()
+        return stripper.getText(document).trim()
     }
+
+    override fun close() {
+        try {
+            document.close()
+        } catch (_: Throwable) {
+        }
+    }
+}
+
+private class RendererPageBackend(
+    private val renderer: PdfRenderer,
+    private val pfd: ParcelFileDescriptor,
+    private val tempFile: File,
+) : PdfPageBackend {
+    override val pageCount: Int get() = renderer.pageCount
 
     override fun renderPagePng(
         pageIndex: Int,
@@ -197,10 +194,6 @@ private class AndroidPdfDocumentHandle(
         }
         try {
             pfd.close()
-        } catch (_: Throwable) {
-        }
-        try {
-            pdDoc.close()
         } catch (_: Throwable) {
         }
         tempFile.delete()

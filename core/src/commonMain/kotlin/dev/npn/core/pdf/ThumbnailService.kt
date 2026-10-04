@@ -53,11 +53,8 @@ class ThumbnailService(
                 // freeze the UI; the gate caps concurrency and uses a CPU-bound dispatcher.
                 renderGate.render {
                     engine.open(bytes).use { handle ->
-                        if (handle.pageCount <= 0) {
-                            null
-                        } else {
-                            handle.renderPagePng(0, maxDim) to handle.pageCount
-                        }
+                        // Render first: on Android the count then comes from the open renderer.
+                        handle.renderPagePngOrNull(0, maxDim)?.let { png -> png to handle.pageCount }
                     }
                 }
             }.getOrNull() ?: return null

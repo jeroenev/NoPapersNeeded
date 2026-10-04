@@ -22,6 +22,16 @@ interface PdfDocumentHandle : AutoCloseable {
         pageIndex: Int,
         maxDimensionPx: Int,
     ): ByteArray
+
+    /**
+     * [renderPagePng], or null when the document has no page [pageIndex]. A platform that renders
+     * with a separate backend answers the bounds from that backend, so drawing a page never needs
+     * the parse a [pageCount] alone could cost.
+     */
+    fun renderPagePngOrNull(
+        pageIndex: Int,
+        maxDimensionPx: Int,
+    ): ByteArray? = if (pageIndex in 0 until pageCount) renderPagePng(pageIndex, maxDimensionPx) else null
 }
 
 /**
@@ -71,7 +81,10 @@ fun pageRenderScale(
  * pdfbox-android/PdfRenderer implementations to differ.
  */
 interface PdfEngine {
-    /** Open [bytes] as a PDF; throws [PdfOpenException] on an invalid/corrupt file. */
+    /**
+     * Open [bytes] as a PDF; throws [PdfOpenException] on an invalid/corrupt file. A platform that
+     * opens its backends lazily (Android) throws it from the first handle call that needs one.
+     */
     suspend fun open(bytes: ByteArray): PdfDocumentHandle
 
     /** Combine JPEG/PNG page images into a single PDF (one image per page). */
