@@ -88,7 +88,8 @@ sealed interface OpenReconciliation {
 class MetadataAccumulator(
     private val fs: LibraryFileSystem,
     db: NpnDatabase,
-    private val installationId: String? = null,
+    /** Marks the journal staging files this installation wrote; the first reconcile deletes stale ones. */
+    private val installationId: String,
     private val clock: EpochClock = SystemEpochClock,
 ) {
     private val dao = db.metadataProjectionDao()
@@ -372,7 +373,7 @@ class MetadataAccumulator(
     private suspend fun cleanOwnedStaging(entries: List<FileMeta>) {
         if (stagingCleaned) return
         stagingCleaned = true
-        val marker = installationId?.let { ".$it." } ?: return
+        val marker = ".$installationId."
         val cutoff = clock.nowMillis() - STAGING_MAX_AGE_MS
         entries
             .asSequence()
