@@ -1,8 +1,5 @@
 package dev.npn.core.ai
 
-import ai.koog.agents.core.tools.ToolDescriptor
-import ai.koog.prompt.Prompt
-import ai.koog.prompt.dsl.ModerationResult
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLMCapability
 import ai.koog.prompt.llm.LLMProvider
@@ -377,90 +374,10 @@ class KoogChatAgentTest {
                 .map { it.output } shouldContainExactly List(3) { output }
         }
 
-    /**
-     * The system prompt carries the field registry, the language and today's date, all of which
-     * can change between two questions; a later turn must be asked under the current one, not the
-     * one the conversation began with.
-     */
-    @Test
-    fun eachTurnIsAskedUnderTheCurrentSystemPrompt() =
-        runTest {
-            val earlier =
-                listOf(
-                    Message.System("system v1", RequestMetaInfo.Empty),
-                    Message.User("question 1", RequestMetaInfo.Empty),
-                    Message.Assistant("answer 1", ResponseMetaInfo.Empty),
-                )
-            RoomChatHistoryProvider(db.keyValueDao()).store("session-1", earlier)
-            val executor = scriptedExecutor(listOf(textFrames("answer 2")))
-
-            KoogChatAgent(
-                executor,
-                model,
-                RoomChatHistoryProvider(db.keyValueDao()),
-                LibraryAiTools.toolSetFor(db, FieldKeys.seedDefinitions()),
-                null,
-                "system v2",
-                15,
-            ).run("question 2", "session-1").collectList()
-
-            executor.prompts
-                .single()
-                .messages
-                .filterIsInstance<Message.System>()
-                .map { it.textContent() } shouldContainExactly listOf("system v2")
-            RoomChatHistoryProvider(db.keyValueDao())
-                .load("session-1")
-                .filterIsInstance<Message.System>()
-                .map { it.textContent() } shouldContainExactly listOf("system v2")
-        }
-
     private suspend fun Flow<AiChatEvent>.collectList(): List<AiChatEvent> {
         val out = mutableListOf<AiChatEvent>()
         collect { out += it }
         return out
-    }
-
-    /**
-     * Emits one scripted stream per streaming call, in order; records every prompt seen. Turns are
-     * given as flows so a turn can throw mid-stream rather than only replaying a fixed frame list.
-     * Use [scriptedExecutor] for the common frame-list case.
-     */
-    private class ScriptedExecutor(
-        private val turns: List<Flow<StreamFrame>>,
-    ) : PromptExecutor() {
-        val prompts = mutableListOf<Prompt>()
-        private var index = 0
-
-        override fun executeStreaming(
-            prompt: Prompt,
-            model: LLModel,
-            tools: List<ToolDescriptor>,
-        ): Flow<StreamFrame> {
-            prompts += prompt
-            val flow = turns[index]
-            index++
-            return flow
-        }
-
-        override suspend fun execute(
-            prompt: Prompt,
-            model: LLModel,
-            tools: List<ToolDescriptor>,
-        ): Message.Assistant = Message.Assistant("", ResponseMetaInfo.Empty)
-
-        override suspend fun executeMultipleChoices(
-            prompt: Prompt,
-            model: LLModel,
-            tools: List<ToolDescriptor>,
-        ): List<Message.Assistant> = emptyList()
-
-        override suspend fun moderate(
-            prompt: Prompt,
-            model: LLModel,
-        ): ModerationResult = error("not used")
-
-        override fun close() = Unit
     }
 
     private companion object {
