@@ -180,7 +180,6 @@ private val SidePanelMaxWidth = 800.dp
 fun LibraryScreen(
     session: LibrarySession,
     env: AppEnvironment,
-    aiConfigured: Boolean,
     onOpenDoc: (docId: String, order: List<String>, searchQuery: String?) -> Unit,
     onTrash: () -> Unit,
     /** Opens the processing queue page, behind the OCR / AI-enrichment progress banners. */
@@ -207,6 +206,7 @@ fun LibraryScreen(
     val tags by vm.tags.collectAsStateWithLifecycle()
     val fieldFilters by vm.fieldFilters.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
+    val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)

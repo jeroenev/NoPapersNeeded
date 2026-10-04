@@ -9,6 +9,7 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
+import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.completeActiveSearchToken
 import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
@@ -152,6 +153,10 @@ class LibraryViewModel(
             .map { it.gridColumnWidth }
             .distinctUntilChanged()
             .stateIn(viewModelScope, WhileSubscribedTimeout, 160)
+
+    /** Whether AI is configured, which offers AI edit on a selection; follows Settings. */
+    val aiConfigured: StateFlow<Boolean> =
+        settings.aiConfigured().stateIn(viewModelScope, WhileSubscribedTimeout, false)
 
     /** When true, the list view uses multiple columns while the window is landscape. */
     val landscapeListColumns: StateFlow<Boolean> =

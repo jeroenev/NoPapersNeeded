@@ -20,7 +20,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.produceState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
@@ -50,7 +49,7 @@ import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.isConfiguredOrFalse
+import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
@@ -63,7 +62,6 @@ import dev.npn.app.ui.detail.WithDraftResumeBanner
 import dev.npn.app.ui.library.LibraryFilterHandoff
 import dev.npn.app.ui.library.LibraryScreen
 import dev.npn.app.ui.nav.AiDestination
-import dev.npn.app.ui.nav.AiProbe
 import dev.npn.app.ui.nav.NavigationShell
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.Route
@@ -199,18 +197,8 @@ private fun MainNav(
             dev.npn.app.ui.detail
                 .BrowseContext()
         }
-    // Probe once whether the AI assistant is configured; gates the AI entries in rail and menus.
-    // Tri-state so the shell can reserve the AI slots while the probe runs rather than shifting
-    // the bar sideways when the answer lands; screens that only need the boolean read it off this.
-    val aiProbe by produceState(initialValue = AiProbe.PROBING, session) {
-        value =
-            if (session.aiSuggest.isConfiguredOrFalse()) {
-                AiProbe.CONFIGURED
-            } else {
-                AiProbe.UNAVAILABLE
-            }
-    }
-    val aiConfigured = aiProbe.isConfigured
+    // Gates the AI entries in the rail and bar; follows Settings as AI is configured or turned off.
+    val aiConfigured by remember(env.settings) { env.settings.aiConfigured() }.collectAsStateWithLifecycle(false)
     // Outstanding background work, for the shell's queue badge. Read here rather than in a screen
     // because the badge is the only standing sign that the app is still busy — or, once a
     // background AI edit finishes, that it is waiting on the user — and on compact layouts the
@@ -243,7 +231,7 @@ private fun MainNav(
             NavigationShell(
                 current = nav.currentTopLevelDestination(),
                 aiCurrent = nav.currentAiDestination(),
-                aiProbe = aiProbe,
+                aiConfigured = aiConfigured,
                 queue = queue,
                 onNavigate = { dest -> nav.navigateTopLevel(dest) },
                 onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
@@ -257,7 +245,6 @@ private fun MainNav(
                     env = env,
                     session = session,
                     browse = browse,
-                    aiConfigured = aiConfigured,
                     aiSelection = aiSelection,
                     libraryFilterHandoff = libraryFilterHandoff,
                     showAiEditTopBar = !aiEditInSidebar,
@@ -273,7 +260,6 @@ private fun MainNavHost(
     env: AppEnvironment,
     session: dev.npn.core.app.LibrarySession,
     browse: dev.npn.app.ui.detail.BrowseContext,
-    aiConfigured: Boolean,
     aiSelection: dev.npn.app.ui.ai.AiEditSelection,
     libraryFilterHandoff: LibraryFilterHandoff,
     showAiEditTopBar: Boolean,
@@ -283,7 +269,6 @@ private fun MainNavHost(
             LibraryScreen(
                 session = session,
                 env = env,
-                aiConfigured = aiConfigured,
                 onOpenDoc = { docId, order, query ->
                     browse.setOrder(order, query)
                     nav.navigate(Route.DocDetail(docId))

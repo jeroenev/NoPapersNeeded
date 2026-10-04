@@ -62,52 +62,49 @@ import org.jetbrains.compose.resources.stringResource
  * of it — background work has to be visible from the bar without spending a permanent slot on a
  * screen that is empty most of the time.
  *
- * [aiProbe] is a tri-state, not a boolean, so the shell can *reserve* the AI slots while the
- * configuration probe is still running rather than adding them the instant it resolves — otherwise
- * the compact bar would shift sideways under the user's finger the moment the answer lands. While
- * [AiProbe.PROBING] the entries are shown but inert; only [AiProbe.UNAVAILABLE] drops them.
+ * The AI entries show while [aiConfigured], and stay while one of their screens is open, so they
+ * never vanish from under the screen they lead to.
  */
 @Composable
 fun NavigationShell(
     current: TopLevelDestination?,
     aiCurrent: AiDestination?,
-    aiProbe: AiProbe,
+    aiConfigured: Boolean,
     queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
     onAiChat: () -> Unit,
     onAiEdit: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    Box(Modifier.fillMaxSize()) {
-        if (LocalWindowWidthClass.current.isWide) {
-            Row(Modifier.fillMaxSize()) {
-                if (current != null || aiCurrent != null) {
-                    ShellRail(
-                        current = current,
-                        aiCurrent = aiCurrent,
-                        aiProbe = aiProbe,
-                        queue = queue,
-                        onNavigate = onNavigate,
-                        onAiChat = onAiChat,
-                        onAiEdit = onAiEdit,
-                    )
-                }
-                Box(Modifier.weight(1f)) { content() }
+    val showAi = aiConfigured || aiCurrent != null
+    if (LocalWindowWidthClass.current.isWide) {
+        Row(Modifier.fillMaxSize()) {
+            if (current != null || aiCurrent != null) {
+                ShellRail(
+                    current = current,
+                    aiCurrent = aiCurrent,
+                    showAi = showAi,
+                    queue = queue,
+                    onNavigate = onNavigate,
+                    onAiChat = onAiChat,
+                    onAiEdit = onAiEdit,
+                )
             }
-        } else {
-            Column(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f)) { content() }
-                if (current != null || aiCurrent != null) {
-                    ShellBottomBar(
-                        current = current,
-                        aiCurrent = aiCurrent,
-                        aiProbe = aiProbe,
-                        queue = queue,
-                        onNavigate = onNavigate,
-                        onAiChat = onAiChat,
-                        onAiEdit = onAiEdit,
-                    )
-                }
+            Box(Modifier.weight(1f)) { content() }
+        }
+    } else {
+        Column(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f)) { content() }
+            if (current != null || aiCurrent != null) {
+                ShellBottomBar(
+                    current = current,
+                    aiCurrent = aiCurrent,
+                    showAi = showAi,
+                    queue = queue,
+                    onNavigate = onNavigate,
+                    onAiChat = onAiChat,
+                    onAiEdit = onAiEdit,
+                )
             }
         }
     }
@@ -117,7 +114,7 @@ fun NavigationShell(
 private fun ShellRail(
     current: TopLevelDestination?,
     aiCurrent: AiDestination?,
-    aiProbe: AiProbe,
+    showAi: Boolean,
     queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
     onAiChat: () -> Unit,
@@ -135,21 +132,15 @@ private fun ShellRail(
                 onNavigate = onNavigate,
             )
         }
-        // Reserve the AI items while the probe runs, and keep them around while one of their
-        // screens is open, so the slots never appear or vanish from under the user. While probing
-        // they are inert; a resolved-unavailable probe drops them.
-        if (aiProbe.reservesSlot || aiCurrent != null) {
-            val enabled = aiProbe.isConfigured || aiCurrent != null
+        if (showAi) {
             NavigationRailItem(
                 selected = aiCurrent == AiDestination.CHAT,
-                enabled = enabled,
                 onClick = onAiChat,
                 icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
                 label = { Text(stringResource(Res.string.library_ai_assistant)) },
             )
             NavigationRailItem(
                 selected = aiCurrent == AiDestination.EDIT,
-                enabled = enabled,
                 onClick = onAiEdit,
                 icon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
                 label = { Text(stringResource(Res.string.library_ai_edit)) },
@@ -201,18 +192,13 @@ private fun RailItem(
 private fun ShellBottomBar(
     current: TopLevelDestination?,
     aiCurrent: AiDestination?,
-    aiProbe: AiProbe,
+    showAi: Boolean,
     queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
     onAiChat: () -> Unit,
     onAiEdit: () -> Unit,
 ) {
     var moreOpen by remember { mutableStateOf(false) }
-    // Reserve the assistant slot while the probe runs so the bar does not shift sideways when the
-    // answer lands, and keep it present while one of the AI screens is open. While probing it is
-    // shown but inert; only a resolved-unavailable probe removes it.
-    val aiReserved = aiProbe.reservesSlot || aiCurrent != null
-    val aiActive = aiProbe.isConfigured || aiCurrent != null
     NavigationBar {
         TopLevelDestination.compactBar.forEach { dest ->
             val selected = dest == current
@@ -228,10 +214,9 @@ private fun ShellBottomBar(
                 label = { Text(stringResource(dest.label)) },
             )
         }
-        if (aiReserved) {
+        if (showAi) {
             NavigationBarItem(
                 selected = aiCurrent == AiDestination.CHAT,
-                enabled = aiActive,
                 onClick = onAiChat,
                 icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
                 label = { Text(stringResource(Res.string.library_ai_assistant)) },
@@ -258,10 +243,9 @@ private fun ShellBottomBar(
     }
     if (moreOpen) {
         MoreSheet(
-            rows = moreRows(aiEdit = aiReserved),
+            rows = moreRows(aiEdit = showAi),
             current = current,
             aiCurrent = aiCurrent,
-            aiEditEnabled = aiActive,
             queue = queue,
             onDismiss = { moreOpen = false },
             onNavigate = { dest ->
@@ -311,7 +295,6 @@ private fun MoreSheet(
     rows: List<MoreRow>,
     current: TopLevelDestination?,
     aiCurrent: AiDestination?,
-    aiEditEnabled: Boolean,
     queue: QueueStatus,
     onDismiss: () -> Unit,
     onNavigate: (TopLevelDestination) -> Unit,
@@ -336,7 +319,6 @@ private fun MoreSheet(
                             label = stringResource(row.dest.label),
                             icon = if (selected) row.dest.selectedIcon else row.dest.icon,
                             selected = selected,
-                            enabled = true,
                             // The queue is the only screen behind the sheet that reports on itself.
                             badge =
                                 if (row.dest == TopLevelDestination.QUEUE) queue else QueueStatus.None,
@@ -349,7 +331,6 @@ private fun MoreSheet(
                             label = stringResource(Res.string.library_ai_edit),
                             icon = Icons.Outlined.AutoFixHigh,
                             selected = aiCurrent == AiDestination.EDIT,
-                            enabled = aiEditEnabled,
                             badge = QueueStatus.None,
                             onClick = onAiEdit,
                         )
@@ -365,7 +346,6 @@ private fun MoreSheetRow(
     label: String,
     icon: ImageVector,
     selected: Boolean,
-    enabled: Boolean,
     badge: QueueStatus,
     onClick: () -> Unit,
 ) {
@@ -375,7 +355,6 @@ private fun MoreSheetRow(
                 .fillMaxWidth()
                 .selectable(
                     selected = selected,
-                    enabled = enabled,
                     role = Role.Tab,
                     onClick = onClick,
                 ),

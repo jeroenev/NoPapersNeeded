@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.app.ui.library.ImportSummary
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
+import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
@@ -265,6 +266,25 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.bulkSetReviewed(true)
             advanceUntilIdle()
             session.meta.reviewedSets shouldBe emptyList()
+        }
+
+    @Test
+    fun aiEditIsOfferedOnceAiIsConfiguredAndWithdrawnWhenItIsTurnedOff() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            val model = vm(settings = settings)
+            backgroundScope.launch { model.aiConfigured.collect {} }
+            runCurrent()
+            model.aiConfigured.value shouldBe false
+
+            // Configured in Settings while the library is open: no reopen needed.
+            settings.edit { it.copy(aiEnabled = true, aiProvider = AiProvider.OLLAMA, aiModel = "qwen3:8b") }
+            runCurrent()
+            model.aiConfigured.value shouldBe true
+
+            settings.edit { it.copy(aiEnabled = false) }
+            runCurrent()
+            model.aiConfigured.value shouldBe false
         }
 
     @Test

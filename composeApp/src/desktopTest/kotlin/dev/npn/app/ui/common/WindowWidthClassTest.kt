@@ -8,7 +8,6 @@ import androidx.compose.ui.ImageComposeScene
 import androidx.compose.ui.unit.Density
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.nav.AiProbe
 import dev.npn.app.ui.nav.NavigationShell
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.TopLevelDestination
@@ -66,7 +65,7 @@ class WindowWidthClassTest {
         NavigationShell(
             current = TopLevelDestination.LIBRARY,
             aiCurrent = null,
-            aiProbe = AiProbe.UNAVAILABLE,
+            aiConfigured = false,
             queue = QueueStatus.None,
             onNavigate = {},
             onAiChat = {},
