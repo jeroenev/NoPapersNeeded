@@ -48,8 +48,10 @@ import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.SafStorageSwitch
 import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.common.TestTags
+import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isConfiguredOrFalse
+import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.supportsSafStorage
@@ -81,6 +83,7 @@ import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_folder_unusable_title
 import no_papers_needed.composeapp.generated.resources.common_ok
@@ -115,6 +118,7 @@ fun App(env: AppEnvironment) {
 private fun AppRoot(env: AppEnvironment) {
     val session by env.session.collectAsStateWithLifecycle()
     val opening by env.opening.collectAsStateWithLifecycle()
+    val openError by env.openError.collectAsStateWithLifecycle()
     val scope = rememberCoroutineScope()
 
     var restoreError by remember { mutableStateOf<String?>(null) }
@@ -160,8 +164,24 @@ private fun AppRoot(env: AppEnvironment) {
 
         else -> {
             DocumentDraftHost(current, env.appScope) { MainNav(env = env, session = current) }
+            // A switch to another library that failed lands back in this one; say why.
+            openError?.let { OpenErrorDialog(it) }
         }
     }
+}
+
+@Composable
+private fun OpenErrorDialog(error: UiText) {
+    var dismissed by remember(error) { mutableStateOf(false) }
+    if (dismissed) return
+    AlertDialog(
+        onDismissRequest = { dismissed = true },
+        title = { Text(stringResource(Res.string.common_could_not_open_library)) },
+        text = { Text(error.resolve()) },
+        confirmButton = {
+            TextButton(onClick = { dismissed = true }) { Text(stringResource(Res.string.common_ok)) }
+        },
+    )
 }
 
 @Composable

@@ -8,8 +8,10 @@ import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.watch.WatchedFolder
 import dev.npn.core.watch.WatchedFolderImporter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -23,6 +25,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * Platform-built pieces for one library, returned by [PlatformLibraryFactory.build]. The
@@ -81,6 +84,9 @@ class DefaultAppEnvironment(
     // Closes the resources (db) backing the current session, kept so we can free them on swap.
     private var currentClose: (() -> Unit)? = null
 
+    // Where the current session is open, so a switch that fails can go back there.
+    private var currentLocation: String? = null
+
     init {
         // Watched-folder auto-import: (re)start an importer whenever the open session or the
         // configured folder changes; collectLatest cancels the previous importer's loops.
@@ -115,30 +121,75 @@ class DefaultAppEnvironment(
         // Run on the process-lived appScope, not the caller's (composable) scope, which can be
         // cancelled by recomposition while a picker dismisses.
         appScope.launch {
-            runCatching { openLibrary(location) }
-                .onFailure {
-                    _openError.value = it.message?.let(UiText::Dynamic)
-                        ?: uiText(UiTextKey.COULD_NOT_OPEN_LIBRARY)
-                }
+            try {
+                openLibrary(location)
+            } catch (e: CancellationException) {
+                throw e
+            } catch (_: Throwable) {
+                // Already published as openError.
+            }
         }
     }
 
     override suspend fun openLibrary(location: String) = sessionMutex.withLock { openLibraryLocked(location) }
 
+    /**
+     * Swap the open session for one at [location]. If that fails, the user goes back to the library
+     * they had rather than to onboarding: the previous location is reopened, best effort, and the
+     * failure is published as [openError] and rethrown.
+     */
     private suspend fun openLibraryLocked(location: String) {
         _opening.value = true
         _openError.value = null
         try {
+            val previous = currentLocation
             closeCurrentInternal()
-
-            val opened = factory.build(location, appScope)
-            val session = LibrarySessionImpl.openSession(opened.deps)
-            session.start(appScope)
-            currentClose = opened.close
-            _session.value = session
+            try {
+                startSession(location)
+            } catch (failure: CancellationException) {
+                throw failure
+            } catch (failure: Throwable) {
+                _openError.value = failure.message?.let(UiText::Dynamic) ?: uiText(UiTextKey.COULD_NOT_OPEN_LIBRARY)
+                if (previous != null && previous != location) reopen(previous)
+                throw failure
+            }
             settings.edit { it.copy(libraryLocation = location) }
         } finally {
             _opening.value = false
+        }
+    }
+
+    /**
+     * Open and start a session at [location]. Whatever was built before a failure is closed again:
+     * left open, each Retry would leak another Room instance on the same file.
+     */
+    private suspend fun startSession(location: String) {
+        val opened = factory.build(location, appScope)
+        var session: LibrarySessionImpl? = null
+        var started = false
+        try {
+            session = LibrarySessionImpl.openSession(opened.deps)
+            session.start(appScope)
+            started = true
+        } finally {
+            if (!started) {
+                withContext(NonCancellable) { session?.close() }
+                opened.close()
+            }
+        }
+        currentClose = opened.close
+        currentLocation = location
+        _session.value = session
+    }
+
+    /** Go back to [location] after a failed switch; a failure here leaves the user on onboarding. */
+    private suspend fun reopen(location: String) {
+        try {
+            startSession(location)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Throwable) {
+            println("Could not reopen $location after a failed library switch: ${e.message}")
         }
     }
 
@@ -166,5 +217,6 @@ class DefaultAppEnvironment(
             .clearThumbCache()
         currentClose?.invoke()
         currentClose = null
+        currentLocation = null
     }
 }
