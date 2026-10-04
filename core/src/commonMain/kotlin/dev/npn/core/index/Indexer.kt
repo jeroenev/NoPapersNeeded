@@ -194,26 +194,22 @@ class Indexer(
 
             // The reconcile writes and the fold land in one transaction, so no reader sees a row
             // before its tags and fields; the files their intents move wait until it commits.
-            val pass =
+            val recon =
                 documentPaths.deferring(known = knownHashes(indexable, changed, byPath, hashes)) {
                     db.withWriteTransaction {
-                        val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
-                        val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
-                        recon.relinkCandidates.addAll(
-                            RelinkPairing.pair(missing.missingDocs, recon.newDocs, recon.relinkCandidates),
-                        )
-
-                        report(IndexProgress(IndexProgress.Phase.FOLDING))
-                        val resurrected =
-                            applyFold(
-                                metadataState,
-                                FoldRequest(diskPaths = diskPaths, reconcileFileState = true),
+                        reconcile(toHash, hashes, dbProjection, diskPaths).also { recon ->
+                            val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
+                            recon.missingCount = missing.size
+                            recon.relinkCandidates.addAll(
+                                RelinkPairing.pair(missing, recon.newDocs, recon.relinkCandidates),
                             )
-                        ScanPass(recon, missing.missingCount, resurrected)
+
+                            report(IndexProgress(IndexProgress.Phase.FOLDING))
+                            recon.resurrected = applyFold(metadataState, FoldScope.FullRescan(diskPaths))
+                        }
                     }
                 }
-            val recon = pass.recon
-            if (pass.resurrected.isNotEmpty()) onResurrected(pass.resurrected)
+            if (recon.resurrected.isNotEmpty()) onResurrected(recon.resurrected)
 
             if (recon.duplicates.isNotEmpty()) {
                 val duplicateDocs = recon.duplicates.mapTo(LinkedHashSet()) { it.docId }
@@ -230,7 +226,7 @@ class Indexer(
                 added = recon.added,
                 moved = recon.moved,
                 changed = recon.changed,
-                missingCount = pass.missingCount,
+                missingCount = recon.missingCount,
                 duplicates = recon.duplicates,
                 conflictFiles = conflictFiles,
                 relinkCandidates = recon.relinkCandidates,
@@ -263,18 +259,13 @@ class Indexer(
         return indexable to conflictFiles
     }
 
-    /** What one rescan's reconcile and fold produced, for its report. */
-    private class ScanPass(
-        val recon: Reconciliation,
-        val missingCount: Int,
-        val resurrected: List<Resurrected>,
-    )
-
-    /** Mutable accumulator for the reconcile pass, plus the doc rows it touched. */
+    /** Mutable accumulator for one rescan's reconcile and fold, plus the doc rows it touched. */
     private class Reconciliation {
         var added = 0
         var moved = 0
         var changed = 0
+        var missingCount = 0
+        var resurrected: List<Resurrected> = emptyList()
         val duplicates = ArrayList<DuplicateReport>()
         val relinkCandidates = ArrayList<RelinkCandidate>()
 
@@ -388,19 +379,15 @@ class Indexer(
         }
     }
 
-    /** Result of the disappeared-files pass. */
-    private class MissingResult(
-        val missingCount: Int,
-        val missingDocs: List<DocumentEntity>,
-    )
-
-    /** Mark docs whose canonical path is no longer on disk as missing (skipping deleted/trashed). */
+    /**
+     * Mark docs whose canonical path is no longer on disk as missing (skipping deleted/trashed), and
+     * return every doc that is missing now.
+     */
     private suspend fun detectMissing(
         dbProjection: List<PathMeta>,
         diskPaths: Set<String>,
         existingByDocId: Map<String, DocumentEntity>,
-    ): MissingResult {
-        var missingCount = 0
+    ): List<DocumentEntity> {
         val missingDocs = ArrayList<DocumentEntity>()
         val nowMissing = ArrayList<DocumentEntity>()
         for (pm in dbProjection) {
@@ -412,29 +399,35 @@ class Indexer(
             if (current.relPath !in diskPaths) {
                 if (!current.missing) nowMissing.add(current.copy(missing = true))
                 missingDocs.add(current)
-                missingCount++
             }
         }
         if (nowMissing.isNotEmpty()) documentDao.upsertAll(nowMissing)
-        return MissingResult(missingCount, missingDocs)
+        return missingDocs
     }
 
-    /**
-     * The non-state inputs of one [applyFold] pass, grouped so the three fold modes are explicit at
-     * a glance instead of threading 6 positional/subset args through two functions:
-     *  - full rescan: [reconcileFileState] = true + populated [diskPaths] (resurrection preference);
-     *  - event refresh: a bounded [documentScope] (+ [styledTags]);
-     *  - state refresh: whole-DB reproject (null [documentScope]) with [preserveLifecycleDocs] kept.
-     *
-     * Defaults describe the plain fold-only mode; each entry point overrides only what differs.
-     */
-    private class FoldRequest(
-        val diskPaths: Set<String> = emptySet(),
-        val reconcileFileState: Boolean = false,
-        val documentScope: Set<String>? = null,
-        val styledTags: Set<String> = emptySet(),
-        val preserveLifecycleDocs: Set<String> = emptySet(),
-    )
+    /** Which documents one [applyFold] projects, and what else it takes into account. */
+    private sealed interface FoldScope {
+        /**
+         * A rescan's fold: every document, preferring a file the rescan found at [diskPaths] over a
+         * journal that hides its document (see [FoldPass.lifecycle]).
+         */
+        class FullRescan(
+            val diskPaths: Set<String>,
+        ) : FoldScope
+
+        /**
+         * The documents [docs] and the tags [styledTags] some events touched. [preserveLifecycleDocs]
+         * keep the lifecycle their row already has, which a commit wrote optimistically.
+         */
+        class Events(
+            val docs: Set<String>,
+            val styledTags: Set<String>,
+            val preserveLifecycleDocs: Set<String>,
+        ) : FoldScope
+
+        /** Every document the journal or the index knows. */
+        data object WholeDb : FoldScope
+    }
 
     /** Apply already-reduced events without reading journal files or walking the PDF library. */
     suspend fun refreshEvents(
@@ -476,29 +469,17 @@ class Indexer(
                 }
             }
             documents.toList().forEach { documents += state.resolveDocId(it) }
-            return projection {
-                applyFold(
-                    state,
-                    FoldRequest(
-                        documentScope = documents,
-                        styledTags = styledTags,
-                        preserveLifecycleDocs = preserveLifecycleDocs,
-                    ),
-                )
-            }
+            return projection { applyFold(state, FoldScope.Events(documents, styledTags, preserveLifecycleDocs)) }
         } finally {
             _scanState.value = null
         }
     }
 
     /** Reproject a reconciled mixed-version accumulator without rereading journal sources. */
-    suspend fun refreshState(
-        state: FoldedState,
-        preserveLifecycleDocs: Set<String> = emptySet(),
-    ): List<Resurrected> {
+    suspend fun refreshState(state: FoldedState): List<Resurrected> {
         _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
         try {
-            return projection { applyFold(state, FoldRequest(preserveLifecycleDocs = preserveLifecycleDocs)) }
+            return projection { applyFold(state, FoldScope.WholeDb) }
         } finally {
             _scanState.value = null
         }
@@ -533,7 +514,7 @@ class Indexer(
      *   fold's lifecycle state. Resurrection, on a full rescan only: when the journal says trashed
      *   or deleted but the file exists at its original or current path, the file wins (flags and
      *   missing cleared) and the document is reported, so the caller can record a restore; until
-     *   one is recorded, any other fold hides it again (see [projectLifecycle]).
+     *   one is recorded, any other fold hides it again (see [FoldPass.lifecycle]).
      * - Relinks: fold resolves old->new; the effective views are already keyed on ids. For a folded
      *   relink where both ids are known, the OLD doc is marked deleted/superseded and the NEW doc
      *   carries the metadata (fold exposes effective views on the resolved id).
@@ -544,20 +525,22 @@ class Indexer(
      */
     private suspend fun applyFold(
         state: FoldedState,
-        request: FoldRequest,
+        scope: FoldScope,
     ): List<Resurrected> {
-        // Every doc the fold must project: those the journal has data about, plus (for a full
-        // fold) every doc currently in the DB so stale trash/delete flags get cleared.
+        // Every doc the fold must project: those the events touched, or for a full fold, those the
+        // journal has data about plus every doc in the DB, so stale trash/delete flags get cleared.
         val journalDocs = LinkedHashSet<String>()
-        journalDocs.addAll(request.documentScope ?: state.docsWithMetadata())
-        if (request.documentScope == null) {
+        if (scope is FoldScope.Events) {
+            journalDocs.addAll(scope.docs)
+        } else {
+            journalDocs.addAll(state.docsWithMetadata())
             for (pm in documentDao.allPathsAndMeta()) journalDocs.add(pm.docId)
         }
 
         // Bulk preload the current projection (rows, tags, fields, FTS content) so the per-doc
         // pass below issues no serial reads; diffed writes are collected and flushed once.
         val preloaded = preloadRows(state, journalDocs)
-        upsertReferencedTags(state, journalDocs, request.styledTags)
+        upsertReferencedTags(state, journalDocs, (scope as? FoldScope.Events)?.styledTags.orEmpty())
         // The registry is library-wide and small; a diffed replace per fold keeps it in step
         // with the fold at negligible cost and needs no per-op scoping.
         fieldDefDao.replaceAll(state.effectiveFieldDefs())
@@ -566,26 +549,16 @@ class Indexer(
         val work = documentPaths.work()
         work.state = state
 
-        val resurrected = ArrayList<Resurrected>()
+        val pass = FoldPass(state, scope, supersession, preloaded, changes, work)
         for (doc in journalDocs) {
             val row = preloaded.rows[doc] ?: continue
-            projectDocument(
-                doc = doc,
-                row = row,
-                state = state,
-                supersession = supersession,
-                request = request,
-                resurrected = resurrected,
-                preloaded = preloaded,
-                changes = changes,
-                work = work,
-            )
+            pass.project(doc, row)
         }
         flushChanges(changes)
         // Tags live only through use: once no live document references a name, drop its row so
         // stale tags never linger in tag lists (see TagDao.pruneUnreferenced).
         tagDao.pruneUnreferenced()
-        return resurrected
+        return pass.resurrected
     }
 
     /**
@@ -706,78 +679,6 @@ class Indexer(
         return Supersession(superseded, predecessors)
     }
 
-    /** Effective system properties for a doc: own value wins, else inherit from a predecessor. */
-    private class ProjectedMeta(
-        val reviewed: Boolean,
-        val ocrEngineOverride: String?,
-    )
-
-    private fun projectMeta(
-        state: FoldedState,
-        doc: String,
-        preds: List<String>,
-    ): ProjectedMeta {
-        fun prop(key: SystemProperty): String? {
-            state.effectiveProp(doc, key)?.let { return it }
-            for (p in preds) state.effectiveProp(p, key)?.let { return it }
-            return null
-        }
-        return ProjectedMeta(
-            reviewed = prop(SystemProperty.REVIEWED) == "true",
-            ocrEngineOverride = prop(SystemProperty.OCR_ENGINE),
-        )
-    }
-
-    /**
-     * Effective tags for a doc plus every predecessor's effective tags. Diffed against the
-     * preloaded rows: only record a rewrite when the set actually changed, so an unrelated edit
-     * does not invalidate `document_tags` observers for every doc. Returns the effective (sorted)
-     * tags and whether the stored rows changed.
-     */
-    private fun projectTags(
-        state: FoldedState,
-        doc: String,
-        preds: List<String>,
-        existingTags: Map<String, List<String>>,
-        changes: ProjectionChanges,
-    ): Pair<List<String>, Boolean> {
-        val tagSet = LinkedHashSet<String>()
-        tagSet.addAll(state.effectiveTags(doc))
-        for (p in preds) tagSet.addAll(state.effectiveTags(p))
-        val effTags = tagSet.toList().sorted()
-        val tagsChanged = existingTags[doc].orEmpty() != effTags
-        if (tagsChanged) changes.tags[doc] = effTags
-        return effTags to tagsChanged
-    }
-
-    /**
-     * Every field value for a doc: own value wins; inherit predecessor keys this doc doesn't set.
-     * Rows carry the numeric shadow for the registry's NUMBER/DECIMAL fields. Diffed like tags so
-     * an unrelated edit does not rewrite this doc's field rows. Returns the effective map, which
-     * also feeds the cached well-known columns and the FTS row.
-     */
-    private fun projectFields(
-        state: FoldedState,
-        doc: String,
-        preds: List<String>,
-        types: Map<String, FieldType>,
-        existingFields: Map<String, List<DocumentFieldEntity>>,
-        changes: ProjectionChanges,
-    ): Map<String, String> {
-        val effFields = LinkedHashMap<String, String>()
-        for (p in preds) effFields.putAll(state.effectiveFields(p))
-        effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
-        val rows =
-            effFields.map { (key, value) ->
-                val type = types[key]
-                DocumentFieldEntity(doc, key, value, numValue = type?.let { FieldValues.numeric(it, value) })
-            }
-        if (existingFields[doc].orEmpty().sortedBy { it.fieldKey } != rows.sortedBy { it.fieldKey }) {
-            changes.fields[doc] = rows
-        }
-        return effFields
-    }
-
     /** The trash/delete lifecycle for a doc, after applying the file-resurrection preference. */
     private class Lifecycle(
         val trashed: Boolean,
@@ -789,118 +690,160 @@ class Indexer(
     )
 
     /**
-     * Resolve the doc's trash/delete state with resurrection preference for the file: if the
-     * journal says trashed/deleted but the file exists at the original (or current) path, prefer
-     * the file, clear the flags, and record a [Resurrected]. Docs in [preserveLifecycleDocs] keep
-     * their stored lifecycle regardless.
+     * One [applyFold] pass over its documents: what it projects them from (the folded [state], the
+     * [preloaded] rows, the [supersession]) and where it leaves what it projected: [changes] for the
+     * database, [work] for the path work after the transaction, [resurrected] for the caller.
      */
-    private fun projectLifecycle(
-        state: FoldedState,
-        doc: String,
-        row: DocumentEntity,
-        supersession: Supersession,
-        diskPaths: Set<String>,
-        reconcileFileState: Boolean,
-        preserveLifecycleDocs: Set<String>,
-        resurrected: MutableList<Resurrected>,
-    ): Lifecycle {
-        val journalDeleted = state.isDeleted(doc) || doc in supersession.superseded
-        val journalTrashed = state.isTrashed(doc) && !state.isDeleted(doc)
-        val origPath = state.trashOrigPath(doc)
-
-        var trashed = if (doc in preserveLifecycleDocs) row.trashed else journalTrashed
-        var deleted = if (doc in preserveLifecycleDocs) row.deleted else journalDeleted
-        var missing = row.missing
-        var relPath = row.relPath
-        var fileName = row.fileName
-
-        val origOnDisk = origPath?.takeIf { it in diskPaths }
-        val fileAtCurrent = relPath in diskPaths
-        val tombstonedFileExists =
-            (journalTrashed || journalDeleted) && (origOnDisk != null || fileAtCurrent)
-
-        if (reconcileFileState && tombstonedFileExists && doc !in supersession.superseded) {
-            // Resurrection: prefer the file. Clear trashed/deleted for the working view.
-            trashed = false
-            deleted = false
-            missing = false
-            if (origOnDisk != null) {
-                relPath = origOnDisk
-                fileName = origOnDisk.substringAfterLast('/')
-            }
-            val hiddenAt = state.hiddenBy(doc)?.physicalMillis ?: 0L
-            resurrected.add(Resurrected(doc, relPath, wasDeleted = journalDeleted, hiddenAtMillis = hiddenAt))
-        }
-        return Lifecycle(trashed, deleted, missing, relPath, fileName, origPath)
-    }
-
-    /**
-     * Project one doc's tags, fields, props, lifecycle, row and FTS from the folded state. The row
-     * goes to [work] as written, for the path work after the transaction: the fold itself never
-     * moves a file.
-     */
-    private fun projectDocument(
-        doc: String,
-        row: DocumentEntity,
-        state: FoldedState,
-        supersession: Supersession,
-        request: FoldRequest,
-        resurrected: MutableList<Resurrected>,
-        preloaded: PreloadedRows,
-        changes: ProjectionChanges,
-        work: DocumentPathReconciler.PathWork,
+    private inner class FoldPass(
+        private val state: FoldedState,
+        private val scope: FoldScope,
+        private val supersession: Supersession,
+        private val preloaded: PreloadedRows,
+        private val changes: ProjectionChanges,
+        private val work: DocumentPathReconciler.PathWork,
     ) {
-        // Predecessors (older ids that relinked onto this doc): their metadata carries over.
-        val preds = supersession.predecessors[doc].orEmpty()
+        val resurrected = ArrayList<Resurrected>()
 
-        val (effTags, tagsChanged) = projectTags(state, doc, preds, preloaded.tags, changes)
-        val fields = projectFields(state, doc, preds, preloaded.fieldTypes, preloaded.fields, changes)
-        val meta = projectMeta(state, doc, preds)
-        val lifecycle =
-            projectLifecycle(
-                state,
-                doc,
-                row,
-                supersession,
-                request.diskPaths,
-                request.reconcileFileState,
-                request.preserveLifecycleDocs,
-                resurrected,
-            )
+        /**
+         * Project one doc's tags, fields, props, lifecycle, row and FTS from the folded state. The
+         * row goes to [work] as written, for the path work after the transaction: the fold itself
+         * never moves a file.
+         */
+        fun project(
+            doc: String,
+            row: DocumentEntity,
+        ) {
+            // Predecessors (older ids that relinked onto this doc): their metadata carries over.
+            val preds = supersession.predecessors[doc].orEmpty()
 
-        // Diffed: skip the upsert when the effective row equals what is stored, so a fold
-        // triggered by one edit does not rewrite (and invalidate) every other doc's row.
-        val projectedRow =
-            row.copy(
-                relPath = lifecycle.relPath,
-                fileName = lifecycle.fileName,
-                reviewed = meta.reviewed,
-                // Read cache of the well-known field rows; see DocumentEntity.correspondent.
-                correspondent = fields[FieldKeys.CORRESPONDENT],
-                docType = fields[FieldKeys.DOC_TYPE],
-                docDate = fields[FieldKeys.DOC_DATE],
-                title = fields[FieldKeys.TITLE],
-                notes = fields[FieldKeys.NOTES],
-                ocrEngineOverride = meta.ocrEngineOverride,
-                trashed = lifecycle.trashed,
-                trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
-                trashedAt = if (lifecycle.trashed) state.trashedAtMillis(doc) ?: row.trashedAt else null,
-                deleted = lifecycle.deleted,
-                missing = lifecycle.missing,
-            )
-        val rowChanged = projectedRow != row
-        if (rowChanged) changes.docRows.add(projectedRow)
-        work.rows[doc] = projectedRow
+            val effTags = tags(doc, preds)
+            val fields = fields(doc, preds)
+            val lifecycle = lifecycle(doc, row)
 
-        // FTS: the fold writes only the metadata-derived columns; the extracted text is the OCR
-        // pipeline's (FtsDao.upsertMetadata leaves it alone). A brand-new doc has no fts row yet,
-        // so it must be written even when nothing else changed; the metadata columns derive from
-        // the doc row, tags and fields, so when none changed and a row exists there is nothing to
-        // write.
-        val ftsRow = FtsRows.row(doc, projectedRow.fileName, effTags, fields, content = null)
-        val searchableChanged = rowChanged || tagsChanged || doc in changes.fields
-        if (searchableChanged || doc !in preloaded.ftsIndexed) changes.ftsRows.add(ftsRow)
-        if (documentPaths.pending(state, projectedRow)) work.searchable[doc] = ftsRow
+            // Diffed: skip the upsert when the effective row equals what is stored, so a fold
+            // triggered by one edit does not rewrite (and invalidate) every other doc's row.
+            val projectedRow =
+                row.copy(
+                    relPath = lifecycle.relPath,
+                    fileName = lifecycle.fileName,
+                    reviewed = inheritedProp(doc, preds, SystemProperty.REVIEWED) == "true",
+                    // Read cache of the well-known field rows; see DocumentEntity.correspondent.
+                    correspondent = fields[FieldKeys.CORRESPONDENT],
+                    docType = fields[FieldKeys.DOC_TYPE],
+                    docDate = fields[FieldKeys.DOC_DATE],
+                    title = fields[FieldKeys.TITLE],
+                    notes = fields[FieldKeys.NOTES],
+                    ocrEngineOverride = inheritedProp(doc, preds, SystemProperty.OCR_ENGINE),
+                    trashed = lifecycle.trashed,
+                    trashedOrigPath = if (lifecycle.trashed) lifecycle.origPath else null,
+                    trashedAt = if (lifecycle.trashed) state.trashedAtMillis(doc) ?: row.trashedAt else null,
+                    deleted = lifecycle.deleted,
+                    missing = lifecycle.missing,
+                )
+            val rowChanged = projectedRow != row
+            if (rowChanged) changes.docRows.add(projectedRow)
+            work.rows[doc] = projectedRow
+
+            // FTS: the fold writes only the metadata-derived columns; the extracted text is the OCR
+            // pipeline's (FtsDao.upsertMetadata leaves it alone). A brand-new doc has no fts row
+            // yet, so it must be written even when nothing else changed; the metadata columns derive
+            // from the doc row, tags and fields, so when none changed and a row exists there is
+            // nothing to write.
+            val ftsRow = FtsRows.row(doc, projectedRow.fileName, effTags, fields, content = null)
+            val searchableChanged = rowChanged || doc in changes.tags || doc in changes.fields
+            if (searchableChanged || doc !in preloaded.ftsIndexed) changes.ftsRows.add(ftsRow)
+            if (documentPaths.pending(state, projectedRow)) work.searchable[doc] = ftsRow
+        }
+
+        /** A system property's effective value for a doc: its own, else a predecessor's. */
+        private fun inheritedProp(
+            doc: String,
+            preds: List<String>,
+            key: SystemProperty,
+        ): String? = state.effectiveProp(doc, key) ?: preds.firstNotNullOfOrNull { state.effectiveProp(it, key) }
+
+        /**
+         * Effective tags for a doc plus every predecessor's effective tags, sorted. Diffed against
+         * the preloaded rows: a rewrite goes to [changes] only when the set actually changed, so an
+         * unrelated edit does not invalidate `document_tags` observers for every doc.
+         */
+        private fun tags(
+            doc: String,
+            preds: List<String>,
+        ): List<String> {
+            val tagSet = LinkedHashSet<String>()
+            tagSet.addAll(state.effectiveTags(doc))
+            for (p in preds) tagSet.addAll(state.effectiveTags(p))
+            val effTags = tagSet.toList().sorted()
+            if (preloaded.tags[doc].orEmpty() != effTags) changes.tags[doc] = effTags
+            return effTags
+        }
+
+        /**
+         * Every field value for a doc: own value wins; inherit predecessor keys this doc doesn't set.
+         * Rows carry the numeric shadow for the registry's NUMBER/DECIMAL fields. Diffed like tags so
+         * an unrelated edit does not rewrite this doc's field rows. Returns the effective map, which
+         * also feeds the cached well-known columns and the FTS row.
+         */
+        private fun fields(
+            doc: String,
+            preds: List<String>,
+        ): Map<String, String> {
+            val effFields = LinkedHashMap<String, String>()
+            for (p in preds) effFields.putAll(state.effectiveFields(p))
+            effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
+            val rows =
+                effFields.map { (key, value) ->
+                    val type = preloaded.fieldTypes[key]
+                    DocumentFieldEntity(doc, key, value, numValue = type?.let { FieldValues.numeric(it, value) })
+                }
+            if (preloaded.fields[doc].orEmpty().sortedBy { it.fieldKey } != rows.sortedBy { it.fieldKey }) {
+                changes.fields[doc] = rows
+            }
+            return effFields
+        }
+
+        /**
+         * Resolve the doc's trash/delete state. On a [FoldScope.FullRescan] the file is preferred:
+         * if the journal says trashed/deleted but the file exists at the original (or current)
+         * path, the flags are cleared and a [Resurrected] recorded. Docs an [FoldScope.Events] fold
+         * preserves keep their stored lifecycle.
+         */
+        private fun lifecycle(
+            doc: String,
+            row: DocumentEntity,
+        ): Lifecycle {
+            val superseded = doc in supersession.superseded
+            val journalDeleted = state.isDeleted(doc) || superseded
+            val journalTrashed = state.isTrashed(doc) && !state.isDeleted(doc)
+            val origPath = state.trashOrigPath(doc)
+            val preserved = scope is FoldScope.Events && doc in scope.preserveLifecycleDocs
+
+            var trashed = if (preserved) row.trashed else journalTrashed
+            var deleted = if (preserved) row.deleted else journalDeleted
+            var missing = row.missing
+            var relPath = row.relPath
+            var fileName = row.fileName
+
+            val diskPaths = (scope as? FoldScope.FullRescan)?.diskPaths
+            val origOnDisk = origPath?.takeIf { diskPaths != null && it in diskPaths }
+            val tombstonedFileExists =
+                (journalTrashed || journalDeleted) && (origOnDisk != null || diskPaths?.contains(relPath) == true)
+
+            if (tombstonedFileExists && !superseded) {
+                // Resurrection: prefer the file. Clear trashed/deleted for the working view.
+                trashed = false
+                deleted = false
+                missing = false
+                if (origOnDisk != null) {
+                    relPath = origOnDisk
+                    fileName = origOnDisk.substringAfterLast('/')
+                }
+                val hiddenAt = state.hiddenBy(doc)?.physicalMillis ?: 0L
+                resurrected.add(Resurrected(doc, relPath, wasDeleted = journalDeleted, hiddenAtMillis = hiddenAt))
+            }
+            return Lifecycle(trashed, deleted, missing, relPath, fileName, origPath)
+        }
     }
 
     private companion object {

@@ -224,7 +224,7 @@ class JournalCoordinator internal constructor(
      * seed the write clock and the settings a reader needs. Only a moved journal (or an unusable
      * projection) costs a refold and a whole-DB reprojection here.
      */
-    suspend fun refreshState(preserveLifecycleDocs: Set<String> = emptySet()) =
+    suspend fun refreshState() =
         locked {
             latching {
                 when (val outcome = accumulator.reconcileOnOpen()) {
@@ -236,7 +236,7 @@ class JournalCoordinator internal constructor(
                     }
 
                     is OpenReconciliation.Refolded -> {
-                        adopt(outcome.state) { indexer.refreshState(outcome.state, preserveLifecycleDocs) }
+                        adopt(outcome.state) { indexer.refreshState(outcome.state) }
                     }
                 }
             }
@@ -423,7 +423,7 @@ class JournalCoordinator internal constructor(
      * concurrent fold (periodic [reconcileMetadata], [rescan], [refreshState]) also holds this
      * mutex, none can interleave between the optimistic write and its committing fold, so the
      * optimistic value can never be clobbered by a fold that has not yet seen the event.
-     * [lifecycleDocs] are additionally passed through [Indexer.applyFold]'s preserveLifecycleDocs
+     * [lifecycleDocs] are additionally passed to [Indexer.refreshEvents] as preserveLifecycleDocs,
      * so the committing fold keeps the just-written lifecycle row rather than re-deriving it from a
      * journal state that (for a not-yet-folded source) might not carry it.
      */

@@ -8,7 +8,6 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.effectiveFieldType
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldValues

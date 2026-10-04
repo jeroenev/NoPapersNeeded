@@ -361,6 +361,13 @@ class FoldedState {
     /** The winning definition for [key], or null when never defined or removed. */
     fun effectiveFieldDef(key: String): FieldDef? = fieldDefs[key]?.def
 
+    /**
+     * The one rule for "what type is this field": the folded definition's, or TEXT for a key no
+     * definition covers. Callers that need a value's canonical form or numeric shadow go through
+     * this, so the unregistered-is-text default lives in one place.
+     */
+    fun effectiveFieldType(key: String): FieldType = effectiveFieldDef(key)?.type ?: FieldType.TEXT
+
     /** All documents this state has any tag data for (literal keys, before resolveDocId). */
     fun taggedDocs(): Set<String> = tagAdds.keys.toSet()
 
@@ -433,14 +440,6 @@ class FoldedState {
             addAll(fields.keys)
         }
 }
-
-/**
- * The one rule for "what type is this field": the folded definition's, or TEXT for a key no
- * definition covers. Callers that need a value's canonical form or numeric shadow go through this
- * so the unregistered-is-text default lives in one place. An extension, not a member, so the
- * class's function count stays within detekt's bound.
- */
-fun FoldedState.effectiveFieldType(key: String): FieldType = effectiveFieldDef(key)?.type ?: FieldType.TEXT
 
 interface HlcStamped {
     val hlc: Hlc
