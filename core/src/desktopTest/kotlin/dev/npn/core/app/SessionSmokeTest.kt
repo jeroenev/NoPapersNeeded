@@ -2,7 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pdf.PdfFixtures
-import dev.npn.core.util.RecordingLog
+import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.xmp.XmpParser
 import io.kotest.assertions.throwables.shouldThrow
@@ -10,17 +10,16 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlin.test.Test
-import kotlin.time.Duration.Companion.seconds
-import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
+import java.util.concurrent.Executors
+import kotlin.test.Test
 
 class SessionSmokeTest {
     @Test
@@ -68,8 +67,10 @@ class SessionSmokeTest {
             try {
                 val bytes = PdfFixtures.embeddedTextPdf("imported from two places at once")
                 val outcomes =
-                    withContext(Dispatchers.Default) {
-                        (1..6).map { async { rig.session.importPdfBytes(bytes, "same.pdf") } }.awaitAll()
+                    Executors.newFixedThreadPool(6).asCoroutineDispatcher().use { threads ->
+                        withContext(threads) {
+                            (1..6).map { async { rig.session.importPdfBytes(bytes, "same.pdf") } }.awaitAll()
+                        }
                     }
 
                 outcomes.filterIsInstance<ImportOutcome.Imported>() shouldHaveSize 1
@@ -150,17 +151,17 @@ class SessionSmokeTest {
     @Test
     fun aFailingBackgroundRescanIsLogged() =
         runTest {
-            val log = RecordingLog()
+            val reported = CompletableDeferred<Throwable?>()
+            val log =
+                NpnLog { _, message, error ->
+                    if (message == "Reading the trash retention failed") reported.complete(error)
+                }
             val rig =
                 AppSessionRig.create(backgroundScope, log = log, trashRetentionDays = { error("settings unreadable") })
             try {
                 rig.session.start()
 
-                val failed = "Reading the trash retention failed"
-                withContext(Dispatchers.Default) {
-                    withTimeout(10.seconds) { while (log.entries.none { it.message == failed }) delay(10) }
-                }
-                log.entries.first { it.message == failed }.error.shouldNotBeNull()
+                reported.await().shouldNotBeNull()
             } finally {
                 rig.close()
             }

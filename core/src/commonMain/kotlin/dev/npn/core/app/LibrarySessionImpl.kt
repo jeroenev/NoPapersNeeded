@@ -433,7 +433,7 @@ class LibrarySessionImpl private constructor(
         docId: String,
         partIds: List<String>,
     ) {
-        val doc = db.documentDao().getByDocId(docId) ?: return
+        db.documentDao().getByDocId(docId) ?: return
         val tags =
             db
                 .documentDao()

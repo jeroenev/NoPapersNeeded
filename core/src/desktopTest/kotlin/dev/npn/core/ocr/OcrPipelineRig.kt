@@ -75,6 +75,25 @@ internal class OcrPipelineRig {
         return docId
     }
 
+    /** Publish a sidecar as if another device produced it (legacy, non-engine-qualified name). */
+    suspend fun writeForeignSidecar(
+        docId: String,
+        dev: String,
+        engine: String,
+        text: String,
+    ) {
+        val sidecar =
+            OcrSidecar(
+                doc = docId,
+                dev = dev,
+                engine = engine,
+                lang = "eng",
+                createdAt = 1,
+                pages = listOf(text),
+            )
+        OcrSidecarFiles(fs).writeOnce(docId, dev, OcrSidecarCodec.encode(sidecar))
+    }
+
     fun close() {
         db.close()
         libRoot.toFile().deleteRecursively()

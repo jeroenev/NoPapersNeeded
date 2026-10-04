@@ -9,6 +9,7 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.updateAndGet
@@ -47,7 +48,7 @@ class QueueDrainer(
     // Started by the first kick, so a drainer only ever driven through [drain] runs no loop at all.
     private val worker =
         scope.launch(start = CoroutineStart.LAZY) {
-            for (kick in kicks) {
+            kicks.consumeEach {
                 // Every kick counted so far was made before this drain started, so it covers them.
                 val covers = requested.value
                 // Its own child, so a stray CancellationException out of a step (a request on an HTTP

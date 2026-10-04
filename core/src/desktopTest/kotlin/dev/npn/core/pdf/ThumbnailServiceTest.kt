@@ -7,6 +7,7 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.test.runTest
@@ -83,7 +84,8 @@ class ThumbnailServiceTest {
         val racingDao =
             object : DocumentDao by dao {
                 suspend fun foldLands() {
-                    dao.upsert(dao.getByDocId(docId)!!.copy(relPath = "moved/doc.pdf", title = "Folded"))
+                    val row = dao.getByDocId(docId).shouldNotBeNull()
+                    dao.upsert(row.copy(relPath = "moved/doc.pdf", title = "Folded"))
                 }
 
                 override suspend fun upsert(doc: DocumentEntity) {
@@ -103,7 +105,7 @@ class ThumbnailServiceTest {
 
         service.ensureThumbnail(docId, "doc.pdf") shouldNotBe null
 
-        val row = dao.getByDocId(docId)!!
+        val row = dao.getByDocId(docId).shouldNotBeNull()
         row.pageCount shouldBe 2
         row.relPath shouldBe "moved/doc.pdf"
         row.title shouldBe "Folded"
@@ -112,10 +114,12 @@ class ThumbnailServiceTest {
     @Test
     fun aKnownPageCountIsNeverOverwritten() = runTest {
         db.documentDao().upsert(
-            DocumentEntity(docId = "d", relPath = "d.pdf", fileName = "d.pdf", size = 1, mtime = 1, addedAt = 1, pageCount = 3),
+            DocumentEntity(
+                docId = "d", relPath = "d.pdf", fileName = "d.pdf", size = 1, mtime = 1, addedAt = 1, pageCount = 3,
+            ),
         )
         db.documentDao().fillPageCount("d", 5)
-        db.documentDao().getByDocId("d")!!.pageCount shouldBe 3
+        db.documentDao().getByDocId("d").shouldNotBeNull().pageCount shouldBe 3
     }
 
     @Test

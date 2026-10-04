@@ -107,12 +107,11 @@ class ImportService(
      */
     suspend fun undoImport(imported: ImportResult.Imported) =
         serialize {
-            val row = documentDao.getByDocId(imported.docId)
-            if (row != null && row.relPath == imported.relPath && !row.deleted && !row.trashed) {
-                if (fs.exists(imported.relPath)) fs.delete(imported.relPath)
-                documentDao.delete(imported.docId)
-                ocrQueueDao.delete(imported.docId)
-            }
+            val row = documentDao.getByDocId(imported.docId)?.takeIf { it.relPath == imported.relPath }
+            if (row == null || row.deleted || row.trashed) return@serialize
+            if (fs.exists(imported.relPath)) fs.delete(imported.relPath)
+            documentDao.delete(imported.docId)
+            ocrQueueDao.delete(imported.docId)
         }
 
     private suspend fun place(

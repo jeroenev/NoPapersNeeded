@@ -133,7 +133,8 @@ class KoogChatAgentTest {
             val cancelled =
                 library.chatTools.map { tool ->
                     object : AiChatTool by tool {
-                        override suspend fun call(argsJson: String): String = throw CancellationException("turn stopped")
+                        override suspend fun call(argsJson: String): String =
+                            throw CancellationException("turn stopped")
                     }
                 }
             val executor =
