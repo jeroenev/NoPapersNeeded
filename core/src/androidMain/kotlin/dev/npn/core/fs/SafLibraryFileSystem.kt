@@ -469,8 +469,9 @@ class SafLibraryFileSystem(
         toName: String,
     ) {
         val stagingName = ".npn-move-${UUID.randomUUID()}.part"
+        // The source is deleted below, so the staging copy is read back and checked first.
         val stagingUri =
-            copyIntoNewFile(toParentId, stagingName, toRelPath, mimeForName(toName)) {
+            copyIntoNewFile(toParentId, stagingName, toRelPath, mimeForName(toName), verify = true) {
                 resolver.openInputStream(docUri(source.docId))
                     ?: throw IOException("Cannot read source for move: $fromRelPath")
             }
@@ -527,18 +528,28 @@ class SafLibraryFileSystem(
         }
     }
 
-    /** Create an exact-name file and stream [openInput] into it, removing partial output on error. */
+    /**
+     * Create an exact-name file and stream [openInput] into it, removing partial output on error.
+     * With [verify], the file must also read back as exactly the bytes that were read.
+     */
     private fun copyIntoNewFile(
         parentId: String,
         name: String,
         relForError: String,
         mime: String = mimeForName(name),
+        verify: Boolean = false,
         openInput: () -> InputStream,
     ): Uri {
         val createdUri = createDocument(parentId, name, mime, relForError)
         assertExactCreatedName(createdUri, name, relForError)
         try {
-            streamInto(resolver, createdUri, relForError, openInput)
+            val read = if (verify) MessageDigest.getInstance("SHA-256") else null
+            streamInto(resolver, createdUri, relForError) {
+                if (read != null) DigestInputStream(openInput(), read) else openInput()
+            }
+            if (read != null && digestSha256(createdUri, relForError) != read.digest().toHexLower()) {
+                throw IOException("Copy does not read back as its source: $relForError")
+            }
         } catch (e: Throwable) {
             deleteQuietly(createdUri)
             throw e
