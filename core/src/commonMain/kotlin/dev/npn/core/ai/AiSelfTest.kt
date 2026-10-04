@@ -1,8 +1,6 @@
 package dev.npn.core.ai
 
 import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.message.AttachmentContent
-import ai.koog.prompt.message.AttachmentSource
 import ai.koog.prompt.params.LLMParams
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
@@ -185,8 +183,8 @@ object AiSelfTest {
     /**
      * The real probes. Each one deliberately mirrors the call it is standing in for: the message
      * probe uses the assistant's params ([AiRuntime.chatParams]) and the page probe the OCR ones
-     * ([AiRuntime.ocrParams]) and the same image attachment shape, so a reasoning level or a
-     * vision capability that breaks the real feature breaks the check too.
+     * ([AiRuntime.ocrParams]) and its image attachment ([AiPrompts.pageImage]), so a reasoning
+     * level or a vision capability that breaks the real feature breaks the check too.
      */
     private class EndpointProbes(
         private val runtime: AiRuntime,
@@ -209,14 +207,7 @@ object AiSelfTest {
                     system("You read text off images. Answer with the characters you see and nothing else.")
                     user {
                         text("Which digits are shown in this image?")
-                        image(
-                            AttachmentSource.Image(
-                                content = AttachmentContent.Binary.Bytes(PROBE_PAGE_PNG),
-                                format = "png",
-                                mimeType = "image/png",
-                                fileName = "probe.png",
-                            ),
-                        )
+                        image(AiPrompts.pageImage(PROBE_PAGE_PNG))
                     }
                 }
             return runtime.executor.execute(thePrompt, runtime.model).textContent()

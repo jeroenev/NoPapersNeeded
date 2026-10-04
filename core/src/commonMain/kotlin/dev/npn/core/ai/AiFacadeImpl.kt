@@ -2,8 +2,6 @@ package dev.npn.core.ai
 
 import ai.koog.prompt.Prompt
 import ai.koog.prompt.dsl.prompt
-import ai.koog.prompt.message.AttachmentContent
-import ai.koog.prompt.message.AttachmentSource
 import dev.npn.core.app.AiTagging
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
@@ -258,14 +256,7 @@ class AiFacadeImpl(
             system(AiPrompts.ocrSystem(promptContext(config)))
             user {
                 text(AiPrompts.pageRequest(lang))
-                image(
-                    AttachmentSource.Image(
-                        content = AttachmentContent.Binary.Bytes(png),
-                        format = "png",
-                        mimeType = "image/png",
-                        fileName = "page.png",
-                    ),
-                )
+                image(AiPrompts.pageImage(png))
             }
         }
 

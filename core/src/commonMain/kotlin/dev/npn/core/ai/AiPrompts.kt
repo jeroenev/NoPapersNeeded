@@ -1,5 +1,7 @@
 package dev.npn.core.ai
 
+import ai.koog.prompt.message.AttachmentContent
+import ai.koog.prompt.message.AttachmentSource
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.AppLanguages
@@ -153,6 +155,18 @@ internal object AiPrompts {
 
     /** The user turn accompanying the page image: which language to expect, and what to do. */
     fun pageRequest(lang: String): String = "Language hint: $lang. Transcribe this page."
+
+    /**
+     * A rendered page as the image attachment of a page-reading request. The settings self-test's
+     * vision check sends its probe page through this too, so it proves the shape page OCR sends.
+     */
+    fun pageImage(png: ByteArray): AttachmentSource.Image =
+        AttachmentSource.Image(
+            content = AttachmentContent.Binary.Bytes(png),
+            format = "png",
+            mimeType = "image/png",
+            fileName = "page.png",
+        )
 
     /**
      * Today's date as a *reading* aid only.
