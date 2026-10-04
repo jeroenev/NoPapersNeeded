@@ -823,7 +823,7 @@ class Indexer(
         ): Lifecycle {
             val superseded = doc in supersession.superseded
             val journalDeleted = state.isDeleted(doc) || superseded
-            val journalTrashed = state.isTrashed(doc) && !state.isDeleted(doc)
+            val journalTrashed = state.isTrashed(doc)
             val origPath = state.trashOrigPath(doc)
             val preserved = scope is FoldScope.Events && doc in scope.preserveLifecycleDocs
 

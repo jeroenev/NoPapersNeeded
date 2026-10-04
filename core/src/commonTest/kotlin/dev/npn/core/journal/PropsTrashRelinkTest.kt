@@ -108,7 +108,7 @@ class PropsTrashRelinkTest {
         val r = restore(2, 999) // even a much later restore cannot undo delete
         val state = JournalFolder.fold(listOf(d, r))
         assertTrue(state.isDeleted(doc))
-        assertTrue(state.isTrashed(doc))
+        assertFalse(state.isTrashed(doc))
         // order independent
         assertTrue(JournalFolder.fold(listOf(r, d)).isDeleted(doc))
     }

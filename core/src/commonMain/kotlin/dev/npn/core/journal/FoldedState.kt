@@ -285,11 +285,8 @@ class FoldedState {
             else -> null
         }
 
-    /** True if the document is currently in trash (and not deleted). */
-    fun isTrashed(doc: String): Boolean {
-        if (isDeleted(doc)) return true
-        return trash[doc]?.trashed == true
-    }
+    /** True if the document is currently in trash. A deleted document is [isDeleted] only, never both. */
+    fun isTrashed(doc: String): Boolean = !isDeleted(doc) && trash[doc]?.trashed == true
 
     /** Original path recorded by the winning doc-trash, if currently trashed. */
     fun trashOrigPath(doc: String): String? {
