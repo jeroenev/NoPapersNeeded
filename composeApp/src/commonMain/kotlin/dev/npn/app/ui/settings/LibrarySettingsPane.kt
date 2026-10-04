@@ -81,7 +81,7 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
         )
         SettingsActionRow(
             label = stringResource(Res.string.common_settings_clear_thumbnail_cache),
-            onClick = { context.vm.clearThumbnailCache(context.onThumbnailsCleared) },
+            onClick = context.vm::clearThumbnailCache,
             help = stringResource(Res.string.common_settings_thumbnail_cache_help),
         )
     }

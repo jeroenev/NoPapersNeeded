@@ -59,7 +59,6 @@ import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
-import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
@@ -135,7 +134,6 @@ import no_papers_needed.composeapp.generated.resources.library_mark_needs_review
 import no_papers_needed.composeapp.generated.resources.library_mark_reviewed
 import no_papers_needed.composeapp.generated.resources.library_more_actions
 import no_papers_needed.composeapp.generated.resources.library_move_to_trash_question
-import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.library_no_documents_subtitle
 import no_papers_needed.composeapp.generated.resources.library_no_documents_title
 import no_papers_needed.composeapp.generated.resources.library_no_matches_subtitle
@@ -159,7 +157,6 @@ import no_papers_needed.composeapp.generated.resources.library_switch_to_grid
 import no_papers_needed.composeapp.generated.resources.library_switch_to_list
 import no_papers_needed.composeapp.generated.resources.library_trash
 import no_papers_needed.composeapp.generated.resources.library_trash_documents
-import no_papers_needed.composeapp.generated.resources.library_undo
 import no_papers_needed.composeapp.generated.resources.queue_ai_pending
 import no_papers_needed.composeapp.generated.resources.ux_review_count
 import org.jetbrains.compose.resources.pluralStringResource
@@ -216,7 +213,6 @@ fun LibraryScreen(
     val scope = rememberCoroutineScope()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
-    TrashUndoSnackbar(vm, snackbar)
 
     val dialogs = rememberLibraryDialogState()
 
@@ -370,38 +366,6 @@ fun LibraryScreen(
             onRemoveTag = vm::bulkRemoveTag,
             renderFilter = !wide,
         )
-    }
-}
-
-/**
- * Turns each [LibraryViewModel.trashUndo] event into an Undo snackbar. Keyed by a monotonic counter
- * (not the batch) so two identical trash batches back-to-back both re-trigger the snackbar rather
- * than being swallowed by snapshot equality. Tapping Undo restores exactly the ids that were moved.
- */
-@Composable
-private fun TrashUndoSnackbar(
-    vm: LibraryViewModel,
-    snackbar: SnackbarHostState,
-) {
-    var pending by remember { mutableStateOf<Pair<Long, TrashUndo>?>(null) }
-    LaunchedEffect(vm) {
-        vm.trashUndo.collect { pending = (pending?.first?.plus(1) ?: 1L) to it }
-    }
-    val batch = pending?.second
-    val message =
-        batch?.let {
-            pluralStringResource(Res.plurals.library_moved_to_trash, it.docIds.size, it.docIds.size)
-        }
-    val undoLabel = stringResource(Res.string.library_undo)
-    LaunchedEffect(pending?.first) {
-        val current = batch ?: return@LaunchedEffect
-        val result =
-            snackbar.showSnackbar(
-                message = message ?: return@LaunchedEffect,
-                actionLabel = undoLabel,
-                withDismissAction = true,
-            )
-        if (result == SnackbarResult.ActionPerformed) vm.undoTrash(current.docIds)
     }
 }
 

@@ -7,6 +7,7 @@ import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.queryTerms
+import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.effectiveReviewed
@@ -383,7 +384,7 @@ class DocDetailViewModel(
                     aiTags.update { it.copy(suggesting = false, suggestions = suggestions) }
                 },
                 onFailure = { error ->
-                    message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_TAGS, reasonOf(error)))
+                    message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_TAGS, error.reasonText()))
                     aiTags.update { it.copy(suggesting = false, suggestions = emptyList()) }
                 },
             )
@@ -436,7 +437,7 @@ class DocDetailViewModel(
                     aiMetadata.value = AiMetadataState(suggesting = false, suggestion = suggestion)
                 },
                 onFailure = { error ->
-                    message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_METADATA, reasonOf(error)))
+                    message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_METADATA, error.reasonText()))
                     aiMetadata.value = AiMetadataState()
                 },
             )

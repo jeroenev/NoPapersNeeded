@@ -60,7 +60,10 @@ import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
-/** Resource-ready text passed across the ViewModel/UI boundary. */
+/**
+ * Resource-ready text passed across the ViewModel/UI boundary. New text uses [Res] and [Plural]
+ * with whole-sentence resources; [Resource] keys are the older indirection.
+ */
 sealed interface UiText {
     data class Resource(
         val key: UiTextKey,
@@ -70,12 +73,35 @@ sealed interface UiText {
     data class Dynamic(
         val value: String,
     ) : UiText
+
+    /** A string resource; [args] may be nested [UiText]s, resolved first. */
+    data class Res(
+        val res: StringResource,
+        val args: List<Any?> = emptyList(),
+    ) : UiText
+
+    /** A plural resource picked by [quantity]; [args] may be nested [UiText]s, resolved first. */
+    data class Plural(
+        val res: PluralStringResource,
+        val quantity: Int,
+        val args: List<Any?> = emptyList(),
+    ) : UiText
 }
 
-/** One-shot message presented by the UI, normally in a snackbar. */
+/**
+ * One-shot message presented by the UI, normally in a snackbar, with an optional [action] such as
+ * Undo. See [MessagesViewModel] for how messages are sent and [SnackbarMessages] for how they show.
+ */
 data class UiMessage(
     val text: UiText,
-)
+    val action: Action? = null,
+) {
+    /** The snackbar's action button: [label], and [onPerform] run when the user taps it. */
+    class Action(
+        val label: UiText,
+        val onPerform: () -> Unit,
+    )
+}
 
 /** Stable identifiers for messages crossing the ViewModel/UI boundary. */
 enum class UiTextKey {
@@ -139,6 +165,26 @@ fun uiText(
     vararg arguments: Any?,
 ): UiText = UiText.Resource(key, arguments.toList())
 
+fun uiText(
+    res: StringResource,
+    vararg arguments: Any?,
+): UiText = UiText.Res(res, arguments.toList())
+
+fun uiText(
+    res: PluralStringResource,
+    quantity: Int,
+    vararg arguments: Any?,
+): UiText = UiText.Plural(res, quantity, arguments.toList())
+
+/**
+ * This failure's reason as message text, for the "%s" of a "Could not …: %s" sentence: its message,
+ * else its class name, else a localized "unknown error".
+ */
+fun Throwable.reasonText(): UiText =
+    message?.takeIf { it.isNotBlank() }?.let(UiText::Dynamic)
+        ?: this::class.simpleName?.let(UiText::Dynamic)
+        ?: uiText(UiTextKey.UNKNOWN_ERROR)
+
 /**
  * The rendering plan for one [UiTextKey]: which resource to read and which arguments to feed it.
  *
@@ -176,6 +222,8 @@ internal fun UiText.spec(): TextSpec =
     when (this) {
         is UiText.Dynamic -> TextSpec.Literal(value)
         is UiText.Resource -> key.spec(arguments)
+        is UiText.Res -> TextSpec.Str(res, args.map { it.argumentSpec() })
+        is UiText.Plural -> TextSpec.Plural(res, quantity, args.map { it.argumentSpec() })
     }
 
 private fun UiTextKey.spec(args: List<Any?>): TextSpec =

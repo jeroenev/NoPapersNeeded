@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.library.ImportSummary
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
@@ -323,18 +324,26 @@ class LibraryViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun bulkTrashEmitsUndoWithTrashedIds() =
+    fun bulkTrashOffersAnUndoThatRestoresTheTrashedIds() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            val undo = mutableListOf<List<String>>()
-            backgroundScope.launch { model.trashUndo.collect { undo += it.docIds } }
+            val messages = mutableListOf<UiMessage>()
+            backgroundScope.launch { model.messages.collect { messages += it } }
             model.startSelection("d1")
             model.toggleSelection("d2")
             runCurrent()
             model.bulkTrash()
             advanceUntilIdle()
-            undo shouldContainExactly listOf(listOf("d1", "d2"))
+
+            val undo = messages.single()
+            undo.resolveEnglish() shouldBe "Moved 2 documents to trash"
+            undo.action
+                ?.label
+                ?.resolveEnglish() shouldBe "Undo"
+            undo.action?.onPerform?.invoke()
+            advanceUntilIdle()
+            session.docLifecycle.restoredDocs shouldContainExactly listOf("d1", "d2")
         }
 
     @Test
@@ -342,30 +351,33 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("d2") }
             val model = vm(session = session)
-            val undo = mutableListOf<List<String>>()
-            backgroundScope.launch { model.trashUndo.collect { undo += it.docIds } }
+            val messages = mutableListOf<UiMessage>()
+            backgroundScope.launch { model.messages.collect { messages += it } }
             model.startSelection("d1")
             model.toggleSelection("d2")
             model.toggleSelection("d3")
             runCurrent()
             model.bulkTrash()
             advanceUntilIdle()
+
             // Only the successfully trashed ids are offered for undo; d2 failed and stays selected.
-            undo shouldContainExactly listOf(listOf("d1", "d3"))
+            messages.single { it.action != null }.action?.onPerform?.invoke()
+            advanceUntilIdle()
+            session.docLifecycle.restoredDocs shouldContainExactly listOf("d1", "d3")
         }
 
     @Test
-    fun bulkTrashNoSuccessEmitsNoUndo() =
+    fun bulkTrashNoSuccessOffersNoUndo() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("d1") }
             val model = vm(session = session)
-            val undo = mutableListOf<List<String>>()
-            backgroundScope.launch { model.trashUndo.collect { undo += it.docIds } }
+            val messages = mutableListOf<UiMessage>()
+            backgroundScope.launch { model.messages.collect { messages += it } }
             model.startSelection("d1")
             runCurrent()
             model.bulkTrash()
             advanceUntilIdle()
-            undo shouldBe emptyList()
+            messages.filter { it.action != null } shouldBe emptyList()
         }
 
     @Test
@@ -404,7 +416,8 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.bulkTrash()
             advanceUntilIdle()
             collector.cancel()
-            messages shouldContainExactly listOf("Could not trash 1 of 3 documents")
+            // Both messages show, in order: the failure, then the Undo for what did move.
+            messages shouldContainExactly listOf("Could not trash 1 of 3 documents", "Moved 2 documents to trash")
             // d1 and d3 succeeded; only d2 kept selected for retry.
             session.docLifecycle.trashedDocs shouldContainExactlyInAnyOrder listOf("d1", "d3")
             model.ui.value.selected shouldBe setOf("d2")

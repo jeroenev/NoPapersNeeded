@@ -35,6 +35,25 @@ class SettingsViewModelTest : MainDispatcherTest() {
     ) = SettingsViewModel(settings, session.content, session.reviewConfig, session.fieldRegistry, selfTest)
 
     @Test
+    fun clearingTheThumbnailCacheSaysWhatItCleared() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+
+            session.content.clearedThumbnails = 3
+            model.clearThumbnailCache()
+            advanceUntilIdle()
+            session.content.clearedThumbnails = 0
+            model.clearThumbnailCache()
+            advanceUntilIdle()
+            collector.cancel()
+
+            messages shouldContainExactly listOf("Cleared 3 thumbnails", "Thumbnail cache already empty")
+        }
+
+    @Test
     fun stateAggregatesAllSettingsFlows() =
         runTest(dispatcher) {
             val settings =

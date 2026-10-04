@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.isConfiguredOrFalse
+import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiChatEvent
@@ -132,7 +133,7 @@ class AiChatViewModel(
                     .onFailure { e ->
                         finishStreaming()
                         _ui.update { it.copy(busy = false) }
-                        message(uiText(UiTextKey.AI_ASSISTANT_UNREACHABLE, reasonOf(e)))
+                        message(uiText(UiTextKey.AI_ASSISTANT_UNREACHABLE, e.reasonText()))
                     }
             }
     }

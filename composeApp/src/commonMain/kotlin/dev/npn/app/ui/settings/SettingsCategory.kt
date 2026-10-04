@@ -95,7 +95,6 @@ internal class SettingsPaneContext(
     val fieldUsage: Map<String, Int>,
     val onChangeLibrary: () -> Unit,
     val onAutoMatchRules: () -> Unit,
-    val onThumbnailsCleared: (Int) -> Unit,
 )
 
 /**

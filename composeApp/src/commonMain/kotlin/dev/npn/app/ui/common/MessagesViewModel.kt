@@ -3,50 +3,60 @@ package dev.npn.app.ui.common
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.npn.core.util.runCatchingCancellable
-import kotlinx.coroutines.flow.MutableSharedFlow
-import kotlinx.coroutines.flow.SharedFlow
-import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 
 /**
- * Base for view models that surface one-shot user-facing messages as snackbars.
+ * Base for view models that surface one-shot user-facing messages, shown by [SnackbarMessages].
+ *
+ * Messages go through one buffered channel: each is delivered exactly once, in the order sent, to
+ * the one collector the screen runs. A message sent while no screen collects (between lifecycles,
+ * during navigation) waits for the next collector instead of being dropped, and two sent together
+ * both show, one after the other.
  *
  * Write operations are journal appends and file moves, so they can genuinely fail (SAF I/O errors,
  * full disk, permissions). Fire-and-forget writes must go through [launchReporting] so a failure
- * is reported to the user instead of silently swallowed — a failed edit looks identical to the
- * flaky-merge bugs we fixed otherwise.
+ * is reported to the user instead of silently swallowed, or crashing the app.
  */
 abstract class MessagesViewModel : ViewModel() {
-    // extraBufferCapacity so tryEmit from viewModelScope never suspends or drops under bursts.
-    private val _messages = MutableSharedFlow<UiMessage>(extraBufferCapacity = 8)
-    val messages: SharedFlow<UiMessage> = _messages.asSharedFlow()
+    private val channel = Channel<UiMessage>(Channel.BUFFERED)
 
-    /** Emit a one-shot user-facing message (snackbar). */
-    protected fun message(text: UiText) {
-        _messages.tryEmit(UiMessage(text))
+    /** The messages to show; collect it from one place only, normally [SnackbarMessages]. */
+    val messages: Flow<UiMessage> = channel.receiveAsFlow()
+
+    /** Send a one-shot user-facing message, optionally with an [action] such as Undo. */
+    protected fun message(
+        text: UiText,
+        action: UiMessage.Action? = null,
+    ) {
+        channel.trySend(UiMessage(text, action))
     }
 
-    /**
-     * Run a fire-and-forget write in [viewModelScope]; on failure emit "Could not [action] …" via
-     * [messages]. Cancellation is rethrown so it is not misreported as a failure.
-     */
+    /** Run a fire-and-forget write in [viewModelScope]; a failure reads "Could not [action]: …". */
     protected fun launchReporting(
         action: UiAction,
         block: suspend () -> Unit,
-    ) {
-        viewModelScope.launch {
-            runCatchingCancellable { block() }.onFailure { e ->
-                message(uiText(UiTextKey.COULD_NOT_ACTION, action, reasonOf(e)))
-            }
-        }
-    }
+    ) = launchReporting({ reason -> uiText(UiTextKey.COULD_NOT_ACTION, action, reason) }, block)
 
     /**
-     * A short, user-facing reason for [e]: its message when present and non-blank, else its class
-     * simple name, else a localized unknown-error fallback.
+     * Run a fire-and-forget write in [viewModelScope]; on failure send [failure] of the failure's
+     * reason, a whole sentence such as "Could not split the document: %1$s". Cancellation is
+     * rethrown so it is not misreported as a failure.
      */
-    protected fun reasonOf(e: Throwable): UiText =
-        e.message?.takeIf { it.isNotBlank() }?.let(UiText::Dynamic)
-            ?: e::class.simpleName?.let(UiText::Dynamic)
-            ?: uiText(UiTextKey.UNKNOWN_ERROR)
+    protected fun launchReporting(
+        failure: (reason: UiText) -> UiText,
+        block: suspend () -> Unit,
+    ) {
+        viewModelScope.launch { reporting(failure, block) }
+    }
+
+    /** [launchReporting]'s failure handling, for a write inside a coroutine the caller launched. */
+    protected suspend fun reporting(
+        failure: (reason: UiText) -> UiText,
+        block: suspend () -> Unit,
+    ) {
+        runCatchingCancellable { block() }.onFailure { message(failure(it.reasonText())) }
+    }
 }

@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiModelCatalog
 import dev.npn.core.ai.AiProvider
@@ -35,6 +36,9 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
+import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 
 private const val DEFAULT_STORAGE_PATH_TEMPLATE = "{doc_date:yyyy}/{title}.pdf"
 
@@ -289,13 +293,17 @@ class SettingsViewModel(
             }
     }
 
-    /**
-     * Drop all cached thumbnails so they regenerate at the current render quality. Invokes [onDone]
-     * with the number cleared (for a confirmation snackbar).
-     */
-    fun clearThumbnailCache(onDone: (Int) -> Unit) =
-        viewModelScope.launch {
-            onDone(content.clearThumbnailCache())
+    /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
+    fun clearThumbnailCache() =
+        launchReporting(UiAction.UPDATE) {
+            val cleared = content.clearThumbnailCache()
+            message(
+                if (cleared > 0) {
+                    uiText(Res.plurals.common_settings_thumbnails_cleared, cleared, cleared)
+                } else {
+                    uiText(Res.string.common_settings_thumbnail_cache_empty)
+                },
+            )
         }
 
     /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */

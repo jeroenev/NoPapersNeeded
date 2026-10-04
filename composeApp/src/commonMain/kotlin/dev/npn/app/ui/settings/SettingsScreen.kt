@@ -33,7 +33,6 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.VerticalDivider
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -53,10 +52,7 @@ import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.common_clear_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search_no_results
-import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
-import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 import no_papers_needed.composeapp.generated.resources.common_settings_title
-import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 /** Width of the category list when it sits beside a pane. Matches the Material nav-drawer width. */
@@ -96,10 +92,7 @@ fun SettingsScreen(
     val fieldUsage by vm.fieldUsage.collectAsStateWithLifecycle()
 
     val snackbar = remember { SnackbarHostState() }
-    // Surface failed settings writes (properties-file I/O, SAF errors) on the same snackbar host.
     SnackbarMessages(vm.messages, snackbar)
-    var thumbnailResult by remember { mutableStateOf<Int?>(null) }
-    ThumbnailCacheSnackbar(thumbnailResult, snackbar) { thumbnailResult = null }
 
     val context =
         SettingsPaneContext(
@@ -112,7 +105,6 @@ fun SettingsScreen(
             fieldUsage = fieldUsage,
             onChangeLibrary = onChangeLibrary,
             onAutoMatchRules = onAutoMatchRules,
-            onThumbnailsCleared = { count -> thumbnailResult = count },
         )
 
     BoxWithConstraints(Modifier.fillMaxSize()) {
@@ -321,28 +313,5 @@ private fun SettingsPane(
             Text(text = stringResource(category.title), style = MaterialTheme.typography.headlineSmall)
         }
         category.content(context)
-    }
-}
-
-/** Confirms a thumbnail-cache clear, then clears the pending result so it shows only once. */
-@Composable
-private fun ThumbnailCacheSnackbar(
-    cleared: Int?,
-    snackbar: SnackbarHostState,
-    onShown: () -> Unit,
-) {
-    val message =
-        cleared?.let { count ->
-            if (count > 0) {
-                pluralStringResource(Res.plurals.common_settings_thumbnails_cleared, count, count)
-            } else {
-                stringResource(Res.string.common_settings_thumbnail_cache_empty)
-            }
-        }
-    LaunchedEffect(message) {
-        if (message != null) {
-            snackbar.showSnackbar(message)
-            onShown()
-        }
     }
 }

@@ -4,11 +4,13 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.ScannedPdf
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
+import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.completeActiveSearchToken
+import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.queue.QueueCounts
@@ -42,7 +44,6 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -54,10 +55,12 @@ import kotlinx.coroutines.flow.flatMapLatest
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
+import no_papers_needed.composeapp.generated.resources.library_undo
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -87,11 +90,6 @@ data class LibraryQuery(
 data class DocumentResults(
     val query: LibraryQuery,
     val items: List<DocListItem>,
-)
-
-/** One batch of documents just moved to the trash, offered back to the user via an Undo snackbar. */
-data class TrashUndo(
-    val docIds: List<String>,
 )
 
 data class LibraryUiState(
@@ -135,12 +133,6 @@ class LibraryViewModel(
 
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
-
-    // One-shot "documents moved to trash" events carrying the ids to restore. A buffered channel
-    // retains an event if the screen collector is between lifecycles, without replaying an already
-    // consumed Undo every time the screen returns.
-    private val trashUndoEvents = Channel<TrashUndo>(capacity = Channel.BUFFERED)
-    val trashUndo = trashUndoEvents.receiveAsFlow()
 
     // True once the user picks a view or applies a saved view this session. Guards against the
     // async default-view seed clobbering an explicit choice made before it arrives.
@@ -426,9 +418,9 @@ class LibraryViewModel(
 
     /**
      * Move the current selection to the trash, one document at a time so a single failure does not
-     * abort the rest. On any successful move an [TrashUndo] event is emitted so the screen can offer
-     * an Undo snackbar; the failed ids stay selected for retry. See [runOnSelection] for the
-     * per-doc failure contract this mirrors.
+     * abort the rest. Any successful move is reported with an Undo action that restores exactly the
+     * documents moved; the failed ids stay selected for retry. See [runOnSelection] for the per-doc
+     * failure contract this mirrors.
      */
     fun bulkTrash() {
         val ids = _ui.value.selected.toList()
@@ -442,11 +434,16 @@ class LibraryViewModel(
                 _ui.update { it.copy(selected = failed.toSet(), selectionMode = true) }
                 message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, UiAction.TRASH, failed.size, ids.size))
             }
-            if (trashed.isNotEmpty()) trashUndoEvents.trySend(TrashUndo(trashed))
+            if (trashed.isNotEmpty()) {
+                message(
+                    uiText(Res.plurals.library_moved_to_trash, trashed.size, trashed.size),
+                    UiMessage.Action(uiText(Res.string.library_undo)) { undoTrash(trashed) },
+                )
+            }
         }
     }
 
-    /** Restore [ids] previously moved to the trash (the Undo action of the trash snackbar). */
+    /** Restore [ids] previously moved to the trash (the Undo action of the trash message). */
     fun undoTrash(ids: List<String>) {
         if (ids.isEmpty()) return
         viewModelScope.launch {
@@ -526,7 +523,7 @@ class LibraryViewModel(
         val msg =
             runCatchingCancellable { import() }.fold(
                 onSuccess = ::scanOutcomeMessage,
-                onFailure = { uiText(UiTextKey.SCAN_IMPORT_FAILED, reasonOf(it)) },
+                onFailure = { uiText(UiTextKey.SCAN_IMPORT_FAILED, it.reasonText()) },
             )
         message(msg)
     }
