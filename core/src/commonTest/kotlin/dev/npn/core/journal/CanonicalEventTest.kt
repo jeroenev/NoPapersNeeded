@@ -55,7 +55,10 @@ class CanonicalEventTest {
     @Test
     fun aLocalEventCanonicalizesExactlyAsItsDecodedLine() {
         for (event in events) {
-            assertEquals(EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false), EventDecoderRegistry.canonical(event))
+            assertEquals(
+                EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false),
+                EventDecoderRegistry.canonical(event),
+            )
         }
     }
 
@@ -74,12 +77,17 @@ class CanonicalEventTest {
                 """"op":"prop-set","p":{"key":"title","value":"Old"}}"""
         val stored = EventDecoderRegistry.decode(line, allowMissingV1 = false)
 
-        assertEquals(JournalOp.FieldSet(FieldKeys.TITLE, "Old"), EventDecoderRegistry.decodeStored(stored.canonicalJson).op)
+        assertEquals(
+            JournalOp.FieldSet(FieldKeys.TITLE, "Old"),
+            EventDecoderRegistry.decodeStored(stored.canonicalJson).op,
+        )
     }
 
     @Test
     fun aMalformedLocalEventIsRefusedLikeADecodedOne() {
-        assertFailsWith<IllegalArgumentException> { EventDecoderRegistry.canonical(event(1, JournalOp.TagAdd("x"), doc = "nope")) }
+        assertFailsWith<IllegalArgumentException> {
+            EventDecoderRegistry.canonical(event(1, JournalOp.TagAdd("x"), doc = "nope"))
+        }
         assertFailsWith<IllegalArgumentException> { EventDecoderRegistry.canonical(event(0, JournalOp.TagAdd("x"))) }
         assertFailsWith<IllegalArgumentException> {
             EventDecoderRegistry.canonical(event(1, JournalOp.TagRename("a", "b"), doc = doc))

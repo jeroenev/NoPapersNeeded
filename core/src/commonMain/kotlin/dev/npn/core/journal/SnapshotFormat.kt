@@ -29,12 +29,16 @@ import kotlinx.serialization.json.jsonPrimitive
  * yields byte-for-byte the same event multiset as before compaction (the accumulator dedupes by
  * `(deviceId, seq)`), so the CRDT result is unchanged and concurrent snapshots converge.
  */
-data class SnapshotManifest(val version: Int, val supersedes: List<String>) {
+data class SnapshotManifest(
+    val version: Int,
+    val supersedes: List<String>,
+) {
     fun encode(): String {
-        val obj = buildJsonObject {
-            put(FIELD_SNAP, JsonPrimitive(version))
-            put(FIELD_SUPERSEDES, buildJsonArray { supersedes.forEach { add(JsonPrimitive(it)) } })
-        }
+        val obj =
+            buildJsonObject {
+                put(FIELD_SNAP, JsonPrimitive(version))
+                put(FIELD_SUPERSEDES, buildJsonArray { supersedes.forEach { add(JsonPrimitive(it)) } })
+            }
         return SnapshotCodec.json.encodeToString(JsonObject.serializer(), obj)
     }
 
@@ -48,8 +52,9 @@ object SnapshotCodec {
     val json = JournalCodec.json
 
     fun decodeManifest(line: String): SnapshotManifest {
-        val obj = json.parseToJsonElement(line.trim()) as? JsonObject
-            ?: throw IllegalArgumentException("Snapshot manifest is not a JSON object")
+        val obj =
+            json.parseToJsonElement(line.trim()) as? JsonObject
+                ?: throw IllegalArgumentException("Snapshot manifest is not a JSON object")
         val version = (obj[SnapshotManifest.FIELD_SNAP] as? JsonPrimitive)?.content?.toIntOrNull()
         val supersedes = (obj[SnapshotManifest.FIELD_SUPERSEDES] as? JsonArray)?.map { it.jsonPrimitive.content }
         require(version != null) { "Snapshot manifest version must be an integer" }
@@ -58,11 +63,15 @@ object SnapshotCodec {
         return SnapshotManifest(version, supersedes)
     }
 
-    fun encodeSnapshot(manifest: SnapshotManifest, events: List<JournalEvent>): ByteArray {
-        val lines = buildList {
-            add(manifest.encode())
-            events.forEach { add(JournalCodec.encode(it)) }
-        }
+    fun encodeSnapshot(
+        manifest: SnapshotManifest,
+        events: List<JournalEvent>,
+    ): ByteArray {
+        val lines =
+            buildList {
+                add(manifest.encode())
+                events.forEach { add(JournalCodec.encode(it)) }
+            }
         return lines.joinToString("\n").encodeToByteArray()
     }
 
@@ -81,10 +90,15 @@ object SnapshotV2Reader {
      * Read the snapshot at [relPath]: an accepted read carries its events and its manifest.
      * [contentHash] is [bytes]' SHA-256, when the caller has it already.
      */
-    fun read(relPath: String, bytes: ByteArray, contentHash: String = sha256Bytes(bytes)): JournalSourceRead {
+    fun read(
+        relPath: String,
+        bytes: ByteArray,
+        contentHash: String = sha256Bytes(bytes),
+    ): JournalSourceRead {
         val path = NpnPaths.journalPath(relPath)
-        val snapshotPath = path as? NpnPaths.JournalPath.SnapshotV2
-            ?: return JournalSourceRead.Unsupported("Not a supported snapshot object path: $relPath")
+        val snapshotPath =
+            path as? NpnPaths.JournalPath.SnapshotV2
+                ?: return JournalSourceRead.Unsupported("Not a supported snapshot object path: $relPath")
         if (contentHash != snapshotPath.expectedHash) {
             return JournalSourceRead.Retryable("Snapshot hash does not match its path")
         }
@@ -96,9 +110,18 @@ object SnapshotV2Reader {
     }
 
     private sealed interface SnapshotParse {
-        data class Ok(val manifest: SnapshotManifest, val events: List<CanonicalJournalEvent>) : SnapshotParse
-        data class Retry(val message: String) : SnapshotParse
-        data class Unsupported(val message: String) : SnapshotParse
+        data class Ok(
+            val manifest: SnapshotManifest,
+            val events: List<CanonicalJournalEvent>,
+        ) : SnapshotParse
+
+        data class Retry(
+            val message: String,
+        ) : SnapshotParse
+
+        data class Unsupported(
+            val message: String,
+        ) : SnapshotParse
     }
 
     private fun parse(bytes: ByteArray): SnapshotParse {
@@ -106,11 +129,12 @@ object SnapshotV2Reader {
         if (lines.isEmpty() || lines.any { it.isBlank() }) {
             return SnapshotParse.Retry("Snapshot is empty or contains a blank line")
         }
-        val manifest = try {
-            SnapshotCodec.decodeManifest(lines.first())
-        } catch (e: Exception) {
-            return SnapshotParse.Retry("Snapshot manifest is invalid: ${e.message}")
-        }
+        val manifest =
+            try {
+                SnapshotCodec.decodeManifest(lines.first())
+            } catch (e: Exception) {
+                return SnapshotParse.Retry("Snapshot manifest is invalid: ${e.message}")
+            }
         if (manifest.version != SnapshotCodec.SNAPSHOT_MANIFEST_VERSION) {
             return SnapshotParse.Unsupported("Snapshot manifest version ${manifest.version} is unsupported")
         }
@@ -118,28 +142,33 @@ object SnapshotV2Reader {
     }
 
     private fun splitLines(bytes: ByteArray): List<String>? {
-        val content = try {
-            bytes.decodeToString(throwOnInvalidSequence = true)
-        } catch (_: CharacterCodingException) {
-            return null
-        }
+        val content =
+            try {
+                bytes.decodeToString(throwOnInvalidSequence = true)
+            } catch (_: CharacterCodingException) {
+                return null
+            }
         return content.split('\n').let { split ->
             if (split.lastOrNull()?.isEmpty() == true) split.dropLast(1) else split
         }
     }
 
-    private fun decodeEvents(eventLines: List<String>, manifest: SnapshotManifest): SnapshotParse {
+    private fun decodeEvents(
+        eventLines: List<String>,
+        manifest: SnapshotManifest,
+    ): SnapshotParse {
         val decoded = ArrayList<CanonicalJournalEvent>(eventLines.size)
         for ((index, line) in eventLines.withIndex()) {
-            val event = try {
-                EventDecoderRegistry.decode(line, allowMissingV1 = false)
-            } catch (e: UnsupportedEventVersionException) {
-                return SnapshotParse.Unsupported(
-                    "Snapshot line ${index + 2} uses unsupported event version ${e.version}",
-                )
-            } catch (e: Exception) {
-                return SnapshotParse.Retry("Snapshot line ${index + 2} is invalid: ${e.message}")
-            }
+            val event =
+                try {
+                    EventDecoderRegistry.decode(line, allowMissingV1 = false)
+                } catch (e: UnsupportedEventVersionException) {
+                    return SnapshotParse.Unsupported(
+                        "Snapshot line ${index + 2} uses unsupported event version ${e.version}",
+                    )
+                } catch (e: Exception) {
+                    return SnapshotParse.Retry("Snapshot line ${index + 2} is invalid: ${e.message}")
+                }
             if (event.event.op is JournalOp.Unknown) {
                 return SnapshotParse.Unsupported(
                     "Snapshot line ${index + 2} uses unknown operation ${event.event.op.wire}",

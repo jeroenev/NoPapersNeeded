@@ -11,23 +11,25 @@ class JournalSourceReadersTest {
     private val actor = "12345678-1234-4234-9234-123456789abc"
     private val doc = "a".repeat(64)
 
-    private fun event(seq: Long = 1L) = JournalEvent(
-        version = JournalEventVersions.V1,
-        seq = seq,
-        hlc = Hlc(1000L, seq.toInt(), actor),
-        dev = actor,
-        doc = doc,
-        op = JournalOp.TagAdd("invoice"),
-    )
+    private fun event(seq: Long = 1L) =
+        JournalEvent(
+            version = JournalEventVersions.V1,
+            seq = seq,
+            hlc = Hlc(1000L, seq.toInt(), actor),
+            dev = actor,
+            doc = doc,
+            op = JournalOp.TagAdd("invoice"),
+        )
 
     private fun objectPath(bytes: ByteArray): String = NpnPaths.journalObjectPath(sha256Bytes(bytes))
 
     @Test
     fun legacy_accepts_missing_version_and_reports_malformed_lines() {
         val missingVersion = JournalCodec.encode(event()).replaceFirst("\"v\":1,", "")
-        val result = assertIs<JournalSourceRead.Accepted>(
-            StorageV1Reader.read("$missingVersion\nnot-json".encodeToByteArray()),
-        )
+        val result =
+            assertIs<JournalSourceRead.Accepted>(
+                StorageV1Reader.read("$missingVersion\nnot-json".encodeToByteArray()),
+            )
         assertEquals(1, result.events.size)
         assertEquals(1, result.diagnostics.size)
     }
@@ -58,7 +60,9 @@ class JournalSourceReadersTest {
 
         // The bytes match their path; only the handed hash does not, so a reader that re-hashed
         // would accept them.
-        assertIs<JournalSourceRead.Retryable>(StorageV2Reader.read(objectPath(bytes), bytes, contentHash = "0".repeat(64)))
+        assertIs<JournalSourceRead.Retryable>(
+            StorageV2Reader.read(objectPath(bytes), bytes, contentHash = "0".repeat(64)),
+        )
         assertIs<JournalSourceRead.Accepted>(StorageV2Reader.read(objectPath(bytes), bytes, sha256Bytes(bytes)))
     }
 

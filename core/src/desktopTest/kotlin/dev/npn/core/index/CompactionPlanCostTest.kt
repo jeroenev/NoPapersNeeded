@@ -129,7 +129,9 @@ class CompactionPlanCostTest {
             val joins = log.statements.filter { it.startsWith(EVENTS_OF_SOURCES) }
             joins.size shouldBe 1
             db.queryPlan(joins.single()).filter { isFullTableScan(it, "metadata_events") }.shouldBeEmpty()
-            fs.calls("stat").filter { NpnPaths.journalPath(it.substringAfter(' ')) is NpnPaths.JournalPath.ObjectV2 }
+            fs
+                .calls("stat")
+                .filter { NpnPaths.journalPath(it.substringAfter(' ')) is NpnPaths.JournalPath.ObjectV2 }
                 .size shouldBe 6
             db.metadataProjectionDao().state()?.migrationState shouldBe MetadataAccumulator.MIGRATION_READY
             db

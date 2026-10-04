@@ -3,7 +3,10 @@ package dev.npn.core.journal
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 
-data class JournalDiagnostic(val line: Int?, val message: String)
+data class JournalDiagnostic(
+    val line: Int?,
+    val message: String,
+)
 
 sealed interface JournalSourceRead {
     /** [manifest] is the snapshot's, for a snapshot object; null for every other source. */
@@ -13,18 +16,24 @@ sealed interface JournalSourceRead {
         val manifest: SnapshotManifest? = null,
     ) : JournalSourceRead
 
-    data class Retryable(val message: String) : JournalSourceRead
-    data class Unsupported(val message: String) : JournalSourceRead
+    data class Retryable(
+        val message: String,
+    ) : JournalSourceRead
+
+    data class Unsupported(
+        val message: String,
+    ) : JournalSourceRead
 }
 
 /** Tolerant storage-v1 reader: valid lines remain usable, but malformed lines are reported. */
 object StorageV1Reader {
     fun read(bytes: ByteArray): JournalSourceRead {
-        val content = try {
-            bytes.decodeToString(throwOnInvalidSequence = true)
-        } catch (_: CharacterCodingException) {
-            return JournalSourceRead.Retryable("Legacy source is not valid UTF-8")
-        }
+        val content =
+            try {
+                bytes.decodeToString(throwOnInvalidSequence = true)
+            } catch (_: CharacterCodingException) {
+                return JournalSourceRead.Retryable("Legacy source is not valid UTF-8")
+            }
         val events = ArrayList<CanonicalJournalEvent>()
         val diagnostics = ArrayList<JournalDiagnostic>()
         var unsupported: String? = null
@@ -51,16 +60,22 @@ object StorageV1Reader {
 
 /** Strict storage-v2 reader. Any integrity or structural failure applies zero events. */
 object StorageV2Reader {
-    private val uuidV4 = Regex(
-        "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
-        RegexOption.IGNORE_CASE,
-    )
+    private val uuidV4 =
+        Regex(
+            "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
+            RegexOption.IGNORE_CASE,
+        )
 
     /** Read the object at [relPath]; [contentHash] is [bytes]' SHA-256, when the caller has it already. */
-    fun read(relPath: String, bytes: ByteArray, contentHash: String = sha256Bytes(bytes)): JournalSourceRead {
+    fun read(
+        relPath: String,
+        bytes: ByteArray,
+        contentHash: String = sha256Bytes(bytes),
+    ): JournalSourceRead {
         val path = NpnPaths.journalPath(relPath)
-        val objectPath = path as? NpnPaths.JournalPath.ObjectV2
-            ?: return JournalSourceRead.Unsupported("Not a supported storage-v2 object path: $relPath")
+        val objectPath =
+            path as? NpnPaths.JournalPath.ObjectV2
+                ?: return JournalSourceRead.Unsupported("Not a supported storage-v2 object path: $relPath")
         if (contentHash != objectPath.expectedHash) {
             return JournalSourceRead.Retryable("Object hash does not match its path")
         }
@@ -68,14 +83,16 @@ object StorageV2Reader {
     }
 
     private fun readVerified(bytes: ByteArray): JournalSourceRead {
-        val content = try {
-            bytes.decodeToString(throwOnInvalidSequence = true)
-        } catch (_: CharacterCodingException) {
-            return JournalSourceRead.Retryable("Object is not valid UTF-8")
-        }
-        val lines = content.split('\n').let { split ->
-            if (split.lastOrNull()?.isEmpty() == true) split.dropLast(1) else split
-        }
+        val content =
+            try {
+                bytes.decodeToString(throwOnInvalidSequence = true)
+            } catch (_: CharacterCodingException) {
+                return JournalSourceRead.Retryable("Object is not valid UTF-8")
+            }
+        val lines =
+            content.split('\n').let { split ->
+                if (split.lastOrNull()?.isEmpty() == true) split.dropLast(1) else split
+            }
         if (lines.isEmpty()) return JournalSourceRead.Retryable("Object has no events")
         if (lines.any { it.isBlank() }) return JournalSourceRead.Retryable("Object contains a blank event line")
         val decoded = decodeLines(lines)
@@ -87,15 +104,16 @@ object StorageV2Reader {
     private fun decodeLines(lines: List<String>): JournalSourceRead {
         val decoded = ArrayList<CanonicalJournalEvent>(lines.size)
         for ((index, line) in lines.withIndex()) {
-            val event = try {
-                EventDecoderRegistry.decode(line, allowMissingV1 = false)
-            } catch (e: UnsupportedEventVersionException) {
-                return JournalSourceRead.Unsupported(
-                    "Object line ${index + 1} uses unsupported event version ${e.version}",
-                )
-            } catch (e: Exception) {
-                return JournalSourceRead.Retryable("Object line ${index + 1} is invalid: ${e.message}")
-            }
+            val event =
+                try {
+                    EventDecoderRegistry.decode(line, allowMissingV1 = false)
+                } catch (e: UnsupportedEventVersionException) {
+                    return JournalSourceRead.Unsupported(
+                        "Object line ${index + 1} uses unsupported event version ${e.version}",
+                    )
+                } catch (e: Exception) {
+                    return JournalSourceRead.Retryable("Object line ${index + 1} is invalid: ${e.message}")
+                }
             if (event.event.op is JournalOp.Unknown) {
                 return JournalSourceRead.Unsupported(
                     "Object line ${index + 1} uses unknown operation ${event.event.op.wire}",

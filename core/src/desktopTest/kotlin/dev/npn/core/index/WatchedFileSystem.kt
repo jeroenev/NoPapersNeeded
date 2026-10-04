@@ -24,10 +24,11 @@ internal class WatchedFileSystem(
     /** Every call made while a transaction was open. */
     fun callsInsideTransactions(): List<String> = synchronized(calls) { inTransaction.toList() }
 
-    fun clear() = synchronized(calls) {
-        calls.clear()
-        inTransaction.clear()
-    }
+    fun clear() =
+        synchronized(calls) {
+            calls.clear()
+            inTransaction.clear()
+        }
 
     private suspend fun record(
         name: String,

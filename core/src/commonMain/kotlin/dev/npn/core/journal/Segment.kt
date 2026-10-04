@@ -8,7 +8,10 @@ package dev.npn.core.journal
  * - Snapshot (compaction output): `<first-seq>-<last-seq>.snap.jsonl` (both zero-padded 16),
  *   still plain JSON-lines of events, e.g. `0000000000000001-0000000000000042.snap.jsonl`.
  */
-data class SegmentRef(val deviceId: String, val fileName: String) {
+data class SegmentRef(
+    val deviceId: String,
+    val fileName: String,
+) {
     val isSnapshot: Boolean get() = fileName.endsWith(SNAP_SUFFIX)
 
     /** The first seq encoded in the file name. */
@@ -53,8 +56,13 @@ data class SegmentRef(val deviceId: String, val fileName: String) {
  */
 interface SegmentStore {
     suspend fun listSegments(): List<SegmentRef>
+
     suspend fun readSegment(ref: SegmentRef): String
 
     /** Create-once write; must fail if a file with [fileName] already exists for [deviceId]. */
-    suspend fun writeSegment(deviceId: String, fileName: String, content: String)
+    suspend fun writeSegment(
+        deviceId: String,
+        fileName: String,
+        content: String,
+    )
 }

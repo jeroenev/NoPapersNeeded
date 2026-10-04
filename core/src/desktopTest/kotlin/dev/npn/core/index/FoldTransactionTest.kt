@@ -21,19 +21,26 @@ class FoldTransactionTest {
         var open: ArrayList<String>? = null
         for (sql in statements) {
             when {
-                sql.startsWith("BEGIN") -> open = ArrayList()
+                sql.startsWith("BEGIN") -> {
+                    open = ArrayList()
+                }
+
                 sql.startsWith("END TRANSACTION") || sql.startsWith("ROLLBACK") -> {
                     open?.takeIf { block -> block.any(::isWrite) }?.let(blocks::add)
                     open = null
                 }
-                else -> open?.add(sql)
+
+                else -> {
+                    open?.add(sql)
+                }
             }
         }
         return blocks
     }
 
     /** A write to the index's own tables; Room's invalidation bookkeeping does not count. */
-    private fun isWrite(sql: String): Boolean = WRITES.any { sql.startsWith(it) } && "room_table_modification_log" !in sql
+    private fun isWrite(sql: String): Boolean =
+        WRITES.any { sql.startsWith(it) } && "room_table_modification_log" !in sql
 
     /** Writes to the projection tables that ran outside any transaction. */
     private fun projectionWritesOutsideTransactions(statements: List<String>): List<String> {
@@ -42,9 +49,11 @@ class FoldTransactionTest {
         for (sql in statements) {
             when {
                 sql.startsWith("BEGIN") -> depth++
+
                 // The log may have been cleared inside a transaction Room's invalidation tracker
                 // had open, leaving its END without a BEGIN.
                 sql.startsWith("END TRANSACTION") || sql.startsWith("ROLLBACK") -> depth = maxOf(0, depth - 1)
+
                 depth == 0 && isWrite(sql) && PROJECTION_TABLES.any { it in sql } -> outside += sql
             }
         }
@@ -59,7 +68,12 @@ class FoldTransactionTest {
     private fun savepointsOutsideTheSearchIndex(statements: List<String>): Int =
         statements.indices.count { i ->
             statements[i].startsWith("SAVEPOINT") &&
-                statements.asSequence().drop(i + 1).firstOrNull { !it.startsWith("SAVEPOINT") }?.contains("fts_") != true
+                statements
+                    .asSequence()
+                    .drop(i + 1)
+                    .firstOrNull { !it.startsWith("SAVEPOINT") }
+                    ?.contains("fts_") !=
+                true
         }
 
     /** A library of [docs] PDFs, each tagged and titled by another device, and the rig that indexes it. */
