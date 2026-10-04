@@ -68,9 +68,9 @@ import no_papers_needed.composeapp.generated.resources.detail_baked_in_place
 import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_copy
 import no_papers_needed.composeapp.generated.resources.detail_export_failed
 import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
-import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_invalid_parts
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_not_completed
@@ -265,8 +265,7 @@ class DocDetailViewModel(
                 runCatchingCancellable { ocr.ocrVersions(docId) }
                     .onFailure(::reportOcrDetailsFailure)
                     .getOrDefault(emptyList())
-            }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+            }.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /** 0 until the History tab first asks; every explicit refresh then counts up. */
     private val historyRequests = MutableStateFlow(0)

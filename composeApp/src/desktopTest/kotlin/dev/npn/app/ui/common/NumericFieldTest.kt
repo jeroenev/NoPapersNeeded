@@ -113,7 +113,11 @@ class NumericFieldTest {
     }
 
     private fun ImageComposeScene.type(value: String) {
-        field()?.config?.get(SemanticsActions.SetText)?.action?.invoke(AnnotatedString(value))
+        field()
+            ?.config
+            ?.get(SemanticsActions.SetText)
+            ?.action
+            ?.invoke(AnnotatedString(value))
         render()
     }
 

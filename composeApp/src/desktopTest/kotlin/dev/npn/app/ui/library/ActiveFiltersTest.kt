@@ -61,7 +61,12 @@ class ActiveFiltersTest {
         fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
         return semanticsOwners
             .flatMap { descendants(it.rootSemanticsNode) }
-            .flatMap { node -> node.config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text } }
+            .flatMap { node ->
+                node.config
+                    .getOrNull(SemanticsProperties.Text)
+                    .orEmpty()
+                    .map { it.text }
+            }
     }
 
     private fun onUiThread(block: () -> Unit) {

@@ -179,12 +179,24 @@ class SettingsViewModelTest : MainDispatcherTest() {
     fun aDatePatternOnAUserDefinedDateFieldValidatesAndEnables() =
         runTest(dispatcher) {
             val invoiceDate =
-                FieldDef("invoiceDate", "Invoice date", FieldType.DATE, showByDefault = false, aiEnabled = false, position = 9)
-            val session = FakeLibrarySession().apply { fieldRegistry.defs.value = fieldRegistry.defs.value + invoiceDate }
+                FieldDef(
+                    "invoiceDate",
+                    "Invoice date",
+                    FieldType.DATE,
+                    showByDefault = false,
+                    aiEnabled = false,
+                    position = 9,
+                )
+            val session =
+                FakeLibrarySession().apply {
+                    fieldRegistry.defs.value = fieldRegistry.defs.value + invoiceDate
+                }
             val template = "{field:invoiceDate:yyyy}/{title}.pdf"
             val settings = FakeSettingsRepository().apply { updateSettings { it.copy(storagePathTemplate = template) } }
             val model = vm(settings = settings, session = session)
-            val types = session.fieldRegistry.defs.value.associate { it.key to it.type }
+            val types =
+                session.fieldRegistry.defs.value
+                    .associate { it.key to it.type }
 
             evaluateStoragePath(template, PREVIEW_CONTEXT.copy(fieldTypes = types)).error shouldBe null
             model.setStoragePathEnabled(true)

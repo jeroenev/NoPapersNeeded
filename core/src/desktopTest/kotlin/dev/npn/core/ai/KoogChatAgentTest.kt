@@ -155,8 +155,7 @@ class KoogChatAgentTest {
                     null,
                     "system",
                     15,
-                )
-                    .run("find tax", "session-1")
+                ).run("find tax", "session-1")
                     .collect { events += it }
             }
 

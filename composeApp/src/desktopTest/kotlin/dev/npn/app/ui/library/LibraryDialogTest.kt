@@ -78,7 +78,12 @@ class LibraryDialogTest {
                     before.render()
                     dialog.value = LibraryDialog.Filter
                     before.render()
-                    before.untaggedSwitch()?.config?.get(SemanticsActions.OnClick)?.action?.invoke()
+                    before
+                        .untaggedSwitch()
+                        ?.config
+                        ?.get(SemanticsActions.OnClick)
+                        ?.action
+                        ?.invoke()
                     before.render()
                     before.untaggedSwitch()?.config?.getOrNull(SemanticsProperties.ToggleableState) shouldBe
                         ToggleableState.On

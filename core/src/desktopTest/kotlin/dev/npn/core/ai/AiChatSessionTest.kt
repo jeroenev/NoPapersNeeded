@@ -16,8 +16,8 @@ import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
-import kotlin.test.assertFails
 import kotlin.test.Test
+import kotlin.test.assertFails
 
 class AiChatSessionTest {
     private lateinit var dbDir: File

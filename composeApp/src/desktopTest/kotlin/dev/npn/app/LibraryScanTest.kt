@@ -25,7 +25,8 @@ class LibraryScanTest : MainDispatcherTest() {
     fun anImportedScanSaysSo() = expectMessage(ImportOutcome.Imported("a", "a.pdf"), "Scan imported")
 
     @Test
-    fun aScanAlreadyInTheLibrarySaysSo() = expectMessage(ImportOutcome.Duplicate("a", "a.pdf"), "Scan already in library")
+    fun aScanAlreadyInTheLibrarySaysSo() =
+        expectMessage(ImportOutcome.Duplicate("a", "a.pdf"), "Scan already in library")
 
     @Test
     fun aRefusedScanNamesTheReason() =

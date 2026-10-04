@@ -44,7 +44,14 @@ class StoragePathRuleIntegrationTest {
             val rig = AppSessionRig.create(backgroundScope, storagePathRule = { rule })
             try {
                 rig.session.fieldRegistry.upsert(
-                    FieldDef("invoiceDate", "Invoice date", FieldType.DATE, showByDefault = false, aiEnabled = false, position = 9),
+                    FieldDef(
+                        "invoiceDate",
+                        "Invoice date",
+                        FieldType.DATE,
+                        showByDefault = false,
+                        aiEnabled = false,
+                        position = 9,
+                    ),
                 )
                 val imported =
                     rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "scan.pdf")
