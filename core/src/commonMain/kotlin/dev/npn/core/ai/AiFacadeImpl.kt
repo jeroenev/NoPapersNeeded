@@ -276,6 +276,17 @@ class AiFacadeImpl(
     }
 
     /**
+     * Release the cached runtime's HTTP client. The session calls this when it closes; without it
+     * every library swap would leave a client and its engine behind. A call after this simply
+     * builds a fresh runtime.
+     */
+    suspend fun close() =
+        runtimeMutex.withLock {
+            cachedRuntime?.second?.close()
+            cachedRuntime = null
+        }
+
+    /**
      * The language + date facts the prompts need (see [AiPromptContext]). Derived from the live
      * config on every call for the same reason the runtime is: the user can switch the app's
      * language between two calls, and a run started yesterday must not keep yesterday's date.

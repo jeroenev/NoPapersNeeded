@@ -600,6 +600,7 @@ class LibrarySessionImpl private constructor(
         lifetime.close()
         // Waits out a coordinator write a caller started outside the lifetime, then refuses more.
         coordinator.close()
+        aiFacade.close()
         // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
     }
 
@@ -819,7 +820,8 @@ class LibrarySessionImpl private constructor(
                     policy = deps.unattendedAi,
                     clock = deps.clock,
                 )
-            val enrichWorker = QueueDrainer(lifetime.scope, "AI enrichment queue", deps.log) { autoEnricher.processNext() }
+            val enrichWorker =
+                QueueDrainer(lifetime.scope, "AI enrichment queue", deps.log) { autoEnricher.processNext() }
             val editQueue =
                 AiEditQueue(
                     dao = db.aiEditJobDao(),

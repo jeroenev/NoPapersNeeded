@@ -106,29 +106,37 @@ internal class AiRuntime(
          * requirements (the OpenCode Go session header) are added on top here, never in place of
          * what the caller installed.
          *
-         * A null [transport] means "a plain client, owned by the runtime": it is created here and
-         * released by [close]. A supplied one stays the caller's to close, because it outlives any
-         * one runtime by design (the facade rebuilds runtimes when the config changes).
+         * A null [transport] means "a plain client, owned by the runtime": [newTransport] creates it
+         * here and [close] releases it — or this does, when a provider factory throws (a malformed
+         * base URL does), since no runtime then exists to release it. A supplied one stays the
+         * caller's to close, because it outlives any one runtime by design (the facade rebuilds
+         * runtimes when the config changes).
          */
         fun build(
             config: AiConfig,
             transport: HttpClient? = null,
+            newTransport: () -> HttpClient = { HttpClient() },
         ): AiRuntime {
-            val owned = if (transport == null) HttpClient() else null
+            val owned = if (transport == null) newTransport() else null
             val base = transport ?: checkNotNull(owned)
-            val httpFactory =
-                KtorKoogHttpClient.Factory(
-                    if (config.provider == AiProvider.OPENCODE_GO) base.withOpenCodeSession() else base,
-                )
             val built =
-                when (config.provider) {
-                    AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> openAiRuntime(config, httpFactory)
-                    AiProvider.ANTHROPIC -> anthropicRuntime(config, httpFactory)
-                    AiProvider.GOOGLE -> googleRuntime(config, httpFactory)
-                    AiProvider.MISTRAL -> mistralRuntime(config, httpFactory)
-                    AiProvider.DEEPSEEK -> deepSeekRuntime(config, httpFactory)
-                    AiProvider.OPENROUTER -> openRouterRuntime(config, httpFactory)
-                    AiProvider.OLLAMA -> ollamaRuntime(config, httpFactory)
+                try {
+                    val http =
+                        KtorKoogHttpClient.Factory(
+                            if (config.provider == AiProvider.OPENCODE_GO) base.withOpenCodeSession() else base,
+                        )
+                    when (config.provider) {
+                        AiProvider.OPENAI, AiProvider.CUSTOM, AiProvider.OPENCODE_GO -> openAiRuntime(config, http)
+                        AiProvider.ANTHROPIC -> anthropicRuntime(config, http)
+                        AiProvider.GOOGLE -> googleRuntime(config, http)
+                        AiProvider.MISTRAL -> mistralRuntime(config, http)
+                        AiProvider.DEEPSEEK -> deepSeekRuntime(config, http)
+                        AiProvider.OPENROUTER -> openRouterRuntime(config, http)
+                        AiProvider.OLLAMA -> ollamaRuntime(config, http)
+                    }
+                } catch (failure: Throwable) {
+                    owned?.close()
+                    throw failure
                 }
             return AiRuntime(built.executor, built.model, built.client, ownedTransport = owned)
         }
