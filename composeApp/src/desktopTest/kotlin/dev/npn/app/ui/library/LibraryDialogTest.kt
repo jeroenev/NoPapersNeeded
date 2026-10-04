@@ -20,6 +20,7 @@ import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
 import dev.npn.core.model.ReviewMode
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import java.util.Locale
 import javax.swing.SwingUtilities
@@ -57,7 +58,7 @@ class LibraryDialogTest {
         val scope = SaverScope { true }
         dialogs.forEach { dialog ->
             val saved = with(LibraryDialogSaver) { scope.save(dialog) }
-            LibraryDialogSaver.restore(saved!!) shouldBe dialog
+            LibraryDialogSaver.restore(saved.shouldNotBeNull()) shouldBe dialog
         }
         with(LibraryDialogSaver) { scope.save(null) } shouldBe null
     }
