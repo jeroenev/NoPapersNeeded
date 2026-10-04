@@ -261,14 +261,10 @@ class AiEditRunSuggestTest {
             var cancelled = false
             val job =
                 launch {
-                    try {
-                        h.run.suggest(key())
-                        completed = true
-                    } catch (e: CancellationException) {
-                        cancelled = true
-                        throw e
-                    }
+                    h.run.suggest(key())
+                    completed = true
                 }
+            job.invokeOnCompletion { cancelled = it is CancellationException }
             advanceTimeBy(500)
             runCurrent()
             job.cancel()

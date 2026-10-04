@@ -21,6 +21,7 @@ import dev.npn.core.journal.SnapshotV2Reader
 import dev.npn.core.journal.StorageV1Reader
 import dev.npn.core.journal.StorageV2Reader
 import dev.npn.core.journal.systemNowMillis
+import dev.npn.core.util.runCatchingCancellable
 
 class MetadataWriteBlocked(
     message: String,
@@ -361,7 +362,7 @@ class MetadataAccumulator(
             .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.Staging }
             .filter { it.name.contains(marker) }
             .filter { it.mtimeMillis in 1 until cutoff }
-            .forEach { runCatching { fs.delete(it.relPath) } }
+            .forEach { runCatchingCancellable { fs.delete(it.relPath) } }
     }
 
     /** Running result of an [ingestFiles] pass. */

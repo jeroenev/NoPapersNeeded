@@ -13,6 +13,8 @@ import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponse
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.reason
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
@@ -104,10 +106,11 @@ class KoogChatAgent(
             agent.run(question, conversationId)
         }
 
+    // A failing tool is reported to the model as its result; a cancelled one ends the turn.
     private suspend fun dispatch(call: ToolCall): String =
         toolSet.chatTools.firstOrNull { it.name == call.name }?.let { tool ->
-            runCatching { tool.call(call.argsJson) }
-                .getOrElse { "Error running ${call.name}: ${it.message ?: "unknown error"}" }
+            runCatchingCancellable { tool.call(call.argsJson) }
+                .getOrElse { "Error running ${call.name}: ${it.reason()}" }
         } ?: "Error: unknown tool \"${call.name}\"."
 
     private fun aiConfig() =

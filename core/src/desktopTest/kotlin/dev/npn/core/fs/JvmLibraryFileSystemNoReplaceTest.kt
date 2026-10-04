@@ -2,11 +2,8 @@ package dev.npn.core.fs
 
 import dev.npn.core.index.FsSegmentStore
 import dev.npn.core.journal.SegmentRef
+import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.runBlocking
 import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.Path
@@ -16,6 +13,10 @@ import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.runBlocking
 
 /**
  * Write-once discipline under concurrency: no app-written object in `.npn/` may ever be
@@ -124,7 +125,7 @@ class JvmLibraryFileSystemNoReplaceTest {
                 .map { i ->
                     async {
                         barrier.await()
-                        runCatching { block(i) }.fold(onSuccess = { i }, onFailure = { null })
+                        runCatchingCancellable { block(i) }.fold(onSuccess = { i }, onFailure = { null })
                     }
                 }.awaitAll()
                 .filterNotNull()

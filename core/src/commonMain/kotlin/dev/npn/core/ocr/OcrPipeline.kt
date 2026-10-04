@@ -17,6 +17,8 @@ import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.pdf.PdfEngine
+import dev.npn.core.util.reason
+import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.work.backoffMs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -273,15 +275,7 @@ class OcrPipeline(
             )
         var firstError: String? = null
         for ((name, hook) in hooks) {
-            try {
-                hook()
-            } catch (e: CancellationException) {
-                throw e
-            } catch (t: Throwable) {
-                if (firstError == null) {
-                    firstError = "$name: ${t.message ?: t::class.simpleName}"
-                }
-            }
+            runCatchingCancellable { hook() }.onFailure { if (firstError == null) firstError = "$name: ${it.reason()}" }
         }
         return firstError
     }
@@ -307,18 +301,14 @@ class OcrPipeline(
     ): OwnOcr {
         var step = "read failed"
         val result =
-            try {
+            runCatchingCancellable {
                 val bytes = fs.readBytes(doc.relPath)
                 // The sidecar is keyed by docId and is write-once and synced, so text from any other
                 // bytes would stick to this document everywhere.
                 if (sha256Bytes(bytes) != doc.docId) return OwnOcr.Stale
                 step = "ocr failed"
                 extractOrOcr(bytes, doc, aiRequested)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (t: Throwable) {
-                return OwnOcr.Failed(describe(step, t))
-            }
+            }.getOrElse { return OwnOcr.Failed(describe(step, it)) }
         val sameEngine = stored.filter { it.engine == result.engine }
         // A re-run that read the same text again adds nothing; keep the library free of copies.
         if (sameEngine.any { decode(doc.docId, it.writerKey)?.pages == result.pages }) return OwnOcr.Adopted
@@ -337,19 +327,18 @@ class OcrPipeline(
                 createdAt = clock.nowMillis(),
                 pages = result.pages,
             )
-        return try {
-            sidecars.writeOnce(doc.docId, writerKey, OcrSidecarCodec.encode(sidecar))
-            OwnOcr.Published
-        } catch (e: CancellationException) {
-            throw e
-        } catch (t: Throwable) {
-            // Already exists for this device+engine: keep the published file.
-            if (decode(doc.docId, writerKey) == null) {
-                OwnOcr.Failed(describe("sidecar write/read failed for $writerKey", t))
-            } else {
-                OwnOcr.Adopted
-            }
-        }
+        val encoded = OcrSidecarCodec.encode(sidecar)
+        return runCatchingCancellable { sidecars.writeOnce(doc.docId, writerKey, encoded) }.fold(
+            onSuccess = { OwnOcr.Published },
+            onFailure = { failure ->
+                // Already exists for this device+engine: keep the published file.
+                if (decode(doc.docId, writerKey) == null) {
+                    OwnOcr.Failed(describe("sidecar write/read failed for $writerKey", failure))
+                } else {
+                    OwnOcr.Adopted
+                }
+            },
+        )
     }
 
     /** Outcome of a [runOwnOcr] pass. */
@@ -626,16 +615,15 @@ class OcrPipeline(
         return Version(writerKey, writerKey, engine)
     }
 
-    /** Read and decode one sidecar, or null when missing/corrupt. */
+    /**
+     * Read and decode one sidecar, or null when missing/corrupt. Cancellation is rethrown: read as
+     * "unreadable", it would charge the document a failed attempt for a drain that was only
+     * stopped (see [fail]).
+     */
     private suspend fun decode(
         hash: String,
         writerKey: String,
-    ): OcrSidecar? =
-        try {
-            OcrSidecarCodec.decode(sidecars.read(hash, writerKey))
-        } catch (_: Throwable) {
-            null
-        }
+    ): OcrSidecar? = runCatchingCancellable { OcrSidecarCodec.decode(sidecars.read(hash, writerKey)) }.getOrNull()
 
     // --- indexing / state helpers ---
 
@@ -719,11 +707,11 @@ class OcrPipeline(
     }
 }
 
-/** [what] plus [cause]'s message, when it has one: the diagnostic a failure is recorded with. */
+/** [what] plus [cause]'s reason: the diagnostic a failure is recorded with. */
 private fun describe(
     what: String,
     cause: Throwable,
-): String = cause.message?.let { "$what: $it" } ?: what
+): String = "$what: ${cause.reason()}"
 
 /**
  * A memo of facts about write-once sidecars, shared by every coroutine that drives the pipeline:

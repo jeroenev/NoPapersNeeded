@@ -10,8 +10,9 @@ import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.journal.EpochClock
+import dev.npn.core.util.reason
+import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.work.backoffMs
-import kotlinx.coroutines.CancellationException
 
 /**
  * Unattended AI enrichment of documents whose OCR text was just indexed, run as a persisted queue.
@@ -142,19 +143,19 @@ class AiAutoEnricher(
             queueDao.delete(entry.docId)
             return true
         }
-        return try {
+        return runCatchingCancellable {
             write(entry.docId, ai.suggestEdits(entry.docId, request()))
             documentDao.markAiEnriched(entry.docId, clock.nowMillis())
             queueDao.delete(entry.docId)
             cooldownUntil = 0L
-            true
-        } catch (e: CancellationException) {
-            throw e
-        } catch (t: Throwable) {
-            reschedule(entry, t)
-            cooldownUntil = clock.nowMillis() + FAILURE_COOLDOWN_MS
-            false
-        }
+        }.fold(
+            onSuccess = { true },
+            onFailure = { cause ->
+                reschedule(entry, cause)
+                cooldownUntil = clock.nowMillis() + FAILURE_COOLDOWN_MS
+                false
+            },
+        )
     }
 
     /**
@@ -186,7 +187,7 @@ class AiAutoEnricher(
                 attempts = attempts,
                 nextAttemptAt = now + backoffMs(attempts),
                 updatedAt = now,
-                lastError = cause.message ?: cause::class.simpleName,
+                lastError = cause.reason(),
             ),
         )
     }

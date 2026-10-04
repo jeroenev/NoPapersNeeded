@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.util.runCatchingCancellable
+
 /**
  * One document's writable edit — see CONTEXT.md, "Writable Edit".
  *
@@ -124,7 +126,7 @@ class AiEditApply(
         // all-or-nothing: on failure every (doc, tag) pair for that tag is retained for retry.
         val addsByTag = edits.flatMap { e -> e.addTags.map { e.docId to it } }.groupBy({ it.second }, { it.first })
         for ((tag, docIds) in addsByTag) {
-            runCatching { meta.addTag(docIds, tag) }
+            runCatchingCancellable { meta.addTag(docIds, tag) }
                 .onSuccess {
                     docIds.forEach { docId ->
                         addsWritten += docId to tag
@@ -136,7 +138,7 @@ class AiEditApply(
         val removalsByTag =
             edits.flatMap { e -> e.removeTags.map { e.docId to it } }.groupBy({ it.second }, { it.first })
         for ((tag, docIds) in removalsByTag) {
-            runCatching { meta.removeTag(docIds, tag) }
+            runCatchingCancellable { meta.removeTag(docIds, tag) }
                 .onSuccess {
                     docIds.forEach { docId ->
                         removalsWritten += docId to tag
@@ -149,7 +151,7 @@ class AiEditApply(
         // single change (see the class doc for why this is load-bearing, not a style choice).
         for (edit in edits) {
             if (edit.properties.isEmpty()) continue
-            runCatching { meta.applyEdits(listOf(edit.docId), fields = edit.properties) }
+            runCatchingCancellable { meta.applyEdits(listOf(edit.docId), fields = edit.properties) }
                 .onSuccess {
                     edit.properties.keys.forEach { field -> fieldsWritten += edit.docId to field }
                     onDocWritten(edit.docId)
@@ -186,7 +188,7 @@ class AiEditApply(
 
         // The whole edit — tags and fields together — as one applyEdits so a failure writes none
         // of it and a retry re-asks the model about the state it was originally shown.
-        runCatching {
+        runCatchingCancellable {
             meta.applyEdits(listOf(edit.docId), addTags = edit.addTags, fields = edit.properties)
         }.onSuccess {
             edit.addTags.forEach { tag -> addsWritten += edit.docId to tag }

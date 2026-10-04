@@ -4,12 +4,13 @@ import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.clients.openai.OpenAIResponsesParams
 import ai.koog.prompt.executor.clients.openai.base.models.ReasoningEffort
 import ai.koog.prompt.streaming.StreamFrame
+import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlin.test.Test
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.runTest
-import kotlin.test.Test
 
 /**
  * The OpenCode Go gateway serves OpenAI-family models on the Responses API and everything else on
@@ -87,7 +88,7 @@ class ZenGoResponsesStreamTest {
         val runtime = AiRuntime.build(zenGoConfig(model), transport)
         val frames = mutableListOf<StreamFrame>()
         val outcome =
-            runCatching {
+            runCatchingCancellable {
                 runtime.executor
                     .executeStreaming(prompt("p") { user("hi") }, runtime.model, emptyList())
                     .collect { frames += it }

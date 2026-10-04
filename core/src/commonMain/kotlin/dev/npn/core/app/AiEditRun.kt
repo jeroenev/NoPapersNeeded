@@ -2,7 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiSuggest
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -275,12 +275,11 @@ class AiEditRun(
                 .mapIndexed { index, item ->
                     async {
                         semaphore.withPermit {
+                            // Cancellation tears the whole scope down; it is not a failed suggestion.
                             val outcome =
-                                runCatching {
+                                runCatchingCancellable {
                                     projector.project(item, ai.suggestEdits(item.doc.docId, request))
                                 }
-                            // CancellationException must propagate so the whole scope tears down.
-                            outcome.exceptionOrNull()?.let { if (it is CancellationException) throw it }
                             progress.withLock {
                                 outcome
                                     .onSuccess { results[index] = it }

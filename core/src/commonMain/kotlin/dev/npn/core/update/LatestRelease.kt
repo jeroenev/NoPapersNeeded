@@ -1,12 +1,12 @@
 package dev.npn.core.update
 
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.runCatchingCancellable
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
 import io.ktor.client.statement.bodyAsText
 import io.ktor.http.isSuccess
-import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -56,7 +56,7 @@ class GitHubLatestRelease(
     private val client: () -> HttpClient = { HttpClient() },
 ) : LatestReleaseSource {
     override suspend fun latest(): AppRelease? =
-        try {
+        runCatchingCancellable {
             client().use { http ->
                 val response =
                     http.get("https://api.github.com/repos/$repository/releases/latest") {
@@ -66,11 +66,7 @@ class GitHubLatestRelease(
                 val release = json.decodeFromString<GitHubRelease>(response.bodyAsText())
                 AppRelease(version = release.tagName.removePrefix("v"), url = release.htmlUrl)
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (_: Exception) {
-            null
-        }
+        }.getOrNull()
 
     @Serializable
     private data class GitHubRelease(

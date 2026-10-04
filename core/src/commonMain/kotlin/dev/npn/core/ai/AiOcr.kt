@@ -2,6 +2,7 @@ package dev.npn.core.ai
 
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngines
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -56,8 +57,7 @@ internal suspend fun transcribeWithRetry(
 ): String {
     var failure: Throwable? = null
     repeat(attempts) {
-        val outcome = runCatching { attempt() }
-        outcome.exceptionOrNull()?.let { if (it is CancellationException) throw it }
+        val outcome = runCatchingCancellable { attempt() }
         outcome.getOrNull()?.let { return it }
         failure = outcome.exceptionOrNull() ?: failure
     }

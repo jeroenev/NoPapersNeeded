@@ -4,10 +4,11 @@ import android.content.Context
 import com.tom_roush.pdfbox.android.PDFBoxResourceLoader
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.common.PDMetadata
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.withContext
+import dev.npn.core.util.runCatchingCancellable
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * Android [PdfXmpIO] backed by pdfbox-android (PDFBox 2.x API under
@@ -64,13 +65,11 @@ class PdfBoxAndroidXmpIO(context: Context) : PdfXmpIO {
     }
 
     override suspend fun verify(pdfBytes: ByteArray): Boolean = withContext(Dispatchers.IO) {
-        try {
+        runCatchingCancellable {
             val xmp = readXmp(pdfBytes) ?: return@withContext false
             val data = XmpParser.parse(xmp)
             data.documentId != null || data.tags.isNotEmpty()
-        } catch (_: Throwable) {
-            false
-        }
+        }.getOrDefault(false)
     }
 
     private companion object {

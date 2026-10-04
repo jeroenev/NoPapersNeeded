@@ -9,16 +9,16 @@ import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.work.backoffMs
-import kotlinx.coroutines.CancellationException
+import kotlin.uuid.ExperimentalUuidApi
+import kotlin.uuid.Uuid
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
 
 /**
  * A finished queued Edit Run, opened for review. The queued counterpart of one
@@ -291,12 +291,8 @@ class AiEditQueue(
         coroutineScope {
             rows
                 .map { row ->
-                    async {
-                        val outcome = runCatching { ai.suggestEdits(row.docId, request) }
-                        // Cancellation must tear the whole scope down, not count as a failure.
-                        outcome.exceptionOrNull()?.let { if (it is CancellationException) throw it }
-                        outcome
-                    }
+                    // Cancellation tears the whole scope down; it is not a failed suggestion.
+                    async { runCatchingCancellable { ai.suggestEdits(row.docId, request) } }
                 }.awaitAll()
         }
 

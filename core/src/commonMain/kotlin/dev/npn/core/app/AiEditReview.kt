@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditSuggestion
+import dev.npn.core.util.runCatchingCancellable
 
 /**
  * Turns one document's raw [AiEditSuggestion] into the [ReviewDoc] a human is shown, applying the
@@ -54,7 +55,7 @@ internal class ReviewProjector(
 
     /** First ~[SNIPPET_LENGTH] chars of extracted text, whitespace-collapsed; null when unavailable. */
     private suspend fun snippetFor(docId: String): String? =
-        runCatching { content.extractedText(docId) }
+        runCatchingCancellable { content.extractedText(docId) }
             .getOrNull()
             ?.replace(Regex("\\s+"), " ")
             ?.trim()

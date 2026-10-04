@@ -6,6 +6,7 @@ import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.uniquifyPath
+import dev.npn.core.util.runCatchingCancellable
 
 sealed interface ConflictAction {
     /** Keep the file: strip the conflict suffix (uniquify if taken), then it is picked up on rescan. */
@@ -42,10 +43,10 @@ class MaintenanceService(
     ) {
         val doc = documentDao.getByDocId(docId)
         if (keepCanonical || doc == null) {
-            if (fs.exists(extraRelPath)) runCatching { fs.delete(extraRelPath) }
+            if (fs.exists(extraRelPath)) runCatchingCancellable { fs.delete(extraRelPath) }
         } else {
             // Swap: delete the old canonical file, adopt the extra path as canonical.
-            if (fs.exists(doc.relPath)) runCatching { fs.delete(doc.relPath) }
+            if (fs.exists(doc.relPath)) runCatchingCancellable { fs.delete(doc.relPath) }
             documentDao.upsert(
                 doc.copy(
                     relPath = extraRelPath,
@@ -88,7 +89,7 @@ class MaintenanceService(
                 val cleanName = cleanConflictName(relPath).substringAfterLast('/')
                 val bytes = fs.readBytes(relPath)
                 val result = importService.importBytes(bytes, cleanName, NpnPaths.DEFAULT_INBOX)
-                if (fs.exists(relPath)) runCatching { fs.delete(relPath) }
+                if (fs.exists(relPath)) runCatchingCancellable { fs.delete(relPath) }
                 return when (result) {
                     is ImportResult.Imported -> result.relPath
                     is ImportResult.Duplicate -> result.existingPath

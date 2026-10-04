@@ -5,15 +5,16 @@ import android.content.Context
 import android.net.Uri
 import android.provider.DocumentsContract
 import androidx.documentfile.provider.DocumentFile
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.emptyFlow
-import kotlinx.coroutines.withContext
+import dev.npn.core.util.runCatchingCancellable
 import java.io.IOException
 import java.io.InputStream
 import java.security.DigestInputStream
 import java.security.MessageDigest
 import java.util.UUID
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
+import kotlinx.coroutines.withContext
 
 /**
  * Storage Access Framework backed [LibraryFileSystem] for Android (PLAN section 4, "Android
@@ -313,7 +314,8 @@ class SafLibraryFileSystem(
                 check(sha256OfEntry(existing) == expectedHash) {
                     "Canonical object exists with invalid bytes: $canonicalPath"
                 }
-                runCatching { delete(stagingPath) }
+                // Best effort: an orphaned staging file is never read as an object.
+                runCatchingCancellable { delete(stagingPath) }
                 return@withContext VerifiedPublicationResult.ALREADY_PRESENT
             }
 

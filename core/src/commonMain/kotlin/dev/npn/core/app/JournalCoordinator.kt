@@ -20,6 +20,7 @@ import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -552,20 +553,14 @@ class JournalCoordinator internal constructor(
      * so every entry point behaves uniformly, cancellation included (see [blockingWritesOnFailure]).
      */
     private suspend fun <T> withDurableProjectionRecovery(attempt: suspend () -> T): T =
-        try {
-            attempt()
-        } catch (cancelled: CancellationException) {
-            // Not a failure, so nothing to latch. A rolled-back ingest can leave its events in the
-            // live fold, which is harmless: the object is ingested again and folding is idempotent.
-            throw cancelled
-        } catch (failure: Throwable) {
+        // Cancellation is not a failure, so nothing is latched for it. A rolled-back ingest can
+        // leave its events in the live fold, which is harmless: the object is ingested again and
+        // folding is idempotent.
+        runCatchingCancellable { attempt() }.getOrElse { failure ->
             blockWrites(failure)
-            try {
-                recoverDurableProjection()
-            } catch (recoveryFailure: Throwable) {
+            runCatchingCancellable { recoverDurableProjection() }.onFailure { recoveryFailure ->
                 blockWrites(recoveryFailure)
                 failure.addSuppressed(recoveryFailure)
-                throw failure
             }
             throw failure
         }

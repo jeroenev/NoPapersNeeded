@@ -1,17 +1,18 @@
 package dev.npn.core.app
 
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertFailsWith
+import kotlin.test.assertTrue
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.supervisorScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import kotlin.test.Test
-import kotlin.test.assertEquals
-import kotlin.test.assertFailsWith
-import kotlin.test.assertTrue
 
 class SessionLifetimeTest {
     @Test
@@ -20,9 +21,9 @@ class SessionLifetimeTest {
             val lifetime = SessionLifetime(backgroundScope)
             val started = CompletableDeferred<Unit>()
             var cleanedUp = false
-            val caller =
-                async {
-                    runCatching {
+            supervisorScope {
+                val caller =
+                    async {
                         lifetime.owned {
                             try {
                                 started.complete(Unit)
@@ -32,15 +33,14 @@ class SessionLifetimeTest {
                             }
                         }
                     }
-                }
-            started.await()
+                started.await()
 
-            lifetime.close()
+                lifetime.close()
 
-            assertTrue(cleanedUp)
-            val failure = caller.await().exceptionOrNull()
-            assertTrue(failure is IllegalStateException, "was $failure")
-            assertEquals(SessionLifetime.CLOSED, failure.message)
+                assertTrue(cleanedUp)
+                val failure = assertFailsWith<IllegalStateException> { caller.await() }
+                assertEquals(SessionLifetime.CLOSED, failure.message)
+            }
         }
 
     @Test

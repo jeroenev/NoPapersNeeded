@@ -4,8 +4,10 @@ import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.message.AttachmentContent
 import ai.koog.prompt.message.AttachmentSource
 import ai.koog.prompt.params.LLMParams
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.reason
+import dev.npn.core.util.runCatchingCancellable
 import kotlin.io.encoding.Base64
+import kotlinx.coroutines.CancellationException
 
 /**
  * The three things the settings self-test proves about a configured endpoint, in the order they
@@ -76,21 +78,19 @@ object AiSelfTest {
     private const val MAX_DETAIL_CHARS = 300
 
     suspend fun run(config: AiConfig): AiSelfTestReport =
-        try {
+        runCatchingCancellable {
             val runtime = AiRuntime.build(config)
             try {
                 run(EndpointProbes(runtime, config))
             } finally {
                 runtime.close()
             }
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
+        }.getOrElse { e ->
             // The runtime could not even be built (an unusable base URL, an unmappable model):
             // nothing was attempted, so every check reports as the same single failure.
             AiSelfTestReport(
                 listOf(
-                    AiCheckOutcome(AiCheck.API, AiCheckStatus.FAILED, e.reason()),
+                    AiCheckOutcome(AiCheck.API, AiCheckStatus.FAILED, e.detail()),
                     AiCheckOutcome(AiCheck.MESSAGES, AiCheckStatus.SKIPPED),
                     AiCheckOutcome(AiCheck.VISION, AiCheckStatus.SKIPPED),
                 ),
@@ -134,20 +134,16 @@ object AiSelfTest {
         check: AiCheck,
         probe: suspend () -> String?,
     ): AiCheckOutcome =
-        try {
+        runCatchingCancellable {
             probe()?.let { AiCheckOutcome(check, AiCheckStatus.FAILED, it.trim().take(MAX_DETAIL_CHARS)) }
                 ?: AiCheckOutcome(check, AiCheckStatus.PASSED)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Exception) {
-            AiCheckOutcome(check, AiCheckStatus.FAILED, e.reason())
-        }
+        }.getOrElse { AiCheckOutcome(check, AiCheckStatus.FAILED, it.detail()) }
 
     private fun skipped(check: AiCheck) = AiCheckOutcome(check, AiCheckStatus.SKIPPED)
 
     private fun report(vararg outcomes: AiCheckOutcome) = AiSelfTestReport(outcomes.toList())
 
-    private fun Throwable.reason(): String = (message ?: this::class.simpleName.orEmpty()).trim().take(MAX_DETAIL_CHARS)
+    private fun Throwable.detail(): String = reason().trim().take(MAX_DETAIL_CHARS)
 
     /**
      * A 420x140 one-bit PNG of the digits [PROBE_PAGE_CODE], embedded rather than rendered so the

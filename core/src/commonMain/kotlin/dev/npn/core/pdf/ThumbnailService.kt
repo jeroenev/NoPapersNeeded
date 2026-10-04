@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.ThumbnailDao
 import dev.npn.core.db.ThumbnailEntity
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.util.runCatchingCancellable
 import kotlin.time.Clock
 
 /**
@@ -44,15 +45,10 @@ class ThumbnailService(
     ): String? {
         thumbnailDao.get(docId)?.let { return it.cachePath }
 
-        val bytes =
-            try {
-                fs.readBytes(relPath)
-            } catch (_: Throwable) {
-                return null
-            }
+        val bytes = runCatchingCancellable { fs.readBytes(relPath) }.getOrElse { return null }
 
         val (png, pageCount) =
-            try {
+            runCatchingCancellable {
                 // Gate the heavy open+render so 200 first-load thumbnails cannot run at once and
                 // freeze the UI; the gate caps concurrency and uses a CPU-bound dispatcher.
                 renderGate.render {
@@ -63,10 +59,8 @@ class ThumbnailService(
                             handle.renderPagePng(0, maxDim) to handle.pageCount
                         }
                     }
-                } ?: return null
-            } catch (_: Throwable) {
-                return null
-            }
+                }
+            }.getOrNull() ?: return null
 
         val cachePath = store.write(docId, png)
         thumbnailDao.upsert(
@@ -90,7 +84,8 @@ class ThumbnailService(
      */
     suspend fun clearCache(): Int {
         val all = thumbnailDao.getAll()
-        all.forEach { runCatching { store.delete(it.docId) } }
+        // Best effort: a file left behind is never served again once its row is gone.
+        all.forEach { runCatchingCancellable { store.delete(it.docId) } }
         thumbnailDao.deleteAll()
         return all.size
     }

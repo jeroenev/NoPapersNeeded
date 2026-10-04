@@ -3,12 +3,15 @@ package dev.npn.core.app
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.RecordingLog
+import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.xmp.XmpParser
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlin.test.Test
+import kotlin.time.Duration.Companion.seconds
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -18,8 +21,6 @@ import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlin.test.Test
-import kotlin.time.Duration.Companion.seconds
 
 class SessionSmokeTest {
     @Test
@@ -130,7 +131,7 @@ class SessionSmokeTest {
             val rig = AppSessionRig.create(backgroundScope)
             try {
                 rig.writePdf("one.pdf", PdfFixtures.embeddedTextPdf("first document"))
-                val outside = async { runCatching { rig.session.rescan() } }
+                val outside = async { runCatchingCancellable { rig.session.rescan() } }
                 runCurrent()
 
                 rig.session.close()

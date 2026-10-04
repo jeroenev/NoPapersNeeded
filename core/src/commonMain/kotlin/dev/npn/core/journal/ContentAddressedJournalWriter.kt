@@ -5,6 +5,7 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationCapability
 import dev.npn.core.fs.randomUuidV4
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.util.runCatchingCancellable
 
 data class PublishedTransaction(
     val relPath: String,
@@ -72,11 +73,12 @@ internal suspend fun stageAndPublishVerifiedObject(
     val canonicalPath = NpnPaths.journalObjectPath(hash, snapshot = snapshot)
     val stagingPath = NpnPaths.journalStagingPath(hash, installationId, randomUuidV4(), snapshot = snapshot)
     fs.writeBytesOnce(stagingPath, bytes)
+    var published = false
     try {
         fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, hash)
-    } catch (failure: Throwable) {
-        runCatching { fs.delete(stagingPath) }
-        throw failure
+        published = true
+    } finally {
+        if (!published) runCatchingCancellable { fs.delete(stagingPath) }
     }
     return canonicalPath
 }

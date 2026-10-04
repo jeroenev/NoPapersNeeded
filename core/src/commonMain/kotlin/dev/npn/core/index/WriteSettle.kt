@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.util.runCatchingCancellable
 
 /**
  * Whether a PDF the rescan is about to hash has finished being written.
@@ -53,7 +54,7 @@ internal class WriteSettle(
     }
 
     private suspend fun hasEofMarker(relPath: String): Boolean {
-        val tail = runCatching { fs.readTail(relPath, TAIL_BYTES) }.getOrNull() ?: return false
+        val tail = runCatchingCancellable { fs.readTail(relPath, TAIL_BYTES) }.getOrNull() ?: return false
         return tail.decodeToString().contains(EOF_MARKER)
     }
 

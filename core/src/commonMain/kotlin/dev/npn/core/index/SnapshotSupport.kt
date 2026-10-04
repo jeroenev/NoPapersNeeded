@@ -12,6 +12,7 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.PublishedSnapshot
 import dev.npn.core.journal.SnapshotCodec
 import dev.npn.core.journal.SnapshotManifest
+import dev.npn.core.util.runCatchingCancellable
 
 /**
  * Compaction-side bookkeeping for the metadata accumulator: recording a locally-published snapshot,
@@ -75,6 +76,6 @@ class SnapshotSupport(
 
     /** Best-effort delete of superseded object/snapshot files after their snapshot is applied. */
     suspend fun deleteSupersededFiles(paths: Collection<String>) {
-        for (path in paths) runCatching { fs.delete(path) }
+        for (path in paths) runCatchingCancellable { fs.delete(path) }
     }
 }

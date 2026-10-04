@@ -7,7 +7,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.model.SystemProperty
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.runCatchingCancellable
 
 /** Materializes winning path intents while keeping the index pointed at verified, available bytes. */
 internal class DocumentPathReconciler(
@@ -109,13 +109,7 @@ internal class DocumentPathReconciler(
         source: String,
         target: String,
     ): String =
-        try {
-            paths.reconcile(docId, source, target)
-        } catch (cancelled: CancellationException) {
-            throw cancelled
-        } catch (_: Exception) {
-            // Physical failures leave the journal intent pending, surfaced by conflicts(). They
-            // must not prevent unrelated documents and metadata from being projected.
-            source
-        }
+        // Physical failures leave the journal intent pending, surfaced by conflicts(). They must
+        // not prevent unrelated documents and metadata from being projected.
+        runCatchingCancellable { paths.reconcile(docId, source, target) }.getOrDefault(source)
 }
