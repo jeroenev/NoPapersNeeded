@@ -315,6 +315,12 @@ class FoldedState {
     /** Effective value of a library-wide synced setting, or null if never set/cleared. */
     fun effectiveSetting(key: String): String? = settings[key]?.value
 
+    /**
+     * Every library-wide synced setting ever written, with its effective value: null for one that
+     * was cleared. A key absent from the map was never set.
+     */
+    fun settings(): Map<String, String?> = settings.mapValues { it.value.value }
+
     /** The live field registry: every key whose winning definition is non-null, in display order. */
     fun effectiveFieldDefs(): List<FieldDef> =
         fieldDefs.values

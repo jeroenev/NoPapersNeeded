@@ -362,6 +362,22 @@ class ReconcilePerfTest {
             after.sourceSetFingerprint shouldBe expectedHlc.sourceSetFingerprint
         }
 
+    /** Any synced setting reads its value after an open, not only the ones a list names. */
+    @Test
+    fun everySyncedSettingIsSeededOnOpen() =
+        runTest {
+            seedReadyLibrary()
+            val coordinator = reopen()
+            coordinator.refreshState()
+            clock.advance()
+            coordinator.commitAndApply(listOf(PendingOp.settingSet("someLaterSetting", "on")))
+
+            val reopened = reopen()
+            reopened.refreshState()
+
+            reopened.settingFlow("someLaterSetting").first() shouldBe "on"
+        }
+
     /**
      * The whole point of leaving the fold unmaterialized is that writes still work. A tag-remove
      * is the sharpest case: building it needs the OR-set dots currently observed for (tag, doc),

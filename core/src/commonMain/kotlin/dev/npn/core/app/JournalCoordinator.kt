@@ -19,7 +19,6 @@ import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.model.ReviewMode
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
@@ -33,23 +32,25 @@ import kotlinx.coroutines.withContext
 
 /**
  * The library-wide synced settings a reader can observe, kept as a snapshot of their effective
- * values rather than re-derived per read.
+ * values rather than re-derived per read. Every setting the journal holds is here, so a new synced
+ * setting needs nothing but its key.
  *
  * These are `setting-set` events in the journal, so their effective values come out the same from a
  * settings-only fold as from the whole state — which is what lets [JournalCoordinator.refreshState]
  * seed them at open without replaying the journal (see [MetadataAccumulator.loadStateOf]).
  */
 private class SyncedSettings {
+    /** Every key ever written, null for a cleared one (see [FoldedState.settings]). */
     private val values = MutableStateFlow<Map<String, String?>>(emptyMap())
 
     fun flow(key: String): kotlinx.coroutines.flow.Flow<String?> = values.map { it[key] }
 
-    /** The current value of a seeded key, without touching the fold. */
+    /** The current value of a key, without touching the fold. */
     fun current(key: String): String? = values.value[key]
 
-    /** Replace every seeded key's value from [source]. */
+    /** Replace every setting from [source]. */
     fun seed(source: FoldedState) {
-        values.value = SEEDED_KEYS.associateWith { key -> source.effectiveSetting(key) }
+        values.value = source.settings()
     }
 
     /** Refresh only the keys [events] actually wrote. */
@@ -63,14 +64,6 @@ private class SyncedSettings {
             values.value.toMutableMap().apply {
                 changed.forEach { key -> put(key, current.effectiveSetting(key)) }
             }
-    }
-
-    companion object {
-        /**
-         * Every synced setting published on open. A key left out of this list reads as null until
-         * something writes it in the running session, so a new synced setting belongs here.
-         */
-        private val SEEDED_KEYS = listOf(ReviewMode.WIRE_KEY, FieldKeys.SEEDED_SETTING)
     }
 }
 

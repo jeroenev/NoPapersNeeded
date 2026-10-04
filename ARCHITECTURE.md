@@ -172,12 +172,10 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
 
 ## Where to look for common tasks
 
-- A new library-wide synced setting → a `setting-set` op plus its key in
-  `SyncedSettings.SEEDED_KEYS` (a private class at the top of `JournalCoordinator.kt`;
-  read through `JournalCoordinator.settingFlow(key)`, written with
-  `PendingOp.settingSet` — `reviewMode` is the model). A key left out of that list reads as
-  null on open (the open path folds only the seeded settings, not the whole
-  journal) and only appears once something writes it in the running session.
+- A new library-wide synced setting → a `setting-set` op under a new key, read through
+  `JournalCoordinator.settingFlow(key)` and written with `PendingOp.settingSet` (`reviewMode`
+  is the model). The open path folds every setting the journal holds, and nothing else, so the
+  key needs no registration anywhere.
 - A new document field is **data, not code**: define it in Settings → Documents (or
   the panel's "New field…"), which writes a `field-def`; every editor, filter, sort,
   storage-path placeholder (`{field:key}`), auto-match action, XMP bag entry, AI
