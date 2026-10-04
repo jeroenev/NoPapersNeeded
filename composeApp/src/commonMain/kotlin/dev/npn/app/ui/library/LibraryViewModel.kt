@@ -79,6 +79,21 @@ data class ImportSummary(
     fun asUiText(): UiText = uiText(UiTextKey.IMPORT_SUMMARY, imported, duplicate, failed)
 }
 
+/** Import each of [sources] (a file and the name to give it) as a PDF, and tally the outcomes. */
+suspend fun IngestFacade.importPdfs(sources: List<Pair<ExternalSource, String>>): ImportSummary {
+    var imported = 0
+    var duplicate = 0
+    var failed = 0
+    sources.forEach { (source, name) ->
+        when (importPdf(source, name)) {
+            is ImportOutcome.Imported -> imported++
+            is ImportOutcome.Duplicate -> duplicate++
+            is ImportOutcome.Failed -> failed++
+        }
+    }
+    return ImportSummary(imported, duplicate, failed)
+}
+
 /** The filter and sort a result set was queried with. */
 data class LibraryQuery(
     val filter: LibraryFilter,
@@ -491,17 +506,7 @@ class LibraryViewModel(
     /** Import PDFs from external sources, tallying the per-source outcome into a message. */
     fun import(sources: List<Pair<ExternalSource, String>>) =
         launchReporting({ reason -> uiText(Res.string.library_import_failed, reason) }) {
-            var imported = 0
-            var duplicate = 0
-            var failed = 0
-            sources.forEach { (src, name) ->
-                when (ingest.importPdf(src, name)) {
-                    is ImportOutcome.Imported -> imported++
-                    is ImportOutcome.Duplicate -> duplicate++
-                    is ImportOutcome.Failed -> failed++
-                }
-            }
-            message(ImportSummary(imported, duplicate, failed).asUiText())
+            message(ingest.importPdfs(sources).asUiText())
         }
 
     /** Launch a platform scan; cancellation stays quiet while an actual scanner failure is visible. */

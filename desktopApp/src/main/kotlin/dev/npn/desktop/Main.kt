@@ -4,7 +4,7 @@ import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -28,15 +28,11 @@ import dev.npn.app.di.createAppEnvironment
 import dev.npn.app.ui.common.AlreadyRunningNotice
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.core.app.DesktopLog
-import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.PlatformDirs
 import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.util.info
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
@@ -91,6 +87,9 @@ private fun runApp() =
         val scope = rememberCoroutineScope()
         var closing by remember { mutableStateOf(false) }
 
+        // The shared UI publishes the title for the screen it shows, in the app's language; the
+        // window is its one writer. The app's name stands in only until the first screen has.
+        val title by DesktopBridge.windowTitle.collectAsState()
         val appName = stringResource(Res.string.common_app_name)
         Window(
             onCloseRequest = {
@@ -105,25 +104,19 @@ private fun runApp() =
                 }
             },
             visible = !closing,
-            title = appName,
+            title = title ?: appName,
             // Same PNG jpackage installs as the desktop-entry icon; see .mise/tasks/icons.
             icon = painterResource(WINDOW_ICON),
             state = rememberWindowState(width = 1200.dp, height = 800.dp),
         ) {
-            // Enforce a sensible minimum window size (jpackage/AWT window).
-            window.minimumSize = java.awt.Dimension(800, 600)
-
             DisposableEffect(window) {
+                // A sensible minimum size for the AWT window; set once, not on every recomposition.
+                window.minimumSize = java.awt.Dimension(800, 600)
                 val monitorMoveWorkaround = MonitorMoveSurfaceWorkaround.install(window)
                 onDispose(monitorMoveWorkaround::close)
             }
 
-            // Mirror the shared UI's window-title flow into the native window title.
-            LaunchedEffect(Unit) {
-                DesktopBridge.windowTitle.collect { window.title = it ?: appName }
-            }
-
-            val dropTarget = remember { pdfDropTarget(env, scope) }
+            val dropTarget = remember { pdfDropTarget() }
 
             Box(
                 Modifier.fillMaxSize().dragAndDropTarget(
@@ -138,53 +131,26 @@ private fun runApp() =
         }
     }
 
-/** Drop target that imports dropped PDF files through the [env]'s session on [scope]. */
+/**
+ * Drop target for PDF files. The shared UI imports them into the open library and says what became
+ * of them, so a drop is reported like any other import.
+ */
 @OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
-private fun pdfDropTarget(
-    env: dev.npn.app.di.AppEnvironment,
-    scope: kotlinx.coroutines.CoroutineScope,
-): DragAndDropTarget =
+private fun pdfDropTarget(): DragAndDropTarget =
     object : DragAndDropTarget {
         override fun onDrop(event: DragAndDropEvent): Boolean {
             val data = event.dragData()
             if (data !is DragData.FilesList) return false
-            val paths =
+            val files =
                 data
                     .readFiles()
                     .mapNotNull { toPath(it) }
-                    .filter { it.toString().endsWith(EXT_PDF, ignoreCase = true) }
-            if (paths.isEmpty()) return false
-            scope.launch { importDroppedFiles(env, paths) }
+                    .filter { it.toString().endsWith(EXT_PDF, ignoreCase = true) && Files.isRegularFile(it) }
+                    .map { ExternalSource(it) to (it.fileName?.toString() ?: FALLBACK_DROPPED_PDF) }
+            if (files.isEmpty()) return false
+            DesktopBridge.droppedFiles.trySend(files)
             return true
         }
-    }
-
-private suspend fun importDroppedFiles(
-    env: dev.npn.app.di.AppEnvironment,
-    paths: List<Path>,
-) {
-    val session =
-        env.session.value ?: run {
-            log("drag-drop import ignored: no library configured")
-            return
-        }
-    withContext(Dispatchers.IO) {
-        for (path in paths) {
-            if (!Files.isRegularFile(path)) continue
-            val name = path.fileName?.toString() ?: FALLBACK_DROPPED_PDF
-            log(importLogLine(name, session.ingest.importPdf(ExternalSource(path), name)))
-        }
-    }
-}
-
-private fun importLogLine(
-    name: String,
-    outcome: ImportOutcome,
-): String =
-    when (outcome) {
-        is ImportOutcome.Imported -> "imported $name -> ${outcome.relPath}"
-        is ImportOutcome.Duplicate -> "duplicate $name (already ${outcome.existingPath})"
-        is ImportOutcome.Failed -> "failed $name: ${outcome.reason}"
     }
 
 /** Convert a dropped file reference (a `file:` URI or a plain path) to a [Path]. */

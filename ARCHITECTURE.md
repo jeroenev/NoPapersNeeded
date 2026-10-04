@@ -108,9 +108,12 @@ background OCR).
 
 Desktop entrypoint (`Main.kt`) and packaging. One instance runs per user: `SingleInstance` holds a
 lock file in the app data directory, and a second launch only says so and exits. Closing the window
-closes the library session (bounded by a timeout) before the process exits. Packaging: deb, rpm,
-AppImage and uber-jar on Linux, a Flatpak bundle (manifest in `desktopApp/flatpak/`), and
-`.msi`/`.exe` installers on Windows. Hot Reload via `mise hot`.
+closes the library session (bounded by a timeout) before the process exits. `DesktopBridge`
+(composeApp) carries the window's two ties to the shared UI: the title the screens publish, which
+the window collects as state, and files dropped on the window, which `AppViewModel` imports and
+reports like any other import. Packaging: deb, rpm, AppImage and uber-jar on Linux, a Flatpak
+bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Windows. Hot Reload via
+`mise hot`.
 
 ## Data flow
 

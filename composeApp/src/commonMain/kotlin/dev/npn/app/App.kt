@@ -62,6 +62,7 @@ import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.trash.TrashScreen
 import dev.npn.app.ui.update.WithUpdateBanner
+import kotlinx.coroutines.flow.receiveAsFlow
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
@@ -95,6 +96,10 @@ private fun AppRoot(
     val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
+    // Files dropped on the desktop window import into whichever library is open, from any screen.
+    LaunchedEffect(vm) { DesktopBridge.droppedFiles.receiveAsFlow().collect { vm.importFiles(it) } }
+    // Without a library there are no screens to title the window; the app's name, in its language.
+    if (state !is AppState.Open) PublishWindowTitle(stringResource(Res.string.common_app_name))
 
     Box(modifier.fillMaxSize()) {
         when (val current = state) {
@@ -412,8 +417,14 @@ private fun DriveWindowTitle(nav: NavHostController) {
                 stringResource(Res.string.common_app_name)
             }
         }
-    LaunchedEffect(windowTitle) {
-        if (windowTitle != null) DesktopBridge.windowTitle.value = windowTitle
+    PublishWindowTitle(windowTitle)
+}
+
+/** Make [title] the native window title (desktop); null leaves the title to a screen below. */
+@Composable
+private fun PublishWindowTitle(title: String?) {
+    LaunchedEffect(title) {
+        if (title != null) DesktopBridge.windowTitle.value = title
     }
 }
 

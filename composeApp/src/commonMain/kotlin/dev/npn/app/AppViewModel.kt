@@ -9,7 +9,10 @@ import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.createLibraryFolder
+import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.library.importPdfs
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.fs.ExternalSource
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher
@@ -25,6 +28,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.library_drop_needs_library
+import no_papers_needed.composeapp.generated.resources.library_import_failed
 
 /** A library that did not open, as the user is told: a localized [reason], with [details] for support. */
 data class OpenFailure(
@@ -174,6 +180,21 @@ class AppViewModel(
 
     /** The user has read why a switch to another library failed. */
     fun dismissFailure() = phase.update { if (it is Phase.Ready) Phase.Ready() else it }
+
+    /**
+     * Import [files] (a file and the name to give it) dropped on the window, whatever screen is
+     * showing, and say what became of them.
+     */
+    fun importFiles(files: List<Pair<ExternalSource, String>>) {
+        val session = env.session.value
+        if (session == null) {
+            message(uiText(Res.string.library_drop_needs_library))
+            return
+        }
+        launchReporting({ reason -> uiText(Res.string.library_import_failed, reason) }) {
+            message(session.ingest.importPdfs(files).asUiText())
+        }
+    }
 }
 
 private fun Throwable.toOpenFailure(): OpenFailure =
