@@ -176,7 +176,9 @@ fun AiChatScreen(
                 contentPadding = PaddingValues(16.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(items) { item ->
+                // Keyed by session and item, so a row's own state (an expanded tool row) stays with
+                // its item, and never carries over to whatever sits at that position in another chat.
+                items(items, key = { "${ui.currentSessionId}:${it.id}" }) { item ->
                     when (item) {
                         is TranscriptItem.UserTurn -> {
                             UserBubble(item)

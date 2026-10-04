@@ -151,7 +151,7 @@ class AiChatViewModel(
         job = null
         _ui.update {
             it.copy(
-                transcript = ChatTranscript.EMPTY,
+                transcript = it.transcript.cleared(),
                 busy = false,
                 sessions =
                     it.sessions.map { session ->
@@ -183,7 +183,7 @@ class AiChatViewModel(
                 it.copy(
                     sessions = (listOf(session) + savedSessions).distinctBy { item -> item.id },
                     currentSessionId = session.id,
-                    transcript = ChatTranscript.EMPTY,
+                    transcript = it.transcript.cleared(),
                 )
             }
         }

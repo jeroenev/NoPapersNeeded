@@ -66,9 +66,29 @@ class ChatTranscriptTest {
 
         transcript.items shouldContainExactly
             listOf(
-                TranscriptItem.UserTurn("find tax"),
-                TranscriptItem.ToolUse("search_documents", "{}", "found one", running = false),
+                TranscriptItem.UserTurn(0, "find tax"),
+                TranscriptItem.ToolUse(1, "search_documents", "{}", "found one", running = false),
             )
+    }
+
+    /** Ids key the list rows: an item keeps its id as it streams and completes, and none repeats. */
+    @Test
+    fun everyItemKeepsAnIdNoOtherItemHas() {
+        val transcript =
+            ChatTranscript
+                .fromPersistedHistory(listOf(AiChatHistoryItem.UserTurn("earlier")))
+                .plusUser("find tax")
+                .plus(AiChatEvent.TextDelta("Let me "))
+                .plus(AiChatEvent.TextDelta("search"))
+                .plus(AiChatEvent.ToolCallStarted("search_documents", "{}"))
+                .plus(AiChatEvent.ToolCallFinished("search_documents", "{}", "hit"))
+                .plus(AiChatEvent.TextDelta("Found it"))
+                .plus(AiChatEvent.Done("Let me searchFound it"))
+
+        transcript.items.map { it.id } shouldContainExactly listOf(0L, 1L, 2L, 3L, 4L)
+
+        val afterClear = transcript.cleared().plusUser("again")
+        afterClear.items.single().id shouldBe 5L
     }
 
     @Test
