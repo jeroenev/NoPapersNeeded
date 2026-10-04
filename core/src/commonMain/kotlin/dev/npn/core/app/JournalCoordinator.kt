@@ -218,13 +218,16 @@ class JournalCoordinator internal constructor(
                 // Fold before opening the transaction: loadState reads the events as they stand
                 // BEFORE this object is ingested, which is exactly the base its events apply onto.
                 val current = foldedState()
+                val staged = accumulator.readObject(relPath)
                 var events: List<JournalEvent> = emptyList()
-                accumulator.withProjectionTransaction {
-                    events = accumulator.ingestObject(relPath)
-                    if (events.isEmpty()) return@withProjectionTransaction
-                    events.forEach(current::apply)
-                    observeSourceHlc(current.maxHlc)
-                    indexer.refreshEvents(current, events)
+                if (staged != null) {
+                    indexer.projection {
+                        events = accumulator.ingestObject(staged)
+                        if (events.isEmpty()) return@projection
+                        events.forEach(current::apply)
+                        observeSourceHlc(current.maxHlc)
+                        indexer.refreshEvents(current, events)
+                    }
                 }
                 syncedSettings.update(current, events)
                 // The projection now matches the enlarged source set; record that so the next open
@@ -351,8 +354,9 @@ class JournalCoordinator internal constructor(
     ) {
         val (path, version) = sourcePathAndVersion(published, written)
         withDurableProjectionRecovery {
-            accumulator.withProjectionTransaction {
-                accumulator.recordLocalSource(path, version, published?.contentHash, written)
+            val local = accumulator.localSource(path, version, published?.contentHash, written)
+            indexer.projection {
+                accumulator.recordLocalSource(local)
                 written.forEach(current::apply)
                 observeSourceHlc(current.maxHlc)
                 indexer.refreshEvents(current, written, preserveLifecycleDocs = preserveLifecycleDocs)

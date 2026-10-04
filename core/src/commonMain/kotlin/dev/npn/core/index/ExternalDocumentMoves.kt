@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.KeyValueDao
+import dev.npn.core.db.KeyValueEntity
 import dev.npn.core.db.PathMeta
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
@@ -23,17 +24,40 @@ internal class ExternalDocumentMoves(
         val version: Hlc?,
     )
 
+    /**
+     * Record where each of [rows] was seen, under its current path intent. The stored baselines are
+     * read in one bulk pass, and only a row whose baseline moved is checked against its bytes:
+     * through [known] (path to content hash) when the caller already knows the path's hash, by
+     * hashing the file otherwise.
+     */
     suspend fun observe(
-        row: DocumentEntity,
+        rows: Collection<DocumentEntity>,
         state: FoldedState,
+        known: Map<String, String>,
     ) {
-        if (row.missing || row.deleted || row.trashed) return
-        val intended = state.effectiveProp(row.docId, SystemProperty.STORAGE_PATH)
-        if (intended != null && intended != row.relPath) return
-        val value = encode(row.docId, row.relPath, state)
-        if (kv.get(key(row.docId)) == value) return
-        // A metadata-only refresh must not bless an intent whose bytes haven't arrived yet.
-        if (fs.exists(row.relPath) && fs.sha256(row.relPath) == row.docId) kv.put(key(row.docId), value)
+        val observable =
+            rows.filter { row ->
+                val intended = state.effectiveProp(row.docId, SystemProperty.STORAGE_PATH)
+                !row.missing && !row.deleted && !row.trashed && (intended == null || intended == row.relPath)
+            }
+        if (observable.isEmpty()) return
+        val stored = kv.getAll(observable.map { key(it.docId) })
+        val baselines = ArrayList<KeyValueEntity>()
+        for (row in observable) {
+            val value = encode(row.docId, row.relPath, state)
+            if (stored[key(row.docId)] == value) continue
+            // A metadata-only refresh must not bless an intent whose bytes haven't arrived yet.
+            if (holds(row, known)) baselines += KeyValueEntity(key(row.docId), value)
+        }
+        if (baselines.isNotEmpty()) kv.putAll(baselines)
+    }
+
+    private suspend fun holds(
+        row: DocumentEntity,
+        known: Map<String, String>,
+    ): Boolean {
+        known[row.relPath]?.let { return it == row.docId }
+        return fs.exists(row.relPath) && fs.sha256(row.relPath) == row.docId
     }
 
     suspend fun detect(

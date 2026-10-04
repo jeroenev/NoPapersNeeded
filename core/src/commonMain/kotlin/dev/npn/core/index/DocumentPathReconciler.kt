@@ -9,7 +9,13 @@ import dev.npn.core.journal.FoldedState
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.util.runCatchingCancellable
 
-/** Materializes winning path intents while keeping the index pointed at verified, available bytes. */
+/**
+ * Materializes winning path intents while keeping the index pointed at verified, available bytes.
+ *
+ * All of it is filesystem work, so none of it runs inside a fold: the fold projects rows from the
+ * journal alone, and [settle] moves the files those rows' intents ask for once the fold's
+ * transaction has committed.
+ */
 internal class DocumentPathReconciler(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
@@ -17,12 +23,41 @@ internal class DocumentPathReconciler(
     private val paths = DocumentPaths(fs)
     private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
 
-    suspend fun observe(
-        row: DocumentEntity,
+    /** Whether [row] sits somewhere other than where its winning path intent wants it. */
+    fun pending(
         state: FoldedState,
-    ) = externalMoves.observe(row, state)
+        row: DocumentEntity,
+    ): Boolean = intendedPath(state, row.docId)?.let { it != row.relPath } ?: false
 
-    suspend fun project(
+    /**
+     * The filesystem side of a fold that projected [rows]: free intended paths held by stale rows,
+     * move each document whose intent differs from where it is, and record where every document
+     * was seen. [known] maps paths to content hashes the caller already verified (a rescan's), so
+     * observing them hashes nothing again. Returns the rows it moved, for the caller to write.
+     */
+    suspend fun settle(
+        state: FoldedState,
+        rows: Collection<DocumentEntity>,
+        known: Map<String, String>,
+    ): List<DocumentEntity> {
+        val current = rows.associateByTo(LinkedHashMap()) { it.docId }
+        releaseStaleOwners(state, current)
+        val verified = HashMap(known)
+        val moved = ArrayList<DocumentEntity>()
+        for (row in current.values.toList()) {
+            if (!pending(state, row)) continue
+            val relocated = project(row, state)
+            if (relocated == row) continue
+            current[row.docId] = relocated
+            // The move checked the bytes it published, so observing them needs no second hash.
+            verified[relocated.relPath] = relocated.docId
+            moved += relocated
+        }
+        externalMoves.observe(current.values, state, verified)
+        return moved
+    }
+
+    private suspend fun project(
         row: DocumentEntity,
         state: FoldedState,
     ): DocumentEntity {
@@ -47,7 +82,7 @@ internal class DocumentPathReconciler(
         }
     }
 
-    suspend fun releaseStaleOwners(
+    private suspend fun releaseStaleOwners(
         state: FoldedState,
         rows: MutableMap<String, DocumentEntity>,
     ) {
@@ -66,7 +101,6 @@ internal class DocumentPathReconciler(
             if (!fs.exists(intended)) {
                 val released = owner.copy(relPath = "${NpnPaths.NPN_DIR}/missing/${owner.docId}", missing = true)
                 db.documentDao().upsert(released)
-                // Keep preloaded rows coherent so the fold's flush cannot restore the old path.
                 if (owner.docId in rows) rows[owner.docId] = released
             }
         }

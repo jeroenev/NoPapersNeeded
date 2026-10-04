@@ -132,31 +132,54 @@ class MetadataAccumulator(
     }
 
     /**
-     * v2-only single-object ingest (watch path). The filename is the content hash, so reads are
-     * hash-verified by [StorageV2Reader]. Returns the newly-unseen events (empty on a no-op).
+     * A storage-v2 object read and checked off disk, waiting for [ingestObject] to record it. The
+     * read is filesystem work, so the watch path makes it before the transaction that records it.
      */
-    suspend fun ingestObject(relPath: String): List<dev.npn.core.journal.JournalEvent> {
+    class StagedObject internal constructor(
+        internal val relPath: String,
+        internal val previouslyApplied: Boolean,
+        internal val fingerprint: String,
+        internal val contentHash: String,
+        internal val read: JournalSourceRead,
+    )
+
+    /**
+     * Read the v2 object at [relPath] (watch path). The filename is the content hash, so reads are
+     * hash-verified by [StorageV2Reader]. Null when the file is gone or already applied unchanged.
+     */
+    suspend fun readObject(relPath: String): StagedObject? {
         val path = NpnPaths.journalPath(relPath)
         if (path is NpnPaths.JournalPath.UnsupportedObjectStore) {
             fail("Unsupported metadata object store version ${path.version}")
         }
         require(path is NpnPaths.JournalPath.ObjectV2) { "Not a storage-v2 object: $relPath" }
-        val meta = fs.stat(relPath) ?: return emptyList()
+        val meta = fs.stat(relPath) ?: return null
         val existingSource = dao.source(relPath)
         val loaded =
             when (val prepared = prepareSource(relPath, meta, existingSource)) {
-                PreparedSource.Unchanged -> return emptyList()
+                PreparedSource.Unchanged -> return null
                 is PreparedSource.Loaded -> prepared
             }
-        return when (val result = StorageV2Reader.read(relPath, loaded.bytes)) {
+        return StagedObject(
+            relPath = relPath,
+            previouslyApplied = existingSource?.status == MetadataProjectionDao.STATUS_APPLIED,
+            fingerprint = loaded.fingerprint,
+            contentHash = loaded.contentHash,
+            read = StorageV2Reader.read(relPath, loaded.bytes),
+        )
+    }
+
+    /** Record the object [staged] read. Returns the newly-unseen events (empty on a no-op). */
+    suspend fun ingestObject(staged: StagedObject): List<dev.npn.core.journal.JournalEvent> =
+        when (val result = staged.read) {
             is JournalSourceRead.Accepted -> {
                 val inserted =
                     dao.ingestSource(
                         MetadataSourceEntity(
-                            relPath,
+                            staged.relPath,
                             NpnPaths.STORAGE_V2,
-                            loaded.fingerprint,
-                            loaded.contentHash,
+                            staged.fingerprint,
+                            staged.contentHash,
                             MetadataProjectionDao.STATUS_APPLIED,
                         ),
                         result.events.map(::eventEntity),
@@ -164,22 +187,22 @@ class MetadataAccumulator(
                             result.events
                                 .first()
                                 .event.dev,
-                            loaded.contentHash,
+                            staged.contentHash,
                         ),
                     )
                 unseen(result.events, inserted)
             }
 
             is JournalSourceRead.Retryable -> {
-                if (existingSource?.status == MetadataProjectionDao.STATUS_APPLIED) {
-                    fail("Previously applied object is no longer valid: $relPath (${result.message})")
+                if (staged.previouslyApplied) {
+                    fail("Previously applied object is no longer valid: ${staged.relPath} (${result.message})")
                 }
                 dao.upsertSource(
                     MetadataSourceEntity(
-                        relPath,
+                        staged.relPath,
                         NpnPaths.STORAGE_V2,
-                        loaded.fingerprint,
-                        loaded.contentHash,
+                        staged.fingerprint,
+                        staged.contentHash,
                         MetadataProjectionDao.STATUS_RETRYABLE,
                         result.message,
                     ),
@@ -191,7 +214,6 @@ class MetadataAccumulator(
                 fail(result.message)
             }
         }
-    }
 
     /** What one [runReconcilePass] observed, before any decision about how to fold it. */
     private class ReconcilePass(
@@ -512,12 +534,23 @@ class MetadataAccumulator(
         }
     }
 
-    suspend fun recordLocalSource(
+    /**
+     * A transaction this device just wrote, staged for [recordLocalSource]: its source row, canonical
+     * events and actor. Staging stats the written file, so it happens before the transaction that
+     * records it.
+     */
+    class LocalSource internal constructor(
+        internal val source: MetadataSourceEntity,
+        internal val events: List<MetadataEventEntity>,
+        internal val actor: MetadataTransactionActorEntity?,
+    )
+
+    suspend fun localSource(
         path: String,
         storageVersion: Int,
         contentHash: String?,
         events: List<dev.npn.core.journal.JournalEvent>,
-    ) {
+    ): LocalSource {
         val canonical =
             events.map { event ->
                 EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false)
@@ -539,8 +572,19 @@ class MetadataAccumulator(
             } else {
                 null
             }
-        dao.ingestSource(source, canonical.map(::eventEntity), actor)
+        return LocalSource(source, canonical.map(::eventEntity), actor)
     }
+
+    suspend fun recordLocalSource(local: LocalSource) {
+        dao.ingestSource(local.source, local.events, local.actor)
+    }
+
+    suspend fun recordLocalSource(
+        path: String,
+        storageVersion: Int,
+        contentHash: String?,
+        events: List<dev.npn.core.journal.JournalEvent>,
+    ) = recordLocalSource(localSource(path, storageVersion, contentHash, events))
 
     suspend fun loadState(): FoldedState =
         FoldedState().also { state ->

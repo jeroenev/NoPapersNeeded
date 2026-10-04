@@ -97,6 +97,22 @@ interface DocumentDao {
         at: Long,
     )
 
+    /**
+     * Point a document at the place its bytes were just moved to. A partial UPDATE, not a row
+     * upsert, so columns another writer set since the fold read the row survive the move.
+     */
+    @Query(
+        "UPDATE documents SET relPath = :relPath, fileName = :fileName, size = :size, mtime = :mtime, " +
+            "missing = 0 WHERE docId = :docId",
+    )
+    suspend fun relocate(
+        docId: String,
+        relPath: String,
+        fileName: String,
+        size: Long,
+        mtime: Long,
+    )
+
     @Query("SELECT * FROM documents WHERE docId = :docId")
     fun observeByDocId(docId: String): Flow<DocumentEntity?>
 

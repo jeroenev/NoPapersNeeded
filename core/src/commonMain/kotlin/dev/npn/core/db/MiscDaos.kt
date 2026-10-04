@@ -417,6 +417,16 @@ interface KeyValueDao {
         value: String,
     ) = put(KeyValueEntity(key, value))
 
+    @Upsert
+    suspend fun putAll(entries: List<KeyValueEntity>)
+
+    @Query("SELECT * FROM kv WHERE key IN (:keys)")
+    suspend fun getChunk(keys: List<String>): List<KeyValueEntity>
+
+    /** The stored value of each of [keys] that has one, read in bind-limit slices. */
+    suspend fun getAll(keys: List<String>): Map<String, String> =
+        inBindChunks(keys) { getChunk(it) }.associate { it.key to it.value }
+
     @Query("DELETE FROM kv WHERE key = :key")
     suspend fun delete(key: String)
 }

@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import androidx.room3.withWriteTransaction
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DocumentFieldEntity
 import dev.npn.core.db.DuplicateEntity
@@ -54,6 +55,9 @@ class Indexer(
     private val clock: EpochClock = SystemEpochClock,
 ) {
     private val documentPaths = DocumentPathReconciler(fs, db)
+
+    /** The path side of the folds made since the outermost [projection] began; null outside one. */
+    private var pathWork: PathWork? = null
     private val _scanState = MutableStateFlow<IndexProgress?>(null)
 
     /** Lightweight progress surface; null when idle. */
@@ -66,6 +70,62 @@ class Indexer(
     private val fieldDefDao get() = db.fieldDefDao()
     private val duplicateDao get() = db.duplicateDao()
 
+    /**
+     * Run [block], the journal bookkeeping of a write plus the folds that project it, as one
+     * database transaction. Moving the files the folds' path intents ask for, and recording where
+     * documents were seen, is filesystem work: it waits until the transaction has committed rather
+     * than holding SQLite's write lock through it. A fold or projection inside [block] joins it.
+     */
+    suspend fun <T> projection(block: suspend () -> T): T = deferringPaths { db.withWriteTransaction { block() } }
+
+    /**
+     * Run [block], letting every fold in it leave its path work in [work], then settle that work.
+     * Nested calls join the outermost one, so the work waits for the outermost transaction.
+     */
+    private suspend fun <T> deferringPaths(
+        work: PathWork = PathWork(),
+        block: suspend () -> T,
+    ): T {
+        if (pathWork != null) return block()
+        pathWork = work
+        val result =
+            try {
+                block()
+            } finally {
+                pathWork = null
+            }
+        settlePaths(work)
+        return result
+    }
+
+    /**
+     * Move the documents whose intents the folds left pending, record where every projected document
+     * was seen, and write the moved rows: their location and their searchable file name.
+     */
+    private suspend fun settlePaths(work: PathWork) {
+        val state = work.state ?: return
+        val moved = documentPaths.settle(state, work.rows.values, work.known)
+        if (moved.isEmpty()) return
+        db.withWriteTransaction {
+            for (row in moved) documentDao.relocate(row.docId, row.relPath, row.fileName, row.size, row.mtime)
+            ftsDao.upsertMetadata(moved.mapNotNull { row -> work.searchable[row.docId]?.copy(fileName = row.fileName) })
+        }
+    }
+
+    /**
+     * What the folds of one [projection] or rescan leave for after their transaction: the rows they
+     * projected, as written, and the searchable columns of those whose path intent is still pending,
+     * so a move can rewrite the file name. [known] holds content hashes a rescan established, by
+     * path, for observing them without hashing again.
+     */
+    private class PathWork(
+        val known: Map<String, String> = emptyMap(),
+    ) {
+        var state: FoldedState? = null
+        val rows = LinkedHashMap<String, DocumentEntity>()
+        val searchable = HashMap<String, FtsDocumentEntity>()
+    }
+
     @Suppress("LongMethod")
     suspend fun rescan(
         metadataState: FoldedState,
@@ -73,6 +133,7 @@ class Indexer(
         onProgress: (IndexProgress) -> Unit = {},
         onExternalMoves: (suspend (List<PendingOp>) -> Unit)? = null,
     ): ScanReport {
+        check(pathWork == null) { "A rescan does filesystem work, so it cannot run inside a projection" }
         val started = clock.nowMillis()
 
         fun report(p: IndexProgress) {
@@ -175,19 +236,24 @@ class Indexer(
             }
             val diskPaths = indexable.map { it.relPath }.toHashSet()
 
-            val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
+            val work = PathWork(known = knownHashes(indexable, changed, byPath, hashes))
+            val pass =
+                deferringPaths(work) {
+                    val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
+                    val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
+                    recon.relinkCandidates.addAll(
+                        RelinkPairing.pair(missing.missingDocs, recon.newDocs, recon.relinkCandidates),
+                    )
 
-            val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
-            recon.relinkCandidates.addAll(
-                RelinkPairing.pair(missing.missingDocs, recon.newDocs, recon.relinkCandidates),
-            )
-
-            report(IndexProgress(IndexProgress.Phase.FOLDING))
-            val resurrected =
-                applyFold(
-                    metadataState,
-                    FoldRequest(diskPaths = diskPaths, reconcileFileState = true),
-                )
+                    report(IndexProgress(IndexProgress.Phase.FOLDING))
+                    val resurrected =
+                        applyFold(
+                            metadataState,
+                            FoldRequest(diskPaths = diskPaths, reconcileFileState = true),
+                        )
+                    ScanPass(recon, missing.missingCount, resurrected)
+                }
+            val recon = pass.recon
 
             documentPaths.reconcileDuplicates(metadataState, recon.duplicates)
             val dupByDoc = recon.duplicates.groupBy { it.docId }
@@ -201,10 +267,10 @@ class Indexer(
                 added = recon.added,
                 moved = recon.moved,
                 changed = recon.changed,
-                missingCount = missing.missingCount,
+                missingCount = pass.missingCount,
                 duplicates = recon.duplicates,
                 conflictFiles = conflictFiles,
-                resurrected = resurrected,
+                resurrected = pass.resurrected,
                 relinkCandidates = recon.relinkCandidates,
                 hashedCount = hashedCount,
                 durationMillis = clock.nowMillis() - started,
@@ -234,6 +300,33 @@ class Indexer(
         }
         return indexable to conflictFiles
     }
+
+    /**
+     * Every listed path whose content hash this pass knows without reading the file again: the ones
+     * it just hashed, and the unchanged ones whose size and mtime matched their stored row, which is
+     * the same evidence the pass itself trusts to skip hashing them.
+     */
+    private fun knownHashes(
+        indexable: List<FileMeta>,
+        changed: List<FileMeta>,
+        byPath: Map<String, PathMeta>,
+        hashes: Map<String, String>,
+    ): Map<String, String> {
+        val changedPaths = changed.mapTo(HashSet()) { it.relPath }
+        val known = HashMap(hashes)
+        for (meta in indexable) {
+            if (meta.relPath in changedPaths) continue
+            byPath[meta.relPath]?.let { known[meta.relPath] = it.docId }
+        }
+        return known
+    }
+
+    /** What one rescan's reconcile and fold produced, for its report. */
+    private class ScanPass(
+        val recon: Reconciliation,
+        val missingCount: Int,
+        val resurrected: List<Resurrected>,
+    )
 
     /** Mutable accumulator for the reconcile pass, plus the doc rows it touched. */
     private class Reconciliation {
@@ -435,14 +528,16 @@ class Indexer(
                 }
             }
             documents.toList().forEach { documents += state.resolveDocId(it) }
-            return applyFold(
-                state,
-                FoldRequest(
-                    documentScope = documents,
-                    styledTags = styledTags,
-                    preserveLifecycleDocs = preserveLifecycleDocs,
-                ),
-            )
+            return deferringPaths {
+                applyFold(
+                    state,
+                    FoldRequest(
+                        documentScope = documents,
+                        styledTags = styledTags,
+                        preserveLifecycleDocs = preserveLifecycleDocs,
+                    ),
+                )
+            }
         } finally {
             _scanState.value = null
         }
@@ -455,7 +550,7 @@ class Indexer(
     ): List<Resurrected> {
         _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
         try {
-            return applyFold(state, FoldRequest(preserveLifecycleDocs = preserveLifecycleDocs))
+            return deferringPaths { applyFold(state, FoldRequest(preserveLifecycleDocs = preserveLifecycleDocs)) }
         } finally {
             _scanState.value = null
         }
@@ -526,13 +621,14 @@ class Indexer(
         // Bulk preload the current projection (rows, tags, fields, FTS content) so the per-doc
         // pass below issues no serial reads; diffed writes are collected and flushed once.
         val preloaded = preloadRows(state, journalDocs)
-        documentPaths.releaseStaleOwners(state, preloaded.rows)
         upsertReferencedTags(state, journalDocs, request.styledTags)
         // The registry is library-wide and small; a diffed replace per fold keeps it in step
         // with the fold at negligible cost and needs no per-op scoping.
         fieldDefDao.replaceAll(state.effectiveFieldDefs())
         val changes = ProjectionChanges()
         val supersession = resolveSupersessions(state, journalDocs, preloaded.rows, changes)
+        val work = checkNotNull(pathWork) { "A fold runs inside deferringPaths" }
+        work.state = state
 
         val resurrected = ArrayList<Resurrected>()
         for (doc in journalDocs) {
@@ -546,6 +642,7 @@ class Indexer(
                 resurrected = resurrected,
                 preloaded = preloaded,
                 changes = changes,
+                work = work,
             )
         }
         flushChanges(changes)
@@ -799,8 +896,12 @@ class Indexer(
         return Lifecycle(trashed, deleted, missing, relPath, fileName, origPath)
     }
 
-    /** Project one doc's tags, fields, props, lifecycle, row and FTS from the folded state. */
-    private suspend fun projectDocument(
+    /**
+     * Project one doc's tags, fields, props, lifecycle, row and FTS from the folded state. The row
+     * goes to [work] as written, for the path work after the transaction: the fold itself never
+     * moves a file.
+     */
+    private fun projectDocument(
         doc: String,
         row: DocumentEntity,
         state: FoldedState,
@@ -809,6 +910,7 @@ class Indexer(
         resurrected: MutableList<Resurrected>,
         preloaded: PreloadedRows,
         changes: ProjectionChanges,
+        work: PathWork,
     ) {
         // Predecessors (older ids that relinked onto this doc): their metadata carries over.
         val preds = supersession.predecessors[doc].orEmpty()
@@ -848,20 +950,19 @@ class Indexer(
                 deleted = lifecycle.deleted,
                 missing = lifecycle.missing,
             )
-        val newRow = documentPaths.project(projectedRow, state)
-        documentPaths.observe(newRow, state)
-        val rowChanged = newRow != row
-        if (rowChanged) changes.docRows.add(newRow)
+        val rowChanged = projectedRow != row
+        if (rowChanged) changes.docRows.add(projectedRow)
+        work.rows[doc] = projectedRow
 
         // FTS: the fold writes only the metadata-derived columns; the extracted text is the OCR
         // pipeline's (FtsDao.upsertMetadata leaves it alone). A brand-new doc has no fts row yet,
         // so it must be written even when nothing else changed; the metadata columns derive from
         // the doc row, tags and fields, so when none changed and a row exists there is nothing to
         // write.
+        val ftsRow = FtsRows.row(doc, projectedRow.fileName, effTags, fields, content = null)
         val searchableChanged = rowChanged || tagsChanged || doc in changes.fields
-        if (searchableChanged || doc !in preloaded.ftsIndexed) {
-            changes.ftsRows.add(FtsRows.row(doc, newRow.fileName, effTags, fields, content = null))
-        }
+        if (searchableChanged || doc !in preloaded.ftsIndexed) changes.ftsRows.add(ftsRow)
+        if (documentPaths.pending(state, projectedRow)) work.searchable[doc] = ftsRow
     }
 
     private companion object {
