@@ -74,7 +74,11 @@ fun DocActions(
     val ui by vm.ui.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<DocActionDialog?>(null) }
 
-    ShareOrExportButton(item = item, vm = vm)
+    ShareOrExportButton(
+        exportName = exportName(item),
+        onExport = { file -> vm.exportBakedCopy { bytes -> file.write(bytes) } },
+        onShare = { fileName -> vm.shareBakedCopy { bytes -> sharePdfBytes(fileName, bytes) } },
+    )
     DocActionsMenu(
         compact = compact,
         reindexing = ui.reindexing,
@@ -98,8 +102,12 @@ fun DocActions(
         dialog = dialog,
         pageCount = ui.pageCount.count,
         aiOcr = ui.aiOcr,
-        vm = vm,
-        onGone = onGone,
+        onRename = vm::rename,
+        onTrash = { vm.trash(onGone) },
+        onAiOcr = vm::ocrWithAi,
+        // The original is trashed on success; the host should leave/close.
+        onSplit = { segments -> vm.split(segments, onGone) },
+        onBake = vm::bakeInPlace,
         onDismiss = { dialog = null },
     )
 }
@@ -107,27 +115,28 @@ fun DocActions(
 /** Share on platforms with a share sheet (Android), save-to-file elsewhere (desktop). */
 @Composable
 private fun ShareOrExportButton(
-    item: DocListItem,
-    vm: DocDetailViewModel,
+    exportName: String,
+    onExport: (PlatformFile) -> Unit,
+    onShare: (fileName: String) -> Unit,
 ) {
     val saver =
         rememberFileSaverLauncher(
             dialogSettings = FileKitDialogSettings.createDefault(),
         ) { file: PlatformFile? ->
-            if (file != null) vm.exportBakedCopy { bytes -> file.write(bytes) }
+            if (file != null) onExport(file)
         }
 
     if (supportsSharing()) {
         TooltipIconButton(
             icon = Icons.Filled.Share,
             label = stringResource(Res.string.detail_share_baked_copy),
-            onClick = { vm.shareBakedCopy { bytes -> sharePdfBytes(exportName(item) + ".pdf", bytes) } },
+            onClick = { onShare("$exportName.pdf") },
         )
     } else {
         TooltipIconButton(
             icon = Icons.Filled.Save,
             label = stringResource(Res.string.detail_export_baked_copy),
-            onClick = { saver.launch(suggestedName = exportName(item), defaultExtension = "pdf") },
+            onClick = { saver.launch(suggestedName = exportName, defaultExtension = "pdf") },
         )
     }
 }
@@ -225,8 +234,11 @@ private fun DocActionDialogs(
     dialog: DocActionDialog?,
     pageCount: Int,
     aiOcr: AiOcrOffer,
-    vm: DocDetailViewModel,
-    onGone: () -> Unit,
+    onRename: (String) -> Unit,
+    onTrash: () -> Unit,
+    onAiOcr: () -> Unit,
+    onSplit: (List<IntRange>) -> Unit,
+    onBake: () -> Unit,
     onDismiss: () -> Unit,
 ) {
     when (dialog) {
@@ -236,7 +248,7 @@ private fun DocActionDialogs(
                 label = stringResource(Res.string.detail_new_file_name),
                 confirmLabel = stringResource(Res.string.detail_rename),
                 onConfirm = {
-                    vm.rename(it)
+                    onRename(it)
                     onDismiss()
                 },
                 onDismiss = onDismiss,
@@ -251,7 +263,7 @@ private fun DocActionDialogs(
                 destructive = true,
                 onConfirm = {
                     onDismiss()
-                    vm.trash(onGone)
+                    onTrash()
                 },
                 onDismiss = onDismiss,
             )
@@ -264,7 +276,7 @@ private fun DocActionDialogs(
                 confirmLabel = stringResource(Res.string.detail_bake_in_place),
                 onConfirm = {
                     onDismiss()
-                    vm.bakeInPlace()
+                    onBake()
                 },
                 onDismiss = onDismiss,
             )
@@ -279,7 +291,7 @@ private fun DocActionDialogs(
                 confirmLabel = stringResource(Res.string.detail_ai_ocr_confirm),
                 onConfirm = {
                     onDismiss()
-                    vm.ocrWithAi()
+                    onAiOcr()
                 },
                 onDismiss = onDismiss,
             )
@@ -290,8 +302,7 @@ private fun DocActionDialogs(
                 pageCount = pageCount,
                 onConfirm = { segments ->
                     onDismiss()
-                    // The original is trashed on success; the host should leave/close.
-                    vm.split(segments, onGone)
+                    onSplit(segments)
                 },
                 onDismiss = onDismiss,
             )

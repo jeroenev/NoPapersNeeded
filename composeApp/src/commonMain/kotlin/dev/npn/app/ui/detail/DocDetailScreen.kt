@@ -133,6 +133,7 @@ fun DocDetailScreen(
         actions = actions,
         vm = vm,
         snackbar = snackbar,
+        topBarActions = { compact -> DocActions(item = current, vm = vm, onGone = onBack, compact = compact) },
         viewerFocus = viewerFocus,
         browsePosition = browsePosition,
         goPrevDoc = goPrevDoc,
@@ -154,6 +155,8 @@ private fun LoadedDocScreen(
     actions: MetadataActions,
     vm: DocDetailViewModel,
     snackbar: SnackbarHostState,
+    /** The document actions for the top bar, given whether the bar is compact. */
+    topBarActions: @Composable (compact: Boolean) -> Unit,
     viewerFocus: FocusRequester,
     browsePosition: Pair<Int, Int>?,
     goPrevDoc: (() -> Unit)?,
@@ -180,14 +183,7 @@ private fun LoadedDocScreen(
                         onNextDoc = goNextDoc.takeIf { showNavInTopBar },
                         showNav = showNavInTopBar,
                         onBack = onBack,
-                        actions = {
-                            DocActions(
-                                item = current,
-                                vm = vm,
-                                onGone = onBack,
-                                compact = compact,
-                            )
-                        },
+                        actions = { topBarActions(compact) },
                     )
                     browsePosition?.takeIf { canBrowse && compact }?.let { position ->
                         DocumentNavPill(
