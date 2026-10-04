@@ -2,7 +2,6 @@ package dev.npn.app
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -48,8 +47,9 @@ import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.SafStorageSwitch
 import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.common.TestTags
+import dev.npn.app.ui.common.LocalWindowWidthClass
+import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.common.rememberStorageAccess
@@ -108,8 +108,10 @@ import org.jetbrains.compose.resources.stringResource
 fun App(env: AppEnvironment) {
     LocaleProvider(env.settings) {
         NpnTheme {
-            Surface(Modifier.fillMaxSize().testTagsAsResourceIds(), color = MaterialTheme.colorScheme.background) {
-                AppRoot(env)
+            ProvideWindowWidthClass {
+                Surface(Modifier.fillMaxSize().testTagsAsResourceIds(), color = MaterialTheme.colorScheme.background) {
+                    AppRoot(env)
+                }
             }
         }
     }
@@ -235,31 +237,31 @@ private fun MainNav(
                 }
             },
         ) {
-            BoxWithConstraints(Modifier.fillMaxSize()) {
-                val aiEditInSidebar = maxWidth > WideLayoutBreakpoint
-                NavigationShell(
-                    current = nav.currentTopLevelDestination(),
-                    aiCurrent = nav.currentAiDestination(),
-                    aiProbe = aiProbe,
-                    queue = queue,
-                    onNavigate = { dest -> nav.navigateTopLevel(dest) },
-                    onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
-                    onAiEdit = {
-                        aiSelection.set(emptyList())
-                        nav.navigateAi(Route.AiEdit)
-                    },
-                ) {
-                    MainNavHost(
-                        nav = nav,
-                        env = env,
-                        session = session,
-                        browse = browse,
-                        aiConfigured = aiConfigured,
-                        aiSelection = aiSelection,
-                        libraryFilterHandoff = libraryFilterHandoff,
-                        showAiEditTopBar = !aiEditInSidebar,
-                    )
-                }
+            // The rail carries AI edit on a wide window, so the chat's top bar offers it only on a
+            // compact one.
+            val aiEditInSidebar = LocalWindowWidthClass.current.isWide
+            NavigationShell(
+                current = nav.currentTopLevelDestination(),
+                aiCurrent = nav.currentAiDestination(),
+                aiProbe = aiProbe,
+                queue = queue,
+                onNavigate = { dest -> nav.navigateTopLevel(dest) },
+                onAiChat = { nav.navigateAi(Route.AiChat, restoreState = true) },
+                onAiEdit = {
+                    aiSelection.set(emptyList())
+                    nav.navigateAi(Route.AiEdit)
+                },
+            ) {
+                MainNavHost(
+                    nav = nav,
+                    env = env,
+                    session = session,
+                    browse = browse,
+                    aiConfigured = aiConfigured,
+                    aiSelection = aiSelection,
+                    libraryFilterHandoff = libraryFilterHandoff,
+                    showAiEditTopBar = !aiEditInSidebar,
+                )
             }
         }
     }

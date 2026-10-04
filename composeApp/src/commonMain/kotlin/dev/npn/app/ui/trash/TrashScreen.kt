@@ -4,7 +4,6 @@ package dev.npn.app.ui.trash
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -43,10 +42,10 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
-import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
@@ -203,25 +202,23 @@ private fun TrashScaffold(
 ) {
     Scaffold(
         topBar = {
-            BoxWithConstraints {
-                // A desktop window shows the two bulk actions directly; a compact bar keeps them in
-                // the overflow menu so the bar stays uncrowded.
-                val wide = maxWidth > WideLayoutBreakpoint
-                TopAppBar(
-                    title = { Text(stringResource(Res.string.common_trash_maintenance_title)) },
-                    // No back arrow: Trash is a top-level rail destination reached from navigation, not a
-                    // pushed screen, so a back arrow would misrepresent it and crowd the bar.
-                    actions = {
-                        if (tab == TrashTab.TRASH && state.trashed.isNotEmpty()) {
-                            TrashBulkActions(
-                                wide = wide,
-                                onRestoreAll = bulkActions.onRestoreAll,
-                                onEmptyTrash = bulkActions.onEmptyTrash,
-                            )
-                        }
-                    },
-                )
-            }
+            // A wide window shows the two bulk actions directly; a compact bar keeps them in the
+            // overflow menu so the bar stays uncrowded.
+            val wide = LocalWindowWidthClass.current.isWide
+            TopAppBar(
+                title = { Text(stringResource(Res.string.common_trash_maintenance_title)) },
+                // No back arrow: Trash is a top-level rail destination reached from navigation, not a
+                // pushed screen, so a back arrow would misrepresent it and crowd the bar.
+                actions = {
+                    if (tab == TrashTab.TRASH && state.trashed.isNotEmpty()) {
+                        TrashBulkActions(
+                            wide = wide,
+                            onRestoreAll = bulkActions.onRestoreAll,
+                            onEmptyTrash = bulkActions.onEmptyTrash,
+                        )
+                    }
+                },
+            )
         },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->

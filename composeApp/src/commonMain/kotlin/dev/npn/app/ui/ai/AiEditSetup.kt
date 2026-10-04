@@ -2,7 +2,6 @@ package dev.npn.app.ui.ai
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -34,8 +33,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.NumericField
-import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.EditScope
@@ -109,9 +108,9 @@ internal fun AiEditSetup(
     val preview by vm.preview.collectAsStateWithLifecycle()
     val plan by vm.plan.collectAsStateWithLifecycle()
     val blocker by vm.startBlocker.collectAsStateWithLifecycle()
+    val wide = LocalWindowWidthClass.current.isWide
     Column(Modifier.fillMaxSize()) {
-        BoxWithConstraints(Modifier.weight(1f).fillMaxWidth()) {
-            val wide = maxWidth > WideLayoutBreakpoint
+        Box(Modifier.weight(1f).fillMaxWidth()) {
             Column(
                 Modifier
                     .fillMaxSize()

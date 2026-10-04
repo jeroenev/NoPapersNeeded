@@ -1,7 +1,6 @@
 package dev.npn.app.ui.nav
 
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -39,7 +38,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.contentDescription
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.common.WideLayoutBreakpoint
+import dev.npn.app.ui.common.LocalWindowWidthClass
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_ai_assistant
 import no_papers_needed.composeapp.generated.resources.library_ai_edit
@@ -79,8 +78,8 @@ fun NavigationShell(
     onAiEdit: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        if (maxWidth > WideLayoutBreakpoint) {
+    Box(Modifier.fillMaxSize()) {
+        if (LocalWindowWidthClass.current.isWide) {
             Row(Modifier.fillMaxSize()) {
                 if (current != null || aiCurrent != null) {
                     ShellRail(

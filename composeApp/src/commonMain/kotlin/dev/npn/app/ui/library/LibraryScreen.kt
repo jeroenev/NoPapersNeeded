@@ -95,6 +95,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.ScrollToTopOnNewResults
 import dev.npn.app.ui.common.ScrollbarWidth
 import dev.npn.app.ui.common.SearchField
@@ -103,7 +104,6 @@ import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.VerticalScrollbar
-import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.common.platformFileToExternalSource
 import dev.npn.app.ui.queue.QueueCounts
@@ -169,7 +169,8 @@ import org.jetbrains.compose.resources.stringResource
  * Width of the right-hand side panel (filter editor / document preview) on wide layouts: half the
  * window, clamped so it neither collapses just past the breakpoint nor eats a huge desktop window.
  * The panel is the full document view on wide layouts (viewer + metadata), so it gets equal
- * footing with the list.
+ * footing with the list. Its maximum stays below [dev.npn.app.ui.common.WideLayoutBreakpoint],
+ * which is what lets the panel lay its content out as a compact window does.
  */
 private const val SIDE_PANEL_FRACTION = 0.5f
 private val SidePanelMinWidth = 420.dp
@@ -212,8 +213,9 @@ fun LibraryScreen(
 
     var dialog by rememberLibraryDialog()
 
+    val wide = LocalWindowWidthClass.current.isWide
+    // Measured for the side panel's width only; whether there is a side panel is the window's call.
     BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth > WideLayoutBreakpoint
         // Wide layouts preview a tapped document in the side panel; compact ones open it directly.
         var previewDocId by remember { mutableStateOf<String?>(null) }
         val onDocClick: (String) -> Unit = { docId -> if (wide) previewDocId = docId else openDoc(docId) }

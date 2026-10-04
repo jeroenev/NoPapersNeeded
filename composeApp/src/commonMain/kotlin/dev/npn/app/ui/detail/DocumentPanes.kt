@@ -32,7 +32,7 @@ import androidx.compose.ui.semantics.progressBarRangeInfo
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.common.WideLayoutBreakpoint
+import dev.npn.app.ui.common.LocalWindowWidthClass
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ux_resize_panes
 import org.jetbrains.compose.resources.stringResource
@@ -43,7 +43,11 @@ private val PaneMinWidth = 320.dp
 /** Width of the draggable divider between the two panes; excluded from the area the panes share. */
 private val DividerWidth = 48.dp
 
-/** Width decisions use the document's available area, including when it is in a library pane. */
+/**
+ * The page preview and the metadata tabs side by side on a wide window, or the preview as the first
+ * tab on a compact one. The library's side panel counts as compact
+ * (see [dev.npn.app.ui.library.DocPreviewPanel]).
+ */
 @Composable
 fun MetadataPanel(
     state: MetadataUiState,
@@ -51,8 +55,8 @@ fun MetadataPanel(
     previewTab: (@Composable (Modifier) -> Unit)? = null,
     modifier: Modifier = Modifier,
 ) {
-    BoxWithConstraints(modifier) {
-        if (maxWidth >= WideLayoutBreakpoint && previewTab != null) {
+    Box(modifier) {
+        if (LocalWindowWidthClass.current.isWide && previewTab != null) {
             DocumentPanes(
                 preview = previewTab,
                 details = { MetadataTabs(state, actions, modifier = it) },

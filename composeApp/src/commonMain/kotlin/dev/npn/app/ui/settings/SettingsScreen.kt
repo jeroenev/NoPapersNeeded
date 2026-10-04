@@ -4,7 +4,6 @@ package dev.npn.app.ui.settings
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
@@ -44,8 +43,8 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SnackbarMessages
-import dev.npn.app.ui.common.WideLayoutBreakpoint
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_back
@@ -107,27 +106,25 @@ fun SettingsScreen(
             onAutoMatchRules = onAutoMatchRules,
         )
 
-    BoxWithConstraints(Modifier.fillMaxSize()) {
-        val wide = maxWidth > WideLayoutBreakpoint
-        // Wide layouts keep the list on screen, so switching panes is a selection, not navigation:
-        // it must not stack back-stack entries, and it must not reset the search box by tearing
-        // the screen down. Compact layouts drill down for real, which is what makes system back
-        // return to the list.
-        var picked by rememberSaveable { mutableStateOf<String?>(null) }
-        SettingsScaffold(
-            wide = wide,
-            selected =
-                if (wide) {
-                    SettingsCategoryId.fromRouteKey(picked) ?: category ?: SettingsCategoryId.LIBRARY
-                } else {
-                    category
-                },
-            snackbar = snackbar,
-            context = context,
-            onSelect = { id -> if (wide) picked = id.routeKey else onOpenCategory(id) },
-            onBack = onBack,
-        )
-    }
+    val wide = LocalWindowWidthClass.current.isWide
+    // Wide layouts keep the list on screen, so switching panes is a selection, not navigation:
+    // it must not stack back-stack entries, and it must not reset the search box by tearing
+    // the screen down. Compact layouts drill down for real, which is what makes system back
+    // return to the list.
+    var picked by rememberSaveable { mutableStateOf<String?>(null) }
+    SettingsScaffold(
+        wide = wide,
+        selected =
+            if (wide) {
+                SettingsCategoryId.fromRouteKey(picked) ?: category ?: SettingsCategoryId.LIBRARY
+            } else {
+                category
+            },
+        snackbar = snackbar,
+        context = context,
+        onSelect = { id -> if (wide) picked = id.routeKey else onOpenCategory(id) },
+        onBack = onBack,
+    )
 }
 
 @Composable

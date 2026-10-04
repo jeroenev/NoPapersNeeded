@@ -29,8 +29,10 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TooltipIconButton
+import dev.npn.app.ui.common.WindowWidthClass
 import dev.npn.app.ui.detail.DocActions
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.DocumentEditor
@@ -65,16 +67,20 @@ internal fun DocPreviewPanel(
     modifier: Modifier = Modifier,
 ) {
     Surface(modifier = modifier, tonalElevation = 3.dp) {
-        ScopedToDoc(docId = item.doc.docId) {
-            PreviewBody(
-                item = item,
-                session = session,
-                snackbar = snackbar,
-                onClose = onClose,
-                onExpand = onExpand,
-                onReviewed = onReviewed,
-                hasNext = hasNext,
-            )
+        // A column beside the list, never wider than the wide breakpoint (see SidePanelMaxWidth):
+        // the document view inside lays out as it would on a compact window, one tab at a time.
+        CompositionLocalProvider(LocalWindowWidthClass provides WindowWidthClass.COMPACT) {
+            ScopedToDoc(docId = item.doc.docId) {
+                PreviewBody(
+                    item = item,
+                    session = session,
+                    snackbar = snackbar,
+                    onClose = onClose,
+                    onExpand = onExpand,
+                    onReviewed = onReviewed,
+                    hasNext = hasNext,
+                )
+            }
         }
     }
 }
