@@ -8,6 +8,8 @@ import androidx.room3.DeleteTable
 import androidx.room3.RoomDatabase
 import androidx.room3.RoomDatabaseConstructor
 import androidx.room3.migration.AutoMigrationSpec
+import androidx.sqlite.SQLiteConnection
+import androidx.sqlite.execSQL
 
 /**
  * Local index database. This is a disposable cache: a materialized view of the file library
@@ -36,7 +38,8 @@ import androidx.room3.migration.AutoMigrationSpec
     // v19: adds ocr_queue.aiRequested (an AI OCR run asked for on this device, unlike the synced pin).
     // v20: adds ocr_queue.nextAttemptAt (retry backoff for failed OCR runs).
     // v21: adds ocr_page_cache (pages a failed OCR run read, so its retry does not pay for them).
-    version = 21,
+    // v22: adds fts_keys, the rowid of each document's FTS row.
+    version = 22,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -57,6 +60,7 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 18, to = 19),
         AutoMigration(from = 19, to = 20),
         AutoMigration(from = 20, to = 21),
+        AutoMigration(from = 21, to = 22, spec = NpnDatabase.FtsKeys::class),
     ],
     entities = [
         DocumentEntity::class,
@@ -65,6 +69,7 @@ import androidx.room3.migration.AutoMigrationSpec
         DocumentFieldEntity::class,
         FieldDefEntity::class,
         FtsDocumentEntity::class,
+        FtsKeyEntity::class,
         SavedViewEntity::class,
         ThumbnailEntity::class,
         DuplicateEntity::class,
@@ -145,6 +150,20 @@ abstract class NpnDatabase : RoomDatabase() {
         DeleteColumn(tableName = "auto_match_rules", columnName = "docType"),
     )
     class RuleSetsColumn : AutoMigrationSpec
+
+    /**
+     * v21 -> v22: record the rowid of every existing FTS row, so the index survives the upgrade with
+     * its extracted text. A document indexed twice keeps its first row; the others are dropped.
+     */
+    class FtsKeys : AutoMigrationSpec {
+        override suspend fun onPostMigrate(connection: SQLiteConnection) {
+            connection.execSQL(
+                "INSERT INTO fts_keys (ftsRowid, docId) " +
+                    "SELECT MIN(rowid), docId FROM fts_documents WHERE docId IS NOT NULL GROUP BY docId",
+            )
+            connection.execSQL("DELETE FROM fts_documents WHERE rowid NOT IN (SELECT ftsRowid FROM fts_keys)")
+        }
+    }
 }
 
 /**

@@ -168,10 +168,15 @@ data class FieldDefEntity(
 
 /**
  * FTS5 full-text index over file name, extracted content, tags and every field value. Plain
- * (regular) FTS5 table: docId lives as an indexed column and updates are done as exact-match
- * delete + reinsert (see [FtsDao.replaceDocument]). Rows are built by
+ * (regular) FTS5 table. FTS5 finds a row only by MATCH or by rowid: a `docId = ?` filter reads
+ * every row, so a document's row is addressed by the rowid [FtsKeyEntity] records for it, never
+ * through [docId], which is here for search results. Rows are built by
  * [dev.npn.core.index.FtsRows] only, so every write site indexes the same columns.
  * The JVM integration test verifies that [Fts5] works with the bundled SQLite driver.
+ *
+ * A schema change to this table needs a migration that keeps each row's rowid. Room's
+ * auto-migration rebuilds an FTS table without them, which would leave [FtsKeyEntity] pointing at
+ * the wrong rows.
  */
 @Fts5
 @Entity(tableName = "fts_documents")
@@ -184,6 +189,20 @@ data class FtsDocumentEntity(
     val tags: String? = null,
     /** Every field value the document carries (title, notes, custom fields alike), newline-joined. */
     val fields: String? = null,
+)
+
+/**
+ * The rowid of each document's [FtsDocumentEntity] row, found through the unique index on [docId].
+ * Every document-scoped FTS read and write resolves its row here (see [FtsDao]). Keys are allocated
+ * here and never reused, so an FTS row is only ever inserted under its own key's rowid.
+ */
+@Entity(
+    tableName = "fts_keys",
+    indices = [Index(value = ["docId"], unique = true)],
+)
+data class FtsKeyEntity(
+    @PrimaryKey(autoGenerate = true) val ftsRowid: Long = 0,
+    val docId: String,
 )
 
 @Entity(tableName = "saved_views")

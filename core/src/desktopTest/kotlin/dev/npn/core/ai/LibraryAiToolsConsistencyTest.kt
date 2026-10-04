@@ -113,7 +113,7 @@ class LibraryAiToolsConsistencyTest {
             db.documentDao().upsertAll(
                 hidden.mapIndexed { index, id -> doc(id, relPath = "$index.pdf", trashed = true) } + doc(live),
             )
-            db.ftsDao().insertAll(
+            db.ftsDao().replaceDocuments(
                 hidden.map { FtsDocumentEntity(docId = it, content = "needle") } +
                     FtsDocumentEntity(docId = live, content = "needle"),
             )

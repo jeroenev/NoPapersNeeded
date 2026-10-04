@@ -4,8 +4,10 @@ import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.StatementLog
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.index.ScanReport
 import dev.npn.core.journal.EpochClock
@@ -117,11 +119,13 @@ class IndexRig private constructor(
     }
 
     companion object {
-        fun create(): IndexRig {
+        /** A fresh rig; with [statements], every SQL statement the index database runs is logged there. */
+        fun create(statements: StatementLog? = null): IndexRig {
             val libRoot = Files.createTempDirectory("npn-index-lib")
             val dbDir = Files.createTempDirectory("npn-index-db").toFile()
             val fs = JvmLibraryFileSystem(libRoot)
-            val db = npnDatabase(File(dbDir, "index.db"))
+            val dbFile = File(dbDir, "index.db")
+            val db = if (statements == null) npnDatabase(dbFile) else recordingDatabase(dbFile, statements)
             return IndexRig(libRoot, dbDir, fs, db, MutableClock(1_000L))
         }
     }
