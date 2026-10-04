@@ -105,10 +105,13 @@ fun PageViewer(
     val pagerState = rememberPagerState(initialPage = pageIndex.coerceIn(0, count - 1)) { count }
     val scope = rememberCoroutineScope()
 
-    // Keep pager and the external page index in sync, both directions, without feedback loops:
-    // settled pager page -> VM; VM page (prev/next/go-to) -> animate the pager.
+    // Keep pager and the external page index in sync, both directions: settled pager page -> VM;
+    // VM page (prev/next/go-to) -> animate the pager. The VM ignores a page it already holds, so
+    // reporting every settle cannot loop, and comparing against [pageIndex] here would read the
+    // value this effect started with.
+    val reportPage by rememberUpdatedState(onPageChange)
     LaunchedEffect(pagerState) {
-        snapshotFlow { pagerState.settledPage }.collect { if (it != pageIndex) onPageChange(it) }
+        snapshotFlow { pagerState.settledPage }.collect { reportPage(it) }
     }
     LaunchedEffect(pageIndex) {
         if (pageIndex != pagerState.currentPage) pagerState.animateScrollToPage(pageIndex)
