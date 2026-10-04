@@ -45,8 +45,6 @@ object NpnPaths {
     // See docs/METADATA_STORAGE_PLAN.md §5 "Compaction".
     private val snapshotBucketPattern = Regex("^objects-snap-v([1-9][0-9]*)-([0-9a-fA-F]{2})$")
 
-    /** A canonical lowercase-hex SHA-256 digest (document/content identity), anchored. */
-    private val canonicalHashPattern = Regex("^[0-9a-f]{$SHA256_HEX_LENGTH}$")
     private val objectNamePattern = Regex("^([0-9a-f]{64})\\.jsonl$")
     private val embeddedHashPattern = Regex("(?:^|[^0-9a-f])([0-9a-f]{64})(?=[^0-9a-f]|$)")
     private val objectStagingPattern = Regex("^\\.[0-9a-f]{64}\\.[^.]+\\.[^.]+\\.part$")
@@ -102,7 +100,7 @@ object NpnPaths {
         hash: String,
         snapshot: Boolean = false,
     ): String {
-        require(canonicalHashPattern.matches(hash)) { "Invalid SHA-256: $hash" }
+        require(SHA256_HEX.matches(hash)) { "Invalid SHA-256: $hash" }
         val infix = if (snapshot) "objects-snap-v$SNAPSHOT_V2" else "objects-v$STORAGE_V2"
         return "$JOURNAL_DIR/$infix-${hash.take(2)}/$hash.jsonl"
     }

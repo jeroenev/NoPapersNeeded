@@ -2,6 +2,9 @@ package dev.npn.core.fs
 
 private const val HEX_DIGITS = "0123456789abcdef"
 
+/** A canonical SHA-256 digest, the form of every document and journal object id: lowercase hex, anchored. */
+internal val SHA256_HEX = Regex("^[0-9a-f]{${NpnPaths.SHA256_HEX_LENGTH}}$")
+
 /** Lowercase hex encoding of these bytes (used for content-hash filenames). */
 internal fun ByteArray.toHexLower(): String {
     val hex = CharArray(size * 2)

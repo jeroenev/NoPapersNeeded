@@ -1,5 +1,6 @@
 package dev.npn.core.journal
 
+import dev.npn.core.fs.SHA256_HEX
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
@@ -59,8 +60,6 @@ data class CanonicalJournalEvent(
 /** Explicit event decoder registry. Add migrations here before adding a new writer version. */
 object EventDecoderRegistry {
     val supportedVersions: Set<Int> = setOf(JournalEventVersions.V1)
-
-    private val DOCUMENT_ID = Regex("^[0-9a-f]{64}$")
 
     fun decode(
         line: String,
@@ -153,8 +152,8 @@ object EventDecoderRegistry {
         if (documentOperation != null) {
             require((event.doc != null) == documentOperation) { "Operation has invalid document scope" }
         }
-        event.doc?.let { require(DOCUMENT_ID.matches(it)) { "Invalid document id" } }
-        (event.op as? JournalOp.Relink)?.let { require(DOCUMENT_ID.matches(it.newDoc)) { "Invalid relink target" } }
+        event.doc?.let { require(SHA256_HEX.matches(it)) { "Invalid document id" } }
+        (event.op as? JournalOp.Relink)?.let { require(SHA256_HEX.matches(it.newDoc)) { "Invalid relink target" } }
         (event.op as? JournalOp.TagRemove)?.dots?.forEach { require(it.seq > 0L) { "Invalid removed dot" } }
     }
 

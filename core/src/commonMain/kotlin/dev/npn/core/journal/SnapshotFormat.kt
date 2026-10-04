@@ -1,6 +1,7 @@
 package dev.npn.core.journal
 
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.SHA256_HEX
 import dev.npn.core.fs.sha256Bytes
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
@@ -59,7 +60,7 @@ object SnapshotCodec {
         val supersedes = (obj[SnapshotManifest.FIELD_SUPERSEDES] as? JsonArray)?.map { it.jsonPrimitive.content }
         require(version != null) { "Snapshot manifest version must be an integer" }
         require(supersedes != null) { "Snapshot manifest supersedes must be an array" }
-        require(supersedes.all { HEX64.matches(it) }) { "Superseded hash is not a SHA-256" }
+        require(supersedes.all { SHA256_HEX.matches(it) }) { "Superseded hash is not a SHA-256" }
         return SnapshotManifest(version, supersedes)
     }
 
@@ -75,7 +76,6 @@ object SnapshotCodec {
         return lines.joinToString("\n").encodeToByteArray()
     }
 
-    private val HEX64 = Regex("^[0-9a-f]{64}$")
     const val SNAPSHOT_MANIFEST_VERSION = 2
 }
 
