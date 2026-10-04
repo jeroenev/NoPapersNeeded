@@ -9,6 +9,7 @@ import ai.koog.prompt.llm.LLMProvider
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
+import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
 import dev.npn.core.db.NpnDatabase
@@ -295,6 +296,51 @@ class KoogChatAgentTest {
                 .filterIsInstance<Message.Assistant>()
                 .map { it.textContent() }
                 .filter { it.isNotBlank() } shouldContainExactly listOf("Let me search.")
+        }
+
+    /**
+     * A long session must not re-send every old tool output with each question: the request
+     * replays only the latest turns' results in full. The stored history keeps all of them, since
+     * the reopened transcript shows them.
+     */
+    @Test
+    fun oldToolResultsAreStubbedInTheRequestButKeptInTheHistory() =
+        runTest {
+            val output = "r".repeat(2_000)
+            val earlier =
+                listOf(Message.System("system", RequestMetaInfo.Empty)) +
+                    (1..3).flatMap { n ->
+                        listOf(
+                            Message.User("question $n", RequestMetaInfo.Empty),
+                            Message.Assistant(
+                                listOf(MessagePart.Tool.Call("call-$n", "search_documents", "{}")),
+                                ResponseMetaInfo.Empty,
+                            ),
+                            Message.User(
+                                MessagePart.Tool.Result("call-$n", "search_documents", output),
+                                RequestMetaInfo.Empty,
+                            ),
+                            Message.Assistant("answer $n", ResponseMetaInfo.Empty),
+                        )
+                    }
+            RoomChatHistoryProvider(db).store("session-1", earlier)
+            val executor = scriptedExecutor(listOf(textFrames("answer 4")))
+
+            agent(executor).run("question 4", "session-1").collectList()
+
+            // Sent: the previous turn's result in full, the older two as stubs.
+            executor.prompts
+                .single()
+                .messages
+                .flatMap { it.parts }
+                .filterIsInstance<MessagePart.Tool.Result>()
+                .map { it.output == output } shouldContainExactly listOf(false, false, true)
+            // Kept: every result as it was.
+            RoomChatHistoryProvider(db)
+                .load("session-1")
+                .flatMap { it.parts }
+                .filterIsInstance<MessagePart.Tool.Result>()
+                .map { it.output } shouldContainExactly List(3) { output }
         }
 
     private suspend fun Flow<AiChatEvent>.collectList(): List<AiChatEvent> {

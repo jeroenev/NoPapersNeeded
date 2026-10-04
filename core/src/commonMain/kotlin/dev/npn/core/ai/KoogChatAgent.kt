@@ -1,14 +1,13 @@
 package dev.npn.core.ai
 
 import ai.koog.agents.chatMemory.feature.ChatMemory
-import ai.koog.agents.chatMemory.feature.ChatMemoryPreProcessor
 import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.functionalStrategy
+import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
-import ai.koog.prompt.message.Message
 import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponse
@@ -23,7 +22,7 @@ import kotlinx.serialization.json.JsonObject
 class KoogChatAgent(
     private val executor: PromptExecutor,
     private val model: LLModel,
-    private val db: NpnDatabase,
+    db: NpnDatabase,
     private val toolSet: LibraryToolSet,
     private val params: LLMParams?,
     private val systemPrompt: String,
@@ -49,7 +48,7 @@ class KoogChatAgent(
                         val turnText = StringBuilder()
                         var textFlushed = false
                         llm.writeSession {
-                            requestLLMStreaming().collect { frame ->
+                            streamOverReplayWindow { frame ->
                                 when (frame) {
                                     is StreamFrame.TextDelta -> {
                                         responseFrames += frame
@@ -99,7 +98,7 @@ class KoogChatAgent(
                 ) {
                     install(ChatMemory) {
                         chatHistoryProvider = historyProvider
-                        addPreProcessor(SystemPreservingWindow(160))
+                        addPreProcessor(ChatHistoryWindow.memory)
                     }
                 }
             agent.run(question, conversationId)
@@ -125,12 +124,18 @@ class KoogChatAgent(
     )
 }
 
-private class SystemPreservingWindow(
-    private val size: Int,
-) : ChatMemoryPreProcessor {
-    override fun preprocess(messages: List<Message>): List<Message> {
-        if (messages.size <= size + 1) return messages
-        return listOf(messages.first()) + messages.takeLast(size)
+/**
+ * Stream the model's next response to the part of the conversation [ChatHistoryWindow] replays,
+ * handing each frame to [onFrame]. The session's prompt keeps the whole conversation, for the
+ * transcript and the next turn.
+ */
+private suspend fun AIAgentLLMWriteSession.streamOverReplayWindow(onFrame: suspend (StreamFrame) -> Unit) {
+    val conversation = prompt
+    prompt = conversation.withMessages(ChatHistoryWindow::forRequest)
+    try {
+        requestLLMStreaming().collect { onFrame(it) }
+    } finally {
+        prompt = conversation
     }
 }
 
