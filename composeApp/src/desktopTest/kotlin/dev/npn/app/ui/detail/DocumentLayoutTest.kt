@@ -18,6 +18,7 @@ import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.npn.app.FakeMetadataWriter
 import dev.npn.app.doc
+import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.app.DocListItem
@@ -164,34 +165,38 @@ class DocumentLayoutTest {
         store.field("invoice", FieldKeys.TITLE, "Electricity invoice 2026", persisted = "Electricity invoice")
         return ImageComposeScene(width, height, density = Density(1f, fontScale)) {
             CompositionLocalProvider(LocalLifecycleOwner provides owner, LocalDocumentDrafts provides store) {
-                NpnTheme(darkTheme = false) {
-                    Surface {
-                        DocumentEditor(
-                            state =
-                                MetadataUiState(
-                                    document =
-                                        DocumentSection(
-                                            item =
-                                                DocListItem(
-                                                    doc("invoice", title = "Electricity invoice"),
-                                                    listOf("Utilities"),
-                                                ),
-                                            reviewMode = ReviewMode.INBOX_WORKFLOW,
-                                            // The panel renders fields from the registry; seed it as a library would.
-                                            fieldDefs =
-                                                FieldKeys.seedDefinitions {
-                                                    FieldKeys.SEED_LABELS.getValue(
-                                                        it,
-                                                    )
-                                                },
-                                        ),
-                                    ai = ai,
-                                ),
-                            writes = NoWrites,
-                            preview = { Text("PDF preview", modifier = it) },
-                            onReviewed = {},
-                            hasNext = true,
-                        )
+                // The scene is the window: wide or compact from its width, as the app root decides.
+                ProvideWindowWidthClass {
+                    NpnTheme(darkTheme = false) {
+                        Surface {
+                            DocumentEditor(
+                                state =
+                                    MetadataUiState(
+                                        document =
+                                            DocumentSection(
+                                                item =
+                                                    DocListItem(
+                                                        doc("invoice", title = "Electricity invoice"),
+                                                        listOf("Utilities"),
+                                                    ),
+                                                reviewMode = ReviewMode.INBOX_WORKFLOW,
+                                                // The panel renders fields from the registry; seed it as a
+                                                // library would.
+                                                fieldDefs =
+                                                    FieldKeys.seedDefinitions {
+                                                        FieldKeys.SEED_LABELS.getValue(
+                                                            it,
+                                                        )
+                                                    },
+                                            ),
+                                        ai = ai,
+                                    ),
+                                writes = NoWrites,
+                                preview = { Text("PDF preview", modifier = it) },
+                                onReviewed = {},
+                                hasNext = true,
+                            )
+                        }
                     }
                 }
             }
