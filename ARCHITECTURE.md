@@ -172,7 +172,8 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
    `core.app` facet interfaces; the Compose layer is a pure renderer of those.
 5. **Platform boundaries**: every engine (`PdfEngine`, `OcrEngine`,
    `LibraryFileSystem`, Room db, `WatchedFolder`) has a common interface with
-   per-target implementations wired in `AppEnvironment.android/desktop.kt`.
+   per-target implementations wired in `jvmSessionDeps` / `androidSessionDeps` (the
+   watched folder in `AppEnvironment.android/desktop.kt`).
    `OcrEngine` is the exception that proves the rule: its implementations are not all
    platform-specific — the vision engine (`core.ai.AiOcrEngine`) lives in `commonMain`
    and is picked per document rather than per target.
@@ -241,7 +242,8 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
   document's draft, routed by `DocumentEditor`), both in `MetadataPanelState.kt`. Both call
   sites (detail screen, library preview panel) then pick it up for free.
 - New platform behavior → interface in `core` commonMain, impl in each platform
-  source set, wire in `AppEnvironment.*`.
+  source set, wired per library in `jvmSessionDeps` / `androidSessionDeps`, or in
+  `AppEnvironment.*` when it belongs to the app rather than to a library.
 - Background work → `core.watch` importer loops, `NpnWork` (Android), and the
   `core.work.QueueDrainer` instances the session wires (OCR, AI enrichment,
   queued AI edit runs), exposed to callers that must await them as `session.work`
