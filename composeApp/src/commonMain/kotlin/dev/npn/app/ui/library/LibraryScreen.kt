@@ -214,7 +214,7 @@ fun LibraryScreen(
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
-    val dialogs = rememberLibraryDialogState()
+    var dialog by rememberLibraryDialog()
 
     val tagColors = remember(tags) { TagColors(tags.associate { it.name to it.color }) }
 
@@ -247,9 +247,9 @@ fun LibraryScreen(
                 savedViews = savedViews,
                 onAllDocuments = vm::clearFilter,
                 onReviewQueue = vm::applyReviewPreset,
-                onSaveCurrentView = dialogs::openSaveView,
+                onSaveCurrentView = { dialog = LibraryDialog.SaveView },
                 onSavedView = vm::applySavedView,
-                onRenameSavedView = dialogs::openRename,
+                onRenameSavedView = { dialog = LibraryDialog.RenameView(it) },
                 onDeleteSavedView = vm::deleteSavedView,
                 onTogglePinSavedView = vm::toggleSavedViewPin,
             )
@@ -277,7 +277,7 @@ fun LibraryScreen(
                 onImport = { importPicker.launch() },
                 onScan = onScan,
                 scanAvailable = scanner.available,
-                onOpenFilter = dialogs::openFilter,
+                onOpenFilter = { dialog = LibraryDialog.Filter },
                 // Hand the selection to the AI-edit page and leave selection mode behind.
                 onAiEdit =
                     if (!aiConfigured) {
@@ -289,82 +289,81 @@ fun LibraryScreen(
                             onAiEdit(selected)
                         }
                     },
-                onAddTag = {
-                    scope.launch { dialogs.allTagNames = session.tags.allTagNames() }
-                    dialogs.openAddTag()
-                },
+                onAddTag = { dialog = LibraryDialog.AddTag },
                 onRemoveTag = {
                     // Only the tags the selection actually carries: removing any other is a no-op.
-                    scope.launch {
-                        dialogs.removableTagNames = vm.tagsInSelection()
-                        dialogs.openRemoveTag()
-                    }
+                    scope.launch { dialog = LibraryDialog.RemoveTag(vm.tagsInSelection()) }
                 },
+                onRequestTrash = { dialog = LibraryDialog.ConfirmTrash },
             )
         }
 
-        if (wide) {
-            val sidePanelWidth = (maxWidth * SIDE_PANEL_FRACTION).coerceIn(SidePanelMinWidth, SidePanelMaxWidth)
-            Row(Modifier.fillMaxSize()) {
-                Box(Modifier.weight(1f)) { content() }
-                // The side panel shows the filter editor when it is open, else the tapped
-                // document's preview. The preview vanishes automatically when its document
-                // leaves the current result set (trashed, filtered out, library rescan).
-                val previewItem = docs?.firstOrNull { it.doc.docId == previewDocId }
-                when {
-                    dialogs.showFilter -> {
+        val sidePanelWidth = (maxWidth * SIDE_PANEL_FRACTION).coerceIn(SidePanelMinWidth, SidePanelMaxWidth)
+        val panel = Modifier.width(sidePanelWidth).fillMaxHeight()
+        Row(Modifier.fillMaxSize()) {
+            Box(Modifier.weight(1f)) { content() }
+            // Wide layouts give the side panel to the filter editor when it is open, else to the
+            // tapped document's preview, which vanishes when its document leaves the current result
+            // set (trashed, filtered out, library rescan). Compact layouts edit the filter in a sheet.
+            val items = docs.orEmpty()
+            val previewItem = items.firstOrNull { it.doc.docId == previewDocId }.takeIf { wide }
+            when {
+                dialog == LibraryDialog.Filter -> {
+                    val apply = { applied: dev.npn.core.app.LibraryFilter ->
+                        vm.setFilter(applied)
+                        dialog = null
+                    }
+                    if (wide) {
                         FilterPanel(
                             filter = ui.filter,
                             tags = tags,
                             fields = fieldFilters,
                             reviewMode = reviewMode,
-                            onApply = {
-                                vm.setFilter(it)
-                                dialogs.dismissFilter()
-                            },
-                            onDismiss = dialogs::dismissFilter,
+                            onApply = apply,
+                            onDismiss = { dialog = null },
                             fillHeight = true,
-                            modifier = Modifier.width(sidePanelWidth).fillMaxHeight(),
+                            modifier = panel,
                         )
-                    }
-
-                    previewItem != null -> {
-                        // By id, not by value: indexOf would run a full structural comparison per
-                        // row on every recomposition of this branch.
-                        val nextId = docs.getOrNull(docs.indexOfFirst { it.doc.docId == previewDocId } + 1)?.doc?.docId
-                        DocPreviewPanel(
-                            item = previewItem,
-                            session = session,
-                            snackbar = snackbar,
-                            onClose = { previewDocId = null },
-                            onExpand = { openDoc(previewItem.doc.docId) },
-                            onReviewed = { if (previewDocId == previewItem.doc.docId) previewDocId = nextId },
-                            hasNext = nextId != null,
-                            modifier = Modifier.width(sidePanelWidth).fillMaxHeight(),
+                    } else {
+                        FilterSheet(
+                            filter = ui.filter,
+                            tags = tags,
+                            fields = fieldFilters,
+                            reviewMode = reviewMode,
+                            onApply = apply,
+                            onDismiss = { dialog = null },
                         )
                     }
                 }
+
+                previewItem != null -> {
+                    // By id, not by value: indexOf would run a full structural comparison per
+                    // row on every recomposition of this branch.
+                    val nextId = items.getOrNull(items.indexOfFirst { it.doc.docId == previewDocId } + 1)?.doc?.docId
+                    DocPreviewPanel(
+                        item = previewItem,
+                        session = session,
+                        snackbar = snackbar,
+                        onClose = { previewDocId = null },
+                        onExpand = { openDoc(previewItem.doc.docId) },
+                        onReviewed = { if (previewDocId == previewItem.doc.docId) previewDocId = nextId },
+                        hasNext = nextId != null,
+                        modifier = panel,
+                    )
+                }
             }
-        } else {
-            content()
         }
 
         LibraryDialogHost(
-            state = dialogs,
-            filter = ui.filter,
+            dialog = dialog,
             selectedCount = ui.selected.size,
-            tags = tags,
-            fields = fieldFilters,
-            reviewMode = reviewMode,
-            onApplyFilter = { applied ->
-                vm.setFilter(applied)
-                dialogs.dismissFilter()
-            },
+            tagNames = tags.map { it.name },
             onSaveView = vm::saveCurrentView,
             onRenameView = vm::renameSavedView,
             onAddTag = vm::bulkAddTag,
             onRemoveTag = vm::bulkRemoveTag,
-            renderFilter = !wide,
+            onTrash = vm::bulkTrash,
+            onDismiss = { dialog = null },
         )
     }
 }
@@ -446,6 +445,7 @@ private fun LibraryContent(
     onAiEdit: (() -> Unit)?,
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
+    onRequestTrash: () -> Unit,
 ) {
     val reviewCount by vm.needsReviewCount.collectAsStateWithLifecycle()
     val sortableFields by vm.sortableFields.collectAsStateWithLifecycle()
@@ -458,14 +458,13 @@ private fun LibraryContent(
     val searchFocus = remember { FocusRequester() }
     val contentFocus = remember { FocusRequester() }
     var searchFocused by remember { mutableStateOf(false) }
-    var confirmTrash by remember { mutableStateOf(false) }
     // Right-click context menu actions. Tag/trash actions operate on the current selection, so the
     // clicked document is pulled into it first (replacing the selection when it was not part of it).
     // The factory is remembered (reading the live selection through State) so the per-item actions
     // it produces can be memoized too instead of invalidating every list item each recomposition.
     val selectedNow by rememberUpdatedState(ui.selected)
     val contextActionsFor: (String) -> DocContextMenuActions =
-        remember(vm, onOpenDoc, onAddTag, onRemoveTag) {
+        remember(vm, onOpenDoc, onAddTag, onRemoveTag, onRequestTrash) {
             { docId ->
                 val ensureInSelection = {
                     if (docId !in selectedNow) vm.startSelection(docId)
@@ -482,7 +481,7 @@ private fun LibraryContent(
                     },
                     onTrash = {
                         ensureInSelection()
-                        confirmTrash = true
+                        onRequestTrash()
                     },
                 )
             }
@@ -508,7 +507,7 @@ private fun LibraryContent(
                     onRemoveTag = onRemoveTag,
                     onAiEdit = onAiEdit,
                     onSetReviewed = vm::bulkSetReviewed,
-                    onRequestTrash = { confirmTrash = true },
+                    onRequestTrash = onRequestTrash,
                 )
             } else {
                 LibraryTopBar(
@@ -552,7 +551,7 @@ private fun LibraryContent(
                         selectionMode = ui.selectionMode,
                         onImport = onImport,
                         onSelectAll = { if (allDocIds.isNotEmpty()) vm.selectAll(allDocIds) },
-                        onRequestTrash = { confirmTrash = true },
+                        onRequestTrash = onRequestTrash,
                         onClearSelection = vm::clearSelection,
                         onClearQuery = { vm.onQueryChange("") },
                     )
@@ -692,24 +691,6 @@ private fun LibraryContent(
                 }
             }
         }
-    }
-    if (confirmTrash) {
-        dev.npn.app.ui.common.ConfirmDialog(
-            title = stringResource(Res.string.library_trash_documents),
-            message =
-                pluralStringResource(
-                    Res.plurals.library_move_to_trash_question,
-                    ui.selected.size,
-                    ui.selected.size,
-                ),
-            confirmLabel = stringResource(Res.string.library_trash),
-            destructive = true,
-            onConfirm = {
-                vm.bulkTrash()
-                confirmTrash = false
-            },
-            onDismiss = { confirmTrash = false },
-        )
     }
 }
 
