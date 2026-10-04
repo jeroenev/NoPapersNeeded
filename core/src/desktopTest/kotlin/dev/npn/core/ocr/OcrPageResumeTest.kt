@@ -56,7 +56,11 @@ class OcrPageResumeTest {
             local.calls shouldBe 0
             val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(rig.fs).read(docId, "devA.ai"))
             sidecar.pages shouldContainExactly listOf("read 1", "read 2", "read 4", "read 5")
-            db.ocrQueueDao().getByDocId(docId).shouldNotBeNull().state shouldBe OcrPipeline.STATE_DONE
+            db
+                .ocrQueueDao()
+                .getByDocId(docId)
+                .shouldNotBeNull()
+                .state shouldBe OcrPipeline.STATE_DONE
             // Published, so nothing is kept for a run that is no longer owed.
             db.ocrQueueDao().cachedPages(docId, OcrEngines.AI, "eng").shouldBeEmpty()
         }
@@ -121,7 +125,11 @@ class OcrPageResumeTest {
             val engine = PageCountingEngine("mlkit").apply { failOnCall = 2 }
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
             rig.pipeline("devA", engine).processDoc(docId)
-            db.ocrQueueDao().cachedPages(docId, "mlkit", "eng").shouldNotBeNull().size shouldBe 1
+            db
+                .ocrQueueDao()
+                .cachedPages(docId, "mlkit", "eng")
+                .shouldNotBeNull()
+                .size shouldBe 1
 
             db.ocrQueueDao().delete(docId)
 

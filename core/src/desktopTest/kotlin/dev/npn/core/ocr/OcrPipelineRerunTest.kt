@@ -109,7 +109,11 @@ class OcrPipelineRerunTest {
             pipe.processDoc(docId)
 
             failing.calls shouldBe 1
-            val row = rig.db.ocrQueueDao().getByDocId(docId).shouldNotBeNull()
+            val row =
+                rig.db
+                    .ocrQueueDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
             row.state shouldBe OcrPipeline.STATE_PENDING
             row.rerun shouldBe true
             row.attempts shouldBe 1
