@@ -187,8 +187,4 @@ class FakeSavedViewRepository : SavedViewRepository {
         failDelete?.invoke()
         deleted += id
     }
-
-    override suspend fun exportJson(): String = "[]"
-
-    override suspend fun importJson(text: String): Int = 0
 }

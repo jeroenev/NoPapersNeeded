@@ -125,8 +125,4 @@ interface SavedViewRepository {
     suspend fun save(view: SavedView)
 
     suspend fun delete(id: String)
-
-    suspend fun exportJson(): String
-
-    suspend fun importJson(text: String): Int // returns number imported
 }

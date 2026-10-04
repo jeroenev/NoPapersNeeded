@@ -6,26 +6,19 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
-import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.JsonArray
 
 /**
  * Saved views are library data: each is one synced setting in the journal, keyed by its id and
  * holding the whole [SavedView], so every device sees the same views and two devices saving
  * different views both keep theirs. Deleting one clears its setting. They read in name order.
- *
- * Export/import is a JSON array of [SavedView]. Import is tolerant: broken entries are skipped,
- * and of several entries with one id the first wins. Writes run through [owned], so the session
- * waits them out before it closes.
+ * Writes run through [owned], so the session waits them out before it closes.
  */
 class SavedViewRepositoryImpl internal constructor(
     private val coordinator: JournalCoordinator,
     private val owned: suspend (suspend () -> Unit) -> Unit,
 ) : SavedViewRepository {
     private val json = NpnJson.Persisted
-    private val listSerializer = ListSerializer(SavedView.serializer())
 
     override fun observeSavedViews(): Flow<List<SavedView>> =
         coordinator
@@ -34,7 +27,16 @@ class SavedViewRepositoryImpl internal constructor(
             .distinctUntilChanged()
             .map { views -> views.sortedWith(compareBy(SavedView::name, SavedView::id)) }
 
-    override suspend fun save(view: SavedView) = write(listOf(view))
+    /** Save [view], writing nothing when the journal already holds it as it is. */
+    override suspend fun save(view: SavedView) =
+        owned {
+            coordinator.commitBuilt { state ->
+                val value = encode(view)
+                listOfNotNull(
+                    PendingOp.settingSet(key(view.id), value).takeIf { state.effectiveSetting(key(view.id)) != value },
+                )
+            }
+        }
 
     override suspend fun delete(id: String) =
         owned {
@@ -42,14 +44,6 @@ class SavedViewRepositoryImpl internal constructor(
                 listOfNotNull(state.effectiveSetting(key(id))?.let { PendingOp.settingSet(key(id), null) })
             }
         }
-
-    override suspend fun exportJson(): String = json.encodeToString(listSerializer, observeSavedViews().first())
-
-    override suspend fun importJson(text: String): Int {
-        val parsed = parse(text).filter { it.id.isNotBlank() }.distinctBy { it.id }
-        write(parsed)
-        return parsed.size
-    }
 
     /**
      * Move the views older builds kept in the index into the journal, then drop their table. A view
@@ -59,44 +53,6 @@ class SavedViewRepositoryImpl internal constructor(
         val stored = LegacyIndexTables.savedViews(db) ?: return
         val views = stored.mapNotNull(::decode).associate { key(it.id) to encode(it) }
         if (coordinator.adoptSettings(views)) LegacyIndexTables.drop(db, LegacyIndexTables.SAVED_VIEWS)
-    }
-
-    /** Save [views] in one transaction, leaving out any the journal already holds as they are. */
-    private suspend fun write(views: List<SavedView>) =
-        owned {
-            coordinator.commitBuilt { state ->
-                views
-                    .map { key(it.id) to encode(it) }
-                    .filter { (key, value) -> state.effectiveSetting(key) != value }
-                    .map { (key, value) -> PendingOp.settingSet(key, value) }
-            }
-        }
-
-    /**
-     * The views in [text]: the whole array, or what can be read of a partly broken one. Every
-     * decoding failure is an [IllegalArgumentException], kotlinx.serialization's included.
-     */
-    private fun parse(text: String): List<SavedView> =
-        try {
-            json.decodeFromString(listSerializer, text)
-        } catch (_: IllegalArgumentException) {
-            parseLeniently(text)
-        }
-
-    private fun parseLeniently(text: String): List<SavedView> {
-        val array =
-            try {
-                json.parseToJsonElement(text) as? JsonArray
-            } catch (_: IllegalArgumentException) {
-                null
-            } ?: return emptyList()
-        return array.mapNotNull { item ->
-            try {
-                json.decodeFromJsonElement(SavedView.serializer(), item)
-            } catch (_: IllegalArgumentException) {
-                null
-            }
-        }
     }
 
     private fun encode(view: SavedView): String = json.encodeToString(SavedView.serializer(), view)

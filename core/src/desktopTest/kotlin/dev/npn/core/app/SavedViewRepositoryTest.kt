@@ -8,7 +8,7 @@ import kotlin.test.Test
 
 class SavedViewRepositoryTest {
     @Test
-    fun roundtripAndExportImport() =
+    fun savedViewRoundTrips() =
         runTest {
             val rig = AppSessionRig.create(backgroundScope)
             try {
@@ -27,46 +27,6 @@ class SavedViewRepositoryTest {
                 val stored = repo.observeSavedViews().first()
                 stored shouldHaveSize 1
                 stored.first() shouldBe view
-
-                val json = repo.exportJson()
-
-                // Fresh repo (new library) imports the JSON.
-                val rig2 = AppSessionRig.create(backgroundScope)
-                try {
-                    val n = rig2.session.savedViews.importJson(json)
-                    n shouldBe 1
-                    rig2.session.savedViews
-                        .observeSavedViews()
-                        .first()
-                        .first() shouldBe view
-                } finally {
-                    rig2.close()
-                }
-            } finally {
-                rig.close()
-            }
-        }
-
-    @Test
-    fun importSkipsBrokenEntriesAndKeepsTheFirstOfEachId() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                val json =
-                    """
-                    [
-                      {"id":"a","name":"A","viewType":"LIST"},
-                      {"broken":true},
-                      {"id":"a","name":"A dup","viewType":"LIST"},
-                      {"id":"b","name":"B","viewType":"GRID"}
-                    ]
-                    """.trimIndent()
-                val n = rig.session.savedViews.importJson(json)
-                n shouldBe 2 // a (once), b; broken skipped, dup deduped
-                rig.session.savedViews
-                    .observeSavedViews()
-                    .first()
-                    .map { it.name } shouldBe listOf("A", "B")
             } finally {
                 rig.close()
             }
