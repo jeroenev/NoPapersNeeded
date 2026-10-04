@@ -69,8 +69,8 @@ class FtsKeysMigrationTest {
 
                 // New keys continue past the migrated rowids instead of colliding with them.
                 val c = "c".repeat(64)
-                fts.replaceDocument(FtsRows.row(c, "c.pdf", emptyList(), emptyMap(), "condor"))
-                fts.replaceDocument(FtsRows.row(a, "a.pdf", emptyList(), emptyMap(), "anteater"))
+                fts.upsertContent(FtsRows.row(c, "c.pdf", emptyList(), emptyMap(), "condor"))
+                fts.upsertContent(FtsRows.row(a, "a.pdf", emptyList(), emptyMap(), "anteater"))
                 fts.searchDocIds("condor") shouldContainExactly listOf(c)
                 fts.searchDocIds("aardvark") shouldBe emptyList()
                 fts.searchDocIds("anteater") shouldContainExactly listOf(a)

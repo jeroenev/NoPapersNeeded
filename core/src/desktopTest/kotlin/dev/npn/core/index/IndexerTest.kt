@@ -465,7 +465,7 @@ class IndexerTest {
                     .docId
 
             // Simulate the OCR pipeline writing extracted text into the FTS content column.
-            rig.db.ftsDao().replaceDocument(
+            rig.db.ftsDao().upsertContent(
                 FtsRows.row(
                     docId = docId,
                     fileName = "a.pdf",
@@ -509,7 +509,7 @@ class IndexerTest {
                     .rowAtPath("a.pdf")!!
                     .docId
 
-            rig.db.ftsDao().replaceDocument(
+            rig.db.ftsDao().upsertContent(
                 FtsRows.row(
                     docId = docId,
                     fileName = "a.pdf",

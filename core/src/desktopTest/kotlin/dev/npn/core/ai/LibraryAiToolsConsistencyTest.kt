@@ -113,10 +113,7 @@ class LibraryAiToolsConsistencyTest {
             db.documentDao().upsertAll(
                 hidden.mapIndexed { index, id -> doc(id, relPath = "$index.pdf", trashed = true) } + doc(live),
             )
-            db.ftsDao().replaceDocuments(
-                hidden.map { FtsDocumentEntity(docId = it, content = "needle") } +
-                    FtsDocumentEntity(docId = live, content = "needle"),
-            )
+            (hidden + live).forEach { db.ftsDao().upsertContent(FtsDocumentEntity(docId = it, content = "needle")) }
             val tool = LibraryAiTools.SearchDocumentsTool(db.ftsDao(), db.documentDao())
 
             tool.execute(LibraryAiTools.SearchDocumentsTool.Args("needle")) shouldContain "[doc:$live]"

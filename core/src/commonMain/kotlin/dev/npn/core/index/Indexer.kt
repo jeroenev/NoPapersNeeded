@@ -44,16 +44,15 @@ import kotlinx.coroutines.sync.withLock
  *     DB, then updates FTS,
  *  7. returns a [ScanReport].
  *
- * Only one rescan runs at a time (guarded by a [Mutex]); calling [rescan] repeatedly is safe.
+ * Not safe for concurrent calls: [dev.npn.core.app.JournalCoordinator] makes every call under its
+ * single-writer lock, and nothing else calls in.
  */
 @Suppress("TooManyFunctions", "LargeClass")
 class Indexer(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
     private val clock: EpochClock = SystemEpochClock,
-    private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
 ) {
-    private val rescanMutex = Mutex()
     private val documentPaths = DocumentPathReconciler(fs, db)
     private val _scanState = MutableStateFlow<IndexProgress?>(null)
 
@@ -73,149 +72,148 @@ class Indexer(
         fullHash: Boolean = false,
         onProgress: (IndexProgress) -> Unit = {},
         onExternalMoves: (suspend (List<PendingOp>) -> Unit)? = null,
-    ): ScanReport =
-        rescanMutex.withLock {
-            val started = clock.nowMillis()
+    ): ScanReport {
+        val started = clock.nowMillis()
 
-            fun report(p: IndexProgress) {
-                _scanState.value = p
-                onProgress(p)
-            }
-
-            report(IndexProgress(IndexProgress.Phase.LISTING))
-            try {
-                // Indexable walk: `.npn/` (journal, OCR sidecars, trash) is never indexed, so skip
-                // it instead of traversing the whole metadata tree on every rescan.
-                val all = fs.listAllIndexable()
-
-                val (indexable, conflictFiles) = partition(all)
-
-                val dbProjection = documentDao.allPathsAndMeta()
-                val byPath = dbProjection.associateBy { it.relPath }
-                val changed =
-                    indexable.filter { meta ->
-                        val known = byPath[meta.relPath]
-                        fullHash || known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
-                    }
-                // A file still being written is left for a later scan rather than given the
-                // identity of a partial file. A known path keeps its old row meanwhile.
-                val settle = WriteSettle(fs, started)
-                val deferred = DeferredFiles()
-                val toHash =
-                    changed.filter { meta ->
-                        when (val verdict = settle.verdict(meta)) {
-                            WriteSettle.Verdict.Ready -> {
-                                true
-                            }
-
-                            WriteSettle.Verdict.Skip -> {
-                                false
-                            }
-
-                            is WriteSettle.Verdict.Wait -> {
-                                deferred.add(meta.relPath, verdict.millis)
-                                false
-                            }
-                        }
-                    }
-
-                report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
-                val hashes = HashMap<String, String>() // relPath -> sha256
-                val progressMutex = Mutex()
-                var hashedCount = 0
-                // A fixed pool of workers pulling from a shared queue. Chunking the input instead
-                // would size the CHUNKS at HASH_CONCURRENCY and launch one coroutine per chunk —
-                // a thousand files to hash meant 250 coroutines all hopping to Dispatchers.IO,
-                // which is unbounded read concurrency against the storage provider rather than
-                // the intended cap. A queue also balances the work, which matters because file
-                // sizes (and so hash costs) vary by orders of magnitude.
-                coroutineScope {
-                    val pending = Channel<FileMeta>(Channel.UNLIMITED)
-                    // Unlimited and not yet closed, so every offer succeeds. Checked rather than
-                    // discarded because a capacity change here would otherwise silently drop
-                    // files from the scan instead of failing.
-                    for (meta in toHash) {
-                        check(
-                            pending.trySend(meta).isSuccess,
-                        ) { "hash queue rejected ${meta.relPath}" }
-                    }
-                    pending.close()
-                    repeat(minOf(HASH_CONCURRENCY, toHash.size)) {
-                        launch(Dispatchers.Default) {
-                            for (meta in pending) {
-                                val hash = fs.sha256(meta.relPath)
-                                // Written to while it was hashed: the hash is of no settled content.
-                                val stable = settle.unchangedSince(meta)
-                                progressMutex.withLock {
-                                    if (stable) {
-                                        hashes[meta.relPath] = hash
-                                    } else {
-                                        deferred.add(meta.relPath, WriteSettle.QUIET_MILLIS)
-                                    }
-                                    hashedCount++
-                                    report(
-                                        IndexProgress(
-                                            IndexProgress.Phase.HASHING,
-                                            hashed = hashedCount,
-                                            total = toHash.size,
-                                        ),
-                                    )
-                                }
-                            }
-                        }
-                    }
-                }
-
-                report(IndexProgress(IndexProgress.Phase.RECONCILING))
-                if (onExternalMoves != null) {
-                    val moves =
-                        ExternalDocumentMoves(
-                            fs,
-                            db.keyValueDao(),
-                        ).detect(metadataState, dbProjection, indexable, hashes)
-                    if (moves.isNotEmpty()) onExternalMoves(moves)
-                }
-                val diskPaths = indexable.map { it.relPath }.toHashSet()
-
-                val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
-
-                val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
-                recon.relinkCandidates.addAll(pairRelinks(missing.missingDocs, recon.newDocs, recon.relinkCandidates))
-
-                report(IndexProgress(IndexProgress.Phase.FOLDING))
-                val resurrected =
-                    applyFold(
-                        metadataState,
-                        FoldRequest(diskPaths = diskPaths, reconcileFileState = true),
-                    )
-
-                documentPaths.reconcileDuplicates(metadataState, recon.duplicates)
-                val dupByDoc = recon.duplicates.groupBy { it.docId }
-                for ((docId, entries) in dupByDoc) {
-                    duplicateDao.replaceAll(docId, entries.map { DuplicateEntity(docId, it.extraRelPath) })
-                }
-
-                report(IndexProgress(IndexProgress.Phase.DONE))
-
-                ScanReport(
-                    added = recon.added,
-                    moved = recon.moved,
-                    changed = recon.changed,
-                    missingCount = missing.missingCount,
-                    duplicates = recon.duplicates,
-                    conflictFiles = conflictFiles,
-                    resurrected = resurrected,
-                    relinkCandidates = recon.relinkCandidates,
-                    hashedCount = hashedCount,
-                    durationMillis = clock.nowMillis() - started,
-                    pathConflicts = documentPaths.conflicts(metadataState),
-                    deferred = deferred.paths,
-                    retryAfterMillis = deferred.retryAfterMillis,
-                )
-            } finally {
-                _scanState.value = null
-            }
+        fun report(p: IndexProgress) {
+            _scanState.value = p
+            onProgress(p)
         }
+
+        report(IndexProgress(IndexProgress.Phase.LISTING))
+        return try {
+            // Indexable walk: `.npn/` (journal, OCR sidecars, trash) is never indexed, so skip
+            // it instead of traversing the whole metadata tree on every rescan.
+            val all = fs.listAllIndexable()
+
+            val (indexable, conflictFiles) = partition(all)
+
+            val dbProjection = documentDao.allPathsAndMeta()
+            val byPath = dbProjection.associateBy { it.relPath }
+            val changed =
+                indexable.filter { meta ->
+                    val known = byPath[meta.relPath]
+                    fullHash || known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
+                }
+            // A file still being written is left for a later scan rather than given the
+            // identity of a partial file. A known path keeps its old row meanwhile.
+            val settle = WriteSettle(fs, started)
+            val deferred = DeferredFiles()
+            val toHash =
+                changed.filter { meta ->
+                    when (val verdict = settle.verdict(meta)) {
+                        WriteSettle.Verdict.Ready -> {
+                            true
+                        }
+
+                        WriteSettle.Verdict.Skip -> {
+                            false
+                        }
+
+                        is WriteSettle.Verdict.Wait -> {
+                            deferred.add(meta.relPath, verdict.millis)
+                            false
+                        }
+                    }
+                }
+
+            report(IndexProgress(IndexProgress.Phase.HASHING, hashed = 0, total = toHash.size))
+            val hashes = HashMap<String, String>() // relPath -> sha256
+            val progressMutex = Mutex()
+            var hashedCount = 0
+            // A fixed pool of workers pulling from a shared queue. Chunking the input instead
+            // would size the CHUNKS at HASH_CONCURRENCY and launch one coroutine per chunk —
+            // a thousand files to hash meant 250 coroutines all hopping to Dispatchers.IO,
+            // which is unbounded read concurrency against the storage provider rather than
+            // the intended cap. A queue also balances the work, which matters because file
+            // sizes (and so hash costs) vary by orders of magnitude.
+            coroutineScope {
+                val pending = Channel<FileMeta>(Channel.UNLIMITED)
+                // Unlimited and not yet closed, so every offer succeeds. Checked rather than
+                // discarded because a capacity change here would otherwise silently drop
+                // files from the scan instead of failing.
+                for (meta in toHash) {
+                    check(
+                        pending.trySend(meta).isSuccess,
+                    ) { "hash queue rejected ${meta.relPath}" }
+                }
+                pending.close()
+                repeat(minOf(HASH_CONCURRENCY, toHash.size)) {
+                    launch(Dispatchers.Default) {
+                        for (meta in pending) {
+                            val hash = fs.sha256(meta.relPath)
+                            // Written to while it was hashed: the hash is of no settled content.
+                            val stable = settle.unchangedSince(meta)
+                            progressMutex.withLock {
+                                if (stable) {
+                                    hashes[meta.relPath] = hash
+                                } else {
+                                    deferred.add(meta.relPath, WriteSettle.QUIET_MILLIS)
+                                }
+                                hashedCount++
+                                report(
+                                    IndexProgress(
+                                        IndexProgress.Phase.HASHING,
+                                        hashed = hashedCount,
+                                        total = toHash.size,
+                                    ),
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            report(IndexProgress(IndexProgress.Phase.RECONCILING))
+            if (onExternalMoves != null) {
+                val moves =
+                    ExternalDocumentMoves(
+                        fs,
+                        db.keyValueDao(),
+                    ).detect(metadataState, dbProjection, indexable, hashes)
+                if (moves.isNotEmpty()) onExternalMoves(moves)
+            }
+            val diskPaths = indexable.map { it.relPath }.toHashSet()
+
+            val recon = reconcile(toHash, hashes, dbProjection, diskPaths)
+
+            val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
+            recon.relinkCandidates.addAll(pairRelinks(missing.missingDocs, recon.newDocs, recon.relinkCandidates))
+
+            report(IndexProgress(IndexProgress.Phase.FOLDING))
+            val resurrected =
+                applyFold(
+                    metadataState,
+                    FoldRequest(diskPaths = diskPaths, reconcileFileState = true),
+                )
+
+            documentPaths.reconcileDuplicates(metadataState, recon.duplicates)
+            val dupByDoc = recon.duplicates.groupBy { it.docId }
+            for ((docId, entries) in dupByDoc) {
+                duplicateDao.replaceAll(docId, entries.map { DuplicateEntity(docId, it.extraRelPath) })
+            }
+
+            report(IndexProgress(IndexProgress.Phase.DONE))
+
+            ScanReport(
+                added = recon.added,
+                moved = recon.moved,
+                changed = recon.changed,
+                missingCount = missing.missingCount,
+                duplicates = recon.duplicates,
+                conflictFiles = conflictFiles,
+                resurrected = resurrected,
+                relinkCandidates = recon.relinkCandidates,
+                hashedCount = hashedCount,
+                durationMillis = clock.nowMillis() - started,
+                pathConflicts = documentPaths.conflicts(metadataState),
+                deferred = deferred.paths,
+                retryAfterMillis = deferred.retryAfterMillis,
+            )
+        } finally {
+            _scanState.value = null
+        }
+    }
 
     /**
      * Split all on-disk entries into indexable documents and sync-conflict files. Conflict files
@@ -397,7 +395,7 @@ class Indexer(
      * The non-state inputs of one [applyFold] pass, grouped so the three fold modes are explicit at
      * a glance instead of threading 6 positional/subset args through two functions:
      *  - full rescan: [reconcileFileState] = true + populated [diskPaths] (resurrection preference);
-     *  - event refresh: a bounded [documentScope] (+ [styledTags]) folded with [ftsGateHeld] held;
+     *  - event refresh: a bounded [documentScope] (+ [styledTags]);
      *  - state refresh: whole-DB reproject (null [documentScope]) with [preserveLifecycleDocs] kept.
      *
      * Defaults describe the plain fold-only mode; each entry point overrides only what differs.
@@ -407,7 +405,6 @@ class Indexer(
         val reconcileFileState: Boolean = false,
         val documentScope: Set<String>? = null,
         val styledTags: Set<String> = emptySet(),
-        val ftsGateHeld: Boolean = false,
         val preserveLifecycleDocs: Set<String> = emptySet(),
     )
 
@@ -415,73 +412,67 @@ class Indexer(
     suspend fun refreshEvents(
         state: FoldedState,
         events: List<JournalEvent>,
-        ftsGateHeld: Boolean = false,
         preserveLifecycleDocs: Set<String> = emptySet(),
-    ): List<Resurrected> =
-        rescanMutex.withLock {
-            if (events.isEmpty()) return@withLock emptyList()
-            _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-            try {
-                val documents = LinkedHashSet<String>()
-                val styledTags = LinkedHashSet<String>()
-                for (event in events) {
-                    event.doc?.let(documents::add)
-                    // TagRemove needs no extra scope: its affected document is already added via
-                    // event.doc above. Rename/merge/relink/style fan out to more docs/tags.
-                    when (val op = event.op) {
-                        is JournalOp.TagRename, is JournalOp.TagMerge -> {
-                            documents.addAll(state.taggedDocs())
-                        }
-
-                        is JournalOp.TagStyle -> {
-                            styledTags += op.tag
-                        }
-
-                        is JournalOp.Relink -> {
-                            documents.addAll(state.docsWithMetadata())
-                            documents += op.newDoc
-                        }
-
-                        // A definition change is library-wide: every document's projection of that
-                        // field depends on its type (the numeric shadow), so all docs with metadata
-                        // are reprojected rather than only the event's own document (there is none).
-                        is JournalOp.FieldDefSet -> {
-                            documents.addAll(state.docsWithMetadata())
-                        }
-
-                        else -> {}
+    ): List<Resurrected> {
+        if (events.isEmpty()) return emptyList()
+        _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
+        try {
+            val documents = LinkedHashSet<String>()
+            val styledTags = LinkedHashSet<String>()
+            for (event in events) {
+                event.doc?.let(documents::add)
+                // TagRemove needs no extra scope: its affected document is already added via
+                // event.doc above. Rename/merge/relink/style fan out to more docs/tags.
+                when (val op = event.op) {
+                    is JournalOp.TagRename, is JournalOp.TagMerge -> {
+                        documents.addAll(state.taggedDocs())
                     }
+
+                    is JournalOp.TagStyle -> {
+                        styledTags += op.tag
+                    }
+
+                    is JournalOp.Relink -> {
+                        documents.addAll(state.docsWithMetadata())
+                        documents += op.newDoc
+                    }
+
+                    // A definition change is library-wide: every document's projection of that
+                    // field depends on its type (the numeric shadow), so all docs with metadata
+                    // are reprojected rather than only the event's own document (there is none).
+                    is JournalOp.FieldDefSet -> {
+                        documents.addAll(state.docsWithMetadata())
+                    }
+
+                    else -> {}
                 }
-                documents.toList().forEach { documents += state.resolveDocId(it) }
-                applyFold(
-                    state,
-                    FoldRequest(
-                        documentScope = documents,
-                        styledTags = styledTags,
-                        ftsGateHeld = ftsGateHeld,
-                        preserveLifecycleDocs = preserveLifecycleDocs,
-                    ),
-                )
-            } finally {
-                _scanState.value = null
             }
+            documents.toList().forEach { documents += state.resolveDocId(it) }
+            return applyFold(
+                state,
+                FoldRequest(
+                    documentScope = documents,
+                    styledTags = styledTags,
+                    preserveLifecycleDocs = preserveLifecycleDocs,
+                ),
+            )
+        } finally {
+            _scanState.value = null
         }
+    }
 
     /** Reproject a reconciled mixed-version accumulator without rereading journal sources. */
     suspend fun refreshState(
         state: FoldedState,
         preserveLifecycleDocs: Set<String> = emptySet(),
-    ): List<Resurrected> =
-        rescanMutex.withLock {
-            _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-            try {
-                applyFold(state, FoldRequest(preserveLifecycleDocs = preserveLifecycleDocs))
-            } finally {
-                _scanState.value = null
-            }
+    ): List<Resurrected> {
+        _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
+        try {
+            return applyFold(state, FoldRequest(preserveLifecycleDocs = preserveLifecycleDocs))
+        } finally {
+            _scanState.value = null
         }
-
-    suspend fun <T> withFtsWriteGate(block: suspend () -> T): T = ftsWriteGate.withGate(block)
+    }
 
     /**
      * A synthetic, unique relPath for a doc whose file was replaced in place (external edit). It
@@ -558,12 +549,10 @@ class Indexer(
      * - Relinks: fold resolves old->new; the effective views are already keyed on ids. For a folded
      *   relink where both ids are known, the OLD doc is marked deleted/superseded and the NEW doc
      *   carries the metadata (fold exposes effective views on the resolved id).
-     * - FTS: after tags/props, each affected doc's fts row is replaced. The fold has no content
-     *   source of its own, so it reads the existing extracted-text content from the current fts
-     *   row and carries it forward, only updating the metadata-derived columns (fileName, tags,
-     *   fields). This preserves OCR/embedded text (written by the OCR
-     *   pipeline) across metadata-only folds and rescans. A brand-new doc with no fts row yet
-     *   gets empty content, which the OCR pipeline fills later via its own path.
+     * - FTS: after tags/props, each affected doc's metadata-derived fts columns (fileName, tags,
+     *   fields) are written. The extracted-text content column belongs to the OCR pipeline, so
+     *   the fold never touches it. A brand-new doc gets a row with no content yet, which the OCR
+     *   pipeline fills through its own write.
      */
     private suspend fun applyFold(
         state: FoldedState,
@@ -602,7 +591,7 @@ class Indexer(
                 changes = changes,
             )
         }
-        flushChanges(changes, request)
+        flushChanges(changes)
         // Tags live only through use: once no live document references a name, drop its row so
         // stale tags never linger in tag lists (see TagDao.pruneUnreferenced).
         tagDao.pruneUnreferenced()
@@ -622,8 +611,7 @@ class Indexer(
         val fieldTypes: Map<String, FieldType>,
         /**
          * Docs that already have an FTS row. Presence only, never the text: the projection just
-         * needs to know whether a doc has been indexed yet, and [flushChanges] re-reads the
-         * content it carries forward under the write gate.
+         * needs to know whether a doc has been indexed yet.
          */
         val ftsIndexed: Set<String>,
     )
@@ -660,33 +648,12 @@ class Indexer(
         return PreloadedRows(rows, tags, fields, fieldTypes, ftsIndexed)
     }
 
-    /**
-     * Flush one fold's diffed changes, one bulk call per table. FTS writes keep the fold's
-     * gating: under the shared [ftsWriteGate] unless [FoldRequest.ftsGateHeld] was already held.
-     */
-    private suspend fun flushChanges(
-        changes: ProjectionChanges,
-        request: FoldRequest,
-    ) {
+    /** Flush one fold's diffed changes, one bulk call per table. */
+    private suspend fun flushChanges(changes: ProjectionChanges) {
         if (changes.docRows.isNotEmpty()) documentDao.upsertAll(changes.docRows)
         if (changes.tags.isNotEmpty()) tagDao.setForDocuments(changes.tags)
         if (changes.fields.isNotEmpty()) fieldDao.replaceForDocs(changes.fields)
-        if (changes.ftsRows.isNotEmpty()) {
-            // Read the content to carry forward *under the gate*, so this read-then-replace cannot
-            // clobber a concurrent OCR content write for the same doc (the gate is the same one the
-            // OCR pipeline uses). The metadata-derived columns come from the projection; only the
-            // extracted-text content is refreshed here.
-            val flush: suspend () -> Unit = {
-                val freshContent =
-                    ftsDao
-                        .contentsForDocs(changes.ftsRows.map { it.docId })
-                        .associate { it.docId to it.content }
-                ftsDao.replaceDocuments(
-                    changes.ftsRows.map { row -> row.copy(content = freshContent[row.docId] ?: "") },
-                )
-            }
-            if (request.ftsGateHeld) flush() else ftsWriteGate.withGate { flush() }
-        }
+        if (changes.ftsRows.isNotEmpty()) ftsDao.upsertMetadata(changes.ftsRows)
     }
 
     /**
@@ -929,17 +896,14 @@ class Indexer(
         val rowChanged = newRow != row
         if (rowChanged) changes.docRows.add(newRow)
 
-        // FTS: the fold only owns the metadata-derived columns; the extracted-text content
-        // (OCR/embedded text written by the OCR pipeline) must be carried forward so a metadata
-        // change (tag add, field set) never wipes full-text search. That carry-forward happens in
-        // [flushChanges], which re-reads the content under the write gate and fills it in — the
-        // empty string here is a placeholder it always replaces. A brand-new doc has no fts row
-        // yet, so it must be written even when nothing else changed; all other fts metadata
-        // columns derive from the doc row, tags and fields, so when none changed and a row
-        // already exists there is nothing to write.
+        // FTS: the fold writes only the metadata-derived columns; the extracted text is the OCR
+        // pipeline's (FtsDao.upsertMetadata leaves it alone). A brand-new doc has no fts row yet,
+        // so it must be written even when nothing else changed; the metadata columns derive from
+        // the doc row, tags and fields, so when none changed and a row exists there is nothing to
+        // write.
         val searchableChanged = rowChanged || tagsChanged || doc in changes.fields
         if (searchableChanged || doc !in preloaded.ftsIndexed) {
-            changes.ftsRows.add(FtsRows.row(doc, newRow.fileName, effTags, fields, content = ""))
+            changes.ftsRows.add(FtsRows.row(doc, newRow.fileName, effTags, fields, content = null))
         }
     }
 

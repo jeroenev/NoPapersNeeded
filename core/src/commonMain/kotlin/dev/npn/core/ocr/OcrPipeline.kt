@@ -13,7 +13,6 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.FtsRows
-import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.pdf.PdfEngine
@@ -68,7 +67,6 @@ class OcrPipeline(
     private val fieldDao: DocumentFieldDao,
     private val deviceId: String,
     private val config: OcrConfig = OcrConfig(),
-    private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
     private val clock: EpochClock = SystemEpochClock,
 ) {
     /**
@@ -638,22 +636,20 @@ class OcrPipeline(
         desired: Version,
         sidecar: OcrSidecar,
     ) {
-        ftsWriteGate.withGate {
-            // Under the shared gate so this write cannot interleave with a metadata fold's FTS
-            // read-then-replace for the same doc (see FtsWriteGate).
-            val doc = documentDao.getByDocId(docId)
-            val tags = tagDao.tagsForDocument(docId)
-            val fields = fieldDao.fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue }
-            ftsDao.replaceDocument(
-                FtsRows.row(
-                    docId = docId,
-                    fileName = doc?.fileName,
-                    tags = tags,
-                    fields = fields,
-                    content = OcrSidecar.joinPages(sidecar.pages),
-                ),
-            )
-        }
+        // Only the content column is this pipeline's; the fold writes the others. The projection's
+        // values are read for a document the index has no FTS row for yet, which gets a whole one.
+        val doc = documentDao.getByDocId(docId)
+        val tags = tagDao.tagsForDocument(docId)
+        val fields = fieldDao.fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue }
+        ftsDao.upsertContent(
+            FtsRows.row(
+                docId = docId,
+                fileName = doc?.fileName,
+                tags = tags,
+                fields = fields,
+                content = OcrSidecar.joinPages(sidecar.pages),
+            ),
+        )
         val state = if (desired.deviceId == deviceId) OCR_DONE else OCR_ADOPTED
         setOcrState(docId, state, pageCount = sidecar.pages.size, engine = sidecar.engine, source = desired.writerKey)
     }

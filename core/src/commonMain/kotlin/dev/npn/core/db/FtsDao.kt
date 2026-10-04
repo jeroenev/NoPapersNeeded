@@ -42,30 +42,13 @@ interface FtsDao {
         limit: Int,
     ): List<FtsDocumentEntity>
 
-    /**
-     * The stored extracted-text content column for a doc, or null if the doc has no FTS row
-     * yet. Used by the fold pipeline to preserve OCR/embedded content across metadata-only
-     * rewrites (the fold has no content source of its own).
-     */
+    /** A document's extracted text, or null when it has no FTS row or no text yet. */
     @Query("SELECT content FROM fts_documents WHERE rowid = (SELECT ftsRowid FROM fts_keys WHERE docId = :docId)")
     suspend fun contentForDoc(docId: String): String?
 
-    @Query(
-        "SELECT docId, content FROM fts_documents " +
-            "WHERE rowid IN (SELECT ftsRowid FROM fts_keys WHERE docId IN (:docIds))",
-    )
-    suspend fun contentsForDocsChunk(docIds: List<String>): List<FtsContentRow>
-
-    /** Chunked [contentsForDocsChunk] so large id sets stay under SQLite's bind-variable limit. */
-    suspend fun contentsForDocs(docIds: List<String>): List<FtsContentRow> =
-        chunkedQuery(docIds) { contentsForDocsChunk(it) }
-
     /**
      * Which of [docIds] already have an FTS row. Presence only: the fold needs to know whether a
-     * document has been indexed yet (a brand-new one has no row), NOT what its text says. Reading
-     * the `content` column here instead would pull every document's entire extracted text into
-     * memory on every whole-library fold — and [replaceDocuments]' caller re-reads the content it
-     * carries forward under the write gate anyway (see Indexer.flushChanges).
+     * document has been indexed yet (a brand-new one has no row), not what its text says.
      */
     @Query("SELECT docId FROM fts_keys WHERE docId IN (:docIds)")
     suspend fun indexedDocIdsChunk(docIds: List<String>): List<String>
@@ -74,29 +57,44 @@ interface FtsDao {
     suspend fun indexedDocIds(docIds: List<String>): List<String> = chunkedQuery(docIds) { indexedDocIdsChunk(it) }
 
     /**
-     * Write a document's FTS row: in place when it has one, else as a new row under a newly
-     * allocated key. Build [row] with [dev.npn.core.index.FtsRows] so every write site indexes the
-     * same columns.
+     * The fold's write: the metadata columns of each of [rows] (file name, tags, fields). A document
+     * with an FTS row keeps its extracted text, which only [upsertContent] writes; one without gets
+     * [rows]' row as given. Build rows with [dev.npn.core.index.FtsRows].
      */
     @Transaction
-    suspend fun replaceDocument(row: FtsDocumentEntity) = replaceDocuments(listOf(row))
-
-    /** Several documents' rows written atomically, each as [replaceDocument] writes one. */
-    @Transaction
-    suspend fun replaceDocuments(rows: List<FtsDocumentEntity>) {
+    suspend fun upsertMetadata(rows: List<FtsDocumentEntity>) {
         if (rows.isEmpty()) return
         val rowids = rowidsFor(rows.map { it.docId })
         for (row in rows) {
             val rowid = rowids[row.docId]
             if (rowid != null) {
-                updateRow(rowid, row.fileName, row.content, row.tags, row.fields)
+                updateMetadata(rowid, row.fileName, row.tags, row.fields)
             } else {
-                val allocated = insertKey(FtsKeyEntity(docId = row.docId))
-                insertRow(allocated, row.docId, row.fileName, row.content, row.tags, row.fields)
-                rowids[row.docId] = allocated
+                rowids[row.docId] = insertNew(row)
             }
         }
     }
+
+    /**
+     * The OCR pipeline's write: [row]'s extracted text. A document with an FTS row keeps the
+     * metadata columns, which only [upsertMetadata] writes; one without gets [row] as given.
+     */
+    @Transaction
+    suspend fun upsertContent(row: FtsDocumentEntity) {
+        val rowid = rowidFor(row.docId)
+        if (rowid != null) updateContent(rowid, row.content) else insertNew(row)
+    }
+
+    /** Insert [row] as its document's first FTS row, under a newly allocated key; returns the rowid. */
+    @Transaction
+    suspend fun insertNew(row: FtsDocumentEntity): Long {
+        val rowid = insertKey(FtsKeyEntity(docId = row.docId))
+        insertRow(rowid, row.docId, row.fileName, row.content, row.tags, row.fields)
+        return rowid
+    }
+
+    @Query("SELECT ftsRowid FROM fts_keys WHERE docId = :docId")
+    suspend fun rowidFor(docId: String): Long?
 
     @Query("SELECT * FROM fts_keys WHERE docId IN (:docIds)")
     suspend fun keysChunk(docIds: List<String>): List<FtsKeyEntity>
@@ -122,16 +120,18 @@ interface FtsDao {
         fields: String?,
     )
 
-    @Query(
-        "UPDATE fts_documents SET fileName = :fileName, content = :content, tags = :tags, fields = :fields " +
-            "WHERE rowid = :rowid",
-    )
-    suspend fun updateRow(
+    @Query("UPDATE fts_documents SET fileName = :fileName, tags = :tags, fields = :fields WHERE rowid = :rowid")
+    suspend fun updateMetadata(
         rowid: Long,
         fileName: String?,
-        content: String?,
         tags: String?,
         fields: String?,
+    )
+
+    @Query("UPDATE fts_documents SET content = :content WHERE rowid = :rowid")
+    suspend fun updateContent(
+        rowid: Long,
+        content: String?,
     )
 
     companion object {
@@ -150,8 +150,3 @@ interface FtsDao {
     }
 }
 
-/** Minimal FTS projection: a row's docId and its extracted-text content, for the bulk fold preload. */
-data class FtsContentRow(
-    val docId: String,
-    val content: String?,
-)

@@ -231,7 +231,7 @@ class NpnDatabaseTest {
     fun ftsMatchReturnsRightDocIds() =
         runTest {
             val fts = db.ftsDao()
-            fts.replaceDocument(
+            fts.upsertContent(
                 FtsRows.row(
                     "a".repeat(64),
                     "invoice.pdf",
@@ -245,7 +245,7 @@ class NpnDatabaseTest {
                     content = "total amount due for electricity usage",
                 ),
             )
-            fts.replaceDocument(
+            fts.upsertContent(
                 FtsRows.row(
                     "b".repeat(64),
                     "recipe.pdf",
@@ -267,7 +267,7 @@ class NpnDatabaseTest {
         runTest {
             val fts = db.ftsDao()
             val id = "n".repeat(64)
-            fts.replaceDocument(
+            fts.upsertContent(
                 FtsRows.row(
                     id,
                     "doc.pdf",
@@ -281,16 +281,20 @@ class NpnDatabaseTest {
             fts.searchDocIds("buffalo") shouldContainExactly listOf(id)
             fts.contentForDoc(id) shouldBe "ocr aardvark"
 
-            fts.replaceDocument(
-                FtsRows.row(
-                    id,
-                    "renamed.pdf",
-                    tags = emptyList(),
-                    fields = mapOf(FieldKeys.NOTES to "note condor"),
-                    content = "ocr aardvark",
+            // The fold's write replaces the metadata columns and leaves the OCR text alone.
+            fts.upsertMetadata(
+                listOf(
+                    FtsRows.row(
+                        id,
+                        "renamed.pdf",
+                        tags = emptyList(),
+                        fields = mapOf(FieldKeys.NOTES to "note condor"),
+                        content = null,
+                    ),
                 ),
             )
             fts.searchDocIds("aardvark") shouldContainExactly listOf(id)
+            fts.contentForDoc(id) shouldBe "ocr aardvark"
             fts.searchDocIds("buffalo") shouldBe emptyList()
             fts.searchDocIds("condor") shouldContainExactly listOf(id)
         }
@@ -299,7 +303,7 @@ class NpnDatabaseTest {
     fun ftsSnippetHighlightsFragment() =
         runTest {
             val fts = db.ftsDao()
-            fts.replaceDocument(
+            fts.upsertContent(
                 FtsRows.row(
                     "a".repeat(64),
                     "invoice.pdf",
@@ -323,7 +327,7 @@ class NpnDatabaseTest {
     fun ftsPrefixSearch() =
         runTest {
             val fts = db.ftsDao()
-            fts.replaceDocument(
+            fts.upsertContent(
                 FtsRows.row(
                     "a".repeat(64),
                     "doc.pdf",
@@ -341,7 +345,7 @@ class NpnDatabaseTest {
         runTest {
             val fts = db.ftsDao()
             val id = "a".repeat(64)
-            fts.replaceDocument(
+            fts.upsertContent(
                 FtsRows.row(
                     id,
                     "invoice.pdf",
@@ -373,7 +377,7 @@ class NpnDatabaseTest {
                 ),
             )
             db.tagDao().upsert(TagEntity("Invoice tag"))
-            db.ftsDao().replaceDocument(
+            db.ftsDao().upsertContent(
                 FtsRows.row(
                     id,
                     "document.pdf",
@@ -397,40 +401,42 @@ class NpnDatabaseTest {
         }
 
     @Test
-    fun ftsReplaceDocumentUpdatesResults() =
+    fun ftsContentWriteReplacesOnlyTheText() =
         runTest {
             val fts = db.ftsDao()
             val id = "a".repeat(64)
-            fts.replaceDocument(
+            fts.upsertContent(
                 FtsRows.row(
                     id,
                     "doc.pdf",
                     tags = emptyList(),
-                    fields = mapOf(FieldKeys.TITLE to "t"),
+                    fields = mapOf(FieldKeys.TITLE to "tapir"),
                     content = "aardvark content",
                 ),
             )
             fts.searchDocIds("aardvark") shouldContainExactly listOf(id)
-            // re-index same docId with new content; old term must no longer match, and there
-            // must be no duplicate row for the new term.
-            fts.replaceDocument(
+            // Re-index the same docId with new content: the old term must no longer match, there
+            // must be no duplicate row for the new term, and the metadata columns stay the fold's.
+            fts.upsertContent(
                 FtsRows.row(
                     id,
                     "doc.pdf",
                     tags = emptyList(),
-                    fields = mapOf(FieldKeys.TITLE to "t"),
+                    fields = mapOf(FieldKeys.TITLE to "ignored"),
                     content = "buffalo content",
                 ),
             )
             fts.searchDocIds("aardvark") shouldBe emptyList()
             fts.searchDocIds("buffalo") shouldContainExactly listOf(id)
+            fts.searchDocIds("tapir") shouldContainExactly listOf(id)
+            fts.searchDocIds("ignored") shouldBe emptyList()
         }
 
     @Test
     fun ftsSearchAcrossTagsAndCorrespondent() =
         runTest {
             val fts = db.ftsDao()
-            fts.replaceDocument(
+            fts.upsertContent(
                 FtsRows.row(
                     "a".repeat(64),
                     "doc.pdf",

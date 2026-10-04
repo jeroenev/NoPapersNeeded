@@ -15,7 +15,7 @@ class FtsQueryTest {
             val db = npnDatabase(dir.resolve("index.db"))
             try {
                 val largeText = "invoice " + "payload ".repeat(20_000)
-                db.ftsDao().replaceDocument(
+                db.ftsDao().upsertContent(
                     FtsRows.row("doc", "invoice.pdf", emptyList(), mapOf("notes" to largeText), largeText),
                 )
 

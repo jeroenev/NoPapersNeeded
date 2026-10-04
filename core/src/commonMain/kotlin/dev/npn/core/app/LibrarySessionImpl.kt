@@ -22,7 +22,6 @@ import dev.npn.core.index.DbLocalJournalState
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.FsSegmentStore
-import dev.npn.core.index.FtsWriteGate
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
@@ -702,10 +701,7 @@ class LibrarySessionImpl private constructor(
             val lifetime = SessionLifetime(deps.scope)
 
             val segmentStore = FsSegmentStore(fs)
-            // Shared FTS content gate: serializes metadata-fold content carry-forward against
-            // OCR content writes so they cannot clobber the same FTS row.
-            val ftsWriteGate = FtsWriteGate()
-            val indexer = Indexer(fs, db, deps.clock, ftsWriteGate)
+            val indexer = Indexer(fs, db, deps.clock)
 
             val identity = DeviceIdentity(db.keyValueDao())
             val initialDeviceId = identity.getOrCreate()
@@ -776,7 +772,6 @@ class LibrarySessionImpl private constructor(
                     fieldDao = db.documentFieldDao(),
                     deviceId = effectiveDeviceId,
                     config = OcrConfig(lang = deps.ocrLanguage()),
-                    ftsWriteGate = ftsWriteGate,
                     clock = deps.clock,
                 )
             val ocrWorker = QueueDrainer(lifetime.scope, "OCR queue", deps.log) { ocrPipeline.processNext() }

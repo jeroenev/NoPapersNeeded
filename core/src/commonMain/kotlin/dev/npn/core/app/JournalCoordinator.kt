@@ -219,14 +219,12 @@ class JournalCoordinator internal constructor(
                 // BEFORE this object is ingested, which is exactly the base its events apply onto.
                 val current = foldedState()
                 var events: List<JournalEvent> = emptyList()
-                indexer.withFtsWriteGate {
-                    accumulator.withProjectionTransaction {
-                        events = accumulator.ingestObject(relPath)
-                        if (events.isEmpty()) return@withProjectionTransaction
-                        events.forEach(current::apply)
-                        observeSourceHlc(current.maxHlc)
-                        indexer.refreshEvents(current, events, ftsGateHeld = true)
-                    }
+                accumulator.withProjectionTransaction {
+                    events = accumulator.ingestObject(relPath)
+                    if (events.isEmpty()) return@withProjectionTransaction
+                    events.forEach(current::apply)
+                    observeSourceHlc(current.maxHlc)
+                    indexer.refreshEvents(current, events)
                 }
                 syncedSettings.update(current, events)
                 // The projection now matches the enlarged source set; record that so the next open
@@ -342,8 +340,8 @@ class JournalCoordinator internal constructor(
     /**
      * Shared projection pipeline for an ALREADY-published/written transaction: record the local
      * source, fold the frozen events into the live state, and incrementally project one DB
-     * transaction under the durable-recovery, FTS write-gate, and projection-transaction wrappers,
-     * then update synced settings. Callers own the enclosing mutex + [NonCancellable] scope.
+     * transaction under the durable-recovery and projection-transaction wrappers, then update
+     * synced settings. Callers own the enclosing mutex + [NonCancellable] scope.
      */
     private suspend fun projectWrittenTransaction(
         current: FoldedState,
@@ -353,18 +351,11 @@ class JournalCoordinator internal constructor(
     ) {
         val (path, version) = sourcePathAndVersion(published, written)
         withDurableProjectionRecovery {
-            indexer.withFtsWriteGate {
-                accumulator.withProjectionTransaction {
-                    accumulator.recordLocalSource(path, version, published?.contentHash, written)
-                    written.forEach(current::apply)
-                    observeSourceHlc(current.maxHlc)
-                    indexer.refreshEvents(
-                        current,
-                        written,
-                        ftsGateHeld = true,
-                        preserveLifecycleDocs = preserveLifecycleDocs,
-                    )
-                }
+            accumulator.withProjectionTransaction {
+                accumulator.recordLocalSource(path, version, published?.contentHash, written)
+                written.forEach(current::apply)
+                observeSourceHlc(current.maxHlc)
+                indexer.refreshEvents(current, written, preserveLifecycleDocs = preserveLifecycleDocs)
             }
             syncedSettings.update(current, written)
             // This commit added a source and projected it incrementally, so the projection matches
@@ -475,7 +466,7 @@ class JournalCoordinator internal constructor(
         return path to version
     }
 
-    /** Called under the coordinator mutex; the indexer already holds its scan lock in the callback. */
+    /** Called under the coordinator mutex, which the external-move callback relies on too. */
     private suspend fun rescanWithExternalMoves(state: FoldedState): ScanReport =
         indexer.rescan(metadataState = state, onExternalMoves = { ops ->
             withContext(NonCancellable) {

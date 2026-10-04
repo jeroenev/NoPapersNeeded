@@ -34,12 +34,12 @@ class FtsQueryPlanTest {
     fun documentScopedFtsCallsAddressRowsByRowid() =
         withDatabase { db, log ->
             val fts = db.ftsDao()
-            fts.replaceDocuments(listOf(row(a, "alpha"), row(b, "bravo")))
-            fts.replaceDocument(row(a, "alpha again"))
-            fts.contentForDoc(a) shouldBe "alpha again"
-            fts.contentsForDocs(listOf(a, b)).map { it.content }.sortedBy { it } shouldContainExactly
-                listOf("alpha again", "bravo")
-            fts.indexedDocIds(listOf(a, b, "c".repeat(64))).sorted() shouldContainExactly listOf(a, b)
+            fts.upsertMetadata(listOf(row(a, content = null), row(b, content = null)))
+            fts.upsertContent(row(a, "alpha"))
+            fts.upsertMetadata(listOf(row(a, content = null)))
+            fts.upsertContent(row("c".repeat(64), "charlie"))
+            fts.contentForDoc(a) shouldBe "alpha"
+            fts.indexedDocIds(listOf(a, b, "d".repeat(64))).sorted() shouldContainExactly listOf(a, b)
 
             noFtsStatementScans(db, log)
         }
@@ -78,7 +78,7 @@ class FtsQueryPlanTest {
 
     private fun row(
         docId: String,
-        content: String,
+        content: String?,
     ) = FtsRows.row(docId, "$docId.pdf", tags = emptyList(), fields = emptyMap(), content = content)
 
     private fun withDatabase(block: suspend (NpnDatabase, StatementLog) -> Unit) =
