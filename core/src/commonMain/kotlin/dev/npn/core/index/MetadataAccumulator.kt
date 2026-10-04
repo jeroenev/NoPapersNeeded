@@ -512,16 +512,6 @@ class MetadataAccumulator(
         }
     }
 
-    /** The events of [read] that its ingest [inserted]: the ones no fold has seen yet. */
-    private fun unseen(
-        read: List<CanonicalJournalEvent>,
-        inserted: List<MetadataEventEntity>,
-    ): List<dev.npn.core.journal.JournalEvent> {
-        if (inserted.isEmpty()) return emptyList()
-        val keys = inserted.mapTo(HashSet()) { it.deviceId to it.sequence }
-        return read.filter { (it.event.dev to it.event.seq) in keys }.map { it.event }
-    }
-
     suspend fun recordLocalSource(
         path: String,
         storageVersion: Int,
@@ -630,4 +620,14 @@ class MetadataAccumulator(
         /** Terminal: reconcile failed; writes are latched off by the coordinator. */
         const val MIGRATION_FAILED = "failed"
     }
+}
+
+/** The events of [read] that its ingest [inserted]: the ones no fold has seen yet. */
+private fun unseen(
+    read: List<CanonicalJournalEvent>,
+    inserted: List<MetadataEventEntity>,
+): List<dev.npn.core.journal.JournalEvent> {
+    if (inserted.isEmpty()) return emptyList()
+    val keys = inserted.mapTo(HashSet()) { it.deviceId to it.sequence }
+    return read.filter { (it.event.dev to it.event.seq) in keys }.map { it.event }
 }

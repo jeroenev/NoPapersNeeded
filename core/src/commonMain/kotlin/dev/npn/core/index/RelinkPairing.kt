@@ -47,8 +47,7 @@ internal object RelinkPairing {
             val best = ArrayList<RelinkCandidate>(MAX_CANDIDATES_PER_DOC + 1)
             for (candidate in found) {
                 val scored = score(gone, candidate) ?: continue
-                if (proposed.isNotEmpty() && (scored.oldDocId to scored.newDocId) in proposed) continue
-                keepBest(best, scored)
+                if (proposed.isEmpty() || (scored.oldDocId to scored.newDocId) !in proposed) keepBest(best, scored)
             }
             out += best
         }
