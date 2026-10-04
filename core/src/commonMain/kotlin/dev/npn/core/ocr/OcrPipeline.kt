@@ -54,6 +54,17 @@ data class OcrConfig(
  * picking between them for a given document is [engines]' job, not this class's.
  *
  * Only touches the `dev.npn.core.ocr`/`dev.npn.core.pdf` surface plus the DAOs it is given.
+ *
+ * @param onTextIndexed called whenever text is indexed for a document — including when an existing
+ *  sidecar is merely adopted or re-selected, and so on every index rebuild. For work that is local,
+ *  deterministic and free to repeat (the auto-match rules).
+ * @param onOcrProduced called only when *this device just produced* a new sidecar, i.e. the text is
+ *  new here rather than re-indexed. Narrower than [onTextIndexed] on purpose: after a destructive
+ *  index rebuild every document is re-queued and re-adopts its stored sidecar, which would otherwise
+ *  look like a library's worth of new documents to work that costs a paid request each (automatic
+ *  AI enrichment).
+ * @param onStaleFile called when a document's file no longer hashes to its docId: it was replaced
+ *  or is still being written. Nothing is published for it; a rescan sorts out what the file now is.
  */
 class OcrPipeline(
     private val fs: LibraryFileSystem,
@@ -68,32 +79,10 @@ class OcrPipeline(
     private val deviceId: String,
     private val config: OcrConfig = OcrConfig(),
     private val clock: EpochClock = SystemEpochClock,
+    private val onTextIndexed: suspend (docId: String, text: String) -> Unit = { _, _ -> },
+    private val onOcrProduced: suspend (docId: String) -> Unit = {},
+    private val onStaleFile: suspend (docId: String) -> Unit = {},
 ) {
-    /**
-     * Optional hook called whenever text is indexed for a document — including when an existing
-     * sidecar is merely adopted or re-selected, and so on every index rebuild. Used by the
-     * auto-matching rule engine, whose work is local, deterministic and free to repeat.
-     */
-    var onTextIndexed: (suspend (docId: String, text: String) -> Unit)? = null
-
-    /**
-     * Optional hook called only when *this device just produced* a new OCR sidecar, i.e. the
-     * document's text is new here rather than re-indexed. Used by automatic AI enrichment, which
-     * costs a paid request per document and so must not fire for work already done.
-     *
-     * This is deliberately narrower than [onTextIndexed]. The index is a disposable cache: after a
-     * destructive rebuild every document is re-queued and re-adopts its stored sidecar, which would
-     * otherwise look exactly like a library's worth of brand-new documents.
-     */
-    var onOcrProduced: (suspend (docId: String) -> Unit)? = null
-
-    /**
-     * Optional hook called when a document's file no longer hashes to its docId: it was replaced
-     * or is still being written. Nothing is published for it; a rescan sorts out what the file
-     * now is.
-     */
-    var onStaleFile: (suspend (docId: String) -> Unit)? = null
-
     companion object {
         const val STATE_PENDING = "pending"
         const val STATE_DONE = "done"
@@ -210,7 +199,7 @@ class OcrPipeline(
                 // Not this document's bytes, so not its failure either. Left out of the queue: the
                 // rescan replaces the row, or refreshes it if the file turns out unchanged.
                 ocrQueueDao.delete(docId)
-                onStaleFile?.invoke(docId)
+                onStaleFile(docId)
                 return
             }
             versions = loadVersions(docId)
@@ -268,8 +257,8 @@ class OcrPipeline(
     ): String? {
         val hooks =
             listOfNotNull(
-                onTextIndexed?.let { hook -> "onTextIndexed" to suspend { hook(docId, sidecar.fullText()) } },
-                onOcrProduced?.takeIf { ocrProduced }?.let { hook -> "onOcrProduced" to suspend { hook(docId) } },
+                "onTextIndexed" to suspend { onTextIndexed(docId, sidecar.fullText()) },
+                ("onOcrProduced" to suspend { onOcrProduced(docId) }).takeIf { ocrProduced },
             )
         var firstError: String? = null
         for ((name, hook) in hooks) {

@@ -40,6 +40,9 @@ internal class OcrPipelineRig {
         config: OcrConfig = OcrConfig(),
         clock: EpochClock = SystemEpochClock,
         files: LibraryFileSystem = fs,
+        onTextIndexed: suspend (docId: String, text: String) -> Unit = { _, _ -> },
+        onOcrProduced: suspend (docId: String) -> Unit = {},
+        onStaleFile: suspend (docId: String) -> Unit = {},
     ) = OcrPipeline(
         fs = files,
         sidecars = OcrSidecarFiles(files),
@@ -53,6 +56,9 @@ internal class OcrPipelineRig {
         deviceId = deviceId,
         config = config,
         clock = clock,
+        onTextIndexed = onTextIndexed,
+        onOcrProduced = onOcrProduced,
+        onStaleFile = onStaleFile,
     )
 
     /**

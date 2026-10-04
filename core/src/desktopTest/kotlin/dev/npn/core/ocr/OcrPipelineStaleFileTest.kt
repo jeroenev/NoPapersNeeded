@@ -36,11 +36,15 @@ class OcrPipelineStaleFileTest {
         runTest {
             val docId = rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("the bytes that were indexed"))
             Files.write(rig.libRoot.resolve("a.pdf"), PdfFixtures.embeddedTextPdf("the bytes there now"))
-            val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"))
             val stale = mutableListOf<String>()
             val indexed = mutableListOf<String>()
-            pipeline.onStaleFile = { stale += it }
-            pipeline.onTextIndexed = { id, _ -> indexed += id }
+            val pipeline =
+                rig.pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit"),
+                    onTextIndexed = { id, _ -> indexed += id },
+                    onStaleFile = { stale += it },
+                )
 
             pipeline.processNext()
 

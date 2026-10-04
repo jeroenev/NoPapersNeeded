@@ -459,9 +459,6 @@ class LibrarySessionImpl private constructor(
         started = true
         val scope = lifetime.scope
 
-        // OCR found a document's file no longer matches its hash: rescan once it has settled.
-        ocrPipeline.onStaleFile = { scheduleSettleRescan(WriteSettle.QUIET_MILLIS) }
-
         // OCR worker drain loop: kick on each queue change.
         scope.launch {
             deviceDb.ocrQueueDao().countActive().collect { active ->
@@ -765,23 +762,6 @@ class LibrarySessionImpl private constructor(
                     ai = AiOcrEngine(ai),
                     aiAuto = deps.unattendedAi::autoOcr,
                 )
-            val ocrPipeline =
-                OcrPipeline(
-                    fs = fs,
-                    sidecars = OcrSidecarFiles(fs),
-                    pdfEngine = deps.pdfEngine,
-                    engines = ocrEngines,
-                    documentDao = db.documentDao(),
-                    ftsDao = db.ftsDao(),
-                    ocrQueueDao = deviceDb.ocrQueueDao(),
-                    tagDao = db.tagDao(),
-                    fieldDao = db.documentFieldDao(),
-                    deviceId = effectiveDeviceId,
-                    config = OcrConfig(lang = deps.ocrLanguage()),
-                    clock = deps.clock,
-                )
-            val ocrWorker = QueueDrainer(lifetime.scope, "OCR queue", deps.log) { ocrPipeline.processNext() }
-
             // Single shared gate so thumbnail + page rendering share one bounded concurrency
             // budget and a first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
             val renderGate = RenderGate()
@@ -851,6 +831,34 @@ class LibrarySessionImpl private constructor(
                 )
             val enrichWorker =
                 QueueDrainer(lifetime.scope, "AI enrichment queue", deps.log) { autoEnricher.processNext() }
+            // The pipeline's stale-file hook asks the session for a follow-up rescan; the session is
+            // built last, and the hook only runs on a drain.
+            lateinit var session: LibrarySessionImpl
+            val ocrPipeline =
+                OcrPipeline(
+                    fs = fs,
+                    sidecars = OcrSidecarFiles(fs),
+                    pdfEngine = deps.pdfEngine,
+                    engines = ocrEngines,
+                    documentDao = db.documentDao(),
+                    ftsDao = db.ftsDao(),
+                    ocrQueueDao = deviceDb.ocrQueueDao(),
+                    tagDao = db.tagDao(),
+                    fieldDao = db.documentFieldDao(),
+                    deviceId = effectiveDeviceId,
+                    config = OcrConfig(lang = deps.ocrLanguage()),
+                    clock = deps.clock,
+                    // Deterministic local rules run on any newly indexed text, including a re-index.
+                    onTextIndexed = { docId, text -> ruleApplier.applyToDoc(docId, text) },
+                    // The paid pass runs only on text this device just produced. It fires after the
+                    // rules above, so rule-applied tags and fields are part of the context the model
+                    // sees. Only the *intent* is recorded here: this runs on the OCR queue-drain
+                    // thread, where a network call would stall OCR of every remaining document.
+                    onOcrProduced = { docId -> if (autoEnricher.enqueue(docId)) enrichWorker.kick() },
+                    // The file no longer matches its hash: rescan once it has settled.
+                    onStaleFile = { session.scheduleSettleRescan(WriteSettle.QUIET_MILLIS) },
+                )
+            val ocrWorker = QueueDrainer(lifetime.scope, "OCR queue", deps.log) { ocrPipeline.processNext() }
             val editQueue =
                 AiEditQueue(
                     dao = deviceDb.aiEditJobDao(),
@@ -863,17 +871,8 @@ class LibrarySessionImpl private constructor(
                     clock = deps.clock,
                 )
             val editWorker = QueueDrainer(lifetime.scope, "AI edit queue", deps.log) { editQueue.processNext() }
-            // Deterministic local rules run on any newly indexed text, including a re-index.
-            ocrPipeline.onTextIndexed = { docId, text -> ruleApplier.applyToDoc(docId, text) }
-            // The paid pass runs only on text this device just produced. It fires after the rules
-            // above, so rule-applied tags and fields are part of the context the model sees. Only
-            // the *intent* is recorded here: this runs on the OCR queue-drain thread, where a
-            // network call would stall OCR of every remaining document.
-            ocrPipeline.onOcrProduced = { docId ->
-                if (autoEnricher.enqueue(docId)) enrichWorker.kick()
-            }
 
-            return LibrarySessionImpl(
+            session = LibrarySessionImpl(
                 deviceId = effectiveDeviceId,
                 deps = deps,
                 lifetime = lifetime,
@@ -899,6 +898,7 @@ class LibrarySessionImpl private constructor(
                 content = content,
                 aiFacade = ai,
             )
+            return session
         }
 
         /**

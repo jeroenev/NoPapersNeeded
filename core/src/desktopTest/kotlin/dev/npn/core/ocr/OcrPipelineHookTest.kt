@@ -37,15 +37,19 @@ class OcrPipelineHookTest {
     fun textIndexedHookRunsBeforeTheQueueEntryIsMarkedDone() =
         runTest {
             val docId = rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("invoice 42 acme corporation"))
-            val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"))
             var stateDuringHook: String? = null
-            pipeline.onTextIndexed = { id, _ ->
-                stateDuringHook =
-                    rig.deviceDb
-                        .ocrQueueDao()
-                        .getByDocId(id)
-                        ?.state
-            }
+            val pipeline =
+                rig.pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit"),
+                    onTextIndexed = { id, _ ->
+                        stateDuringHook =
+                            rig.deviceDb
+                                .ocrQueueDao()
+                                .getByDocId(id)
+                                ?.state
+                    },
+                )
 
             pipeline.processNext()
 
@@ -63,11 +67,15 @@ class OcrPipelineHookTest {
     fun ownOcrFiresBothTheIndexedAndTheProducedHook() =
         runTest {
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"))
             val indexed = mutableListOf<String>()
             val produced = mutableListOf<String>()
-            pipeline.onTextIndexed = { id, _ -> indexed += id }
-            pipeline.onOcrProduced = { id -> produced += id }
+            val pipeline =
+                rig.pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit"),
+                    onTextIndexed = { id, _ -> indexed += id },
+                    onOcrProduced = { id -> produced += id },
+                )
 
             pipeline.processDoc(docId)
 
@@ -96,12 +104,16 @@ class OcrPipelineHookTest {
                 )
                 // The queue is this device's and outlives the index; re-queued as a rebuild's rescan would.
                 rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 1))
-                val pipeline =
-                    rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"), rebuilt)
                 val indexed = mutableListOf<String>()
                 val produced = mutableListOf<String>()
-                pipeline.onTextIndexed = { id, _ -> indexed += id }
-                pipeline.onOcrProduced = { id -> produced += id }
+                val pipeline =
+                    rig.pipeline(
+                        "devA",
+                        FakeOcrEngine(isAvailable = true, name = "mlkit"),
+                        rebuilt,
+                        onTextIndexed = { id, _ -> indexed += id },
+                        onOcrProduced = { id -> produced += id },
+                    )
 
                 pipeline.processDoc(docId)
 
@@ -118,10 +130,14 @@ class OcrPipelineHookTest {
         runTest {
             rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("invoice 42 acme corporation"))
             rig.stageDoc("b.pdf", PdfFixtures.embeddedTextPdf("another invoice document here"))
-            val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"))
-            pipeline.onTextIndexed = { _, _ -> error("hook blew up") }
             val produced = mutableListOf<String>()
-            pipeline.onOcrProduced = { id -> produced += id }
+            val pipeline =
+                rig.pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit"),
+                    onTextIndexed = { _, _ -> error("hook blew up") },
+                    onOcrProduced = { id -> produced += id },
+                )
 
             val worker = QueueDrainer(this) { pipeline.processNext() }
             try {
@@ -147,7 +163,6 @@ class OcrPipelineHookTest {
         runTest {
             rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("invoice 42 acme corporation"))
             val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"))
-            pipeline.onTextIndexed = { _, _ -> }
 
             val worker = QueueDrainer(this) { pipeline.processNext() }
             try {
