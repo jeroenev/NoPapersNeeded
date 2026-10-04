@@ -415,5 +415,6 @@ class DocumentFilterTest {
             tagDao = rig.db.tagDao(),
             fieldDao = rig.db.documentFieldDao(),
             deviceId = rig.session.deviceId,
+            language = { "eng" },
         )
 }

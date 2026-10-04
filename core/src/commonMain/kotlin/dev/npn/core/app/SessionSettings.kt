@@ -6,7 +6,7 @@ import kotlinx.coroutines.flow.first
 
 /**
  * The device settings a session reads while it runs. Each is read at the moment it is needed (the
- * trash retention on each purge, the OCR language when a pipeline is built, the AI endpoint on
+ * trash retention on each purge, the OCR language for each document, the AI endpoint on
  * every call), so a change applies without reopening the library.
  */
 class SessionSettings(

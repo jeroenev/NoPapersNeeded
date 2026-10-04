@@ -23,7 +23,6 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
-import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.pathrules.StoragePathRuleApplicator
@@ -246,7 +245,7 @@ internal fun buildEditQueue(
  * [onOcrProduced] then fires only for text this device just produced, so rule-applied tags and
  * fields are part of what a paid follow-up sees.
  */
-internal suspend fun buildOcr(
+internal fun buildOcr(
     deps: SessionDeps,
     lifetime: SessionLifetime,
     deviceId: String,
@@ -273,7 +272,7 @@ internal suspend fun buildOcr(
             tagDao = deps.db.tagDao(),
             fieldDao = deps.db.documentFieldDao(),
             deviceId = deviceId,
-            config = OcrConfig(lang = deps.settings.ocrLanguage()),
+            language = deps.settings.ocrLanguage,
             clock = deps.clock,
             // Deterministic local rules run on any newly indexed text, including a re-index.
             onTextIndexed = { docId, text -> library.ruleApplier.applyToDoc(docId, text) },

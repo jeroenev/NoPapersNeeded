@@ -121,7 +121,7 @@ class OcrPageResumeTest {
 
             // The retry reads in other languages: the cached page says nothing about those.
             val second = PageCountingEngine("mlkit")
-            rig.pipeline("devA", second, config = OcrConfig(lang = "nld")).processDoc(docId)
+            rig.pipeline("devA", second, language = { "nld" }).processDoc(docId)
 
             second.calls shouldBe 2
         }

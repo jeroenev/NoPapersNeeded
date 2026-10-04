@@ -40,7 +40,6 @@ import kotlinx.coroutines.sync.withLock
  *  once.
  */
 data class OcrConfig(
-    val lang: String = "eng",
     val minEmbeddedCharsPerPage: Int = 32,
     val renderDpiDim: Int = 2000,
     val maxAttempts: Int = 3,
@@ -58,6 +57,8 @@ data class OcrConfig(
  *
  * Only touches the `dev.npn.core.ocr`/`dev.npn.core.pdf` surface plus the DAOs it is given.
  *
+ * @param language the OCR languages a run asks its engine for (`nld+eng`), read once per document so a
+ *  change in Settings applies to the next one.
  * @param onTextIndexed called whenever text is indexed for a document — including when an existing
  *  sidecar is merely adopted or re-selected, and so on every index rebuild. For work that is local,
  *  deterministic and free to repeat (the auto-match rules).
@@ -80,6 +81,7 @@ class OcrPipeline(
     private val tagDao: TagDao,
     private val fieldDao: DocumentFieldDao,
     private val deviceId: String,
+    private val language: suspend () -> String,
     private val config: OcrConfig = OcrConfig(),
     private val clock: EpochClock = SystemEpochClock,
     private val onTextIndexed: suspend (docId: String, text: String) -> Unit = { _, _ -> },
@@ -358,7 +360,8 @@ class OcrPipeline(
             val canOcr = engine.available()
             // Resolved once, like the engine, so every page reads the same languages and the
             // sidecar records the ones actually used.
-            val lang = if (canOcr) engine.languagesFor(config.lang) else config.lang
+            val requested = language()
+            val lang = if (canOcr) engine.languagesFor(requested) else requested
             // Pages an earlier, failed attempt already paid for (see OcrPageCacheEntity).
             val read =
                 if (canOcr) {

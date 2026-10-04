@@ -77,10 +77,30 @@ class OcrPipelineTest {
             val fake = FakeOcrEngine(isAvailable = true, name = "tesseract", installed = { "eng" })
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
 
-            rig.pipeline("devA", fake, config = OcrConfig(lang = "nld+eng")).processDoc(docId)
+            rig.pipeline("devA", fake, language = { "nld+eng" }).processDoc(docId)
 
             fake.lastLang shouldBe "eng"
             OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.tesseract")).lang shouldBe "eng"
+        }
+
+    /** A language chosen in Settings applies to the next document, without reopening the library. */
+    @Test
+    fun theLanguageIsReadForEachDocument() =
+        runTest {
+            val fake = FakeOcrEngine(isAvailable = true, name = "tesseract")
+            var language = "eng"
+            val pipeline = rig.pipeline("devA", fake, language = { language })
+            val first = rig.stageDoc("first.pdf", PdfFixtures.imageOnlyPdf())
+            val second = rig.stageDoc("second.pdf", PdfFixtures.imageOnlyPdf(pages = 2))
+
+            pipeline.processDoc(first)
+            fake.lastLang shouldBe "eng"
+
+            language = "nld"
+            pipeline.processDoc(second)
+
+            fake.lastLang shouldBe "nld"
+            OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(second, "devA.tesseract")).lang shouldBe "nld"
         }
 
     @Test
