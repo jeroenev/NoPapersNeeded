@@ -129,7 +129,7 @@ private fun PreviewBody(
             actions = {
                 // Trash/split remove the document from the result set; close the panel with them.
                 TooltipIconButton(Icons.Filled.OpenInFull, stringResource(Res.string.ux_expand_document), onExpand)
-                DocActions(item = item, vm = vm, snackbar = snackbar, onGone = onClose)
+                DocActions(item = item, vm = vm, onGone = onClose)
             },
             onClose = onClose,
         )

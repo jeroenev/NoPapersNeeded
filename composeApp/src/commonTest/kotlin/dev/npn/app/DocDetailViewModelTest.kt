@@ -497,6 +497,54 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun anExportWritesTheBakedCopyAndSaysSo() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { content.bakedBytes = byteArrayOf(1, 2, 3) }
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            var written: ByteArray? = null
+
+            model.exportBakedCopy { written = it }
+            advanceUntilIdle()
+            collector.cancel()
+
+            written?.toList() shouldBe listOf<Byte>(1, 2, 3)
+            messages shouldContainExactly listOf("PDF exported with tags and details")
+        }
+
+    @Test
+    fun aCopyThatCannotBeBakedIsNotDelivered() =
+        runTest(dispatcher) {
+            val model = vm()
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            var delivered = false
+
+            model.shareBakedCopy { delivered = true }
+            advanceUntilIdle()
+            collector.cancel()
+
+            delivered shouldBe false
+            messages shouldContainExactly listOf("Could not prepare PDF for export")
+        }
+
+    @Test
+    fun aFailedShareSaysWhy() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { content.bakedBytes = byteArrayOf(1) }
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+
+            model.shareBakedCopy { error("no app can receive it") }
+            advanceUntilIdle()
+            collector.cancel()
+
+            messages shouldContainExactly listOf("Share failed: no app can receive it")
+        }
+
+    @Test
     fun suggestAiTagsStoresSuggestions() =
         runTest(dispatcher) {
             val session =

@@ -58,11 +58,17 @@ import no_papers_needed.composeapp.generated.resources.detail_bake_failed_not_sa
 import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unsupported
 import no_papers_needed.composeapp.generated.resources.detail_baked_in_place
+import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_copy
+import no_papers_needed.composeapp.generated.resources.detail_export_failed
+import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_share_failed
+import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_split_failed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_invalid_parts
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_not_completed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
+import org.jetbrains.compose.resources.StringResource
 
 /**
  * Transient UI state for the detail viewer (page index, page count, busy flags). Zoom/pan are
@@ -578,7 +584,27 @@ class DocDetailViewModel(
             )
         }
 
-    suspend fun bakedCopyBytes(): ByteArray? = runCatchingCancellable { content.bakedCopyBytes(docId) }.getOrNull()
+    /** Write a copy carrying this document's metadata through [write] (a file the user picked). */
+    fun exportBakedCopy(write: suspend (ByteArray) -> Unit) =
+        deliverBakedCopy(write, delivered = Res.string.detail_exported_baked_copy, failed = Res.string.detail_export_failed)
+
+    /** Hand a copy carrying this document's metadata to the platform's share sheet through [share]. */
+    fun shareBakedCopy(share: suspend (ByteArray) -> Unit) =
+        deliverBakedCopy(share, delivered = Res.string.detail_shared_baked_copy, failed = Res.string.detail_share_failed)
+
+    private fun deliverBakedCopy(
+        deliver: suspend (ByteArray) -> Unit,
+        delivered: StringResource,
+        failed: StringResource,
+    ) = launchReporting({ reason -> uiText(failed, reason) }) {
+        val bytes = content.bakedCopyBytes(docId)
+        if (bytes == null) {
+            message(uiText(Res.string.detail_could_not_bake_copy))
+        } else {
+            deliver(bytes)
+            message(uiText(delivered))
+        }
+    }
 
     suspend fun renderPage(
         pageIndex: Int,

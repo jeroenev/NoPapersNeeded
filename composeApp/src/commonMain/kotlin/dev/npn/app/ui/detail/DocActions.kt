@@ -9,12 +9,10 @@ import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Save
 import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.SnackbarHostState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.ui.common.ConfirmDialog
@@ -26,14 +24,11 @@ import dev.npn.app.ui.common.sharePdfBytes
 import dev.npn.app.ui.common.supportsSharing
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
-import dev.npn.core.util.runCatchingCancellable
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
 import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
 import io.github.vinceglb.filekit.write
-import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_unknown_error
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_confirm
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_large
@@ -42,10 +37,7 @@ import no_papers_needed.composeapp.generated.resources.detail_bake_in_place
 import no_papers_needed.composeapp.generated.resources.detail_bake_metadata_in_place
 import no_papers_needed.composeapp.generated.resources.detail_bake_prompt
 import no_papers_needed.composeapp.generated.resources.detail_baking
-import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_copy
 import no_papers_needed.composeapp.generated.resources.detail_export_baked_copy
-import no_papers_needed.composeapp.generated.resources.detail_export_failed
-import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_more_actions
 import no_papers_needed.composeapp.generated.resources.detail_new_file_name
 import no_papers_needed.composeapp.generated.resources.detail_rename
@@ -53,14 +45,11 @@ import no_papers_needed.composeapp.generated.resources.detail_rename_file
 import no_papers_needed.composeapp.generated.resources.detail_rerun_ocr
 import no_papers_needed.composeapp.generated.resources.detail_rerunning_ocr
 import no_papers_needed.composeapp.generated.resources.detail_share_baked_copy
-import no_papers_needed.composeapp.generated.resources.detail_share_failed
-import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_split_document
 import no_papers_needed.composeapp.generated.resources.detail_splitting
 import no_papers_needed.composeapp.generated.resources.detail_trash
 import no_papers_needed.composeapp.generated.resources.detail_trash_document
 import no_papers_needed.composeapp.generated.resources.detail_trash_prompt
-import org.jetbrains.compose.resources.getString
 import org.jetbrains.compose.resources.stringResource
 
 /** Which document-action dialog is open, if any. */
@@ -70,7 +59,7 @@ private enum class DocActionDialog { RENAME, TRASH, BAKE, SPLIT, AI_OCR }
  * Shared document actions: a share/export button for a baked copy plus an overflow menu with
  * rename, re-run OCR, split, bake-in-place and trash. Used by the detail screen's top bar and by
  * the library's side-panel preview header, so both surfaces offer the same operations. Owns the
- * confirmation dialogs; results surface on [snackbar].
+ * confirmation dialogs; results are [vm]'s messages, shown by the host's snackbar.
  *
  * [onGone] runs after the document left the library (trashed, or split into new documents) so the
  * host can close itself.
@@ -79,14 +68,13 @@ private enum class DocActionDialog { RENAME, TRASH, BAKE, SPLIT, AI_OCR }
 fun DocActions(
     item: DocListItem,
     vm: DocDetailViewModel,
-    snackbar: SnackbarHostState,
     onGone: () -> Unit,
     compact: Boolean = true,
 ) {
     val ui by vm.ui.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<DocActionDialog?>(null) }
 
-    ShareOrExportButton(item = item, vm = vm, snackbar = snackbar)
+    ShareOrExportButton(item = item, vm = vm)
     DocActionsMenu(
         compact = compact,
         reindexing = ui.reindexing,
@@ -111,7 +99,6 @@ fun DocActions(
         pageCount = ui.pageCount.count,
         aiOcr = ui.aiOcr,
         vm = vm,
-        snackbar = snackbar,
         onGone = onGone,
         onDismiss = { dialog = null },
     )
@@ -122,56 +109,19 @@ fun DocActions(
 private fun ShareOrExportButton(
     item: DocListItem,
     vm: DocDetailViewModel,
-    snackbar: SnackbarHostState,
 ) {
-    val scope = rememberCoroutineScope()
-    val exportedBakedCopy = stringResource(Res.string.detail_exported_baked_copy)
-    val sharedBakedCopy = stringResource(Res.string.detail_shared_baked_copy)
-    val couldNotBakeCopy = stringResource(Res.string.detail_could_not_bake_copy)
-    val unknownError = stringResource(Res.string.common_unknown_error)
-
     val saver =
         rememberFileSaverLauncher(
             dialogSettings = FileKitDialogSettings.createDefault(),
         ) { file: PlatformFile? ->
-            if (file != null) {
-                scope.launch {
-                    val bytes = vm.bakedCopyBytes()
-                    if (bytes != null) {
-                        runCatchingCancellable { file.write(bytes) }
-                            .onSuccess { snackbar.showSnackbar(exportedBakedCopy) }
-                            .onFailure {
-                                snackbar.showSnackbar(
-                                    getString(Res.string.detail_export_failed, it.message ?: unknownError),
-                                )
-                            }
-                    } else {
-                        snackbar.showSnackbar(couldNotBakeCopy)
-                    }
-                }
-            }
+            if (file != null) vm.exportBakedCopy { bytes -> file.write(bytes) }
         }
 
     if (supportsSharing()) {
         TooltipIconButton(
             icon = Icons.Filled.Share,
             label = stringResource(Res.string.detail_share_baked_copy),
-            onClick = {
-                scope.launch {
-                    val bytes = vm.bakedCopyBytes()
-                    if (bytes != null) {
-                        runCatchingCancellable { sharePdfBytes(exportName(item) + ".pdf", bytes) }
-                            .onSuccess { snackbar.showSnackbar(sharedBakedCopy) }
-                            .onFailure {
-                                snackbar.showSnackbar(
-                                    getString(Res.string.detail_share_failed, it.message ?: unknownError),
-                                )
-                            }
-                    } else {
-                        snackbar.showSnackbar(couldNotBakeCopy)
-                    }
-                }
-            },
+            onClick = { vm.shareBakedCopy { bytes -> sharePdfBytes(exportName(item) + ".pdf", bytes) } },
         )
     } else {
         TooltipIconButton(
@@ -276,7 +226,6 @@ private fun DocActionDialogs(
     pageCount: Int,
     aiOcr: AiOcrOffer,
     vm: DocDetailViewModel,
-    snackbar: SnackbarHostState,
     onGone: () -> Unit,
     onDismiss: () -> Unit,
 ) {

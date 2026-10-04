@@ -184,7 +184,6 @@ private fun LoadedDocScreen(
                             DocActions(
                                 item = current,
                                 vm = vm,
-                                snackbar = snackbar,
                                 onGone = onBack,
                                 compact = compact,
                             )
