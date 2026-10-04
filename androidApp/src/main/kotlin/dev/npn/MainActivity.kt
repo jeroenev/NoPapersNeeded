@@ -88,7 +88,10 @@ class MainActivity : ComponentActivity() {
      * the activity that applies it to its own resources may be gone by the time an import ends.
      */
     private suspend fun inAppLanguage(context: Context): Context {
-        val language = env.settings.settings.first().appLanguage ?: return context
+        val language =
+            env.settings.settings
+                .first()
+                .appLanguage ?: return context
         val configuration =
             Configuration(context.resources.configuration).apply { setLocale(Locale.forLanguageTag(language)) }
         return context.createConfigurationContext(configuration)
@@ -99,8 +102,14 @@ class MainActivity : ComponentActivity() {
         outcome: ForegroundImport<IntentImport.Result>,
     ): String =
         when (outcome) {
-            ForegroundImport.NoLibrary -> context.getString(R.string.import_library_required)
-            is ForegroundImport.Failed -> context.getString(R.string.import_failed)
+            ForegroundImport.NoLibrary -> {
+                context.getString(R.string.import_library_required)
+            }
+
+            is ForegroundImport.Failed -> {
+                context.getString(R.string.import_failed)
+            }
+
             is ForegroundImport.Done -> {
                 val result = outcome.result
                 if (result.isEmpty) {

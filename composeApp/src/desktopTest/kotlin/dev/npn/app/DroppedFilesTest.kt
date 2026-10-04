@@ -26,7 +26,9 @@ class DroppedFilesTest : MainDispatcherTest() {
             val env = FakeAppEnvironment(backgroundScope, savedLocation = "/lib")
             val vm = AppViewModel(env)
             advanceUntilIdle()
-            env.sessions.getValue("/lib").ingest.importOutcomes =
+            env.sessions
+                .getValue("/lib")
+                .ingest.importOutcomes =
                 listOf(ImportOutcome.Imported("a", "a.pdf"), ImportOutcome.Duplicate("b", "b.pdf"))
 
             messagesOf(vm) { vm.importFiles(dropped) } shouldContainExactly listOf("1 imported, 1 duplicate")
@@ -48,7 +50,9 @@ class DroppedFilesTest : MainDispatcherTest() {
             val env = FakeAppEnvironment(backgroundScope, savedLocation = "/lib")
             val vm = AppViewModel(env)
             advanceUntilIdle()
-            env.sessions.getValue("/lib").ingest.failImport = { error("Library session is closed") }
+            env.sessions
+                .getValue("/lib")
+                .ingest.failImport = { error("Library session is closed") }
 
             messagesOf(vm) { vm.importFiles(dropped) } shouldContainExactly
                 listOf("Could not import the files: Library session is closed")
