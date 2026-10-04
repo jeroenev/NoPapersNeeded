@@ -19,14 +19,16 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.asFlow
-import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertFails
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.asFlow
+import kotlinx.coroutines.test.runTest
 
 /**
  * Behaviour of the shipped chat loop: the Koog agent drives streaming turns, dispatches the
@@ -121,6 +123,35 @@ class KoogChatAgentTest {
                 AiChatEvent.ToolCallFinished("search_documents", "{\"query\":\"tax\"}", NO_TAX_MATCH)
             events[2] shouldBe AiChatEvent.TextDelta("Found it")
             events.last().shouldBeInstanceOf<AiChatEvent.Done>().fullText shouldBe "Found it"
+        }
+
+    /** A tool cancelled under the turn ends the turn; it is not an error to report to the model. */
+    @Test
+    fun aCancelledToolIsNotReportedAsAToolError() =
+        runTest {
+            val library = LibraryAiTools.toolSetFor(db, FieldKeys.seedDefinitions())
+            val cancelled =
+                library.chatTools.map { tool ->
+                    object : AiChatTool by tool {
+                        override suspend fun call(argsJson: String): String = throw CancellationException("turn stopped")
+                    }
+                }
+            val executor =
+                scriptedExecutor(
+                    listOf(
+                        listOf(toolFrame("search_documents", "{\"query\":\"tax\"}"), end()),
+                        textFrames("Found it"),
+                    ),
+                )
+            val events = mutableListOf<AiChatEvent>()
+
+            assertFails {
+                KoogChatAgent(executor, model, db, LibraryToolSet(library.tools, cancelled), null, "system", 15)
+                    .run("find tax", "session-1")
+                    .collect { events += it }
+            }
+
+            events.filterIsInstance<AiChatEvent.ToolCallFinished>() shouldBe emptyList()
         }
 
     @Test

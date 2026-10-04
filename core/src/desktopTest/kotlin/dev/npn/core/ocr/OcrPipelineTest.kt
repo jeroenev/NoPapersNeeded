@@ -6,6 +6,8 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.index.MutableClock
 import dev.npn.core.pdf.PdfBoxEngine
@@ -15,18 +17,20 @@ import dev.npn.core.work.backoffMs
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
-import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withContext
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
 
 class OcrPipelineTest {
     private lateinit var rig: OcrPipelineRig
@@ -404,6 +408,29 @@ class OcrPipelineTest {
             val pinned = repo.observeDoc(docId).first()!!.doc
             pinned.ocrEngineOverride shouldBe OcrEngineRef.Unknown("mixed")
             pinned.ocrEngineOverride?.label shouldBe "mixed"
+        }
+
+    /**
+     * A sidecar read cut short by the drain stopping is not an unreadable sidecar: read that way,
+     * the document was charged a failed attempt for an interrupted pass.
+     */
+    @Test
+    fun aCancelledSidecarReadChargesNoAttempt() =
+        runTest {
+            val docId = rig.stageDoc("docs/a.pdf", PdfFixtures.embeddedTextPdf("some text"))
+            writeForeignSidecar(docId, dev = "olddev", engine = "mixed", text = "legacy words")
+            val stopping =
+                object : LibraryFileSystem by fs {
+                    override suspend fun readBytes(relPath: String): ByteArray {
+                        if (relPath.startsWith(NpnPaths.OCR_DIR)) throw CancellationException("drain stopped")
+                        return fs.readBytes(relPath)
+                    }
+                }
+            val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = false, name = "mlkit"), files = stopping)
+
+            assertFailsWith<CancellationException> { pipeline.processDoc(docId) }
+
+            db.ocrQueueDao().getByDocId(docId)!!.attempts shouldBe 0
         }
 
     /**

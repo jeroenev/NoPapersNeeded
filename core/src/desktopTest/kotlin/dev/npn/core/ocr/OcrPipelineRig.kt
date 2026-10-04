@@ -5,6 +5,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
@@ -31,9 +32,10 @@ internal class OcrPipelineRig {
         engines: OcrEngineSelector = OcrEngineSelector(local = ocr),
         config: OcrConfig = OcrConfig(),
         clock: EpochClock = SystemEpochClock,
+        files: LibraryFileSystem = fs,
     ) = OcrPipeline(
-        fs = fs,
-        sidecars = OcrSidecarFiles(fs),
+        fs = files,
+        sidecars = OcrSidecarFiles(files),
         pdfEngine = PdfBoxEngine(),
         engines = engines,
         documentDao = database.documentDao(),
