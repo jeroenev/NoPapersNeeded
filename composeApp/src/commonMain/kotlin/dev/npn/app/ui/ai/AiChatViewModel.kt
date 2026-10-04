@@ -21,6 +21,10 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_chat_clear_failed
+import no_papers_needed.composeapp.generated.resources.ai_chat_delete_failed
+import no_papers_needed.composeapp.generated.resources.ai_chat_new_failed
 
 /**
  * Chat UI state. [configured] is null until the initial config probe completes, then true/false so
@@ -161,7 +165,9 @@ class AiChatViewModel(
             )
         }
         _ui.value.currentSessionId?.let { sessionId ->
-            viewModelScope.launch { ai.clearChatSession(sessionId) }
+            launchReporting({ reason -> uiText(Res.string.ai_chat_clear_failed, reason) }) {
+                ai.clearChatSession(sessionId)
+            }
         }
     }
 
@@ -175,7 +181,7 @@ class AiChatViewModel(
     /** Create and select a new empty conversation. */
     fun newSession() {
         if (_ui.value.busy) return
-        viewModelScope.launch {
+        launchReporting({ reason -> uiText(Res.string.ai_chat_new_failed, reason) }) {
             ai.createChatSession()?.let { session ->
                 val savedSessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(_ui.value.sessions)
                 _ui.update {
@@ -192,12 +198,12 @@ class AiChatViewModel(
     /** Delete a conversation and select the newest remaining one. */
     fun deleteSession(sessionId: String) {
         if (_ui.value.busy) return
-        viewModelScope.launch {
+        launchReporting({ reason -> uiText(Res.string.ai_chat_delete_failed, reason) }) {
             ai.deleteChatSession(sessionId)
             val remaining = runCatchingCancellable { ai.chatSessions() }.getOrDefault(emptyList())
             if (sessionId != _ui.value.currentSessionId) {
                 _ui.update { it.copy(sessions = remaining) }
-                return@launch
+                return@launchReporting
             }
             val next = remaining.firstOrNull() ?: ai.createChatSession()
             if (next == null) {

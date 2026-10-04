@@ -123,7 +123,11 @@ class FakeReviewConfigFacade : ReviewConfigFacade {
     val reviewModeSets = mutableListOf<ReviewMode>()
     val migrations = mutableListOf<Boolean>()
 
+    /** If set, [setReviewMode] throws this. */
+    var failSetReviewMode: (() -> Nothing)? = null
+
     override suspend fun setReviewMode(mode: ReviewMode) {
+        failSetReviewMode?.invoke()
         reviewModeSets += mode
         reviewModeFlow.value = mode
     }
@@ -215,7 +219,13 @@ class FakeAiEditQueue : AiEditQueueFacade {
         return nextJobId
     }
 
-    override suspend fun openEditRun(jobId: String): EditRunReview? = reviews[jobId]
+    /** Thrown by [openEditRun] when set. */
+    var openFailure: Throwable? = null
+
+    override suspend fun openEditRun(jobId: String): EditRunReview? {
+        openFailure?.let { throw it }
+        return reviews[jobId]
+    }
 
     override suspend fun discardEditRun(jobId: String) {
         discarded += jobId

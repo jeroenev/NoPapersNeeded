@@ -42,6 +42,29 @@ class AiChatViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun aChatThatCannotBeDeletedIsReportedNotCrashed() =
+        runTest(dispatcher) {
+            val saved = AiChatSession("saved", "Previous chat", 2L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.savedChatSessions = listOf(saved)
+                    aiChat.failDeleteChatSession = { error("store locked") }
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            val messages = mutableListOf<String>()
+            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            advanceUntilIdle()
+
+            model.deleteSession(saved.id)
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf("Could not delete the chat: store locked")
+            job.cancel()
+            messageJob.cancel()
+        }
+
+    @Test
     fun startupOpensNewChatInsteadOfNewestSavedSession() =
         runTest(dispatcher) {
             val saved = AiChatSession("saved", "Previous chat", 2L)

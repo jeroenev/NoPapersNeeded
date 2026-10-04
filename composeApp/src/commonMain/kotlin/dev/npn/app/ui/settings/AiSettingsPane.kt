@@ -30,6 +30,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.NumericField
+import dev.npn.app.ui.common.resolve
 import dev.npn.core.ai.AiCheck
 import dev.npn.core.ai.AiCheckOutcome
 import dev.npn.core.ai.AiCheckStatus
@@ -425,7 +426,7 @@ private fun AiModelSupportingText(
     when {
         models.error != null -> {
             Text(
-                text = stringResource(Res.string.common_settings_models_error, models.error),
+                text = stringResource(Res.string.common_settings_models_error, models.error.resolve()),
                 color = MaterialTheme.colorScheme.error,
             )
         }

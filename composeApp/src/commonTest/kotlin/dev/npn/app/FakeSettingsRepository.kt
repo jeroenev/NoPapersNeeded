@@ -29,7 +29,11 @@ class FakeSettingsRepository(
         settingsFlow.value = transform(settingsFlow.value ?: defaultSnapshot())
     }
 
+    /** If set, [edit] throws this, as a failed properties-file or DataStore write would. */
+    var failEdit: (() -> Nothing)? = null
+
     override suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) {
+        failEdit?.invoke()
         settingsFlow.value = SettingsCodec.normalise(transform(settingsFlow.value ?: defaultSnapshot()))
     }
 

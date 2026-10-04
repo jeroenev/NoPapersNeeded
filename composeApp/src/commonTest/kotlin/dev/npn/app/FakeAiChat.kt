@@ -39,7 +39,12 @@ class FakeAiChat : AiChat {
 
     override suspend fun createChatSession(): AiChatSession? = createdChatSession
 
-    override suspend fun deleteChatSession(sessionId: String) = Unit
+    /** If set, [deleteChatSession] throws this. */
+    var failDeleteChatSession: (() -> Nothing)? = null
+
+    override suspend fun deleteChatSession(sessionId: String) {
+        failDeleteChatSession?.invoke()
+    }
 
     override suspend fun clearChatSession(sessionId: String) = Unit
 

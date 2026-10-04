@@ -252,6 +252,22 @@ class SettingsViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun aFailedReviewModeSwitchIsReportedNotCrashed() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { reviewConfig.failSetReviewMode = { error("writes blocked") } }
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+
+            model.setUntaggedOnlyMode()
+            model.setInboxWorkflowMode(ReviewMigration.MARK_NONE)
+            advanceUntilIdle()
+            collector.cancel()
+
+            messages shouldContainExactly listOf("Could not update: writes blocked", "Could not update: writes blocked")
+        }
+
+    @Test
     fun inboxWorkflowMarkAllRunsMigrationThenSetsMode() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
@@ -320,6 +336,23 @@ class SettingsViewModelTest : MainDispatcherTest() {
             settings.settingsFlow.value?.aiOcrAuto shouldBe false
             model.aiSelfTest.value.aiOcrTurnedOff shouldBe true
             model.aiSelfTest.value.running shouldBe false
+        }
+
+    @Test
+    fun aFailedSwitchOffOfPageReadingIsReportedNotClaimed() =
+        runTest(dispatcher) {
+            val settings = aiSettings().apply { failEdit = { error("read-only file system") } }
+            val model = vm(settings = settings, selfTest = { report(AiCheckStatus.FAILED) })
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+
+            model.runAiSelfTest()
+            advanceUntilIdle()
+            collector.cancel()
+
+            model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
+            model.aiSelfTest.value.running shouldBe false
+            messages shouldContainExactly listOf("Could not update: read-only file system")
         }
 
     @Test

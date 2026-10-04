@@ -1486,3 +1486,22 @@ class ReviewSelectionTest {
         doc.fields.all { it.selected } shouldBe true
     }
 }
+
+class AiEditSetupFailureTest : MainDispatcherTest() {
+    @Test
+    fun aSetupReadThatFailsIsReportedAndFallsBackToDefaults() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply { savedViews.failObserve = IllegalStateException("database locked") }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            val messages = mutableListOf<String>()
+            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            advanceUntilIdle()
+
+            model.ui.value.savedViews shouldBe emptyList()
+            messages shouldContainExactly listOf("Some AI edit options could not be loaded: database locked")
+            job.cancel()
+            messageJob.cancel()
+        }
+}

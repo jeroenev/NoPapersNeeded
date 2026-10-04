@@ -146,4 +146,10 @@
         <item quantity="one">%1$d à examiner de plus près</item>
         <item quantity="other">%1$d à examiner de plus près</item>
     </plurals>
+    <string name="ai_chat_clear_failed">Impossible d’effacer la conversation : %1$s</string>
+    <string name="ai_chat_new_failed">Impossible de démarrer une nouvelle conversation : %1$s</string>
+    <string name="ai_chat_delete_failed">Impossible de supprimer la conversation : %1$s</string>
+    <string name="ai_edit_review_open_failed">Impossible d’ouvrir la modification IA : %1$s</string>
+    <string name="ai_edit_review_discard_failed">Impossible d’abandonner la modification IA : %1$s</string>
+    <string name="ai_edit_setup_load_failed">Certaines options de la modification IA n’ont pas pu être chargées : %1$s</string>
 </resources>

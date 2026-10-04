@@ -146,4 +146,10 @@
         <item quantity="one">%1$d requiere atención</item>
         <item quantity="other">%1$d requieren atención</item>
     </plurals>
+    <string name="ai_chat_clear_failed">No se pudo borrar la conversación: %1$s</string>
+    <string name="ai_chat_new_failed">No se pudo iniciar un chat nuevo: %1$s</string>
+    <string name="ai_chat_delete_failed">No se pudo eliminar el chat: %1$s</string>
+    <string name="ai_edit_review_open_failed">No se pudo abrir la edición con IA: %1$s</string>
+    <string name="ai_edit_review_discard_failed">No se pudo descartar la edición con IA: %1$s</string>
+    <string name="ai_edit_setup_load_failed">No se pudieron cargar algunas opciones de la edición con IA: %1$s</string>
 </resources>

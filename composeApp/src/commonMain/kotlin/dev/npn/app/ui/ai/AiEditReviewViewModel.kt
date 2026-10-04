@@ -4,6 +4,7 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiTextKey
+import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.AiEditQueueFacade
 import dev.npn.core.app.ApplyOutcome
@@ -18,6 +19,9 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
 
 /**
  * The phases of reviewing a run that was suggested in the background. Deliberately shorter than
@@ -79,7 +83,10 @@ class AiEditReviewViewModel(
 
     init {
         viewModelScope.launch {
-            val opened = runCatchingCancellable { queue.openEditRun(jobId) }.getOrNull()
+            val opened =
+                runCatchingCancellable { queue.openEditRun(jobId) }
+                    .onFailure { message(uiText(Res.string.ai_edit_review_open_failed, it.reasonText())) }
+                    .getOrNull()
             review = opened
             _phase.value =
                 opened?.let { QueuedReviewPhase.Review(it.docs, it.emptyDocs) }
@@ -124,15 +131,18 @@ class AiEditReviewViewModel(
     /**
      * Leave without writing anything, discarding the run. This is the only way a reviewed run is
      * thrown away, so it is deliberately the same button the interactive flow uses to skip a
-     * batch — there is no later batch here to carry the suggestions into.
+     * batch — there is no later batch here to carry the suggestions into. A discard that fails
+     * says so and stays on Review, since the run is still queued.
      */
     fun skip() {
         val opened = review ?: return
         if (run?.isActive == true) return
         run =
             viewModelScope.launch {
-                runCatchingCancellable { opened.discard() }
-                _phase.value = QueuedReviewPhase.Done(ApplyResult(0, 0, moreRemain = false))
+                reporting({ reason -> uiText(Res.string.ai_edit_review_discard_failed, reason) }) {
+                    opened.discard()
+                    _phase.value = QueuedReviewPhase.Done(ApplyResult(0, 0, moreRemain = false))
+                }
             }
     }
 

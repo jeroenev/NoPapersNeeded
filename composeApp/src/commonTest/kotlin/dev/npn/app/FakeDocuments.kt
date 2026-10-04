@@ -16,6 +16,7 @@ import dev.npn.core.ocr.OcrState
 import dev.npn.core.rules.AutoMatchRule
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.flow
 
 /**
  * Read-side test doubles: documents, tags, saved views and auto-match rules. Everything is backed
@@ -171,7 +172,10 @@ class FakeSavedViewRepository : SavedViewRepository {
     /** If set, delete throws this. */
     var failDelete: (() -> Nothing)? = null
 
-    override fun observeSavedViews(): Flow<List<SavedView>> = views
+    /** If set, the saved-views flow throws this when collected. */
+    var failObserve: Throwable? = null
+
+    override fun observeSavedViews(): Flow<List<SavedView>> = failObserve?.let { failure -> flow { throw failure } } ?: views
 
     override suspend fun save(view: SavedView) {
         failSave?.invoke()

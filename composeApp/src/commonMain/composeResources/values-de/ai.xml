@@ -146,4 +146,10 @@
         <item quantity="one">%1$d braucht einen genaueren Blick</item>
         <item quantity="other">%1$d brauchen einen genaueren Blick</item>
     </plurals>
+    <string name="ai_chat_clear_failed">Die Unterhaltung konnte nicht geleert werden: %1$s</string>
+    <string name="ai_chat_new_failed">Es konnte kein neuer Chat gestartet werden: %1$s</string>
+    <string name="ai_chat_delete_failed">Der Chat konnte nicht gelöscht werden: %1$s</string>
+    <string name="ai_edit_review_open_failed">Die KI-Bearbeitung konnte nicht geöffnet werden: %1$s</string>
+    <string name="ai_edit_review_discard_failed">Die KI-Bearbeitung konnte nicht verworfen werden: %1$s</string>
+    <string name="ai_edit_setup_load_failed">Einige Optionen der KI-Bearbeitung konnten nicht geladen werden: %1$s</string>
 </resources>

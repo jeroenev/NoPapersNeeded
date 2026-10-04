@@ -3,7 +3,10 @@ package dev.npn.app.ui.settings
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
+import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiModelCatalog
@@ -26,7 +29,6 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathTemplate
-import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -90,7 +92,7 @@ data class AiSelfTestState(
 data class AiModelListState(
     val loading: Boolean = false,
     val models: List<String> = emptyList(),
-    val error: String? = null,
+    val error: UiText? = null,
 )
 
 data class StoragePathError(
@@ -265,7 +267,7 @@ class SettingsViewModel(
                 _aiModels.value =
                     runCatchingCancellable { AiModelCatalog.listModels(config) }.fold(
                         onSuccess = { AiModelListState(models = it) },
-                        onFailure = { AiModelListState(error = it.reason()) },
+                        onFailure = { AiModelListState(error = it.reasonText()) },
                     )
             }
     }
@@ -287,10 +289,19 @@ class SettingsViewModel(
                 _aiSelfTest.value = AiSelfTestState(running = true)
                 val config = settings.settings.first().toAiConfig()
                 val report = selfTest(config)
-                val turnOffAiOcr = report.provesAiOcrCannotWork && config.ocrAuto
-                if (turnOffAiOcr) settings.edit { it.copy(aiOcrAuto = false) }
-                _aiSelfTest.value = AiSelfTestState(report = report, aiOcrTurnedOff = turnOffAiOcr)
+                val turnedOff = report.provesAiOcrCannotWork && config.ocrAuto && turnOffAiOcr()
+                _aiSelfTest.value = AiSelfTestState(report = report, aiOcrTurnedOff = turnedOff)
             }
+    }
+
+    /** Switch AI page reading off; true once it is, false (and reported) when the write failed. */
+    private suspend fun turnOffAiOcr(): Boolean {
+        var done = false
+        reporting({ reason -> uiText(UiTextKey.COULD_NOT_ACTION, UiAction.UPDATE, reason) }) {
+            settings.edit { it.copy(aiOcrAuto = false) }
+            done = true
+        }
+        return done
     }
 
     /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
@@ -307,7 +318,7 @@ class SettingsViewModel(
         }
 
     /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */
-    fun setUntaggedOnlyMode() = viewModelScope.launch { reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY) }
+    fun setUntaggedOnlyMode() = launchReporting(UiAction.UPDATE) { reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY) }
 
     /**
      * Switch to INBOX_WORKFLOW, running the chosen one-shot migration of the reviewed marker.
@@ -315,7 +326,7 @@ class SettingsViewModel(
      * the mode flips.
      */
     fun setInboxWorkflowMode(migration: ReviewMigration) =
-        viewModelScope.launch {
+        launchReporting(UiAction.UPDATE) {
             when (migration) {
                 ReviewMigration.MARK_ALL -> reviewConfig.markReviewedForMigration(onlyTagged = false)
                 ReviewMigration.MARK_TAGGED -> reviewConfig.markReviewedForMigration(onlyTagged = true)

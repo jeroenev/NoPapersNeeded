@@ -4,6 +4,7 @@ package dev.npn.app.ui.ai
 
 import dev.npn.app.FakeAiEditQueue
 import dev.npn.app.MainDispatcherTest
+import dev.npn.app.resolveEnglish
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.EditRunReview
@@ -51,6 +52,7 @@ private class ScriptedReview(
     override val emptyDocs: List<ReviewDoc> = emptyList(),
     override val failures: Int = 0,
     private val outcome: ApplyOutcome = ApplyOutcome.Done(ApplyResult(2, 1, moreRemain = false)),
+    private val discardFailure: Throwable? = null,
 ) : EditRunReview {
     val applied = mutableListOf<List<ReviewDoc>>()
     var discarded = false
@@ -61,6 +63,7 @@ private class ScriptedReview(
     }
 
     override suspend fun discard() {
+        discardFailure?.let { throw it }
         discarded = true
     }
 }
@@ -90,6 +93,41 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
 
             model.phase.value shouldBe QueuedReviewPhase.Unavailable
             job.cancel()
+        }
+
+    @Test
+    fun aRunThatCannotBeOpenedSaysWhy() =
+        runTest(dispatcher) {
+            val queue = FakeAiEditQueue().apply { openFailure = IllegalStateException("database locked") }
+            val model = AiEditReviewViewModel(queue, "job")
+            val job = launch { model.phase.collect {} }
+            val messages = mutableListOf<String>()
+            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            advanceUntilIdle()
+
+            model.phase.value shouldBe QueuedReviewPhase.Unavailable
+            messages shouldContainExactly listOf("Could not open the AI edit: database locked")
+            job.cancel()
+            messageJob.cancel()
+        }
+
+    @Test
+    fun aFailedDiscardSaysSoAndKeepsTheReview() =
+        runTest(dispatcher) {
+            val review = ScriptedReview(discardFailure = IllegalStateException("disk full"))
+            val model = AiEditReviewViewModel(queueWith(review), "job")
+            val job = launch { model.phase.collect {} }
+            val messages = mutableListOf<String>()
+            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            advanceUntilIdle()
+
+            model.skip()
+            advanceUntilIdle()
+
+            model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
+            messages shouldContainExactly listOf("Could not discard the AI edit: disk full")
+            job.cancel()
+            messageJob.cancel()
         }
 
     @Test

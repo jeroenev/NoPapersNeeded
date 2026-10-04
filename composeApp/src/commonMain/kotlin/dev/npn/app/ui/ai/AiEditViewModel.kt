@@ -5,6 +5,7 @@ import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
+import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
@@ -46,6 +47,8 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_setup_load_failed
 
 /**
  * The documents the next batch would process ([batch]) out of [total] still in scope.
@@ -400,9 +403,14 @@ class AiEditViewModel(
 
     private var run: Job? = null
 
+    // Each setup read falls back to a default when it fails, and says so: the form must not quietly
+    // offer fewer scopes or other caps than the user configured.
     init {
         viewModelScope.launch {
-            val mode = runCatchingCancellable { reviewConfig.reviewMode.first() }.getOrDefault(ReviewMode.DEFAULT)
+            val mode =
+                runCatchingCancellable { reviewConfig.reviewMode.first() }
+                    .onFailure(::reportSetupFailure)
+                    .getOrDefault(ReviewMode.DEFAULT)
             _ui.update { it.copy(reviewQueueAvailable = mode == ReviewMode.INBOX_WORKFLOW) }
         }
         // Saved views double as AI-edit scopes, so keep the list live and preselect the first one.
@@ -411,12 +419,15 @@ class AiEditViewModel(
                 savedViewRepository.observeSavedViews().collect { views ->
                     _ui.update { it.copy(savedViews = views, savedViewId = it.savedViewId ?: views.firstOrNull()?.id) }
                 }
-            }
+            }.onFailure(::reportSetupFailure)
         }
         // Seed the per-run overrides from the persisted Settings defaults (once); keep the
         // AiTagging defaults on failure.
         viewModelScope.launch {
-            val snapshot = runCatchingCancellable { settings.settings.first() }.getOrNull()
+            val snapshot =
+                runCatchingCancellable { settings.settings.first() }
+                    .onFailure(::reportSetupFailure)
+                    .getOrNull()
             _ui.update {
                 it.copy(
                     maxTags = snapshot?.aiMaxTagsPerDoc ?: AiTagging.DEFAULT_TAGS_PER_DOC,
@@ -425,6 +436,9 @@ class AiEditViewModel(
             }
         }
     }
+
+    private fun reportSetupFailure(failure: Throwable) =
+        message(uiText(Res.string.ai_edit_setup_load_failed, failure.reasonText()))
 
     /**
      * Pick the job this run does, applying its preset over the current configuration (Idle only).
