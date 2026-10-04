@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.MetadataEventEntity
 import dev.npn.core.db.MetadataSourceEntity
+import dev.npn.core.db.SourceFingerprint
 import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
 import dev.npn.core.db.npnDatabase
@@ -53,8 +54,15 @@ class DocumentRepositoryHistoryTest {
                     event(other, seq = 3, Hlc(10, 0, "dev-a"), JournalOp.TagAdd("other")),
                     event(docId, seq = 4, Hlc(100, 1, "dev-a"), JournalOp.DocTrash("a.pdf")),
                 )
-            val source = MetadataSourceEntity("src", SourceKind.LEGACY_SEGMENT, "fp", null, SourceStatus.APPLIED)
-            dao.ingestSource(source, events, transactionActor = null)
+            val source =
+                MetadataSourceEntity(
+                    "src",
+                    SourceKind.LEGACY_SEGMENT,
+                    SourceFingerprint("fp"),
+                    null,
+                    SourceStatus.APPLIED,
+                )
+            dao.ingest(source, events)
 
             val repo = DocumentRepositoryImpl(db)
             val history = repo.history(docId)
@@ -84,8 +92,14 @@ class DocumentRepositoryHistoryTest {
                     documentId = docId,
                     operation = "future-op",
                 )
-            dao.ingestSource(
-                MetadataSourceEntity("src", SourceKind.LEGACY_SEGMENT, "fp", null, SourceStatus.APPLIED),
+            dao.ingest(
+                MetadataSourceEntity(
+                    "src",
+                    SourceKind.LEGACY_SEGMENT,
+                    SourceFingerprint("fp"),
+                    null,
+                    SourceStatus.APPLIED,
+                ),
                 listOf(valid, broken),
             )
 

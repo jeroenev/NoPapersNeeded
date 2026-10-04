@@ -1,6 +1,7 @@
 package dev.npn.core.db
 
 import androidx.room3.ColumnTypeConverter
+import kotlin.jvm.JvmInline
 
 /** [SourceStatus.APPLIED]'s stored value, for a query that filters on it. */
 internal const val SOURCE_APPLIED = "applied"
@@ -43,6 +44,31 @@ enum class SourceKind(
         fun fromStored(stored: Int): SourceKind =
             entries.firstOrNull { it.stored == stored } ?: error("Unknown metadata source kind: $stored")
     }
+}
+
+/**
+ * A journal source's fingerprint as recorded when it was read, `"<size>,<mtime>:<sha256>"`: the
+ * stat that lets an unchanged file skip the read, and the hash of the bytes that were read.
+ */
+@JvmInline
+value class SourceFingerprint(
+    val value: String,
+) {
+    constructor(size: Long, mtimeMillis: Long, contentHash: String) : this("$size,$mtimeMillis:$contentHash")
+
+    /** The size recorded, or null when this fingerprint has none. */
+    val size: Long? get() = stat.substringBefore(',').toLongOrNull()
+
+    /** The mtime recorded, or null when this fingerprint has none. */
+    val mtimeMillis: Long? get() = stat.substringAfter(',', missingDelimiterValue = "").toLongOrNull()
+
+    /** Whether a file of [size] and [mtimeMillis] still has the stat recorded, so its bytes need no read. */
+    fun sameStat(
+        size: Long,
+        mtimeMillis: Long,
+    ): Boolean = stat == "$size,$mtimeMillis"
+
+    private val stat: String get() = value.substringBefore(':', missingDelimiterValue = "")
 }
 
 /** Where the accumulator's projection stands. Stored as [wire]. */

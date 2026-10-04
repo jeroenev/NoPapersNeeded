@@ -387,7 +387,7 @@ data class KeyValueEntity(
 data class MetadataSourceEntity(
     @PrimaryKey val path: String,
     @ColumnInfo(name = "storageVersion") val kind: SourceKind,
-    val fingerprint: String,
+    val fingerprint: SourceFingerprint,
     val contentHash: String?,
     val status: SourceStatus,
     val diagnostic: String? = null,

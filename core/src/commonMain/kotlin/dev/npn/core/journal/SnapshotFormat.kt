@@ -102,80 +102,24 @@ object SnapshotV2Reader {
         if (contentHash != snapshotPath.expectedHash) {
             return JournalSourceRead.Retryable("Snapshot hash does not match its path")
         }
-        return when (val parsed = parse(bytes)) {
-            is SnapshotParse.Ok -> JournalSourceRead.Accepted(parsed.events, manifest = parsed.manifest)
-            is SnapshotParse.Retry -> JournalSourceRead.Retryable(parsed.message)
-            is SnapshotParse.Unsupported -> JournalSourceRead.Unsupported(parsed.message)
-        }
-    }
-
-    private sealed interface SnapshotParse {
-        data class Ok(
-            val manifest: SnapshotManifest,
-            val events: List<CanonicalJournalEvent>,
-        ) : SnapshotParse
-
-        data class Retry(
-            val message: String,
-        ) : SnapshotParse
-
-        data class Unsupported(
-            val message: String,
-        ) : SnapshotParse
-    }
-
-    private fun parse(bytes: ByteArray): SnapshotParse {
-        val lines = splitLines(bytes) ?: return SnapshotParse.Retry("Snapshot is not valid UTF-8")
-        if (lines.isEmpty() || lines.any { it.isBlank() }) {
-            return SnapshotParse.Retry("Snapshot is empty or contains a blank line")
-        }
-        val manifest =
-            try {
-                SnapshotCodec.decodeManifest(lines.first())
-            } catch (e: Exception) {
-                return SnapshotParse.Retry("Snapshot manifest is invalid: ${e.message}")
-            }
-        if (manifest.version != SnapshotCodec.SNAPSHOT_MANIFEST_VERSION) {
-            return SnapshotParse.Unsupported("Snapshot manifest version ${manifest.version} is unsupported")
-        }
-        return decodeEvents(lines.drop(1), manifest)
-    }
-
-    private fun splitLines(bytes: ByteArray): List<String>? {
-        val content =
-            try {
-                bytes.decodeToString(throwOnInvalidSequence = true)
-            } catch (_: CharacterCodingException) {
-                return null
-            }
-        return content.split('\n').let { split ->
-            if (split.lastOrNull()?.isEmpty() == true) split.dropLast(1) else split
-        }
-    }
-
-    private fun decodeEvents(
-        eventLines: List<String>,
-        manifest: SnapshotManifest,
-    ): SnapshotParse {
-        val decoded = ArrayList<CanonicalJournalEvent>(eventLines.size)
-        for ((index, line) in eventLines.withIndex()) {
-            val event =
+        return StrictLines.read(bytes, NOUN) { lines ->
+            val manifest =
                 try {
-                    EventDecoderRegistry.decode(line, allowMissingV1 = false)
-                } catch (e: UnsupportedEventVersionException) {
-                    return SnapshotParse.Unsupported(
-                        "Snapshot line ${index + 2} uses unsupported event version ${e.version}",
-                    )
+                    SnapshotCodec.decodeManifest(lines.first())
                 } catch (e: Exception) {
-                    return SnapshotParse.Retry("Snapshot line ${index + 2} is invalid: ${e.message}")
+                    return@read JournalSourceRead.Retryable("Snapshot manifest is invalid: ${e.message}")
                 }
-            if (event.event.op is JournalOp.Unknown) {
-                return SnapshotParse.Unsupported(
-                    "Snapshot line ${index + 2} uses unknown operation ${event.event.op.wire}",
+            if (manifest.version != SnapshotCodec.SNAPSHOT_MANIFEST_VERSION) {
+                return@read JournalSourceRead.Unsupported(
+                    "Snapshot manifest version ${manifest.version} is unsupported",
                 )
             }
-            decoded += event
+            when (val events = StrictLines.decodeEvents(lines.drop(1), NOUN, firstLine = 2)) {
+                is JournalSourceRead.Accepted -> events.copy(manifest = manifest)
+                else -> events
+            }
         }
-        return SnapshotParse.Ok(manifest, decoded)
     }
+
+    private const val NOUN = "Snapshot"
 }

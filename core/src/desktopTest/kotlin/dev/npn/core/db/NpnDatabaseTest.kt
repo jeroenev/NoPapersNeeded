@@ -536,7 +536,13 @@ class NpnDatabaseTest {
             val dao = db.metadataProjectionDao()
 
             fun source(path: String) =
-                MetadataSourceEntity(path, SourceKind.LEGACY_SEGMENT, path, null, SourceStatus.APPLIED)
+                MetadataSourceEntity(
+                    path,
+                    SourceKind.LEGACY_SEGMENT,
+                    SourceFingerprint(path),
+                    null,
+                    SourceStatus.APPLIED,
+                )
 
             fun event(
                 dev: String,
@@ -554,12 +560,12 @@ class NpnDatabaseTest {
                 operation = "future",
             )
 
-            dao.ingestSource(source("one"), listOf(event("dev-a", 1, "a")))
+            dao.ingest(source("one"), listOf(event("dev-a", 1, "a")))
             assertFailsWith<MetadataIdentityCollision> {
-                dao.ingestSource(source("two"), listOf(event("dev-a", 1, "different")))
+                dao.ingest(source("two"), listOf(event("dev-a", 1, "different")))
             }
             assertFailsWith<MetadataIdentityCollision> {
-                dao.ingestSource(source("three"), listOf(event("dev-b", 1, "b", hlcDevice = "dev-a")))
+                dao.ingest(source("three"), listOf(event("dev-b", 1, "b", hlcDevice = "dev-a")))
             }
         }
 }

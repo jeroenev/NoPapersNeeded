@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import dev.npn.core.db.SourceFingerprint
 import dev.npn.core.db.StatementLog
 import dev.npn.core.db.isFullTableScan
 import dev.npn.core.db.queryPlan
@@ -89,7 +90,7 @@ class MetadataIngestCostTest {
 
             // The same source, recorded again with one event fewer.
             val source = dao.allSources().single()
-            dao.ingestSource(source.copy(fingerprint = "rewritten"), events.take(1))
+            dao.ingest(source.copy(fingerprint = SourceFingerprint("rewritten")), events.take(1))
 
             dao.allEvents() shouldContainExactly events.take(1)
         }

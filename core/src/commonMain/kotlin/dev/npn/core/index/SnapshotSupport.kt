@@ -3,6 +3,7 @@ package dev.npn.core.index
 import dev.npn.core.db.MetadataEventEntity
 import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataSourceEntity
+import dev.npn.core.db.SourceFingerprint
 import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.LibraryFileSystem
@@ -36,16 +37,15 @@ class SnapshotSupport(
         // Re-encoded only for its size, when the stat failed.
         val size = meta?.size ?: encodedSize(published)
         val canonical = published.events.map(EventDecoderRegistry::canonical)
-        val fingerprint = "$size,${meta?.mtimeMillis ?: 0L}:${published.contentHash}"
         val source =
             MetadataSourceEntity(
                 path = published.relPath,
                 kind = SourceKind.SNAPSHOT,
-                fingerprint = fingerprint,
+                fingerprint = SourceFingerprint(size, meta?.mtimeMillis ?: 0L, published.contentHash),
                 contentHash = published.contentHash,
                 status = SourceStatus.APPLIED,
             )
-        dao.ingestSnapshot(source, canonical.map(eventEntity), published.supersedes)
+        dao.ingest(source, canonical.map(eventEntity), supersedes = published.supersedes)
     }
 
     /**
@@ -64,7 +64,7 @@ class SnapshotSupport(
         fun ofKind(kind: SourceKind): List<CompactionSource> =
             live.filter { it.kind == kind }.mapNotNull { source ->
                 val hash = source.contentHash ?: return@mapNotNull null
-                recordedMtime(source)?.let { CompactionSource(source.path, hash, it) }
+                source.fingerprint.mtimeMillis?.let { CompactionSource(source.path, hash, it) }
             }
         return ofKind(SourceKind.OBJECT) to ofKind(SourceKind.SNAPSHOT)
     }
@@ -91,13 +91,6 @@ class SnapshotSupport(
             )
         }
     }
-
-    /** The mtime in a source's `"size,mtime:hash"` fingerprint. */
-    private fun recordedMtime(source: MetadataSourceEntity): Long? =
-        source.fingerprint
-            .substringBefore(':')
-            .substringAfter(',', missingDelimiterValue = "")
-            .toLongOrNull()
 
     private fun encodedSize(published: PublishedSnapshot): Long =
         SnapshotCodec

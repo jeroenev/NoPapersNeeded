@@ -60,6 +60,8 @@ object StorageV1Reader {
 
 /** Strict storage-v2 reader. Any integrity or structural failure applies zero events. */
 object StorageV2Reader {
+    private const val NOUN = "Object"
+
     private val uuidV4 =
         Regex(
             "^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$",
@@ -82,47 +84,13 @@ object StorageV2Reader {
         return readVerified(bytes)
     }
 
-    private fun readVerified(bytes: ByteArray): JournalSourceRead {
-        val content =
-            try {
-                bytes.decodeToString(throwOnInvalidSequence = true)
-            } catch (_: CharacterCodingException) {
-                return JournalSourceRead.Retryable("Object is not valid UTF-8")
-            }
-        val lines =
-            content.split('\n').let { split ->
-                if (split.lastOrNull()?.isEmpty() == true) split.dropLast(1) else split
-            }
-        if (lines.isEmpty()) return JournalSourceRead.Retryable("Object has no events")
-        if (lines.any { it.isBlank() }) return JournalSourceRead.Retryable("Object contains a blank event line")
-        val decoded = decodeLines(lines)
-        if (decoded !is JournalSourceRead.Accepted) return decoded
-        val violation = transactionViolation(decoded.events)
-        return if (violation == null) decoded else JournalSourceRead.Retryable(violation)
-    }
-
-    private fun decodeLines(lines: List<String>): JournalSourceRead {
-        val decoded = ArrayList<CanonicalJournalEvent>(lines.size)
-        for ((index, line) in lines.withIndex()) {
-            val event =
-                try {
-                    EventDecoderRegistry.decode(line, allowMissingV1 = false)
-                } catch (e: UnsupportedEventVersionException) {
-                    return JournalSourceRead.Unsupported(
-                        "Object line ${index + 1} uses unsupported event version ${e.version}",
-                    )
-                } catch (e: Exception) {
-                    return JournalSourceRead.Retryable("Object line ${index + 1} is invalid: ${e.message}")
-                }
-            if (event.event.op is JournalOp.Unknown) {
-                return JournalSourceRead.Unsupported(
-                    "Object line ${index + 1} uses unknown operation ${event.event.op.wire}",
-                )
-            }
-            decoded += event
+    private fun readVerified(bytes: ByteArray): JournalSourceRead =
+        StrictLines.read(bytes, NOUN) { lines ->
+            val decoded = StrictLines.decodeEvents(lines, NOUN)
+            if (decoded !is JournalSourceRead.Accepted) return@read decoded
+            val violation = transactionViolation(decoded.events)
+            if (violation == null) decoded else JournalSourceRead.Retryable(violation)
         }
-        return JournalSourceRead.Accepted(decoded)
-    }
 
     private fun transactionViolation(decoded: List<CanonicalJournalEvent>): String? {
         val actor = decoded.first().event.dev
@@ -142,5 +110,61 @@ object StorageV2Reader {
             previous = event.hlc
         }
         return null
+    }
+}
+
+/**
+ * The line format both content-addressed sources share, read strictly: UTF-8, one record per line
+ * (`\n`, the last one optional), no blank line, and every event line a canonical event of a version
+ * and an op this build knows. Any failure is a [JournalSourceRead] that applies nothing; [noun]
+ * names the source in its message.
+ */
+internal object StrictLines {
+    /** Hand [bytes]' lines to [decode], or refuse them. */
+    inline fun read(
+        bytes: ByteArray,
+        noun: String,
+        decode: (List<String>) -> JournalSourceRead,
+    ): JournalSourceRead {
+        val content =
+            try {
+                bytes.decodeToString(throwOnInvalidSequence = true)
+            } catch (_: CharacterCodingException) {
+                return JournalSourceRead.Retryable("$noun is not valid UTF-8")
+            }
+        val lines =
+            content.split('\n').let { split ->
+                if (split.lastOrNull()?.isEmpty() == true) split.dropLast(1) else split
+            }
+        if (lines.isEmpty()) return JournalSourceRead.Retryable("$noun is empty")
+        if (lines.any { it.isBlank() }) return JournalSourceRead.Retryable("$noun contains a blank line")
+        return decode(lines)
+    }
+
+    /** Decode every one of [lines] as an event, the first being line [firstLine] of the source. */
+    fun decodeEvents(
+        lines: List<String>,
+        noun: String,
+        firstLine: Int = 1,
+    ): JournalSourceRead {
+        val decoded = ArrayList<CanonicalJournalEvent>(lines.size)
+        for ((index, line) in lines.withIndex()) {
+            val number = firstLine + index
+            val event =
+                try {
+                    EventDecoderRegistry.decode(line, allowMissingV1 = false)
+                } catch (e: UnsupportedEventVersionException) {
+                    return JournalSourceRead.Unsupported(
+                        "$noun line $number uses unsupported event version ${e.version}",
+                    )
+                } catch (e: Exception) {
+                    return JournalSourceRead.Retryable("$noun line $number is invalid: ${e.message}")
+                }
+            if (event.event.op is JournalOp.Unknown) {
+                return JournalSourceRead.Unsupported("$noun line $number uses unknown operation ${event.event.op.wire}")
+            }
+            decoded += event
+        }
+        return JournalSourceRead.Accepted(decoded)
     }
 }

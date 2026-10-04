@@ -6,6 +6,7 @@ import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.MetadataTransactionActorEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.ProjectionStatus
+import dev.npn.core.db.SourceFingerprint
 import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.FileMeta
@@ -17,6 +18,7 @@ import dev.npn.core.journal.EventDecoderRegistry
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
+import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotV2Reader
@@ -47,7 +49,7 @@ class MetadataWriteBlocked(
 data class MetadataReconciliation(
     val state: FoldedState?,
     val sourcesRead: Int,
-    val newEvents: List<dev.npn.core.journal.JournalEvent> = emptyList(),
+    val newEvents: List<JournalEvent> = emptyList(),
     val incremental: Boolean = false,
 )
 
@@ -94,51 +96,15 @@ class MetadataAccumulator(
     private val validator = SourceSetValidator(dao)
 
     /**
-     * Shared stat/read/hash/fingerprint core for the two ingest paths ([ingestObject] and
-     * [ingestFile]). Applies both cheap gates — an already-applied source whose size+mtime match
-     * skips the read entirely, and one whose full fingerprint matches skips re-ingest — then reads
-     * the bytes and computes `"size,mtime:hash"`. Returns [Unchanged] when a gate fires, else a
-     * [Loaded] carrying the bytes/hash/fingerprint the caller ingests. Pure of any DB writes.
+     * A journal source read and checked off disk, waiting for [ingestObject] (or a reconcile pass)
+     * to record it. Reading is filesystem work, so the watch path does it before the transaction
+     * that records it.
      */
-    private sealed interface PreparedSource {
-        data object Unchanged : PreparedSource
-
-        data class Loaded(
-            val bytes: ByteArray,
-            val contentHash: String,
-            val fingerprint: String,
-        ) : PreparedSource
-    }
-
-    private suspend fun prepareSource(
-        relPath: String,
-        meta: FileMeta,
-        existingSource: MetadataSourceEntity?,
-    ): PreparedSource {
-        val alreadyApplied =
-            existingSource != null &&
-                existingSource.status == SourceStatus.APPLIED
-        // Cheap gate: an already-applied source whose size+mtime are byte-for-byte unchanged is
-        // treated as unchanged without reading/hashing. Only an exact match on BOTH fields
-        // short-circuits (mtime granularity means an approximate match could hide a mutation), so
-        // any difference falls through to a full read + hash.
-        val statPrefix = existingSource?.fingerprint?.substringBefore(':', missingDelimiterValue = "")
-        if (alreadyApplied && statPrefix == "${meta.size},${meta.mtimeMillis}") return PreparedSource.Unchanged
-        val bytes = fs.readBytes(relPath)
-        val contentHash = sha256Bytes(bytes)
-        val fingerprint = "${meta.size},${meta.mtimeMillis}:$contentHash"
-        if (alreadyApplied && existingSource.fingerprint == fingerprint) return PreparedSource.Unchanged
-        return PreparedSource.Loaded(bytes, contentHash, fingerprint)
-    }
-
-    /**
-     * A storage-v2 object read and checked off disk, waiting for [ingestObject] to record it. The
-     * read is filesystem work, so the watch path makes it before the transaction that records it.
-     */
-    class StagedObject internal constructor(
+    class StagedSource internal constructor(
         internal val relPath: String,
+        internal val kind: SourceKind,
         internal val previouslyApplied: Boolean,
-        internal val fingerprint: String,
+        internal val fingerprint: SourceFingerprint,
         internal val contentHash: String,
         internal val read: JournalSourceRead,
     )
@@ -147,64 +113,90 @@ class MetadataAccumulator(
      * Read the v2 object at [relPath] (watch path). The filename is the content hash, so reads are
      * hash-verified by [StorageV2Reader]. Null when the file is gone or already applied unchanged.
      */
-    suspend fun readObject(relPath: String): StagedObject? {
+    suspend fun readObject(relPath: String): StagedSource? {
         val path = NpnPaths.journalPath(relPath)
-        if (path is NpnPaths.JournalPath.UnsupportedObjectStore) {
-            fail("Unsupported metadata object store version ${path.version}")
-        }
         require(path is NpnPaths.JournalPath.ObjectV2) { "Not a storage-v2 object: $relPath" }
         val meta = fs.stat(relPath) ?: return null
-        val existingSource = dao.source(relPath)
-        val loaded =
-            when (val prepared = prepareSource(relPath, meta, existingSource)) {
-                PreparedSource.Unchanged -> return null
-                is PreparedSource.Loaded -> prepared
-            }
-        return StagedObject(
-            relPath = relPath,
-            previouslyApplied = existingSource?.status == SourceStatus.APPLIED,
-            fingerprint = loaded.fingerprint,
-            contentHash = loaded.contentHash,
-            read = StorageV2Reader.read(relPath, loaded.bytes, loaded.contentHash),
-        )
+        return stage(meta, path)
     }
 
     /** Record the object [staged] read. Returns the newly-unseen events (empty on a no-op). */
-    suspend fun ingestObject(staged: StagedObject): List<dev.npn.core.journal.JournalEvent> =
+    suspend fun ingestObject(staged: StagedSource): List<JournalEvent> = record(staged)
+
+    /**
+     * Read the source [meta] describes, classified as [path], unless it was applied before and is
+     * unchanged since: null then. The cheap gate is the stat, an exact match on size and mtime
+     * (mtime granularity means an approximate one could hide a mutation); the bytes are read and
+     * hashed only past it, and a matching hash skips the source too. No DB writes.
+     */
+    private suspend fun stage(
+        meta: FileMeta,
+        path: NpnPaths.JournalPath,
+    ): StagedSource? {
+        val existing = dao.source(meta.relPath)
+        val applied = existing?.status == SourceStatus.APPLIED
+        // v1-tolerant shrink guard: a legacy (mutable) source is allowed to grow but never shrink.
+        // When the stat gate below fires the size is unchanged, so this only fires on a real shrink.
+        if (applied && existing.kind == SourceKind.LEGACY_SEGMENT) {
+            val previousSize = existing.fingerprint.size
+            if (previousSize != null && meta.size < previousSize) {
+                fail("Legacy metadata source shrank: ${meta.relPath}")
+            }
+        }
+        if (applied && existing.fingerprint.sameStat(meta.size, meta.mtimeMillis)) return null
+        val bytes = fs.readBytes(meta.relPath)
+        val contentHash = sha256Bytes(bytes)
+        val fingerprint = SourceFingerprint(meta.size, meta.mtimeMillis, contentHash)
+        if (applied && existing.fingerprint == fingerprint) return null
+        return StagedSource(
+            relPath = meta.relPath,
+            kind = kindOf(path),
+            previouslyApplied = applied,
+            fingerprint = fingerprint,
+            contentHash = contentHash,
+            read = readSource(meta.relPath, path, bytes, contentHash),
+        )
+    }
+
+    /**
+     * Record [staged]: its events when it read as valid, else why not, failing the pass. A source
+     * applied before that no longer reads as valid fails without being recorded. Returns the events
+     * no fold has seen yet.
+     */
+    private suspend fun record(staged: StagedSource): List<JournalEvent> =
         when (val result = staged.read) {
             is JournalSourceRead.Accepted -> {
-                val inserted =
-                    dao.ingestSource(
-                        MetadataSourceEntity(
-                            staged.relPath,
-                            SourceKind.OBJECT,
-                            staged.fingerprint,
-                            staged.contentHash,
-                            SourceStatus.APPLIED,
-                        ),
-                        result.events.map(::eventEntity),
-                        MetadataTransactionActorEntity(
-                            result.events
-                                .first()
-                                .event.dev,
-                            staged.contentHash,
-                        ),
+                val source =
+                    MetadataSourceEntity(
+                        path = staged.relPath,
+                        kind = staged.kind,
+                        fingerprint = staged.fingerprint,
+                        contentHash = staged.contentHash.takeIf { staged.kind != SourceKind.LEGACY_SEGMENT },
+                        status = SourceStatus.APPLIED,
+                        diagnostic = diagnosticOf(result),
                     )
-                unseen(result.events, inserted)
+                // A v2 object is one transaction, whose actor no other object may claim.
+                val actor =
+                    result.events
+                        .firstOrNull()
+                        ?.takeIf { staged.kind == SourceKind.OBJECT }
+                        ?.let { MetadataTransactionActorEntity(it.event.dev, staged.contentHash) }
+                val supersedes = result.manifest?.supersedes.orEmpty()
+                unseen(result.events, dao.ingest(source, result.events.map(::eventEntity), actor, supersedes))
             }
 
             is JournalSourceRead.Retryable -> {
                 if (staged.previouslyApplied) {
-                    fail("Previously applied object is no longer valid: ${staged.relPath} (${result.message})")
+                    fail("Previously applied metadata source is no longer valid: ${staged.relPath} (${result.message})")
                 }
                 dao.upsertSource(
                     MetadataSourceEntity(
-                        staged.relPath,
-                        SourceKind.OBJECT,
-                        staged.fingerprint,
-                        staged.contentHash,
-                        SourceStatus.RETRYABLE,
-                        result.message,
+                        path = staged.relPath,
+                        kind = staged.kind,
+                        fingerprint = staged.fingerprint,
+                        contentHash = staged.contentHash,
+                        status = SourceStatus.RETRYABLE,
+                        diagnostic = result.message,
                     ),
                 )
                 fail(result.message)
@@ -343,7 +335,7 @@ class MetadataAccumulator(
                 for (source in applied) {
                     append(source.path)
                     append('\u0000')
-                    append(source.fingerprint)
+                    append(source.fingerprint.value)
                     append('\n')
                 }
             }
@@ -390,7 +382,7 @@ class MetadataAccumulator(
     /** Running result of an [ingestFiles] pass. */
     private class IngestBatch {
         var read = 0
-        val newEvents = ArrayList<dev.npn.core.journal.JournalEvent>()
+        val newEvents = ArrayList<JournalEvent>()
 
         // True if any source that was already APPLIED got re-ingested (mutated in place). Such a
         // rewrite can drop events (MetadataProjectionDao.replaceSourceEvents), so the in-memory state
@@ -418,105 +410,11 @@ class MetadataAccumulator(
         if (path is NpnPaths.JournalPath.UnsupportedObjectStore) {
             fail("Unsupported metadata object store version ${path.version}")
         }
-        val existing = dao.source(meta.relPath)
-        val alreadyApplied = existing != null && existing.status == SourceStatus.APPLIED
-        // v1-tolerant shrink guard: a legacy (mutable) source is allowed to grow but never shrink.
-        // Runs before the read; when the stat gate below short-circuits the size is unchanged, so
-        // this is a no-op there and only fires on a genuine shrink.
-        if (alreadyApplied && existing.kind == SourceKind.LEGACY_SEGMENT) {
-            val previousSize = existing.fingerprint.substringBefore(',').toLongOrNull()
-            if (previousSize != null && meta.size < previousSize) {
-                fail("Legacy metadata source shrank: ${meta.relPath}")
-            }
-        }
-        // Shared stat/read/hash/fingerprint core + cheap gates. v1 mutation semantics are
-        // preserved: a changed size/mtime still falls through to the read + rewrite logic below.
-        val loaded =
-            when (val prepared = prepareSource(meta.relPath, meta, existing)) {
-                PreparedSource.Unchanged -> return
-                is PreparedSource.Loaded -> prepared
-            }
-        val kind =
-            when (path) {
-                is NpnPaths.JournalPath.SnapshotV2 -> SourceKind.SNAPSHOT
-                is NpnPaths.JournalPath.ObjectV2 -> SourceKind.OBJECT
-                else -> SourceKind.LEGACY_SEGMENT
-            }
-        val result = readSource(meta.relPath, path, loaded.bytes, loaded.contentHash)
-        if (result is JournalSourceRead.Retryable && alreadyApplied) {
-            fail("Previously applied metadata source is no longer valid: ${meta.relPath} (${result.message})")
-        }
-        if (alreadyApplied) batch.reingestedExisting = true
-        val supersedes =
-            if (path is NpnPaths.JournalPath.SnapshotV2 && result is JournalSourceRead.Accepted) {
-                result.manifest?.supersedes.orEmpty()
-            } else {
-                null
-            }
-        applyReadResult(meta.relPath, kind, loaded.fingerprint, loaded.contentHash, result, batch, supersedes)
-    }
-
-    private suspend fun applyReadResult(
-        path: String,
-        kind: SourceKind,
-        fingerprint: String,
-        contentHash: String,
-        result: JournalSourceRead,
-        batch: IngestBatch,
-        snapshotSupersedes: List<String>? = null,
-    ) {
-        when (result) {
-            is JournalSourceRead.Accepted -> {
-                val diagnostic =
-                    result.diagnostics
-                        .joinToString("\n") { item ->
-                            item.line?.let { "line $it: ${item.message}" } ?: item.message
-                        }.ifEmpty { null }
-                val hashCol = contentHash.takeIf { kind != SourceKind.LEGACY_SEGMENT }
-                val source =
-                    MetadataSourceEntity(
-                        path,
-                        kind,
-                        fingerprint,
-                        hashCol,
-                        SourceStatus.APPLIED,
-                        diagnostic,
-                    )
-                val inserted =
-                    if (snapshotSupersedes != null) {
-                        dao.ingestSnapshot(source, result.events.map(::eventEntity), snapshotSupersedes)
-                    } else {
-                        val actor =
-                            result.events
-                                .firstOrNull()
-                                ?.event
-                                ?.dev
-                                ?.takeIf { kind == SourceKind.OBJECT }
-                                ?.let { MetadataTransactionActorEntity(it, contentHash) }
-                        dao.ingestSource(source, result.events.map(::eventEntity), actor)
-                    }
-                batch.read++
-                batch.newEvents.addAll(unseen(result.events, inserted))
-            }
-
-            is JournalSourceRead.Retryable -> {
-                dao.upsertSource(
-                    MetadataSourceEntity(
-                        path,
-                        kind,
-                        fingerprint,
-                        contentHash,
-                        SourceStatus.RETRYABLE,
-                        result.message,
-                    ),
-                )
-                fail(result.message)
-            }
-
-            is JournalSourceRead.Unsupported -> {
-                fail(result.message)
-            }
-        }
+        val staged = stage(meta, path) ?: return
+        val unseen = record(staged)
+        batch.read++
+        batch.newEvents.addAll(unseen)
+        if (staged.previouslyApplied) batch.reingestedExisting = true
     }
 
     /**
@@ -528,7 +426,7 @@ class MetadataAccumulator(
         internal val source: MetadataSourceEntity,
         internal val events: List<MetadataEventEntity>,
         internal val actor: MetadataTransactionActorEntity?,
-        internal val written: List<dev.npn.core.journal.JournalEvent>,
+        internal val written: List<JournalEvent>,
     )
 
     suspend fun localSource(published: PublishedTransaction): LocalSource {
@@ -537,12 +435,16 @@ class MetadataAccumulator(
         // The written bytes are needed only when the stat failed.
         val bytes by lazy { JournalCodec.encodeLines(events).encodeToByteArray() }
         val meta = fs.stat(published.relPath)
-        val stat = "${meta?.size ?: bytes.size.toLong()},${meta?.mtimeMillis ?: 0L}"
         val source =
             MetadataSourceEntity(
                 path = published.relPath,
                 kind = SourceKind.OBJECT,
-                fingerprint = "$stat:${published.contentHash}",
+                fingerprint =
+                    SourceFingerprint(
+                        meta?.size ?: bytes.size.toLong(),
+                        meta?.mtimeMillis ?: 0L,
+                        published.contentHash,
+                    ),
                 contentHash = published.contentHash,
                 status = SourceStatus.APPLIED,
             )
@@ -551,7 +453,7 @@ class MetadataAccumulator(
     }
 
     suspend fun recordLocalSource(local: LocalSource) {
-        dao.ingestSource(local.source, local.events, local.actor)
+        dao.ingest(local.source, local.events, local.actor)
     }
 
     suspend fun loadState(): FoldedState =
@@ -627,11 +529,25 @@ class MetadataAccumulator(
 private fun unseen(
     read: List<CanonicalJournalEvent>,
     inserted: List<MetadataEventEntity>,
-): List<dev.npn.core.journal.JournalEvent> {
+): List<JournalEvent> {
     if (inserted.isEmpty()) return emptyList()
     val keys = inserted.mapTo(HashSet()) { it.deviceId to it.sequence }
     return read.filter { (it.event.dev to it.event.seq) in keys }.map { it.event }
 }
+
+/** What kind of source a journal file classified as [path] is. */
+private fun kindOf(path: NpnPaths.JournalPath): SourceKind =
+    when (path) {
+        is NpnPaths.JournalPath.SnapshotV2 -> SourceKind.SNAPSHOT
+        is NpnPaths.JournalPath.ObjectV2 -> SourceKind.OBJECT
+        else -> SourceKind.LEGACY_SEGMENT
+    }
+
+/** The lines a tolerant read skipped, one per line, or null when it skipped none. */
+private fun diagnosticOf(read: JournalSourceRead.Accepted): String? =
+    read.diagnostics
+        .joinToString("\n") { item -> item.line?.let { "line $it: ${item.message}" } ?: item.message }
+        .ifEmpty { null }
 
 /** Read a source whose bytes the accumulator loaded and hashed; the v2 readers take that hash. */
 private fun readSource(

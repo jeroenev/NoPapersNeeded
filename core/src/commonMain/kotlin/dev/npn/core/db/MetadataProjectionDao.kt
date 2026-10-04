@@ -184,48 +184,31 @@ interface MetadataProjectionDao {
     }
 
     /**
-     * Ingest a compaction snapshot source: record its events/provenance like any source, then
-     * record its supersession facts. Idempotent — two overlapping snapshots each record their own
-     * (path, hash) rows and share event identities harmlessly. Returns the events new to the table,
-     * as [ingestSource] does.
+     * Record [source] as applied with [events], with the [transactionActor] of a v2 object and,
+     * for a snapshot, the hashes it [supersedes]. Returns the events new to the table, which are
+     * the ones a fold has not seen yet; empty when the source was already applied unchanged.
+     * Idempotent: two overlapping snapshots each record their own (path, hash) rows and share event
+     * identities harmlessly.
      */
     @Transaction
-    suspend fun ingestSnapshot(
-        source: MetadataSourceEntity,
-        events: List<MetadataEventEntity>,
-        supersedes: List<String>,
-    ): List<MetadataEventEntity> {
-        val existing = source(source.path)
-        if (existing?.fingerprint == source.fingerprint && existing.status == SourceStatus.APPLIED) return emptyList()
-        val inserted = insertNewEvents(events)
-        replaceSourceEvents(source.path, events)
-        deleteSupersededBy(source.path)
-        insertSuperseded(supersedes.map { MetadataSupersededEntity(source.path, it) })
-        upsertSource(source.copy(status = SourceStatus.APPLIED))
-        return inserted
-    }
-
-    /**
-     * Record [source] as applied with [events]. Returns the events new to the table, which are the
-     * ones a fold has not seen yet; empty when the source was already applied unchanged.
-     */
-    @Transaction
-    suspend fun ingestSource(
+    suspend fun ingest(
         source: MetadataSourceEntity,
         events: List<MetadataEventEntity>,
         transactionActor: MetadataTransactionActorEntity? = null,
+        supersedes: List<String> = emptyList(),
     ): List<MetadataEventEntity> {
-        val existingSource = source(source.path)
-        if (existingSource?.fingerprint == source.fingerprint && existingSource.status == SourceStatus.APPLIED) {
-            return emptyList()
-        }
+        val existing = source(source.path)
+        if (existing?.fingerprint == source.fingerprint && existing.status == SourceStatus.APPLIED) return emptyList()
         if (transactionActor != null) {
-            val existingActor = actor(transactionActor.actorId)
-            validateActor(existingActor, transactionActor)
+            validateActor(actor(transactionActor.actorId), transactionActor)
             insertActor(transactionActor)
         }
         val inserted = insertNewEvents(events)
         replaceSourceEvents(source.path, events)
+        if (source.kind == SourceKind.SNAPSHOT) {
+            deleteSupersededBy(source.path)
+            insertSuperseded(supersedes.map { MetadataSupersededEntity(source.path, it) })
+        }
         upsertSource(source.copy(status = SourceStatus.APPLIED))
         return inserted
     }
