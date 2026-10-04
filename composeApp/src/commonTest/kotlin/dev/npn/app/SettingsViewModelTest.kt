@@ -203,6 +203,25 @@ class SettingsViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun switchingProviderDropsTheBaseUrlOfThePreviousOne() =
+        runTest(dispatcher) {
+            val settings =
+                FakeSettingsRepository().apply {
+                    updateSettings { it.copy(aiProvider = AiProvider.OLLAMA, aiBaseUrl = "http://192.168.1.20:11434") }
+                }
+            val model = vm(settings = settings)
+
+            model.setAiProvider(AiProvider.OLLAMA)
+            advanceUntilIdle()
+            settings.settingsFlow.value?.aiBaseUrl shouldBe "http://192.168.1.20:11434"
+
+            model.setAiProvider(AiProvider.ANTHROPIC)
+            advanceUntilIdle()
+            settings.settingsFlow.value?.aiProvider shouldBe AiProvider.ANTHROPIC
+            settings.settingsFlow.value?.aiBaseUrl shouldBe ""
+        }
+
+    @Test
     fun untaggedOnlyModeSetsModeWithoutMigration() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()

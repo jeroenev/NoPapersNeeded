@@ -44,7 +44,15 @@ class AiConfigTest {
     @Test
     fun effectiveBaseUrlFallsBackToProviderDefault() {
         AiConfig(provider = AiProvider.OPENROUTER).effectiveBaseUrl shouldBe "https://openrouter.ai"
-        AiConfig(provider = AiProvider.OPENROUTER, baseUrl = "https://p").effectiveBaseUrl shouldBe "https://p"
+        AiConfig(provider = AiProvider.OLLAMA, baseUrl = "http://nas:11434").effectiveBaseUrl shouldBe
+            "http://nas:11434"
+    }
+
+    @Test
+    fun aFixedUrlProviderIgnoresAStoredBaseUrl() {
+        // The settings screen hides the field for these, so a stored value is a leftover.
+        AiConfig(provider = AiProvider.OPENROUTER, baseUrl = "http://nas:11434").effectiveBaseUrl shouldBe
+            "https://openrouter.ai"
     }
 
     @Test

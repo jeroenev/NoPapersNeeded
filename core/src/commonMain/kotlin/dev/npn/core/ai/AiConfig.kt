@@ -56,8 +56,9 @@ data class AiConfig(
     /** Which provider requests go to; [AiProvider.CUSTOM] is the fully manual escape hatch. */
     val provider: AiProvider = AiProvider.OPENAI,
     /**
-     * Server root override, e.g. `https://api.openai.com` or `http://localhost:11434`. Blank
-     * means the provider's [AiProvider.defaultBaseUrl]; required only for [AiProvider.CUSTOM].
+     * Server root override, e.g. `http://localhost:11434`. Blank means the provider's
+     * [AiProvider.defaultBaseUrl]; required only for [AiProvider.CUSTOM]. Read only for providers
+     * with an [AiProvider.editableBaseUrl]; see [effectiveBaseUrl].
      */
     val baseUrl: String = "",
     /** Bearer token; may stay blank for local endpoints that skip auth. */
@@ -102,9 +103,18 @@ data class AiConfig(
      */
     val appLanguage: String? = null,
 ) {
-    /** The effective server root: the explicit override, or the provider default. */
+    /**
+     * The server root requests go to: the override, or the provider default. A provider without an
+     * editable URL always gets its default. Settings hide the field for those, so a stored value is
+     * a leftover from another provider (a LAN Ollama box, say), and the API key must not go there.
+     */
     val effectiveBaseUrl: String
-        get() = baseUrl.ifBlank { provider.defaultBaseUrl.orEmpty() }
+        get() =
+            if (provider.editableBaseUrl) {
+                baseUrl.ifBlank { provider.defaultBaseUrl.orEmpty() }
+            } else {
+                provider.defaultBaseUrl.orEmpty()
+            }
 
     val configured: Boolean
         get() =

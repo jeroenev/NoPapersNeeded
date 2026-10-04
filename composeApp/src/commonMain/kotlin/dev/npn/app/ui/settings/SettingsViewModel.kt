@@ -235,12 +235,15 @@ class SettingsViewModel(
             if (valid) settings.edit { it.copy(storagePathEnabled = enabled) }
         }
 
-    /** Switch provider and drop the stale model list (it belongs to the previous endpoint). */
+    /**
+     * Switch provider and drop what belonged to the previous endpoint: the model list, and the base
+     * URL, which the settings screen hides for fixed-URL providers so nobody could clear it there.
+     */
     fun setAiProvider(provider: AiProvider) =
         launchReporting(UiAction.UPDATE) {
             aiModelsJob?.cancel()
             _aiModels.value = AiModelListState()
-            settings.edit { it.copy(aiProvider = provider) }
+            settings.edit { if (it.aiProvider == provider) it else it.copy(aiProvider = provider, aiBaseUrl = "") }
         }
 
     /**

@@ -389,14 +389,10 @@ internal class AiRuntime(
             // throws "Unsupported model" for anything absent, so the user's model must be mapped
             // explicitly (the default map only covers Koog's predefined AnthropicModels).
             val settings =
-                if (config.baseUrl.isBlank()) {
-                    AnthropicClientSettings(modelVersionsMap = mapOf(model to config.model))
-                } else {
-                    AnthropicClientSettings(
-                        modelVersionsMap = mapOf(model to config.model),
-                        baseUrl = trimBaseUrl(config.baseUrl),
-                    )
-                }
+                AnthropicClientSettings(
+                    modelVersionsMap = mapOf(model to config.model),
+                    baseUrl = trimBaseUrl(config.effectiveBaseUrl),
+                )
             val client = AnthropicLLMClient(config.apiKey, settings, httpFactory)
             return AiRuntime(MultiLLMPromptExecutor(LLMProvider.Anthropic to client), model, client)
         }
@@ -405,12 +401,7 @@ internal class AiRuntime(
             config: AiConfig,
             httpFactory: KoogHttpClient.Factory,
         ): AiRuntime {
-            val settings =
-                if (config.baseUrl.isBlank()) {
-                    GoogleClientSettings()
-                } else {
-                    GoogleClientSettings(baseUrl = trimBaseUrl(config.baseUrl))
-                }
+            val settings = GoogleClientSettings(baseUrl = trimBaseUrl(config.effectiveBaseUrl))
             val client = GoogleLLMClient(config.apiKey, settings, httpFactory)
             val model =
                 LLModel(
@@ -426,12 +417,7 @@ internal class AiRuntime(
             config: AiConfig,
             httpFactory: KoogHttpClient.Factory,
         ): AiRuntime {
-            val settings =
-                if (config.baseUrl.isBlank()) {
-                    MistralAIClientSettings()
-                } else {
-                    MistralAIClientSettings(baseUrl = trimBaseUrl(config.baseUrl))
-                }
+            val settings = MistralAIClientSettings(baseUrl = trimBaseUrl(config.effectiveBaseUrl))
             val client = MistralAILLMClient(config.apiKey, settings, httpFactory)
             val model =
                 LLModel(
@@ -447,12 +433,7 @@ internal class AiRuntime(
             config: AiConfig,
             httpFactory: KoogHttpClient.Factory,
         ): AiRuntime {
-            val settings =
-                if (config.baseUrl.isBlank()) {
-                    DeepSeekClientSettings()
-                } else {
-                    DeepSeekClientSettings(baseUrl = trimBaseUrl(config.baseUrl))
-                }
+            val settings = DeepSeekClientSettings(baseUrl = trimBaseUrl(config.effectiveBaseUrl))
             val client = DeepSeekLLMClient(config.apiKey, settings, httpFactory)
             val model =
                 LLModel(
@@ -468,12 +449,7 @@ internal class AiRuntime(
             config: AiConfig,
             httpFactory: KoogHttpClient.Factory,
         ): AiRuntime {
-            val settings =
-                if (config.baseUrl.isBlank()) {
-                    OpenRouterClientSettings()
-                } else {
-                    OpenRouterClientSettings(baseUrl = trimBaseUrl(config.baseUrl))
-                }
+            val settings = OpenRouterClientSettings(baseUrl = trimBaseUrl(config.effectiveBaseUrl))
             val client = OpenRouterLLMClient(config.apiKey, settings, httpFactory)
             val model =
                 LLModel(

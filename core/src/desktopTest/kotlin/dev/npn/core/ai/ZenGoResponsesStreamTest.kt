@@ -75,22 +75,16 @@ class ZenGoResponsesStreamTest {
         params.shouldBeInstanceOf<OpenAIResponsesParams>().reasoning?.effort shouldBe ReasoningEffort.LOW
     }
 
-    private fun zenGoConfig(
-        model: String,
-        baseUrl: String,
-    ) = AiConfig(
-        enabled = true,
-        provider = AiProvider.OPENCODE_GO,
-        baseUrl = baseUrl,
-        apiKey = "unused",
-        model = model,
-    )
+    private fun zenGoConfig(model: String) =
+        AiConfig(enabled = true, provider = AiProvider.OPENCODE_GO, apiKey = "unused", model = model)
 
+    /** One turn against the real gateway URL, sent to [gateway] instead. */
     private suspend fun streamOneTurn(
         model: String,
         gateway: FakeSseGateway,
     ): Result<List<StreamFrame>> {
-        val runtime = AiRuntime.build(zenGoConfig(model, gateway.baseUrl))
+        val transport = gateway.redirectingTransport()
+        val runtime = AiRuntime.build(zenGoConfig(model), transport)
         val frames = mutableListOf<StreamFrame>()
         val outcome =
             runCatching {
@@ -100,6 +94,7 @@ class ZenGoResponsesStreamTest {
                 frames.toList()
             }
         runtime.close()
+        transport.close()
         return outcome
     }
 
@@ -109,7 +104,7 @@ class ZenGoResponsesStreamTest {
             val gateway = FakeSseGateway(FakeSseGateway.zenGoResponsesStream()).start()
             try {
                 streamOneTurn("gpt-5.6-luna", gateway)
-                gateway.requestedPaths shouldContainExactly listOf("/v1/responses")
+                gateway.requestedPaths shouldContainExactly listOf("/zen/go/v1/responses")
             } finally {
                 gateway.stop()
             }
@@ -121,7 +116,7 @@ class ZenGoResponsesStreamTest {
             val gateway = FakeSseGateway(FakeSseGateway.zenGoResponsesStream()).start()
             try {
                 streamOneTurn("kimi-k2.6", gateway)
-                gateway.requestedPaths shouldContainExactly listOf("/v1/chat/completions")
+                gateway.requestedPaths shouldContainExactly listOf("/zen/go/v1/chat/completions")
             } finally {
                 gateway.stop()
             }

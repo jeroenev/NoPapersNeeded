@@ -1,6 +1,10 @@
 package dev.npn.core.ai
 
 import com.sun.net.httpserver.HttpServer
+import io.ktor.client.HttpClient
+import io.ktor.client.plugins.api.Send
+import io.ktor.client.plugins.api.createClientPlugin
+import io.ktor.http.URLProtocol
 import java.net.InetSocketAddress
 
 /**
@@ -61,4 +65,24 @@ internal class FakeSseGateway(
     }
 
     fun stop() = server.stop(0)
+
+    /**
+     * A base client that sends every request here, whatever host it names, after adding that host
+     * to [hosts]. For providers whose server root is fixed: the runtime is built exactly as for the
+     * real endpoint, and nothing leaves the machine. Redirected at the send stage, after every
+     * plugin of the provider client has settled the URL.
+     */
+    fun redirectingTransport(hosts: MutableList<String> = mutableListOf()): HttpClient {
+        val redirect =
+            createClientPlugin("redirect-to-fake-gateway") {
+                on(Send) { request ->
+                    hosts += request.url.host
+                    request.url.protocol = URLProtocol.HTTP
+                    request.url.host = "127.0.0.1"
+                    request.url.port = server.address.port
+                    proceed(request)
+                }
+            }
+        return HttpClient { install(redirect) }
+    }
 }
