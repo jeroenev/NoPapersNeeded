@@ -3,10 +3,10 @@ package dev.npn.core.app
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.VerifiedPublicationResult
 import dev.npn.core.fs.VerifiedPublicationFailedException
-import dev.npn.core.index.Indexer
+import dev.npn.core.fs.VerifiedPublicationResult
 import dev.npn.core.index.IndexRig
+import dev.npn.core.index.Indexer
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp

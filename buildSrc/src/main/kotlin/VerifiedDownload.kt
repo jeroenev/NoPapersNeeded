@@ -32,7 +32,12 @@ object VerifiedDownload {
             partial.delete()
             throw GradleException("$url has SHA-256 $actual, expected $sha256")
         }
-        Files.move(partial.toPath(), target.toPath(), StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE)
+        Files.move(
+            partial.toPath(),
+            target.toPath(),
+            StandardCopyOption.REPLACE_EXISTING,
+            StandardCopyOption.ATOMIC_MOVE,
+        )
         return target
     }
 

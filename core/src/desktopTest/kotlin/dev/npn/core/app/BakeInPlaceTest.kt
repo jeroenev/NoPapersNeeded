@@ -24,7 +24,9 @@ class BakeInPlaceTest {
                     fields = mapOf(FieldKeys.TITLE to "Water bill", FieldKeys.CORRESPONDENT to "Aquafin"),
                 )
 
-                rig.session.content.bakeInPlace(before).shouldBeTrue()
+                rig.session.content
+                    .bakeInPlace(before)
+                    .shouldBeTrue()
 
                 val after = rig.docId("a.pdf")
                 after shouldNotBe before

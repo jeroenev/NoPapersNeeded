@@ -25,7 +25,13 @@ class SingleInstanceTest {
             ).redirectErrorStream(true).start()
         assertTrue(second.waitFor(60, TimeUnit.SECONDS), "second instance did not finish")
 
-        assertEquals("taken", second.inputStream.bufferedReader().readText().trim())
+        assertEquals(
+            "taken",
+            second.inputStream
+                .bufferedReader()
+                .readText()
+                .trim(),
+        )
     }
 }
 

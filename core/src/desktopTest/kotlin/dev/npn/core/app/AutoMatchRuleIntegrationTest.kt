@@ -218,15 +218,24 @@ class AutoMatchRuleIntegrationTest {
             val settings = RulesSettings(AutoMatchRuleJson.encodeList(listOf(rule("r1", "Invoice rule"))))
             try {
                 settings.open(backgroundScope, libRoot, dataDir).use { session ->
-                    session.rules.observeRules().first().map { it.name } shouldBe listOf("Invoice rule")
+                    session.rules
+                        .observeRules()
+                        .first()
+                        .map { it.name } shouldBe listOf("Invoice rule")
                 }
 
                 // A blob this build cannot read: from a newer version, say, or a damaged file.
                 settings.json = "{not json"
                 settings.open(backgroundScope, libRoot, dataDir).use { session ->
-                    session.rules.observeRules().first().map { it.name } shouldBe listOf("Invoice rule")
+                    session.rules
+                        .observeRules()
+                        .first()
+                        .map { it.name } shouldBe listOf("Invoice rule")
                     session.rules.save(rule("", "Added later"))
-                    session.rules.observeRules().first().map { it.name } shouldContain "Added later"
+                    session.rules
+                        .observeRules()
+                        .first()
+                        .map { it.name } shouldContain "Added later"
                 }
 
                 settings.json shouldBe "{not json"

@@ -30,7 +30,6 @@ class BakeService(
     private val fs: LibraryFileSystem,
     private val io: PdfXmpIO,
 ) {
-
     /** Suffix for the sibling temp file written during [bakeInPlace]. */
     private val tmpSuffix = ".npnbake.tmp"
 
@@ -39,10 +38,16 @@ class BakeService(
      * The library file is not modified. The document id, when present in [data], is written
      * verbatim (callers typically set it to the current sha256).
      */
-    suspend fun bakeToBytes(relPath: String, data: NpnXmpData): ByteArray = bake(fs.readBytes(relPath), data)
+    suspend fun bakeToBytes(
+        relPath: String,
+        data: NpnXmpData,
+    ): ByteArray = bake(fs.readBytes(relPath), data)
 
     /** Merge [data] into the XMP already in [src] and write it, with the keywords and title, into a copy. */
-    private suspend fun bake(src: ByteArray, data: NpnXmpData): ByteArray {
+    private suspend fun bake(
+        src: ByteArray,
+        data: NpnXmpData,
+    ): ByteArray {
         val xmp = XmpMerger.merge(io.readXmp(src), data)
         val effectiveTitle = XmpParser.parse(xmp).title
         return io.writeBaked(src, xmp, data.tags, effectiveTitle)
@@ -86,12 +91,13 @@ class BakeService(
         fs.writeBytesOnce(tmpPath, bakedBytes)
 
         // Verify by re-reading the temp file (round-trips through the real filesystem).
-        val verified = try {
-            val readBack = fs.readBytes(tmpPath)
-            io.verify(readBack)
-        } catch (_: Throwable) {
-            false
-        }
+        val verified =
+            try {
+                val readBack = fs.readBytes(tmpPath)
+                io.verify(readBack)
+            } catch (_: Throwable) {
+                false
+            }
         if (!verified) {
             runCatching { fs.delete(tmpPath) }
             error("Bake verification failed for $norm; original left untouched")

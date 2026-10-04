@@ -217,7 +217,11 @@ class TrashLifecycleTest {
 
                 rig.session.purgeTrash(olderThanDays = 30)
 
-                val left = rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }.map { it.name }
+                val left =
+                    rig.fs
+                        .listAllUnder(NpnPaths.TRASH_DIR)
+                        .filter { !it.isDirectory }
+                        .map { it.name }
                 left shouldBe listOf("today__${today.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}.pdf")
                 rig.session.docLifecycle.restoreDoc(today)
                 rig.exists("today.pdf").shouldBeTrue()
