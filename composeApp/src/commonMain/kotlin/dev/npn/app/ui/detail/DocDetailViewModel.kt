@@ -40,14 +40,19 @@ import dev.npn.core.app.TagRepository
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.util.runCatchingCancellable
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.flatMapLatest
+import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapLatest
 import kotlinx.coroutines.flow.onEach
+import kotlinx.coroutines.flow.onStart
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
@@ -137,6 +142,7 @@ data class AiMetadataState(
  * new public flow wired through two call sites. The screen's whole write surface lives here too —
  * every setter the panel's action holders bind — which is why the function count is suppressed.
  */
+@OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("TooManyFunctions")
 class DocDetailViewModel(
     val docId: String,
@@ -256,7 +262,23 @@ class DocDetailViewModel(
             .map { runCatchingCancellable { ocr.ocrVersions(docId) }.getOrDefault(emptyList()) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
-    private val history = MutableStateFlow<HistoryUiState>(HistoryUiState.NotLoaded)
+    /** 0 until the History tab first asks; every explicit refresh then counts up. */
+    private val historyRequests = MutableStateFlow(0)
+
+    /**
+     * The document's journal timeline, read once the History tab asks for it and read again
+     * whenever the document row changes, so an edit made on this screen (or synced in) shows up
+     * without a manual refresh. Only an explicit request shows [HistoryUiState.Loading]; a reload
+     * behind a change keeps the old timeline on screen until the new one is in.
+     */
+    private val history: Flow<HistoryUiState> =
+        historyRequests.flatMapLatest { request ->
+            if (request == 0) {
+                flowOf(HistoryUiState.NotLoaded)
+            } else {
+                doc.mapLatest { readHistory() }.onStart { emit(HistoryUiState.Loading) }
+            }
+        }
 
     private val aiTags = MutableStateFlow(AiTagState())
 
@@ -356,26 +378,22 @@ class DocDetailViewModel(
         }
     }
 
-    /** Load once when opened. Pass [refresh] only for an explicit retry or refresh request. */
+    /**
+     * Start showing the history (the tab was opened); a no-op once it is showing, since it then
+     * follows the document by itself. Pass [refresh] for an explicit retry or refresh.
+     */
     fun loadHistory(refresh: Boolean = false) {
-        if (!refresh && history.value != HistoryUiState.NotLoaded) return
-        if (history.value == HistoryUiState.Loading) return
-        history.value = HistoryUiState.Loading
-        viewModelScope.launch {
-            history.value =
-                runCatchingCancellable {
-                    val labels = fieldRegistry.current().associate { it.key to it.label }
-                    HistoryMapper.toHistoryItems(documents.history(docId)) { key -> labels[key] ?: key }
-                }.fold(
-                    onSuccess = { items ->
-                        if (items.isEmpty()) HistoryUiState.Empty else HistoryUiState.Loaded(items)
-                    },
-                    onFailure = { error ->
-                        HistoryUiState.Error(error.message.orEmpty())
-                    },
-                )
-        }
+        historyRequests.update { if (refresh || it == 0) it + 1 else it }
     }
+
+    private suspend fun readHistory(): HistoryUiState =
+        runCatchingCancellable {
+            val labels = fieldRegistry.current().associate { it.key to it.label }
+            HistoryMapper.toHistoryItems(documents.history(docId)) { key -> labels[key] ?: key }
+        }.fold(
+            onSuccess = { items -> if (items.isEmpty()) HistoryUiState.Empty else HistoryUiState.Loaded(items) },
+            onFailure = { error -> HistoryUiState.Error(error.message.orEmpty()) },
+        )
 
     fun addTag(tag: String) = launchMetadata(UiAction.ADD_TAG) { meta.addTag(listOf(docId), tag) }
 

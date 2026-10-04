@@ -1,20 +1,26 @@
 package dev.npn.app
 
 import dev.npn.app.ui.detail.DocDetailViewModel
+import dev.npn.app.ui.detail.HistoryUiState
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
 import dev.npn.core.db.FieldKeyCount
+import dev.npn.core.journal.Hlc
+import dev.npn.core.journal.JournalEvent
+import dev.npn.core.journal.JournalOp
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrState
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -147,6 +153,40 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             messages shouldContainExactly listOf("Could not save field: io", "Could not remove field: io")
             job.cancel()
         }
+
+    /**
+     * An edit made while the panel is open changes the document row; the History tab must show it
+     * without a manual refresh, here and on the full-screen route alike.
+     */
+    @Test
+    fun historyFollowsTheDocumentAfterItFirstLoads() =
+        runTest(dispatcher) {
+            val tagged = historyRecord(1, JournalOp.TagAdd("invoice"))
+            val session =
+                FakeLibrarySession().apply {
+                    documents.singleDoc.value = listItem("doc-1")
+                    documents.historyList = listOf(tagged)
+                }
+            val model = vm(session = session)
+            model.loadHistory()
+            advanceUntilIdle()
+            (model.metadata.value.history as HistoryUiState.Loaded).items shouldHaveSize 1
+
+            // A field edit lands: the journal gains an event and the row changes with it.
+            session.documents.historyList = listOf(tagged, historyRecord(2, JournalOp.FieldSet(FieldKeys.TITLE, "X")))
+            session.documents.singleDoc.value = listItem("doc-1", tags = listOf("invoice"))
+            advanceUntilIdle()
+
+            (model.metadata.value.history as HistoryUiState.Loaded).items shouldHaveSize 2
+        }
+
+    private fun historyRecord(
+        seq: Long,
+        op: JournalOp,
+    ): DocumentHistoryRecord {
+        val event = JournalEvent(1, seq, Hlc(100 + seq, 0, "dev-a"), "dev-a", "doc-1", op)
+        return DocumentHistoryRecord(event.hlc, event.dev, event.op.wire, event)
+    }
 
     @Test
     fun aiOcrActionIsOfferedOnlyWithAConfiguredEndpoint() =
