@@ -193,7 +193,12 @@ class SessionSmokeTest {
                     shouldThrow<IllegalStateException> { call() }.message shouldBe "Library session is closed"
                 }
                 // The re-OCR request never reached the queue.
-                (rig.db.ocrQueueDao().getByDocId(id)?.rerun == true) shouldBe false
+                (
+                    rig.db
+                        .ocrQueueDao()
+                        .getByDocId(id)
+                        ?.rerun == true
+                ) shouldBe false
             } finally {
                 rig.close()
             }

@@ -56,7 +56,11 @@ class SplitServiceTest {
         return row
     }
 
-    private suspend fun libraryPdfs() = rig.fs.listAllIndexable().filter { !it.isDirectory }.map { it.relPath }
+    private suspend fun libraryPdfs() =
+        rig.fs
+            .listAllIndexable()
+            .filter { !it.isDirectory }
+            .map { it.relPath }
 
     @Test
     fun aFailedLaterPartTakesBackTheOnesAlreadyImported() =
@@ -69,7 +73,10 @@ class SplitServiceTest {
 
             result.shouldBeInstanceOf<SplitService.Result.Failed>().message shouldContain "part 2"
             libraryPdfs() shouldBe listOf("contract.pdf")
-            rig.db.documentDao().getAllLive().map { it.docId } shouldBe listOf(original.docId)
+            rig.db
+                .documentDao()
+                .getAllLive()
+                .map { it.docId } shouldBe listOf(original.docId)
             rig.db
                 .ocrQueueDao()
                 .observeQueue()

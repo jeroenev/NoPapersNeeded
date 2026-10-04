@@ -8,9 +8,9 @@ import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
-import kotlin.test.Test
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.runTest
+import kotlin.test.Test
 
 /**
  * The OpenCode Go gateway serves OpenAI-family models on the Responses API and everything else on

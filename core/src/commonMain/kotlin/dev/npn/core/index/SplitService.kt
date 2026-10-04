@@ -29,8 +29,13 @@ class SplitService(
 ) {
     sealed interface Result {
         /** One [ImportResult] per requested segment, in segment order. */
-        data class Done(val parts: List<ImportResult>) : Result
-        data class Failed(val message: String) : Result
+        data class Done(
+            val parts: List<ImportResult>,
+        ) : Result
+
+        data class Failed(
+            val message: String,
+        ) : Result
     }
 
     /**
@@ -39,14 +44,18 @@ class SplitService(
      * them from "split after page N" cut points, so dropping or duplicating pages is a bug here,
      * not a feature. Parts are named `<original> (part N).pdf`.
      */
-    suspend fun split(docId: String, segments: List<IntRange>): Result {
+    suspend fun split(
+        docId: String,
+        segments: List<IntRange>,
+    ): Result {
         val doc = documentDao.getByDocId(docId)
-        val precondition = when {
-            doc == null -> "Document not found"
-            doc.trashed || doc.deleted || doc.missing -> "Document is not available"
-            segments.size < 2 -> "A split needs at least two parts"
-            else -> null
-        }
+        val precondition =
+            when {
+                doc == null -> "Document not found"
+                doc.trashed || doc.deleted || doc.missing -> "Document is not available"
+                segments.size < 2 -> "A split needs at least two parts"
+                else -> null
+            }
         if (doc == null || precondition != null) {
             return Result.Failed(precondition ?: "Document not found")
         }
@@ -54,14 +63,18 @@ class SplitService(
             .getOrElse { Result.Failed("Could not read the PDF: ${it.reason()}") }
     }
 
-    private suspend fun splitLoaded(doc: DocumentEntity, segments: List<IntRange>): Result {
+    private suspend fun splitLoaded(
+        doc: DocumentEntity,
+        segments: List<IntRange>,
+    ): Result {
         val bytes = fs.readBytes(doc.relPath)
         val handle = pdfEngine.open(bytes)
-        val pageCount = try {
-            handle.pageCount
-        } finally {
-            handle.close()
-        }
+        val pageCount =
+            try {
+                handle.pageCount
+            } finally {
+                handle.close()
+            }
         validateSegments(segments, pageCount)?.let { return Result.Failed(it) }
 
         val baseName = doc.fileName.removeSuffix(".pdf").removeSuffix(".PDF")
@@ -69,10 +82,11 @@ class SplitService(
         var complete = false
         try {
             for ((i, segment) in segments.withIndex()) {
-                val outcome = runCatchingCancellable {
-                    val partBytes = pdfEngine.extractPages(bytes, segment.toList())
-                    importService.importBytes(partBytes, "$baseName (part ${i + 1}).pdf", parentDirOf(doc.relPath))
-                }.getOrElse { return Result.Failed("Splitting failed on part ${i + 1}: ${it.reason()}") }
+                val outcome =
+                    runCatchingCancellable {
+                        val partBytes = pdfEngine.extractPages(bytes, segment.toList())
+                        importService.importBytes(partBytes, "$baseName (part ${i + 1}).pdf", parentDirOf(doc.relPath))
+                    }.getOrElse { return Result.Failed("Splitting failed on part ${i + 1}: ${it.reason()}") }
                 parts.add(outcome)
             }
             complete = true
@@ -96,11 +110,13 @@ class SplitService(
         }
 
     /** Same folder as the original ("" = library root) so a split never moves documents around. */
-    private fun parentDirOf(relPath: String): String =
-        relPath.substringBeforeLast('/', missingDelimiterValue = "")
+    private fun parentDirOf(relPath: String): String = relPath.substringBeforeLast('/', missingDelimiterValue = "")
 
     /** Null when valid, else a user-facing error message. */
-    private fun validateSegments(segments: List<IntRange>, pageCount: Int): String? {
+    private fun validateSegments(
+        segments: List<IntRange>,
+        pageCount: Int,
+    ): String? {
         var expectedStart = 0
         for (segment in segments) {
             if (segment.isEmpty()) return "Empty page range"

@@ -6,8 +6,8 @@ import ai.koog.prompt.message.AttachmentSource
 import ai.koog.prompt.params.LLMParams
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
-import kotlin.io.encoding.Base64
 import kotlinx.coroutines.CancellationException
+import kotlin.io.encoding.Base64
 
 /**
  * The three things the settings self-test proves about a configured endpoint, in the order they

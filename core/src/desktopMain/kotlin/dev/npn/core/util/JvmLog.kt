@@ -30,7 +30,12 @@ class JvmLog(
     ) {
         val entry =
             buildString {
-                append(Instant.now()).append(' ').append(level).append(' ').append(message).append('\n')
+                append(Instant.now())
+                    .append(' ')
+                    .append(level)
+                    .append(' ')
+                    .append(message)
+                    .append('\n')
                 if (error != null) append(error.stackTraceToString())
             }
         synchronized(lock) {

@@ -29,21 +29,25 @@ class SnapshotSupport(
      * manifest, so the just-written snapshot is folded/tracked without waiting for a reconcile read.
      */
     suspend fun recordLocalSnapshot(published: PublishedSnapshot) {
-        val bytes = SnapshotCodec.encodeSnapshot(
-            SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, published.supersedes),
-            published.events,
-        )
+        val bytes =
+            SnapshotCodec.encodeSnapshot(
+                SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, published.supersedes),
+                published.events,
+            )
         val meta = fs.stat(published.relPath)
-        val canonical = published.events.map { event ->
-            EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false)
-        }
-        val source = MetadataSourceEntity(
-            path = published.relPath,
-            storageVersion = NpnPaths.STORAGE_SNAPSHOT,
-            fingerprint = "${meta?.size ?: bytes.size.toLong()},${meta?.mtimeMillis ?: 0L}:${published.contentHash}",
-            contentHash = published.contentHash,
-            status = MetadataProjectionDao.STATUS_APPLIED,
-        )
+        val canonical =
+            published.events.map { event ->
+                EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false)
+            }
+        val fingerprint = "${meta?.size ?: bytes.size.toLong()},${meta?.mtimeMillis ?: 0L}:${published.contentHash}"
+        val source =
+            MetadataSourceEntity(
+                path = published.relPath,
+                storageVersion = NpnPaths.STORAGE_SNAPSHOT,
+                fingerprint = fingerprint,
+                contentHash = published.contentHash,
+                status = MetadataProjectionDao.STATUS_APPLIED,
+            )
         dao.ingestSnapshot(source, canonical.map(eventEntity), published.supersedes)
     }
 
@@ -68,9 +72,11 @@ class SnapshotSupport(
         if (source.status != MetadataProjectionDao.STATUS_APPLIED) return null
         val hash = source.contentHash ?: return null
         val meta = fs.stat(source.path) ?: return null
-        val events = dao.sourceEvents(source.path)
-            .mapNotNull { dao.event(it.eventDeviceId, it.eventSequence) }
-            .map { EventDecoderRegistry.decode(it.canonicalJson, allowMissingV1 = false).event }
+        val events =
+            dao
+                .sourceEvents(source.path)
+                .mapNotNull { dao.event(it.eventDeviceId, it.eventSequence) }
+                .map { EventDecoderRegistry.decode(it.canonicalJson, allowMissingV1 = false).event }
         return CompactionCandidate(source.path, hash, events, meta.mtimeMillis)
     }
 

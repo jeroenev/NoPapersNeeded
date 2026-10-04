@@ -16,8 +16,9 @@ import kotlinx.serialization.builtins.ListSerializer
  * Export/import is a JSON array of [SavedView]. Import is tolerant: broken entries are skipped and
  * ids are deduped (later entries overwrite earlier ones with the same id).
  */
-class SavedViewRepositoryImpl(private val dao: SavedViewDao) : SavedViewRepository {
-
+class SavedViewRepositoryImpl(
+    private val dao: SavedViewDao,
+) : SavedViewRepository {
     private val json = NpnJson.Persisted
     private val listSerializer = ListSerializer(SavedView.serializer())
 
@@ -44,8 +45,9 @@ class SavedViewRepositoryImpl(private val dao: SavedViewDao) : SavedViewReposito
     }
 
     override suspend fun importJson(text: String): Int {
-        val parsed = runCatching { json.decodeFromString(listSerializer, text) }.getOrNull()
-            ?: return importLenient(text)
+        val parsed =
+            runCatching { json.decodeFromString(listSerializer, text) }.getOrNull()
+                ?: return importLenient(text)
         var count = 0
         val seen = HashSet<String>()
         // Dedup by id, keeping the FIRST occurrence: the `seen` set skips any later duplicate, so
@@ -69,8 +71,9 @@ class SavedViewRepositoryImpl(private val dao: SavedViewDao) : SavedViewReposito
         var count = 0
         val seen = HashSet<String>()
         for (item in array) {
-            val view = runCatching { json.decodeFromJsonElement(SavedView.serializer(), item) }.getOrNull()
-                ?: continue
+            val view =
+                runCatching { json.decodeFromJsonElement(SavedView.serializer(), item) }.getOrNull()
+                    ?: continue
             if (view.id.isBlank() || !seen.add(view.id)) continue
             save(view)
             count++

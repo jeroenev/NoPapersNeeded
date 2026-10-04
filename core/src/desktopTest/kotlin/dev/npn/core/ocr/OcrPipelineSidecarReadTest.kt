@@ -6,8 +6,8 @@ import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CancellationException
-import kotlinx.coroutines.async
 import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -45,7 +45,11 @@ class OcrPipelineSidecarReadTest {
 
             assertFailsWith<CancellationException> { pipeline.processDoc(docId) }
 
-            db.ocrQueueDao().getByDocId(docId).shouldNotBeNull().attempts shouldBe 0
+            db
+                .ocrQueueDao()
+                .getByDocId(docId)
+                .shouldNotBeNull()
+                .attempts shouldBe 0
         }
 
     /**
@@ -69,7 +73,11 @@ class OcrPipelineSidecarReadTest {
             }
 
             for ((i, docId) in docIds.withIndex()) {
-                db.documentDao().getByDocId(docId).shouldNotBeNull().ocrSource shouldBe "olddev${i + 1}"
+                db
+                    .documentDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
+                    .ocrSource shouldBe "olddev${i + 1}"
             }
         }
 }

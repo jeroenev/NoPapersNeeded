@@ -35,8 +35,7 @@ internal class SessionLifetime(
      * A caller cancelled meanwhile sees its own cancellation. A session closed under the call is a
      * failure the caller should see, not a cancellation, so that becomes an [IllegalStateException].
      */
-    // Deliberate: the session's cancellation becomes a failure; ensureActive rethrows the caller's own.
-    @Suppress("SuspendFunSwallowedCancellation")
+    @Suppress("SuspendFunSwallowedCancellation") // Deliberate: see above; ensureActive rethrows the caller's own.
     suspend fun <T> owned(block: suspend () -> T): T {
         checkOpen()
         val work = scope.async { block() }
