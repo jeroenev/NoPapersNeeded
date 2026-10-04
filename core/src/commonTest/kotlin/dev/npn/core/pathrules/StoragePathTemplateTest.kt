@@ -45,6 +45,7 @@ class StoragePathTemplateTest {
             mapOf(
                 "/root/{title}.pdf" to StoragePathError.Absolute,
                 "C:\\root\\{title}.pdf" to StoragePathError.Absolute,
+                "c:root/{title}.pdf" to StoragePathError.Absolute,
                 "../{title}.pdf" to StoragePathError.Traversal,
                 ".npn/{title}.pdf" to StoragePathError.ReservedDirectory(".npn"),
                 "bad:name/{title}.pdf" to StoragePathError.InvalidSegment("bad:name"),

@@ -452,7 +452,7 @@ object NpnPaths {
     fun normalize(relPath: String): String {
         val segments = segments(relPath)
         val reason = unsafeReason(segments)
-        require(reason == null) { "$reason: '$relPath'" }
+        require(reason == null) { "${reason?.message}: '$relPath'" }
         return segments.joinToString("/")
     }
 
@@ -466,22 +466,36 @@ object NpnPaths {
      * this to *ignore* such a path; the I/O side ([normalize]) refuses it. The split keeps a
      * hostile or merely exotic name on disk from killing a rescan or the watcher.
      */
-    fun isSafe(relPath: String): Boolean = unsafeReason(segments(relPath)) == null
+    fun isSafe(relPath: String): Boolean = unsafeReason(relPath) == null
+
+    /** Why [relPath] is not [isSafe], or null when it is. */
+    fun unsafeReason(relPath: String): UnsafePath? = unsafeReason(segments(relPath))
+
+    /** What makes a path [unsafeReason] refuses unusable as a library-relative path. */
+    enum class UnsafePath(
+        val message: String,
+    ) {
+        DRIVE_PREFIX("Drive prefixes are not library-relative"),
+        BACKSLASH("Backslash is not a path separator here"),
+        TRAVERSAL("Path traversal is not allowed"),
+        NUL("NUL is not allowed in a path"),
+    }
 
     private fun segments(relPath: String): List<String> = relPath.split('/').filter { it.isNotEmpty() }
 
     /** [normalize] without the safety gate, for classifying paths observed on disk. */
     private fun joinSegments(relPath: String): String = segments(relPath).joinToString("/")
 
-    private fun unsafeReason(segments: List<String>): String? =
+    private fun unsafeReason(segments: List<String>): UnsafePath? =
         when {
-            segments.any { it == "." || it == ".." } -> "Path traversal is not allowed"
-            segments.any { '\\' in it } -> "Backslash is not a path separator here"
-            segments.any { '\u0000' in it } -> "NUL is not allowed in a path"
-            segments.firstOrNull()?.let(drivePrefix::matches) == true -> "Drive prefixes are not library-relative"
+            segments.firstOrNull()?.let(drivePrefix::matches) == true -> UnsafePath.DRIVE_PREFIX
+            segments.any { '\\' in it } -> UnsafePath.BACKSLASH
+            segments.any { it == "." || it == ".." } -> UnsafePath.TRAVERSAL
+            segments.any { '\u0000' in it } -> UnsafePath.NUL
             else -> null
         }
 
+    /** A drive letter and colon (`C:`, `c:relative.pdf`), absolute or drive-relative on Windows. */
     private val drivePrefix = Regex("^[A-Za-z]:.*")
 }
 

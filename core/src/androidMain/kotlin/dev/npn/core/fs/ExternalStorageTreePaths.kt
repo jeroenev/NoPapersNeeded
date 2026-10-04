@@ -74,7 +74,7 @@ object ExternalStorageTreePaths {
 
             docId.startsWith(RAW_PREFIX) -> {
                 val raw = docId.removePrefix(RAW_PREFIX)
-                if (raw.startsWith("/") && isSafeRelative(raw)) raw.trimEnd('/').ifEmpty { "/" } else null
+                if (raw.startsWith("/") && NpnPaths.isSafe(raw)) raw.trimEnd('/').ifEmpty { "/" } else null
             }
 
             else -> {
@@ -87,14 +87,11 @@ object ExternalStorageTreePaths {
         rel: String,
     ): String? {
         val trimmed = rel.trim('/')
-        if (!isSafeRelative(trimmed)) return null
+        // A picked tree must stay where the provider says it is.
+        if (!NpnPaths.isSafe(trimmed)) return null
         val base = root.trimEnd('/')
         return if (trimmed.isEmpty()) base else "$base/$trimmed"
     }
-
-    /** No `.`/`..` segments and no NUL: a picked tree must stay where the provider says it is. */
-    private fun isSafeRelative(rel: String): Boolean =
-        rel.none { it == '\u0000' } && rel.split('/').none { it == "." || it == ".." }
 
     /**
      * Resolve a tree uri from `ACTION_OPEN_DOCUMENT_TREE` to an existing directory path, or null
