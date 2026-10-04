@@ -202,6 +202,20 @@ class LibraryViewModelTest : MainDispatcherTest() {
         }
 
     @Test
+    fun aRefreshThatFailsSaysSoAndStopsRefreshing() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { ingest.failRescan = { error("folder unavailable") } }
+            val model = vm(session = session)
+            val messages = collectMessages(model)
+
+            model.refresh()
+            advanceUntilIdle()
+
+            messages shouldBe listOf("Could not refresh the library: folder unavailable")
+            model.ui.value.refreshing shouldBe false
+        }
+
+    @Test
     fun importSummaryMessageFormatsCounts() =
         runTest(dispatcher) {
             ImportSummary(3, 0, 0).asUiText().resolveEnglish() shouldBe "3 imported"

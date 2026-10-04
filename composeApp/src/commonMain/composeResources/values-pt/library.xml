@@ -3,6 +3,7 @@
     <string name="library_more_tags">+%1$d</string>
     <string name="library_documents">Documentos</string>
     <string name="library_refresh">Atualizar</string>
+    <string name="library_refresh_failed">Não foi possível atualizar a biblioteca: %1$s</string>
     <string name="library_filters">Filtros</string>
     <string name="library_switch_to_list">Alternar para lista</string>
     <string name="library_switch_to_grid">Alternar para grade</string>

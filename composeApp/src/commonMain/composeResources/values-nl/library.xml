@@ -3,6 +3,7 @@
     <string name="library_more_tags">+%1$d</string>
     <string name="library_documents">Documenten</string>
     <string name="library_refresh">Vernieuwen</string>
+    <string name="library_refresh_failed">Kan de bibliotheek niet vernieuwen: %1$s</string>
     <string name="library_filters">Filters</string>
     <string name="library_switch_to_list">Overschakelen naar lijstweergave</string>
     <string name="library_switch_to_grid">Overschakelen naar rasterweergave</string>

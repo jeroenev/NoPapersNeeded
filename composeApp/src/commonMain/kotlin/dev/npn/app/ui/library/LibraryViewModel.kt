@@ -64,6 +64,7 @@ import no_papers_needed.composeapp.generated.resources.common_import_failure_emp
 import no_papers_needed.composeapp.generated.resources.common_import_failure_images
 import no_papers_needed.composeapp.generated.resources.library_import_failed
 import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
+import no_papers_needed.composeapp.generated.resources.library_refresh_failed
 import no_papers_needed.composeapp.generated.resources.library_undo
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -387,13 +388,16 @@ class LibraryViewModel(
         _ui.update { it.copy(bannerDismissed = true) }
     }
 
-    fun refresh() {
-        viewModelScope.launch {
+    /** Rescan the library folder (pull to refresh); a rescan that fails says so. */
+    fun refresh() =
+        launchReporting({ reason -> uiText(Res.string.library_refresh_failed, reason) }) {
             _ui.update { it.copy(refreshing = true) }
-            runCatchingCancellable { ingest.rescan() }
-            _ui.update { it.copy(refreshing = false) }
+            try {
+                ingest.rescan()
+            } finally {
+                _ui.update { it.copy(refreshing = false) }
+            }
         }
-    }
 
     // Tag/reviewed writes are a single batched write call. Trash has its own per-document path
     // below because successful moves must be retained for Undo when another move fails.
