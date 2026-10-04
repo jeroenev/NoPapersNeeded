@@ -178,7 +178,7 @@ class DocumentRepositoryImpl(
             db
                 .fieldDefDao()
                 .all()
-                .filter { it.type == FieldType.TEXT.wire && it.fieldKey != FieldKeys.TITLE }
+                .filter { FieldType.fromWire(it.type)?.hasVocabulary == true && it.fieldKey != FieldKeys.TITLE }
                 .map { fieldDao.valuesForPrefix(it.fieldKey, likePrefix, sourceLimit) }
         val sources = listOf(contentTerms, db.tagDao().tagsForPrefix(likePrefix, sourceLimit)) + textFields
         return buildList {

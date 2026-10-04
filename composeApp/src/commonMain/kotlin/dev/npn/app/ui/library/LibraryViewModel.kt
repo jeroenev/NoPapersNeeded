@@ -31,7 +31,6 @@ import dev.npn.core.app.ViewType
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
-import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -237,7 +236,7 @@ class LibraryViewModel(
     /** Registry fields the sort menu offers: everything but prose, which has no useful order. */
     val sortableFields: StateFlow<List<FieldDef>> =
         session.fieldRegistry.fields
-            .map { defs -> defs.filter { it.type != FieldType.LONG_TEXT } }
+            .map { defs -> defs.filter { it.type.singleLine } }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val reviewMode: StateFlow<ReviewMode> =

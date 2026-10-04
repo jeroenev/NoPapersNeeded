@@ -4,7 +4,6 @@ import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.model.FieldType
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
@@ -240,7 +239,7 @@ internal object AiPrompts {
             add(EDIT_INTRO)
             add(editRules(request, fields, max, maxNew, context).joinToString("\n"))
             add(editContract(request, fields))
-            if (fields.any { it.def.type == FieldType.DATE }) add(dateGuidance(context))
+            if (fields.any { it.def.type.isDate }) add(dateGuidance(context))
             editLibraryContext(request, fields, vocabulary)?.let { add(it) }
         }.joinToString("\n\n")
 
@@ -467,7 +466,7 @@ internal object AiPrompts {
                 ""
             }
         return when {
-            spec.def.type == FieldType.DATE -> {
+            spec.def.type.isDate -> {
                 "the ${spec.def.label} as a date in YYYY-MM-DD, taken from the document text"
             }
 

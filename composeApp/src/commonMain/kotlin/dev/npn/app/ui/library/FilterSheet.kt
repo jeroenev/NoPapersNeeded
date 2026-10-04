@@ -49,6 +49,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DatePickerField
+import dev.npn.app.ui.common.invalidNumberText
 import dev.npn.app.ui.common.rememberFieldLocale
 import dev.npn.app.ui.common.rememberFieldText
 import dev.npn.core.app.LibraryFilter
@@ -62,8 +63,6 @@ import dev.npn.core.util.NpnJson
 import kotlinx.serialization.encodeToString
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
-import no_papers_needed.composeapp.generated.resources.common_field_invalid_decimal
-import no_papers_needed.composeapp.generated.resources.common_field_invalid_number
 import no_papers_needed.composeapp.generated.resources.common_needs_review
 import no_papers_needed.composeapp.generated.resources.common_reviewed
 import no_papers_needed.composeapp.generated.resources.library_any
@@ -403,12 +402,7 @@ private fun NumberBound(
     // leaves the composition (the row was removed) so a stale error never blocks Apply.
     LaunchedEffect(invalid) { onValidity(!invalid) }
     DisposableEffect(Unit) { onDispose { onValidity(true) } }
-    val error =
-        when {
-            !invalid -> null
-            def.type == FieldType.DECIMAL -> stringResource(Res.string.common_field_invalid_decimal)
-            else -> stringResource(Res.string.common_field_invalid_number)
-        }
+    val error = if (invalid) invalidNumberText(def.type) else null
     OutlinedTextField(
         value = text,
         onValueChange = { typed ->

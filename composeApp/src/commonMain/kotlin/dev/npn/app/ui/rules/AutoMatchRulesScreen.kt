@@ -52,7 +52,6 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.model.FieldDef
-import dev.npn.core.model.FieldType
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
@@ -423,7 +422,7 @@ private fun RuleFormFields(
         }
         // One "set" row per single-line registry field, in registry order. Prose fields are left
         // out: a rule stamping the same paragraph onto every match is not a use case worth a row.
-        for (def in fields.filter { it.type != FieldType.LONG_TEXT }) {
+        for (def in fields.filter { it.type.singleLine }) {
             FormTextField(state.sets[def.key].orEmpty(), stringResource(Res.string.common_rules_set_field, def.label)) {
                 onChange(state.copy(sets = state.sets + (def.key to it)))
             }

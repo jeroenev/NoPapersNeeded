@@ -225,7 +225,9 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
   storage-path placeholder (`{field:key}`), auto-match action, XMP bag entry, AI
   request and assistant tool follows the registry. A new field *type* is the
   two-file change: `FieldValues` (canonical form) + `FieldEditor` (control), plus
-  the `aiLiteral` on the enum constant.
+  the capabilities its enum constant must declare (`aiLiteral`, `isTextual`, `isNumeric`,
+  `isDate`, `singleLine`, `hasVocabulary`), which every other caller reads instead of
+  comparing types.
 - A new per-document *system* marker (something the app owns, not the user) → a
   `SystemProperty` + `prop-set` event + `FoldedState` + `Projections` + the matching
   `core.app` contract file.

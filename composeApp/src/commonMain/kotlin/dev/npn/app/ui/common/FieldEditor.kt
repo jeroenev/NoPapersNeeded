@@ -249,12 +249,7 @@ private fun NumberField(
     val shown = remember(canonical, locale) { FieldValues.display(def.type, canonical, locale) }
     var text by rememberFieldText(shown)
     val invalid = text.isNotBlank() && FieldValues.canonicalize(def.type, text, locale) is FieldParse.Invalid
-    val error =
-        when {
-            !invalid -> null
-            def.type == FieldType.DECIMAL -> stringResource(Res.string.common_field_invalid_decimal)
-            else -> stringResource(Res.string.common_field_invalid_number)
-        }
+    val error = if (invalid) invalidNumberText(def.type) else null
     OutlinedTextField(
         value = text,
         onValueChange = { typed ->
@@ -328,6 +323,13 @@ fun fieldTypeLabel(type: FieldType): String =
             FieldType.DECIMAL -> Res.string.common_field_type_decimal
             FieldType.DATE -> Res.string.common_field_type_date
         },
+    )
+
+/** What an entry that does not parse as a number of [type] is told, for the editor and the filter sheet. */
+@Composable
+internal fun invalidNumberText(type: FieldType): String =
+    stringResource(
+        if (type == FieldType.DECIMAL) Res.string.common_field_invalid_decimal else Res.string.common_field_invalid_number,
     )
 
 private const val LONG_TEXT_MIN_LINES = 4

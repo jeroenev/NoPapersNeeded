@@ -25,7 +25,7 @@ data class AiFieldSpec(
          */
         const val VOCABULARY_THRESHOLD = 100
 
-        fun wantsVocabulary(def: FieldDef): Boolean = def.type == FieldType.TEXT && def.key != FieldKeys.TITLE
+        fun wantsVocabulary(def: FieldDef): Boolean = def.type.hasVocabulary && def.key != FieldKeys.TITLE
 
         /** The stand-in definition for a requested key the registry does not list: plain text. */
         fun unregistered(key: String): FieldDef =

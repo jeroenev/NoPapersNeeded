@@ -6,36 +6,85 @@ import kotlinx.serialization.Serializable
  * How a field's value is entered, validated, stored and asked for.
  *
  * Only two places are allowed to switch exhaustively on this enum: [FieldValues] (canonical form)
- * and the UI's `FieldEditor` (input control). Everything else branches on data looked up from the
- * [FieldDef] — that is what keeps adding a type a two-file change.
+ * and the UI's `FieldEditor` (input control). Everything else reads the capabilities each constant
+ * declares — that is what keeps adding a type a two-file change, and why a new type has to state
+ * every one of them rather than silently get `false`.
  */
 @Serializable
 enum class FieldType(
     val wire: String,
     /** The nullable JSON literal a model is asked to answer with for a field of this type. */
     val aiLiteral: String,
+    /** Values are text: they belong in the full-text index and compare case-insensitively. */
+    val isTextual: Boolean,
+    /** The canonical value has a numeric shadow ([FieldValues.numeric]). */
+    val isNumeric: Boolean,
+    /** Values are dates: a storage path may format them, and a model gets date guidance. */
+    val isDate: Boolean,
+    /** A value is one line, so it can be sorted by, set by a rule, or shown in a row. Prose is not. */
+    val singleLine: Boolean,
+    /**
+     * Documents share a vocabulary of distinct values worth listing: a filter picks from it, an
+     * editor completes from it, and a model may reuse it (unless the field is
+     * [FieldDef.perDocument]).
+     */
+    val hasVocabulary: Boolean,
 ) {
     /** Single line, autocompleted from existing values. */
-    TEXT("text", "string|null"),
+    TEXT(
+        "text",
+        "string|null",
+        isTextual = true,
+        isNumeric = false,
+        isDate = false,
+        singleLine = true,
+        hasVocabulary = true,
+    ),
 
     /** Multi-line prose (what `notes` is). */
-    LONG_TEXT("longText", "string|null"),
+    LONG_TEXT(
+        "longText",
+        "string|null",
+        isTextual = true,
+        isNumeric = false,
+        isDate = false,
+        singleLine = false,
+        hasVocabulary = false,
+    ),
 
     /** Integer. */
-    NUMBER("number", "integer|null"),
+    NUMBER(
+        "number",
+        "integer|null",
+        isTextual = false,
+        isNumeric = true,
+        isDate = false,
+        singleLine = true,
+        hasVocabulary = false,
+    ),
 
     /** Fractional number; canonical form always uses `.`. */
-    DECIMAL("decimal", "number|null"),
+    DECIMAL(
+        "decimal",
+        "number|null",
+        isTextual = false,
+        isNumeric = true,
+        isDate = false,
+        singleLine = true,
+        hasVocabulary = false,
+    ),
 
     /** ISO-8601 local date, `yyyy-MM-dd`. */
-    DATE("date", "\"YYYY-MM-DD\"|null"),
+    DATE(
+        "date",
+        "\"YYYY-MM-DD\"|null",
+        isTextual = false,
+        isNumeric = false,
+        isDate = true,
+        singleLine = true,
+        hasVocabulary = false,
+    ),
     ;
-
-    /** True for types whose values belong in the full-text index. */
-    val isTextual: Boolean get() = this == TEXT || this == LONG_TEXT
-
-    /** True for types whose canonical value has a numeric shadow ([FieldValues.numeric]). */
-    val isNumeric: Boolean get() = this == NUMBER || this == DECIMAL
 
     companion object {
         fun fromWire(value: String?): FieldType? = entries.firstOrNull { it.wire == value }

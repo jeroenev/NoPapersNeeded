@@ -5,7 +5,6 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.model.FieldType
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.Month
 import kotlinx.datetime.number
@@ -148,7 +147,7 @@ object StoragePathTemplate {
     ): String {
         val value = context.fields[key]
         if (format.isNullOrBlank()) return sanitizeSegment(value ?: "")
-        ensure(context.fieldTypes[key] == FieldType.DATE) { StoragePathError.NotADateField(key) }
+        ensure(context.fieldTypes[key]?.isDate == true) { StoragePathError.NotADateField(key) }
         return sanitizeSegment(resolveDate(value, format))
     }
 
