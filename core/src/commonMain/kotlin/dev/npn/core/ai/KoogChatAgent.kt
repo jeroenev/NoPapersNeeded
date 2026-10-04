@@ -45,7 +45,7 @@ class KoogChatAgent(
                     var iteration = 0
                     var finished = false
                     while (!finished && iteration < maxIterations) {
-                        val calls = mutableListOf<ToolCall>()
+                        val calls = mutableListOf<UsableToolCall>()
                         val responseFrames = mutableListOf<StreamFrame>()
                         val turnText = StringBuilder()
                         var textFlushed = false
@@ -62,7 +62,7 @@ class KoogChatAgent(
                                     is StreamFrame.ToolCallComplete -> {
                                         frame.toUsableToolCall(calls.size)?.let { call ->
                                             responseFrames += frame.withSafeArguments(call)
-                                            calls += ToolCall(call.id, call.name, call.argsJson)
+                                            calls += call
                                         }
                                     }
 
@@ -107,9 +107,9 @@ class KoogChatAgent(
         }
 
     // A failing tool is reported to the model as its result; a cancelled one ends the turn.
-    private suspend fun dispatch(call: ToolCall): String =
-        toolSet.chatTools.firstOrNull { it.name == call.name }?.let { tool ->
-            runCatchingCancellable { tool.call(call.argsJson) }
+    private suspend fun dispatch(call: UsableToolCall): String =
+        toolSet.calls[call.name]?.let { tool ->
+            runCatchingCancellable { tool(call.argsJson) }
                 .getOrElse { "Error running ${call.name}: ${it.reason()}" }
         } ?: "Error: unknown tool \"${call.name}\"."
 
@@ -119,12 +119,6 @@ class KoogChatAgent(
             model = model,
             maxAgentIterations = maxIterations,
         )
-
-    private data class ToolCall(
-        val id: String,
-        val name: String,
-        val argsJson: String,
-    )
 }
 
 /**

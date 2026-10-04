@@ -130,13 +130,8 @@ class KoogChatAgentTest {
     fun aCancelledToolIsNotReportedAsAToolError() =
         runTest {
             val library = LibraryAiTools.toolSetFor(db, FieldKeys.seedDefinitions())
-            val cancelled =
-                library.chatTools.map { tool ->
-                    object : AiChatTool by tool {
-                        override suspend fun call(argsJson: String): String =
-                            throw CancellationException("turn stopped")
-                    }
-                }
+            val stopped: suspend (String) -> String = { throw CancellationException("turn stopped") }
+            val cancelled = library.calls.mapValues { stopped }
             val executor =
                 scriptedExecutor(
                     listOf(

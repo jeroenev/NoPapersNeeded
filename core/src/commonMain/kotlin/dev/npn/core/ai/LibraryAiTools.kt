@@ -2,7 +2,6 @@ package dev.npn.core.ai
 
 import ai.koog.agents.core.tools.SimpleTool
 import ai.koog.agents.core.tools.ToolBase
-import ai.koog.agents.core.tools.ToolDescriptor
 import ai.koog.agents.core.tools.annotations.LLMDescription
 import ai.koog.serialization.typeToken
 import dev.npn.core.db.DocumentDao
@@ -20,18 +19,17 @@ import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /**
- * The library tool set in the two shapes one chat run needs, over a single construction of the
- * tools: [tools] is what Koog advertises to the model through its `ToolRegistry`, [chatTools] is
- * the name-keyed dispatcher the streaming loop calls. The chat view hand-rolls argument decoding
- * instead of going through the registry because the streaming API hands us the raw args JSON, and
- * decoding it against our own `@Serializable Args` types is the smaller, type-safe path.
+ * The library tools as one chat run needs them, built from one construction of each tool: [tools]
+ * is what Koog advertises to the model through its `ToolRegistry`, [calls] runs a tool by name on
+ * the raw arguments JSON the model streamed back. The loop calls tools itself instead of going
+ * through the registry because the streaming API hands it that raw JSON, and decoding it against
+ * the tools' own `@Serializable Args` types is the smaller, type-safe path.
  */
 class LibraryToolSet internal constructor(
     val tools: List<ToolBase<*, *>>,
-    val chatTools: List<AiChatTool>,
+    val calls: Map<String, suspend (argsJson: String) -> String>,
 )
 
 /**
@@ -45,9 +43,8 @@ object LibraryAiTools {
     const val TEXT_CHUNK_CHARS = 4_000
 
     /**
-     * Build the library tool set once, in both shapes the chat agent needs (see [LibraryToolSet]).
-     * Each tool is constructed a single time and shared by the two views, so a tool the model is
-     * advertised is the same instance the loop dispatches to.
+     * Build the library tool set (see [LibraryToolSet]). Each tool is constructed once, so a tool the
+     * model is advertised is the same instance the loop calls.
      */
     fun toolSetFor(
         db: NpnDatabase,
@@ -72,31 +69,18 @@ object LibraryAiTools {
             )
         return LibraryToolSet(
             tools = entries.map { it.tool },
-            chatTools = entries.map { it.chatTool(NpnJson.Lenient) },
+            calls = entries.associate { it.tool.name to it::call },
         )
     }
 
-    /** One tool with the serializer for its `Args`, so both views can be derived from it. */
+    /** One tool with the serializer for its `Args`, so it can be called on the model's raw JSON. */
     private class Entry<A>(
         val tool: SimpleTool<A>,
         private val serializer: KSerializer<A>,
     ) {
-        fun chatTool(json: Json): AiChatTool = tool.asChatTool(serializer, json)
+        suspend fun call(argsJson: String): String =
+            tool.execute(NpnJson.Lenient.decodeFromString(serializer, argsJson.ifBlank { "{}" }))
     }
-
-    private fun <A> SimpleTool<A>.asChatTool(
-        serializer: KSerializer<A>,
-        json: Json,
-    ): AiChatTool =
-        object : AiChatTool {
-            override val name: String = this@asChatTool.name
-            override val descriptor: ToolDescriptor = this@asChatTool.descriptor
-
-            override suspend fun call(argsJson: String): String {
-                val args = json.decodeFromString(serializer, argsJson.ifBlank { "{}" })
-                return execute(args)
-            }
-        }
 
     internal fun docLine(
         doc: DocumentEntity,
