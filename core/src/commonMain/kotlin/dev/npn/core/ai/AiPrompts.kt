@@ -2,6 +2,7 @@ package dev.npn.core.ai
 
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.model.AppLanguages
 import dev.npn.core.model.FieldDef
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -48,33 +49,11 @@ internal data class AiPromptContext(
                         .toString(),
             )
 
+        /** "Dutch (nl)" rather than "nl" for a language [AppLanguages] knows; the bare subtag otherwise. */
         private fun languageLabel(languageTag: String?): String? {
-            val subtag =
-                languageTag
-                    ?.trim()
-                    ?.substringBefore('-')
-                    ?.substringBefore('_')
-                    ?.lowercase()
-                    ?.takeIf { it.isNotEmpty() }
-                    ?: return null
-            return LANGUAGE_NAMES[subtag]?.let { "$it ($subtag)" } ?: subtag
+            val subtag = AppLanguages.subtag(languageTag) ?: return null
+            return AppLanguages.known(subtag)?.let { "${it.englishName} ($subtag)" } ?: subtag
         }
-
-        /**
-         * English names for the languages this app plausibly runs in, so a prompt can say
-         * "Dutch (nl)" instead of "nl". Deliberately not exhaustive; [languageLabel] falls back to
-         * the raw subtag.
-         */
-        private val LANGUAGE_NAMES =
-            mapOf(
-                "en" to "English",
-                "nl" to "Dutch",
-                "fr" to "French",
-                "de" to "German",
-                "es" to "Spanish",
-                "it" to "Italian",
-                "pt" to "Portuguese",
-            )
     }
 }
 

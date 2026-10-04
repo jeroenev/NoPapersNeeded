@@ -1,5 +1,7 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.model.AppLanguages
+
 /**
  * The OCR language setting: one or more Tesseract language codes joined with `+`, Tesseract's own
  * syntax for recognising several languages at once (`nld+eng`), or null for automatic, which
@@ -14,18 +16,12 @@ object OcrLanguages {
      */
     val BUNDLED: List<String> = listOf(ENGLISH, "nld", "deu", "fra", "spa", "por")
 
-    /** ISO 639-1 app language to its Tesseract model. */
-    private val FOR_APP_LANGUAGE =
-        mapOf("en" to ENGLISH, "nl" to "nld", "de" to "deu", "fr" to "fra", "es" to "spa", "pt" to "por")
-
     /**
      * The automatic choice: the app language's model plus English, which most paperwork mixes in
      * (product names, foreign invoices). An app language without a model falls back to English.
      */
-    fun forAppLanguage(tag: String?): List<String> {
-        val language = tag?.substringBefore('-')?.substringBefore('_')?.lowercase()
-        return listOfNotNull(FOR_APP_LANGUAGE[language], ENGLISH).distinct()
-    }
+    fun forAppLanguage(tag: String?): List<String> =
+        listOfNotNull(AppLanguages.known(tag)?.tesseractModel, ENGLISH).distinct()
 
     /** Codes in a stored value; also accepts commas and spaces, as typed by hand. */
     fun parse(value: String): List<String> =
