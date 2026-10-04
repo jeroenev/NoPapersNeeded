@@ -167,14 +167,12 @@ class PropsTrashRelinkTest {
     }
 
     @Test
-    fun concurrent_relink_deterministic_winner_and_losers() {
+    fun concurrent_relink_deterministic_winner() {
         // two devices relink same old doc to different targets
         val rA = relink(1, doc, doc2, 10, "aaa")
         val rZ = relink(1, doc, doc3, 10, "zzz") // same physical+counter, zzz wins on tiebreak
         val state = JournalFolder.fold(listOf(rA, rZ))
         assertEquals(doc3, state.resolveDocId(doc))
-        val losers = state.relinkLosers()
-        assertEquals(listOf(doc to doc2), losers)
         // order independent
         assertEquals(doc3, JournalFolder.fold(listOf(rZ, rA)).resolveDocId(doc))
     }

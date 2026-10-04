@@ -247,8 +247,6 @@ class FoldedState {
         key: SystemProperty,
     ): String? = props[doc]?.get(key)?.value
 
-    fun allProps(doc: String): Map<SystemProperty, String?> = props[doc]?.mapValues { it.value.value } ?: emptyMap()
-
     /** Winning version, including explicit clears, for comparing device-local observation baselines. */
     fun propVersion(
         doc: String,
@@ -318,23 +316,6 @@ class FoldedState {
             current = relinks[current]?.maxByOrNull { it.hlc }?.newDoc ?: break
         }
         return current
-    }
-
-    /**
-     * Relink losers: for each old doc with concurrent relink claims, the claims that did NOT
-     * win. The caller imports each loser's target file as a new document with metadata copied.
-     * Returned as (oldDoc, losingNewDoc).
-     */
-    fun relinkLosers(): List<Pair<String, String>> {
-        val losers = ArrayList<Pair<String, String>>()
-        for ((oldDoc, claims) in relinks) {
-            if (claims.size < 2) continue
-            val winner = claims.maxByOrNull { it.hlc }!!
-            for (c in claims) {
-                if (c !== winner && c.newDoc != winner.newDoc) losers.add(oldDoc to c.newDoc)
-            }
-        }
-        return losers
     }
 
     /** Effective style for a tag, or null if none set. */

@@ -180,15 +180,15 @@ object FoldedStateEquivalence {
             require(a.effectiveTags(doc) == b.effectiveTags(doc)) {
                 "tags differ for $doc: ${a.effectiveTags(doc)} vs ${b.effectiveTags(doc)}"
             }
-            require(a.allProps(doc) == b.allProps(doc)) {
-                "props differ for $doc: ${a.allProps(doc)} vs ${b.allProps(doc)}"
+            for (key in SystemProperty.entries) {
+                require(a.effectiveProp(doc, key) == b.effectiveProp(doc, key)) { "$key differs for $doc" }
+                require(a.propVersion(doc, key) == b.propVersion(doc, key)) { "$key version differs for $doc" }
             }
             require(a.isTrashed(doc) == b.isTrashed(doc)) { "trash differs for $doc" }
             require(a.isDeleted(doc) == b.isDeleted(doc)) { "delete differs for $doc" }
             require(a.trashOrigPath(doc) == b.trashOrigPath(doc)) { "trash path differs for $doc" }
             require(a.resolveDocId(doc) == b.resolveDocId(doc)) { "relink resolve differs for $doc" }
         }
-        require(a.relinkLosers().toSet() == b.relinkLosers().toSet()) { "relink losers differ" }
         for (tag in allTags) {
             require(a.tagStyle(tag) == b.tagStyle(tag)) { "tag style differs for $tag" }
         }
