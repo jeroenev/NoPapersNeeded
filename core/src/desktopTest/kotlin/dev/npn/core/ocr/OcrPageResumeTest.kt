@@ -62,6 +62,45 @@ class OcrPageResumeTest {
         }
 
     @Test
+    fun anotherDevicesVersionArrivingDoesNotRestartAFailedRun() =
+        runTest {
+            // AI is this device's automatic engine, and its run fails on page 2 of 4. Another
+            // device's local reading arrives meanwhile and is adopted for search, but the paid
+            // run is still owed here: with its backoff, and the pages it already bought.
+            val ai = PageCountingEngine(OcrEngines.AI).apply { failOnCall = 3 }
+            val local = FakeOcrEngine(isAvailable = true, name = OcrEngines.MLKIT, canned = "should-not-run")
+            val docId = rig.stageDoc("ledger.pdf", PdfFixtures.imageOnlyPdf(pages = 4))
+            val clock = MutableClock()
+            val engines = OcrEngineSelector(local, ai, aiAuto = { true })
+            val pipe = rig.pipeline("devA", local, engines = engines, clock = clock)
+            pipe.processDoc(docId)
+            ai.calls shouldBe 3
+
+            val fromB =
+                OcrSidecar(
+                    doc = docId,
+                    dev = "devB",
+                    engine = OcrEngines.MLKIT,
+                    lang = "eng",
+                    createdAt = 1,
+                    pages = List(4) { "local words" },
+                )
+            OcrSidecarFiles(rig.fs).writeOnce(docId, "devB.mlkit", OcrSidecarCodec.encode(fromB))
+            pipe.reconcileSidecars()
+            db.ftsDao().searchDocIds("local") shouldContainExactly listOf(docId)
+
+            // Still waiting out the failure's backoff, then resumed where it stopped.
+            pipe.processNext() shouldBe false
+            clock.advance(backoffMs(1))
+            pipe.processNext() shouldBe true
+
+            ai.calls shouldBe 5
+            local.calls shouldBe 0
+            val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(rig.fs).read(docId, "devA.ai"))
+            sidecar.pages shouldContainExactly listOf("read 1", "read 2", "read 4", "read 5")
+        }
+
+    @Test
     fun pagesReadByAnotherEngineOrLanguageAreNotReused() =
         runTest {
             val first = PageCountingEngine("mlkit").apply { failOnCall = 2 }

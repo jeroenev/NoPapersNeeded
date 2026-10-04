@@ -490,12 +490,21 @@ class OcrPipeline(
         val sidecar = decode(doc.docId, desired.writerKey) ?: return
         indexAndMarkSelected(doc.docId, desired, sidecar)
         // Adoption or re-selection of a stored sidecar: no new text, so no enrichment. A hook
-        // failure is discarded rather than recorded, unlike in processDoc: the row is deleted here,
-        // and the only hook that can run is onTextIndexed, which reconcile re-fires on every rescan
-        // rather than marking the document done. Nothing is permanently lost by dropping it.
+        // failure is discarded rather than recorded, unlike in processDoc: the row is not marked
+        // done here, and the only hook that can run is onTextIndexed, which reconcile re-fires on
+        // every rescan. Nothing is permanently lost by dropping it.
         notifyTextIndexed(doc.docId, sidecar, ocrProduced = false)
-        ocrQueueDao.delete(doc.docId)
+        // Adopted text does not settle a run still owed here; processDoc does, once it is due.
+        if (ocrQueueDao.getByDocId(doc.docId)?.isOwedHere() != true) ocrQueueDao.delete(doc.docId)
     }
+
+    /**
+     * Whether this row holds what only this device knows about its own run: a request made here
+     * ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]) or failed attempts, with their backoff,
+     * their cap and the pages they already read. Dropping such a row on adoption would forget the
+     * request, or queue the same run afresh and pay for those pages again.
+     */
+    private fun OcrQueueEntity.isOwedHere(): Boolean = state != STATE_DONE && (rerun || aiRequested || attempts > 0)
 
     /**
      * True when running this device's engine for [doc] would produce a better version than anything

@@ -173,6 +173,27 @@ class AiOcrPipelineTest {
         }
 
     @Test
+    fun aRunAskedForHereSurvivesAReconcileBeforeTheDrainTakesIt() =
+        runTest {
+            // Between "OCR with AI" and the drain, a rescan or a synced journal object reconciles
+            // the sidecars. The document reads as pending then, so reconcile re-adopts its stored
+            // text; the queue row is the only record of the request and must outlive that.
+            val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "model words")
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val pipe = rig.pipeline("devA", local, engines = selector(local, ai, auto = false))
+            pipe.processDoc(docId)
+
+            askForAi(docId)
+            pipe.reconcileSidecars()
+            pipe.drain()
+
+            ai.calls shouldBe 1
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngines.AI
+            db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
+        }
+
+    @Test
     fun anAiPinFromAnotherDeviceDoesNotSpendHere() =
         runTest {
             // The pin is synced library data; the request behind it was made on another device,
@@ -296,11 +317,12 @@ class AiOcrPipelineTest {
 
     /**
      * What `OcrFacade.ocrWithAi` leaves behind on this device: the pin, as the journal fold projects
-     * it onto the row, and a queue row marking the run as asked for here.
+     * it onto the row, a queue row marking the run as asked for here, and the document pending.
      */
     private suspend fun askForAi(docId: String) {
         setOverride(docId, OcrEngines.AI)
         db.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, aiRequested = true))
+        db.documentDao().updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
     }
 
     /** Work the queue the way the session's drainer does. */
