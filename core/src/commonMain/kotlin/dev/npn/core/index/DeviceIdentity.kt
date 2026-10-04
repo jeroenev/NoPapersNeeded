@@ -10,8 +10,8 @@ import kotlin.uuid.Uuid
 /**
  * Manages this installation's `deviceId`.
  *
- * The id is an install-generated UUID stored in the local `kv` table (device-private, never in
- * the synced library). On startup the app must verify the newest segment in its own journal
+ * The id is an install-generated UUID stored in the device database's `kv` table (device-private,
+ * never in the synced library, and kept when the index is rebuilt). On startup the app must verify the newest segment in its own journal
  * directory is one it wrote; if the store contains an own segment the local state does not know
  * about, another installation shares this id (backup restore / clone) and we fork a fresh id to
  * preserve the single-writer invariant.

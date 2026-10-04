@@ -7,9 +7,10 @@ import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.builtins.serializer
 
 /**
- * [LocalJournalState] backed by the local index database's `kv` table. This is device-private
- * bookkeeping (last assigned seq + known own segment file names for fork detection); it lives in
- * the disposable cache, never inside the synced library folder.
+ * [LocalJournalState] backed by a `kv` table: the device database's, in a session. This is
+ * device-private bookkeeping (last assigned seq + known own segment file names for fork
+ * detection), so it lives beside the index but not in it, and never inside the synced library
+ * folder.
  *
  * The known-own-segments set is JSON-encoded into a single kv row.
  */

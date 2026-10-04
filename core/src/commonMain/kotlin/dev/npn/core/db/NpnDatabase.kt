@@ -134,7 +134,7 @@ abstract class NpnDatabase : RoomDatabase() {
 
     /**
      * v15 -> v16: a rule sets any field, so the two named columns give way to a JSON `sets`
-     * column. The table is a mirror of the settings blob and is reconciled from it on open, so
+     * column. The table caches a rule list kept elsewhere and is reconciled from it on open, so
      * the migrated rows' empty `sets` are overwritten before anything reads them.
      */
     @DeleteColumn.Entries(

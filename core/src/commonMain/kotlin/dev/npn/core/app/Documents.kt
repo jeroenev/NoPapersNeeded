@@ -12,8 +12,8 @@ import kotlinx.coroutines.flow.Flow
  * disposable index row — never leaves `core.db`; [DocumentRepositoryImpl] maps it here exactly
  * once, so a column change ripples no further than that mapping.
  *
- * Deliberately absent: `mtime`, `deleted` and `aiEnrichedAt`. They are index bookkeeping with no
- * consumer outside `core`.
+ * Deliberately absent: `mtime` and `deleted`. They are index bookkeeping with no consumer outside
+ * `core`.
  */
 data class Doc(
     val docId: String,
