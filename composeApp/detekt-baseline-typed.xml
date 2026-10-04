@@ -16,7 +16,6 @@
     <ID>ComposableParamOrder:TopBarAction.kt:@Composable fun TopBarActions</ID>
     <ID>CompositionLocalAllowlist:DocumentDrafts.kt:internal val LocalDocumentDrafts = staticCompositionLocalOf&lt;DocumentDrafts&gt; { error("Document drafts not provided") }</ID>
     <ID>CompositionLocalAllowlist:DocumentEditor.kt:/** * True while this document cannot be written: a save is in flight, or the draft is not writable * yet (an unparseable date). Only controls that *trigger* a write read it — editing itself stays * live, so a save in progress never disables the field the user is typing in. */ internal val LocalDocumentWriteBlocked = staticCompositionLocalOf { false }</ID>
-    <ID>CompositionLocalAllowlist:DocumentScanner.kt:val LocalDocumentScanner = staticCompositionLocalOf&lt;DocumentScanner&gt; { NoDocumentScanner }</ID>
     <ID>CompositionLocalAllowlist:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
     <ID>CompositionLocalNaming:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
     <ID>ContentSlotReused:FilterSheet.kt:from: @Composable (Modifier) -&gt; Unit</ID>
@@ -46,10 +45,8 @@
     <ID>ModifierMissing:FieldDefFormState.kt:@Composable fun FieldDefForm</ID>
     <ID>ModifierMissing:LibraryScreen.kt:@Composable fun LibraryScreen</ID>
     <ID>ModifierMissing:NavigationShell.kt:@Composable fun NavigationShell</ID>
-    <ID>ModifierMissing:OnboardingScreen.kt:@Composable @Suppress("CyclomaticComplexMethod") fun OnboardingScreen</ID>
     <ID>ModifierMissing:QueueScreen.kt:@Composable fun QueueScreen</ID>
     <ID>ModifierMissing:SafStorageSwitch.kt:@Composable fun SafStorageSwitch</ID>
-    <ID>ModifierMissing:SettingsScreen.kt:@Composable fun SettingsScreen</ID>
     <ID>ModifierMissing:TagSuggestionLabel.kt:@Composable fun TagSuggestionLabel</ID>
     <ID>ModifierMissing:TooltipIconButton.kt:@Composable fun TooltipIconButton</ID>
     <ID>ModifierMissing:TopBarAction.kt:@Composable fun TopBarActions</ID>
@@ -62,7 +59,6 @@
     <ID>MultipleEmitters:FilterSheet.kt:@Composable private fun TagFilterSection</ID>
     <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun OcrLanguageSettings</ID>
     <ID>MultipleEmitters:ImportSettingsPane.kt:@Composable private fun WatchedFolderSettings</ID>
-    <ID>MultipleEmitters:OnboardingScreen.kt:@Composable private fun StorageAccessStep</ID>
     <ID>MultipleEmitters:QueueScreen.kt:@Composable private fun EditRunTrouble</ID>
     <ID>MultipleEmitters:QueueScreen.kt:@Composable private fun QueueRowTrouble</ID>
     <ID>MultipleEmitters:TagManagementScreen.kt:@Composable private fun BulkMenuItems</ID>
@@ -78,7 +74,6 @@
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, from = it)) }</ID>
     <ID>NoNameShadowing:FilterSheet.kt:{ onDraftChange(draft.withFieldBounds(def.key, to = it)) }</ID>
     <ID>ParameterNaming:AiChatScreen.kt:onOpenFiltered: (List&lt;String&gt;) -&gt; Unit</ID>
-    <ID>ParameterNaming:App.kt:onRepickReturned: (String) -&gt; Unit</ID>
     <ID>ParameterNaming:DocActions.kt:onGone: () -&gt; Unit</ID>
     <ID>ParameterNaming:DocPreviewPanel.kt:onReviewed: () -&gt; Unit</ID>
     <ID>ParameterNaming:DocumentEditor.kt:onReviewed: (() -&gt; Unit)?</ID>
@@ -97,9 +92,7 @@
     <ID>SpreadOperator:HistoryTextResources.kt:(key.resource, *arguments.toTypedArray())</ID>
     <ID>SpreadOperator:UiText.kt:(res, *args.renderAll())</ID>
     <ID>SpreadOperator:UiText.kt:(res, quantity, *args.renderAll())</ID>
-    <ID>UnsafeCallOnNullableType:App.kt:restoreError!!</ID>
     <ID>UnsafeCallOnNullableType:LocalAppLocale.kt:LocalAppLocale$default!!</ID>
-    <ID>UnsafeCallOnNullableType:OnboardingScreen.kt:error!!</ID>
     <ID>UnsafeCallOnNullableType:PageViewer.kt:parsed!!</ID>
     <ID>UnsafeCallOnNullableType:TagDialogs.kt:selected!!</ID>
     <ID>UnusedPrivateProperty:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
