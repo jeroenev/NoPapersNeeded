@@ -5,7 +5,6 @@
     <ID>AbstractClassCanBeInterface:JournalOp.kt:JournalOp$JournalOp</ID>
     <ID>AbstractClassCanBeInterface:SegmentWriter.kt:ForkCheck$ForkCheck</ID>
     <ID>CyclomaticComplexMethod:FoldedState.kt:FoldedState$fun apply</ID>
-    <ID>CyclomaticComplexMethod:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$override fun watch: Flow&lt;FsEvent&gt;</ID>
     <ID>EmptyWhileBlock:DocumentFilterTest.kt:DocumentFilterTest${}</ID>
     <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.ALL))</ID>
     <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.MISSING_FIELDS, missing = missing))</ID>
@@ -28,7 +27,6 @@
     <ID>InjectDispatcher:SafWatchedFolder.kt:SafWatchedFolder$IO</ID>
     <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
     <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
-    <ID>LoopWithTooManyJumpStatements:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$while</ID>
     <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
     <ID>LoopWithTooManyJumpStatements:XmpParser.kt:XmpParser$while</ID>
     <ID>MapGetWithNotNullAssertionOperator:AdaptersTest.kt:AdaptersTest$byDevice["devA"]!!</ID>

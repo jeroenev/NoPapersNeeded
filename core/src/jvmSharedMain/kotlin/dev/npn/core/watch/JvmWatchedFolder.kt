@@ -1,28 +1,22 @@
 package dev.npn.core.watch
 
 import dev.npn.core.fs.externalSourceOfPath
-import kotlinx.coroutines.CoroutineScope
+import dev.npn.core.fs.watchDirs
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
-import java.io.IOException
-import java.nio.file.ClosedWatchServiceException
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.Paths
-import java.nio.file.StandardWatchEventKinds
-import java.nio.file.WatchKey
-import java.nio.file.WatchService
+import java.nio.file.StandardWatchEventKinds.ENTRY_CREATE
+import java.nio.file.StandardWatchEventKinds.ENTRY_MODIFY
 import kotlin.streams.asSequence
 
 /**
  * Plain-directory [WatchedFolder] (desktop, and Android's direct storage mode): listed
- * non-recursively via java.nio and watched with a [WatchService] on the single directory (same
- * pattern as JvmLibraryFileSystem.watch, minus the recursive registration).
+ * non-recursively via java.nio and watched through [watchDirs] on the single directory, for new
+ * and rewritten files only.
  */
 class JvmWatchedFolder(
     private val dir: Path,
@@ -60,52 +54,5 @@ class JvmWatchedFolder(
             runCatching { Files.deleteIfExists(Paths.get(file.id)) }.getOrDefault(false)
         }
 
-    override fun changes(): Flow<Unit> =
-        callbackFlow {
-            if (!Files.isDirectory(dir)) {
-                awaitClose { }
-                return@callbackFlow
-            }
-            val watcher: WatchService = dir.fileSystem.newWatchService()
-            try {
-                dir.register(
-                    watcher,
-                    StandardWatchEventKinds.ENTRY_CREATE,
-                    StandardWatchEventKinds.ENTRY_MODIFY,
-                )
-            } catch (_: IOException) {
-                watcher.close()
-                awaitClose { }
-                return@callbackFlow
-            }
-
-            val scope = CoroutineScope(coroutineContext)
-            val job =
-                scope.launch(Dispatchers.IO) {
-                    var key = takeKey(watcher)
-                    while (isActive && key != null) {
-                        key.pollEvents()
-                        trySend(Unit)
-                        key = if (key.reset()) takeKey(watcher) else null
-                    }
-                }
-
-            awaitClose {
-                job.cancel()
-                try {
-                    watcher.close()
-                } catch (_: IOException) {
-                }
-            }
-        }
-
-    /** Blocking take, mapped to null when the watcher is interrupted or closed. */
-    private fun takeKey(watcher: WatchService): WatchKey? =
-        try {
-            watcher.take()
-        } catch (_: InterruptedException) {
-            null
-        } catch (_: ClosedWatchServiceException) {
-            null
-        }
+    override fun changes(): Flow<Unit> = watchDirs(dir, recursive = false, kinds = arrayOf(ENTRY_CREATE, ENTRY_MODIFY)).map { }
 }

@@ -1,12 +1,8 @@
 package dev.npn.core.fs
 
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.callbackFlow
-import kotlinx.coroutines.isActive
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 import java.io.IOException
 import java.nio.ByteBuffer
@@ -16,9 +12,6 @@ import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.SimpleFileVisitor
 import java.nio.file.StandardOpenOption
-import java.nio.file.StandardWatchEventKinds
-import java.nio.file.WatchKey
-import java.nio.file.WatchService
 import java.nio.file.attribute.BasicFileAttributes
 import kotlin.io.path.name
 
@@ -429,94 +422,5 @@ class JvmLibraryFileSystem internal constructor(
         Unit
     }
 
-    override fun watch(): Flow<FsEvent> =
-        callbackFlow {
-            val watcher: WatchService = root.fileSystem.newWatchService()
-            val keys = HashMap<WatchKey, Path>()
-
-            fun register(dir: Path) {
-                try {
-                    val key =
-                        dir.register(
-                            watcher,
-                            StandardWatchEventKinds.ENTRY_CREATE,
-                            StandardWatchEventKinds.ENTRY_DELETE,
-                            StandardWatchEventKinds.ENTRY_MODIFY,
-                        )
-                    keys[key] = dir
-                } catch (_: IOException) {
-                }
-            }
-
-            fun registerRecursive(start: Path) {
-                if (!Files.exists(start)) return
-                Files.walkFileTree(
-                    start,
-                    object : SimpleFileVisitor<Path>() {
-                        override fun preVisitDirectory(
-                            dir: Path,
-                            attrs: BasicFileAttributes,
-                        ): FileVisitResult {
-                            register(dir)
-                            return FileVisitResult.CONTINUE
-                        }
-
-                        override fun visitFileFailed(
-                            file: Path,
-                            exc: IOException,
-                        ): FileVisitResult = FileVisitResult.CONTINUE
-                    },
-                )
-            }
-
-            registerRecursive(root)
-
-            val scope = CoroutineScope(coroutineContext)
-            val job =
-                scope.launch(Dispatchers.IO) {
-                    while (isActive) {
-                        val key =
-                            try {
-                                watcher.take()
-                            } catch (_: InterruptedException) {
-                                break
-                            } catch (_: java.nio.file.ClosedWatchServiceException) {
-                                break
-                            }
-                        val dir = keys[key]
-                        for (event in key.pollEvents()) {
-                            val kind = event.kind()
-                            if (kind == StandardWatchEventKinds.OVERFLOW) {
-                                trySend(FsEvent(null))
-                                continue
-                            }
-                            val ctx = event.context() as? Path
-                            val child = if (dir != null && ctx != null) dir.resolve(ctx) else null
-                            val createdDirectory =
-                                child != null &&
-                                    kind == StandardWatchEventKinds.ENTRY_CREATE &&
-                                    Files.isDirectory(child)
-                            if (createdDirectory) {
-                                // Newly created directory: start watching it (and anything already inside).
-                                registerRecursive(child)
-                            }
-                            val rel = child?.let { relOf(it) }
-                            trySend(FsEvent(rel))
-                        }
-                        val valid = key.reset()
-                        if (!valid) {
-                            keys.remove(key)
-                            if (keys.isEmpty()) break
-                        }
-                    }
-                }
-
-            awaitClose {
-                job.cancel()
-                try {
-                    watcher.close()
-                } catch (_: IOException) {
-                }
-            }
-        }
+    override fun watch(): Flow<FsEvent> = watchDirs(root, recursive = true).map { changed -> FsEvent(changed?.let(::relOf)) }
 }
