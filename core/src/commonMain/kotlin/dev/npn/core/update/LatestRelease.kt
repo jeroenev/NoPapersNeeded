@@ -1,5 +1,6 @@
 package dev.npn.core.update
 
+import dev.npn.core.util.NpnJson
 import io.ktor.client.HttpClient
 import io.ktor.client.request.get
 import io.ktor.client.request.header
@@ -8,7 +9,6 @@ import io.ktor.http.isSuccess
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /** A published release: its version (no leading `v`) and the page to download it from. */
 data class AppRelease(
@@ -79,6 +79,6 @@ class GitHubLatestRelease(
     )
 
     private companion object {
-        val json = Json { ignoreUnknownKeys = true }
+        val json = NpnJson.Lenient
     }
 }

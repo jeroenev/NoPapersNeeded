@@ -7,6 +7,7 @@ import dev.npn.core.app.MetadataWriter
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
+import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -16,7 +17,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import kotlin.time.Duration.Companion.seconds
 
 /** How long the save bar keeps confirming a save before the settled draft is dropped. */
@@ -88,7 +88,7 @@ internal class DocumentDrafts(
             // truncated bundle must not take the app down on restore: losing an unsaved draft is
             // recoverable, a crash on every restore of that saved state is not.
             restored
-                ?.let { runCatching { Json.decodeFromString<Map<String, DocumentDraft>>(it) }.getOrNull() }
+                ?.let { runCatching { NpnJson.Persisted.decodeFromString<Map<String, DocumentDraft>>(it) }.getOrNull() }
                 .orEmpty(),
         )
 
@@ -125,7 +125,7 @@ internal class DocumentDrafts(
     }
 
     fun serialize(): String =
-        Json.encodeToString(
+        NpnJson.Persisted.encodeToString(
             drafts.value
                 .filterValues {
                     it.dirty

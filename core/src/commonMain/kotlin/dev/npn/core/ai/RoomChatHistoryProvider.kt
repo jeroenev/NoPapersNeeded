@@ -5,14 +5,14 @@ import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
 import dev.npn.core.db.KeyValueEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.util.NpnJson
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 
 /** Device-local chat history stored in the library's disposable Room cache. */
 class RoomChatHistoryProvider(
     private val db: NpnDatabase,
 ) : ChatHistoryProvider {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = NpnJson.Persisted
 
     override suspend fun store(
         conversationId: String,

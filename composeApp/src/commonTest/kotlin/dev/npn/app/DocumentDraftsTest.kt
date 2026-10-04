@@ -34,6 +34,15 @@ class DocumentDraftsTest : MainDispatcherTest() {
             assertTrue(writer.batchedEdits.isEmpty())
         }
 
+    /** A draft saved by another build keeps the user's typing rather than being thrown away. */
+    @Test
+    fun aDraftWithAPropertyThisBuildDoesNotKnowIsStillRestored() =
+        runTest(dispatcher) {
+            val saved = """{"one":{"fields":{"title":"Invoice"},"types":{"title":"TEXT"},"pinnedBy":"newer build"}}"""
+            val store = DocumentDrafts(FakeMetadataWriter(), backgroundScope, saved)
+            store.state["one"]?.fields shouldBe mapOf(FieldKeys.TITLE to "Invoice")
+        }
+
     @Test
     fun unreadableRestoredStateStartsEmptyInsteadOfThrowing() =
         runTest(dispatcher) {

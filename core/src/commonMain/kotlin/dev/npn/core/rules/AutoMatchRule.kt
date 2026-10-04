@@ -1,6 +1,7 @@
 package dev.npn.core.rules
 
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.util.NpnJson
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.builtins.ListSerializer
@@ -9,7 +10,6 @@ import kotlinx.serialization.descriptors.PrimitiveSerialDescriptor
 import kotlinx.serialization.descriptors.SerialDescriptor
 import kotlinx.serialization.encoding.Decoder
 import kotlinx.serialization.encoding.Encoder
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -102,7 +102,7 @@ enum class MatchAlgorithm {
  * carried `correspondent` and `docType` as top-level strings instead of [AutoMatchRule.sets].
  */
 object AutoMatchRuleJson {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = NpnJson.Persisted
     private val listSerializer = ListSerializer(LegacyAware)
 
     fun decodeList(text: String): List<AutoMatchRule> = json.decodeFromString(listSerializer, text)

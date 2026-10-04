@@ -17,6 +17,10 @@ import kotlinx.serialization.json.jsonPrimitive
  * skip only catches structurally-broken lines.
  */
 object JournalCodec {
+    /**
+     * Pinned here rather than taken from [dev.npn.core.util.NpnJson]: this is the synced wire
+     * format, and every replica must encode and decode an event exactly alike.
+     */
     val json = Json {
         ignoreUnknownKeys = true
         encodeDefaults = true

@@ -8,6 +8,7 @@ import ai.koog.prompt.executor.clients.openai.OpenAILLMClient
 import ai.koog.prompt.executor.clients.openai.models.OpenAIChatCompletionStreamResponse
 import ai.koog.prompt.llm.LLModel
 import ai.koog.prompt.streaming.StreamFrame
+import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.catch
@@ -104,17 +105,11 @@ internal class TolerantOpenAILLMClient(
 
     private fun hasNoChoices(data: String): Boolean =
         runCatching {
-            val choices = LENIENT_JSON.parseToJsonElement(data).jsonObject["choices"]
+            val choices = NpnJson.Lenient.parseToJsonElement(data).jsonObject["choices"]
             choices == null || (choices as? JsonArray)?.isEmpty() == true
         }.getOrDefault(false)
 
     private companion object {
-        val LENIENT_JSON =
-            Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-            }
-
         val EMPTY_STREAM_RESPONSE =
             OpenAIChatCompletionStreamResponse(
                 choices = emptyList(),

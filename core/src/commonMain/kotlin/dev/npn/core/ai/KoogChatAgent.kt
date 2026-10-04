@@ -12,10 +12,10 @@ import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponse
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.collect
-import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.JsonObject
 
 /** Koog-backed streaming chat agent. The functional strategy keeps the app's plain-text answers. */
@@ -139,12 +139,6 @@ private suspend fun AIAgentLLMWriteSession.streamOverReplayWindow(onFrame: suspe
     }
 }
 
-private val TOOL_ARGS_JSON =
-    Json {
-        ignoreUnknownKeys = true
-        isLenient = true
-    }
-
 /**
  * `toMessageResponse()` materialises only `*Complete` frames, so a turn's text survives into the
  * next prompt (and into the persisted history) only if the client flushed a
@@ -166,7 +160,7 @@ private fun List<StreamFrame>.withFlushedText(
 
 private fun StreamFrame.ToolCallComplete.withSafeArguments(call: UsableToolCall): StreamFrame.ToolCallComplete {
     val args = content.ifBlank { "{}" }
-    return if (runCatching { TOOL_ARGS_JSON.parseToJsonElement(args) as? JsonObject }.getOrNull() != null) {
+    return if (runCatching { NpnJson.Lenient.parseToJsonElement(args) as? JsonObject }.getOrNull() != null) {
         copy(id = call.id, name = call.name, content = args)
     } else {
         copy(id = call.id, name = call.name, content = "{}")

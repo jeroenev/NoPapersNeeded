@@ -2,14 +2,14 @@ package dev.npn.core.ai
 
 import dev.npn.core.db.KeyValueEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.util.NpnJson
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 
 /** Device-local metadata for the conversations stored by [RoomChatHistoryProvider]. */
 class RoomChatSessionStore(
     private val db: NpnDatabase,
 ) {
-    private val json = Json { ignoreUnknownKeys = true }
+    private val json = NpnJson.Persisted
 
     suspend fun load(): List<AiChatSession> =
         db.keyValueDao().get(KEY)?.let {

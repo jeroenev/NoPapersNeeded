@@ -2,11 +2,11 @@ package dev.npn.core.app
 
 import dev.npn.core.db.SavedViewDao
 import dev.npn.core.db.SavedViewEntity
+import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.serialization.builtins.ListSerializer
-import kotlinx.serialization.json.Json
 
 /**
  * Saved views persisted in the [SavedViewEntity] table. The full [SavedView] contract type is
@@ -18,7 +18,7 @@ import kotlinx.serialization.json.Json
  */
 class SavedViewRepositoryImpl(private val dao: SavedViewDao) : SavedViewRepository {
 
-    private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+    private val json = NpnJson.Persisted
     private val listSerializer = ListSerializer(SavedView.serializer())
 
     override fun observeSavedViews(): Flow<List<SavedView>> =

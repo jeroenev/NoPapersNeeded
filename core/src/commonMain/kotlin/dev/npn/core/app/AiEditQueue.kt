@@ -8,6 +8,7 @@ import dev.npn.core.db.AiEditJobDao
 import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.journal.EpochClock
+import dev.npn.core.util.NpnJson
 import dev.npn.core.work.backoffMs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
@@ -16,7 +17,6 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.json.Json
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -403,7 +403,7 @@ class AiEditQueue(
         private val SORT = LibrarySort()
 
         /** Lenient so a suggestion stored by a newer build still opens under an older one. */
-        private val json = Json { ignoreUnknownKeys = true }
+        private val json = NpnJson.Persisted
 
         /** Keeps the expanded `IN (...)` list clear of SQLite's bound-variable ceiling. */
         private const val DOC_LOOKUP_CHUNK = 400

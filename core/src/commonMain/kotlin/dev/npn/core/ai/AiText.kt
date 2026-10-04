@@ -3,7 +3,7 @@ package dev.npn.core.ai
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldValues
-import kotlinx.serialization.json.Json
+import dev.npn.core.util.NpnJson
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -12,11 +12,7 @@ import kotlinx.serialization.json.jsonPrimitive
 
 /** Pure text helpers for the AI layer, split out so they are unit-testable without a model. */
 object AiText {
-    private val json =
-        Json {
-            ignoreUnknownKeys = true
-            isLenient = true
-        }
+    private val json = NpnJson.Lenient
     private val docRefRegex = Regex("\\[doc:([0-9a-fA-F]{64})]")
 
     /** Cap on accepted title suggestions; anything longer is model rambling, not a title. */

@@ -58,8 +58,8 @@ import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.util.NpnJson
 import kotlinx.serialization.encodeToString
-import kotlinx.serialization.json.Json
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_field_invalid_decimal
@@ -185,8 +185,8 @@ fun FilterPanel(
 /** Filter edits are a user-authored draft and must survive destination recreation until applied. */
 private val LibraryFilterSaver =
     Saver<LibraryFilter, String>(
-        save = { Json.encodeToString(it) },
-        restore = { Json.decodeFromString(it) },
+        save = { NpnJson.Persisted.encodeToString(it) },
+        restore = { NpnJson.Persisted.decodeFromString(it) },
     )
 
 /** Title row of the filter panel: the "Filters" heading, the clear-all button and optional close. */

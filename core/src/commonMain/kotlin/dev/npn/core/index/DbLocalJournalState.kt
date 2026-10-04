@@ -2,9 +2,9 @@ package dev.npn.core.index
 
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.journal.LocalJournalState
+import dev.npn.core.util.NpnJson
 import kotlinx.serialization.builtins.SetSerializer
 import kotlinx.serialization.builtins.serializer
-import kotlinx.serialization.json.Json
 
 /**
  * [LocalJournalState] backed by the local index database's `kv` table. This is device-private
@@ -39,7 +39,7 @@ class DbLocalJournalState(
     companion object {
         const val KEY_LAST_SEQ = "journal.lastSeq"
         const val KEY_KNOWN_SEGMENTS = "journal.knownOwnSegments"
-        private val json = Json
+        private val json = NpnJson.Persisted
         private val setSerializer = SetSerializer(String.serializer())
     }
 }

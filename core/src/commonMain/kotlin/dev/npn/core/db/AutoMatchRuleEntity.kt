@@ -11,8 +11,8 @@ import androidx.room3.Upsert
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.MatchAlgorithm
 import dev.npn.core.rules.RuleField
+import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
-import kotlinx.serialization.json.Json
 
 /**
  * Local-only rule storage. Rules are not part of the journal; they live in the disposable index
@@ -105,4 +105,4 @@ internal fun AutoMatchRule.toEntity(): AutoMatchRuleEntity =
         position = position,
     )
 
-private val setsJson = Json
+private val setsJson = NpnJson.Persisted

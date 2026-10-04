@@ -16,6 +16,7 @@ import dev.npn.core.db.TagDao
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineId
+import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.Serializable
@@ -52,11 +53,6 @@ object LibraryAiTools {
         db: NpnDatabase,
         fields: List<FieldDef>,
     ): LibraryToolSet {
-        val json =
-            Json {
-                ignoreUnknownKeys = true
-                isLenient = true
-            }
         val entries =
             listOf(
                 Entry(SearchDocumentsTool(db.ftsDao(), db.documentDao()), SearchDocumentsTool.Args.serializer()),
@@ -76,7 +72,7 @@ object LibraryAiTools {
             )
         return LibraryToolSet(
             tools = entries.map { it.tool },
-            chatTools = entries.map { it.chatTool(json) },
+            chatTools = entries.map { it.chatTool(NpnJson.Lenient) },
         )
     }
 
