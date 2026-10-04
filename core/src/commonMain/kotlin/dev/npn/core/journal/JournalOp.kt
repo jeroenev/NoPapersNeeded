@@ -78,10 +78,13 @@ sealed class JournalOp {
     }
 
     /**
-     * {"key": String, "def": {label, type, showByDefault, aiEnabled, position, hint?} | null};
+     * {"key": String, "def": {label, type, showByDefault, aiEnabled, position, hint?, perDocument?} | null};
      * doc null, library-wide. Defines (or, with a null [def], removes) one entry of the field
      * registry. Last-writer-wins by HLC per key, so two devices adding two different fields both
      * survive. Removing a definition never touches stored values: they become orphans.
+     *
+     * `perDocument` is written only when true. Builds from before it ignore the key, and one that
+     * rewrites the definition (a label edit there) drops it again.
      */
     data class FieldDefSet(
         val key: String,

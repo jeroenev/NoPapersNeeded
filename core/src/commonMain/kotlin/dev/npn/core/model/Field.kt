@@ -110,6 +110,13 @@ data class FieldDef(
     val position: Int,
     /** Helper text in the UI and guidance in the AI prompt. */
     val hint: String? = null,
+    /**
+     * Each document's value is its own, as a title is: written for the document rather than picked
+     * from what other documents carry. So no other document's values are offered for reuse (a
+     * model's vocabulary, the search box's completions), and a model writes the value in the app's
+     * language, as a single short answer.
+     */
+    val perDocument: Boolean = false,
 ) {
     init {
         require(key.isNotBlank()) { "FieldDef key must not be blank" }
@@ -117,6 +124,9 @@ data class FieldDef(
 
     /** Keys other subsystems name directly (XMP, storage-path templates, auto-match rules). */
     val isWellKnown: Boolean get() = key in FieldKeys.WELL_KNOWN
+
+    /** Whether other documents' values of this field are worth offering for reuse. */
+    val sharesVocabulary: Boolean get() = type.hasVocabulary && !perDocument
 }
 
 /**
@@ -135,8 +145,14 @@ object FieldKeys {
     /** Fields that a split does not carry onto its parts: they describe the whole, not each piece. */
     val NOT_INHERITED_ON_SPLIT: Set<String> = setOf(TITLE, NOTES)
 
-    /** Synced setting marking that the well-known definitions have been seeded once. */
+    /** Synced setting holding the [SEED_VERSION] the library's well-known definitions were seeded at. */
     const val SEEDED_SETTING = "fieldsSeeded"
+
+    /**
+     * Raised whenever [seedDefinitions] gains something a library seeded earlier should get too
+     * ([upgradeSeeded]). 1: the five definitions. 2: title's [FieldDef.perDocument] and the hints.
+     */
+    const val SEED_VERSION = 2
 
     private val invalidKeyChars = Regex("[^A-Za-z0-9_]")
     private val whitespace = Regex("\\s+")
@@ -158,10 +174,25 @@ object FieldKeys {
         b: String,
     ): Boolean = a.equals(b, ignoreCase = true)
 
-    /** The registry definitions a fresh library starts with. Positions follow list order. */
+    /**
+     * The registry definitions a fresh library starts with. Positions follow list order. Their hints
+     * are what an editor shows under the field and what a model is told about it, so they are
+     * written to read well to both.
+     */
     fun seedDefinitions(labels: (String) -> String = { it }): List<FieldDef> =
         listOf(
-            FieldDef(TITLE, labels(TITLE), FieldType.TEXT, showByDefault = true, aiEnabled = true, position = 0),
+            FieldDef(
+                TITLE,
+                labels(TITLE),
+                FieldType.TEXT,
+                showByDefault = true,
+                aiEnabled = true,
+                position = 0,
+                hint =
+                    "What the document is, in a few words (e.g. Electricity invoice January 2024), not its " +
+                        "file name. Keep company names, reference numbers and other proper nouns as printed",
+                perDocument = true,
+            ),
             FieldDef(
                 CORRESPONDENT,
                 labels(CORRESPONDENT),
@@ -169,13 +200,44 @@ object FieldKeys {
                 showByDefault = true,
                 aiEnabled = true,
                 position = 1,
+                hint =
+                    "The other party: the company, institution or person that sent or issued the document, " +
+                        "never the archive's owner",
             ),
             FieldDef(DOC_TYPE, labels(DOC_TYPE), FieldType.TEXT, showByDefault = true, aiEnabled = true, position = 2),
-            FieldDef(DOC_DATE, labels(DOC_DATE), FieldType.DATE, showByDefault = true, aiEnabled = true, position = 3),
+            FieldDef(
+                DOC_DATE,
+                labels(DOC_DATE),
+                FieldType.DATE,
+                showByDefault = true,
+                aiEnabled = true,
+                position = 3,
+                hint = "The date the document was issued (invoice, letter or issue date), not when it was scanned",
+            ),
             // Not AI-enabled on purpose: automatic enrichment must not start generating prose into
             // the user's notes on every OCR completion, which is exactly today's behaviour.
             FieldDef(NOTES, labels(NOTES), FieldType.LONG_TEXT, showByDefault = true, aiEnabled = false, position = 4),
         )
+
+    /**
+     * What a library seeded at an earlier [SEED_VERSION] gains from [seeds]: each definition still
+     * registered under a seeded key takes the seed's [FieldDef.perDocument], and its hint where it has
+     * none. Everything else the library decided stays: a label, type, flag or position changed since,
+     * a hint of its own, and a deleted definition, which stays deleted. Only the changed definitions
+     * are returned.
+     */
+    fun upgradeSeeded(
+        current: List<FieldDef>,
+        seeds: List<FieldDef>,
+    ): List<FieldDef> {
+        val seedsByKey = seeds.associateBy { it.key }
+        return current.mapNotNull { def ->
+            val seed = seedsByKey[def.key] ?: return@mapNotNull null
+            def
+                .copy(perDocument = def.perDocument || seed.perDocument, hint = def.hint ?: seed.hint)
+                .takeIf { it != def }
+        }
+    }
 
     /** English seed labels; the UI re-labels through the registry, so these are only a fallback. */
     val SEED_LABELS: Map<String, String> =

@@ -58,6 +58,7 @@ fun FieldDef.toEntity(): FieldDefEntity =
         aiEnabled = aiEnabled,
         position = position,
         hint = hint,
+        perDocument = perDocument,
     )
 
 /** Null when the stored type wire is unknown to this build (a newer client added a type). */
@@ -71,6 +72,7 @@ fun FieldDefEntity.toFieldDef(): FieldDef? {
         aiEnabled = aiEnabled,
         position = position,
         hint = hint,
+        perDocument = perDocument,
     )
 }
 

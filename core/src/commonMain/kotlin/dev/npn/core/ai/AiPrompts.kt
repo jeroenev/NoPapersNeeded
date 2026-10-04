@@ -3,7 +3,6 @@ package dev.npn.core.ai
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldDef
-import dev.npn.core.model.FieldKeys
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 import kotlin.time.Instant
@@ -414,51 +413,24 @@ internal object AiPrompts {
         """.trimIndent()
 
     /**
-     * What to say about one field. The well-known keys keep their tuned wording; every other field
-     * gets its type's generic instruction plus the user's hint, which is what makes the hint the
-     * quality lever for custom fields.
+     * What to say about one field: its type's instruction, then its hint. The hint is the quality
+     * lever, for the seeded fields (which carry theirs as library data) and custom fields alike.
      */
     private fun fieldDescription(
         spec: AiFieldSpec,
         context: AiPromptContext,
     ): String {
-        val curated =
-            when (spec.key) {
-                FieldKeys.TITLE -> {
-                    // A title is the app's own label for the document, so it belongs in the language
-                    // the user reads the app in. Only when that is unknown does the document's own
-                    // language become the best available default.
-                    val language = context.appLanguage?.let { "in $it" } ?: "in the document's own language"
-                    "a short, human-readable title $language — what the document IS, never a file " +
-                        "name. The English example \"Electricity invoice January 2024\" shows the " +
-                        "shape, not the language to write in. Keep company names, reference numbers " +
-                        "and other proper nouns exactly as printed"
-                }
-
-                FieldKeys.CORRESPONDENT -> {
-                    "the other party — the company, institution or person that sent or issued the " +
-                        "document, never the archive owner. When an existing value from the " +
-                        "provided list matches, copy it VERBATIM (exact spelling and case); only " +
-                        "introduce a new name when none fits"
-                }
-
-                FieldKeys.DOC_DATE -> {
-                    "the document's own date (invoice date, letter date, issue date) as YYYY-MM-DD, " +
-                        "never the scan or import date"
-                }
-
-                else -> {
-                    null
-                }
-            }
         val hint =
             spec.def.hint
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
-        return listOfNotNull(curated ?: typeInstruction(spec), hint).joinToString(". ")
+        return listOfNotNull(typeInstruction(spec, context), hint).joinToString(". ")
     }
 
-    private fun typeInstruction(spec: AiFieldSpec): String {
+    private fun typeInstruction(
+        spec: AiFieldSpec,
+        context: AiPromptContext,
+    ): String {
         val reuse =
             if (spec.vocabulary.isNotEmpty()) {
                 "; when an existing value from the provided list matches, copy it VERBATIM"
@@ -474,9 +446,24 @@ internal object AiPrompts {
                 "the ${spec.def.label} as a plain number (no currency symbol, unit or grouping)"
             }
 
+            spec.def.perDocument -> {
+                "the ${spec.def.label}, written for this document ${perDocumentLanguage(context)}"
+            }
+
             else -> {
                 "the ${spec.def.label}, taken from the document text$reuse"
             }
         }
+    }
+
+    /**
+     * A per-document value (a title) is the app's own label for the document, so it belongs in the
+     * language the user reads the app in. Only when that is unknown does the document's own language
+     * become the best available default. The example in a seeded hint is English library data, and
+     * must not decide the language either.
+     */
+    private fun perDocumentLanguage(context: AiPromptContext): String {
+        val language = context.appLanguage?.let { "in $it" } ?: "in the document's own language"
+        return "$language — any example below shows the shape, not the language to write in"
     }
 }

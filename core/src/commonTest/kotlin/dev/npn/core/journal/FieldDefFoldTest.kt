@@ -84,6 +84,28 @@ class FieldDefFoldTest {
         assertEquals(removal, JournalCodec.decodeLineOrNull(JournalCodec.encode(removal)))
     }
 
+    /**
+     * The per-document flag is written only when set, so every other definition encodes exactly as
+     * before it existed, and a definition from a build that never wrote it reads as unset.
+     */
+    @Test
+    fun per_document_flag_is_written_only_when_set() {
+        val title = set(1, def("title").copy(perDocument = true), 10)
+        val titleDef = Json.parseToJsonElement(JournalCodec.encode(title)).jsonObject["p"]!!.jsonObject["def"]!!
+        assertEquals("true", titleDef.jsonObject["perDocument"]!!.jsonPrimitive.content)
+        assertEquals(title, JournalCodec.decodeLineOrNull(JournalCodec.encode(title)))
+
+        val plain = set(2, def("amount"), 10)
+        val plainDef = Json.parseToJsonElement(JournalCodec.encode(plain)).jsonObject["p"]!!.jsonObject["def"]!!
+        assertNull(plainDef.jsonObject["perDocument"])
+
+        val older =
+            """{"v":1,"seq":5,"hlc":{"t":1,"c":0,"d":"x"},"dev":"x","doc":null,""" +
+                """"op":"field-def","p":{"key":"title","def":{"label":"Title","type":"text","position":0}}}"""
+        val parsed = assertIs<JournalOp.FieldDefSet>(JournalCodec.decodeLineOrNull(older)!!.op)
+        assertEquals(false, parsed.def!!.perDocument)
+    }
+
     @Test
     fun unknown_type_decodes_as_unknown_op_not_crash() {
         val line =

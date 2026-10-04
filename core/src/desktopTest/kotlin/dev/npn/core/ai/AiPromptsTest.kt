@@ -157,8 +157,39 @@ class EditPromptTest {
     @Test
     fun editAsksForATitleInTheAppLanguage() {
         val prompt = editPrompt(fields = listOf(spec(FieldKeys.TITLE)))
-        prompt shouldContain "title in Dutch (nl)"
+        prompt shouldContain "\"fields.title\" (title): the title, written for this document in Dutch (nl)"
         prompt shouldNotContain "in the document's own language"
+    }
+
+    /** What the seeded fields are asked for is their definitions' data: the flag and the hint. */
+    @Test
+    fun editAsksForAPerDocumentFieldByItsFlagAndHint() {
+        val summary =
+            FieldDef(
+                key = "summary",
+                label = "Summary",
+                type = FieldType.TEXT,
+                showByDefault = false,
+                aiEnabled = true,
+                position = 5,
+                hint = "one line about what it says",
+                perDocument = true,
+            )
+        val prompt = editPrompt(fields = listOf(AiFieldSpec(summary, AiFieldMode.UNFILLED)))
+        prompt shouldContain
+            "\"fields.summary\" (Summary): the Summary, written for this document in Dutch (nl)"
+        prompt shouldContain "one line about what it says"
+
+        // A title whose definition lost the flag is asked for like any text field.
+        val plainTitle = AiFieldSpec(seeds.getValue(FieldKeys.TITLE).copy(perDocument = false), AiFieldMode.UNFILLED)
+        editPrompt(fields = listOf(plainTitle)) shouldNotContain "written for this document"
+    }
+
+    @Test
+    fun editCarriesTheSeededHints() {
+        val prompt = editPrompt(fields = listOf(spec(FieldKeys.CORRESPONDENT), spec(FieldKeys.DOC_DATE)))
+        prompt shouldContain "never the archive's owner"
+        prompt shouldContain "not when it was scanned"
     }
 
     @Test

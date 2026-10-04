@@ -199,7 +199,7 @@ class AiFacadeImpl(
         return request.fields.map { cfg ->
             val def = defs[cfg.key] ?: AiFieldSpec.unregistered(cfg.key)
             val vocabulary =
-                if (AiFieldSpec.wantsVocabulary(def)) {
+                if (def.sharesVocabulary) {
                     db
                         .documentFieldDao()
                         .distinctValues(def.key, AiFieldSpec.VOCABULARY_THRESHOLD + 1)

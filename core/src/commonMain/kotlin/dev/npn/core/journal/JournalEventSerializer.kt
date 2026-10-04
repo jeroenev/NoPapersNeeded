@@ -182,6 +182,8 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
             put("aiEnabled", JsonPrimitive(def.aiEnabled))
             put("position", JsonPrimitive(def.position))
             def.hint?.let { put("hint", JsonPrimitive(it)) }
+            // Written only when set, so every other definition encodes as it did before the flag.
+            if (def.perDocument) put("perDocument", JsonPrimitive(true))
         }
 
     private fun decodeFieldDef(
@@ -199,6 +201,7 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
             aiEnabled = obj["aiEnabled"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
             position = obj["position"]?.jsonPrimitive?.content?.toIntOrNull() ?: 0,
             hint = obj["hint"]?.let { if (it is JsonNull) null else it.jsonPrimitive.content },
+            perDocument = obj["perDocument"]?.jsonPrimitive?.content?.toBooleanStrictOrNull() ?: false,
         )
     }
 

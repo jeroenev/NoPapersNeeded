@@ -5,10 +5,10 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.toFieldDef
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.model.FieldType
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
 import kotlinx.coroutines.Dispatchers
@@ -172,14 +172,15 @@ class DocumentRepositoryImpl(
                 .distinctBy { it.lowercase() }
                 .take(sourceLimit)
                 .toList()
-        // Every single-line text field contributes its values: what correspondent and docType got
-        // by name before, any registered TEXT field gets now.
+        // Every field whose values documents share contributes them: what correspondent and docType
+        // got by name before, any such registered field gets now.
         val textFields =
             db
                 .fieldDefDao()
                 .all()
-                .filter { FieldType.fromWire(it.type)?.hasVocabulary == true && it.fieldKey != FieldKeys.TITLE }
-                .map { fieldDao.valuesForPrefix(it.fieldKey, likePrefix, sourceLimit) }
+                .mapNotNull { it.toFieldDef() }
+                .filter { it.sharesVocabulary }
+                .map { fieldDao.valuesForPrefix(it.key, likePrefix, sourceLimit) }
         val sources = listOf(contentTerms, db.tagDao().tagsForPrefix(likePrefix, sourceLimit)) + textFields
         return buildList {
             var index = 0

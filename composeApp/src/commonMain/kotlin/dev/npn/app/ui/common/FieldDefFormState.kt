@@ -40,7 +40,8 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * What the user has typed into a field-definition form. [keyEdited] records that the key was set
- * by hand, after which it stops following the label.
+ * by hand, after which it stops following the label. [perDocument] is not on the form; it is
+ * carried so that editing a definition keeps it.
  */
 data class FieldDefFormState(
     val label: String = "",
@@ -50,6 +51,7 @@ data class FieldDefFormState(
     val hint: String = "",
     val showByDefault: Boolean = false,
     val aiEnabled: Boolean = false,
+    val perDocument: Boolean = false,
 ) {
     val normalizedKey: String? get() = FieldKeys.normalize(key)
 
@@ -73,6 +75,7 @@ data class FieldDefFormState(
             aiEnabled = aiEnabled,
             position = position,
             hint = hint.trim().ifEmpty { null },
+            perDocument = perDocument,
         )
     }
 
@@ -86,6 +89,7 @@ data class FieldDefFormState(
                 hint = def.hint.orEmpty(),
                 showByDefault = def.showByDefault,
                 aiEnabled = def.aiEnabled,
+                perDocument = def.perDocument,
             )
     }
 }

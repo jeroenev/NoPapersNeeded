@@ -157,6 +157,7 @@ data class FieldDefEntity(
     val aiEnabled: Boolean,
     val position: Int,
     val hint: String? = null,
+    @ColumnInfo(defaultValue = "0") val perDocument: Boolean = false,
 )
 
 /**

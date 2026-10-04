@@ -1,6 +1,5 @@
 package dev.npn.core.ai
 
-import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldValues
 import dev.npn.core.util.NpnJson
@@ -15,8 +14,11 @@ object AiText {
     private val json = NpnJson.Lenient
     private val docRefRegex = Regex("\\[doc:([0-9a-fA-F]{64})]")
 
-    /** Cap on accepted title suggestions; anything longer is model rambling, not a title. */
-    const val MAX_TITLE_SUGGESTION_CHARS = 200
+    /**
+     * Cap on an accepted answer for a single-line [dev.npn.core.model.FieldDef.perDocument] field (a
+     * title); anything longer is model rambling, not a label.
+     */
+    const val MAX_PER_DOCUMENT_CHARS = 200
 
     /**
      * What a page-OCR prompt tells the model to answer for a page that carries no text at all.
@@ -120,8 +122,8 @@ object AiText {
      * fit; a TEXT answer matching an existing vocabulary value case-insensitively takes that exact
      * spelling; a value equal to the document's current one (case-insensitively for text) is
      * dropped; an UNFILLED-mode field drops any value when the document already has one (the model
-     * is told to return null, this is the defensive backstop); a title longer than
-     * [MAX_TITLE_SUGGESTION_CHARS] is dropped. Nothing the run did not ask for is ever accepted.
+     * is told to return null, this is the defensive backstop); a per-document answer longer than
+     * [MAX_PER_DOCUMENT_CHARS] is dropped. Nothing the run did not ask for is ever accepted.
      */
     fun parseFieldSuggestion(
         obj: JsonObject,
@@ -154,7 +156,8 @@ object AiText {
         raw: String,
     ): String? {
         val canonical = (FieldValues.canonicalize(spec.def.type, raw) as? FieldParse.Ok)?.canonical ?: return null
-        if (spec.key == FieldKeys.TITLE && canonical.length > MAX_TITLE_SUGGESTION_CHARS) return null
+        val def = spec.def
+        if (def.perDocument && def.type.singleLine && canonical.length > MAX_PER_DOCUMENT_CHARS) return null
         if (!spec.def.type.isTextual) return canonical
         return spec.vocabulary.firstOrNull { it.equals(canonical, ignoreCase = true) } ?: canonical
     }

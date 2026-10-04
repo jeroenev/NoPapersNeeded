@@ -46,7 +46,8 @@ import androidx.sqlite.execSQL
     // v23: saved_views leaves the schema; saved views are library data in the journal now.
     // v24: device-local state leaves for DeviceDatabase: ocr_queue, ocr_page_cache, ai_enrich_queue,
     //      ai_edit_jobs, ai_edit_job_docs and documents.aiEnrichedAt.
-    version = 24,
+    // v25: adds field_defs.perDocument.
+    version = 25,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -68,6 +69,7 @@ import androidx.sqlite.execSQL
         AutoMigration(from = 19, to = 20),
         AutoMigration(from = 20, to = 21),
         AutoMigration(from = 21, to = 22, spec = NpnDatabase.FtsKeys::class),
+        AutoMigration(from = 24, to = 25),
     ],
     entities = [
         DocumentEntity::class,

@@ -195,22 +195,35 @@ class JournalCoordinator internal constructor(
             ).trashTimes()
 
     /**
-     * Write the well-known field definitions once per library. Guarded by the synced
+     * Write the well-known field definitions once per library, and bring a library seeded at an
+     * older [version] up to it once ([FieldKeys.upgradeSeeded]). Guarded by the synced
      * [FieldKeys.SEEDED_SETTING] marker rather than by "are there any definitions", so a user who
      * deletes every default field does not get them back when another device opens the library.
      *
      * The cheap marker check runs first: [commitBuilt] materializes the whole fold, and paying
      * that on every open is exactly what [refreshState]'s projection reuse avoids. Only a library
-     * that has never been seeded (once, ever) reaches the fold.
+     * that has not been seeded at [version] yet (once, ever) reaches the fold.
      */
-    suspend fun seedFieldRegistryIfNeeded(defs: List<FieldDef>) {
-        if (syncedSettings.current(FieldKeys.SEEDED_SETTING) != null) return
+    suspend fun seedFieldRegistryIfNeeded(
+        defs: List<FieldDef>,
+        version: Int = FieldKeys.SEED_VERSION,
+    ) {
+        if (seedVersion(syncedSettings.current(FieldKeys.SEEDED_SETTING)) >= version) return
         if (writeBlockReason != null) return
         commitBuilt { state ->
-            if (state.effectiveSetting(FieldKeys.SEEDED_SETTING) != null) return@commitBuilt emptyList()
-            defs.map { PendingOp.fieldDefSet(it) } + PendingOp.settingSet(FieldKeys.SEEDED_SETTING, "1")
+            val seeded = state.effectiveSetting(FieldKeys.SEEDED_SETTING)
+            val defOps =
+                when {
+                    seedVersion(seeded) >= version -> return@commitBuilt emptyList()
+                    seeded == null -> defs
+                    else -> FieldKeys.upgradeSeeded(state.effectiveFieldDefs(), defs)
+                }.map { PendingOp.fieldDefSet(it) }
+            defOps + PendingOp.settingSet(FieldKeys.SEEDED_SETTING, version.toString())
         }
     }
+
+    /** The seed version a [FieldKeys.SEEDED_SETTING] value records: 0 when absent, 1 for the first marker. */
+    private fun seedVersion(marker: String?): Int = if (marker == null) 0 else marker.toIntOrNull() ?: 1
 
     /** The folded state, replaying it from the accumulator the first time it is actually needed. */
     private suspend fun foldedState(): FoldedState = folded ?: accumulator.loadState().also { folded = it }

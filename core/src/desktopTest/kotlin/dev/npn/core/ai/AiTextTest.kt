@@ -227,7 +227,7 @@ class ParseFieldSuggestionTest {
 
     @Test
     fun overlongTitleIsDropped() {
-        val longTitle = "x".repeat(AiText.MAX_TITLE_SUGGESTION_CHARS + 1)
+        val longTitle = "x".repeat(AiText.MAX_PER_DOCUMENT_CHARS + 1)
         parse("""{"title": "$longTitle"}""", listOf(spec(FieldKeys.TITLE)))[FieldKeys.TITLE] shouldBe null
     }
 

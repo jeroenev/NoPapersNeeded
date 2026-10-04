@@ -120,7 +120,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   properties, settings and field definitions, and for trash/restore and delete/undelete.
 - Document fields are registry data, not code. Title, correspondent, docType, docDate and notes
   are ordinary `field-set` fields whose definitions the library seeds; there is no per-field
-  Kotlin. An exhaustive `when (FieldType)` belongs only in `FieldValues` (canonical form) and in
+  Kotlin. That includes what a model is told: a field's type, its `perDocument` flag (the title's
+  value is its own, so no vocabulary is shared and it is written in the app's language) and its
+  hint, which carries the seeded fields' guidance. A change to the seeds raises
+  `FieldKeys.SEED_VERSION`; `FieldKeys.upgradeSeeded` then brings libraries seeded earlier up to
+  it once, never overriding what their users changed. An exhaustive `when (FieldType)` belongs only in `FieldValues` (canonical form) and in
   the UI, where the type picks a control: `FieldEditor.kt` (the editor and its type label) and the
   filter sheet's per-type filter control. Every other branch reads the `FieldDef`'s data (its
   flags and hint, and the capabilities each `FieldType` constant must declare, such as

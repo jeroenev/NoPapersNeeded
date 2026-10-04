@@ -1,7 +1,6 @@
 package dev.npn.core.ai
 
 import dev.npn.core.model.FieldDef
-import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 
 /**
@@ -19,13 +18,11 @@ data class AiFieldSpec(
 
     companion object {
         /**
-         * A TEXT field with more distinct values than this is asked for without a vocabulary: the
-         * list would dwarf the document. Title is never given one — every document's title is its
-         * own, so there is nothing to reuse.
+         * A field with more distinct values than this is asked for without a vocabulary: the list
+         * would dwarf the document. A field that shares none ([FieldDef.sharesVocabulary], so not a
+         * per-document one like the title) is never given one.
          */
         const val VOCABULARY_THRESHOLD = 100
-
-        fun wantsVocabulary(def: FieldDef): Boolean = def.type.hasVocabulary && def.key != FieldKeys.TITLE
 
         /** The stand-in definition for a requested key the registry does not list: plain text. */
         fun unregistered(key: String): FieldDef =
