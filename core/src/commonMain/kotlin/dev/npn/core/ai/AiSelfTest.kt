@@ -77,12 +77,7 @@ object AiSelfTest {
 
     suspend fun run(config: AiConfig): AiSelfTestReport =
         runCatchingCancellable {
-            val runtime = AiRuntime.build(config)
-            try {
-                run(EndpointProbes(runtime, config))
-            } finally {
-                runtime.close()
-            }
+            AiRuntime.build(config).use { run(EndpointProbes(it, config)) }
         }.getOrElse { e ->
             // The runtime could not even be built (an unusable base URL, an unmappable model):
             // nothing was attempted, so every check reports as the same single failure.

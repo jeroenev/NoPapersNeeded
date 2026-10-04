@@ -8,12 +8,5 @@ package dev.npn.core.ai
  * settings-screen hint — manual model entry always remains available.
  */
 object AiModelCatalog {
-    suspend fun listModels(config: AiConfig): List<String> {
-        val runtime = AiRuntime.build(config)
-        return try {
-            runtime.listModelIds()
-        } finally {
-            runtime.close()
-        }
-    }
+    suspend fun listModels(config: AiConfig): List<String> = AiRuntime.build(config).use { it.listModelIds() }
 }

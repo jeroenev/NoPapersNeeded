@@ -33,7 +33,7 @@ internal class AiRuntime(
     val model: LLModel,
     private val client: LLMClient,
     private val ownedTransport: HttpClient? = null,
-) {
+) : AutoCloseable {
     /**
      * Ids of the models the configured endpoint offers, for the settings model picker.
      * Ollama exposes its local model list through a dedicated management API instead of
@@ -52,7 +52,7 @@ internal class AiRuntime(
      * and a derived Ktor client does not own the engine — so closing [client] alone would leak
      * the engine of a transport we created. A caller-supplied transport is the caller's to close.
      */
-    fun close() {
+    override fun close() {
         client.close()
         ownedTransport?.close()
     }
