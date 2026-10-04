@@ -91,16 +91,35 @@ class DefaultAppEnvironment(
     // Where the current session is open, so a switch that fails can go back there.
     private var currentLocation: String? = null
 
+    // Every watched-folder sweep, continuous or on demand, runs under this one lock, so the same
+    // file is never imported twice at once.
+    private val watchedFolderSweeps = Mutex()
+
+    /** The continuous importer and what it sweeps for, so an on-demand sweep reuses its memory. */
+    private class RunningImporter(
+        val session: dev.npn.core.app.LibrarySession,
+        val location: String,
+        val importer: WatchedFolderImporter,
+    )
+
+    private val runningImporter = MutableStateFlow<RunningImporter?>(null)
+
     init {
         // Watched-folder auto-import: (re)start an importer whenever the open session or the
-        // configured folder changes; collectLatest cancels the previous importer's loops.
+        // configured folder changes; collectLatest cancels the previous importer's loop.
         appScope.launch {
             val watchedFolder = settings.settings.map { it.watchedFolder }.distinctUntilChanged()
             combine(_session, watchedFolder) { s, loc -> s to loc }
                 .collectLatest { (session, location) ->
                     if (session == null || location == null) return@collectLatest
                     val folder = watchedFolderFactory.open(location) ?: return@collectLatest
-                    coroutineScope { buildImporter(session, folder).start(this) }
+                    val importer = buildImporter(session, folder)
+                    runningImporter.value = RunningImporter(session, location, importer)
+                    try {
+                        coroutineScope { importer.start(this) }
+                    } finally {
+                        runningImporter.value = null
+                    }
                 }
         }
     }
@@ -112,13 +131,16 @@ class DefaultAppEnvironment(
         ingest = session.ingest,
         folder = folder,
         deleteAfterImport = { settings.settings.first().watchedFolderDeleteAfterImport },
+        log = log,
+        sweepLock = watchedFolderSweeps,
     )
 
     override suspend fun scanWatchedFolder(): Int {
         val location = settings.settings.first().watchedFolder ?: return 0
         val session = _session.value ?: return 0
-        val folder = watchedFolderFactory.open(location) ?: return 0
-        return buildImporter(session, folder).scanOnce().imported
+        val running = runningImporter.value?.takeIf { it.session === session && it.location == location }
+        val importer = running?.importer ?: buildImporter(session, watchedFolderFactory.open(location) ?: return 0)
+        return importer.scanOnce().imported
     }
 
     override fun requestOpenLibrary(location: String) {
