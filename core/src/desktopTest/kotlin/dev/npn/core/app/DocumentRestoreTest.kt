@@ -38,7 +38,9 @@ class DocumentRestoreTest {
             val id = rig.docId("a.pdf")
             rig.session.docLifecycle.deleteDocPermanently(id)
 
-            rig.session.ingest.importPdfBytes(bytes, "a.pdf").shouldBeInstanceOf<ImportOutcome.Imported>()
+            rig.session.ingest
+                .importPdfBytes(bytes, "a.pdf")
+                .shouldBeInstanceOf<ImportOutcome.Imported>()
             rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
 
             assertVisible(id)
@@ -62,7 +64,9 @@ class DocumentRestoreTest {
             rig.session.docLifecycle.trashDoc(id)
             rig.session.docLifecycle.deleteDocPermanently(id)
 
-            rig.session.ingest.importPdfBytes(bytes, "a.pdf").shouldBeInstanceOf<ImportOutcome.Imported>()
+            rig.session.ingest
+                .importPdfBytes(bytes, "a.pdf")
+                .shouldBeInstanceOf<ImportOutcome.Imported>()
             rig.session.meta.setField(id, FieldKeys.TITLE, "Back again")
 
             assertVisible(id)
@@ -77,7 +81,9 @@ class DocumentRestoreTest {
             rig.session.rescan()
             val id = rig.docId("a.pdf")
             rig.session.docLifecycle.deleteDocPermanently(id)
-            rig.session.ingest.importPdfBytes(bytes, "a.pdf").shouldBeInstanceOf<ImportOutcome.Imported>()
+            rig.session.ingest
+                .importPdfBytes(bytes, "a.pdf")
+                .shouldBeInstanceOf<ImportOutcome.Imported>()
 
             rig.session.docLifecycle.deleteDocPermanently(id)
             rig.session.rescan()
@@ -149,7 +155,11 @@ class DocumentRestoreTest {
         }
 
     private suspend fun assertVisible(id: String) {
-        val row = rig.db.documentDao().getByDocId(id).shouldNotBeNull()
+        val row =
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
         row.deleted.shouldBeFalse()
         row.trashed.shouldBeFalse()
         rig.session.documents

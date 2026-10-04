@@ -193,8 +193,7 @@ class JournalCoordinator internal constructor(
                 JournalOp.DocRestore.wire,
                 JournalOp.DocDelete.wire,
                 JournalOp.DocUndelete.WIRE,
-            )
-            .trashTimes()
+            ).trashTimes()
 
     /**
      * Write the well-known field definitions once per library. Guarded by the synced
