@@ -1,10 +1,9 @@
 package dev.npn.core.rules
 
 import dev.npn.core.app.JournalCoordinator
-import dev.npn.core.db.AutoMatchRuleDao
 import dev.npn.core.db.DocumentDao
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
-import dev.npn.core.db.toRule
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.effectiveFieldType
@@ -18,9 +17,12 @@ import kotlinx.coroutines.sync.withLock
  * Applies enabled auto-matching rules by turning matches into [PendingOp]s and committing them
  * through [JournalCoordinator]. Runs as a side effect when OCR text becomes available and when
  * a rule is saved/updated.
+ *
+ * [rules] reads the rule list wherever it is stored. Each call here reads it once and compiles the
+ * enabled rules once, however many documents it then matches.
  */
 class RuleApplier(
-    private val ruleDao: AutoMatchRuleDao,
+    private val rules: suspend () -> List<AutoMatchRule>,
     private val ftsDao: FtsDao,
     private val documentDao: DocumentDao,
     private val coordinator: JournalCoordinator,
@@ -34,7 +36,9 @@ class RuleApplier(
         content: String? = null,
         organize: Boolean = true,
     ) = mutex.withLock {
-        apply(documentDao.getByDocId(docId) ?: return@withLock, content, organize)
+        val compiled = enabledRules()
+        if (compiled.isEmpty()) return@withLock
+        apply(documentDao.getByDocId(docId) ?: return@withLock, content, compiled, organize)
     }
 
     /**
@@ -43,33 +47,35 @@ class RuleApplier(
      */
     suspend fun applyToExistingDocs() =
         mutex.withLock {
-            val docs = documentDao.getAllLive()
-            for (doc in docs) {
-                apply(doc, ftsDao.contentForDoc(doc.docId), organize = true)
+            val compiled = enabledRules()
+            if (compiled.isEmpty()) return@withLock
+            val readsText = compiled.any { it.rule.field == RuleField.Content }
+            for (doc in documentDao.getAllLive()) {
+                val content = if (readsText) ftsDao.contentForDoc(doc.docId) else null
+                apply(doc, content, compiled, organize = true)
             }
         }
 
-    private suspend fun enabledRules(): List<AutoMatchRule> =
-        ruleDao
-            .getAll()
-            .map { it.toRule() }
+    /** The enabled rules in priority order, compiled for the pass that reads them. */
+    private suspend fun enabledRules(): List<CompiledRule> =
+        rules()
             .filter { it.enabled && it.pattern.isNotBlank() }
             .sortedWith(compareBy(AutoMatchRule::position, AutoMatchRule::id))
+            .map(RuleMatcher::compile)
 
     private suspend fun apply(
-        doc: dev.npn.core.db.DocumentEntity,
+        doc: DocumentEntity,
         content: String?,
+        compiled: List<CompiledRule>,
         organize: Boolean,
     ) {
-        val rules = enabledRules()
-        if (rules.isEmpty()) return
         val changed =
             coordinator.commitBuilt { state ->
                 // Matching reads the folded state, not the projection, so a rule on a field sees
                 // the value the journal holds even before the index has caught up.
                 val fields = state.effectiveFields(doc.docId)
                 val tags = state.effectiveTags(doc.docId)
-                val matched = matchRules(rules, content, fields, doc.fileName)
+                val matched = matchRules(compiled, content, fields, doc.fileName)
                 buildList {
                     // Write when the effective value DIFFERS (not only when empty): idempotent, so a
                     // rule fires once and then goes quiet, yet still corrects a non-matching value.
@@ -103,21 +109,22 @@ class RuleApplier(
 
     /** Every enabled rule's actions, in priority order; a later rule's value for a key wins. */
     private fun matchRules(
-        rules: List<AutoMatchRule>,
+        compiled: List<CompiledRule>,
         content: String?,
         fields: Map<String, String>,
         fileName: String,
     ): Matched {
         val tags = LinkedHashSet<String>()
         val sets = LinkedHashMap<String, String>()
-        for (rule in rules) {
+        for (candidate in compiled) {
+            val rule = candidate.rule
             val value =
                 when (val field = rule.field) {
                     RuleField.Content -> content
                     RuleField.FileName -> fileName
                     is RuleField.Field -> fields[field.key]
                 }
-            if (!RuleMatcher.matches(rule, value)) continue
+            if (!candidate.matches(value)) continue
             rule.tags
                 .asSequence()
                 .map { it.trim() }

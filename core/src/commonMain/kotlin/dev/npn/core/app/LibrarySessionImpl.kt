@@ -11,6 +11,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.toEntity
+import dev.npn.core.db.toRule
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.LibraryFileSystem
@@ -810,7 +811,7 @@ class LibrarySessionImpl private constructor(
 
             val ruleApplier =
                 RuleApplier(
-                    ruleDao = db.autoMatchRuleDao(),
+                    rules = { db.autoMatchRuleDao().getAll().map { it.toRule() } },
                     ftsDao = db.ftsDao(),
                     documentDao = db.documentDao(),
                     coordinator = coordinator,
