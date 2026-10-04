@@ -70,12 +70,6 @@ object SnapshotCodec {
     const val SNAPSHOT_MANIFEST_VERSION = 2
 }
 
-/** The parsed result of a snapshot object: its manifest plus surviving canonical events. */
-data class SnapshotRead(
-    val manifest: SnapshotManifest,
-    val events: List<CanonicalJournalEvent>,
-)
-
 /**
  * Strict snapshot reader. Like [StorageV2Reader] it applies zero events on any integrity or
  * structural failure and treats a still-transferring file as [JournalSourceRead.Retryable].
@@ -83,30 +77,26 @@ data class SnapshotRead(
  * does not require a contiguous `1..N` sequence.
  */
 object SnapshotV2Reader {
-    fun read(relPath: String, bytes: ByteArray): JournalSourceRead {
+    /**
+     * Read the snapshot at [relPath]: an accepted read carries its events and its manifest.
+     * [contentHash] is [bytes]' SHA-256, when the caller has it already.
+     */
+    fun read(relPath: String, bytes: ByteArray, contentHash: String = sha256Bytes(bytes)): JournalSourceRead {
         val path = NpnPaths.journalPath(relPath)
         val snapshotPath = path as? NpnPaths.JournalPath.SnapshotV2
             ?: return JournalSourceRead.Unsupported("Not a supported snapshot object path: $relPath")
-        if (sha256Bytes(bytes) != snapshotPath.expectedHash) {
+        if (contentHash != snapshotPath.expectedHash) {
             return JournalSourceRead.Retryable("Snapshot hash does not match its path")
         }
         return when (val parsed = parse(bytes)) {
-            is SnapshotParse.Ok -> JournalSourceRead.Accepted(parsed.read.events)
+            is SnapshotParse.Ok -> JournalSourceRead.Accepted(parsed.events, manifest = parsed.manifest)
             is SnapshotParse.Retry -> JournalSourceRead.Retryable(parsed.message)
             is SnapshotParse.Unsupported -> JournalSourceRead.Unsupported(parsed.message)
         }
     }
 
-    /** Read the manifest + events together for the compactor and supersession bookkeeping. */
-    fun readSnapshot(relPath: String, bytes: ByteArray): SnapshotRead? {
-        val path = NpnPaths.journalPath(relPath)
-        if (path !is NpnPaths.JournalPath.SnapshotV2) return null
-        if (sha256Bytes(bytes) != path.expectedHash) return null
-        return (parse(bytes) as? SnapshotParse.Ok)?.read
-    }
-
     private sealed interface SnapshotParse {
-        data class Ok(val read: SnapshotRead) : SnapshotParse
+        data class Ok(val manifest: SnapshotManifest, val events: List<CanonicalJournalEvent>) : SnapshotParse
         data class Retry(val message: String) : SnapshotParse
         data class Unsupported(val message: String) : SnapshotParse
     }
@@ -157,6 +147,6 @@ object SnapshotV2Reader {
             }
             decoded += event
         }
-        return SnapshotParse.Ok(SnapshotRead(manifest, decoded))
+        return SnapshotParse.Ok(manifest, decoded)
     }
 }

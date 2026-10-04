@@ -5,7 +5,6 @@ import dev.npn.core.fs.sha256Bytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertIs
-import kotlin.test.assertNull
 import kotlin.test.assertTrue
 
 class SnapshotFormatTest {
@@ -51,9 +50,17 @@ class SnapshotFormatTest {
 
         val accepted = assertIs<JournalSourceRead.Accepted>(SnapshotV2Reader.read(path, bytes))
         assertEquals(events, accepted.events.map { it.event })
+        assertEquals(supersedes.sorted(), accepted.manifest?.supersedes?.sorted())
+    }
 
-        val read = SnapshotV2Reader.readSnapshot(path, bytes)!!
-        assertEquals(supersedes.sorted(), read.manifest.supersedes.sorted())
+    @Test
+    fun snapshot_reader_checks_the_hash_it_is_handed_rather_than_hashing_again() {
+        val bytes = snapshotBytes(emptyList(), listOf(event("dev-a", 1, 1000)))
+        val path = NpnPaths.journalObjectPath(sha256Bytes(bytes), snapshot = true)
+
+        // The bytes match their path; only the handed hash does not, so a reader that re-hashed
+        // would accept them.
+        assertIs<JournalSourceRead.Retryable>(SnapshotV2Reader.read(path, bytes, contentHash = "0".repeat(64)))
     }
 
     @Test
@@ -87,7 +94,9 @@ class SnapshotFormatTest {
         val path = NpnPaths.journalObjectPath(sha256Bytes(bytes), snapshot = true)
         val result = StorageV2Reader.read(path, bytes)
         assertIs<JournalSourceRead.Unsupported>(result)
-        // And the manifest recovery from an old reader that lacks snapshot support returns nothing.
-        assertNull(SnapshotV2Reader.readSnapshot(NpnPaths.journalObjectPath(sha256Bytes(bytes)), bytes))
+        // And a snapshot reader asked about an object path refuses it rather than recovering a manifest.
+        assertIs<JournalSourceRead.Unsupported>(
+            SnapshotV2Reader.read(NpnPaths.journalObjectPath(sha256Bytes(bytes)), bytes),
+        )
     }
 }

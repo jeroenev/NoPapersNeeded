@@ -60,6 +60,8 @@ data class CanonicalJournalEvent(
 object EventDecoderRegistry {
     val supportedVersions: Set<Int> = setOf(JournalEventVersions.V1)
 
+    private val DOCUMENT_ID = Regex("^[0-9a-f]{64}$")
+
     fun decode(
         line: String,
         allowMissingV1: Boolean,
@@ -76,12 +78,30 @@ object EventDecoderRegistry {
                 raw
             }
         val event = JournalCodec.json.decodeFromJsonElement(JournalEventSerializer, versioned)
-        require(event.seq > 0L) { "Event sequence must be positive" }
-        require(event.dev == event.hlc.deviceId) { "Event dev must equal hlc.d" }
         validateEvent(event)
         val normalized = JournalCodec.json.encodeToJsonElement(JournalEventSerializer, event)
         return CanonicalJournalEvent(event, canonicalJson(normalized))
     }
+
+    /**
+     * The canonical form of an event this device built, without the string round trip [decode]
+     * makes: the event is encoded straight to its canonical JSON. It is checked like a decoded one,
+     * so a malformed local event still fails before it is recorded.
+     */
+    fun canonical(event: JournalEvent): CanonicalJournalEvent {
+        requireSupportedVersion(event.version)
+        validateEvent(event)
+        val normalized = JournalCodec.json.encodeToJsonElement(JournalEventSerializer, event)
+        return CanonicalJournalEvent(event, canonicalJson(normalized))
+    }
+
+    /**
+     * An event read back from the index's event table. [decode] or [canonical] produced its
+     * canonical JSON when it was recorded, after every check they make, so it is parsed straight
+     * into the event: no duplicate-key scan, validation, normalization or re-encoding.
+     */
+    fun decodeStored(canonicalJson: String): JournalEvent =
+        JournalCodec.json.decodeFromString(JournalEventSerializer, canonicalJson)
 
     private fun validateEnvelopeTypes(raw: JsonObject) {
         fun integer(
@@ -116,7 +136,8 @@ object EventDecoderRegistry {
     }
 
     private fun validateEvent(event: JournalEvent) {
-        val documentId = Regex("^[0-9a-f]{64}$")
+        require(event.seq > 0L) { "Event sequence must be positive" }
+        require(event.dev == event.hlc.deviceId) { "Event dev must equal hlc.d" }
         require(event.hlc.physicalMillis >= 0L && event.hlc.counter >= 0) { "HLC values must be non-negative" }
         val documentOperation: Boolean? =
             when (event.op) {
@@ -131,8 +152,8 @@ object EventDecoderRegistry {
         if (documentOperation != null) {
             require((event.doc != null) == documentOperation) { "Operation has invalid document scope" }
         }
-        event.doc?.let { require(documentId.matches(it)) { "Invalid document id" } }
-        (event.op as? JournalOp.Relink)?.let { require(documentId.matches(it.newDoc)) { "Invalid relink target" } }
+        event.doc?.let { require(DOCUMENT_ID.matches(it)) { "Invalid document id" } }
+        (event.op as? JournalOp.Relink)?.let { require(DOCUMENT_ID.matches(it.newDoc)) { "Invalid relink target" } }
         (event.op as? JournalOp.TagRemove)?.dots?.forEach { require(it.seq > 0L) { "Invalid removed dot" } }
     }
 

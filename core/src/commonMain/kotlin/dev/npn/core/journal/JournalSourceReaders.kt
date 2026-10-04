@@ -6,9 +6,11 @@ import dev.npn.core.fs.sha256Bytes
 data class JournalDiagnostic(val line: Int?, val message: String)
 
 sealed interface JournalSourceRead {
+    /** [manifest] is the snapshot's, for a snapshot object; null for every other source. */
     data class Accepted(
         val events: List<CanonicalJournalEvent>,
         val diagnostics: List<JournalDiagnostic> = emptyList(),
+        val manifest: SnapshotManifest? = null,
     ) : JournalSourceRead
 
     data class Retryable(val message: String) : JournalSourceRead
@@ -54,11 +56,12 @@ object StorageV2Reader {
         RegexOption.IGNORE_CASE,
     )
 
-    fun read(relPath: String, bytes: ByteArray): JournalSourceRead {
+    /** Read the object at [relPath]; [contentHash] is [bytes]' SHA-256, when the caller has it already. */
+    fun read(relPath: String, bytes: ByteArray, contentHash: String = sha256Bytes(bytes)): JournalSourceRead {
         val path = NpnPaths.journalPath(relPath)
         val objectPath = path as? NpnPaths.JournalPath.ObjectV2
             ?: return JournalSourceRead.Unsupported("Not a supported storage-v2 object path: $relPath")
-        if (sha256Bytes(bytes) != objectPath.expectedHash) {
+        if (contentHash != objectPath.expectedHash) {
             return JournalSourceRead.Retryable("Object hash does not match its path")
         }
         return readVerified(bytes)

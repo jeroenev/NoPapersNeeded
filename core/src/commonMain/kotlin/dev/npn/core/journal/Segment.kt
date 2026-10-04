@@ -32,16 +32,15 @@ data class SegmentRef(val deviceId: String, val fileName: String) {
         const val SNAP_SUFFIX = ".snap.jsonl"
         private const val WIDTH = 16
 
+        private val PLAIN_NAME = Regex("^[0-9]+\\.jsonl$")
+        private val SNAPSHOT_NAME = Regex("^[0-9]+-[0-9]+\\.snap\\.jsonl$")
+
         private fun pad(seq: Long): String = seq.toString().padStart(WIDTH, '0')
 
         fun plainName(firstSeq: Long): String = "${pad(firstSeq)}$PLAIN_SUFFIX"
 
         /** True if [fileName] is a name this engine produces (plain or snapshot). */
-        fun isSegmentFile(fileName: String): Boolean {
-            val plain = Regex("^[0-9]+\\.jsonl$")
-            val snapshot = Regex("^[0-9]+-[0-9]+\\.snap\\.jsonl$")
-            return plain.matches(fileName) || snapshot.matches(fileName)
-        }
+        fun isSegmentFile(fileName: String): Boolean = PLAIN_NAME.matches(fileName) || SNAPSHOT_NAME.matches(fileName)
     }
 }
 

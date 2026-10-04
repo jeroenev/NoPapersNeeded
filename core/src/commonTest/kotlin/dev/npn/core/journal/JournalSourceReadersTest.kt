@@ -53,6 +53,16 @@ class JournalSourceReadersTest {
     }
 
     @Test
+    fun v2_checks_the_hash_it_is_handed_rather_than_hashing_again() {
+        val bytes = JournalCodec.encode(event()).encodeToByteArray()
+
+        // The bytes match their path; only the handed hash does not, so a reader that re-hashed
+        // would accept them.
+        assertIs<JournalSourceRead.Retryable>(StorageV2Reader.read(objectPath(bytes), bytes, contentHash = "0".repeat(64)))
+        assertIs<JournalSourceRead.Accepted>(StorageV2Reader.read(objectPath(bytes), bytes, sha256Bytes(bytes)))
+    }
+
+    @Test
     fun v2_validates_complete_transaction() {
         val events = listOf(event(1), event(2))
         val bytes = JournalCodec.encodeLines(events).encodeToByteArray()

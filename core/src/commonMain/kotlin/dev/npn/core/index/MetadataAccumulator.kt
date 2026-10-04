@@ -162,7 +162,7 @@ class MetadataAccumulator(
             previouslyApplied = existingSource?.status == MetadataProjectionDao.STATUS_APPLIED,
             fingerprint = loaded.fingerprint,
             contentHash = loaded.contentHash,
-            read = StorageV2Reader.read(relPath, loaded.bytes),
+            read = StorageV2Reader.read(relPath, loaded.bytes, loaded.contentHash),
         )
     }
 
@@ -358,7 +358,7 @@ class MetadataAccumulator(
         FoldedState().also { state ->
             for (operation in operations) {
                 dao.eventsForOperation(operation).forEach { stored ->
-                    state.apply(EventDecoderRegistry.decode(stored.canonicalJson, allowMissingV1 = false).event)
+                    state.apply(EventDecoderRegistry.decodeStored(stored.canonicalJson))
                 }
             }
         }
@@ -439,33 +439,30 @@ class MetadataAccumulator(
                 is NpnPaths.JournalPath.ObjectV2 -> NpnPaths.STORAGE_V2
                 else -> NpnPaths.STORAGE_V1
             }
-        val result = readSource(meta.relPath, path, loaded.bytes)
+        val result = readSource(meta.relPath, path, loaded)
         if (result is JournalSourceRead.Retryable && alreadyApplied) {
             fail("Previously applied metadata source is no longer valid: ${meta.relPath} (${result.message})")
         }
         if (alreadyApplied) batch.reingestedExisting = true
         val supersedes =
             if (path is NpnPaths.JournalPath.SnapshotV2 && result is JournalSourceRead.Accepted) {
-                SnapshotV2Reader
-                    .readSnapshot(meta.relPath, loaded.bytes)
-                    ?.manifest
-                    ?.supersedes
-                    .orEmpty()
+                result.manifest?.supersedes.orEmpty()
             } else {
                 null
             }
         applyReadResult(meta.relPath, storageVersion, loaded.fingerprint, loaded.contentHash, result, batch, supersedes)
     }
 
+    /** Read a source whose bytes [prepareSource] loaded and hashed; the readers take that hash. */
     private fun readSource(
         relPath: String,
         path: NpnPaths.JournalPath,
-        bytes: ByteArray,
+        loaded: PreparedSource.Loaded,
     ): JournalSourceRead =
         when (path) {
-            is NpnPaths.JournalPath.SnapshotV2 -> SnapshotV2Reader.read(relPath, bytes)
-            is NpnPaths.JournalPath.ObjectV2 -> StorageV2Reader.read(relPath, bytes)
-            else -> StorageV1Reader.read(bytes)
+            is NpnPaths.JournalPath.SnapshotV2 -> SnapshotV2Reader.read(relPath, loaded.bytes, loaded.contentHash)
+            is NpnPaths.JournalPath.ObjectV2 -> StorageV2Reader.read(relPath, loaded.bytes, loaded.contentHash)
+            else -> StorageV1Reader.read(loaded.bytes)
         }
 
     private suspend fun applyReadResult(
@@ -548,11 +545,9 @@ class MetadataAccumulator(
         contentHash: String?,
         events: List<dev.npn.core.journal.JournalEvent>,
     ): LocalSource {
-        val canonical =
-            events.map { event ->
-                EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false)
-            }
-        val bytes = JournalCodec.encodeLines(events).encodeToByteArray()
+        val canonical = events.map(EventDecoderRegistry::canonical)
+        // The written bytes are needed only for a legacy segment's hash, or when the stat failed.
+        val bytes by lazy { JournalCodec.encodeLines(events).encodeToByteArray() }
         val hash = contentHash ?: sha256Bytes(bytes)
         val meta = fs.stat(path)
         val source =
@@ -585,9 +580,7 @@ class MetadataAccumulator(
 
     suspend fun loadState(): FoldedState =
         FoldedState().also { state ->
-            dao.allEvents().forEach { stored ->
-                state.apply(EventDecoderRegistry.decode(stored.canonicalJson, allowMissingV1 = false).event)
-            }
+            dao.allEvents().forEach { stored -> state.apply(EventDecoderRegistry.decodeStored(stored.canonicalJson)) }
         }
 
     /** Compaction bookkeeping (snapshot record/plan/delete) lives in [SnapshotSupport]. */

@@ -44,6 +44,7 @@ object NpnPaths {
     /** A canonical lowercase-hex SHA-256 digest (document/content identity), anchored. */
     private val canonicalHashPattern = Regex("^[0-9a-f]{$SHA256_HEX_LENGTH}$")
     private val objectNamePattern = Regex("^([0-9a-f]{64})\\.jsonl$")
+    private val embeddedHashPattern = Regex("(?:^|[^0-9a-f])([0-9a-f]{64})(?=[^0-9a-f]|$)")
     private val objectStagingPattern = Regex("^\\.[0-9a-f]{64}\\.[^.]+\\.[^.]+\\.part$")
     private val legacySegmentPattern = Regex("^[0-9]+(?:-[0-9]+\\.snap)?\\.jsonl$")
 
@@ -163,7 +164,7 @@ object NpnPaths {
         objectNamePattern.matchEntire(name)?.let { return it.groupValues[1] }
         if (!isSyncConflict(name)) return null
         val matches =
-            Regex("(?:^|[^0-9a-f])([0-9a-f]{64})(?=[^0-9a-f]|$)")
+            embeddedHashPattern
                 .findAll(name.lowercase())
                 .map { it.groupValues[1] }
                 .distinct()

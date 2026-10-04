@@ -9,7 +9,6 @@ import dev.npn.core.journal.CanonicalJournalEvent
 import dev.npn.core.journal.CompactionCandidate
 import dev.npn.core.journal.CompactionSource
 import dev.npn.core.journal.EventDecoderRegistry
-import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.PublishedSnapshot
 import dev.npn.core.journal.SnapshotCodec
 import dev.npn.core.journal.SnapshotManifest
@@ -31,17 +30,11 @@ class SnapshotSupport(
      * It stats the snapshot first and records it in one transaction of its own.
      */
     suspend fun recordLocalSnapshot(published: PublishedSnapshot) {
-        val bytes =
-            SnapshotCodec.encodeSnapshot(
-                SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, published.supersedes),
-                published.events,
-            )
         val meta = fs.stat(published.relPath)
-        val canonical =
-            published.events.map { event ->
-                EventDecoderRegistry.decode(JournalCodec.encode(event), allowMissingV1 = false)
-            }
-        val fingerprint = "${meta?.size ?: bytes.size.toLong()},${meta?.mtimeMillis ?: 0L}:${published.contentHash}"
+        // Re-encoded only for its size, when the stat failed.
+        val size = meta?.size ?: encodedSize(published)
+        val canonical = published.events.map(EventDecoderRegistry::canonical)
+        val fingerprint = "$size,${meta?.mtimeMillis ?: 0L}:${published.contentHash}"
         val source =
             MetadataSourceEntity(
                 path = published.relPath,
@@ -86,7 +79,7 @@ class SnapshotSupport(
         }
         val events =
             dao.eventsOfSources(chosen.map { it.relPath }).groupBy({ it.sourcePath }) { stored ->
-                EventDecoderRegistry.decode(stored.canonicalJson, allowMissingV1 = false).event
+                EventDecoderRegistry.decodeStored(stored.canonicalJson)
             }
         return chosen.map { CompactionCandidate(it.relPath, it.contentHash, events[it.relPath].orEmpty(), it.mtimeMillis) }
     }
@@ -97,6 +90,14 @@ class SnapshotSupport(
             .substringBefore(':')
             .substringAfter(',', missingDelimiterValue = "")
             .toLongOrNull()
+
+    private fun encodedSize(published: PublishedSnapshot): Long =
+        SnapshotCodec
+            .encodeSnapshot(
+                SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, published.supersedes),
+                published.events,
+            ).size
+            .toLong()
 
     /** Best-effort delete of superseded object/snapshot files after their snapshot is applied. */
     suspend fun deleteSupersededFiles(paths: Collection<String>) {
