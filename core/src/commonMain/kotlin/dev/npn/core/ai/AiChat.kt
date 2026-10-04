@@ -116,3 +116,13 @@ interface AiChat : AiAvailability {
     /** Clear messages while keeping the session available in the session list. */
     suspend fun clearChatSession(sessionId: String)
 }
+
+private val docRefRegex = Regex("\\[doc:([0-9a-fA-F]{64})]")
+
+/** Full docIds an assistant answer cites as `[doc:<hash>]`, in first-occurrence order. */
+fun extractDocRefs(text: String): List<String> =
+    docRefRegex
+        .findAll(text)
+        .map { it.groupValues[1].lowercase() }
+        .distinct()
+        .toList()

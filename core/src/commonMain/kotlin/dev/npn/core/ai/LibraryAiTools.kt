@@ -28,7 +28,7 @@ import kotlinx.serialization.Serializable
  * through the registry because the streaming API hands it that raw JSON, and decoding it against
  * the tools' own `@Serializable Args` types is the smaller, type-safe path.
  */
-class LibraryToolSet internal constructor(
+internal class LibraryToolSet(
     val tools: List<ToolBase<*, *>>,
     val calls: Map<String, suspend (argsJson: String) -> String>,
 )
@@ -65,7 +65,7 @@ object ChatTools {
  * tags, filenames, and single-value metadata. Tools never write; every result line carries
  * the full docId so the model can cite documents as `[doc:<docId>]`.
  */
-object LibraryAiTools {
+internal object LibraryAiTools {
     const val MAX_SEARCH_RESULTS = 15
     const val MAX_LISTED_DOCS = 50
     const val TEXT_CHUNK_CHARS = 4_000

@@ -14,24 +14,24 @@ class AiTextTest {
 
     @Test
     fun extractDocRefsFindsValidHexRef() {
-        AiText.extractDocRefs("see [doc:$hashA] here") shouldContainExactly listOf(hashA)
+        extractDocRefs("see [doc:$hashA] here") shouldContainExactly listOf(hashA)
     }
 
     @Test
     fun extractDocRefsLowercasesHash() {
         val upper = "A".repeat(64)
-        AiText.extractDocRefs("[doc:$upper]") shouldContainExactly listOf("a".repeat(64))
+        extractDocRefs("[doc:$upper]") shouldContainExactly listOf("a".repeat(64))
     }
 
     @Test
     fun extractDocRefsDedupesPreservingFirstOccurrenceOrder() {
         val text = "[doc:$hashB] then [doc:$hashA] and again [doc:$hashB]"
-        AiText.extractDocRefs(text) shouldContainExactly listOf(hashB, hashA)
+        extractDocRefs(text) shouldContainExactly listOf(hashB, hashA)
     }
 
     @Test
     fun extractDocRefsIgnoresShortOrInvalidHashesAndPlainBrackets() {
-        AiText.extractDocRefs("[doc:abc] [see above] plain [brackets]") shouldContainExactly emptyList()
+        extractDocRefs("[doc:abc] [see above] plain [brackets]") shouldContainExactly emptyList()
     }
 
     @Test

@@ -9,9 +9,8 @@ import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
 
 /** Pure text helpers for the AI layer, split out so they are unit-testable without a model. */
-object AiText {
+internal object AiText {
     private val json = NpnJson.Lenient
-    private val docRefRegex = Regex("\\[doc:([0-9a-fA-F]{64})]")
 
     /**
      * Cap on an accepted answer for a single-line [dev.npn.core.model.FieldDef.perDocument] field (a
@@ -52,14 +51,6 @@ object AiText {
         if (trimmed.equals(BLANK_PAGE_MARKER, ignoreCase = true)) return ""
         return trimmed
     }
-
-    /** Full docIds cited as `[doc:<hash>]` in an assistant answer, first occurrence order. */
-    fun extractDocRefs(text: String): List<String> =
-        docRefRegex
-            .findAll(text)
-            .map { it.groupValues[1].lowercase() }
-            .distinct()
-            .toList()
 
     /**
      * Parse a combined edit suggestion object out of a model [response] (first JSON object wins):

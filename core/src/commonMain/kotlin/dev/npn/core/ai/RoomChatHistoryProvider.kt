@@ -13,7 +13,7 @@ import kotlinx.serialization.builtins.ListSerializer
  * leaves alone, since a conversation is user content nothing could recreate. Writes go through
  * [ownWrite], so the session can wait them out before it closes the database.
  */
-class RoomChatHistoryProvider(
+internal class RoomChatHistoryProvider(
     private val kv: KeyValueDao,
     private val ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
 ) : ChatHistoryProvider {

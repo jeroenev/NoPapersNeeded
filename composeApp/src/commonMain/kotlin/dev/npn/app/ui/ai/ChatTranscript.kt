@@ -2,7 +2,7 @@ package dev.npn.app.ui.ai
 
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
-import dev.npn.core.ai.AiText
+import dev.npn.core.ai.extractDocRefs
 
 /** One rendered item in the chat transcript: a user turn, a tool use, or an assistant turn. */
 sealed interface TranscriptItem {
@@ -133,7 +133,7 @@ data class ChatTranscript(
             // No delta ever arrived (a run whose only text reaches us on Done): materialise the
             // full answer as one finished turn.
             appended(items) { id ->
-                TranscriptItem.AssistantTurn(id, fullText, AiText.extractDocRefs(fullText), streaming = false)
+                TranscriptItem.AssistantTurn(id, fullText, extractDocRefs(fullText), streaming = false)
             }
         }
     }
@@ -169,7 +169,7 @@ data class ChatTranscript(
                             TranscriptItem.AssistantTurn(
                                 id = id,
                                 text = item.text,
-                                docRefs = AiText.extractDocRefs(item.text),
+                                docRefs = extractDocRefs(item.text),
                                 streaming = false,
                             )
                         }
@@ -195,7 +195,7 @@ data class ChatTranscript(
         private fun finaliseTrailingAssistant(items: List<TranscriptItem>): List<TranscriptItem> {
             val last = items.lastOrNull()
             return if (last is TranscriptItem.AssistantTurn && last.streaming) {
-                items.dropLast(1) + last.copy(docRefs = AiText.extractDocRefs(last.text), streaming = false)
+                items.dropLast(1) + last.copy(docRefs = extractDocRefs(last.text), streaming = false)
             } else {
                 items
             }

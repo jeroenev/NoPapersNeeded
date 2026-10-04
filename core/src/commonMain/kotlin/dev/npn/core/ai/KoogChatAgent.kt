@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.collect
 import kotlinx.serialization.json.JsonObject
 
 /** Koog-backed streaming chat agent. The functional strategy keeps the app's plain-text answers. */
-class KoogChatAgent(
+internal class KoogChatAgent(
     private val executor: PromptExecutor,
     private val model: LLModel,
     /** Where the conversation is loaded from and stored back to, keyed by conversation id. */

@@ -9,7 +9,7 @@ import dev.npn.core.model.FieldType
  * request in the facade from [AiFieldConfig] + the registry, then shared by the prompt (what to
  * ask) and the parser (what to accept), so the two can never disagree about a field's type.
  */
-data class AiFieldSpec(
+internal data class AiFieldSpec(
     val def: FieldDef,
     val mode: AiFieldMode,
     val vocabulary: List<String> = emptyList(),

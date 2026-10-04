@@ -10,7 +10,7 @@ import kotlinx.serialization.builtins.ListSerializer
  * [kv]. Writes go through [ownWrite], so the session can wait them out before it closes the
  * database.
  */
-class RoomChatSessionStore(
+internal class RoomChatSessionStore(
     private val kv: KeyValueDao,
     private val ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
