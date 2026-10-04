@@ -261,6 +261,27 @@ class AiEditQueueSuggestionTest {
             }
         }
 
+    /** What the processing queue shows as running comes from here, never from a run's progress. */
+    @Test
+    fun `a run is in flight while its chunk is being suggested, and only then`() =
+        runTest {
+            withQueue { rig ->
+                rig.ai.edit = suggestion()
+                val jobId = rig.enqueue("a")
+                val gate = CompletableDeferred<Unit>()
+                rig.ai.gate = gate
+                rig.queue.inFlight.value shouldBe null
+
+                val draining = backgroundScope.launch { rig.queue.processNext() }
+                while (rig.ai.suggestEditsCalls.isEmpty()) runCurrent()
+                rig.queue.inFlight.value shouldBe jobId
+
+                gate.complete(Unit)
+                draining.join()
+                rig.queue.inFlight.value shouldBe null
+            }
+        }
+
     /** The user abandons a run against a slow endpoint; the drain must not make them wait for it. */
     @Test
     fun `a discard returns while the run's model calls are still in flight`() =

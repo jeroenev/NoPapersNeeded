@@ -426,7 +426,7 @@ class LibrarySessionImpl private constructor(
                     ocrFacade = ocr,
                     maintenance = buildMaintenance(deps, lifetime, library, relink, ocr, scanReports),
                     aiEditQueue = edits.queue,
-                    queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits.worker),
+                    queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits),
                     aiFacade = ai,
                 )
             return session

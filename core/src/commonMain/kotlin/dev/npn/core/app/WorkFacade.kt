@@ -63,7 +63,11 @@ enum class WorkState {
     /** Queued and never attempted. */
     WAITING,
 
-    /** Being worked on right now. Only the OCR queue tracks this; enrichment drains single-flight. */
+    /**
+     * Being worked on right now: the OCR document or the edit run this device's drain is on, as
+     * the live queue reports it. Enrichment entries never show it; their drain leaves the row as
+     * it is while working it.
+     */
     RUNNING,
 
     /** Attempted and failed, and will be attempted again after a backoff. */

@@ -319,13 +319,13 @@ internal fun buildWork(
     lifetime: SessionLifetime,
     ocr: OcrFacadeImpl,
     enrichment: QueueDrainer,
-    edits: QueueDrainer,
+    edits: DrainedQueue<AiEditQueue>,
 ): SessionWork =
     SessionWork(
         lifetime = lifetime,
         ocr = ocr.worker,
         enrichment = enrichment,
-        edits = edits,
+        edits = edits.worker,
         reader =
             WorkQueueReader(
                 deps.db.documentDao(),
@@ -333,5 +333,6 @@ internal fun buildWork(
                 deps.deviceDb.aiEnrichQueueDao(),
                 deps.deviceDb.aiEditJobDao(),
                 ocr.inFlight,
+                edits.queue.inFlight,
             ),
     )

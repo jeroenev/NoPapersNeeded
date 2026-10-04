@@ -31,6 +31,9 @@ internal abstract class WorkQueueReaderFixture {
     /** Stands in for the live pipeline's `inFlight`; tests set it to name the document being run. */
     protected val ocrInFlight = MutableStateFlow<String?>(null)
 
+    /** Stands in for the live edit queue's `inFlight`; tests set it to name the run being suggested. */
+    protected val editInFlight = MutableStateFlow<String?>(null)
+
     @BeforeTest
     fun setup() {
         dbDir = Files.createTempDirectory("npn-queue-test").toFile()
@@ -43,6 +46,7 @@ internal abstract class WorkQueueReaderFixture {
                 deviceDb.aiEnrichQueueDao(),
                 deviceDb.aiEditJobDao(),
                 ocrInFlight,
+                editInFlight,
             )
     }
 
@@ -283,6 +287,7 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
             putRun("underway", listOf("d", "e", "f"), suggested = 1)
             putRun("backing-off", listOf("g", "h"), attempts = 2)
             putRun("finished", listOf("i", "j"), suggested = 2)
+            editInFlight.value = "underway"
 
             val byId = runs().associateBy { it.jobId }
             byId.getValue("untouched").state shouldBe WorkState.WAITING
@@ -291,6 +296,18 @@ internal class EditRunReaderTest : WorkQueueReaderFixture() {
             byId.getValue("backing-off").state shouldBe WorkState.RETRYING
             byId.getValue("backing-off").nextAttemptAt shouldBe 9_000
             byId.getValue("finished").state shouldBe WorkState.READY
+        }
+
+    /**
+     * Progress says only that answers were bought, not that anyone is buying more: a half-done run
+     * whose endpoint was removed must not show as running for ever.
+     */
+    @Test
+    fun `a half-suggested run nobody is draining is waiting, not running`() =
+        runTest {
+            putRun("stalled", listOf("a", "b"), suggested = 1)
+
+            runs().single().state shouldBe WorkState.WAITING
         }
 
     @Test

@@ -23,10 +23,10 @@ import kotlinx.coroutines.flow.map
  * and the edit queue's progress derived from its document rows. Doing it once here is what keeps
  * [WorkState] meaningful to a caller that should not have to know any of those tables.
  *
- * Neither per-document queue stores "running": that fact belongs to the process doing the work and
- * would be a lie the moment one died (see [dev.npn.core.db.OcrQueueEntity]). [ocrInFlight] carries
- * it in from the live pipeline instead, which is why [WorkState.RUNNING] can never survive a
- * restart here.
+ * No queue stores "running": that fact belongs to the process doing the work and would be a lie
+ * the moment one died (see [dev.npn.core.db.OcrQueueEntity]). [ocrInFlight] and [editInFlight]
+ * carry it in from the live OCR pipeline and edit queue instead, which is why [WorkState.RUNNING]
+ * can never survive a restart here.
  *
  * Per-document work and whole-run work stay two flows rather than one list. They differ in grain
  * (a document owed a pass versus a batch owed a review), in lifetime (the first clears itself, the
@@ -39,6 +39,7 @@ internal class WorkQueueReader(
     private val enrichQueueDao: AiEnrichQueueDao,
     private val editJobDao: AiEditJobDao,
     ocrInFlight: Flow<String?>,
+    editInFlight: Flow<String?>,
 ) {
     val queue: Flow<List<QueuedWork>> =
         combine(
@@ -51,8 +52,11 @@ internal class WorkQueueReader(
         combine(
             editJobDao.observeJobs(),
             editJobDao.observeProgress(),
-        ) { jobs, progress -> jobs to progress.associateBy { it.jobId } }
-            .map { (jobs, progress) -> jobs.mapNotNull { it.toQueuedEditRun(progress[it.jobId]) }.readyFirst() }
+            editInFlight,
+        ) { jobs, progress, inFlight ->
+            val byJob = progress.associateBy { it.jobId }
+            jobs.mapNotNull { it.toQueuedEditRun(byJob[it.jobId], inFlight) }.readyFirst()
+        }
 
     /**
      * Finished runs first, newest first, then the rest in the order the drain will take them. The
@@ -67,12 +71,16 @@ internal class WorkQueueReader(
     /**
      * A job's state is derived from its document rows rather than stored, so the two can never
      * disagree: nothing owed means the suggestions are complete and a human is the only thing
-     * left; a failed attempt means retrying; any progress at all means the run is under way.
+     * left; a failed attempt means retrying. Whether it is under way is asked of the live queue
+     * ([inFlight]), never inferred from progress: a half-suggested run nobody is draining waits.
      *
      * A job whose document rows have vanished entirely is skipped — it can neither be finished nor
      * reviewed, and the only way to reach that state is a partially applied delete.
      */
-    private fun AiEditJobEntity.toQueuedEditRun(progress: AiEditJobProgress?): QueuedEditRun? {
+    private fun AiEditJobEntity.toQueuedEditRun(
+        progress: AiEditJobProgress?,
+        inFlight: String?,
+    ): QueuedEditRun? {
         if (progress == null || progress.total == 0) return null
         return QueuedEditRun(
             jobId = jobId,
@@ -82,8 +90,8 @@ internal class WorkQueueReader(
             state =
                 when {
                     progress.done >= progress.total -> WorkState.READY
+                    jobId == inFlight -> WorkState.RUNNING
                     attempts > 0 -> WorkState.RETRYING
-                    progress.done > 0 -> WorkState.RUNNING
                     else -> WorkState.WAITING
                 },
             createdAt = createdAt,

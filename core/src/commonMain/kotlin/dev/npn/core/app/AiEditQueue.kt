@@ -11,6 +11,9 @@ import dev.npn.core.journal.EpochClock
 import dev.npn.core.util.NpnJson
 import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueRetryPolicy
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -190,6 +193,15 @@ class AiEditQueue(
     private val docRetry = QueueRetryPolicy(MAX_DOC_ATTEMPTS)
     private val jobRetry = QueueRetryPolicy()
 
+    private val _inFlight = MutableStateFlow<String?>(null)
+
+    /**
+     * The run this device's drain is suggesting right now, null when it is idle. In-process, like
+     * [dev.npn.core.ocr.OcrPipeline.inFlight], rather than read off the rows: progress says only
+     * that answers were bought, and a run whose endpoint went away keeps its progress for good.
+     */
+    val inFlight: StateFlow<String?> = _inFlight.asStateFlow()
+
     override suspend fun enqueueEditRun(
         docIds: List<String>,
         request: AiEditRequest,
@@ -260,7 +272,12 @@ class AiEditQueue(
     suspend fun processNext(): Boolean {
         val job = dueJob() ?: return false
         val request = job.request() ?: return dropUndecodableJob(job)
-        return suggestNextChunk(job, request)
+        _inFlight.value = job.jobId
+        try {
+            return suggestNextChunk(job, request)
+        } finally {
+            _inFlight.value = null
+        }
     }
 
     /**

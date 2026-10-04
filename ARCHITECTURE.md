@@ -259,8 +259,9 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
   table has a `running` state: the drain is single-flight in-process, so a row left
   claiming to be running has nobody alive to withdraw the claim, and every drain
   thereafter skips it (`OcrQueueEntity` documents the outage this caused). "Who is
-  being worked on right now" is a `StateFlow` on the pipeline (`OcrPipeline.inFlight`),
-  which the read seam and `OcrStatus` combine in. An interrupted pass must leave its
+  being worked on right now" is a `StateFlow` on the live queue (`OcrPipeline.inFlight`,
+  `AiEditQueue.inFlight`), which the read seam and `OcrStatus` combine in; it is never
+  inferred from a row's progress. An interrupted pass must leave its
   row exactly as it found it — including its attempt count, which is why cancellation
   is rethrown rather than recorded as a failure.
 - Showing background work to the user → `WorkQueueReader` joins the queue tables to
