@@ -1,6 +1,7 @@
 package dev.npn.app.ui.detail
 
 import dev.npn.app.FakeLibrarySession
+import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.listItem
 import dev.npn.core.app.DocumentHistoryRecord
@@ -28,7 +29,7 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
                             DocumentHistoryRecord(50, "dev-a", HistoryEntry.FieldSet(FieldKeys.TITLE, "X")),
                         )
                 }
-            val model = DocDetailViewModel("doc-1", session)
+            val model = DocDetailViewModel("doc-1", session, FakeSettingsRepository())
             val job = launch { model.metadata.collect {} }
             advanceUntilIdle()
 
@@ -49,7 +50,7 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
     fun loadHistoryDoesNotReloadWithoutRefreshAndExposesFailure() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
-            val model = DocDetailViewModel("doc-1", session)
+            val model = DocDetailViewModel("doc-1", session, FakeSettingsRepository())
             // metadata shares while subscribed, so keep a collector for the whole test.
             backgroundScope.launch { model.metadata.collect {} }
 

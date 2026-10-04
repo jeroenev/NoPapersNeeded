@@ -3,12 +3,13 @@ package dev.npn.app.ui.ai
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiTextKey
-import dev.npn.app.ui.common.isConfiguredOrFalse
+import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SettingsRepository
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -49,6 +50,8 @@ data class AiChatUiState(
  */
 class AiChatViewModel(
     session: LibrarySession,
+    /** The device settings, followed for whether AI is configured. */
+    private val settings: SettingsRepository,
 ) : MessagesViewModel() {
     private val ai = session.aiChat
     private val documents = session.documents
@@ -59,9 +62,9 @@ class AiChatViewModel(
     private var job: Job? = null
 
     init {
+        // Follows Settings, so configuring AI there (or turning it off) applies to an open chat.
         viewModelScope.launch {
-            val configured = ai.isConfiguredOrFalse()
-            _ui.update { it.copy(configured = configured) }
+            settings.aiConfigured().collect { configured -> _ui.update { it.copy(configured = configured) } }
         }
         viewModelScope.launch {
             val sessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(emptyList())

@@ -267,6 +267,7 @@ private fun MainNavHost(
             DocDetailScreen(
                 docId = route.docId,
                 session = session,
+                settings = env.settings,
                 browse = browse,
                 onBack = { if (nav.currentBackStackEntry == entry) nav.popBackStack() },
                 onNavigateToDoc = { targetId ->
@@ -440,6 +441,7 @@ private fun NavGraphBuilder.aiRoutes(
     composable<Route.AiChat> {
         AiChatScreen(
             session = session,
+            settings = settings,
             onBack = { nav.popBackStack() },
             onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
             onOpenFiltered = { docIds ->

@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.HistoryUiState
 import dev.npn.core.ai.AiEditSuggestion
+import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
@@ -37,7 +38,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     private fun TestScope.vm(
         session: FakeLibrarySession = FakeLibrarySession(),
         docId: String = "doc-1",
-    ) = DocDetailViewModel(docId, session).also { model ->
+        settings: FakeSettingsRepository = aiConfiguredSettings(),
+    ) = DocDetailViewModel(docId, session, settings).also { model ->
         backgroundScope.launch { model.metadata.collect {} }
     }
 
@@ -176,7 +178,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     ocr.failOcrVersions = { error("index busy") }
                     ocr.failAiOcrOffer = { error("index busy") }
                 }
-            val model = DocDetailViewModel("doc-1", session)
+            val model = DocDetailViewModel("doc-1", session, aiConfiguredSettings())
             val messages = mutableListOf<String>()
             val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
             val panel = launch { model.metadata.collect {} }
@@ -315,7 +317,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             // document; the seed is what keeps the panel from blanking on every switch, so it must
             // be visible before anything is collected or dispatched.
             val seed = DocListItem(doc("doc-1", title = "Seeded"), listOf("finance"))
-            val model = DocDetailViewModel("doc-1", FakeLibrarySession(), initialItem = seed)
+            val model = DocDetailViewModel("doc-1", FakeLibrarySession(), aiConfiguredSettings(), initialItem = seed)
 
             model.metadata.value.document.item shouldBe seed
         }
@@ -419,21 +421,22 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             job.cancel()
         }
 
+    /** Turning AI on or off in Settings shows or hides the AI actions of an open document. */
     @Test
-    fun aiAvailabilityReflectsConfig() =
+    fun aiAvailabilityFollowsSettings() =
         runTest(dispatcher) {
-            val configured = FakeLibrarySession()
-            val configuredVm = vm(session = configured)
+            val settings = FakeSettingsRepository()
+            val model = vm(settings = settings)
             advanceUntilIdle()
-            configuredVm.metadata.value.ai.tags.available shouldBe true
+            model.metadata.value.ai.tags.available shouldBe false
 
-            val disabled =
-                FakeLibrarySession().apply {
-                    aiSuggest.configuredValue = false
-                }
-            val disabledVm = vm(session = disabled)
+            settings.edit { it.copy(aiEnabled = true, aiProvider = AiProvider.OLLAMA, aiModel = "qwen3:8b") }
             advanceUntilIdle()
-            disabledVm.metadata.value.ai.tags.available shouldBe false
+            model.metadata.value.ai.tags.available shouldBe true
+
+            settings.edit { it.copy(aiEnabled = false) }
+            advanceUntilIdle()
+            model.metadata.value.ai.tags.available shouldBe false
         }
 
     @Test

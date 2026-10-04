@@ -16,6 +16,7 @@ import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import dev.npn.app.FakeLibrarySession
+import dev.npn.app.aiConfiguredSettings
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
@@ -102,6 +103,7 @@ class AiChatScreenTest {
                 NpnTheme(darkTheme = false) {
                     AiChatScreen(
                         session = session,
+                        settings = aiConfiguredSettings(),
                         onBack = {},
                         onOpenDoc = {},
                         onOpenFiltered = {},

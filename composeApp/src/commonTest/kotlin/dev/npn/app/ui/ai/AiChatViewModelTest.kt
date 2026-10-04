@@ -1,11 +1,14 @@
 package dev.npn.app.ui.ai
 
 import dev.npn.app.FakeLibrarySession
+import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
+import dev.npn.app.aiConfiguredSettings
 import dev.npn.app.resolveEnglish
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
+import dev.npn.core.ai.AiProvider
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -25,18 +28,25 @@ import kotlin.test.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class AiChatViewModelTest : MainDispatcherTest() {
-    private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = AiChatViewModel(session)
+    private fun vm(
+        session: FakeLibrarySession = FakeLibrarySession(),
+        settings: FakeSettingsRepository = aiConfiguredSettings(),
+    ) = AiChatViewModel(session, settings)
 
+    /** An open chat follows Settings: configuring AI there, or turning it off, applies at once. */
     @Test
-    fun configProbePopulatesConfiguredFlag() =
+    fun configuredFollowsSettings() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { aiChat.configuredValue = true }
-            val model = vm(session)
+            val settings = FakeSettingsRepository()
+            val model = vm(settings = settings)
             val job = launch { model.ui.collect {} }
 
             model.ui.value.configured shouldBe null
             advanceUntilIdle()
+            model.ui.value.configured shouldBe false
 
+            settings.edit { it.copy(aiEnabled = true, aiProvider = AiProvider.OLLAMA, aiModel = "qwen3:8b") }
+            advanceUntilIdle()
             model.ui.value.configured shouldBe true
             job.cancel()
         }

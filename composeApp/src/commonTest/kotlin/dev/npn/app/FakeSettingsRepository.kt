@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.SettingsCodec
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SettingsSnapshot
@@ -43,3 +44,9 @@ class FakeSettingsRepository(
             defaultViewType = ViewType.LIST,
         )
 }
+
+/** Settings with an AI endpoint configured, which every AI action and screen waits for. */
+fun aiConfiguredSettings(): FakeSettingsRepository =
+    FakeSettingsRepository().apply {
+        updateSettings { it.copy(aiEnabled = true, aiProvider = AiProvider.OLLAMA, aiModel = "qwen3:8b") }
+    }

@@ -6,7 +6,7 @@ import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
-import dev.npn.app.ui.common.isConfiguredOrFalse
+import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.textFieldValues
@@ -25,6 +25,7 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.OcrVersion
+import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.model.FieldDef
@@ -35,6 +36,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.flatMapLatest
@@ -103,9 +105,9 @@ sealed interface HistoryUiState {
 }
 
 /**
- * AI tag-suggestion state for the detail screen. [available] is null until the endpoint config has
- * been probed on init (the button stays hidden until it resolves to true), [suggesting] is the
- * in-flight busy flag, and [suggestions] are the not-yet-accepted new-tag proposals.
+ * AI tag-suggestion state for the detail screen. [available] follows whether AI is configured in
+ * Settings and is null until first read (the button stays hidden until it is true), [suggesting]
+ * is the in-flight busy flag, and [suggestions] are the not-yet-accepted new-tag proposals.
  */
 data class AiTagState(
     val available: Boolean? = null,
@@ -138,6 +140,8 @@ data class AiMetadataState(
 class DocDetailViewModel(
     val docId: String,
     session: LibrarySession,
+    /** The device settings, followed for whether AI is configured. */
+    private val settings: SettingsRepository,
     searchQuery: String? = null,
     /**
      * The document row a caller already has in hand (the library list feeds its preview panel one).
@@ -320,16 +324,17 @@ class DocDetailViewModel(
 
     init {
         loadPageCount()
+        // Follows Settings, so turning AI on or off there shows or hides the AI actions here at
+        // once, without reopening the document. The assistant-reading offer depends on it too.
         viewModelScope.launch {
-            val configured = ai.isConfiguredOrFalse()
-            aiTags.update { it.copy(available = configured) }
-        }
-        viewModelScope.launch {
-            val offer =
-                runCatchingCancellable { ocr.aiOcrOffer(docId) }
-                    .onFailure(::reportOcrDetailsFailure)
-                    .getOrDefault(AiOcrOffer.Unavailable)
-            _ui.update { it.copy(aiOcr = offer) }
+            settings.aiConfigured().collectLatest { configured ->
+                aiTags.update { it.copy(available = configured) }
+                val offer =
+                    runCatchingCancellable { ocr.aiOcrOffer(docId) }
+                        .onFailure(::reportOcrDetailsFailure)
+                        .getOrDefault(AiOcrOffer.Unavailable)
+                _ui.update { it.copy(aiOcr = offer) }
+            }
         }
     }
 

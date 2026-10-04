@@ -39,6 +39,7 @@ import dev.npn.app.ui.detail.DocumentEditor
 import dev.npn.app.ui.detail.PageViewer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.library_preview_close
 import no_papers_needed.composeapp.generated.resources.ux_expand_document
@@ -59,6 +60,7 @@ import org.jetbrains.compose.resources.stringResource
 internal fun DocPreviewPanel(
     item: DocListItem,
     session: LibrarySession,
+    settings: SettingsRepository,
     snackbar: SnackbarHostState,
     onClose: () -> Unit,
     onExpand: () -> Unit,
@@ -74,6 +76,7 @@ internal fun DocPreviewPanel(
                 PreviewBody(
                     item = item,
                     session = session,
+                    settings = settings,
                     snackbar = snackbar,
                     onClose = onClose,
                     onExpand = onExpand,
@@ -108,6 +111,7 @@ private fun ScopedToDoc(
 private fun PreviewBody(
     item: DocListItem,
     session: LibrarySession,
+    settings: SettingsRepository,
     snackbar: SnackbarHostState,
     onClose: () -> Unit,
     onExpand: () -> Unit,
@@ -118,7 +122,7 @@ private fun PreviewBody(
     // Seeded with the row the library list already loaded: this viewmodel is rebuilt for every
     // document the user selects (see ScopedToDoc), so without the seed the panel would blank for
     // one index query on every switch.
-    val vm: DocDetailViewModel = viewModel { DocDetailViewModel(docId, session, initialItem = item) }
+    val vm: DocDetailViewModel = viewModel { DocDetailViewModel(docId, session, settings, initialItem = item) }
     SnackbarMessages(vm.messages, snackbar)
 
     val ui by vm.ui.collectAsStateWithLifecycle()

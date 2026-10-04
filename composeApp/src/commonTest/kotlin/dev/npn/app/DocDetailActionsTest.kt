@@ -21,7 +21,8 @@ import kotlin.test.Test
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailActionsTest : MainDispatcherTest() {
-    private fun vm(session: FakeLibrarySession = FakeLibrarySession()) = DocDetailViewModel("doc-1", session)
+    private fun vm(session: FakeLibrarySession = FakeLibrarySession()) =
+        DocDetailViewModel("doc-1", session, aiConfiguredSettings())
 
     @Test
     fun trashCallsSessionAndCallback() =

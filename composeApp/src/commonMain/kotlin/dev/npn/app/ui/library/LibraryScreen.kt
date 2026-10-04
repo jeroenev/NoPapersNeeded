@@ -277,6 +277,7 @@ fun LibraryScreen(
                     DocPreviewPanel(
                         item = previewItem,
                         session = session,
+                        settings = env.settings,
                         snackbar = snackbar,
                         onClose = { previewDocId = null },
                         onExpand = { openDoc(previewItem.doc.docId) },

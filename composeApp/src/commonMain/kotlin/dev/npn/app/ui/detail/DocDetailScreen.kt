@@ -50,6 +50,7 @@ import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.detail_document
@@ -70,6 +71,7 @@ import org.jetbrains.compose.resources.stringResource
 fun DocDetailScreen(
     docId: String,
     session: LibrarySession,
+    settings: SettingsRepository,
     browse: BrowseContext,
     onBack: () -> Unit,
     onNavigateToDoc: (String) -> Unit,
@@ -78,7 +80,7 @@ fun DocDetailScreen(
     val searchQuery = browse.searchQuery
     val vm: DocDetailViewModel =
         viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") {
-            DocDetailViewModel(docId, session, searchQuery)
+            DocDetailViewModel(docId, session, settings, searchQuery)
         }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val metadata by vm.metadata.collectAsStateWithLifecycle()

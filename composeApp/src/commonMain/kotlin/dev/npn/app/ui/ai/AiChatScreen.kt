@@ -79,6 +79,7 @@ import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SettingsRepository
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
 import kotlinx.serialization.json.jsonObject
@@ -115,6 +116,7 @@ private const val BUBBLE_MAX_WIDTH_FRACTION = 0.85f
 @Composable
 fun AiChatScreen(
     session: LibrarySession,
+    settings: SettingsRepository,
     onBack: () -> Unit,
     onOpenDoc: (String) -> Unit,
     onOpenFiltered: (List<String>) -> Unit,
@@ -123,7 +125,7 @@ fun AiChatScreen(
     /** Hands off to the AI-edit page without preselection. */
     onAiEdit: () -> Unit,
 ) {
-    val vm: AiChatViewModel = viewModel { AiChatViewModel(session) }
+    val vm: AiChatViewModel = viewModel { AiChatViewModel(session, settings) }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)

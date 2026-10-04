@@ -15,7 +15,7 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     private fun TestScope.vm(session: FakeLibrarySession = FakeLibrarySession()) =
-        DocDetailViewModel("doc-1", session).also { model ->
+        DocDetailViewModel("doc-1", session, aiConfiguredSettings()).also { model ->
             backgroundScope.launch { model.metadata.collect {} }
         }
 
@@ -63,7 +63,7 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     @Test
     fun loadStateIsLoadingBeforeTheFirstObserveDocEmission() =
         runTest(dispatcher) {
-            val model = DocDetailViewModel("doc-1", FakeLibrarySession())
+            val model = DocDetailViewModel("doc-1", FakeLibrarySession(), aiConfiguredSettings())
             model.metadata.value.document.loadState shouldBe DocLoadState.Loading
         }
 
@@ -71,7 +71,7 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     fun loadStatePresentWhenSeededWithARow() =
         runTest(dispatcher) {
             val seed = DocListItem(doc("doc-1", title = "Seeded"), listOf("finance"))
-            val model = DocDetailViewModel("doc-1", FakeLibrarySession(), initialItem = seed)
+            val model = DocDetailViewModel("doc-1", FakeLibrarySession(), aiConfiguredSettings(), initialItem = seed)
             model.metadata.value.document.loadState shouldBe DocLoadState.Present(seed)
         }
 
