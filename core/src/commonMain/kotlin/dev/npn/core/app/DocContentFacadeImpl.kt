@@ -2,7 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.journal.PendingOp
+import dev.npn.core.index.RelinkService
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
@@ -16,9 +16,8 @@ import dev.npn.core.xmp.NpnXmpData
  * - [ThumbnailService] caches first-page thumbnails against a platform [ThumbnailStore].
  * - [PdfEngine] is opened per call and closed via `use` (kept simple; no long-lived handle cache).
  * - [BakeService] + [NpnXmpData] (assembled from the current DB row + tags) drive export/in-place
- *   bake. In-place bake emits a relink through the [JournalCoordinator] and updates the documents
- *   row to the new hash, reusing the same relink semantics the [dev.npn.core.index.RelinkService]
- *   relies on.
+ *   bake. In-place bake relinks the new hash through [RelinkService], whose rescan carries the
+ *   document's tags and fields onto it and marks the old row superseded.
  *
  * All failure paths return null/false and report through [logFailure].
  */
@@ -29,6 +28,7 @@ class DocContentFacadeImpl(
     private val thumbnailService: ThumbnailService,
     private val bakeService: BakeService,
     private val coordinator: JournalCoordinator,
+    private val relinkService: RelinkService,
     private val renderGate: RenderGate = RenderGate(),
     private val logFailure: (String, Throwable) -> Unit = { message, failure ->
         println("$message: ${failure.message}")
@@ -108,34 +108,10 @@ class DocContentFacadeImpl(
     override suspend fun bakeInPlace(docId: String): Boolean {
         val doc = documentDao.getByDocId(docId) ?: return false
         return try {
-            val result =
-                bakeService.bakeInPlace(doc.relPath, buildXmpData(docId)) { oldSha, newSha ->
-                    coordinator.commitAndApply(listOf(PendingOp.relink(oldSha, newSha)))
-                }
-            // Update the documents row to the new identity, carrying metadata over. The relink
-            // fold already resolves old->new; here we materialize the new canonical row now so the
-            // UI reflects the new docId immediately.
-            val fresh = documentDao.getByDocId(docId)
-            if (fresh != null) {
-                val newSize = fs.stat(result.finalRelPath)?.size ?: fresh.size
-                val newMtime = fs.stat(result.finalRelPath)?.mtimeMillis ?: fresh.mtime
-                documentDao.upsert(
-                    fresh.copy(
-                        docId = result.newSha256,
-                        relPath = result.finalRelPath,
-                        fileName = result.finalRelPath.substringAfterLast('/'),
-                        size = newSize,
-                        mtime = newMtime,
-                        pageCount = null,
-                    ),
-                )
-                // Carry tags to the new id.
-                val tags = db.tagDao().tagsForDocument(docId)
-                if (tags.isNotEmpty()) db.tagDao().setForDocument(result.newSha256, tags)
-                // Mark old row superseded (deleted) so it drops out of listings.
-                if (result.newSha256 != docId) {
-                    documentDao.upsert(fresh.copy(deleted = true))
-                }
+            // Rewritten bytes whose relink is then refused would orphan the metadata on the old hash.
+            coordinator.checkWritable()
+            bakeService.bakeInPlace(doc.relPath, buildXmpData(docId)) { oldSha, newSha ->
+                relinkService.applyRelink(oldSha, newSha)
             }
             true
         } catch (t: Throwable) {

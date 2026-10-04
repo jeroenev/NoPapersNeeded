@@ -773,7 +773,16 @@ class LibrarySessionImpl private constructor(
             val tags = TagRepositoryImpl(db.tagDao())
             val savedViews = SavedViewRepositoryImpl(db.savedViewDao())
             val content =
-                DocContentFacadeImpl(db, fs, deps.pdfEngine, thumbnailService, bakeService, coordinator, renderGate)
+                DocContentFacadeImpl(
+                    db,
+                    fs,
+                    deps.pdfEngine,
+                    thumbnailService,
+                    bakeService,
+                    coordinator,
+                    relinkService,
+                    renderGate,
+                )
 
             val ruleApplier =
                 RuleApplier(

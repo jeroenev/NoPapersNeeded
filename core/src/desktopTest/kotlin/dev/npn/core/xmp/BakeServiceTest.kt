@@ -1,6 +1,7 @@
 package dev.npn.core.xmp
 
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.LibraryFileSystem
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -9,6 +10,7 @@ import kotlinx.coroutines.test.runTest
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
 import java.io.ByteArrayOutputStream
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -129,6 +131,32 @@ class BakeServiceTest {
             fs.readBytes("doc.pdf") shouldBe original
             fs.sha256("doc.pdf") shouldBe oldSha
             // Temp cleaned.
+            noTempLitter().shouldBeTrue()
+        }
+
+    @Test
+    fun aFailedFinalMovePutsTheOriginalBytesBackAndEmitsNoRelink() =
+        runTest {
+            val original = fixturePdf()
+            fs.writeBytesOnce("doc.pdf", original)
+            val oldSha = fs.sha256("doc.pdf")
+            val failingMove =
+                object : LibraryFileSystem by fs {
+                    override suspend fun move(
+                        fromRelPath: String,
+                        toRelPath: String,
+                    ) = throw IOException("disk full")
+                }
+
+            var relinkCalled = false
+            assertFailsWith<IOException> {
+                BakeService(failingMove, io).bakeInPlace("doc.pdf", xmp(tags = listOf("t"))) { _, _ ->
+                    relinkCalled = true
+                }
+            }
+
+            relinkCalled.shouldBeFalse()
+            fs.sha256("doc.pdf") shouldBe oldSha
             noTempLitter().shouldBeTrue()
         }
 

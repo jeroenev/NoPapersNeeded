@@ -2,6 +2,9 @@ package dev.npn.core.xmp
 
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /** Outcome of [BakeService.bakeInPlace]. */
 data class BakeResult(
@@ -19,9 +22,9 @@ data class BakeResult(
  *   document identity (the sha256) follows the new bytes.
  *
  * This class holds no journal dependency. The relink is emitted through the [emitRelink]
- * lambda supplied by the caller, which is the decoupling point: the caller wires it to a
- * `SegmentWriter` (a `relink` [dev.npn.core.journal.JournalOp]) without this module importing
- * the journal package.
+ * lambda supplied by the caller, which is the decoupling point: the caller wires it to
+ * [dev.npn.core.index.RelinkService] (a `relink` [dev.npn.core.journal.JournalOp]) without this
+ * package importing the journal.
  */
 class BakeService(
     private val fs: LibraryFileSystem,
@@ -36,10 +39,11 @@ class BakeService(
      * The library file is not modified. The document id, when present in [data], is written
      * verbatim (callers typically set it to the current sha256).
      */
-    suspend fun bakeToBytes(relPath: String, data: NpnXmpData): ByteArray {
-        val src = fs.readBytes(relPath)
-        val existing = io.readXmp(src)
-        val xmp = XmpMerger.merge(existing, data)
+    suspend fun bakeToBytes(relPath: String, data: NpnXmpData): ByteArray = bake(fs.readBytes(relPath), data)
+
+    /** Merge [data] into the XMP already in [src] and write it, with the keywords and title, into a copy. */
+    private suspend fun bake(src: ByteArray, data: NpnXmpData): ByteArray {
+        val xmp = XmpMerger.merge(io.readXmp(src), data)
         val effectiveTitle = XmpParser.parse(xmp).title
         return io.writeBaked(src, xmp, data.tags, effectiveTitle)
     }
@@ -50,16 +54,16 @@ class BakeService(
      *
      * Sequence: read old bytes and old sha -> produce baked bytes -> write them to a sibling
      * temp file -> re-read the temp and verify it parses and carries our metadata -> delete the
-     * original -> move the temp into the original path -> compute the new sha -> [emitRelink].
+     * original -> move the temp into the original path -> compute the new sha -> [emitRelink]
+     * (skipped when the bytes came out identical).
      *
-     * Atomicity compromise (documented, v1): [LibraryFileSystem.move] refuses to overwrite an
-     * existing target (fail-if-exists, required for the write-once invariant elsewhere), and
-     * SAF offers no atomic replace. So the final step is delete-then-move, leaving a small
-     * non-atomic window where the original path does not exist. If the move fails after the
-     * delete, this attempts to restore the original bytes from the still-present temp file and
-     * rethrows. A crash inside that window leaves the temp file (`*.npnbake.tmp`) as recovery
-     * material next to the missing original. This is the pragmatic approach given SAF; a future
-     * version can add a platform atomic-replace primitive.
+     * Atomicity compromise: [LibraryFileSystem.move] refuses to overwrite an existing target
+     * (fail-if-exists, required for the write-once invariant elsewhere), and SAF offers no atomic
+     * replace. So the final step is delete-then-move, leaving a small window where the original
+     * path does not exist. If the move fails, the original bytes, still in memory, are written
+     * back and the failure rethrown: the document keeps its hash, so no relink is owed. A crash
+     * inside that window leaves the temp file (`*.npnbake.tmp`, the baked bytes) next to the
+     * missing original as recovery material.
      *
      * On verification failure the temp file is removed and the original is left untouched.
      */
@@ -72,12 +76,9 @@ class BakeService(
         val oldSha = fs.sha256(norm)
 
         val src = fs.readBytes(norm)
-        val existing = io.readXmp(src)
         // Ensure documentId reflects the pre-bake identity when the caller did not set one.
         val effectiveData = if (data.documentId == null) data.copy(documentId = oldSha) else data
-        val xmp = XmpMerger.merge(existing, effectiveData)
-        val effectiveTitle = XmpParser.parse(xmp).title
-        val bakedBytes = io.writeBaked(src, xmp, effectiveData.tags, effectiveTitle)
+        val bakedBytes = bake(src, effectiveData)
 
         val tmpPath = norm + tmpSuffix
         // Clean any stale temp from a prior interrupted bake so writeBytesOnce does not fail.
@@ -98,20 +99,40 @@ class BakeService(
 
         // Non-atomic replace: delete original, then move temp into place.
         fs.delete(norm)
+        var moved = false
         try {
             fs.move(tmpPath, norm)
-        } catch (e: Throwable) {
-            // Restore from the temp file, which still holds the baked bytes.
-            runCatching {
-                val recovered = fs.readBytes(tmpPath)
-                if (!fs.exists(norm)) fs.writeBytesOnce(norm, recovered)
-            }
-            runCatching { fs.delete(tmpPath) }
-            throw e
+            moved = true
+        } finally {
+            if (!moved) restoreOriginal(norm, src, oldSha, tmpPath)
         }
 
         val newSha = fs.sha256(norm)
-        emitRelink(oldSha, newSha)
+        if (newSha != oldSha) emitRelink(oldSha, newSha)
         return BakeResult(oldSha256 = oldSha, newSha256 = newSha, finalRelPath = norm)
+    }
+
+    /**
+     * Put the original bytes [src] back at [norm] after the final move failed, so the document
+     * keeps its hash [oldSha]. Runs even when the bake was cancelled. The baked temp is removed
+     * only once the original is back; until then it is the recovery material. The caller still
+     * sees the move's failure; a restore that fails too is only logged.
+     */
+    private suspend fun restoreOriginal(
+        norm: String,
+        src: ByteArray,
+        oldSha: String,
+        tmpPath: String,
+    ) = withContext(NonCancellable) {
+        try {
+            // A move that reported failure may still have landed the baked bytes.
+            if (fs.exists(norm) && fs.sha256(norm) != oldSha) fs.delete(norm)
+            if (!fs.exists(norm)) fs.writeBytesOnce(norm, src)
+            if (fs.exists(tmpPath)) fs.delete(tmpPath)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (restoreFailure: Exception) {
+            println("Could not restore $norm after a failed bake, baked bytes kept: ${restoreFailure.message}")
+        }
     }
 }
