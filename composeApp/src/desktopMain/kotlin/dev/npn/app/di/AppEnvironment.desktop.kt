@@ -26,7 +26,7 @@ fun createAppEnvironment(): AppEnvironment {
         WatchedFolderFactory { location ->
             runCatching { JvmWatchedFolder(Path.of(location)) }.getOrNull()
         }
-    return DefaultAppEnvironment(settings, watchedFolders) { location, scope ->
+    return DefaultAppEnvironment(settings, watchedFolders, DesktopLog) { location, scope ->
         val deps =
             jvmSessionDeps(
                 libraryRoot = Path.of(location),

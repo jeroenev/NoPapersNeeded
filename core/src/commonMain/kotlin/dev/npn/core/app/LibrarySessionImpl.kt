@@ -58,6 +58,8 @@ import dev.npn.core.rules.RuleApplier
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
+import dev.npn.core.util.warn
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.PdfXmpIO
@@ -117,6 +119,7 @@ class LibrarySessionImpl private constructor(
     AiEditQueueFacade {
     private val fs get() = deps.fs
     private val db get() = deps.db
+    private val log get() = deps.log
 
     // The session implements every facet itself; the facet properties only narrow the type a
     // consumer sees. [MetadataWriterImpl] likewise backs all three write facets, and
@@ -221,7 +224,7 @@ class LibrarySessionImpl private constructor(
                     delay(afterMillis + SETTLE_RESCAN_MARGIN_MS)
                     // Cleared first: the rescan below may schedule the next one.
                     settleRescanLock.withLock { settleRescan = null }
-                    runCatching { doWatchTriggeredRescan() }
+                    log.runLogged("Follow-up rescan") { doWatchTriggeredRescan() }
                 }
         }
     }
@@ -487,26 +490,26 @@ class LibrarySessionImpl private constructor(
                 .collect { event ->
                     val rel = (event as? FsEvent.Changed)?.relPath
                     if (rel != null && rel.startsWith("${NpnPaths.OCR_DIR}/")) {
-                        runCatching { ocrPipeline.reconcileSidecars() }
+                        log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
                     } else {
-                        runCatching { coordinator.reconcileMetadata() }
-                        runCatching { doWatchTriggeredRescan() }
+                        log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
+                        log.runLogged("Watch-triggered rescan") { doWatchTriggeredRescan() }
                     }
                 }
         }
 
         // Initial rescan.
-        scope.launch { runCatching { doWatchTriggeredRescan() } }
+        scope.launch { log.runLogged("Initial rescan") { doWatchTriggeredRescan() } }
 
         // Watch services and sync providers may omit events. This reconciliation reads only the
         // metadata directory and skips unchanged source fingerprints; it never walks PDFs.
         scope.launch {
             while (isActive) {
                 delay(METADATA_RECONCILIATION_INTERVAL_MS)
-                runCatching { coordinator.reconcileMetadata() }
+                log.runLogged("Periodic metadata reconcile") { coordinator.reconcileMetadata() }
                 // Compaction runs under the same single-writer mutex; it only fires when the stable
                 // object count exceeds the threshold, so most reconciles are a cheap no-op.
-                runCatching { coordinator.compact() }
+                log.runLogged("Journal compaction") { coordinator.compact() }
                 // OCR retries, enrichment rows and edit runs become due by the passage of time,
                 // which no Room flow can observe; this tick is what actually retries a backed-off
                 // one.
@@ -565,10 +568,10 @@ class LibrarySessionImpl private constructor(
         val rel = (event as? FsEvent.Changed)?.relPath
         when (rel?.let(NpnPaths::journalPath)) {
             is NpnPaths.JournalPath.ObjectV2 -> {
-                runCatching { coordinator.ingestObject(rel) }
+                log.runLogged("Journal object ingest") { coordinator.ingestObject(rel) }
                 // A remote OCR-engine override may have just folded in; re-select promptly
                 // instead of waiting for the next rescan.
-                runCatching { ocrPipeline.reconcileSidecars() }
+                log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
             }
 
             // A staging file is a write in progress, and a null path means the event was not a
@@ -576,8 +579,8 @@ class LibrarySessionImpl private constructor(
             NpnPaths.JournalPath.Staging, null -> {}
 
             else -> {
-                runCatching { coordinator.reconcileMetadata() }
-                runCatching { ocrPipeline.reconcileSidecars() }
+                log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
+                log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
             }
         }
         return route
@@ -590,9 +593,9 @@ class LibrarySessionImpl private constructor(
         editWorker.kick()
         // Respect the configured retention at call time.
         val days =
-            runCatching { deps.trashRetentionDays() }
-                .getOrDefault(TrashSettings.DEFAULT_TRASH_RETENTION_DAYS)
-        runCatching { purgeTrash(days) }
+            log.runLogged("Reading the trash retention") { deps.trashRetentionDays() }
+                ?: TrashSettings.DEFAULT_TRASH_RETENTION_DAYS
+        log.runLogged("Trash auto-purge") { purgeTrash(days) }
     }
 
     override suspend fun close() {
@@ -767,7 +770,7 @@ class LibrarySessionImpl private constructor(
                     documentDao = db.documentDao(),
                     renderGate = renderGate,
                 )
-            val bakeService = BakeService(fs, deps.xmpIO)
+            val bakeService = BakeService(fs, deps.xmpIO, deps.log)
 
             val documents = DocumentRepositoryImpl(db)
             val fieldRegistry = FieldRegistryImpl(db, coordinator)
@@ -784,6 +787,7 @@ class LibrarySessionImpl private constructor(
                     coordinator,
                     relinkService,
                     renderGate,
+                    deps.log,
                 )
 
             val ruleApplier =
@@ -808,6 +812,7 @@ class LibrarySessionImpl private constructor(
                     fs,
                     TrashOps(fs),
                     pathRuleApplicator,
+                    deps.log,
                     applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
                 )
             val autoEnricher =
@@ -889,7 +894,7 @@ class LibrarySessionImpl private constructor(
                 try {
                     AutoMatchRuleJson.decodeList(json)
                 } catch (e: IllegalArgumentException) {
-                    println("Auto-match rules did not decode; keeping the last ones that did: ${e.message}")
+                    deps.log.warn("Auto-match rules did not decode; keeping the last ones that did", e)
                     return false
                 }
             val storedRules =

@@ -2,17 +2,23 @@ package dev.npn.core.app
 
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pdf.PdfFixtures
+import dev.npn.core.util.RecordingLog
 import dev.npn.core.xmp.XmpParser
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlin.test.Test
+import kotlin.time.Duration.Companion.seconds
 
 class SessionSmokeTest {
     @Test
@@ -111,6 +117,26 @@ class SessionSmokeTest {
                     result.exceptionOrNull().shouldBeInstanceOf<IllegalStateException>()
                 }
                 shouldThrow<IllegalStateException> { rig.session.rescan() }
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** Background work has no caller to tell, so a failure there must reach the log, not vanish. */
+    @Test
+    fun aFailingBackgroundRescanIsLogged() =
+        runTest {
+            val log = RecordingLog()
+            val rig =
+                AppSessionRig.create(backgroundScope, log = log, trashRetentionDays = { error("settings unreadable") })
+            try {
+                rig.session.start()
+
+                val failed = "Reading the trash retention failed"
+                withContext(Dispatchers.Default) {
+                    withTimeout(10.seconds) { while (log.entries.none { it.message == failed }) delay(10) }
+                }
+                log.entries.first { it.message == failed }.error.shouldNotBeNull()
             } finally {
                 rig.close()
             }

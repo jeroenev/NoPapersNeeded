@@ -27,10 +27,12 @@ import dev.npn.app.App
 import dev.npn.app.di.createAppEnvironment
 import dev.npn.app.ui.common.AlreadyRunningNotice
 import dev.npn.app.ui.common.DesktopBridge
+import dev.npn.core.app.DesktopLog
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.PlatformDirs
 import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.util.info
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.launch
@@ -47,13 +49,12 @@ import kotlin.time.Duration.Companion.seconds
 private const val EXT_PDF = ".pdf"
 private const val FILE_URI_PREFIX = "file:"
 private const val FALLBACK_DROPPED_PDF = "dropped.pdf"
-private const val LOG_PREFIX = "[npn] "
 private const val WINDOW_ICON = "icon.png"
 
 /** How long closing the window waits for the library session to shut down before exiting anyway. */
 private val SESSION_CLOSE_TIMEOUT = 10.seconds
 
-private fun log(message: String) = println(LOG_PREFIX + message)
+private fun log(message: String) = DesktopLog.info(message)
 
 /** Held by the running instance; see [SingleInstance]. Per user, so beside every library's data. */
 private fun instanceLockFile(): Path = Path.of(PlatformDirs.dataHome(), "no-papers-needed", "instance.lock")

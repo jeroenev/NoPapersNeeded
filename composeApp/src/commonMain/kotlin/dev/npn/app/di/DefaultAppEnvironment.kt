@@ -6,6 +6,9 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepository
+import dev.npn.core.util.NpnLog
+import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.warn
 import dev.npn.core.watch.WatchedFolder
 import dev.npn.core.watch.WatchedFolderImporter
 import kotlinx.coroutines.CancellationException
@@ -62,6 +65,7 @@ fun interface WatchedFolderFactory {
 class DefaultAppEnvironment(
     override val settings: SettingsRepository,
     private val watchedFolderFactory: WatchedFolderFactory = WatchedFolderFactory { null },
+    private val log: NpnLog = NpnLog.None,
     private val factory: PlatformLibraryFactory,
 ) : AppEnvironment {
     override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
@@ -184,13 +188,8 @@ class DefaultAppEnvironment(
 
     /** Go back to [location] after a failed switch; a failure here leaves the user on onboarding. */
     private suspend fun reopen(location: String) {
-        try {
-            startSession(location)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (e: Throwable) {
-            println("Could not reopen $location after a failed library switch: ${e.message}")
-        }
+        runCatchingCancellable { startSession(location) }
+            .onFailure { log.warn("Could not reopen $location after a failed library switch", it) }
     }
 
     override suspend fun closeLibrary() =

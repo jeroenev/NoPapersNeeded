@@ -48,7 +48,7 @@ fun createAppEnvironment(context: Context): AppEnvironment {
         WatchedFolderFactory { location ->
             runCatching { watchedFolder(appContext, location) }.getOrNull()
         }
-    return DefaultAppEnvironment(settings, watchedFolders) { location, scope ->
+    return DefaultAppEnvironment(settings, watchedFolders, AndroidLog) { location, scope ->
         val key = AppDirs.libraryKey(location)
         val fs = libraryFileSystem(appContext, location)
         val db = npnDatabase(appContext, "npn-index-$key.db")

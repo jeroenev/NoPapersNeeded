@@ -11,11 +11,13 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.effectiveFieldType
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldParse
-import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.NpnLog
+import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
+import dev.npn.core.util.warn
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
@@ -35,6 +37,7 @@ class MetadataWriterImpl(
     private val fs: LibraryFileSystem,
     private val trashOps: TrashOps,
     private val pathRuleApplicator: StoragePathRuleApplicator,
+    private val log: NpnLog,
     private val applyAutoMatch: suspend (String) -> Unit = {},
 ) : MetadataWriter,
     TagAdmin,
@@ -233,13 +236,9 @@ class MetadataWriterImpl(
     private suspend fun moveBack(
         from: String,
         to: String,
-    ) = withContext(NonCancellable) {
-        try {
-            fs.move(from, to)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (undoFailure: Exception) {
-            println("Could not move $from back to $to: ${undoFailure.message}")
+    ) {
+        withContext(NonCancellable) {
+            runCatchingCancellable { fs.move(from, to) }.onFailure { log.warn("Could not move $from back to $to", it) }
         }
     }
 
@@ -278,11 +277,9 @@ class MetadataWriterImpl(
         ) {
             documentDao.upsert(doc.copy(deleted = true, trashed = false, trashedAt = null, missing = false))
         }
-        val trashEntry = findTrashEntry(docId)
-        when {
-            trashEntry != null -> runCatching { fs.delete(trashEntry) }
-            fs.exists(doc.relPath) -> runCatching { fs.delete(doc.relPath) }
-        }
+        // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden.
+        val path = findTrashEntry(docId) ?: doc.relPath.takeIf { fs.exists(it) } ?: return
+        log.runLogged("Deleting the file of $docId") { fs.delete(path) }
     }
 
     override suspend fun renameFile(

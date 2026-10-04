@@ -6,6 +6,8 @@ import dev.npn.core.index.RelinkService
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
+import dev.npn.core.util.NpnLog
+import dev.npn.core.util.runLogged
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.NpnXmpData
 
@@ -19,7 +21,7 @@ import dev.npn.core.xmp.NpnXmpData
  *   bake. In-place bake relinks the new hash through [RelinkService], whose rescan carries the
  *   document's tags and fields onto it and marks the old row superseded.
  *
- * All failure paths return null/false and report through [logFailure]. The calls that write (the
+ * All failure paths return null/false and are logged to [log]. The calls that write (the
  * thumbnail cache, the page-count backfill, an in-place bake) run as the session's owned work, so
  * closing the session waits for them before its database is closed.
  */
@@ -32,10 +34,8 @@ class DocContentFacadeImpl internal constructor(
     private val bakeService: BakeService,
     private val coordinator: JournalCoordinator,
     private val relinkService: RelinkService,
-    private val renderGate: RenderGate = RenderGate(),
-    private val logFailure: (String, Throwable) -> Unit = { message, failure ->
-        println("$message: ${failure.message}")
-    },
+    private val renderGate: RenderGate,
+    private val log: NpnLog,
 ) : DocContentFacade {
     private val documentDao get() = db.documentDao()
 
@@ -50,16 +50,13 @@ class DocContentFacadeImpl internal constructor(
     private suspend fun readPageCount(docId: String): Int? {
         val doc = documentDao.getByDocId(docId) ?: return null
         doc.pageCount?.let { return it }
-        return try {
+        return log.runLogged("Reading the page count of $docId") {
             val bytes = fs.readBytes(doc.relPath)
             pdfEngine.open(bytes).use { handle ->
                 val pc = handle.pageCount
                 if (doc.pageCount == null) documentDao.upsert(doc.copy(pageCount = pc))
                 pc
             }
-        } catch (t: Throwable) {
-            logFailure("pageCount failed for $docId", t)
-            null
         }
     }
 
@@ -69,7 +66,7 @@ class DocContentFacadeImpl internal constructor(
         maxDim: Int,
     ): ByteArray? {
         val doc = documentDao.getByDocId(docId) ?: return null
-        return try {
+        return log.runLogged("Rendering page $pageIndex of $docId") {
             val bytes = fs.readBytes(doc.relPath)
             renderGate.render {
                 pdfEngine.open(bytes).use { handle ->
@@ -80,53 +77,36 @@ class DocContentFacadeImpl internal constructor(
                     }
                 }
             }
-        } catch (t: Throwable) {
-            logFailure("renderPage failed for $docId p$pageIndex", t)
-            null
         }
     }
 
     override suspend fun clearThumbnailCache(): Int =
-        lifetime.owned { runCatching { thumbnailService.clearCache() }.getOrDefault(0) }
+        lifetime.owned { log.runLogged("Clearing the thumbnail cache") { thumbnailService.clearCache() } ?: 0 }
 
     override suspend fun extractedText(docId: String): String? =
-        runCatching { db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } }.getOrNull()
+        log.runLogged("Reading the text of $docId") { db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } }
 
     override suspend fun rawBytes(docId: String): ByteArray? {
         val doc = documentDao.getByDocId(docId) ?: return null
-        return try {
-            fs.readBytes(doc.relPath)
-        } catch (t: Throwable) {
-            logFailure("rawBytes failed for $docId", t)
-            null
-        }
+        return log.runLogged("Reading $docId") { fs.readBytes(doc.relPath) }
     }
 
     override suspend fun bakedCopyBytes(docId: String): ByteArray? {
         val doc = documentDao.getByDocId(docId) ?: return null
-        return try {
-            bakeService.bakeToBytes(doc.relPath, buildXmpData(docId))
-        } catch (t: Throwable) {
-            logFailure("bakedCopyBytes failed for $docId", t)
-            null
-        }
+        return log.runLogged("Baking a copy of $docId") { bakeService.bakeToBytes(doc.relPath, buildXmpData(docId)) }
     }
 
     override suspend fun bakeInPlace(docId: String): Boolean = lifetime.owned { bake(docId) }
 
     private suspend fun bake(docId: String): Boolean {
         val doc = documentDao.getByDocId(docId) ?: return false
-        return try {
+        return log.runLogged("Baking $docId in place") {
             // Rewritten bytes whose relink is then refused would orphan the metadata on the old hash.
             coordinator.checkWritable()
             bakeService.bakeInPlace(doc.relPath, buildXmpData(docId)) { oldSha, newSha ->
                 relinkService.applyRelink(oldSha, newSha)
             }
-            true
-        } catch (t: Throwable) {
-            logFailure("bakeInPlace failed for $docId", t)
-            false
-        }
+        } != null
     }
 
     /** Assemble the XMP payload from the current DB row, its tags and its field rows. */

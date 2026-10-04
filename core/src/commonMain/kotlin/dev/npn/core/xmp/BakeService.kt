@@ -2,7 +2,9 @@ package dev.npn.core.xmp
 
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import kotlinx.coroutines.CancellationException
+import dev.npn.core.util.NpnLog
+import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
@@ -29,6 +31,7 @@ data class BakeResult(
 class BakeService(
     private val fs: LibraryFileSystem,
     private val io: PdfXmpIO,
+    private val log: NpnLog = NpnLog.None,
 ) {
     /** Suffix for the sibling temp file written during [bakeInPlace]. */
     private val tmpSuffix = ".npnbake.tmp"
@@ -91,15 +94,10 @@ class BakeService(
         fs.writeBytesOnce(tmpPath, bakedBytes)
 
         // Verify by re-reading the temp file (round-trips through the real filesystem).
-        val verified =
-            try {
-                val readBack = fs.readBytes(tmpPath)
-                io.verify(readBack)
-            } catch (_: Throwable) {
-                false
-            }
+        val verified = runCatchingCancellable { io.verify(fs.readBytes(tmpPath)) }.getOrDefault(false)
         if (!verified) {
-            runCatching { fs.delete(tmpPath) }
+            // Left behind, the next bake of this document removes it first.
+            log.runLogged("Removing the unverified bake of $norm") { fs.delete(tmpPath) }
             error("Bake verification failed for $norm; original left untouched")
         }
 
@@ -129,16 +127,14 @@ class BakeService(
         src: ByteArray,
         oldSha: String,
         tmpPath: String,
-    ) = withContext(NonCancellable) {
-        try {
-            // A move that reported failure may still have landed the baked bytes.
-            if (fs.exists(norm) && fs.sha256(norm) != oldSha) fs.delete(norm)
-            if (!fs.exists(norm)) fs.writeBytesOnce(norm, src)
-            if (fs.exists(tmpPath)) fs.delete(tmpPath)
-        } catch (e: CancellationException) {
-            throw e
-        } catch (restoreFailure: Exception) {
-            println("Could not restore $norm after a failed bake, baked bytes kept: ${restoreFailure.message}")
+    ) {
+        withContext(NonCancellable) {
+            log.runLogged("Restoring $norm after a failed bake (baked bytes kept)") {
+                // A move that reported failure may still have landed the baked bytes.
+                if (fs.exists(norm) && fs.sha256(norm) != oldSha) fs.delete(norm)
+                if (!fs.exists(norm)) fs.writeBytesOnce(norm, src)
+                if (fs.exists(tmpPath)) fs.delete(tmpPath)
+            }
         }
     }
 }
