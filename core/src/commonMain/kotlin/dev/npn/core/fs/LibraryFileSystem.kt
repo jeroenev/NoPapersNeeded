@@ -77,17 +77,23 @@ sealed interface FsEvent {
 fun Flow<FsEvent>.debounced(
     quietMillis: Long = 500L,
     maxWaitMillis: Long = 5_000L,
+    timeSource: TimeSource = TimeSource.Monotonic,
 ): Flow<FsEvent> =
-    debounced(quietMillis, maxWaitMillis) { burst, next -> if (next == burst) burst else FsEvent.Changed(null) }
+    debounced(quietMillis, maxWaitMillis, timeSource) { burst, next ->
+        if (next == burst) burst else FsEvent.Changed(null)
+    }
 
 /**
  * [debounced] for any kind of event: a burst becomes one emission once quiet for [quietMillis], or
  * after [maxWaitMillis] of continuous churn, with every event of the burst folded in by [merge].
+ * [timeSource] measures the max wait; the quiet window is a coroutine delay, so a test's virtual
+ * time drives both when it passes its scheduler's `timeSource`.
  */
 @OptIn(ExperimentalCoroutinesApi::class) // select's onTimeout
 fun <T : Any> Flow<T>.debounced(
     quietMillis: Long = 500L,
     maxWaitMillis: Long = 5_000L,
+    timeSource: TimeSource = TimeSource.Monotonic,
     merge: (burst: T, next: T) -> T,
 ): Flow<T> =
     channelFlow {
@@ -97,7 +103,7 @@ fun <T : Any> Flow<T>.debounced(
             events.close()
         }
         var burst = events.receiveCatching().getOrNull() ?: return@channelFlow
-        var deadline = TimeSource.Monotonic.markNow() + maxWaitMillis.milliseconds
+        var deadline = timeSource.markNow() + maxWaitMillis.milliseconds
         while (true) {
             val wait = minOf(quietMillis.milliseconds, -deadline.elapsedNow())
             // select, not withTimeout around a receive: a timeout racing a receive cannot drop
@@ -115,7 +121,7 @@ fun <T : Any> Flow<T>.debounced(
                 next == null -> {
                     send(burst)
                     burst = events.receiveCatching().getOrNull() ?: return@channelFlow
-                    deadline = TimeSource.Monotonic.markNow() + maxWaitMillis.milliseconds
+                    deadline = timeSource.markNow() + maxWaitMillis.milliseconds
                 }
 
                 next.isClosed -> {

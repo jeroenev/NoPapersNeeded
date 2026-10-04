@@ -9,6 +9,7 @@ import kotlinx.coroutines.flow.buffer
 import kotlinx.coroutines.flow.channelFlow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import kotlin.time.TimeSource
 
 /**
  * What the session does about one change its library watcher reported. [watchAction] decides it
@@ -89,20 +90,22 @@ internal fun watchAction(
 
 /**
  * Pass the actions that need no settling straight through, and hold [WatchAction.Settled] ones
- * until the folder has been quiet for [quietMillis] (or [maxWaitMillis] of continuous churn), each
- * burst merged into one ([WatchAction.Settled.merge]). Never holds the watcher up: what the
- * collector has not taken yet waits in an unbounded buffer, as the watcher's own events do.
+ * until the folder has been quiet for [quietMillis] (or [maxWaitMillis] of continuous churn, on
+ * [timeSource]), each burst merged into one ([WatchAction.Settled.merge]). Never holds the watcher
+ * up: what the collector has not taken yet waits in an unbounded buffer, as the watcher's own
+ * events do.
  */
 internal fun Flow<WatchAction>.settled(
     quietMillis: Long = 500L,
     maxWaitMillis: Long = 5_000L,
+    timeSource: TimeSource = TimeSource.Monotonic,
 ): Flow<WatchAction> =
     channelFlow {
         val held = Channel<WatchAction.Settled>(Channel.UNLIMITED)
         launch {
             held
                 .receiveAsFlow()
-                .debounced(quietMillis, maxWaitMillis) { burst, next -> burst.merge(next) }
+                .debounced(quietMillis, maxWaitMillis, timeSource) { burst, next -> burst.merge(next) }
                 .collect { send(it) }
         }
         collect { action -> if (action is WatchAction.Settled) held.send(action) else send(action) }

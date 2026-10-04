@@ -2,17 +2,17 @@ package dev.npn.core.fs
 
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.ints.shouldBeGreaterThanOrEqual
-import io.kotest.matchers.longs.shouldBeGreaterThanOrEqual
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
-import kotlin.time.TimeSource
 
-/** Real time, not virtual: [debounced] measures its max wait on the monotonic clock. */
+/** On virtual time: the max wait is measured on the test scheduler's time source. */
 class DebouncedTest {
     private fun events(
         vararg paths: String?,
@@ -24,52 +24,55 @@ class DebouncedTest {
         }
     }
 
+    private fun TestScope.debounce(
+        events: Flow<FsEvent>,
+        maxWaitMillis: Long = 10_000,
+    ) = events.debounced(quietMillis = QUIET, maxWaitMillis = maxWaitMillis, timeSource = testScheduler.timeSource)
+
     @Test
     fun burstEmitsOnceAfterItGoesQuiet() =
-        runBlocking<Unit> {
-            val start = TimeSource.Monotonic.markNow()
+        runTest {
             // A watcher never completes; completing would flush the burst early.
             val first =
-                flow {
-                    events("a.pdf", "a.pdf", "a.pdf", "a.pdf").collect { emit(it) }
-                    delay(10_000)
-                }.debounced(quietMillis = QUIET, maxWaitMillis = 10_000).first()
-            val emittedAt = start.elapsedNow().inWholeMilliseconds
+                debounce(
+                    flow {
+                        events("a.pdf", "a.pdf", "a.pdf", "a.pdf").collect { emit(it) }
+                        delay(10_000)
+                    },
+                ).first()
 
             first shouldBe FsEvent.Changed("a.pdf")
             // Four events 20 ms apart, then the quiet window: never on the first event.
-            emittedAt shouldBeGreaterThanOrEqual 3 * 20 + QUIET
+            testScheduler.currentTime shouldBe 3 * 20 + QUIET
         }
 
     @Test
     fun burstOverSeveralPathsEmitsAPathlessChange() =
-        runBlocking<Unit> {
-            events("a.pdf", ".npn/ocr/x.json")
-                .debounced(quietMillis = QUIET, maxWaitMillis = 10_000)
-                .toList() shouldContainExactly listOf(FsEvent.Changed(null))
+        runTest {
+            debounce(events("a.pdf", ".npn/ocr/x.json")).toList() shouldContainExactly listOf(FsEvent.Changed(null))
         }
 
     @Test
     fun continuousChurnStillEmitsEveryMaxWait() =
-        runBlocking<Unit> {
+        runTest {
             val churn = Array<String?>(40) { "a.pdf" }
-            val out =
-                events(*churn, gapMillis = 20)
-                    .debounced(quietMillis = QUIET, maxWaitMillis = 250)
-                    .toList()
+            val out = debounce(events(*churn, gapMillis = 20), maxWaitMillis = 250).toList()
 
-            out.size shouldBeGreaterThanOrEqual 2
+            // 800 ms of churn: one emission per 250 ms of it, then the rest when it ends.
+            out.size shouldBeGreaterThanOrEqual 3
         }
 
     @Test
     fun separateBurstsEmitSeparately() =
-        runBlocking<Unit> {
+        runTest {
             val out =
-                flow {
-                    emit(FsEvent.Changed("a.pdf"))
-                    delay(QUIET * 3)
-                    emit(FsEvent.Changed("b.pdf"))
-                }.debounced(quietMillis = QUIET, maxWaitMillis = 10_000).toList()
+                debounce(
+                    flow {
+                        emit(FsEvent.Changed("a.pdf"))
+                        delay(QUIET * 3)
+                        emit(FsEvent.Changed("b.pdf"))
+                    },
+                ).toList()
 
             out shouldContainExactly listOf(FsEvent.Changed("a.pdf"), FsEvent.Changed("b.pdf"))
         }

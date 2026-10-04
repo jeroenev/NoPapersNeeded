@@ -7,7 +7,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.toList
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 /** What a change the library watcher reports calls for, decided without a session. */
@@ -59,10 +59,9 @@ class WatchActionTest {
         WatchAction.ReconcileOcr.merge(WatchAction.Rescan) shouldBe WatchAction.Rescan
     }
 
-    /** Real time: the settling measures its windows on the monotonic clock, like the watcher's. */
     @Test
     fun snapshotsSettleIntoOneReconcileWhileObjectsPassStraightThrough() =
-        runBlocking<Unit> {
+        runTest {
             val obj = WatchAction.IngestObject(NpnPaths.journalObjectPath(hash))
             val out =
                 flow {
@@ -71,7 +70,7 @@ class WatchActionTest {
                         delay(10)
                     }
                     emit(obj)
-                }.settled(quietMillis = QUIET, maxWaitMillis = 10_000).toList()
+                }.settled(quietMillis = QUIET, maxWaitMillis = 10_000, timeSource = testScheduler.timeSource).toList()
 
             out shouldContainExactly listOf(obj, WatchAction.ReconcileJournal)
         }
