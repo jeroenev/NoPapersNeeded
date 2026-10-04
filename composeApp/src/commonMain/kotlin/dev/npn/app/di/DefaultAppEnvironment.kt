@@ -169,7 +169,7 @@ class DefaultAppEnvironment(
         var started = false
         try {
             session = LibrarySessionImpl.openSession(opened.deps)
-            session.start(appScope)
+            session.start()
             started = true
         } finally {
             if (!started) {

@@ -2,7 +2,6 @@ package dev.npn.core.app
 
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiSuggest
-import kotlinx.coroutines.CoroutineScope
 
 /**
  * Everything scoped to one opened library folder: a pure aggregate of narrow facets plus
@@ -28,9 +27,15 @@ interface LibrarySession {
     val work: WorkFacade
     val aiEditQueue: AiEditQueueFacade
 
-    /** Start folder watching (desktop), OCR worker, periodic reconciliation. Idempotent. */
-    fun start(scope: CoroutineScope)
+    /**
+     * Start folder watching, the queue drains and periodic reconciliation, all on the scope the
+     * session was opened with. Idempotent; fails once the session is closed.
+     */
+    fun start()
 
-    /** Stop and await all work owned by this session. Does not close environment-owned resources. */
+    /**
+     * Stop and await all work owned by this session. Final: the session cannot be started again,
+     * and its operations fail from then on. Does not close environment-owned resources.
+     */
     suspend fun close()
 }

@@ -64,7 +64,9 @@ Platform impls live in the same package under `androidMain`/`desktopMain` (e.g.
 `core.db.NpnDatabase`).
 
 Opening a library is `LibrarySessionImpl.openSession(SessionDeps)` (commonMain) followed by
-`start(scope)`. On a plain JVM the `SessionDeps` come from `core.app.jvmSessionDeps`
+`start()`. Everything the session runs — background loops, queue drains, every facet write — is a
+child of one `SessionLifetime` job under `SessionDeps.scope`, so `close()` stops and awaits all of
+it before the host closes the database; closing is final. On a plain JVM the `SessionDeps` come from `core.app.jvmSessionDeps`
 (`desktopMain`): the one place that wires java.nio + PDFBox + Tesseract + a Room index under an
 `AppDirs`. The desktop app, the `AppSessionRig` test harness and any headless JVM host build
 their sessions through it — nothing in `composeApp` is needed to run a library without a UI.

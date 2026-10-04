@@ -56,18 +56,14 @@ import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.RuleApplier
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.reason
+import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.PdfXmpIO
-import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.async
-import kotlinx.coroutines.cancelAndJoin
-import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
-import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -79,16 +75,18 @@ import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.serialization.decodeFromString
-import kotlinx.serialization.json.Json
 
 /**
  * Everything wired for one opened library folder. Constructed by [openSession] (a suspend factory
- * that runs the device-identity + fork check and initial fold), then [start]ed with a scope.
+ * that runs the device-identity + fork check and initial fold), then [start]ed.
+ *
+ * Everything the session runs — background loops, queue drains, caller-driven operations — belongs
+ * to one [SessionLifetime] under [SessionDeps.scope], so [close] stops all of it at once, for good.
  */
 class LibrarySessionImpl private constructor(
     val deviceId: String,
     private val deps: SessionDeps,
+    private val lifetime: SessionLifetime,
     private val coordinator: JournalCoordinator,
     private val indexer: Indexer,
     private val importService: ImportService,
@@ -169,10 +167,12 @@ class LibrarySessionImpl private constructor(
         coordinator.settingFlow(ReviewMode.WIRE_KEY).map(ReviewMode::fromWire)
 
     override suspend fun setReviewMode(mode: ReviewMode) {
-        coordinator.commitAndApply(listOf(PendingOp.settingSet(ReviewMode.WIRE_KEY, mode.wire)))
+        owned { coordinator.commitAndApply(listOf(PendingOp.settingSet(ReviewMode.WIRE_KEY, mode.wire))) }
     }
 
-    override suspend fun markReviewedForMigration(onlyTagged: Boolean) {
+    override suspend fun markReviewedForMigration(onlyTagged: Boolean) = owned { markReviewed(onlyTagged) }
+
+    private suspend fun markReviewed(onlyTagged: Boolean) {
         val dao = db.documentDao()
         val live =
             dao
@@ -192,29 +192,10 @@ class LibrarySessionImpl private constructor(
         if (ops.isNotEmpty()) coordinator.commitAndApply(ops)
     }
 
-    private var jobs: MutableList<Job> = ArrayList()
     private var started = false
 
-    // Caller-driven work that writes outside the coordinator (rescans, imports) runs on this job
-    // rather than the caller's coroutine, so close() cancels and awaits it before the environment
-    // closes the database. Callers start these from scopes that outlive the session: the activity
-    // rescans on the app scope whenever it resumes, including on the way back from the folder
-    // picker that is about to swap the library.
-    private val operations = SupervisorJob(deps.scope.coroutineContext[Job])
-    private val operationScope = CoroutineScope(deps.scope.coroutineContext + operations)
-
-    private suspend fun <T> owned(block: suspend () -> T): T {
-        val work = operationScope.async { block() }
-        return try {
-            work.await()
-        } catch (e: CancellationException) {
-            work.cancel()
-            // The caller was cancelled: let its own cancellation propagate. Otherwise the session
-            // closed under the call, which is a failure the caller should see, not a cancellation.
-            currentCoroutineContext().ensureActive()
-            throw IllegalStateException("Library session is closed", e)
-        }
-    }
+    // Every facet write runs here rather than on the caller's coroutine; see SessionLifetime.owned.
+    private suspend fun <T> owned(block: suspend () -> T): T = lifetime.owned(block)
 
     override suspend fun rescan(): ScanReport =
         owned {
@@ -236,7 +217,7 @@ class LibrarySessionImpl private constructor(
         settleRescanLock.withLock {
             settleRescan?.cancel()
             settleRescan =
-                operationScope.launch {
+                lifetime.scope.launch {
                     delay(afterMillis + SETTLE_RESCAN_MARGIN_MS)
                     // Cleared first: the rescan below may schedule the next one.
                     settleRescanLock.withLock { settleRescan = null }
@@ -268,11 +249,11 @@ class LibrarySessionImpl private constructor(
         images: List<ByteArray>,
         suggestedName: String,
     ): ImportOutcome =
-        try {
-            val pdf = deps.pdfEngine.imagesToPdf(images)
-            importPdfBytes(pdf, suggestedName)
-        } catch (t: Throwable) {
-            ImportOutcome.Failed(t.message ?: "image conversion failed")
+        owned {
+            runCatchingCancellable {
+                val pdf = deps.pdfEngine.imagesToPdf(images)
+                importing { map(importService.importBytes(pdf, suggestedName)).also { afterImport(it) } }
+            }.getOrElse { ImportOutcome.Failed(it.reason()) }
         }
 
     override suspend fun resolveDuplicate(
@@ -302,11 +283,12 @@ class LibrarySessionImpl private constructor(
         trashOps().purgeOlderThan(cutoff, coordinator.journalTrashTimes() + rows)
     }
 
-    override suspend fun reOcr(docId: String) {
-        if (db.documentDao().getByDocId(docId) == null) return
-        enqueuePendingOcr(docId, rerun = true)
-        ocrWorker.kick()
-    }
+    override suspend fun reOcr(docId: String) =
+        owned {
+            if (db.documentDao().getByDocId(docId) == null) return@owned
+            enqueuePendingOcr(docId, rerun = true)
+            ocrWorker.kick()
+        }
 
     /**
      * The page count is asked of [content] rather than read off `DocumentEntity`: the row's
@@ -321,21 +303,22 @@ class LibrarySessionImpl private constructor(
         return if (ocrEngines.isLargeForAi(pages)) AiOcrOffer.Large(pages) else AiOcrOffer.Ready
     }
 
-    override suspend fun ocrWithAi(docId: String) {
-        db.documentDao().getByDocId(docId) ?: return
-        check(ocrEngines.aiAvailable()) {
-            "AI OCR needs a configured AI endpoint (Settings > AI assistant)"
+    override suspend fun ocrWithAi(docId: String) =
+        owned {
+            db.documentDao().getByDocId(docId) ?: return@owned
+            check(ocrEngines.aiAvailable()) {
+                "AI OCR needs a configured AI endpoint (Settings > AI assistant)"
+            }
+            // Deliberately no page limit here: length is something aiOcrOffer warns about, not
+            // something this refuses. The caller asked for this document by name.
+            //
+            // The pin picks the ai sidecar for search once it exists, on every replica; the request
+            // to pay for one is this device's queue flag (see OcrFacade.ocrWithAi). Queue after
+            // pinning so the run that drains sees the override already folded onto the row.
+            pinOcrEngine(docId, OcrEngines.AI)
+            enqueuePendingOcr(docId, aiRequested = true)
+            ocrWorker.kick()
         }
-        // Deliberately no page limit here: length is something aiOcrOffer warns about, not
-        // something this refuses. The caller asked for this document by name.
-        //
-        // The pin picks the ai sidecar for search once it exists, on every replica; the request to
-        // pay for one is this device's queue flag (see OcrFacade.ocrWithAi). Queue after pinning so
-        // the run that drains sees the override already folded onto the row.
-        setOcrEngine(docId, OcrEngines.AI)
-        enqueuePendingOcr(docId, aiRequested = true)
-        ocrWorker.kick()
-    }
 
     override suspend fun ocrVersions(docId: String): List<OcrVersion> {
         val doc = db.documentDao().getByDocId(docId)
@@ -354,6 +337,11 @@ class LibrarySessionImpl private constructor(
     override suspend fun setOcrEngine(
         docId: String,
         engine: String?,
+    ) = owned { pinOcrEngine(docId, engine) }
+
+    private suspend fun pinOcrEngine(
+        docId: String,
+        engine: String?,
     ) {
         writer.setOcrEngine(docId, engine)
         // The commit above already folded the override into the doc row; re-select now so this
@@ -361,17 +349,20 @@ class LibrarySessionImpl private constructor(
         ocrPipeline.reselect(docId)
     }
 
-    // Both drains go through the session's own drainers rather than running on the caller's
+    // The drains go through the session's own drainers rather than running on the caller's
     // coroutine, so closing the session cancels them (see QueueDrainer.drainAndAwait).
     override suspend fun drainOcr() {
+        lifetime.checkOpen()
         ocrWorker.drainAndAwait()
     }
 
     override suspend fun drainEnrichment() {
+        lifetime.checkOpen()
         enrichWorker.drainAndAwait()
     }
 
     override suspend fun drainEditRuns() {
+        lifetime.checkOpen()
         editWorker.drainAndAwait()
     }
 
@@ -380,11 +371,11 @@ class LibrarySessionImpl private constructor(
     override suspend fun enqueueEditRun(
         docIds: List<String>,
         request: AiEditRequest,
-    ): String = editQueue.enqueueEditRun(docIds, request).also { editWorker.kick() }
+    ): String = owned { editQueue.enqueueEditRun(docIds, request).also { editWorker.kick() } }
 
     override suspend fun openEditRun(jobId: String): EditRunReview? = editQueue.openEditRun(jobId)
 
-    override suspend fun discardEditRun(jobId: String) = editQueue.discardEditRun(jobId)
+    override suspend fun discardEditRun(jobId: String) = owned { editQueue.discardEditRun(jobId) }
 
     override suspend fun splitPdf(
         docId: String,
@@ -449,21 +440,21 @@ class LibrarySessionImpl private constructor(
         writer.applyEdits(partIds, addTags = tags, fields = fields)
     }
 
-    override fun start(scope: CoroutineScope) {
+    override fun start() {
+        lifetime.checkOpen()
         if (started) return
         started = true
+        val scope = lifetime.scope
 
         // OCR found a document's file no longer matches its hash: rescan once it has settled.
         ocrPipeline.onStaleFile = { scheduleSettleRescan(WriteSettle.QUIET_MILLIS) }
 
         // OCR worker drain loop: kick on each queue change.
-        jobs.add(
-            scope.launch {
-                db.ocrQueueDao().countActive().collect { active ->
-                    if (active > 0) ocrWorker.kick()
-                }
-            },
-        )
+        scope.launch {
+            db.ocrQueueDao().countActive().collect { active ->
+                if (active > 0) ocrWorker.kick()
+            }
+        }
 
         // Automatic AI enrichment is NOT driven by an observer of its queue table. Such an observer
         // cannot distinguish new work from a failed document being rescheduled — a reschedule
@@ -485,49 +476,45 @@ class LibrarySessionImpl private constructor(
         editWorker.kick()
 
         // Metadata paths are routed separately so journal sync never scans or hashes PDFs.
-        jobs.add(
-            scope.launch {
-                fs
-                    .watch()
-                    .filterNot { event ->
-                        val rel = (event as? FsEvent.Changed)?.relPath
-                        rel != null && NpnPaths.isOwnDeviceWrite(rel, deviceId)
-                    }.filter { event -> routeWatchEvent(event) == WatchRoute.PassToRescan }
-                    .debounced()
-                    .collect { event ->
-                        val rel = (event as? FsEvent.Changed)?.relPath
-                        if (rel != null && rel.startsWith("${NpnPaths.OCR_DIR}/")) {
-                            runCatching { ocrPipeline.reconcileSidecars() }
-                        } else {
-                            runCatching { coordinator.reconcileMetadata() }
-                            runCatching { doWatchTriggeredRescan() }
-                        }
+        scope.launch {
+            fs
+                .watch()
+                .filterNot { event ->
+                    val rel = (event as? FsEvent.Changed)?.relPath
+                    rel != null && NpnPaths.isOwnDeviceWrite(rel, deviceId)
+                }.filter { event -> routeWatchEvent(event) == WatchRoute.PassToRescan }
+                .debounced()
+                .collect { event ->
+                    val rel = (event as? FsEvent.Changed)?.relPath
+                    if (rel != null && rel.startsWith("${NpnPaths.OCR_DIR}/")) {
+                        runCatching { ocrPipeline.reconcileSidecars() }
+                    } else {
+                        runCatching { coordinator.reconcileMetadata() }
+                        runCatching { doWatchTriggeredRescan() }
                     }
-            },
-        )
+                }
+        }
 
         // Initial rescan.
-        jobs.add(scope.launch { runCatching { doWatchTriggeredRescan() } })
+        scope.launch { runCatching { doWatchTriggeredRescan() } }
 
         // Watch services and sync providers may omit events. This reconciliation reads only the
         // metadata directory and skips unchanged source fingerprints; it never walks PDFs.
-        jobs.add(
-            scope.launch {
-                while (isActive) {
-                    delay(METADATA_RECONCILIATION_INTERVAL_MS)
-                    runCatching { coordinator.reconcileMetadata() }
-                    // Compaction runs under the same single-writer mutex; it only fires when the
-                    // stable object count exceeds the threshold, so most reconciles are a cheap no-op.
-                    runCatching { coordinator.compact() }
-                    // OCR retries, enrichment rows and edit runs become due by the passage of time,
-                    // which no Room flow can observe; this tick is what actually retries a
-                    // backed-off one.
-                    ocrWorker.kick()
-                    enrichWorker.kick()
-                    editWorker.kick()
-                }
-            },
-        )
+        scope.launch {
+            while (isActive) {
+                delay(METADATA_RECONCILIATION_INTERVAL_MS)
+                runCatching { coordinator.reconcileMetadata() }
+                // Compaction runs under the same single-writer mutex; it only fires when the stable
+                // object count exceeds the threshold, so most reconciles are a cheap no-op.
+                runCatching { coordinator.compact() }
+                // OCR retries, enrichment rows and edit runs become due by the passage of time,
+                // which no Room flow can observe; this tick is what actually retries a backed-off
+                // one.
+                ocrWorker.kick()
+                enrichWorker.kick()
+                editWorker.kick()
+            }
+        }
     }
 
     /**
@@ -609,14 +596,10 @@ class LibrarySessionImpl private constructor(
     }
 
     override suspend fun close() {
-        jobs.forEach { it.cancelAndJoin() }
-        jobs.clear()
-        ocrWorker.close()
-        enrichWorker.close()
-        editWorker.close()
-        operations.cancelAndJoin()
+        // Background loops, drains and every owned operation, all in one: see SessionLifetime.
+        lifetime.close()
+        // Waits out a coordinator write a caller started outside the lifetime, then refuses more.
         coordinator.close()
-        started = false
         // DB ownership stays with the environment; it may close the DB after this shutdown barrier.
     }
 
@@ -628,7 +611,7 @@ class LibrarySessionImpl private constructor(
             is ImportResult.Duplicate -> ImportOutcome.Duplicate(result.existingDocId, result.existingPath)
         }
 
-    private suspend fun afterImport(outcome: ImportOutcome) {
+    private fun afterImport(outcome: ImportOutcome) {
         if (outcome is ImportOutcome.Imported) {
             ocrWorker.kick()
         }
@@ -691,6 +674,7 @@ class LibrarySessionImpl private constructor(
         suspend fun openSession(deps: SessionDeps): LibrarySessionImpl {
             val db = deps.db
             val fs = deps.fs
+            val lifetime = SessionLifetime(deps.scope)
 
             val segmentStore = FsSegmentStore(fs)
             // Shared FTS content gate: serializes metadata-fold content carry-forward against
@@ -768,7 +752,7 @@ class LibrarySessionImpl private constructor(
                     ftsWriteGate = ftsWriteGate,
                     clock = deps.clock,
                 )
-            val ocrWorker = QueueDrainer(deps.scope, "OCR queue", deps.log) { ocrPipeline.processNext() }
+            val ocrWorker = QueueDrainer(lifetime.scope, "OCR queue", deps.log) { ocrPipeline.processNext() }
 
             // Single shared gate so thumbnail + page rendering share one bounded concurrency
             // budget and a first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
@@ -790,6 +774,7 @@ class LibrarySessionImpl private constructor(
             val savedViews = SavedViewRepositoryImpl(db.savedViewDao())
             val content =
                 DocContentFacadeImpl(
+                    lifetime,
                     db,
                     fs,
                     deps.pdfEngine,
@@ -834,7 +819,7 @@ class LibrarySessionImpl private constructor(
                     policy = deps.unattendedAi,
                     clock = deps.clock,
                 )
-            val enrichWorker = QueueDrainer(deps.scope, "AI enrichment queue", deps.log) { autoEnricher.processNext() }
+            val enrichWorker = QueueDrainer(lifetime.scope, "AI enrichment queue", deps.log) { autoEnricher.processNext() }
             val editQueue =
                 AiEditQueue(
                     dao = db.aiEditJobDao(),
@@ -846,7 +831,7 @@ class LibrarySessionImpl private constructor(
                     readConfig = deps.aiConfig,
                     clock = deps.clock,
                 )
-            val editWorker = QueueDrainer(deps.scope, "AI edit queue", deps.log) { editQueue.processNext() }
+            val editWorker = QueueDrainer(lifetime.scope, "AI edit queue", deps.log) { editQueue.processNext() }
             // Deterministic local rules run on any newly indexed text, including a re-index.
             ocrPipeline.onTextIndexed = { docId, text -> ruleApplier.applyToDoc(docId, text) }
             // The paid pass runs only on text this device just produced. It fires after the rules
@@ -860,6 +845,7 @@ class LibrarySessionImpl private constructor(
             return LibrarySessionImpl(
                 deviceId = effectiveDeviceId,
                 deps = deps,
+                lifetime = lifetime,
                 coordinator = coordinator,
                 indexer = indexer,
                 importService = importService,

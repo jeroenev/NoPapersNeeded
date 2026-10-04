@@ -19,9 +19,12 @@ import dev.npn.core.xmp.NpnXmpData
  *   bake. In-place bake relinks the new hash through [RelinkService], whose rescan carries the
  *   document's tags and fields onto it and marks the old row superseded.
  *
- * All failure paths return null/false and report through [logFailure].
+ * All failure paths return null/false and report through [logFailure]. The calls that write (the
+ * thumbnail cache, the page-count backfill, an in-place bake) run as the session's owned work, so
+ * closing the session waits for them before its database is closed.
  */
-class DocContentFacadeImpl(
+class DocContentFacadeImpl internal constructor(
+    private val lifetime: SessionLifetime,
     private val db: NpnDatabase,
     private val fs: LibraryFileSystem,
     private val pdfEngine: PdfEngine,
@@ -36,12 +39,15 @@ class DocContentFacadeImpl(
 ) : DocContentFacade {
     private val documentDao get() = db.documentDao()
 
-    override suspend fun thumbnailPath(docId: String): String? {
-        val doc = documentDao.getByDocId(docId) ?: return null
-        return thumbnailService.ensureThumbnail(docId, doc.relPath)
-    }
+    override suspend fun thumbnailPath(docId: String): String? =
+        lifetime.owned {
+            val doc = documentDao.getByDocId(docId) ?: return@owned null
+            thumbnailService.ensureThumbnail(docId, doc.relPath)
+        }
 
-    override suspend fun pageCount(docId: String): Int? {
+    override suspend fun pageCount(docId: String): Int? = lifetime.owned { readPageCount(docId) }
+
+    private suspend fun readPageCount(docId: String): Int? {
         val doc = documentDao.getByDocId(docId) ?: return null
         doc.pageCount?.let { return it }
         return try {
@@ -80,7 +86,8 @@ class DocContentFacadeImpl(
         }
     }
 
-    override suspend fun clearThumbnailCache(): Int = runCatching { thumbnailService.clearCache() }.getOrDefault(0)
+    override suspend fun clearThumbnailCache(): Int =
+        lifetime.owned { runCatching { thumbnailService.clearCache() }.getOrDefault(0) }
 
     override suspend fun extractedText(docId: String): String? =
         runCatching { db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } }.getOrNull()
@@ -105,7 +112,9 @@ class DocContentFacadeImpl(
         }
     }
 
-    override suspend fun bakeInPlace(docId: String): Boolean {
+    override suspend fun bakeInPlace(docId: String): Boolean = lifetime.owned { bake(docId) }
+
+    private suspend fun bake(docId: String): Boolean {
         val doc = documentDao.getByDocId(docId) ?: return false
         return try {
             // Rewritten bytes whose relink is then refused would orphan the metadata on the old hash.

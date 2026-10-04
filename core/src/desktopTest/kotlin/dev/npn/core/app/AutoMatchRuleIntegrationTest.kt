@@ -24,7 +24,7 @@ class AutoMatchRuleIntegrationTest {
         runTest {
             val rig = AppSessionRig.create(backgroundScope)
             try {
-                rig.session.start(backgroundScope)
+                rig.session.start()
                 rig.session.rules.save(
                     AutoMatchRule(
                         id = "",
@@ -64,7 +64,7 @@ class AutoMatchRuleIntegrationTest {
         runTest {
             val rig = AppSessionRig.create(backgroundScope)
             try {
-                rig.session.start(backgroundScope)
+                rig.session.start()
                 rig.writePdf("bill.pdf", PdfFixtures.embeddedTextPdf("Utility bill for July"))
                 rig.session.rescan()
 
@@ -101,7 +101,7 @@ class AutoMatchRuleIntegrationTest {
         runTest {
             val rig = AppSessionRig.create(backgroundScope)
             try {
-                rig.session.start(backgroundScope)
+                rig.session.start()
                 val ruleId =
                     rig.session.rules.save(
                         AutoMatchRule(
@@ -144,7 +144,7 @@ class AutoMatchRuleIntegrationTest {
         runTest {
             val rig = AppSessionRig.create(backgroundScope)
             try {
-                rig.session.start(backgroundScope)
+                rig.session.start()
                 rig.writePdf("doc.pdf", PdfFixtures.embeddedTextPdf("plain text"))
                 rig.session.rescan()
                 val id = rig.fs.sha256("doc.pdf")

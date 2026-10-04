@@ -1,7 +1,6 @@
 package dev.npn.app
 
 import dev.npn.core.app.LibrarySession
-import kotlinx.coroutines.CoroutineScope
 
 /**
  * Convenience composer of the per-facet fakes, mirroring how [dev.npn.core.app.LibrarySessionImpl]
@@ -31,7 +30,7 @@ class FakeLibrarySession : LibrarySession {
     override val work = FakeWorkFacade()
     override val aiEditQueue = FakeAiEditQueue()
 
-    override fun start(scope: CoroutineScope) = Unit
+    override fun start() = Unit
 
     override suspend fun close() = Unit
 }

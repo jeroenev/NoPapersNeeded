@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.model.ReviewMode
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.xmp.XmpParser
 import io.kotest.assertions.throwables.shouldThrow
@@ -110,6 +111,38 @@ class SessionSmokeTest {
                     result.exceptionOrNull().shouldBeInstanceOf<IllegalStateException>()
                 }
                 shouldThrow<IllegalStateException> { rig.session.rescan() }
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A closed session stays closed: nothing restarts it, and no write reaches its database. */
+    @Test
+    fun closeIsFinalAndEveryLaterCallFailsFast() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("one.pdf", PdfFixtures.embeddedTextPdf("first document"))
+                rig.session.rescan()
+                val id = rig.docId("one.pdf")
+                rig.session.close()
+
+                val calls: List<suspend () -> Unit> =
+                    listOf(
+                        { rig.session.start() },
+                        { rig.session.ocr.reOcr(id) },
+                        { rig.session.ocr.setOcrEngine(id, "embedded") },
+                        { rig.session.ocr.ocrWithAi(id) },
+                        { rig.session.reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY) },
+                        { rig.session.aiEditQueue.discardEditRun("run") },
+                        { rig.session.work.drainOcr() },
+                        { rig.session.content.thumbnailPath(id) },
+                    )
+                for (call in calls) {
+                    shouldThrow<IllegalStateException> { call() }.message shouldBe "Library session is closed"
+                }
+                // The re-OCR request never reached the queue.
+                (rig.db.ocrQueueDao().getByDocId(id)?.rerun == true) shouldBe false
             } finally {
                 rig.close()
             }
