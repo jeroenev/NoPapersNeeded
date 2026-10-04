@@ -82,10 +82,8 @@ class AiAutoEnricherRetryTest {
         }
 
     /**
-     * The write goes through the shared [AiEditApply], which collects failures rather than
-     * throwing. The enricher must re-raise the document's own cause so the queue backs off on the
-     * real error — regressing to a synthetic one (or swallowing it) would blind the backoff and
-     * the row's `lastError`. This covers the seam the extraction could silently break.
+     * The queue must back off on the write's own cause: regressing to a synthetic one (or
+     * swallowing it) would blind the backoff and the row's `lastError`.
      */
     @Test
     fun `a failed write backs off on the write's own cause, not a synthetic one`() =

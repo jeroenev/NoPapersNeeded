@@ -64,27 +64,10 @@ internal class QueuedEditReview(
     private val reviewApply: ReviewApply,
     private val onFinished: suspend () -> Unit,
 ) : EditRunReview {
-    /** Suggestions written across earlier partial-failure apply attempts of this review. */
-    private var appliedSoFar = 0
-
     override suspend fun apply(reviewed: List<ReviewDoc>): ApplyOutcome =
-        when (val outcome = reviewApply.apply(reviewed)) {
-            ReviewOutcome.NothingSelected -> {
-                ApplyOutcome.NothingSelected
-            }
-
-            is ReviewOutcome.Written -> {
-                onFinished()
-                ApplyOutcome.Done(
-                    ApplyResult(outcome.applied + appliedSoFar, outcome.docsChanged, moreRemain = false),
-                )
-            }
-
-            is ReviewOutcome.Retry -> {
-                appliedSoFar += outcome.applied
-                ApplyOutcome.Retry(outcome.remaining, outcome.failedDocs, outcome.total)
-            }
-        }
+        reviewApply
+            .apply(reviewed, moreRemain = { false })
+            .also { if (it is ApplyOutcome.Done) onFinished() }
 
     override suspend fun discard() = onFinished()
 }
@@ -172,7 +155,7 @@ class AiEditQueue(
     private val dao: AiEditJobDao,
     private val documents: DocumentRepository,
     content: DocContentFacade,
-    meta: MetadataWriter,
+    private val meta: MetadataWriter,
     ai: AiSuggest,
     fieldRegistry: FieldRegistry,
     private val readConfig: suspend () -> AiConfig,
@@ -186,7 +169,6 @@ class AiEditQueue(
     private val newJobId: () -> String = ::randomJobId,
 ) : AiEditQueueFacade {
     private val projector = ReviewProjector(content, fieldRegistry)
-    private val reviewApply = ReviewApply(meta)
     private val runner = SuggestionRunner(ai)
 
     /** A document is given up on at [MAX_DOC_ATTEMPTS]; a job's own backoff has no cap. */
@@ -256,7 +238,7 @@ class AiEditQueue(
             docs = withSuggestions,
             emptyDocs = empty,
             failures = rows.count { it.failed },
-            reviewApply = reviewApply,
+            reviewApply = ReviewApply(meta),
             onFinished = { dao.deleteJob(jobId) },
         )
     }
@@ -432,9 +414,6 @@ class AiEditQueue(
 }
 
 private val AiEditJobDocEntity.isPending: Boolean get() = suggestionJson == null && !failed
-
-private val ReviewDoc.hasSuggestions: Boolean
-    get() = chips.isNotEmpty() || removals.isNotEmpty() || fields.isNotEmpty()
 
 @OptIn(ExperimentalUuidApi::class)
 private fun randomJobId(): String = Uuid.random().toString()

@@ -75,9 +75,6 @@ class AiAutoEnricher(
     /** Asks for a drain of this queue; called whenever [enqueue] writes a new row. */
     private val onEnqueued: () -> Unit,
 ) {
-    /** The shared write mechanics; this pass only projects the suggestion onto what it may write. */
-    private val editApply = AiEditApply(meta)
-
     /** Retried for ever: see the class docs for why nothing here gives up on a document. */
     private val retry = QueueRetryPolicy()
 
@@ -188,51 +185,30 @@ class AiAutoEnricher(
     }
 
     /**
-     * Write one suggestion through [AiEditApply.applyAtomically], which commits the whole edit —
-     * this document's vocabulary tags AND its fields — in ONE journal transaction. That gives both
-     * things this unattended pass depends on: the file is renamed at most once (a template keyed on
+     * Write what this unattended pass may of one suggestion, as ONE [MetadataWriter.applyEdits]:
+     * this document's vocabulary tags AND its fields in one journal transaction. That gives both
+     * things this pass depends on: the file is renamed at most once (a template keyed on
      * correspondent and date does not rename per field), and the commit is all-or-nothing, so a
      * failed pass writes nothing and its retry re-asks the model about the state it was originally
-     * shown rather than a half-written one. The shared [apply] entry point would split this into a
-     * transaction per tag plus one for the fields, which is right for the reviewed multi-document
-     * Edit Run but would break that all-or-nothing retry contract here — hence the separate grain.
+     * shown rather than a half-written one. A failure throws, with its own cause, into the
+     * [processNext] catch that drives the cooldown and backoff.
      *
-     * A failed write is rethrown so the [processNext] catch drives the queue's cooldown and
-     * backoff — [AiEditApply] collects the cause rather than throwing, so this path re-raises the
-     * document's own cause instead of a synthetic one.
+     * Belt and braces: the request already caps new tags at 0 and asks for no removals, but this
+     * path writes without review, so an out-of-contract facade must not be able to grow the
+     * vocabulary or take a tag off a document: new tags are dropped and removals never carried.
+     * Only the fields the model filled are written; absent means "the model had nothing", which
+     * must leave the document's value alone, not clear it.
      */
     private suspend fun write(
         docId: String,
         suggestion: AiEditSuggestion,
     ) {
-        val edit = writableEdit(docId, suggestion)
-        // A model that found nothing gets no transaction, no rename, no journal entry at all. An
-        // empty edit would already commit nothing; the explicit guard states that intent.
-        if (edit.isEmpty) return
-        val report = editApply.applyAtomically(edit)
-        report.failures[docId]?.let { throw it }
+        val tags = suggestion.addTags.filterNot { it.isNew }.map { it.tag }
+        val fields = suggestion.metadata.values
+        // A model that found nothing gets no transaction, no rename, no journal entry at all.
+        if (tags.isEmpty() && fields.isEmpty()) return
+        meta.applyEdits(listOf(docId), addTags = tags, fields = fields)
     }
-
-    /**
-     * The suggestion projected onto what this unattended pass is allowed to write.
-     *
-     * Belt and braces: the request already caps new tags at 0 and asks for no removals, but this
-     * path writes without review, so an out-of-contract facade must not be able to grow the
-     * vocabulary or take a tag off a document. New tags are dropped and removals are never carried.
-     *
-     * Only non-null field suggestions are included: absent means "the model had nothing", which
-     * must leave the document's value alone, not clear it.
-     */
-    private fun writableEdit(
-        docId: String,
-        suggestion: AiEditSuggestion,
-    ): WritableEdit =
-        WritableEdit(
-            docId = docId,
-            addTags = suggestion.addTags.filterNot { it.isNew }.map { it.tag }, // closed vocabulary
-            removeTags = emptyList(), // never removes unattended
-            properties = suggestion.metadata.values,
-        )
 
     /**
      * The request every automatic pass uses, read from the registry at drain time: every field the

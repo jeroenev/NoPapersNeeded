@@ -68,85 +68,142 @@ internal class ReviewProjector(
     }
 }
 
-/** What one pass of [ReviewApply.apply] achieved. */
-internal sealed interface ReviewOutcome {
-    /** No suggestion was selected; nothing was written. */
-    data object NothingSelected : ReviewOutcome
-
-    /** Every selected suggestion was written. */
-    data class Written(
-        val applied: Int,
-        val docsChanged: Int,
-    ) : ReviewOutcome
-
-    /**
-     * Some documents failed. [remaining] holds only those, with their already-succeeded items
-     * deselected, and [applied] counts what this pass did write, so a caller accumulating across
-     * retries can carry it forward.
-     */
-    data class Retry(
-        val remaining: List<ReviewDoc>,
-        val failedDocs: Int,
-        val total: Int,
-        val applied: Int,
-    ) : ReviewOutcome
-}
+/** Whether the model suggested anything for this document; a row without is shown collapsed. */
+internal val ReviewDoc.hasSuggestions: Boolean
+    get() = chips.isNotEmpty() || removals.isNotEmpty() || fields.isNotEmpty()
 
 /**
- * The Review → journal step: project reviewed documents onto their *selected* items, hand them to
- * [AiEditApply]'s batched grain, and rebuild the retry rows from what actually landed.
+ * The Review → journal step of one reviewed batch, shared by the interactive [AiEditRun] and a
+ * queued run opened from the processing queue, so the two cannot drift apart: project the reviewed
+ * documents onto their *selected* items, write them, and rebuild a Retry from what landed.
  *
- * This sits one level above [AiEditApply], which owns the write mechanics (per-tag transactions,
- * one `applyEdits` per document, failure as data). What lives here is the part that only a
- * *reviewed* run has: the selection projection and the guarantee that a retry never re-writes a
- * `(doc, tag)` or `(doc, field)` that already succeeded. Both reviewed flows — the interactive
- * [AiEditRun] and a queued run opened from the processing queue — need exactly that, so it is one
- * implementation rather than two that must stay in step.
+ * The write grain is the domain's (CONTEXT.md, "Apply"):
  *
- * Run-level accounting (how many suggestions earlier retry attempts wrote, whether the scope has
- * more documents left) deliberately stays with the caller: it is what distinguishes the two flows.
+ * - Tag additions and removals are grouped by distinct tag, one [MetadataWriter.addTag] or
+ *   [MetadataWriter.removeTag] per tag across all its documents, all-or-nothing per tag.
+ * - Field values are per document: one [MetadataWriter.applyEdits] per document. A setter per field
+ *   would re-run the storage path rules and rename the file once per field, and one transaction
+ *   over every document would let one rejected document lose all the others' writes.
+ *
+ * A failure is recorded, never rolled back: the Retry holds only the failed documents, with every
+ * item that did land deselected, so a retry never writes a `(doc, tag)` or `(doc, field)` twice.
+ *
+ * Stateful, one per batch: it carries what earlier partial-failure attempts wrote, so the Done that
+ * finally comes counts all of them.
  */
 internal class ReviewApply(
-    meta: MetadataWriter,
+    private val meta: MetadataWriter,
 ) {
-    private val editApply = AiEditApply(meta)
+    /** Suggestions written across earlier partial-failure attempts of this batch. */
+    private var appliedSoFar = 0
 
+    /**
+     * Write the selected items of [docs]. [onDocWritten] fires with each document's id as a write
+     * covering it lands; [moreRemain] is asked only once everything landed, for [ApplyResult.moreRemain].
+     */
     suspend fun apply(
         docs: List<ReviewDoc>,
         onDocWritten: (String) -> Unit = {},
-    ): ReviewOutcome {
+        moreRemain: suspend () -> Boolean,
+    ): ApplyOutcome {
         val edits = docs.map { it.selectedEdit() }
-        if (edits.all { it.isEmpty }) return ReviewOutcome.NothingSelected
-        val report = editApply.apply(edits, onDocWritten)
-        if (report.failedDocs.isEmpty()) {
-            return ReviewOutcome.Written(report.appliedCount, report.changedDocs.size)
+        if (edits.all { it.isEmpty }) return ApplyOutcome.NothingSelected
+        val written = write(edits, onDocWritten)
+        if (written.failedDocs.isEmpty()) {
+            return ApplyOutcome.Done(ApplyResult(written.count + appliedSoFar, written.changedDocs, moreRemain()))
         }
-        return ReviewOutcome.Retry(
-            remaining = docs.filter { it.docId in report.failedDocs }.map { it.withoutWritten(report) },
-            failedDocs = report.failedDocs.size,
+        appliedSoFar += written.count
+        return ApplyOutcome.Retry(
+            remaining = docs.filter { it.docId in written.failedDocs }.map { it.withoutWritten(written) },
+            failedDocs = written.failedDocs.size,
             total = docs.size,
-            applied = report.appliedCount,
         )
     }
 
-    private fun ReviewDoc.selectedEdit(): WritableEdit =
-        WritableEdit(
+    /** One document's selected items: binary, unlike the Review's tri-state chips. */
+    private class SelectedEdit(
+        val docId: String,
+        val addTags: List<String>,
+        val removeTags: List<String>,
+        val fields: Map<String, String?>,
+    ) {
+        val isEmpty: Boolean get() = addTags.isEmpty() && removeTags.isEmpty() && fields.isEmpty()
+    }
+
+    /** What one write pass landed, per `(docId, tag or field key)`, and which documents failed. */
+    private class Written {
+        val adds = mutableSetOf<Pair<String, String>>()
+        val removals = mutableSetOf<Pair<String, String>>()
+        val fields = mutableSetOf<Pair<String, String>>()
+        val failedDocs = mutableSetOf<String>()
+
+        val count: Int get() = adds.size + removals.size + fields.size
+        val changedDocs: Int get() = (adds + removals + fields).map { it.first }.toSet().size
+    }
+
+    private suspend fun write(
+        edits: List<SelectedEdit>,
+        onDocWritten: (String) -> Unit,
+    ): Written {
+        val written = Written()
+        for ((tag, docIds) in edits.byTag { it.addTags }) {
+            writeTag(written.adds, written, docIds, tag, onDocWritten) { meta.addTag(docIds, tag) }
+        }
+        for ((tag, docIds) in edits.byTag { it.removeTags }) {
+            writeTag(written.removals, written, docIds, tag, onDocWritten) { meta.removeTag(docIds, tag) }
+        }
+        for (edit in edits.filter { it.fields.isNotEmpty() }) {
+            val landed = runCatchingCancellable { meta.applyEdits(listOf(edit.docId), fields = edit.fields) }.isSuccess
+            if (landed) {
+                edit.fields.keys.forEach { written.fields += edit.docId to it }
+                onDocWritten(edit.docId)
+            } else {
+                written.failedDocs += edit.docId
+            }
+        }
+        return written
+    }
+
+    /** One grouped tag call: every `(doc, tag)` of it lands, or all of its documents failed. */
+    private suspend fun writeTag(
+        into: MutableSet<Pair<String, String>>,
+        written: Written,
+        docIds: List<String>,
+        tag: String,
+        onDocWritten: (String) -> Unit,
+        call: suspend () -> Unit,
+    ) {
+        if (runCatchingCancellable { call() }.isSuccess) {
+            docIds.forEach { docId ->
+                into += docId to tag
+                onDocWritten(docId)
+            }
+        } else {
+            written.failedDocs += docIds
+        }
+    }
+
+    private fun List<SelectedEdit>.byTag(tags: (SelectedEdit) -> List<String>): Map<String, List<String>> =
+        flatMap { edit -> tags(edit).map { it to edit.docId } }.groupBy({ it.first }, { it.second })
+
+    private fun ReviewDoc.selectedEdit(): SelectedEdit =
+        SelectedEdit(
             docId = docId,
             addTags = chips.filter { it.selected }.map { it.tag },
             removeTags = removals.filter { it.selected }.map { it.tag },
-            properties = fields.filter { it.selected }.associate { it.key to it.value },
+            fields = fields.filter { it.selected }.associate { it.key to it.value },
         )
 
     /**
-     * The same row with every item [report] confirms was written deselected, so retrying this
-     * document re-writes only what is still owed. Items are deselected rather than dropped: a
-     * written suggestion is still part of what the user was shown and reads as "already done".
+     * The same row with every item [written] confirms deselected, so retrying this document
+     * re-writes only what is still owed. Items are deselected rather than dropped: a written
+     * suggestion is still part of what the user was shown and reads as "already done".
      */
-    private fun ReviewDoc.withoutWritten(report: ApplyReport): ReviewDoc =
+    private fun ReviewDoc.withoutWritten(written: Written): ReviewDoc =
         copy(
-            chips = chips.map { it.deselectIf((docId to it.tag) in report.addsWritten) },
-            removals = removals.map { it.deselectIf((docId to it.tag) in report.removalsWritten) },
-            fields = fields.map { it.deselectIf((docId to it.key) in report.fieldsWritten) },
+            chips = chips.map { it.deselectIf((docId to it.tag) in written.adds) },
+            removals = removals.map { it.deselectIf((docId to it.tag) in written.removals) },
+            fields = fields.map { it.deselectIf((docId to it.key) in written.fields) },
         )
 
     private fun ReviewChip.deselectIf(written: Boolean): ReviewChip =

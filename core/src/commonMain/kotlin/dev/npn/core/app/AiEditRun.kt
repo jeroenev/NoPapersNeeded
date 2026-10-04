@@ -148,10 +148,9 @@ sealed interface ApplyOutcome {
  *   results keep the original batch order. Cancellation propagates (nothing is written).
  * - Review pre-selection is [ReviewProjector]'s: existing-vocabulary tag additions pre-selected,
  *   new tags and removals pre-deselected; field fill-ins pre-selected, overwrites pre-deselected.
- * - [apply] delegates the write and the retry rebuild to [ReviewApply] (per-tag transactions, one
- *   `applyEdits` per document, failures as an [ApplyOutcome.Retry] with succeeded items
- *   deselected) and adds only this run's own accounting: suggestions written by earlier attempts
- *   of the same batch, and whether the scope has documents left.
+ * - [apply] hands the batch to its [ReviewApply] (per-tag transactions, one `applyEdits` per
+ *   document, failures as an [ApplyOutcome.Retry] with succeeded items deselected, and the count of
+ *   what earlier attempts of the batch wrote); the run adds whether the scope has documents left.
  *
  * [processed] marks every reviewed document (including no-suggestion ones) at review time, not on
  * apply, so deselecting or skipping a document never sends it back through the model. A run handed
@@ -159,15 +158,15 @@ sealed interface ApplyOutcome {
  */
 class AiEditRun(
     private val documents: DocumentRepository,
-    meta: MetadataWriter,
+    private val meta: MetadataWriter,
     content: DocContentFacade,
     ai: AiSuggest,
     fieldRegistry: FieldRegistry,
     /** Documents handed over from the library's selection mode; empty when opened standalone. */
     private val selection: List<String> = emptyList(),
 ) {
-    /** The shared Review→journal step; this run adds only its own cross-batch accounting. */
-    private val reviewApply = ReviewApply(meta)
+    /** The current batch's Review→journal step; each batch gets its own, so counts never carry over. */
+    private var reviewApply = ReviewApply(meta)
 
     /** The shared pre-select policy, applied to each answered document. */
     private val projector = ReviewProjector(content, fieldRegistry)
@@ -177,9 +176,6 @@ class AiEditRun(
     /** Documents already reviewed in this run; excluded from every later batch. */
     private val _processed = MutableStateFlow(emptySet<String>())
     val processed: StateFlow<Set<String>> = _processed.asStateFlow()
-
-    /** Suggestions written across earlier partial-failure apply attempts of the current batch. */
-    private var appliedSoFar = 0
 
     /**
      * Documents in scope, live. The library selection is intersected in memory (ids do not travel
@@ -280,12 +276,8 @@ class AiEditRun(
         // next batch never re-suggests docs the user already saw — deselecting or skipping a doc
         // must not send it back through the model on "Next batch".
         _processed.update { done -> done + results.map { it.docId } }
-        appliedSoFar = 0
-        val (withSuggestions, empty) =
-            results.partition {
-                it.chips.isNotEmpty() || it.removals.isNotEmpty() ||
-                    it.fields.isNotEmpty()
-            }
+        reviewApply = ReviewApply(meta)
+        val (withSuggestions, empty) = results.partition { it.hasSuggestions }
         return BatchResult.Review(withSuggestions, empty, failures, total)
     }
 
@@ -293,32 +285,14 @@ class AiEditRun(
     suspend fun apply(
         key: ScopeKey,
         docs: List<ReviewDoc>,
-    ): ApplyOutcome {
-        // The selection projection, the write grain and the retry rebuild all live in the shared
-        // ReviewApply; what stays here is this run's own accounting — the suggestions written by
-        // earlier attempts of the same batch, and whether the scope has more documents left.
-        //
-        // _processed is Review state, so it stays this run's to keep: onDocWritten marks each
-        // document as its grouped op commits, matching the previous per-op update timing.
-        return when (val outcome = reviewApply.apply(docs) { docId -> _processed.update { it + docId } }) {
-            ReviewOutcome.NothingSelected -> {
-                ApplyOutcome.NothingSelected
-            }
-
-            is ReviewOutcome.Written -> {
-                ApplyOutcome.Done(
-                    // Include suggestions written in earlier partial-failure attempts of this batch.
-                    ApplyResult(outcome.applied + appliedSoFar, outcome.docsChanged, moreRemain(key)),
-                )
-            }
-
-            is ReviewOutcome.Retry -> {
-                // Carry the succeeded count forward so it is not lost when Done is finally produced.
-                appliedSoFar += outcome.applied
-                ApplyOutcome.Retry(outcome.remaining, outcome.failedDocs, outcome.total)
-            }
-        }
-    }
+    ): ApplyOutcome =
+        // _processed is Review state, so it stays this run's to keep: each document is marked as a
+        // write covering it commits.
+        reviewApply.apply(
+            docs,
+            onDocWritten = { docId -> _processed.update { it + docId } },
+            moreRemain = { moreRemain(key) },
+        )
 
     // Taken as a one-shot snapshot rather than a live flow: a run continues (and finishes with a
     // correct moreRemain) while the caller's preview subscription is gone.
