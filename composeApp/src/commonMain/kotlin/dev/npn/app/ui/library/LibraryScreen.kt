@@ -600,7 +600,7 @@ private fun LibraryContent(
             }
             ActiveFilters(
                 filter = ui.filter,
-                fieldLabels = fieldFilters.fields.associate { it.key to it.label },
+                fields = fieldFilters.fields,
                 onFilterChange = vm::setFilter,
                 modifier = Modifier.padding(horizontal = 16.dp),
             )
