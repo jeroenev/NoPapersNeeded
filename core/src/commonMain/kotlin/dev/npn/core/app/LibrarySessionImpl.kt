@@ -6,8 +6,8 @@ import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiOcrEngine
 import dev.npn.core.ai.AiSuggest
-import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.ai.RoomChatHistoryProvider
+import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.NpnDatabase

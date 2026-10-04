@@ -1,7 +1,7 @@
 package dev.npn.core.ocr
 
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DeviceDatabase
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity

@@ -86,12 +86,16 @@ class SavedViewRepositoryTest {
                 rig.session.rescan()
                 second.rescan()
 
-                rig.session.savedViews.observeSavedViews().first() shouldBe listOf(invoices, receipts)
+                rig.session.savedViews
+                    .observeSavedViews()
+                    .first() shouldBe listOf(invoices, receipts)
                 second.savedViews.observeSavedViews().first() shouldBe listOf(invoices, receipts)
 
                 second.savedViews.delete("a")
                 rig.session.rescan()
-                rig.session.savedViews.observeSavedViews().first() shouldBe listOf(receipts)
+                rig.session.savedViews
+                    .observeSavedViews()
+                    .first() shouldBe listOf(receipts)
             } finally {
                 second.close()
                 secondDb.close()

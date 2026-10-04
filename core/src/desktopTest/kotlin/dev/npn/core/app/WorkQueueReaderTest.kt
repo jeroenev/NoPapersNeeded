@@ -3,8 +3,8 @@ package dev.npn.core.app
 import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.db.AiEnrichQueueEntity
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DeviceDatabase
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.deviceDatabase

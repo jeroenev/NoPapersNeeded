@@ -143,7 +143,10 @@ class AiOcrPipelineTest {
 
             pipe.reconcileSidecars()
 
-            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
+            rig.deviceDb
+                .ocrQueueDao()
+                .getByDocId(docId)!!
+                .state shouldBe OcrPipeline.STATE_DONE
         }
 
     @Test
@@ -169,7 +172,10 @@ class AiOcrPipelineTest {
             pipe.reconcileSidecars()
 
             ai.calls shouldBe 3
-            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
+            rig.deviceDb
+                .ocrQueueDao()
+                .getByDocId(docId)!!
+                .state shouldBe OcrPipeline.STATE_DONE
         }
 
     @Test

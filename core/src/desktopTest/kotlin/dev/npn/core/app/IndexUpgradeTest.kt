@@ -111,7 +111,11 @@ class IndexUpgradeTest {
                 session.deviceId shouldBe "device-from-the-index"
                 val device = deps.deviceDb
                 device.keyValueDao().getAll(LEGACY_KV.keys.toList()) shouldBe LEGACY_KV - OBSERVATION_KEY
-                device.aiEditJobDao().docsFor("job-1").single().suggestionJson shouldBe "{\"paid\":true}"
+                device
+                    .aiEditJobDao()
+                    .docsFor("job-1")
+                    .single()
+                    .suggestionJson shouldBe "{\"paid\":true}"
                 session.work.editRuns
                     .first()
                     .single()
@@ -119,7 +123,11 @@ class IndexUpgradeTest {
                 device.aiEnrichQueueDao().getByDocId("b".repeat(64))?.attempts shouldBe 1
                 device.aiEnrichQueueDao().enrichedAt(doc) shouldBe 42
                 device.ocrQueueDao().getByDocId(doc)?.aiRequested shouldBe true
-                device.ocrQueueDao().cachedPages(doc, "ai", "eng").single().text shouldBe "paid page"
+                device
+                    .ocrQueueDao()
+                    .cachedPages(doc, "ai", "eng")
+                    .single()
+                    .text shouldBe "paid page"
 
                 // The index keeps only what it can rebuild: its own observations, not the moved state.
                 deps.db.keyValueDao().getAll(LEGACY_KV.keys.toList()) shouldBe mapOf(OBSERVATION_KEY to "seen")
@@ -143,7 +151,11 @@ class IndexUpgradeTest {
                     AiEditJobEntity("job-1", requestJson = "{}", createdAt = 1, updatedAt = 1, nextAttemptAt = 0),
                 )
                 deps.deviceDb.aiEditJobDao().upsertDocs(listOf(AiEditJobDocEntity("job-1", docId, position = 0)))
-                val queued = deps.deviceDb.ocrQueueDao().getByDocId(docId).shouldNotBeNull()
+                val queued =
+                    deps.deviceDb
+                        .ocrQueueDao()
+                        .getByDocId(docId)
+                        .shouldNotBeNull()
                 deps.deviceDb.ocrQueueDao().upsert(queued.copy(attempts = 2, aiRequested = true))
             }
 
@@ -161,7 +173,11 @@ class IndexUpgradeTest {
                     .single()
                     .jobId shouldBe "job-1"
                 // The run this device still owes the document keeps its attempts and its request.
-                val owed = deps.deviceDb.ocrQueueDao().getByDocId(docId).shouldNotBeNull()
+                val owed =
+                    deps.deviceDb
+                        .ocrQueueDao()
+                        .getByDocId(docId)
+                        .shouldNotBeNull()
                 owed.attempts shouldBe 2
                 owed.aiRequested shouldBe true
             }

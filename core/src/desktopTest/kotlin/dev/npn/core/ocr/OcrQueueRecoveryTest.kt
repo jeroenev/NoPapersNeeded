@@ -75,7 +75,10 @@ class OcrQueueRecoveryTest {
 
             rig.pipeline("devA", workingEngine()).processNext() shouldBe true
 
-            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
+            rig.deviceDb
+                .ocrQueueDao()
+                .getByDocId(docId)!!
+                .state shouldBe OcrPipeline.STATE_DONE
             db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
         }
 
@@ -90,7 +93,10 @@ class OcrQueueRecoveryTest {
 
             rig.pipeline("devA", workingEngine()).processNext() shouldBe true
 
-            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_DONE
+            rig.deviceDb
+                .ocrQueueDao()
+                .getByDocId(docId)!!
+                .state shouldBe OcrPipeline.STATE_DONE
         }
 
     @Test
@@ -124,7 +130,10 @@ class OcrQueueRecoveryTest {
             rig.pipeline("devA", engine).processNext() shouldBe false
 
             engine.calls shouldBe 0
-            rig.deviceDb.ocrQueueDao().getByDocId(docId)!!.state shouldBe OcrPipeline.STATE_FAILED
+            rig.deviceDb
+                .ocrQueueDao()
+                .getByDocId(docId)!!
+                .state shouldBe OcrPipeline.STATE_FAILED
         }
 }
 

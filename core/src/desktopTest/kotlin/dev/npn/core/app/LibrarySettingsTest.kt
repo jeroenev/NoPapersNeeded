@@ -34,7 +34,9 @@ class LibrarySettingsTest {
                 rig.session.rescan()
                 second.rescan()
 
-                val first = rig.session.storagePath.storagePath.first()
+                val first =
+                    rig.session.storagePath.storagePath
+                        .first()
                 first shouldBe second.storagePath.storagePath.first()
                 // The later write wins everywhere, whichever device made it.
                 first.template shouldBe "archive/{title}.pdf"
@@ -56,7 +58,8 @@ class LibrarySettingsTest {
                 )
             val rig = AppSessionRig.create(backgroundScope, legacyLibrarySettings = { legacy })
             try {
-                rig.session.storagePath.storagePath.first() shouldBe StoragePathSetting("{title}.pdf", enabled = true)
+                rig.session.storagePath.storagePath
+                    .first() shouldBe StoragePathSetting("{title}.pdf", enabled = true)
                 rig.session.rules
                     .observeRules()
                     .first()
