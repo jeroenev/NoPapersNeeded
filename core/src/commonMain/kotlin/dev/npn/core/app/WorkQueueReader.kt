@@ -141,9 +141,8 @@ internal class WorkQueueReader(
             },
         attempts = attempts,
         updatedAt = updatedAt,
-        // The OCR queue has no scheduled retry: a failed attempt leaves the row pending and the
-        // next drain picks it up.
-        nextAttemptAt = null,
+        // Only a retry waits for a time; a row given up on is not coming back by itself.
+        nextAttemptAt = nextAttemptAt.takeIf { attempts > 0 && state != OcrPipeline.STATE_FAILED },
         lastError = lastError,
     )
 

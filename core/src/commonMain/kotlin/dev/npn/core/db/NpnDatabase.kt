@@ -34,7 +34,8 @@ import androidx.room3.migration.AutoMigrationSpec
     // v17: adds documents.ocrSource (the indexed sidecar's writer key) + ocr_queue.rerun.
     // v18: adds documents.trashedAt (when the winning doc-trash happened) for the trash auto-purge.
     // v19: adds ocr_queue.aiRequested (an AI OCR run asked for on this device, unlike the synced pin).
-    version = 19,
+    // v20: adds ocr_queue.nextAttemptAt (retry backoff for failed OCR runs).
+    version = 20,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -53,6 +54,7 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 16, to = 17),
         AutoMigration(from = 17, to = 18),
         AutoMigration(from = 18, to = 19),
+        AutoMigration(from = 19, to = 20),
     ],
     entities = [
         DocumentEntity::class,

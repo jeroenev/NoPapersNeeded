@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.work.backoffMs
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
@@ -12,7 +13,6 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 import kotlin.time.Duration.Companion.days
-import kotlin.time.Duration.Companion.minutes
 
 /**
  * When a queued document is tried again: drain order, backoff, and the states that pause the drain
@@ -74,7 +74,7 @@ class AiAutoEnricherRetryTest {
 
                 val row = rig.row("d1").shouldNotBeNull()
                 row.attempts shouldBe 1
-                row.nextAttemptAt shouldBe 5_000L + AiAutoEnricher.backoffMs(1)
+                row.nextAttemptAt shouldBe 5_000L + backoffMs(1)
                 row.lastError shouldBe "endpoint down"
                 rig.enrichedAt("d1").shouldBeNull()
             }
@@ -100,7 +100,7 @@ class AiAutoEnricherRetryTest {
 
                 val row = rig.row("d1").shouldNotBeNull()
                 row.attempts shouldBe 1
-                row.nextAttemptAt shouldBe 5_000L + AiAutoEnricher.backoffMs(1)
+                row.nextAttemptAt shouldBe 5_000L + backoffMs(1)
                 row.lastError shouldBe "journal rejected the write"
                 rig.enrichedAt("d1").shouldBeNull()
             }
@@ -117,12 +117,12 @@ class AiAutoEnricherRetryTest {
                 // Twice, so the row's backoff (2m) outlasts the cooldown (1m) and it is the row
                 // being not-yet-due that holds the retry back, not the endpoint cooldown.
                 rig.drain()
-                rig.clock.advance(AiAutoEnricher.backoffMs(1))
+                rig.clock.advance(backoffMs(1))
                 rig.drain()
                 rig.ai.suggestEditsCalls.size shouldBe 2
 
                 // Still inside the backoff window: nothing is due.
-                rig.clock.advance(AiAutoEnricher.backoffMs(2) - 1)
+                rig.clock.advance(backoffMs(2) - 1)
                 rig.drain() shouldBe 0
                 rig.ai.suggestEditsCalls.size shouldBe 2
 
@@ -238,7 +238,7 @@ class AiAutoEnricherRetryTest {
                 rig.drain() shouldBe 0
 
                 // "bad" is due again by the time the fresh document arrives.
-                rig.clock.advance(AiAutoEnricher.backoffMs(1))
+                rig.clock.advance(backoffMs(1))
                 rig.insertAndQueue("good")
 
                 rig.drain() shouldBe 1
@@ -275,20 +275,6 @@ class AiAutoEnricherRetryTest {
                 rig.enrichedAt("d1").shouldNotBeNull()
                 rig.row("d1").shouldBeNull()
             }
-        }
-
-    /** The ceiling is what makes retrying forever affordable: at most one call a day per document. */
-    @Test
-    fun `the backoff doubles up to a daily ceiling and holds there`() =
-        runTest {
-            AiAutoEnricher.backoffMs(1) shouldBe 1.minutes.inWholeMilliseconds
-            AiAutoEnricher.backoffMs(2) shouldBe 2.minutes.inWholeMilliseconds
-            AiAutoEnricher.backoffMs(3) shouldBe 4.minutes.inWholeMilliseconds
-            AiAutoEnricher.backoffMs(8) shouldBe 128.minutes.inWholeMilliseconds
-            AiAutoEnricher.backoffMs(11) shouldBe 1024.minutes.inWholeMilliseconds
-            // 2048m would overshoot the ceiling, so this is where it settles.
-            AiAutoEnricher.backoffMs(12) shouldBe 1.days.inWholeMilliseconds
-            AiAutoEnricher.backoffMs(500) shouldBe 1.days.inWholeMilliseconds
         }
 
     /** Turning the feature off (or losing the endpoint config) must not consume the retries. */

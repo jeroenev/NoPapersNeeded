@@ -200,7 +200,7 @@ interface DuplicateDao {
 @Dao
 interface OcrQueueDao {
     /**
-     * Oldest row still owed a pass.
+     * Oldest row still owed a pass and due at [now], i.e. not waiting out a retry backoff.
      *
      * "Owed" is written as *not terminal* rather than `state = 'pending'` exactly, so the queue has
      * one notion of unfinished work and any row that is neither done nor given up on gets drained.
@@ -208,8 +208,11 @@ interface OcrQueueDao {
      * one once its process is gone, and matching on `pending` alone would skip them forever (see
      * [OcrQueueEntity]).
      */
-    @Query("SELECT * FROM ocr_queue WHERE state NOT IN ('done', 'failed') ORDER BY updatedAt LIMIT 1")
-    suspend fun nextPending(): OcrQueueEntity?
+    @Query(
+        "SELECT * FROM ocr_queue WHERE state NOT IN ('done', 'failed') AND nextAttemptAt <= :now " +
+            "ORDER BY updatedAt LIMIT 1",
+    )
+    suspend fun nextPending(now: Long): OcrQueueEntity?
 
     @Upsert
     suspend fun upsert(entry: OcrQueueEntity)
@@ -230,8 +233,9 @@ interface OcrQueueDao {
 
     /**
      * Count of rows still owed a pass, for [dev.npn.core.app.OcrStatus]. Counts exactly what
-     * [nextPending] would eventually take, so the number the user sees drains to zero; rows given
-     * up on are reported separately, as failures rather than as work outstanding.
+     * [nextPending] would eventually take, including rows waiting out a backoff, so the number the
+     * user sees drains to zero; rows given up on are reported separately, as failures rather than
+     * as work outstanding.
      */
     @Query("SELECT COUNT(*) FROM ocr_queue WHERE state NOT IN ('done', 'failed')")
     fun countActive(): Flow<Int>

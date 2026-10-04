@@ -79,7 +79,10 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         attempts: Int = 0,
         updatedAt: Long = 1,
         lastError: String? = null,
-    ) = db.ocrQueueDao().upsert(OcrQueueEntity(id, state, attempts, updatedAt, lastError))
+        nextAttemptAt: Long = 0,
+    ) = db.ocrQueueDao().upsert(
+        OcrQueueEntity(id, state, attempts, updatedAt, lastError, nextAttemptAt = nextAttemptAt),
+    )
 
     private suspend fun putEnrich(
         id: String,
@@ -168,21 +171,24 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
     fun `a failed OCR row stays visible because it needs attention`() =
         runTest {
             putDoc("a")
-            putOcr("a", state = OcrPipeline.STATE_FAILED, attempts = 3, lastError = "boom")
+            putOcr("a", state = OcrPipeline.STATE_FAILED, attempts = 3, lastError = "boom", nextAttemptAt = 9_000)
 
             val entry = queue().single()
             entry.state shouldBe WorkState.FAILED
             entry.attempts shouldBe 3
             entry.lastError shouldBe "boom"
+            // Given up on: no retry is coming, whatever the row's last backoff said.
+            entry.nextAttemptAt shouldBe null
         }
 
     @Test
     fun `a pending OCR row that has already burned attempts reads as a retry`() =
         runTest {
             putDoc("a")
-            putOcr("a", state = OcrPipeline.STATE_PENDING, attempts = 1)
+            putOcr("a", state = OcrPipeline.STATE_PENDING, attempts = 1, nextAttemptAt = 9_000)
 
             queue().single().state shouldBe WorkState.RETRYING
+            queue().single().nextAttemptAt shouldBe 9_000
         }
 
     @Test

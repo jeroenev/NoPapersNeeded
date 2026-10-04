@@ -6,6 +6,8 @@ import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.journal.EpochClock
+import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.pdf.PdfBoxEngine
 import java.io.File
 import java.nio.file.Files
@@ -28,6 +30,7 @@ internal class OcrPipelineRig {
         database: NpnDatabase = db,
         engines: OcrEngineSelector = OcrEngineSelector(local = ocr),
         config: OcrConfig = OcrConfig(),
+        clock: EpochClock = SystemEpochClock,
     ) = OcrPipeline(
         fs = fs,
         sidecars = OcrSidecarFiles(fs),
@@ -40,6 +43,7 @@ internal class OcrPipelineRig {
         fieldDao = database.documentFieldDao(),
         deviceId = deviceId,
         config = config,
+        clock = clock,
     )
 
     /**

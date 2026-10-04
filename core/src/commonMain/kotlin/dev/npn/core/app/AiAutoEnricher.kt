@@ -10,6 +10,7 @@ import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.journal.EpochClock
+import dev.npn.core.work.backoffMs
 import kotlinx.coroutines.CancellationException
 
 /**
@@ -261,30 +262,5 @@ class AiAutoEnricher(
     companion object {
         /** How long a failed call parks the whole queue, regardless of which document failed. */
         internal const val FAILURE_COOLDOWN_MS = 60L * 1000L
-
-        private const val BACKOFF_BASE_MS = 60L * 1000L
-        private const val BACKOFF_CEILING_MS = 24L * 60L * 60L * 1000L
-
-        /** Keeps the shift in range for an unbounded [AiEnrichQueueEntity.attempts]; well past the ceiling. */
-        private const val BACKOFF_MAX_SHIFT = 20
-
-        /**
-         * 1m, 2m, 4m, 8m … 17h, then a day forever.
-         *
-         * Plain doubling rather than a coarser ramp: the interval is also how long a *recovered*
-         * endpoint goes unnoticed, so overshooting costs latency on the common case (a blip, a
-         * tunnel, a laptop that just woke) to save calls on the rare one. Eleven steps to the
-         * ceiling keeps every early retry cheap while still settling at one call a day for a
-         * document that will never succeed.
-         *
-         * This is an earliest-retry time, not a schedule: nothing wakes the drain when a row falls
-         * due. A retry is served by the next kick after that, so on an otherwise idle library the
-         * first few steps all collapse onto the periodic maintenance tick and the observed ramp
-         * starts at that interval. The doubling only separates the steps above it — which is where
-         * the calls being saved actually are.
-         */
-        fun backoffMs(attempts: Int): Long =
-            (BACKOFF_BASE_MS shl (attempts - 1).coerceIn(0, BACKOFF_MAX_SHIFT))
-                .coerceAtMost(BACKOFF_CEILING_MS)
     }
 }

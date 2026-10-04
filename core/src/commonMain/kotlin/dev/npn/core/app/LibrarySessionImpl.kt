@@ -518,8 +518,10 @@ class LibrarySessionImpl private constructor(
                     // Compaction runs under the same single-writer mutex; it only fires when the
                     // stable object count exceeds the threshold, so most reconciles are a cheap no-op.
                     runCatching { coordinator.compact() }
-                    // Enrichment rows and edit runs become due by the passage of time, which no
-                    // Room flow can observe; this tick is what actually retries a backed-off one.
+                    // OCR retries, enrichment rows and edit runs become due by the passage of time,
+                    // which no Room flow can observe; this tick is what actually retries a
+                    // backed-off one.
+                    ocrWorker.kick()
                     enrichWorker.kick()
                     editWorker.kick()
                 }
@@ -763,6 +765,7 @@ class LibrarySessionImpl private constructor(
                     deviceId = effectiveDeviceId,
                     config = OcrConfig(lang = deps.ocrLanguage()),
                     ftsWriteGate = ftsWriteGate,
+                    clock = deps.clock,
                 )
             val ocrWorker = QueueDrainer(deps.scope) { ocrPipeline.processNext() }
 

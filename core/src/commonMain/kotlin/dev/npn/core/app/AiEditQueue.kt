@@ -8,6 +8,7 @@ import dev.npn.core.db.AiEditJobDao
 import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.journal.EpochClock
+import dev.npn.core.work.backoffMs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -353,7 +354,7 @@ class AiEditQueue(
                 attempts = attempts,
                 // The same ramp as automatic enrichment: both are "an endpoint just refused a
                 // model call", and the cost of guessing the interval wrong is identical.
-                nextAttemptAt = now + AiAutoEnricher.backoffMs(attempts),
+                nextAttemptAt = now + backoffMs(attempts),
                 updatedAt = now,
                 lastError = cause?.let { it.message ?: it::class.simpleName },
             ),

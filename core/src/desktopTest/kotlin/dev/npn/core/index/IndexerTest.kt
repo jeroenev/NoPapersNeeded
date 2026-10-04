@@ -335,8 +335,8 @@ class IndexerTest {
             imported.relPath shouldBe "inbox/invoice.pdf"
             rig.db
                 .ocrQueueDao()
-                .nextPending()!!
-                .docId shouldBe imported.docId
+                .nextPending(now = Long.MAX_VALUE)
+                ?.docId shouldBe imported.docId
 
             // identical bytes -> Duplicate
             val src2 = rig.externalFile("scan2.pdf", "scanned-bytes")

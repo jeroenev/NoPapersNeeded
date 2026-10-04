@@ -116,10 +116,7 @@ data class QueuedWork(
     val attempts: Int,
     /** Epoch millis the queue row last changed. */
     val updatedAt: Long,
-    /**
-     * Epoch millis this entry may next be attempted, or null when nothing is holding it back.
-     * Only the enrichment queue schedules retries this way; OCR retries on the next drain.
-     */
+    /** Epoch millis this entry may next be attempted, or null when nothing is holding it back. */
     val nextAttemptAt: Long? = null,
     /** Message from the most recent failure, or null while the entry has never failed. */
     val lastError: String? = null,

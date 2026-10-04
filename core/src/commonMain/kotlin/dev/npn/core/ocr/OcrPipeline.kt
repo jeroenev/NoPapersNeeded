@@ -13,12 +13,14 @@ import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.FtsRows
 import dev.npn.core.index.FtsWriteGate
+import dev.npn.core.journal.EpochClock
+import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.pdf.PdfEngine
+import dev.npn.core.work.backoffMs
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlin.time.Clock
 
 /**
  * Tunables for the hybrid extract-or-OCR pipeline.
@@ -27,7 +29,8 @@ import kotlin.time.Clock
  *  at least this many characters is treated as already having a usable text layer, so it is
  *  not rendered and OCR'd.
  * @param renderDpiDim max longer-side pixel dimension used when rendering a page for OCR.
- * @param maxAttempts attempts before a queue entry is marked permanently failed.
+ * @param maxAttempts attempts before a queue entry is marked permanently failed. Each failed
+ *  attempt first waits out [backoffMs], so a failing document is not retried at once.
  */
 data class OcrConfig(
     val lang: String = "eng",
@@ -61,6 +64,7 @@ class OcrPipeline(
     private val deviceId: String,
     private val config: OcrConfig = OcrConfig(),
     private val ftsWriteGate: FtsWriteGate = FtsWriteGate(),
+    private val clock: EpochClock = SystemEpochClock,
 ) {
     /**
      * Optional hook called whenever text is indexed for a document — including when an existing
@@ -154,8 +158,8 @@ class OcrPipeline(
     val inFlight: StateFlow<String?> = _inFlight.asStateFlow()
 
     /**
-     * Pop the next queue entry owed a pass, process it, and return whether something was
-     * processed. Drives the state machine pending -> done/failed with attempts.
+     * Pop the next queue entry owed a pass and due now, process it, and return whether something
+     * was processed. Drives the state machine pending -> done/failed with attempts.
      *
      * The row is left `pending` throughout and moved only by [processDoc]'s own terminal write, so
      * an interrupted pass is indistinguishable from one that never started and the next drain
@@ -163,7 +167,7 @@ class OcrPipeline(
      * ([dev.npn.core.work.QueueDrainer]): no second worker can pop the same row meanwhile.
      */
     suspend fun processNext(): Boolean {
-        val entry = ocrQueueDao.nextPending() ?: return false
+        val entry = ocrQueueDao.nextPending(clock.nowMillis()) ?: return false
         _inFlight.value = entry.docId
         try {
             processDoc(entry.docId)
@@ -237,7 +241,7 @@ class OcrPipeline(
                     docId = docId,
                     state = STATE_DONE,
                     attempts = ocrQueueDao.getByDocId(docId)?.attempts ?: 0,
-                    updatedAt = now(),
+                    updatedAt = clock.nowMillis(),
                     lastError = hookError,
                 ),
             )
@@ -316,7 +320,7 @@ class OcrPipeline(
         if (sameEngine.any { decode(doc.docId, it.writerKey)?.pages == result.pages }) return OwnOcr.Adopted
         val writerKey =
             if (sameEngine.any { it.deviceId == deviceId }) {
-                NpnPaths.ocrRerunWriterKey(deviceId, now(), result.engine)
+                NpnPaths.ocrRerunWriterKey(deviceId, clock.nowMillis(), result.engine)
             } else {
                 NpnPaths.ocrWriterKey(deviceId, result.engine)
             }
@@ -326,7 +330,7 @@ class OcrPipeline(
                 dev = deviceId,
                 engine = result.engine,
                 lang = result.lang,
-                createdAt = now(),
+                createdAt = clock.nowMillis(),
                 pages = result.pages,
             )
         return try {
@@ -548,7 +552,7 @@ class OcrPipeline(
                 docId = doc.docId,
                 state = STATE_PENDING,
                 attempts = entry?.attempts ?: 0,
-                updatedAt = now(),
+                updatedAt = clock.nowMillis(),
             ),
         )
     }
@@ -660,8 +664,8 @@ class OcrPipeline(
     }
 
     /**
-     * Charge a failed pass to [docId]: spend an attempt, leave the row pending for a retry or
-     * failed once the cap is reached, and record [error] as the diagnostic.
+     * Charge a failed pass to [docId]: spend an attempt, leave the row pending for a retry after
+     * its backoff or failed once the cap is reached, and record [error] as the diagnostic.
      *
      * [textIndexed] says another version's text was indexed for the document by this same pass. The
      * doc row then keeps the state that indexing gave it: it describes the searchable text, and a
@@ -676,12 +680,14 @@ class OcrPipeline(
         val entry = ocrQueueDao.getByDocId(docId)
         val attempts = (entry?.attempts ?: 0) + 1
         val state = if (attempts >= config.maxAttempts) STATE_FAILED else STATE_PENDING
+        val now = clock.nowMillis()
         ocrQueueDao.upsert(
             OcrQueueEntity(
                 docId = docId,
                 state = state,
                 attempts = attempts,
-                updatedAt = now(),
+                updatedAt = now,
+                nextAttemptAt = now + backoffMs(attempts),
                 lastError = error,
                 // A retry of a requested run is still that request.
                 rerun = entry?.rerun ?: false,
@@ -690,8 +696,6 @@ class OcrPipeline(
         )
         if (!textIndexed) setOcrState(docId, if (state == STATE_FAILED) OCR_FAILED else OCR_PENDING)
     }
-
-    private fun now(): Long = Clock.System.now().toEpochMilliseconds()
 }
 
 /** [what] plus [cause]'s message, when it has one: the diagnostic a failure is recorded with. */

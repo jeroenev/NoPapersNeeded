@@ -7,9 +7,11 @@ import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.index.MutableClock
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.work.QueueDrainer
+import dev.npn.core.work.backoffMs
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.ints.shouldBeGreaterThan
 import io.kotest.matchers.shouldBe
@@ -145,7 +147,8 @@ class OcrPipelineTest {
             val throwing = ThrowingOcrEngine()
             val bytes = PdfFixtures.imageOnlyPdf()
             val docId = rig.stageDoc("scan.pdf", bytes)
-            val pipe = rig.pipeline("devA", throwing)
+            val clock = MutableClock()
+            val pipe = rig.pipeline("devA", throwing, clock = clock)
 
             // attempt 1 -> pending (attempts=1)
             pipe.processDoc(docId)
@@ -158,11 +161,15 @@ class OcrPipelineTest {
             entry.attempts shouldBe 1
             entry.state shouldBe OcrPipeline.STATE_PENDING
             entry.lastError shouldBe "ocr failed: boom"
+            entry.nextAttemptAt shouldBe clock.now + backoffMs(1)
             // A failed page is a failed run: nothing is published for it, blank or otherwise.
             OcrSidecarFiles(fs).listForHash(docId) shouldBe emptyList()
 
-            // reset to pending for the next pop (nextPending picks pending rows)
-            pipe.processNext()
+            // Not retried at once: the row waits out its backoff before the next drain takes it.
+            pipe.processNext() shouldBe false
+            throwing.calls shouldBe 1
+            clock.advance(backoffMs(1))
+            pipe.processNext() shouldBe true
             entry =
                 db
                     .ocrQueueDao()
@@ -172,7 +179,9 @@ class OcrPipelineTest {
             entry.attempts shouldBe 2
             entry.state shouldBe OcrPipeline.STATE_PENDING
 
-            pipe.processNext()
+            pipe.processNext() shouldBe false
+            clock.advance(backoffMs(2))
+            pipe.processNext() shouldBe true
             entry =
                 db
                     .ocrQueueDao()
@@ -446,10 +455,16 @@ class OcrPipelineTest {
 private class ThrowingOcrEngine : OcrEngine {
     override val name: String = "mlkit"
 
+    var calls = 0
+        private set
+
     override suspend fun available(): Boolean = true
 
     override suspend fun recognizePng(
         png: ByteArray,
         lang: String,
-    ): String = throw RuntimeException("boom")
+    ): String {
+        calls++
+        throw RuntimeException("boom")
+    }
 }

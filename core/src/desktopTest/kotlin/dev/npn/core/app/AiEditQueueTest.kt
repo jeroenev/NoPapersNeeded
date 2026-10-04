@@ -13,6 +13,7 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.index.MutableClock
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.work.backoffMs
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -255,7 +256,7 @@ class AiEditQueueFailureTest {
                 rig.rows(jobId).map { it.attempts } shouldContainExactly listOf(0, 0)
                 val job = rig.job(jobId).shouldNotBeNull()
                 job.attempts shouldBe 1
-                job.nextAttemptAt shouldBe rig.clock.nowMillis() + AiAutoEnricher.backoffMs(1)
+                job.nextAttemptAt shouldBe rig.clock.nowMillis() + backoffMs(1)
                 job.lastError shouldBe "endpoint down"
             }
         }
@@ -360,7 +361,7 @@ class AiEditQueueFailureTest {
 
                 rig.ai.failWith = null
                 rig.ai.edit = suggestion()
-                rig.clock.advance(AiAutoEnricher.FAILURE_COOLDOWN_MS + AiAutoEnricher.backoffMs(1))
+                rig.clock.advance(AiAutoEnricher.FAILURE_COOLDOWN_MS + backoffMs(1))
                 rig.queue.processNext() shouldBe true
 
                 val job = rig.job(jobId).shouldNotBeNull()

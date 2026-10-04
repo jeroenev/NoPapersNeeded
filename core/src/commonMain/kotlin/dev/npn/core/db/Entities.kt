@@ -254,6 +254,12 @@ data class OcrQueueEntity(
      * a pin arriving from another replica must not make this one pay as well.
      */
     @ColumnInfo(defaultValue = "0") val aiRequested: Boolean = false,
+    /**
+     * Epoch millis before which a failed row must not be retried (`dev.npn.core.work.backoffMs`);
+     * 0 for a row that has not failed. A retry that came straight back would pay for the same
+     * failing call again, which for an AI run is a whole document of pages.
+     */
+    @ColumnInfo(defaultValue = "0") val nextAttemptAt: Long = 0,
 )
 
 /**
