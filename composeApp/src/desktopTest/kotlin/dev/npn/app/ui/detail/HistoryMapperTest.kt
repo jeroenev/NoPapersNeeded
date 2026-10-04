@@ -1,50 +1,43 @@
 package dev.npn.app.ui.detail
 
 import dev.npn.core.app.DocumentHistoryRecord
-import dev.npn.core.journal.Hlc
-import dev.npn.core.journal.JournalEvent
-import dev.npn.core.journal.JournalOp
+import dev.npn.core.app.HistoryEntry
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 class HistoryMapperTest {
-    private val docId = "a".repeat(64)
-
-    private fun event(
-        op: JournalOp,
-        hlc: Hlc = Hlc(1, 0, "dev"),
-    ) = JournalEvent(1, 1, hlc, hlc.deviceId, docId, op)
-
-    private fun record(event: JournalEvent) = DocumentHistoryRecord(event.hlc, event.dev, event.op.wire, event)
+    private fun record(
+        entry: HistoryEntry,
+        timeMillis: Long = 1,
+    ) = DocumentHistoryRecord(timeMillis, "dev", entry)
 
     @Test
-    fun mapsAllDocumentOpTypes() {
-        val events =
+    fun mapsAllDocumentEntries() {
+        val entries =
             listOf(
-                event(JournalOp.TagAdd("invoice")),
-                event(JournalOp.TagRemove("draft", emptyList())),
-                event(JournalOp.FieldSet(FieldKeys.TITLE, "New title")),
-                event(JournalOp.FieldSet(FieldKeys.NOTES, "Remember this")),
-                event(JournalOp.FieldSet(FieldKeys.CORRESPONDENT, "Acme")),
-                event(JournalOp.FieldSet(FieldKeys.DOC_TYPE, "Invoice")),
-                event(JournalOp.FieldSet(FieldKeys.DOC_DATE, "2026-07-20")),
-                event(JournalOp.PropSet(SystemProperty.REVIEWED, "true")),
-                event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, "tesseract")),
-                event(JournalOp.FieldSet("amount", "42")),
-                event(JournalOp.FieldSet("amount", null)),
-                event(JournalOp.DocTrash("orig.pdf")),
-                event(JournalOp.DocRestore),
-                event(JournalOp.DocDelete),
-                event(JournalOp.Relink("b".repeat(64))),
-                event(JournalOp.Unknown("future-op")),
+                HistoryEntry.TagAdded("invoice"),
+                HistoryEntry.TagRemoved("draft"),
+                HistoryEntry.FieldSet(FieldKeys.TITLE, "New title"),
+                HistoryEntry.FieldSet(FieldKeys.NOTES, "Remember this"),
+                HistoryEntry.FieldSet(FieldKeys.CORRESPONDENT, "Acme"),
+                HistoryEntry.FieldSet(FieldKeys.DOC_TYPE, "Invoice"),
+                HistoryEntry.FieldSet(FieldKeys.DOC_DATE, "2026-07-20"),
+                HistoryEntry.Reviewed(true),
+                HistoryEntry.OcrEnginePinned("tesseract"),
+                HistoryEntry.FieldSet("amount", "42"),
+                HistoryEntry.FieldSet("amount", null),
+                HistoryEntry.Trashed("orig.pdf"),
+                HistoryEntry.Restored,
+                HistoryEntry.Deleted,
+                HistoryEntry.Relinked("b".repeat(64)),
+                HistoryEntry.Unknown("future-op", null),
             )
 
         // Registry labels stand in for keys; a key the registry does not know shows as itself.
         val labels = FieldKeys.SEED_LABELS
-        val items = HistoryMapper.toHistoryItems(events.map(::record)) { labels[it] ?: it }
+        val items = HistoryMapper.toHistoryItems(entries.map { record(it) }) { labels[it] ?: it }
 
         items.map { it.description } shouldContainExactly
             listOf(
@@ -88,43 +81,42 @@ class HistoryMapperTest {
 
     @Test
     fun preservesEventOrder() {
-        val events =
+        val records =
             listOf(
-                event(JournalOp.TagAdd("second"), Hlc(200, 0, "dev")),
-                event(JournalOp.TagAdd("first"), Hlc(100, 0, "dev")),
+                record(HistoryEntry.TagAdded("second"), timeMillis = 200),
+                record(HistoryEntry.TagAdded("first"), timeMillis = 100),
             )
-        val items = HistoryMapper.toHistoryItems(events.map(::record))
+        val items = HistoryMapper.toHistoryItems(records)
         items.map { it.description } shouldContainExactly
             listOf(
                 history(HistoryTextKey.TAG_ADDED, "second"),
                 history(HistoryTextKey.TAG_ADDED, "first"),
             )
+        items.map { it.timeMillis } shouldContainExactly listOf(200L, 100L)
     }
 
     @Test
     fun clearedPropertiesAndReviewedFalse() {
-        val events =
+        val entries =
             listOf(
-                event(JournalOp.FieldSet(FieldKeys.TITLE, null)),
-                event(JournalOp.PropSet(SystemProperty.REVIEWED, "false")),
-                event(JournalOp.PropSet(SystemProperty.OCR_ENGINE, null)),
+                HistoryEntry.FieldSet(FieldKeys.TITLE, null),
+                HistoryEntry.Reviewed(false),
+                HistoryEntry.OcrEnginePinned(null),
+                HistoryEntry.ReviewUnreadable("maybe"),
             )
-        val items = HistoryMapper.toHistoryItems(events.map(::record))
+        val items = HistoryMapper.toHistoryItems(entries.map { record(it) })
         items.map { it.description } shouldContainExactly
             listOf(
                 history(HistoryTextKey.FIELD_REMOVED, FieldKeys.TITLE),
                 history(HistoryTextKey.MARKED_NEEDS_REVIEW),
                 history(HistoryTextKey.OCR_ENGINE_CLEARED),
+                history(HistoryTextKey.REVIEW_STATE_CHANGED, "maybe"),
             )
     }
 
     @Test
     fun mapsUndecodableRecord() {
-        val item =
-            HistoryMapper
-                .toHistoryItems(
-                    listOf(DocumentHistoryRecord(Hlc(1, 2, "dev"), "dev", "future-op", null)),
-                ).single()
+        val item = HistoryMapper.toHistoryItems(listOf(record(HistoryEntry.Undecodable("future-op")))).single()
 
         item.kind shouldBe HistoryEventKind.UNKNOWN
         item.description shouldBe history(HistoryTextKey.UNDECODABLE, "future-op")
@@ -138,7 +130,7 @@ class HistoryMapperTest {
     @Test
     fun clipsLongFieldValues() {
         val long = "x".repeat(200)
-        val items = HistoryMapper.toHistoryItems(listOf(record(event(JournalOp.FieldSet(FieldKeys.NOTES, long)))))
+        val items = HistoryMapper.toHistoryItems(listOf(record(HistoryEntry.FieldSet(FieldKeys.NOTES, long))))
         val shown = items.single().description.arguments[1]
         shown.length shouldBe 80
         shown.endsWith("\u2026") shouldBe true

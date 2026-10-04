@@ -1,10 +1,7 @@
 package dev.npn.app.ui.detail
 
 import dev.npn.core.app.DocumentHistoryRecord
-import dev.npn.core.journal.Hlc
-import dev.npn.core.journal.JournalEvent
-import dev.npn.core.journal.JournalOp
-import dev.npn.core.model.SystemProperty
+import dev.npn.core.app.HistoryEntry
 
 /**
  * UI-facing kind of a document history event. Kept separate from the icon choice so tests can
@@ -29,13 +26,13 @@ enum class HistoryEventKind {
 /**
  * One human-readable entry in the document history timeline.
  *
- * @property hlc Hybrid logical clock stamp used for causal ordering and display.
+ * @property timeMillis When the change was made, on the clock of the device that made it.
  * @property kind Stable classifier for iconography and tests.
  * @property description Localized sentence describing the change.
  * @property deviceId Authoring device for this event.
  */
 data class HistoryItem(
-    val hlc: Hlc,
+    val timeMillis: Long,
     val kind: HistoryEventKind,
     val description: HistoryDescription,
     val deviceId: String,
@@ -73,8 +70,8 @@ enum class HistoryTextKey {
 }
 
 /**
- * Maps decoded journal events into human-readable timeline items. The input is already ordered by
- * HLC; the output preserves that order. [fieldLabel] resolves a field key to the registry label
+ * Maps a document's history into human-readable timeline items. The input is already in causal
+ * order; the output preserves that order. [fieldLabel] resolves a field key to the registry label
  * the user knows it by; a key the registry no longer lists is shown as itself.
  */
 object HistoryMapper {
@@ -86,167 +83,88 @@ object HistoryMapper {
         fieldLabel: (String) -> String = { it },
     ): List<HistoryItem> =
         records.map { record ->
-            record.event?.let { toHistoryItem(it, fieldLabel) } ?: HistoryItem(
-                hlc = record.hlc,
-                kind = HistoryEventKind.UNKNOWN,
-                description = historyText(HistoryTextKey.UNDECODABLE, record.operation),
+            HistoryItem(
+                timeMillis = record.timeMillis,
+                kind = kind(record.entry),
+                description = description(record.entry, fieldLabel),
                 deviceId = record.deviceId,
             )
         }
 
-    private fun toHistoryItem(
-        event: JournalEvent,
+    private fun description(
+        entry: HistoryEntry,
         fieldLabel: (String) -> String,
-    ): HistoryItem {
-        val op = event.op
-        val kind = opKind(op)
-        val description =
-            when (op) {
-                is JournalOp.TagAdd -> {
-                    historyText(HistoryTextKey.TAG_ADDED, op.tag)
-                }
-
-                is JournalOp.TagRemove -> {
-                    historyText(HistoryTextKey.TAG_REMOVED, op.tag)
-                }
-
-                is JournalOp.PropSet -> {
-                    propDescription(op.key, op.value)
-                }
-
-                is JournalOp.FieldSet -> {
-                    fieldDescription(fieldLabel(op.key), op.value)
-                }
-
-                is JournalOp.DocTrash -> {
-                    historyText(HistoryTextKey.DOCUMENT_TRASHED, op.origPath)
-                }
-
-                JournalOp.DocRestore, JournalOp.DocUndelete -> {
-                    historyText(HistoryTextKey.DOCUMENT_RESTORED)
-                }
-
-                JournalOp.DocDelete -> {
-                    historyText(HistoryTextKey.DOCUMENT_DELETED)
-                }
-
-                is JournalOp.Relink -> {
-                    historyText(HistoryTextKey.DOCUMENT_RELINKED, shortId(op.newDoc))
-                }
-
-                is JournalOp.TagRename -> {
-                    historyText(HistoryTextKey.TAG_RENAMED, op.from, op.to)
-                }
-
-                is JournalOp.TagMerge -> {
-                    historyText(HistoryTextKey.TAG_MERGED, op.from, op.to)
-                }
-
-                is JournalOp.TagStyle -> {
-                    historyText(HistoryTextKey.TAG_STYLED, op.tag)
-                }
-
-                is JournalOp.SettingSet -> {
-                    historyText(HistoryTextKey.SETTING_CHANGED, op.key)
-                }
-
-                is JournalOp.FieldDefSet -> {
-                    // Library-wide; never appears in a document's own history, but the mapper is total.
-                    historyText(HistoryTextKey.SETTING_CHANGED, op.key)
-                }
-
-                is JournalOp.Unknown -> {
-                    if (op.payload.isEmpty()) {
-                        historyText(HistoryTextKey.UNKNOWN_EVENT, op.wire)
-                    } else {
-                        historyText(HistoryTextKey.UNKNOWN_EVENT_WITH_PAYLOAD, op.wire, op.payload.toString())
-                    }
-                }
-            }
-        return HistoryItem(
-            hlc = event.hlc,
-            kind = kind,
-            description = description,
-            deviceId = event.dev,
-        )
-    }
-
-    private fun opKind(op: JournalOp): HistoryEventKind =
-        when (op) {
-            is JournalOp.TagAdd -> {
-                HistoryEventKind.TAG_ADD
-            }
-
-            is JournalOp.TagRemove -> {
-                HistoryEventKind.TAG_REMOVE
-            }
-
-            is JournalOp.PropSet -> {
-                when (op.key) {
-                    SystemProperty.REVIEWED -> HistoryEventKind.PROP_REVIEWED
-                    SystemProperty.OCR_ENGINE -> HistoryEventKind.PROP_OCR_ENGINE
-                    SystemProperty.STORAGE_PATH -> HistoryEventKind.PROP_STORAGE_PATH
-                }
-            }
-
-            is JournalOp.FieldSet -> {
-                if (op.value == null) HistoryEventKind.FIELD_REMOVE else HistoryEventKind.FIELD_SET
-            }
-
-            is JournalOp.DocTrash -> {
-                HistoryEventKind.TRASH
-            }
-
-            JournalOp.DocRestore, JournalOp.DocUndelete -> {
-                HistoryEventKind.RESTORE
-            }
-
-            JournalOp.DocDelete -> {
-                HistoryEventKind.DELETE
-            }
-
-            is JournalOp.Relink -> {
-                HistoryEventKind.RELINK
-            }
-
-            else -> {
-                HistoryEventKind.UNKNOWN
-            }
-        }
-
-    private fun propDescription(
-        key: SystemProperty,
-        value: String?,
     ): HistoryDescription =
-        when (key) {
-            SystemProperty.STORAGE_PATH -> {
-                if (value == null) {
-                    historyText(HistoryTextKey.STORAGE_PATH_CLEARED)
-                } else {
-                    historyText(HistoryTextKey.STORAGE_PATH_SET, value)
-                }
-            }
-
-            SystemProperty.REVIEWED -> {
-                when (value) {
-                    "true" -> historyText(HistoryTextKey.MARKED_REVIEWED)
-                    "false" -> historyText(HistoryTextKey.MARKED_NEEDS_REVIEW)
-                    null -> historyText(HistoryTextKey.REVIEW_STATE_CLEARED)
-                    else -> historyText(HistoryTextKey.REVIEW_STATE_CHANGED, value)
-                }
-            }
-
-            SystemProperty.OCR_ENGINE -> {
-                if (value == null) {
-                    historyText(HistoryTextKey.OCR_ENGINE_CLEARED)
-                } else {
-                    historyText(HistoryTextKey.OCR_ENGINE_PINNED, value)
-                }
-            }
+        when (entry) {
+            is HistoryEntry.TagAdded -> historyText(HistoryTextKey.TAG_ADDED, entry.tag)
+            is HistoryEntry.TagRemoved -> historyText(HistoryTextKey.TAG_REMOVED, entry.tag)
+            is HistoryEntry.Reviewed -> reviewedText(entry.reviewed)
+            is HistoryEntry.ReviewUnreadable -> historyText(HistoryTextKey.REVIEW_STATE_CHANGED, entry.value)
+            is HistoryEntry.OcrEnginePinned -> ocrEngineText(entry.engine)
+            is HistoryEntry.StoragePathSet -> storagePathText(entry.path)
+            is HistoryEntry.FieldSet -> fieldText(fieldLabel(entry.key), entry.value)
+            is HistoryEntry.Trashed -> historyText(HistoryTextKey.DOCUMENT_TRASHED, entry.path)
+            HistoryEntry.Restored -> historyText(HistoryTextKey.DOCUMENT_RESTORED)
+            HistoryEntry.Deleted -> historyText(HistoryTextKey.DOCUMENT_DELETED)
+            is HistoryEntry.Relinked -> historyText(HistoryTextKey.DOCUMENT_RELINKED, shortId(entry.newDocId))
+            is HistoryEntry.TagRenamed -> historyText(HistoryTextKey.TAG_RENAMED, entry.from, entry.to)
+            is HistoryEntry.TagMerged -> historyText(HistoryTextKey.TAG_MERGED, entry.from, entry.to)
+            is HistoryEntry.TagStyled -> historyText(HistoryTextKey.TAG_STYLED, entry.tag)
+            is HistoryEntry.SettingChanged -> historyText(HistoryTextKey.SETTING_CHANGED, entry.key)
+            is HistoryEntry.Unknown -> unknownText(entry)
+            is HistoryEntry.Undecodable -> historyText(HistoryTextKey.UNDECODABLE, entry.operation)
         }
+
+    private fun kind(entry: HistoryEntry): HistoryEventKind =
+        when (entry) {
+            is HistoryEntry.TagAdded -> HistoryEventKind.TAG_ADD
+            is HistoryEntry.TagRemoved -> HistoryEventKind.TAG_REMOVE
+            is HistoryEntry.Reviewed, is HistoryEntry.ReviewUnreadable -> HistoryEventKind.PROP_REVIEWED
+            is HistoryEntry.OcrEnginePinned -> HistoryEventKind.PROP_OCR_ENGINE
+            is HistoryEntry.StoragePathSet -> HistoryEventKind.PROP_STORAGE_PATH
+            is HistoryEntry.FieldSet -> {
+                if (entry.value == null) HistoryEventKind.FIELD_REMOVE else HistoryEventKind.FIELD_SET
+            }
+            is HistoryEntry.Trashed -> HistoryEventKind.TRASH
+            HistoryEntry.Restored -> HistoryEventKind.RESTORE
+            HistoryEntry.Deleted -> HistoryEventKind.DELETE
+            is HistoryEntry.Relinked -> HistoryEventKind.RELINK
+            is HistoryEntry.TagRenamed,
+            is HistoryEntry.TagMerged,
+            is HistoryEntry.TagStyled,
+            is HistoryEntry.SettingChanged,
+            is HistoryEntry.Unknown,
+            is HistoryEntry.Undecodable,
+            -> HistoryEventKind.UNKNOWN
+        }
+
+    private fun reviewedText(reviewed: Boolean?): HistoryDescription =
+        when (reviewed) {
+            true -> historyText(HistoryTextKey.MARKED_REVIEWED)
+            false -> historyText(HistoryTextKey.MARKED_NEEDS_REVIEW)
+            null -> historyText(HistoryTextKey.REVIEW_STATE_CLEARED)
+        }
+
+    private fun ocrEngineText(engine: String?): HistoryDescription =
+        if (engine == null) {
+            historyText(HistoryTextKey.OCR_ENGINE_CLEARED)
+        } else {
+            historyText(HistoryTextKey.OCR_ENGINE_PINNED, engine)
+        }
+
+    private fun storagePathText(path: String?): HistoryDescription =
+        if (path == null) {
+            historyText(HistoryTextKey.STORAGE_PATH_CLEARED)
+        } else {
+            historyText(HistoryTextKey.STORAGE_PATH_SET, path)
+        }
+
+    private fun unknownText(entry: HistoryEntry.Unknown): HistoryDescription =
+        entry.payload?.let { historyText(HistoryTextKey.UNKNOWN_EVENT_WITH_PAYLOAD, entry.operation, it) }
+            ?: historyText(HistoryTextKey.UNKNOWN_EVENT, entry.operation)
 
     /** One wording for every field: `label` cleared, or `label` set to a (possibly cut) value. */
-    private fun fieldDescription(
+    private fun fieldText(
         label: String,
         value: String?,
     ): HistoryDescription =

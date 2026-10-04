@@ -1,7 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.journal.Hlc
-import dev.npn.core.journal.JournalEvent
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
@@ -73,14 +71,6 @@ data class TagInfo(
     val count: Int,
 )
 
-/** One indexed journal row, retaining diagnostics when its canonical event cannot be decoded. */
-data class DocumentHistoryRecord(
-    val hlc: Hlc,
-    val deviceId: String,
-    val operation: String,
-    val event: JournalEvent?,
-)
-
 interface DocumentRepository {
     fun observeDocuments(
         filter: LibraryFilter,
@@ -109,8 +99,9 @@ interface DocumentRepository {
     ): List<String>
 
     /**
-     * Journal event history for one document, decoded and ordered by HLC. Read-only: the
-     * underlying journal events are immutable once written.
+     * The history of one document, in the journal's causal order. Read-only: the journal events it
+     * is read from are immutable once written; one that cannot be decoded is kept as
+     * [HistoryEntry.Undecodable].
      */
     suspend fun history(docId: String): List<DocumentHistoryRecord>
 

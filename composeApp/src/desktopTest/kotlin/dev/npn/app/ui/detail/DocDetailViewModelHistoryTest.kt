@@ -4,9 +4,7 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.listItem
 import dev.npn.core.app.DocumentHistoryRecord
-import dev.npn.core.journal.Hlc
-import dev.npn.core.journal.JournalEvent
-import dev.npn.core.journal.JournalOp
+import dev.npn.core.app.HistoryEntry
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -26,22 +24,8 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
                     documents.singleDoc.value = listItem("doc-1")
                     documents.historyList =
                         listOf(
-                            JournalEvent(
-                                1,
-                                1,
-                                Hlc(100, 0, "dev-a"),
-                                "dev-a",
-                                "doc-1",
-                                JournalOp.TagAdd("invoice"),
-                            ).asRecord(),
-                            JournalEvent(
-                                1,
-                                2,
-                                Hlc(50, 0, "dev-a"),
-                                "dev-a",
-                                "doc-1",
-                                JournalOp.FieldSet(FieldKeys.TITLE, "X"),
-                            ).asRecord(),
+                            DocumentHistoryRecord(100, "dev-a", HistoryEntry.TagAdded("invoice")),
+                            DocumentHistoryRecord(50, "dev-a", HistoryEntry.FieldSet(FieldKeys.TITLE, "X")),
                         )
                 }
             val model = DocDetailViewModel("doc-1", session)
@@ -82,6 +66,4 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
             model.metadata.value.history shouldBe HistoryUiState.Error("index unavailable")
             session.documents.historyCalls shouldBe 2
         }
-
-    private fun JournalEvent.asRecord() = DocumentHistoryRecord(hlc, dev, op.wire, this)
 }

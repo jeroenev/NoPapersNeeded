@@ -8,12 +8,10 @@ import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentHistoryRecord
+import dev.npn.core.app.HistoryEntry
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.TagInfo
 import dev.npn.core.db.FieldKeyCount
-import dev.npn.core.journal.Hlc
-import dev.npn.core.journal.JournalEvent
-import dev.npn.core.journal.JournalOp
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -145,7 +143,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun historyFollowsTheDocumentAfterItFirstLoads() =
         runTest(dispatcher) {
-            val tagged = historyRecord(1, JournalOp.TagAdd("invoice"))
+            val tagged = historyRecord(1, HistoryEntry.TagAdded("invoice"))
             val session =
                 FakeLibrarySession().apply {
                     documents.singleDoc.value = listItem("doc-1")
@@ -157,7 +155,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             (model.metadata.value.history as HistoryUiState.Loaded).items shouldHaveSize 1
 
             // A field edit lands: the journal gains an event and the row changes with it.
-            session.documents.historyList = listOf(tagged, historyRecord(2, JournalOp.FieldSet(FieldKeys.TITLE, "X")))
+            session.documents.historyList = listOf(tagged, historyRecord(2, HistoryEntry.FieldSet(FieldKeys.TITLE, "X")))
             session.documents.singleDoc.value = listItem("doc-1", tags = listOf("invoice"))
             advanceUntilIdle()
 
@@ -166,11 +164,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
 
     private fun historyRecord(
         seq: Long,
-        op: JournalOp,
-    ): DocumentHistoryRecord {
-        val event = JournalEvent(1, seq, Hlc(100 + seq, 0, "dev-a"), "dev-a", "doc-1", op)
-        return DocumentHistoryRecord(event.hlc, event.dev, event.op.wire, event)
-    }
+        entry: HistoryEntry,
+    ) = DocumentHistoryRecord(100 + seq, "dev-a", entry)
 
     @Test
     fun ocrDetailsThatCannotBeReadAreReported() =

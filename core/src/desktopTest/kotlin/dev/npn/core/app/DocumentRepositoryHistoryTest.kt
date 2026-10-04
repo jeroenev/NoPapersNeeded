@@ -10,6 +10,7 @@ import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
+import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
@@ -67,12 +68,13 @@ class DocumentRepositoryHistoryTest {
             val repo = DocumentRepositoryImpl(db)
             val history = repo.history(docId)
 
-            history.map { it.event?.op } shouldContainExactly
+            history.map { it.entry } shouldContainExactly
                 listOf(
-                    JournalOp.FieldSet("title", "Title"),
-                    JournalOp.TagAdd("invoice"),
-                    JournalOp.DocTrash("a.pdf"),
+                    HistoryEntry.FieldSet("title", "Title"),
+                    HistoryEntry.TagAdded("invoice"),
+                    HistoryEntry.Trashed("a.pdf"),
                 )
+            history.map { it.timeMillis } shouldContainExactly listOf(50L, 100L, 100L)
         }
 
     @Test
@@ -106,9 +108,33 @@ class DocumentRepositoryHistoryTest {
             val history = DocumentRepositoryImpl(db).history(docId)
 
             history.map { it.deviceId } shouldContainExactly listOf("dev-a", "dev-z")
-            history.first().event shouldBe null
-            history.first().operation shouldBe "future-op"
+            history.first().entry shouldBe HistoryEntry.Undecodable("future-op")
         }
+
+    /** Every journal op a document's history can hold, as the domain entry the UI is given. */
+    @Test
+    fun everyDocumentOpBecomesItsDomainEntry() {
+        val newDoc = "b".repeat(64)
+        listOf(
+            JournalOp.TagAdd("invoice") to HistoryEntry.TagAdded("invoice"),
+            JournalOp.TagRemove("draft", emptyList()) to HistoryEntry.TagRemoved("draft"),
+            JournalOp.FieldSet("amount", "42") to HistoryEntry.FieldSet("amount", "42"),
+            JournalOp.FieldSet("amount", null) to HistoryEntry.FieldSet("amount", null),
+            JournalOp.PropSet(SystemProperty.REVIEWED, "true") to HistoryEntry.Reviewed(true),
+            JournalOp.PropSet(SystemProperty.REVIEWED, "false") to HistoryEntry.Reviewed(false),
+            JournalOp.PropSet(SystemProperty.REVIEWED, null) to HistoryEntry.Reviewed(null),
+            JournalOp.PropSet(SystemProperty.REVIEWED, "maybe") to HistoryEntry.ReviewUnreadable("maybe"),
+            JournalOp.PropSet(SystemProperty.OCR_ENGINE, "tesseract") to HistoryEntry.OcrEnginePinned("tesseract"),
+            JournalOp.PropSet(SystemProperty.OCR_ENGINE, null) to HistoryEntry.OcrEnginePinned(null),
+            JournalOp.PropSet(SystemProperty.STORAGE_PATH, "a/b.pdf") to HistoryEntry.StoragePathSet("a/b.pdf"),
+            JournalOp.DocTrash("orig.pdf") to HistoryEntry.Trashed("orig.pdf"),
+            JournalOp.DocRestore to HistoryEntry.Restored,
+            JournalOp.DocUndelete to HistoryEntry.Restored,
+            JournalOp.DocDelete to HistoryEntry.Deleted,
+            JournalOp.Relink(newDoc) to HistoryEntry.Relinked(newDoc),
+            JournalOp.Unknown("future-op") to HistoryEntry.Unknown("future-op", null),
+        ).forEach { (op, entry) -> HistoryEntry.of(op) shouldBe entry }
+    }
 
     private fun event(
         docId: String,

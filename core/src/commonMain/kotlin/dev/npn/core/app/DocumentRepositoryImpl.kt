@@ -222,14 +222,15 @@ class DocumentRepositoryImpl(
         val dao = db.metadataProjectionDao()
         return dao
             .eventsForDocument(docId)
+            .sortedBy { Hlc(it.hlcPhysical, it.hlcCounter, it.hlcDevice) }
             .map { row ->
+                val event = JournalCodec.decodeLineOrNull(row.canonicalJson)
                 DocumentHistoryRecord(
-                    hlc = Hlc(row.hlcPhysical, row.hlcCounter, row.hlcDevice),
+                    timeMillis = row.hlcPhysical,
                     deviceId = row.deviceId,
-                    operation = row.operation,
-                    event = JournalCodec.decodeLineOrNull(row.canonicalJson),
+                    entry = event?.let { HistoryEntry.of(it.op) } ?: HistoryEntry.Undecodable(row.operation),
                 )
-            }.sortedBy { it.hlc }
+            }
     }
 
     override suspend fun tagsForDocuments(docIds: List<String>): Map<String, List<String>> {

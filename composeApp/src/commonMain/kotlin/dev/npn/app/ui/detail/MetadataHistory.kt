@@ -97,7 +97,7 @@ private fun HistoryRow(item: HistoryItem) {
             Text(
                 stringResource(
                     Res.string.detail_history_secondary,
-                    formatEpochDateTime(item.hlc.physicalMillis),
+                    formatEpochDateTime(item.timeMillis),
                     item.deviceId,
                 ),
                 style = MaterialTheme.typography.bodySmall,
