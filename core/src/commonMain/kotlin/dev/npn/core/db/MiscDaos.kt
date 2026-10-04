@@ -19,15 +19,8 @@ interface DocumentFieldDao {
     suspend fun fieldsForDocsChunk(docIds: List<String>): List<DocumentFieldEntity>
 
     /** Chunked [fieldsForDocsChunk] so large id sets stay under SQLite's bind-variable limit. */
-    suspend fun fieldsForDocs(docIds: List<String>): List<DocumentFieldEntity> {
-        if (docIds.isEmpty()) return emptyList()
-        if (docIds.size <= DocumentDao.BIND_CHUNK) return fieldsForDocsChunk(docIds)
-        val out = ArrayList<DocumentFieldEntity>(docIds.size)
-        for (i in docIds.indices step DocumentDao.BIND_CHUNK) {
-            out += fieldsForDocsChunk(docIds.subList(i, minOf(i + DocumentDao.BIND_CHUNK, docIds.size)))
-        }
-        return out
-    }
+    suspend fun fieldsForDocs(docIds: List<String>): List<DocumentFieldEntity> =
+        docIds.chunkedBind { fieldsForDocsChunk(it) }
 
     /**
      * Distinct field keys in use across the library, for add-field key autocomplete. Observed so
@@ -111,7 +104,7 @@ interface DocumentFieldDao {
     @Transaction
     suspend fun replaceForDocs(updates: Map<String, List<DocumentFieldEntity>>) {
         if (updates.isEmpty()) return
-        chunkedDelete(updates.keys.toList()) { clearFieldsFor(it) }
+        for (chunk in updates.keys.chunked(BIND_CHUNK)) clearFieldsFor(chunk)
         upsertAll(updates.values.flatten())
     }
 
@@ -123,23 +116,6 @@ interface DocumentFieldDao {
 
     @Query("DELETE FROM document_fields")
     suspend fun clearAll()
-
-    companion object {
-        /** Chunked [clearFieldsFor] so large doc sets stay under SQLite's bind-variable limit. */
-        private suspend fun chunkedDelete(
-            docIds: List<String>,
-            block: suspend (List<String>) -> Unit,
-        ) {
-            if (docIds.isEmpty()) return
-            if (docIds.size <= DocumentDao.BIND_CHUNK) {
-                block(docIds)
-                return
-            }
-            for (i in docIds.indices step DocumentDao.BIND_CHUNK) {
-                block(docIds.subList(i, minOf(i + DocumentDao.BIND_CHUNK, docIds.size)))
-            }
-        }
-    }
 }
 
 @Dao
@@ -193,7 +169,7 @@ interface DuplicateDao {
         docIds: Collection<String>,
         rows: List<DuplicateEntity>,
     ) {
-        for (chunk in docIds.chunked(DocumentDao.BIND_CHUNK)) deleteForDocs(chunk)
+        for (chunk in docIds.chunked(BIND_CHUNK)) deleteForDocs(chunk)
         if (rows.isNotEmpty()) insertAll(rows)
     }
 }
@@ -449,7 +425,7 @@ interface KeyValueDao {
 
     /** The stored value of each of [keys] that has one, read in bind-limit slices. */
     suspend fun getAll(keys: List<String>): Map<String, String> =
-        inBindChunks(keys) { getChunk(it) }.associate { it.key to it.value }
+        keys.chunkedBind { getChunk(it) }.associate { it.key to it.value }
 
     @Query("DELETE FROM kv WHERE key = :key")
     suspend fun delete(key: String)

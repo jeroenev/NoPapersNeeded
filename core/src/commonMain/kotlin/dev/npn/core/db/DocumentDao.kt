@@ -189,14 +189,14 @@ interface DocumentDao {
 
     /** Chunked [tagsForDocsChunk] so large id sets stay under SQLite's bind-variable limit. */
     suspend fun tagsForDocs(docIds: List<String>): List<DocumentTagEntity> =
-        chunkedQuery(docIds) { tagsForDocsChunk(it) }
+        docIds.chunkedBind { tagsForDocsChunk(it) }
 
     /** All documents for a set of docIds, for the bulk fold and FTS-first list fetch. */
     @Query("SELECT * FROM documents WHERE docId IN (:docIds)")
     suspend fun getByDocIdsChunk(docIds: List<String>): List<DocumentEntity>
 
     /** Chunked [getByDocIdsChunk] so large id sets stay under SQLite's bind-variable limit. */
-    suspend fun getByDocIds(docIds: List<String>): List<DocumentEntity> = chunkedQuery(docIds) { getByDocIdsChunk(it) }
+    suspend fun getByDocIds(docIds: List<String>): List<DocumentEntity> = docIds.chunkedBind { getByDocIdsChunk(it) }
 
     /** Drop one row outright: only for taking back an import nothing else has seen yet. */
     @Query("DELETE FROM documents WHERE docId = :docId")
@@ -204,21 +204,4 @@ interface DocumentDao {
 
     @Query("DELETE FROM documents")
     suspend fun clearAll()
-
-    companion object {
-        const val BIND_CHUNK = 500
-
-        private suspend fun <T> chunkedQuery(
-            ids: List<String>,
-            block: suspend (List<String>) -> List<T>,
-        ): List<T> {
-            if (ids.isEmpty()) return emptyList()
-            if (ids.size <= BIND_CHUNK) return block(ids)
-            val out = ArrayList<T>(ids.size)
-            for (i in ids.indices step BIND_CHUNK) {
-                out += block(ids.subList(i, minOf(i + BIND_CHUNK, ids.size)))
-            }
-            return out
-        }
-    }
 }

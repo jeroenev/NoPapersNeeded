@@ -128,7 +128,7 @@ interface MetadataProjectionDao {
 
     /** The stored events of each source in [paths], in one join per bind-limit slice. */
     suspend fun eventsOfSources(paths: List<String>): List<SourceEventJson> =
-        inBindChunks(paths) { eventsOfSourcesChunk(it) }
+        paths.chunkedBind { eventsOfSourcesChunk(it) }
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertSourceEvents(events: List<MetadataSourceEventEntity>)

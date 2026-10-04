@@ -80,7 +80,7 @@ interface TagDao {
     @Transaction
     suspend fun setForDocuments(updates: Map<String, List<String>>) {
         if (updates.isEmpty()) return
-        chunkedDelete(updates.keys.toList()) { clearDocumentTagsFor(it) }
+        for (chunk in updates.keys.chunked(BIND_CHUNK)) clearDocumentTagsFor(chunk)
         insertDocumentTags(
             updates.flatMap { (docId, tags) ->
                 tags.map { tag -> DocumentTagEntity(docId, tag) }
@@ -96,21 +96,4 @@ interface TagDao {
 
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertDocumentTags(rows: List<DocumentTagEntity>)
-
-    companion object {
-        /** Chunked [clearDocumentTagsFor] so large doc sets stay under SQLite's bind-variable limit. */
-        private suspend fun chunkedDelete(
-            docIds: List<String>,
-            block: suspend (List<String>) -> Unit,
-        ) {
-            if (docIds.isEmpty()) return
-            if (docIds.size <= DocumentDao.BIND_CHUNK) {
-                block(docIds)
-                return
-            }
-            for (i in docIds.indices step DocumentDao.BIND_CHUNK) {
-                block(docIds.subList(i, minOf(i + DocumentDao.BIND_CHUNK, docIds.size)))
-            }
-        }
-    }
 }

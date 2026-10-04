@@ -54,7 +54,7 @@ interface FtsDao {
     suspend fun indexedDocIdsChunk(docIds: List<String>): List<String>
 
     /** Chunked [indexedDocIdsChunk] so large id sets stay under SQLite's bind-variable limit. */
-    suspend fun indexedDocIds(docIds: List<String>): List<String> = chunkedQuery(docIds) { indexedDocIdsChunk(it) }
+    suspend fun indexedDocIds(docIds: List<String>): List<String> = docIds.chunkedBind { indexedDocIdsChunk(it) }
 
     /**
      * The fold's write: the metadata columns of each of [rows] (file name, tags, fields). A document
@@ -105,7 +105,7 @@ interface FtsDao {
 
     /** The FTS rowid of each of [docIds] that has a row, chunked under SQLite's bind limit. */
     suspend fun rowidsFor(docIds: List<String>): HashMap<String, Long> =
-        chunkedQuery(docIds) { keysChunk(it) }.associateTo(HashMap()) { it.docId to it.ftsRowid }
+        docIds.chunkedBind { keysChunk(it) }.associateTo(HashMap()) { it.docId to it.ftsRowid }
 
     /** Allocate a document's key; the returned rowid is the one its FTS row is inserted under. */
     @Insert
@@ -137,19 +137,4 @@ interface FtsDao {
         rowid: Long,
         content: String?,
     )
-
-    companion object {
-        private suspend fun <T> chunkedQuery(
-            ids: List<String>,
-            block: suspend (List<String>) -> List<T>,
-        ): List<T> {
-            if (ids.isEmpty()) return emptyList()
-            if (ids.size <= DocumentDao.BIND_CHUNK) return block(ids)
-            val out = ArrayList<T>(ids.size)
-            for (i in ids.indices step DocumentDao.BIND_CHUNK) {
-                out += block(ids.subList(i, minOf(i + DocumentDao.BIND_CHUNK, ids.size)))
-            }
-            return out
-        }
-    }
 }
