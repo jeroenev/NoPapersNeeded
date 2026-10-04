@@ -14,29 +14,20 @@ import dev.npn.app.ui.common.completeActiveSearchToken
 import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.queue.QueueCounts
-import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
-import dev.npn.core.app.DocumentRepository
-import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.ImportFailure
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
-import dev.npn.core.app.MetadataWriter
-import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.OcrStatus
-import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SavedView
-import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
-import dev.npn.core.app.TagRepository
 import dev.npn.core.app.ViewType
-import dev.npn.core.app.WorkFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
@@ -126,31 +117,15 @@ data class LibraryUiState(
 @OptIn(ExperimentalCoroutinesApi::class, FlowPreview::class)
 @Suppress("TooManyFunctions")
 class LibraryViewModel(
-    private val documentRepository: DocumentRepository,
-    tagRepository: TagRepository,
-    private val savedViewRepository: SavedViewRepository,
-    private val meta: MetadataWriter,
-    private val docLifecycle: DocLifecycle,
-    private val ingest: IngestFacade,
-    ocr: OcrFacade,
-    work: WorkFacade,
-    private val reviewConfig: ReviewConfigFacade,
+    session: LibrarySession,
     private val settings: SettingsRepository,
-    fieldRegistry: FieldRegistry,
 ) : MessagesViewModel() {
-    constructor(session: LibrarySession, settings: SettingsRepository) : this(
-        documentRepository = session.documents,
-        tagRepository = session.tags,
-        savedViewRepository = session.savedViews,
-        fieldRegistry = session.fieldRegistry,
-        meta = session.meta,
-        docLifecycle = session.docLifecycle,
-        ingest = session.ingest,
-        ocr = session.ocr,
-        work = session.work,
-        reviewConfig = session.reviewConfig,
-        settings = settings,
-    )
+    private val documentRepository = session.documents
+    private val savedViewRepository = session.savedViews
+    private val meta = session.meta
+    private val docLifecycle = session.docLifecycle
+    private val ingest = session.ingest
+    private val reviewConfig = session.reviewConfig
 
     private val _ui = MutableStateFlow(LibraryUiState())
     val ui: StateFlow<LibraryUiState> = _ui.asStateFlow()
@@ -249,19 +224,19 @@ class LibraryViewModel(
             }.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     val tags: StateFlow<List<TagInfo>> =
-        tagRepository
+        session.tags
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /** The filter sheet's field rows: the registry plus each text field's values. */
     val fieldFilters: StateFlow<FieldFilterOptions> =
-        combine(fieldRegistry.fields, fieldRegistry.textFieldValues()) { defs, values ->
+        combine(session.fieldRegistry.fields, session.fieldRegistry.textFieldValues()) { defs, values ->
             FieldFilterOptions(fields = defs, values = values)
         }.stateIn(viewModelScope, WhileSubscribedTimeout, FieldFilterOptions())
 
     /** Registry fields the sort menu offers: everything but prose, which has no useful order. */
     val sortableFields: StateFlow<List<FieldDef>> =
-        fieldRegistry.fields
+        session.fieldRegistry.fields
             .map { defs -> defs.filter { it.type != FieldType.LONG_TEXT } }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
@@ -292,7 +267,7 @@ class LibraryViewModel(
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     val ocrStatus: StateFlow<OcrStatus> =
-        ocr.ocrStatus
+        session.ocr.ocrStatus
             .stateIn(viewModelScope, WhileSubscribedTimeout, OcrStatus(0, false))
 
     /**
@@ -300,7 +275,7 @@ class LibraryViewModel(
      * queue view, which subscribes to the entries itself.
      */
     val queueCounts: StateFlow<QueueCounts> =
-        work.queue
+        session.work.queue
             .map { QueueCounts.of(it) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, QueueCounts())
 

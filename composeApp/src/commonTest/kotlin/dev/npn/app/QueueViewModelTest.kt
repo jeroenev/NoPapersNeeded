@@ -12,14 +12,12 @@ class QueueViewModelTest : MainDispatcherTest() {
     @Test
     fun retryRequeuesTheFailedDocumentThroughOcrFacade() =
         runTest(dispatcher) {
-            val work = FakeWorkFacade()
-            val edits = FakeAiEditQueue()
-            val ocr = FakeOcrFacade()
-            val vm = QueueViewModel(work, edits, ocr)
+            val session = FakeLibrarySession()
+            val vm = QueueViewModel(session)
 
             vm.retry("failed-doc")
             advanceUntilIdle()
 
-            assertEquals(listOf("failed-doc"), ocr.reOcrIds)
+            assertEquals(listOf("failed-doc"), session.ocr.reOcrIds)
         }
 }

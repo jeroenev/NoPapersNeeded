@@ -15,13 +15,9 @@ import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiSelfTest
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.AiTagging
-import dev.npn.core.app.DocContentFacade
-import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SettingsSnapshot
-import dev.npn.core.app.StoragePathFacade
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.toAiConfig
@@ -123,18 +119,17 @@ enum class ReviewMigration { MARK_ALL, MARK_TAGGED, MARK_NONE }
  */
 class SettingsViewModel(
     private val settings: SettingsRepository,
-    private val content: DocContentFacade,
-    private val reviewConfig: ReviewConfigFacade,
-    private val storagePath: StoragePathFacade,
-    private val fieldRegistry: FieldRegistry,
+    session: LibrarySession,
     /**
      * How the AI self-test is run. Injectable so [runAiSelfTest]'s consequence — switching AI page
      * reading off — is testable without an endpoint; production always uses [AiSelfTest.run].
      */
     private val selfTest: suspend (AiConfig) -> AiSelfTestReport = AiSelfTest::run,
 ) : MessagesViewModel() {
-    constructor(settings: SettingsRepository, session: LibrarySession) :
-        this(settings, session.content, session.reviewConfig, session.storagePath, session.fieldRegistry)
+    private val content = session.content
+    private val reviewConfig = session.reviewConfig
+    private val storagePath = session.storagePath
+    private val fieldRegistry = session.fieldRegistry
 
     /** The template as typed and not saved yet, or null when the screen shows the saved one. */
     private val templateDraft = MutableStateFlow<String?>(null)

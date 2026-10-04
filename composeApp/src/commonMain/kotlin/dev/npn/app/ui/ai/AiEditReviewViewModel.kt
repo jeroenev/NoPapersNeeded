@@ -6,7 +6,6 @@ import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.app.AiEditQueueFacade
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.EditRunReview
@@ -68,10 +67,10 @@ sealed interface QueuedReviewPhase {
  * nothing.
  */
 class AiEditReviewViewModel(
-    private val queue: AiEditQueueFacade,
+    session: LibrarySession,
     private val jobId: String,
 ) : MessagesViewModel() {
-    constructor(session: LibrarySession, jobId: String) : this(session.aiEditQueue, jobId)
+    private val queue = session.aiEditQueue
 
     private val _phase = MutableStateFlow<QueuedReviewPhase>(QueuedReviewPhase.Loading)
     val phase: StateFlow<QueuedReviewPhase> = _phase.asStateFlow()

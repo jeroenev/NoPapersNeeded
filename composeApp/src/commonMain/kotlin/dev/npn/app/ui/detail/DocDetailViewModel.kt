@@ -15,28 +15,18 @@ import dev.npn.app.ui.library.effectiveReviewed
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
 import dev.npn.core.app.BakeOutcome
-import dev.npn.core.app.DocContentFacade
-import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
-import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.MaintenanceFacade
-import dev.npn.core.app.MetadataWriter
-import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.OcrVersion
-import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
-import dev.npn.core.app.TagAdmin
-import dev.npn.core.app.TagRepository
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.util.runCatchingCancellable
@@ -147,17 +137,7 @@ data class AiMetadataState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailViewModel(
     val docId: String,
-    private val documents: DocumentRepository,
-    tagRepository: TagRepository,
-    private val meta: MetadataWriter,
-    private val tagAdmin: TagAdmin,
-    private val docLifecycle: DocLifecycle,
-    private val content: DocContentFacade,
-    private val ai: AiSuggest,
-    private val ocr: OcrFacade,
-    private val maintenance: MaintenanceFacade,
-    reviewConfig: ReviewConfigFacade,
-    private val fieldRegistry: FieldRegistry,
+    session: LibrarySession,
     searchQuery: String? = null,
     /**
      * The document row a caller already has in hand (the library list feeds its preview panel one).
@@ -168,27 +148,15 @@ class DocDetailViewModel(
     initialItem: DocListItem? = null,
 ) : MessagesViewModel(),
     DocumentWrites {
-    constructor(
-        docId: String,
-        session: LibrarySession,
-        searchQuery: String? = null,
-        initialItem: DocListItem? = null,
-    ) : this(
-        docId = docId,
-        documents = session.documents,
-        tagRepository = session.tags,
-        meta = session.meta,
-        tagAdmin = session.tagAdmin,
-        docLifecycle = session.docLifecycle,
-        content = session.content,
-        ai = session.aiSuggest,
-        ocr = session.ocr,
-        maintenance = session.maintenance,
-        reviewConfig = session.reviewConfig,
-        fieldRegistry = session.fieldRegistry,
-        searchQuery = searchQuery,
-        initialItem = initialItem,
-    )
+    private val documents = session.documents
+    private val meta = session.meta
+    private val tagAdmin = session.tagAdmin
+    private val docLifecycle = session.docLifecycle
+    private val content = session.content
+    private val ai = session.aiSuggest
+    private val ocr = session.ocr
+    private val maintenance = session.maintenance
+    private val fieldRegistry = session.fieldRegistry
 
     private val _ui = MutableStateFlow(DetailUiState())
     val ui: StateFlow<DetailUiState> = _ui.asStateFlow()
@@ -215,7 +183,7 @@ class DocDetailViewModel(
             .stateIn(viewModelScope, WhileSubscribedTimeout, initialItem)
 
     private val reviewMode: StateFlow<ReviewMode> =
-        reviewConfig.reviewMode
+        session.reviewConfig.reviewMode
             .stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
 
     /** The registry in display order; the panel renders and edits fields from it. */
@@ -230,7 +198,7 @@ class DocDetailViewModel(
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
     private val tagColors: StateFlow<Map<String, String?>> =
-        tagRepository
+        session.tags
             .observeTags()
             .map { tags -> tags.associate { it.name to it.color } }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())

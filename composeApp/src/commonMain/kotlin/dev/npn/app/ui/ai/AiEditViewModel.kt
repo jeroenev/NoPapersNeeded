@@ -10,25 +10,17 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
-import dev.npn.core.ai.AiSuggest
-import dev.npn.core.app.AiEditQueueFacade
 import dev.npn.core.app.AiEditRun
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.BatchResult
-import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
-import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.EditProgress
 import dev.npn.core.app.EditScope
-import dev.npn.core.app.FieldRegistry
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.MetadataWriter
-import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.ReviewDoc
 import dev.npn.core.app.SavedView
-import dev.npn.core.app.SavedViewRepository
 import dev.npn.core.app.ScopeKey
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.model.FieldDef
@@ -300,34 +292,15 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
 @OptIn(ExperimentalCoroutinesApi::class)
 @Suppress("TooManyFunctions")
 class AiEditViewModel(
-    documents: DocumentRepository,
-    meta: MetadataWriter,
-    content: DocContentFacade,
-    ai: AiSuggest,
-    savedViewRepository: SavedViewRepository,
-    reviewConfig: ReviewConfigFacade,
-    fieldRegistry: FieldRegistry,
-    private val editQueue: AiEditQueueFacade,
+    session: LibrarySession,
     private val settings: SettingsRepository,
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
     selection: List<String> = emptyList(),
 ) : MessagesViewModel() {
-    constructor(
-        session: LibrarySession,
-        settings: SettingsRepository,
-        selection: List<String> = emptyList(),
-    ) : this(
-        documents = session.documents,
-        meta = session.meta,
-        content = session.content,
-        ai = session.aiSuggest,
-        savedViewRepository = session.savedViews,
-        reviewConfig = session.reviewConfig,
-        fieldRegistry = session.fieldRegistry,
-        editQueue = session.aiEditQueue,
-        settings = settings,
-        selection = selection,
-    )
+    private val editQueue = session.aiEditQueue
+    private val fieldRegistry = session.fieldRegistry
+    private val reviewConfig = session.reviewConfig
+    private val savedViewRepository = session.savedViews
 
     private val _ui =
         MutableStateFlow(
@@ -338,7 +311,8 @@ class AiEditViewModel(
         )
     val ui: StateFlow<AiEditUiState> = _ui.asStateFlow()
 
-    private val edit = AiEditRun(documents, meta, content, ai, fieldRegistry, selection)
+    private val edit =
+        AiEditRun(session.documents, session.meta, session.content, session.aiSuggest, fieldRegistry, selection)
 
     init {
         // Seed the field options from the registry the first time it arrives: every aiEnabled field

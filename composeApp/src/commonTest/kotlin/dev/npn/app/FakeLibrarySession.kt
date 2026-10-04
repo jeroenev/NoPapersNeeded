@@ -3,10 +3,8 @@ package dev.npn.app
 import dev.npn.core.app.LibrarySession
 
 /**
- * Convenience composer of the per-facet fakes, mirroring how [dev.npn.core.app.LibrarySessionImpl]
- * assembles the real ones. Tests that drive a viewmodel through its narrow constructor should
- * construct only the facet fakes they need; this aggregate exists for tests that would otherwise
- * list half a dozen of them.
+ * The per-facet fakes composed into a session, mirroring how [dev.npn.core.app.LibrarySessionImpl]
+ * assembles the real ones: every viewmodel takes the session and reads the facets it needs.
  *
  * Each property keeps its concrete fake type so tests can reach the recorded calls and injection
  * hooks (e.g. `session.docLifecycle.trashedDocs`, `session.ocr.failReOcr`).

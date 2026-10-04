@@ -5,9 +5,7 @@ import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.TagAdmin
 import dev.npn.core.app.TagInfo
-import dev.npn.core.app.TagRepository
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 
@@ -27,13 +25,12 @@ data class TagNode(
 )
 
 class TagManagementViewModel(
-    tagRepository: TagRepository,
-    private val tagAdmin: TagAdmin,
+    session: LibrarySession,
 ) : MessagesViewModel() {
-    constructor(session: LibrarySession) : this(session.tags, session.tagAdmin)
+    private val tagAdmin = session.tagAdmin
 
     val tags: StateFlow<List<TagInfo>> =
-        tagRepository
+        session.tags
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 

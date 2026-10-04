@@ -4,9 +4,7 @@ import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
-import dev.npn.core.app.AiEditQueueFacade
 import dev.npn.core.app.LibrarySession
-import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.QueuedEditRun
 import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.WorkFacade
@@ -27,22 +25,21 @@ import kotlinx.coroutines.launch
  * plain [ViewModel] all the same: dropping a run is a local delete with nothing to report.
  */
 class QueueViewModel(
-    work: WorkFacade,
-    private val editQueue: AiEditQueueFacade,
-    private val ocr: OcrFacade,
+    session: LibrarySession,
 ) : MessagesViewModel() {
-    constructor(session: LibrarySession) : this(session.work, session.aiEditQueue, session.ocr)
+    private val editQueue = session.aiEditQueue
+    private val ocr = session.ocr
 
     val items: StateFlow<List<QueuedWork>> =
-        work.queue.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+        session.work.queue.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /** Queued AI edit runs, finished ones first — see [WorkFacade.editRuns]. */
     val editRuns: StateFlow<List<QueuedEditRun>> =
-        work.editRuns.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+        session.work.editRuns.stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /** Per-stage counts, for the callers that only want a badge rather than the whole list. */
     val counts: StateFlow<QueueCounts> =
-        work.queue
+        session.work.queue
             .map { entries -> QueueCounts.of(entries) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, QueueCounts())
 

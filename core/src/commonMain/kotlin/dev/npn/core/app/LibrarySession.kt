@@ -5,8 +5,8 @@ import dev.npn.core.ai.AiSuggest
 
 /**
  * Everything scoped to one opened library folder: a pure aggregate of narrow facets plus
- * lifecycle. Consumers should depend on the facets they use, never on this aggregate; only the
- * composable tree and platform entry points hold the whole session.
+ * lifecycle. Viewmodels take the session and read the facets they use; code in `core` depends on
+ * the facets alone.
  */
 interface LibrarySession {
     val documents: DocumentRepository

@@ -2,7 +2,7 @@
 
 package dev.npn.app.ui.ai
 
-import dev.npn.app.FakeAiEditQueue
+import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.resolveEnglish
 import dev.npn.core.app.ApplyOutcome
@@ -68,14 +68,15 @@ private class ScriptedReview(
     }
 }
 
-private fun queueWith(review: EditRunReview) = FakeAiEditQueue().apply { reviews[review.jobId] = review }
+private fun sessionWith(review: EditRunReview) =
+    FakeLibrarySession().apply { aiEditQueue.reviews[review.jobId] = review }
 
 class AiEditReviewViewModelTest : MainDispatcherTest() {
     @Test
     fun theStoredSuggestionsAreLoadedIntoAReviewPhase() =
         runTest(dispatcher) {
             val review = ScriptedReview(docs = listOf(reviewDoc("a"), reviewDoc("b")))
-            val model = AiEditReviewViewModel(queueWith(review), "job")
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
             advanceUntilIdle()
 
@@ -87,7 +88,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     @Test
     fun aRunThatIsGoneReportsItselfRatherThanShowingAnEmptyReview() =
         runTest(dispatcher) {
-            val model = AiEditReviewViewModel(FakeAiEditQueue(), "job")
+            val model = AiEditReviewViewModel(FakeLibrarySession(), "job")
             val job = launch { model.phase.collect {} }
             advanceUntilIdle()
 
@@ -98,8 +99,9 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     @Test
     fun aRunThatCannotBeOpenedSaysWhy() =
         runTest(dispatcher) {
-            val queue = FakeAiEditQueue().apply { openFailure = IllegalStateException("database locked") }
-            val model = AiEditReviewViewModel(queue, "job")
+            val session =
+                FakeLibrarySession().apply { aiEditQueue.openFailure = IllegalStateException("database locked") }
+            val model = AiEditReviewViewModel(session, "job")
             val job = launch { model.phase.collect {} }
             val messages = mutableListOf<String>()
             val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
@@ -115,7 +117,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     fun aFailedDiscardSaysSoAndKeepsTheReview() =
         runTest(dispatcher) {
             val review = ScriptedReview(discardFailure = IllegalStateException("disk full"))
-            val model = AiEditReviewViewModel(queueWith(review), "job")
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
             val messages = mutableListOf<String>()
             val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
@@ -134,7 +136,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     fun onlySelectedSuggestionsSurviveIntoTheApply() =
         runTest(dispatcher) {
             val review = ScriptedReview()
-            val model = AiEditReviewViewModel(queueWith(review), "job")
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
             advanceUntilIdle()
 
@@ -152,7 +154,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     fun aFullyAppliedRunEndsInDone() =
         runTest(dispatcher) {
             val review = ScriptedReview()
-            val model = AiEditReviewViewModel(queueWith(review), "job")
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
             advanceUntilIdle()
 
@@ -174,7 +176,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
                     docs = listOf(reviewDoc("a"), reviewDoc("b")),
                     outcome = ApplyOutcome.Retry(listOf(retryRow), failedDocs = 1, total = 2),
                 )
-            val model = AiEditReviewViewModel(queueWith(review), "job")
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
             val messages = mutableListOf<Unit>()
             val messageJob = launch { model.messages.collect { messages += Unit } }
@@ -194,7 +196,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     fun nothingSelectedLeavesTheReviewExactlyAsItWas() =
         runTest(dispatcher) {
             val review = ScriptedReview(outcome = ApplyOutcome.NothingSelected)
-            val model = AiEditReviewViewModel(queueWith(review), "job")
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
             advanceUntilIdle()
             val before = model.phase.value
@@ -210,7 +212,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
     fun skippingDiscardsTheRunWithoutWriting() =
         runTest(dispatcher) {
             val review = ScriptedReview()
-            val model = AiEditReviewViewModel(queueWith(review), "job")
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
             advanceUntilIdle()
 

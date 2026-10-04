@@ -6,10 +6,8 @@ import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.isConfiguredOrFalse
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
-import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatSession
-import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
@@ -50,10 +48,10 @@ data class AiChatUiState(
  * the running job and finalises the partial assistant turn so it stays in history.
  */
 class AiChatViewModel(
-    private val ai: AiChat,
-    private val documents: DocumentRepository,
+    session: LibrarySession,
 ) : MessagesViewModel() {
-    constructor(session: LibrarySession) : this(session.aiChat, session.documents)
+    private val ai = session.aiChat
+    private val documents = session.documents
 
     private val _ui = MutableStateFlow(AiChatUiState())
     val ui: StateFlow<AiChatUiState> = _ui.asStateFlow()

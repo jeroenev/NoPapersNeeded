@@ -35,14 +35,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
         settings: FakeSettingsRepository = FakeSettingsRepository(),
         session: FakeLibrarySession = FakeLibrarySession(),
         selfTest: suspend (AiConfig) -> AiSelfTestReport = { error("no self-test expected") },
-    ) = SettingsViewModel(
-        settings,
-        session.content,
-        session.reviewConfig,
-        session.storagePath,
-        session.fieldRegistry,
-        selfTest,
-    )
+    ) = SettingsViewModel(settings, session, selfTest)
 
     @Test
     fun clearingTheThumbnailCacheSaysWhatItCleared() =
