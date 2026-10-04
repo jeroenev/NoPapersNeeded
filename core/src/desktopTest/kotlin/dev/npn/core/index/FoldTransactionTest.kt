@@ -18,20 +18,22 @@ class FoldTransactionTest {
     /** The top-level transactions in [statements] that wrote, each as the statements it ran. */
     private fun writeTransactions(statements: List<String>): List<List<String>> {
         val blocks = ArrayList<List<String>>()
-        var open: ArrayList<String>? = null
+        val current = ArrayList<String>()
+        var inside = false
         for (sql in statements) {
             when {
                 sql.startsWith("BEGIN") -> {
-                    open = ArrayList()
+                    inside = true
+                    current.clear()
                 }
 
                 sql.startsWith("END TRANSACTION") || sql.startsWith("ROLLBACK") -> {
-                    open?.takeIf { block -> block.any(::isWrite) }?.let(blocks::add)
-                    open = null
+                    if (inside && current.any(::isWrite)) blocks += current.toList()
+                    inside = false
                 }
 
-                else -> {
-                    open?.add(sql)
+                inside -> {
+                    current += sql
                 }
             }
         }

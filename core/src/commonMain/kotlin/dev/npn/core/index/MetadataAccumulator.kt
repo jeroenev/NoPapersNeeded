@@ -81,7 +81,7 @@ sealed interface OpenReconciliation {
 /** Persisted source/event accumulator. Synced files remain authoritative; this cache is rebuildable. */
 class MetadataAccumulator(
     private val fs: LibraryFileSystem,
-    private val db: NpnDatabase,
+    db: NpnDatabase,
     private val installationId: String? = null,
 ) {
     private val dao = db.metadataProjectionDao()

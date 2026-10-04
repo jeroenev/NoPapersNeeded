@@ -131,8 +131,7 @@ class CompactionPlanCostTest {
             db.queryPlan(joins.single()).filter { isFullTableScan(it, "metadata_events") }.shouldBeEmpty()
             fs
                 .calls("stat")
-                .filter { NpnPaths.journalPath(it.substringAfter(' ')) is NpnPaths.JournalPath.ObjectV2 }
-                .size shouldBe 6
+                .count { NpnPaths.journalPath(it.substringAfter(' ')) is NpnPaths.JournalPath.ObjectV2 } shouldBe 6
             db.metadataProjectionDao().state()?.migrationState shouldBe MetadataAccumulator.MIGRATION_READY
             db
                 .metadataProjectionDao()
