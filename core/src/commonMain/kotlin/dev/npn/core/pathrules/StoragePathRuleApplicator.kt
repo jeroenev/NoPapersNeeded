@@ -32,7 +32,7 @@ class StoragePathRuleApplicator(
         val doc = documentDao.getByDocId(docId) ?: return false
         if (doc.trashed || doc.deleted || doc.missing) return false
 
-        val tags = documentDao.tagsForDocs(listOf(docId)).map { it.tag }.distinct()
+        val tags = db.tagDao().tagsForDocument(docId)
         val context =
             StoragePathContext(
                 fields = db.documentFieldDao().fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue },

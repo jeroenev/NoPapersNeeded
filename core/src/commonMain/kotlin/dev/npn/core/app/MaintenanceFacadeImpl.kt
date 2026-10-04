@@ -99,12 +99,7 @@ internal class MaintenanceFacadeImpl(
         partIds: List<String>,
     ) {
         db.documentDao().getByDocId(docId) ?: return
-        val tags =
-            db
-                .documentDao()
-                .tagsForDocs(listOf(docId))
-                .map { it.tag }
-                .distinct()
+        val tags = db.tagDao().tagsForDocument(docId)
         // Every field carries onto the parts except the ones that describe the whole document
         // (title, notes): a part is not "the" invoice, and its notes would be misleading.
         val fields =

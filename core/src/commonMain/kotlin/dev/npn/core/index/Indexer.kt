@@ -608,7 +608,7 @@ class Indexer(
         for (row in documentDao.getByDocIds(docIds)) rows[row.docId] = row
 
         val tags = HashMap<String, List<String>>(docIds.size)
-        for ((docId, tagRows) in documentDao.tagsForDocs(docIds).groupBy { it.docId }) {
+        for ((docId, tagRows) in tagDao.tagsForDocs(docIds).groupBy { it.docId }) {
             tags[docId] = tagRows.map { it.tag }.sorted()
         }
 

@@ -32,10 +32,6 @@ interface DocumentDao {
     )
     suspend fun titlesFor(docIds: List<String>): List<DocTitle>
 
-    /** Doc ids currently tagged with [tag]. */
-    @Query("SELECT docId FROM document_tags WHERE tag = :tag")
-    suspend fun getDocIdsWithTag(tag: String): List<String>
-
     /** Bounded live document rows carrying an exact tag, for AI tool context. */
     @Query(
         "SELECT d.* FROM documents d INNER JOIN document_tags t ON d.docId = t.docId " +
@@ -98,10 +94,6 @@ interface DocumentDao {
 
     @Query("SELECT * FROM documents WHERE docId = :docId")
     fun observeByDocId(docId: String): Flow<DocumentEntity?>
-
-    /** Live tag list for one document (detail view); re-emits on document_tags changes. */
-    @Query("SELECT tag FROM document_tags WHERE docId = :docId ORDER BY tag")
-    fun observeTagsForDoc(docId: String): Flow<List<String>>
 
     /**
      * Filtered library listing. The upper layer builds the SQL (filters, sort, tag joins)
@@ -176,14 +168,6 @@ interface DocumentDao {
     /** Every live (not deleted) document's trash time, for the trash auto-purge. */
     @Query("SELECT docId, trashedAt FROM documents WHERE deleted = 0")
     suspend fun trashTimes(): List<DocTrashTime>
-
-    /** All document tags for a set of docIds, for grouping list items. */
-    @Query("SELECT docId, tag FROM document_tags WHERE docId IN (:docIds)")
-    suspend fun tagsForDocsChunk(docIds: List<String>): List<DocumentTagEntity>
-
-    /** Chunked [tagsForDocsChunk] so large id sets stay under SQLite's bind-variable limit. */
-    suspend fun tagsForDocs(docIds: List<String>): List<DocumentTagEntity> =
-        docIds.chunkedBind { tagsForDocsChunk(it) }
 
     /** All documents for a set of docIds, for the bulk fold and FTS-first list fetch. */
     @Query("SELECT * FROM documents WHERE docId IN (:docIds)")

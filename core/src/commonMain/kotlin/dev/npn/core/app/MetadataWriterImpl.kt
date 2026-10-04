@@ -46,6 +46,7 @@ class MetadataWriterImpl(
     TagAdmin,
     DocLifecycle {
     private val documentDao get() = db.documentDao()
+    private val tagDao get() = db.tagDao()
 
     override suspend fun addTag(
         docIds: List<String>,
@@ -172,7 +173,7 @@ class MetadataWriterImpl(
         val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
         coordinator.commitAndApply(listOf(PendingOp.tagRename(f, t)))
-        documentDao.getDocIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
+        tagDao.docIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
     }
 
     override suspend fun mergeTag(
@@ -183,13 +184,13 @@ class MetadataWriterImpl(
         val t = to.trim()
         if (f.isEmpty() || t.isEmpty() || f == t) return
         coordinator.commitAndApply(listOf(PendingOp.tagMerge(f, t)))
-        documentDao.getDocIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
+        tagDao.docIdsWithTag(t).forEach { pathRuleApplicator.applyFor(it) }
     }
 
     override suspend fun deleteTag(name: String) {
         val t = name.trim()
         if (t.isEmpty()) return
-        val affected = documentDao.getDocIdsWithTag(t)
+        val affected = tagDao.docIdsWithTag(t)
         // No dedicated journal op by design: remove the tag from every doc currently holding it,
         // listing all observed dots (OR-set delete-everywhere).
         coordinator.commitBuilt { state -> state.tagRemovalOps(state.taggedDocs(), t) }

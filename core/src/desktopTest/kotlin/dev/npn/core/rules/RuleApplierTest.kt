@@ -73,7 +73,7 @@ class RuleApplierTest {
             reads shouldBe 1
             rig.db.tagDao().tagsForDocument(bill) shouldContainExactly listOf("utilities")
             rig.db.tagDao().tagsForDocument(scanned) shouldContainExactly listOf("water")
-            rig.db.documentDao().getDocIdsWithTag("utilities") shouldContainExactly listOf(bill)
+            rig.db.tagDao().docIdsWithTag("utilities") shouldContainExactly listOf(bill)
         }
 
     private companion object {

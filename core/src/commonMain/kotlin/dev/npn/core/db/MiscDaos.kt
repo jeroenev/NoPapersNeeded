@@ -27,25 +27,18 @@ interface DocumentFieldDao {
     suspend fun all(): List<DocumentFieldEntity>
 
     /** Distinct values of one field on live documents, for autocomplete and AI vocabulary. */
-    @Query(
-        "SELECT DISTINCT f.fieldValue FROM document_fields f JOIN documents d ON d.docId = f.docId " +
-            "WHERE f.fieldKey = :key AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
-            "ORDER BY f.fieldValue COLLATE NOCASE LIMIT :limit",
-    )
-    fun observeDistinctValues(
-        key: String,
-        limit: Int,
-    ): Flow<List<String>>
-
-    @Query(
-        "SELECT DISTINCT f.fieldValue FROM document_fields f JOIN documents d ON d.docId = f.docId " +
-            "WHERE f.fieldKey = :key AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
-            "ORDER BY f.fieldValue COLLATE NOCASE LIMIT :limit",
-    )
+    @Query(DISTINCT_VALUES)
     suspend fun distinctValues(
         key: String,
         limit: Int,
     ): List<String>
+
+    /** [distinctValues], observed. */
+    @Query(DISTINCT_VALUES)
+    fun observeDistinctValues(
+        key: String,
+        limit: Int,
+    ): Flow<List<String>>
 
     /** Distinct values of one field on live documents starting with [likePrefix] (LIKE-escaped, `\`). */
     @Query(
@@ -399,6 +392,11 @@ interface KeyValueDao {
     @Query("DELETE FROM kv WHERE key = :key")
     suspend fun delete(key: String)
 }
+
+private const val DISTINCT_VALUES =
+    "SELECT DISTINCT f.fieldValue FROM document_fields f JOIN documents d ON d.docId = f.docId " +
+        "WHERE f.fieldKey = :key AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+        "ORDER BY f.fieldValue COLLATE NOCASE LIMIT :limit"
 
 /** Custom-field key usage count, for the AI's list_fields tool. */
 data class FieldKeyCount(

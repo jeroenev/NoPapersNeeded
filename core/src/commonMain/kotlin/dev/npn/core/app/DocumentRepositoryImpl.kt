@@ -74,6 +74,7 @@ class DocumentRepositoryImpl(
     private val db: NpnDatabase,
 ) : DocumentRepository {
     private val documentDao get() = db.documentDao()
+    private val tagDao get() = db.tagDao()
     private val ftsDao: FtsDao get() = db.ftsDao()
 
     private val fieldDao get() = db.documentFieldDao()
@@ -145,7 +146,7 @@ class DocumentRepositoryImpl(
     override fun observeDoc(docId: String): Flow<DocListItem?> =
         combine(
             documentDao.observeByDocId(docId),
-            documentDao.observeTagsForDoc(docId),
+            tagDao.observeTagsForDocument(docId),
             fieldDao.observeForDoc(docId),
         ) { doc, tags, fields ->
             if (doc == null) {
@@ -181,7 +182,7 @@ class DocumentRepositoryImpl(
                 .mapNotNull { it.toFieldDef() }
                 .filter { it.sharesVocabulary }
                 .map { fieldDao.valuesForPrefix(it.key, likePrefix, sourceLimit) }
-        val sources = listOf(contentTerms, db.tagDao().tagsForPrefix(likePrefix, sourceLimit)) + textFields
+        val sources = listOf(contentTerms, tagDao.tagsForPrefix(likePrefix, sourceLimit)) + textFields
         return buildList {
             var index = 0
             while (size < limit && sources.any { index < it.size }) {
@@ -235,7 +236,7 @@ class DocumentRepositoryImpl(
 
     override suspend fun tagsForDocuments(docIds: List<String>): Map<String, List<String>> {
         if (docIds.isEmpty()) return emptyMap()
-        return documentDao
+        return tagDao
             .tagsForDocs(docIds)
             .groupBy({ it.docId }, { it.tag })
             .mapValues { it.value.sorted() }

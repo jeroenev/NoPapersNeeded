@@ -54,8 +54,23 @@ interface TagDao {
     )
     suspend fun pruneUnreferenced()
 
-    @Query("SELECT tag FROM document_tags WHERE docId = :docId ORDER BY tag")
+    /** Doc ids currently tagged with [tag]. */
+    @Query("SELECT docId FROM document_tags WHERE tag = :tag")
+    suspend fun docIdsWithTag(tag: String): List<String>
+
+    @Query(TAGS_FOR_DOCUMENT)
     suspend fun tagsForDocument(docId: String): List<String>
+
+    /** [tagsForDocument], observed: re-emits on document_tags changes (detail view). */
+    @Query(TAGS_FOR_DOCUMENT)
+    fun observeTagsForDocument(docId: String): Flow<List<String>>
+
+    /** All document tags for a set of docIds, for grouping list items. */
+    @Query("SELECT docId, tag FROM document_tags WHERE docId IN (:docIds)")
+    suspend fun tagsForDocsChunk(docIds: List<String>): List<DocumentTagEntity>
+
+    /** Chunked [tagsForDocsChunk] so large id sets stay under SQLite's bind-variable limit. */
+    suspend fun tagsForDocs(docIds: List<String>): List<DocumentTagEntity> = docIds.chunkedBind { tagsForDocsChunk(it) }
 
     /** Replace the full tag sets of several documents atomically, keyed by docId. */
     @Transaction
@@ -75,3 +90,5 @@ interface TagDao {
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertDocumentTags(rows: List<DocumentTagEntity>)
 }
+
+private const val TAGS_FOR_DOCUMENT = "SELECT tag FROM document_tags WHERE docId = :docId ORDER BY tag"
