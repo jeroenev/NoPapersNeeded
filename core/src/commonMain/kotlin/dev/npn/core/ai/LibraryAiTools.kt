@@ -18,6 +18,7 @@ import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.first
 import kotlinx.serialization.KSerializer
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
@@ -31,6 +32,33 @@ class LibraryToolSet internal constructor(
     val tools: List<ToolBase<*, *>>,
     val calls: Map<String, suspend (argsJson: String) -> String>,
 )
+
+/**
+ * The names the chat tools are advertised under, and the argument keys a transcript labels a call
+ * by: the model calls tools by these, and the chat screen shows its rows by them.
+ */
+object ChatTools {
+    const val SEARCH_DOCUMENTS = "search_documents"
+    const val LIST_TAGS = "list_tags"
+    const val DOCUMENTS_WITH_TAG = "documents_with_tag"
+    const val SEARCH_FILENAMES = "search_filenames"
+    const val LIST_FIELDS = "list_fields"
+    const val SEARCH_FIELDS = "search_fields"
+    const val GET_DOCUMENT = "get_document"
+    const val GET_DOCUMENT_TEXT = "get_document_text"
+
+    /** [SEARCH_DOCUMENTS]' search terms. */
+    const val ARG_QUERY = "query"
+
+    /** [DOCUMENTS_WITH_TAG]'s tag name. */
+    const val ARG_TAG = "tag"
+
+    /** [SEARCH_FILENAMES]' substring. */
+    const val ARG_PATTERN = "pattern"
+
+    /** The document [GET_DOCUMENT] and [GET_DOCUMENT_TEXT] read. */
+    const val ARG_DOC_ID = "docId"
+}
 
 /**
  * Read-only tools the chat agent can call to search the library index: OCR/embedded text,
@@ -192,7 +220,7 @@ object LibraryAiTools {
         private val documentDao: DocumentDao,
     ) : SimpleTool<SearchDocumentsTool.Args>(
             argsType = typeToken<Args>(),
-            name = "search_documents",
+            name = ChatTools.SEARCH_DOCUMENTS,
             description =
                 "Full-text search over all documents (OCR text, embedded text, titles, " +
                     "filenames, tags, notes). Terms are AND-combined. Returns matching documents " +
@@ -201,6 +229,7 @@ object LibraryAiTools {
         @Serializable
         data class Args(
             @property:LLMDescription("Search terms, e.g. \"invoice 2024 electricity\"")
+            @SerialName(ChatTools.ARG_QUERY)
             val query: String,
         )
 
@@ -229,7 +258,7 @@ object LibraryAiTools {
         private val tagDao: TagDao,
     ) : SimpleTool<ListTagsTool.Args>(
             argsType = typeToken<Args>(),
-            name = "list_tags",
+            name = ChatTools.LIST_TAGS,
             description = "List every tag in the library with its document count.",
         ) {
         @Serializable
@@ -249,12 +278,13 @@ object LibraryAiTools {
         private val documentDao: DocumentDao,
     ) : SimpleTool<DocumentsWithTagTool.Args>(
             argsType = typeToken<Args>(),
-            name = "documents_with_tag",
-            description = "List documents carrying an exact tag name (use list_tags to discover names).",
+            name = ChatTools.DOCUMENTS_WITH_TAG,
+            description = "List documents carrying an exact tag name (use ${ChatTools.LIST_TAGS} to discover names).",
         ) {
         @Serializable
         data class Args(
             @property:LLMDescription("Exact tag name")
+            @SerialName(ChatTools.ARG_TAG)
             val tag: String,
         )
 
@@ -272,7 +302,7 @@ object LibraryAiTools {
         private val documentDao: DocumentDao,
     ) : SimpleTool<SearchFileNamesTool.Args>(
             argsType = typeToken<Args>(),
-            name = "search_filenames",
+            name = ChatTools.SEARCH_FILENAMES,
             description =
                 "Find documents whose file name or folder path contains a substring " +
                     "(case-insensitive). Useful when the user remembers part of a file name.",
@@ -280,6 +310,7 @@ object LibraryAiTools {
         @Serializable
         data class Args(
             @property:LLMDescription("Substring to look for in file names and paths")
+            @SerialName(ChatTools.ARG_PATTERN)
             val pattern: String,
         )
 
@@ -308,12 +339,12 @@ object LibraryAiTools {
         private val fields: List<FieldDef>,
     ) : SimpleTool<ListFieldsTool.Args>(
             argsType = typeToken<Args>(),
-            name = "list_fields",
+            name = ChatTools.LIST_FIELDS,
             description =
                 "List the metadata fields documents carry: every registered field (key, label, type, " +
                     "whether it shows on every document) with document counts, keys in use without a " +
                     "definition, and the document columns searchable like fields: $FILE_NAME_FIELD, $PATH_FIELD, " +
-                    "and $OCR_ENGINE_FIELD. Call this to discover field keys before using search_fields.",
+                    "and $OCR_ENGINE_FIELD. Call this to discover field keys before using ${ChatTools.SEARCH_FIELDS}.",
         ) {
         @Serializable
         class Args
@@ -351,7 +382,7 @@ object LibraryAiTools {
         private val fields: List<FieldDef>,
     ) : SimpleTool<SearchFieldsTool.Args>(
             argsType = typeToken<Args>(),
-            name = "search_fields",
+            name = ChatTools.SEARCH_FIELDS,
             description =
                 "Find documents by one metadata field. Fields in this library: ${fieldVocabulary(fields)}. " +
                     "$OCR_ENGINE_FIELD is set by the app, not the user ($OCR_ENGINE_LABELS). Omit field or " +
@@ -364,7 +395,7 @@ object LibraryAiTools {
         @Serializable
         data class Args(
             @property:LLMDescription(
-                "Field to search: a key (or label) from list_fields, $FILE_NAME_FIELD, $PATH_FIELD, " +
+                "Field to search: a key (or label) from ${ChatTools.LIST_FIELDS}, $FILE_NAME_FIELD, $PATH_FIELD, " +
                     "$OCR_ENGINE_FIELD, " +
                     "or \"any\" for every user-authored field.",
             )
@@ -403,7 +434,7 @@ object LibraryAiTools {
                     } else {
                         "a \"${args.field}\" value containing \"$value\""
                     }
-                val hint = if (isKnownField(key)) "" else " Call list_fields to see the field keys in use."
+                val hint = if (isKnownField(key)) "" else " Call ${ChatTools.LIST_FIELDS} to see the field keys in use."
                 return "No documents have $what.$hint"
             }
             return lines.joinToString("\n")
@@ -492,7 +523,7 @@ object LibraryAiTools {
         private val fields: List<FieldDef>,
     ) : SimpleTool<GetDocumentTool.Args>(
             argsType = typeToken<Args>(),
-            name = "get_document",
+            name = ChatTools.GET_DOCUMENT,
             description =
                 "Full metadata of one document by docId: file name, path, tags, every field value " +
                     "(registry order, then keys without a definition), page count, and which OCR " +
@@ -501,6 +532,7 @@ object LibraryAiTools {
         @Serializable
         data class Args(
             @property:LLMDescription("The docId (64-char hash) from a previous search result")
+            @SerialName(ChatTools.ARG_DOC_ID)
             val docId: String,
         )
 
@@ -533,7 +565,7 @@ object LibraryAiTools {
         private val ftsDao: FtsDao,
     ) : SimpleTool<GetDocumentTextTool.Args>(
             argsType = typeToken<Args>(),
-            name = "get_document_text",
+            name = ChatTools.GET_DOCUMENT_TEXT,
             description =
                 "Read the extracted text (OCR or embedded) of one document, in chunks of " +
                     "$TEXT_CHUNK_CHARS characters. Use chunk 0 first; the output says how many chunks exist.",
@@ -541,6 +573,7 @@ object LibraryAiTools {
         @Serializable
         data class Args(
             @property:LLMDescription("The docId (64-char hash) from a previous search result")
+            @SerialName(ChatTools.ARG_DOC_ID)
             val docId: String,
             @property:LLMDescription("0-based chunk index, defaults to 0")
             val chunk: Int = 0,

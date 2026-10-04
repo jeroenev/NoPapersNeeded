@@ -6,6 +6,8 @@ import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.model.FieldKeys
+import io.kotest.matchers.collections.shouldContain
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.coroutines.test.runTest
@@ -46,6 +48,34 @@ class LibraryAiToolsConsistencyTest {
         trashed = trashed,
         deleted = deleted,
     )
+
+    /** The chat screen labels tool rows by [ChatTools]; the model must see exactly those names and keys. */
+    @Test
+    fun toolsAreAdvertisedUnderTheExportedNamesAndArgumentKeys() {
+        val set = LibraryAiTools.toolSetFor(db, FieldKeys.seedDefinitions())
+        val parameters =
+            set.tools.associate { tool ->
+                tool.name to (tool.descriptor.requiredParameters + tool.descriptor.optionalParameters).map { it.name }
+            }
+
+        set.calls.keys shouldContainExactlyInAnyOrder parameters.keys
+        parameters.keys shouldContainExactlyInAnyOrder
+            listOf(
+                ChatTools.SEARCH_DOCUMENTS,
+                ChatTools.LIST_TAGS,
+                ChatTools.DOCUMENTS_WITH_TAG,
+                ChatTools.SEARCH_FILENAMES,
+                ChatTools.LIST_FIELDS,
+                ChatTools.SEARCH_FIELDS,
+                ChatTools.GET_DOCUMENT,
+                ChatTools.GET_DOCUMENT_TEXT,
+            )
+        parameters.getValue(ChatTools.SEARCH_DOCUMENTS) shouldContain ChatTools.ARG_QUERY
+        parameters.getValue(ChatTools.DOCUMENTS_WITH_TAG) shouldContain ChatTools.ARG_TAG
+        parameters.getValue(ChatTools.SEARCH_FILENAMES) shouldContain ChatTools.ARG_PATTERN
+        parameters.getValue(ChatTools.GET_DOCUMENT) shouldContain ChatTools.ARG_DOC_ID
+        parameters.getValue(ChatTools.GET_DOCUMENT_TEXT) shouldContain ChatTools.ARG_DOC_ID
+    }
 
     @Test
     fun listFieldsCountsOnlySearchableDocuments() =

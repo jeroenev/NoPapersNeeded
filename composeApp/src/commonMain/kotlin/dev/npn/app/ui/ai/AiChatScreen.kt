@@ -77,6 +77,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.ai.AiChatSession
+import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -535,9 +536,9 @@ private fun ConfigureHint() {
 
 private fun toolIcon(name: String): ImageVector =
     when (name) {
-        "search_documents", "search_filenames" -> Icons.Outlined.Search
-        "get_document", "get_document_text" -> Icons.Outlined.Description
-        "list_tags", "documents_with_tag" -> Icons.AutoMirrored.Outlined.Label
+        ChatTools.SEARCH_DOCUMENTS, ChatTools.SEARCH_FILENAMES -> Icons.Outlined.Search
+        ChatTools.GET_DOCUMENT, ChatTools.GET_DOCUMENT_TEXT -> Icons.Outlined.Description
+        ChatTools.LIST_TAGS, ChatTools.DOCUMENTS_WITH_TAG -> Icons.AutoMirrored.Outlined.Label
         else -> Icons.Outlined.Info
     }
 
@@ -552,42 +553,42 @@ internal fun toolLabel(
     argsJson: String,
 ): String =
     when (name) {
-        "search_documents" -> {
+        ChatTools.SEARCH_DOCUMENTS -> {
             stringResource(
                 Res.string.ai_tool_searched_documents,
-                quoted(argValue(argsJson, "query")),
+                quoted(argValue(argsJson, ChatTools.ARG_QUERY)),
             )
         }
 
-        "search_filenames" -> {
+        ChatTools.SEARCH_FILENAMES -> {
             stringResource(
                 Res.string.ai_tool_searched_file_names,
-                quoted(argValue(argsJson, "pattern")),
+                quoted(argValue(argsJson, ChatTools.ARG_PATTERN)),
             )
         }
 
-        "documents_with_tag" -> {
+        ChatTools.DOCUMENTS_WITH_TAG -> {
             stringResource(
                 Res.string.ai_tool_listed_tagged_documents,
-                quoted(argValue(argsJson, "tag")),
+                quoted(argValue(argsJson, ChatTools.ARG_TAG)),
             )
         }
 
-        "list_tags" -> {
+        ChatTools.LIST_TAGS -> {
             stringResource(Res.string.ai_tool_listed_tags)
         }
 
-        "get_document" -> {
+        ChatTools.GET_DOCUMENT -> {
             stringResource(
                 Res.string.ai_tool_read_document,
-                shortId(argValue(argsJson, "docId")),
+                shortId(argValue(argsJson, ChatTools.ARG_DOC_ID)),
             )
         }
 
-        "get_document_text" -> {
+        ChatTools.GET_DOCUMENT_TEXT -> {
             stringResource(
                 Res.string.ai_tool_read_document_text,
-                shortId(argValue(argsJson, "docId")),
+                shortId(argValue(argsJson, ChatTools.ARG_DOC_ID)),
             )
         }
 
