@@ -43,21 +43,22 @@ class DocContentFacadeImpl internal constructor(
     private val documentDao get() = db.documentDao()
 
     override suspend fun thumbnailPath(docId: String): String? =
-        lifetime.owned {
-            val doc = documentDao.getByDocId(docId) ?: return@owned null
-            thumbnailService.ensureThumbnail(docId, doc.relPath)
+        log.runLogged("Making the thumbnail of $docId") {
+            lifetime.owned {
+                val doc = documentDao.getByDocId(docId) ?: return@owned null
+                thumbnailService.ensureThumbnail(docId, doc.relPath)
+            }
         }
 
-    override suspend fun pageCount(docId: String): Int? = lifetime.owned { readPageCount(docId) }
+    override suspend fun pageCount(docId: String): Int? =
+        log.runLogged("Reading the page count of $docId") { lifetime.owned { readPageCount(docId) } }
 
     private suspend fun readPageCount(docId: String): Int? {
         val doc = documentDao.getByDocId(docId) ?: return null
         doc.pageCount?.let { return it }
-        return log.runLogged("Reading the page count of $docId") {
-            val bytes = fs.readBytes(doc.relPath)
-            pdfEngine.open(bytes).use { handle ->
-                handle.pageCount.also { documentDao.fillPageCount(docId, it) }
-            }
+        val bytes = fs.readBytes(doc.relPath)
+        return pdfEngine.open(bytes).use { handle ->
+            handle.pageCount.also { documentDao.fillPageCount(docId, it) }
         }
     }
 
@@ -65,9 +66,9 @@ class DocContentFacadeImpl internal constructor(
         docId: String,
         pageIndex: Int,
         maxDim: Int,
-    ): ByteArray? {
-        val doc = documentDao.getByDocId(docId) ?: return null
-        return log.runLogged("Rendering page $pageIndex of $docId") {
+    ): ByteArray? =
+        log.runLogged("Rendering page $pageIndex of $docId") {
+            val doc = documentDao.getByDocId(docId) ?: return@runLogged null
             val bytes = fs.readBytes(doc.relPath)
             renderGate.render {
                 pdfEngine.open(bytes).use { handle ->
@@ -79,7 +80,6 @@ class DocContentFacadeImpl internal constructor(
                 }
             }
         }
-    }
 
     override suspend fun clearThumbnailCache(): Int =
         lifetime.owned { log.runLogged("Clearing the thumbnail cache") { thumbnailService.clearCache() } ?: 0 }
@@ -87,15 +87,17 @@ class DocContentFacadeImpl internal constructor(
     override suspend fun extractedText(docId: String): String? =
         log.runLogged("Reading the text of $docId") { db.ftsDao().contentForDoc(docId)?.takeIf { it.isNotBlank() } }
 
-    override suspend fun rawBytes(docId: String): ByteArray? {
-        val doc = documentDao.getByDocId(docId) ?: return null
-        return log.runLogged("Reading $docId") { fs.readBytes(doc.relPath) }
-    }
+    override suspend fun rawBytes(docId: String): ByteArray? =
+        log.runLogged("Reading $docId") {
+            val doc = documentDao.getByDocId(docId) ?: return@runLogged null
+            fs.readBytes(doc.relPath)
+        }
 
-    override suspend fun bakedCopyBytes(docId: String): ByteArray? {
-        val doc = documentDao.getByDocId(docId) ?: return null
-        return log.runLogged("Baking a copy of $docId") { bakeService.bakeToBytes(doc.relPath, buildXmpData(docId)) }
-    }
+    override suspend fun bakedCopyBytes(docId: String): ByteArray? =
+        log.runLogged("Baking a copy of $docId") {
+            val doc = documentDao.getByDocId(docId) ?: return@runLogged null
+            bakeService.bakeToBytes(doc.relPath, buildXmpData(docId))
+        }
 
     override suspend fun bakeInPlace(docId: String): BakeOutcome = lifetime.owned { bake(docId) }
 

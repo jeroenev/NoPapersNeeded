@@ -242,7 +242,7 @@ class DocDetailViewModel(
         doc
             .map { it?.doc?.ocrState }
             .distinctUntilChanged()
-            .map { runCatchingCancellable { content.extractedText(docId) }.getOrNull() }
+            .map { content.extractedText(docId) }
             .stateIn(viewModelScope, WhileSubscribedTimeout, null)
 
     /**
@@ -342,7 +342,7 @@ class DocDetailViewModel(
     private fun loadPageCount() {
         _ui.update { it.copy(pageCount = PageCountState.Loading) }
         viewModelScope.launch {
-            val count = runCatchingCancellable { content.pageCount(docId) }.getOrNull()
+            val count = content.pageCount(docId)
             _ui.update { it.copy(pageCount = pageCountStateOf(count)) }
         }
     }
@@ -613,7 +613,7 @@ class DocDetailViewModel(
     suspend fun renderPage(
         pageIndex: Int,
         maxDim: Int,
-    ): ByteArray? = runCatchingCancellable { content.renderPage(docId, pageIndex, maxDim) }.getOrNull()
+    ): ByteArray? = content.renderPage(docId, pageIndex, maxDim)
 }
 
 private fun BakeFailure.text(): UiText =

@@ -215,11 +215,14 @@ class SessionSmokeTest {
                         { rig.session.reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY) },
                         { rig.session.aiEditQueue.discardEditRun("run") },
                         { rig.session.work.drainOcr() },
-                        { rig.session.content.thumbnailPath(id) },
+                        { rig.session.content.bakeInPlace(id) },
                     )
                 for (call in calls) {
                     shouldThrow<IllegalStateException> { call() }.message shouldBe "Library session is closed"
                 }
+                // A content read has nothing to show either, and says so the way it always does.
+                rig.session.content.thumbnailPath(id) shouldBe null
+                rig.session.content.pageCount(id) shouldBe null
                 // The re-OCR request never reached the queue.
                 (
                     rig.db

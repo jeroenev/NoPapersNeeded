@@ -31,7 +31,7 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     @Test
     fun pageCountFailureIsModelledAsFailedNotZero() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { content.failPageCount = { error("boom") } }
+            val session = FakeLibrarySession().apply { content.pageCountValue = null }
             val model = vm(session)
             advanceUntilIdle()
             model.ui.value.pageCount shouldBe PageCountState.Failed
@@ -49,12 +49,11 @@ class DocDetailLoadingViewModelTest : MainDispatcherTest() {
     @Test
     fun retryPageCountReResolvesAfterAFailure() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { content.failPageCount = { error("boom") } }
+            val session = FakeLibrarySession().apply { content.pageCountValue = null }
             val model = vm(session)
             advanceUntilIdle()
             model.ui.value.pageCount shouldBe PageCountState.Failed
 
-            session.content.failPageCount = null
             session.content.pageCountValue = 4
             model.retryPageCount()
             advanceUntilIdle()

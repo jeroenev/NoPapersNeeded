@@ -21,7 +21,6 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import dev.npn.core.app.DocContentFacade
-import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 
@@ -81,7 +80,7 @@ fun DocThumbnail(
             return@produceState
         }
         value = ThumbState.Loading
-        val path = runCatchingCancellable { content.thumbnailPath(docId) }.getOrNull()
+        val path = content.thumbnailPath(docId)
         value =
             if (path == null) {
                 ThumbState.Failed

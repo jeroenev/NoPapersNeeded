@@ -4,8 +4,8 @@ import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.DocContentFacade
 
 class FakeDocContentFacade : DocContentFacade {
+    /** Null models a page count that could not be read; the facade returns null, never throws. */
     var pageCountValue: Int? = null
-    var failPageCount: (() -> Nothing)? = null
     var bakeResult: BakeOutcome = BakeOutcome.Baked
     var failBake: (() -> Nothing)? = null
     var bakedBytes: ByteArray? = null
@@ -13,10 +13,7 @@ class FakeDocContentFacade : DocContentFacade {
 
     override suspend fun thumbnailPath(docId: String): String? = null
 
-    override suspend fun pageCount(docId: String): Int? {
-        failPageCount?.invoke()
-        return pageCountValue
-    }
+    override suspend fun pageCount(docId: String): Int? = pageCountValue
 
     override suspend fun renderPage(
         docId: String,

@@ -2,6 +2,13 @@ package dev.npn.core.app
 
 // ---------- documents as bytes / viewer / export ----------
 
+/**
+ * Documents as bytes: thumbnails, pages, export copies and the in-place bake.
+ *
+ * The nullable reads return null whenever there is nothing to show — no such document, bytes that
+ * cannot be read, a closed session — and log the cause; they never throw but for cancellation, so
+ * a caller needs no wrapper around them.
+ */
 interface DocContentFacade {
     suspend fun thumbnailPath(docId: String): String? // ensure + return cache path, null on failure
 
