@@ -17,6 +17,7 @@ import dev.npn.core.rules.AutoMatchRule
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
+import kotlinx.coroutines.flow.map
 
 /**
  * Read-side test doubles: documents, tags, saved views and auto-match rules. Everything is backed
@@ -80,12 +81,14 @@ class FakeDocumentRepository : DocumentRepository {
     /** Records every (filter, sort) the view model subscribed with. */
     val observedFilters = mutableListOf<Pair<LibraryFilter, LibrarySort>>()
 
+    /** [documents], narrowed to [LibraryFilter.docIds] when the filter names any; no other filtering. */
     override fun observeDocuments(
         filter: LibraryFilter,
         sort: LibrarySort,
     ): Flow<List<DocListItem>> {
         observedFilters += filter to sort
-        return documents
+        if (filter.docIds.isEmpty()) return documents
+        return documents.map { list -> list.filter { it.doc.docId in filter.docIds } }
     }
 
     override fun observeDoc(docId: String): Flow<DocListItem?> = singleDoc

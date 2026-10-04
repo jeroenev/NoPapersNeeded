@@ -477,21 +477,29 @@ class AiEditRunApplyTest {
 
 class AiEditRunScopeTest {
     @Test
-    fun selectionScopeIntersectsInMemory() =
+    fun selectionScopeQueriesTheSelectedIds() =
         runTest {
             val h = Harness(selection = listOf("a", "c"))
-            h.documents.documents.value = listOf(item("a"), item("b"), item("c"))
 
-            val docs = h.run.docsFor(key(scope = EditScope.SELECTION))
+            h.run.docsFor(key(scope = EditScope.SELECTION))
 
-            var seen: List<String> = emptyList()
-            val job = launch { docs.collect { list -> seen = list.map { it.doc.docId } } }
-            advanceUntilIdle()
-            seen shouldContainExactly listOf("a", "c")
-            // The filter itself stays empty; the ids are intersected in memory.
             h.documents.observedFilters
                 .single()
-                .first shouldBe LibraryFilter()
+                .first shouldBe LibraryFilter(docIds = listOf("a", "c"))
+        }
+
+    @Test
+    fun selectionScopeWithoutSelectionSelectsNothing() =
+        runTest {
+            // An empty id list is no constraint at all to the library query, so it must not get one.
+            val h = Harness()
+            h.documents.documents.value = listOf(item("a"))
+
+            var seen: List<DocListItem>? = null
+            val job = launch { h.run.docsFor(key(scope = EditScope.SELECTION)).collect { seen = it } }
+            advanceUntilIdle()
+            seen shouldBe emptyList()
+            h.documents.observedFilters shouldBe emptyList()
             job.cancel()
         }
 

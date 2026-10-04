@@ -8,7 +8,6 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.flowOf
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.update
 
 /**
@@ -178,17 +177,17 @@ class AiEditRun(
     val processed: StateFlow<Set<String>> = _processed.asStateFlow()
 
     /**
-     * Documents in scope, live. The library selection is intersected in memory (ids do not travel
-     * through the filter, and the list is already materialized for the library screen anyway); a
-     * saved view contributes its own sort, everything else uses the default [SORT].
+     * Documents in scope, live. The library selection travels as the filter's ids, and an empty one
+     * selects nothing; a saved view contributes its own sort, everything else uses the default [SORT].
      */
     fun docsFor(key: ScopeKey): Flow<List<DocListItem>> =
         when (key.scope) {
             EditScope.SELECTION -> {
-                val ids = selection.toSet()
-                documents
-                    .observeDocuments(LibraryFilter(), SORT)
-                    .map { docs -> docs.filter { it.doc.docId in ids } }
+                if (selection.isEmpty()) {
+                    flowOf(emptyList())
+                } else {
+                    documents.observeDocuments(LibraryFilter(docIds = selection), SORT)
+                }
             }
 
             EditScope.SAVED_VIEW -> {
