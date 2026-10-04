@@ -1,7 +1,7 @@
 package dev.npn.app.ui.library
 
 import androidx.lifecycle.viewModelScope
-import dev.npn.app.platform.ScannedPdf
+import dev.npn.app.platform.ScanResult
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiMessage
@@ -509,22 +509,24 @@ class LibraryViewModel(
             message(ingest.importPdfs(sources).asUiText())
         }
 
-    /** Launch a platform scan; cancellation stays quiet while an actual scanner failure is visible. */
-    fun scan(scanToPdf: suspend () -> ScannedPdf?) {
-        viewModelScope.launch {
-            val scanned =
-                runCatchingCancellable { scanToPdf() }.getOrElse {
-                    message(uiText(UiTextKey.SCAN_CAPTURE_FAILED))
-                    return@launch
+    /** What a platform scan came to: import the PDF, say the scanner failed, or stay quiet. */
+    fun importScan(result: ScanResult) {
+        when (result) {
+            is ScanResult.Scanned -> {
+                launchReporting({ reason -> uiText(UiTextKey.SCAN_IMPORT_FAILED, reason) }) {
+                    message(scanOutcomeMessage(ingest.importPdf(result.pdf.source, result.pdf.suggestedName)))
                 }
-            if (scanned != null) importScanned(scanned)
+            }
+
+            ScanResult.Failed -> {
+                message(uiText(UiTextKey.SCAN_CAPTURE_FAILED))
+            }
+
+            ScanResult.Cancelled -> {
+                Unit
+            }
         }
     }
-
-    private suspend fun importScanned(scanned: ScannedPdf) =
-        reporting({ reason -> uiText(UiTextKey.SCAN_IMPORT_FAILED, reason) }) {
-            message(scanOutcomeMessage(ingest.importPdf(scanned.source, scanned.suggestedName)))
-        }
 
     private fun scanOutcomeMessage(outcome: ImportOutcome): UiText =
         when (outcome) {

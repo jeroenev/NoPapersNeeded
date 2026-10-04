@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.platform.ScanResult
 import dev.npn.app.ui.library.ImportSummary
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
@@ -184,7 +185,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val model = vm()
             val messages = collectMessages(model)
 
-            model.scan { error("camera unavailable") }
+            model.importScan(ScanResult.Failed)
             advanceUntilIdle()
 
             messages shouldBe listOf("Scanning failed. Check camera access and try again.")
@@ -196,7 +197,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val model = vm()
             val messages = collectMessages(model)
 
-            model.scan { null }
+            model.importScan(ScanResult.Cancelled)
             advanceUntilIdle()
 
             messages shouldBe emptyList()

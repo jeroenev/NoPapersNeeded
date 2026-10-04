@@ -1,91 +1,71 @@
 package dev.npn
 
 import android.app.Activity
-import androidx.activity.ComponentActivity
+import androidx.activity.compose.LocalActivity
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.ActivityResult
-import androidx.activity.result.ActivityResultLauncher
 import androidx.activity.result.IntentSenderRequest
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanningResult
 import dev.npn.app.platform.DocumentScanner
+import dev.npn.app.platform.ScanResult
 import dev.npn.app.platform.ScannedPdf
 import dev.npn.core.fs.ExternalSource
-import dev.npn.core.util.runCatchingCancellable
-import kotlinx.coroutines.CompletableDeferred
+
+private const val SCANNED_PDF_NAME = "scan.pdf"
 
 /**
- * [DocumentScanner] backed by the MLKit / Google Play services document scanner
- * (SCANNER_MODE_FULL, PDF output). The activity owns the [ActivityResultLauncher]; this class
- * bridges the callback-based ActivityResult API to a suspend function via a [CompletableDeferred].
+ * [DocumentScanner] backed by the ML Kit / Google Play services document scanner (full mode, PDF
+ * output, gallery import allowed).
  *
- * Only one scan can be in flight at a time (a new scan while another is pending cancels the
- * previous one with null). Cancellation by the user resolves [scanToPdf] to null.
+ * The client hands back an intent sender for the scanner activity, which is started through an
+ * [IntentSenderRequest] on a launcher registered with [rememberLauncherForActivityResult]. Its
+ * result is therefore delivered to the launcher a recreated activity registers again, rather than
+ * to a coroutine that kept the old activity waiting.
  */
-class MlKitDocumentScanner(
-    private val activity: ComponentActivity,
-) : DocumentScanner {
-    override val available: Boolean = true
+object MlKitDocumentScanner : DocumentScanner {
+    private val options =
+        GmsDocumentScannerOptions
+            .Builder()
+            .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
+            .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_PDF)
+            .setGalleryImportAllowed(true)
+            .build()
 
-    private var pending: CompletableDeferred<GmsDocumentScanningResult?>? = null
-
-    private val launcher: ActivityResultLauncher<IntentSenderRequest> =
-        activity.registerForActivityResult(
-            ActivityResultContracts.StartIntentSenderForResult(),
-        ) { result: ActivityResult ->
-            val deferred = pending
-            pending = null
-            if (deferred == null) return@registerForActivityResult
-            if (result.resultCode == Activity.RESULT_OK) {
-                val scan = GmsDocumentScanningResult.fromActivityResultIntent(result.data)
-                deferred.complete(scan)
-            } else {
-                // Cancelled or failed.
-                deferred.complete(null)
+    @Composable
+    override fun rememberLauncher(onResult: (ScanResult) -> Unit): () -> Unit {
+        val activity = LocalActivity.current
+        val currentOnResult by rememberUpdatedState(onResult)
+        val launcher =
+            rememberLauncherForActivityResult(ActivityResultContracts.StartIntentSenderForResult()) {
+                currentOnResult(it.toScanResult())
             }
-        }
-
-    override suspend fun scanToPdf(): ScannedPdf? {
-        // Cancel any previous pending scan.
-        pending?.complete(null)
-
-        val options =
-            GmsDocumentScannerOptions
-                .Builder()
-                .setScannerMode(GmsDocumentScannerOptions.SCANNER_MODE_FULL)
-                .setResultFormats(GmsDocumentScannerOptions.RESULT_FORMAT_PDF)
-                .setGalleryImportAllowed(true)
-                .build()
-
-        val deferred = CompletableDeferred<GmsDocumentScanningResult?>()
-        pending = deferred
-
-        val started =
-            runCatchingCancellable {
-                val intentSender =
+        return remember(activity, launcher) {
+            {
+                if (activity == null) {
+                    currentOnResult(ScanResult.Failed)
+                } else {
+                    // Listeners scoped to the activity are dropped when it stops, so a scanner that
+                    // is slow to hand back its intent cannot keep a finished activity alive.
                     GmsDocumentScanning
                         .getClient(options)
                         .getStartScanIntent(activity)
-                        .await()
-                launcher.launch(IntentSenderRequest.Builder(intentSender).build())
+                        .addOnSuccessListener(activity) { launcher.launch(IntentSenderRequest.Builder(it).build()) }
+                        .addOnFailureListener(activity) { currentOnResult(ScanResult.Failed) }
+                }
             }
-        if (started.isFailure) {
-            pending = null
-            return null
         }
-
-        val result = deferred.await() ?: return null
-        val pdfUri = result.pdf?.uri ?: return null
-        return ScannedPdf(ExternalSource(pdfUri), "scan.pdf")
     }
 }
 
-/** Await a Google Play services [com.google.android.gms.tasks.Task] from a coroutine. */
-private suspend fun <T> com.google.android.gms.tasks.Task<T>.await(): T {
-    val deferred = CompletableDeferred<T>()
-    addOnSuccessListener { deferred.complete(it) }
-    addOnFailureListener { deferred.completeExceptionally(it) }
-    addOnCanceledListener { deferred.cancel() }
-    return deferred.await()
+private fun ActivityResult.toScanResult(): ScanResult {
+    if (resultCode != Activity.RESULT_OK) return ScanResult.Cancelled
+    val pdf = GmsDocumentScanningResult.fromActivityResultIntent(data)?.pdf ?: return ScanResult.Failed
+    return ScanResult.Scanned(ScannedPdf(ExternalSource(pdf.uri), SCANNED_PDF_NAME))
 }

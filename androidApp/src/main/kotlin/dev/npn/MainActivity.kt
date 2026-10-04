@@ -26,18 +26,15 @@ import java.util.Locale
 
 class MainActivity : ComponentActivity() {
     private lateinit var env: AppEnvironment
-    private lateinit var scanner: MlKitDocumentScanner
 
     override fun onCreate(savedInstanceState: Bundle?) {
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
 
         env = NpnApplication.environment(this)
-        // Must register the ActivityResult launcher before the activity is STARTED.
-        scanner = MlKitDocumentScanner(this)
 
         setContent {
-            CompositionLocalProvider(LocalDocumentScanner provides scanner) {
+            CompositionLocalProvider(LocalDocumentScanner provides MlKitDocumentScanner) {
                 App(env)
             }
         }

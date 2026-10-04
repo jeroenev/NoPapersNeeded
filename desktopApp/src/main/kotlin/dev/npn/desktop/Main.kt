@@ -124,8 +124,7 @@ private fun runApp() =
                     target = dropTarget,
                 ),
             ) {
-                // NoDocumentScanner is the default for LocalDocumentScanner, so no provider needed on
-                // desktop (v1 has no camera capture).
+                // No LocalDocumentScanner on desktop: it has no camera capture.
                 App(env)
             }
         }

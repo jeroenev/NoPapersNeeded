@@ -399,7 +399,9 @@ private fun LibraryContent(
             vm.import(files.map { platformFileToExternalSource(it) to it.name })
         }
     val onImport: () -> Unit = { importPicker.launch() }
-    val scanner = LocalDocumentScanner.current
+    // Null without a scanner (desktop); the scan's result comes back to the viewmodel, even when
+    // this activity was recreated while the scanner was open.
+    val scan = LocalDocumentScanner.current?.rememberLauncher(vm::importScan)
 
     val scope = rememberCoroutineScope()
     val onAddTag = { onDialog(LibraryDialog.AddTag) }
@@ -499,9 +501,9 @@ private fun LibraryContent(
         floatingActionButton = {
             if (!ui.selectionMode) {
                 LibraryFab(
-                    scanAvailable = scanner.available,
+                    scanAvailable = scan != null,
                     onImport = onImport,
-                    onScan = { vm.scan(scanner::scanToPdf) },
+                    onScan = { scan?.invoke() },
                 )
             }
         },

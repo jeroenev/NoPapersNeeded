@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.platform.ScanResult
 import dev.npn.app.platform.ScannedPdf
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.app.ImportFailure
@@ -54,7 +55,7 @@ class LibraryScanTest : MainDispatcherTest() {
         val messages = mutableListOf<String>()
         val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
 
-        model.scan { scanned }
+        model.importScan(ScanResult.Scanned(scanned))
         advanceUntilIdle()
         collector.cancel()
 

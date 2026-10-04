@@ -75,6 +75,8 @@ config:
 # The Compose ruleset, loaded by the typed run only.
 Compose:
   CompositionLocalAllowlist:
-    # Deliberate implicit dependencies: the window's width class, decided once at the root.
+    # Deliberate implicit dependencies: the window's width class, decided once at the root, and the
+    # document scanner the platform entry point provides.
     allowedCompositionLocals:
       - LocalWindowWidthClass
+      - LocalDocumentScanner
