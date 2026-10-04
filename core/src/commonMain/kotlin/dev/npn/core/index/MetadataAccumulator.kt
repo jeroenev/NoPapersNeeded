@@ -226,8 +226,9 @@ class MetadataAccumulator(
         val entries = fs.listAllUnder(NpnPaths.JOURNAL_DIR)
         cleanOwnedStaging(entries)
         validator.unsupportedStorage(entries)?.let { fail(it) }
-        val files = entries.filter { !it.isDirectory }.associateBy { it.relPath }
         val previous = dao.allSources()
+        val swept = snapshotSupport.deleteSupersededLeftovers(entries, previous)
+        val files = entries.filter { !it.isDirectory && it.relPath !in swept }.associateBy { it.relPath }
 
         val ingest = ingestFiles(files.values)
         validator.unexplainedSourceLoss(previous, files)?.let { fail(it) }

@@ -6,8 +6,8 @@ import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.SourceFingerprint
 import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.CanonicalJournalEvent
 import dev.npn.core.journal.CompactionCandidate
 import dev.npn.core.journal.CompactionSource
@@ -103,5 +103,27 @@ class SnapshotSupport(
     /** Best-effort delete of superseded object/snapshot files after their snapshot is applied. */
     suspend fun deleteSupersededFiles(paths: Collection<String>) {
         for (path in paths) runCatchingCancellable { fs.delete(path) }
+    }
+
+    /**
+     * Delete the applied objects and snapshots among [entries] that an applied snapshot supersedes:
+     * the compaction that published it could not delete them, and a later plan leaves them out.
+     * Their events are in the snapshot, so nothing is lost. [sources] is the source table. Returns
+     * the paths deleted.
+     */
+    suspend fun deleteSupersededLeftovers(
+        entries: List<FileMeta>,
+        sources: List<MetadataSourceEntity>,
+    ): Set<String> {
+        if (sources.none { it.kind == SourceKind.SNAPSHOT }) return emptySet()
+        val superseded = dao.appliedSupersededHashes().toHashSet()
+        val onDisk = entries.mapTo(HashSet()) { it.relPath }
+        val leftovers =
+            sources.filter { source ->
+                source.status == SourceStatus.APPLIED && source.path in onDisk && source.contentHash in superseded
+            }
+        return leftovers
+            .filter { runCatchingCancellable { fs.delete(it.path) }.isSuccess }
+            .mapTo(HashSet()) { it.path }
     }
 }

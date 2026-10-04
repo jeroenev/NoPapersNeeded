@@ -10,6 +10,7 @@ import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SnapshotCompactor
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -18,6 +19,7 @@ import kotlinx.coroutines.test.runTest
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.StandardCopyOption
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -175,6 +177,39 @@ class CompactionReconcileTest {
             coordinator.reconcileMetadata()
             db.metadataProjectionDao().state()!!.migrationState shouldBe ProjectionStatus.READY
             db.tagDao().tagsForDocument(docId).size shouldBe 5
+        }
+
+    @Test
+    fun aSupersededObjectLeftOnDiskIsDeletedByTheNextReconcile() =
+        runTest {
+            writePdf("a.pdf", "alpha")
+            val coordinator = coordinator(threshold = 3)
+            initialScan()
+            coordinator.refreshState()
+            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
+            repeat(6) { i ->
+                clock.advance()
+                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
+            }
+            coordinator.reconcileMetadata()
+            // Keep one object aside, mtime and all, to put back as if the compaction's delete of it
+            // had failed.
+            val leftover =
+                fs
+                    .listAllUnder(NpnPaths.JOURNAL_DIR)
+                    .first { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+            val kept = Files.createTempDirectory("npn-leftover").resolve(leftover.name)
+            Files.copy(libRoot.resolve(leftover.relPath), kept, StandardCopyOption.COPY_ATTRIBUTES)
+            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            Files.copy(kept, libRoot.resolve(leftover.relPath), StandardCopyOption.COPY_ATTRIBUTES)
+
+            coordinator.reconcileMetadata()
+
+            Files.exists(libRoot.resolve(leftover.relPath)).shouldBeFalse()
+            checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
+            db.tagDao().tagsForDocument(docId).size shouldBe 6
+            clock.advance()
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "after"))).shouldBeTrue()
         }
 
     @Test
