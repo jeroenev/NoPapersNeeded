@@ -35,9 +35,9 @@ import kotlinx.coroutines.flow.map
  */
 internal class WorkQueueReader(
     private val documentDao: DocumentDao,
-    private val ocrQueueDao: OcrQueueDao,
-    private val enrichQueueDao: AiEnrichQueueDao,
-    private val editJobDao: AiEditJobDao,
+    ocrQueueDao: OcrQueueDao,
+    enrichQueueDao: AiEnrichQueueDao,
+    editJobDao: AiEditJobDao,
     ocrInFlight: Flow<String?>,
     editInFlight: Flow<String?>,
 ) {
@@ -81,15 +81,15 @@ internal class WorkQueueReader(
         progress: AiEditJobProgress?,
         inFlight: String?,
     ): QueuedEditRun? {
-        if (progress == null || progress.total == 0) return null
+        val counted = progress?.takeIf { it.total > 0 } ?: return null
         return QueuedEditRun(
             jobId = jobId,
-            total = progress.total,
-            done = progress.done,
-            failures = progress.failures,
+            total = counted.total,
+            done = counted.done,
+            failures = counted.failures,
             state =
                 when {
-                    progress.done >= progress.total -> WorkState.READY
+                    counted.done >= counted.total -> WorkState.READY
                     jobId == inFlight -> WorkState.RUNNING
                     attempts > 0 -> WorkState.RETRYING
                     else -> WorkState.WAITING

@@ -80,8 +80,8 @@ class DefaultAppEnvironment(
         // Watched-folder auto-import: (re)start an importer whenever the open session or the
         // configured folder changes; collectLatest cancels the previous importer's loop.
         appScope.launch {
-            val watchedFolder = settings.settings.map { it.watchedFolder }.distinctUntilChanged()
-            combine(_session, watchedFolder) { s, loc -> s to loc }
+            val configuredFolder = settings.settings.map { it.watchedFolder }.distinctUntilChanged()
+            combine(_session, configuredFolder) { s, loc -> s to loc }
                 .collectLatest { (session, location) ->
                     if (session == null || location == null) return@collectLatest
                     val folder = watchedFolder(location) ?: return@collectLatest

@@ -22,7 +22,7 @@ import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /** A real index database wired to the reader under test; the two suites below share it. */
-internal abstract class WorkQueueReaderFixture {
+internal open class WorkQueueReaderFixture {
     private lateinit var dbDir: File
     protected lateinit var db: NpnDatabase
     protected lateinit var deviceDb: DeviceDatabase

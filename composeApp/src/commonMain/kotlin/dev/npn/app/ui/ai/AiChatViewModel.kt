@@ -65,14 +65,14 @@ class AiChatViewModel(
         }
         viewModelScope.launch {
             val sessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(emptyList())
-            val session = ai.createChatSession()
+            val created = ai.createChatSession()
             _ui.update {
                 it.copy(
-                    sessions = (listOf(session) + sessions).distinctBy { item -> item.id },
-                    currentSessionId = session.id,
+                    sessions = (listOf(created) + sessions).distinctBy { item -> item.id },
+                    currentSessionId = created.id,
                 )
             }
-            loadSession(session.id)
+            loadSession(created.id)
         }
         // Resolve display titles for cited documents as they appear in the transcript, so the
         // bubbles can label their doc chips. Title lookup is data access and belongs here, not in

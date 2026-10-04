@@ -2,7 +2,6 @@
 <SmellBaseline>
   <ManuallySuppressedIssues/>
   <CurrentIssues>
-    <ID>AbstractClassCanBeConcreteClass:WorkQueueReaderTest.kt:WorkQueueReaderFixture$WorkQueueReaderFixture</ID>
     <ID>AbstractClassCanBeInterface:JournalOp.kt:JournalOp$JournalOp</ID>
     <ID>AbstractClassCanBeInterface:SegmentWriter.kt:ForkCheck$ForkCheck</ID>
     <ID>CyclomaticComplexMethod:FoldedState.kt:FoldedState$fun apply</ID>
@@ -31,7 +30,6 @@
     <ID>InjectDispatcher:SafLibraryFileSystem.kt:SafLibraryFileSystem$IO</ID>
     <ID>InjectDispatcher:SafWatchedFolder.kt:SafWatchedFolder$IO</ID>
     <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
-    <ID>LongParameterList:LibrarySessionImpl.kt:LibrarySessionImpl</ID>
     <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
     <ID>LoopWithTooManyJumpStatements:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$while</ID>
     <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
@@ -117,21 +115,10 @@
     <ID>UnsafeCallOnNullableType:TrashLifecycleTest.kt:TrashLifecycleTest$rig.db .documentDao() .getByDocId(id)!!</ID>
     <ID>UnsafeCallOnNullableType:TrashLifecycleTest.kt:TrashLifecycleTest$rig.db.documentDao().getByDocId(id)!!</ID>
     <ID>UnusedPrivateFunction:AiText.kt:AiText$private fun JsonObject.stringAt: String?</ID>
-    <ID>UnusedPrivateProperty:AiAutoEnricher.kt:AiAutoEnricher$private val meta: MetadataWriter</ID>
-    <ID>UnusedPrivateProperty:AiEditQueue.kt:AiEditQueue$private val content: DocContentFacade</ID>
-    <ID>UnusedPrivateProperty:AiEditQueue.kt:AiEditQueue$private val fieldRegistry: FieldRegistry</ID>
-    <ID>UnusedPrivateProperty:AiEditQueue.kt:AiEditQueue$private val meta: MetadataWriter</ID>
-    <ID>UnusedPrivateProperty:AiEditRun.kt:AiEditRun$private val content: DocContentFacade</ID>
-    <ID>UnusedPrivateProperty:AiEditRun.kt:AiEditRun$private val fieldRegistry: FieldRegistry</ID>
-    <ID>UnusedPrivateProperty:AiEditRun.kt:AiEditRun$private val meta: MetadataWriter</ID>
     <ID>UnusedPrivateProperty:EventHistoryGen.kt:EventHistoryGen$private val deviceCount: Int</ID>
     <ID>UnusedPrivateProperty:EventHistoryGen.kt:EventHistoryGen$private val seed: Long</ID>
-    <ID>UnusedPrivateProperty:WorkQueueReader.kt:WorkQueueReader$private val editJobDao: AiEditJobDao</ID>
-    <ID>UnusedPrivateProperty:WorkQueueReader.kt:WorkQueueReader$private val enrichQueueDao: AiEnrichQueueDao</ID>
-    <ID>UnusedPrivateProperty:WorkQueueReader.kt:WorkQueueReader$private val ocrQueueDao: OcrQueueDao</ID>
     <ID>UnusedVariable:MetadataWriterTest.kt:MetadataWriterTest$val published = compactor.publish(candidates)!!</ID>
     <ID>UseCheckOrError:InMemorySegmentStore.kt:InMemorySegmentStore$throw IllegalStateException("No such segment: ${ref.deviceId}/${ref.fileName}")</ID>
-    <ID>UseIsNullOrEmpty:WorkQueueReader.kt:WorkQueueReader$progress == null || progress.total == 0</ID>
     <ID>UseOrEmpty:AiEditQueueTest.kt:title?.let { mapOf(FieldKeys.TITLE to it) } ?: emptyMap()</ID>
     <ID>UseOrEmpty:AiText.kt:AiText$(this[key] as? JsonArray) ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -&gt; p.isString }?.contentOrNull } ?.map { it.trim() } ?.filter { it.isNotEmpty() } ?: emptyList()</ID>
     <ID>UseOrEmpty:AutoMatchRuleEntity.kt:tags?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()</ID>
