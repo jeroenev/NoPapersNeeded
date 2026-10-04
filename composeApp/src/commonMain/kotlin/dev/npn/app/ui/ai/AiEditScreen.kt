@@ -101,7 +101,7 @@ fun AiEditScreen(
     var confirmingLeave by remember { mutableStateOf(false) }
     val leavingCostsSuggestions = ui.phase.leavingDiscardsSuggestions
     val requestBack = { if (leavingCostsSuggestions) confirmingLeave = true else onBack() }
-    LeaveGuard(guarding = leavingCostsSuggestions, onBackGuarded = { confirmingLeave = true })
+    LeaveGuard(guarding = leavingCostsSuggestions, onBack = { confirmingLeave = true })
 
     Scaffold(
         topBar = {
@@ -140,18 +140,18 @@ fun AiEditScreen(
 }
 
 /**
- * Takes Back — the system gesture or Esc on desktop — while [guarding], calling [onBackGuarded]
- * instead of leaving; otherwise Back falls through to the navigation host.
+ * Takes Back — the system gesture or Esc on desktop — while [guarding], calling [onBack] instead
+ * of leaving; otherwise Back falls through to the navigation host.
  */
 @Composable
 internal fun LeaveGuard(
     guarding: Boolean,
-    onBackGuarded: () -> Unit,
+    onBack: () -> Unit,
 ) {
     NavigationBackHandler(
         state = rememberNavigationEventState(NavigationEventInfo.None),
         isBackEnabled = guarding,
-        onBackCompleted = onBackGuarded,
+        onBackCompleted = onBack,
     )
 }
 

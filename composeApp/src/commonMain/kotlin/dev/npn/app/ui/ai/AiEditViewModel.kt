@@ -489,7 +489,11 @@ class AiEditViewModel(
     /** Add a registered field the seed left out to this run, enabled (Idle only). */
     fun addField(key: String) =
         updateIdle {
-            if (key in it.fieldOptions) it else it.asCustom().copy(fieldOptions = it.fieldOptions + (key to AiFieldOption()))
+            if (key in it.fieldOptions) {
+                it
+            } else {
+                it.asCustom().copy(fieldOptions = it.fieldOptions + (key to AiFieldOption()))
+            }
         }
 
     /** Toggle whether tag additions are suggested at all (Idle only). */

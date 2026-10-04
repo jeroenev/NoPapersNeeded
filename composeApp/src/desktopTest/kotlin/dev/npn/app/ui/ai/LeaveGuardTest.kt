@@ -35,7 +35,7 @@ class LeaveGuardTest {
             val scene =
                 ImageComposeScene(WIDTH, HEIGHT) {
                     CompositionLocalProvider(LocalNavigationEventDispatcherOwner provides owner) {
-                        LeaveGuard(guarding = guarding, onBackGuarded = { guarded++ })
+                        LeaveGuard(guarding = guarding, onBack = { guarded++ })
                     }
                 }
             try {
