@@ -17,9 +17,6 @@ interface FieldDefDao {
     @Query("SELECT * FROM field_defs ORDER BY position, fieldKey")
     suspend fun all(): List<FieldDefEntity>
 
-    @Query("SELECT * FROM field_defs WHERE fieldKey = :key")
-    suspend fun get(key: String): FieldDefEntity?
-
     /** Distinct field keys carrying at least one value but no registry definition, with counts. */
     @Query(
         "SELECT f.fieldKey AS fieldKey, COUNT(*) AS count FROM document_fields f " +

@@ -11,9 +11,6 @@ import kotlinx.coroutines.flow.Flow
 @Dao
 interface TagDao {
     @Upsert
-    suspend fun upsert(tag: TagEntity)
-
-    @Upsert
     suspend fun upsertAll(tags: List<TagEntity>)
 
     @Query("SELECT * FROM tags")
@@ -60,18 +57,6 @@ interface TagDao {
     @Query("SELECT tag FROM document_tags WHERE docId = :docId ORDER BY tag")
     suspend fun tagsForDocument(docId: String): List<String>
 
-    /** Replace the full tag set of a document atomically. */
-    @Transaction
-    suspend fun setForDocument(
-        docId: String,
-        tags: List<String>,
-    ) {
-        clearDocumentTags(docId)
-        if (tags.isNotEmpty()) {
-            insertDocumentTags(tags.map { DocumentTagEntity(docId, it) })
-        }
-    }
-
     /** Replace the full tag sets of several documents atomically, keyed by docId. */
     @Transaction
     suspend fun setForDocuments(updates: Map<String, List<String>>) {
@@ -83,9 +68,6 @@ interface TagDao {
             },
         )
     }
-
-    @Query("DELETE FROM document_tags WHERE docId = :docId")
-    suspend fun clearDocumentTags(docId: String)
 
     @Query("DELETE FROM document_tags WHERE docId IN (:docIds)")
     suspend fun clearDocumentTagsFor(docIds: List<String>)

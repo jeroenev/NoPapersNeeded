@@ -4,6 +4,7 @@ import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.StatementLog
 import dev.npn.core.db.recordingDatabase
+import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.ContentAddressedJournalWriter

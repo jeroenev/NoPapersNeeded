@@ -23,9 +23,6 @@ interface FtsDao {
     )
     suspend fun search(query: String): List<FtsHit>
 
-    @Query("SELECT docId FROM fts_documents WHERE fts_documents MATCH :query ORDER BY rank")
-    suspend fun searchDocIds(query: String): List<String>
-
     /**
      * Indexed rows containing a token with the requested prefix, used to derive autocomplete.
      * Return only bounded content/field fragments: selecting complete OCR bodies and long-text

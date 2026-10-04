@@ -125,12 +125,6 @@ interface DocumentDao {
     @RawQuery(observedEntities = [DocumentEntity::class, DocumentTagEntity::class])
     fun observeCount(query: RoomRawQuery): Flow<Int>
 
-    @Query(
-        "SELECT * FROM documents WHERE trashed = 0 AND deleted = 0 AND missing = 0 " +
-            "ORDER BY addedAt DESC",
-    )
-    fun observeAll(): Flow<List<DocumentEntity>>
-
     @Query("SELECT * FROM documents WHERE trashed = 0 AND deleted = 0 AND missing = 0 ORDER BY addedAt DESC")
     suspend fun getAllLive(): List<DocumentEntity>
 
@@ -201,7 +195,4 @@ interface DocumentDao {
     /** Drop one row outright: only for taking back an import nothing else has seen yet. */
     @Query("DELETE FROM documents WHERE docId = :docId")
     suspend fun delete(docId: String)
-
-    @Query("DELETE FROM documents")
-    suspend fun clearAll()
 }

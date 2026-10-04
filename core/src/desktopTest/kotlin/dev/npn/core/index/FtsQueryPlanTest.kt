@@ -5,6 +5,7 @@ import dev.npn.core.db.StatementLog
 import dev.npn.core.db.isFullFtsScan
 import dev.npn.core.db.queryPlan
 import dev.npn.core.db.recordingDatabase
+import dev.npn.core.db.searchDocIds
 import dev.npn.core.journal.PendingOp
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly

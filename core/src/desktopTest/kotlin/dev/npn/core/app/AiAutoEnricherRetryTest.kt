@@ -200,7 +200,7 @@ class AiAutoEnricherRetryTest {
                 // 100s of imports at one minute of cooldown: two calls, not twenty.
                 rig.ai.suggestEditsCalls.size shouldBe 2
                 // Nothing is dropped — every document is still owed its pass.
-                rig.deviceDb.aiEnrichQueueDao().countPending() shouldBe 20
+                rig.deviceDb.aiEnrichQueueDao().observeQueue().first().size shouldBe 20
             }
         }
 
@@ -317,7 +317,7 @@ class AiAutoEnricherRetryTest {
                 // And a second drain at the same instant returns at once rather than sleeping on
                 // either the cooldown or the row's backoff.
                 rig.drain() shouldBe 0
-                rig.deviceDb.aiEnrichQueueDao().countPending() shouldBe 2
+                rig.deviceDb.aiEnrichQueueDao().observeQueue().first().size shouldBe 2
             }
         }
 }

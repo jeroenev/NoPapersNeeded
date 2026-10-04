@@ -234,10 +234,6 @@ interface AiEnrichQueueDao {
     @Query("SELECT * FROM ai_enrich_queue WHERE docId = :docId")
     suspend fun getByDocId(docId: String): AiEnrichQueueEntity?
 
-    /** Rows owed a pass, including ones waiting out a retry backoff. */
-    @Query("SELECT COUNT(*) FROM ai_enrich_queue")
-    suspend fun countPending(): Int
-
     /**
      * Every row owed a pass, in the order [nextDue] will take them, for
      * [dev.npn.core.app.WorkFacade.queue]. Existence is the whole state here, so unlike the OCR

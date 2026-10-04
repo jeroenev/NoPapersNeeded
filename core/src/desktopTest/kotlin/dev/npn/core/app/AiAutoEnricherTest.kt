@@ -13,6 +13,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
@@ -107,7 +108,7 @@ class AiAutoEnricherTest {
                 rig.config = rig.config.copy(autoOnOcr = false)
                 rig.insert("off")
                 rig.enricher.enqueue("off") shouldBe false
-                rig.deviceDb.aiEnrichQueueDao().countPending() shouldBe 1
+                rig.deviceDb.aiEnrichQueueDao().observeQueue().first().size shouldBe 1
                 rig.kicks shouldBe 1
             }
         }

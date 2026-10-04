@@ -89,7 +89,7 @@ class NpnDatabaseTest {
                     doc("d".repeat(64), relPath = "d.pdf", missing = true),
                 ),
             )
-            dao.observeAll().first().map { it.docId } shouldContainExactly listOf("a".repeat(64))
+            dao.getAllLive().map { it.docId } shouldContainExactly listOf("a".repeat(64))
             dao.observeTrashed().first().map { it.docId } shouldContainExactly listOf("b".repeat(64))
             dao.observeMissing().first().map { it.docId } shouldContainExactly listOf("d".repeat(64))
         }
@@ -119,9 +119,8 @@ class NpnDatabaseTest {
             val tagged = "a".repeat(64)
             val untagged = "b".repeat(64)
             docDao.upsertAll(listOf(doc(tagged), doc(untagged, relPath = "b.pdf")))
-            tagDao.upsert(TagEntity("invoice", color = "#ff0000"))
-            tagDao.upsert(TagEntity("empty"))
-            tagDao.setForDocument(tagged, listOf("invoice"))
+            tagDao.upsertAll(listOf(TagEntity("invoice", color = "#ff0000"), TagEntity("empty")))
+            tagDao.setForDocuments(mapOf(tagged to listOf("invoice")))
 
             docDao.countUntagged().first() shouldBe 1
 
@@ -146,10 +145,8 @@ class NpnDatabaseTest {
                     doc(missing, relPath = "missing.pdf", missing = true),
                 ),
             )
-            tagDao.upsert(TagEntity("invoice"))
-            tagDao.setForDocument(live, listOf("invoice"))
-            tagDao.setForDocument(trashed, listOf("invoice"))
-            tagDao.setForDocument(missing, listOf("invoice"))
+            tagDao.upsertAll(listOf(TagEntity("invoice")))
+            tagDao.setForDocuments(listOf(live, trashed, missing).associateWith { listOf("invoice") })
 
             tagDao
                 .observeAllWithLiveCounts()
@@ -165,9 +162,9 @@ class NpnDatabaseTest {
             val tagDao = db.tagDao()
             val id = "a".repeat(64)
             docDao.upsert(doc(id))
-            tagDao.setForDocument(id, listOf("x", "y"))
+            tagDao.setForDocuments(mapOf(id to listOf("x", "y")))
             tagDao.tagsForDocument(id) shouldContainExactly listOf("x", "y")
-            tagDao.setForDocument(id, listOf("y", "z"))
+            tagDao.setForDocuments(mapOf(id to listOf("y", "z")))
             tagDao.tagsForDocument(id) shouldContainExactly listOf("y", "z")
         }
 
@@ -186,7 +183,7 @@ class NpnDatabaseTest {
                     doc(trashed, relPath = "c.pdf", trashed = true),
                 ),
             )
-            listOf(liveA, liveB, trashed).forEach { tagDao.setForDocument(it, listOf("invoice")) }
+            tagDao.setForDocuments(listOf(liveA, liveB, trashed).associateWith { listOf("invoice") })
 
             docDao.getLiveWithTag("invoice", limit = 1).map { it.docId }.size shouldBe 1
             docDao
@@ -203,11 +200,10 @@ class NpnDatabaseTest {
             val a = "a".repeat(64)
             val b = "b".repeat(64)
             docDao.upsertAll(listOf(doc(a), doc(b, relPath = "b.pdf")))
-            tagDao.setForDocument(a, listOf("shared"))
-            tagDao.setForDocument(b, listOf("shared"))
+            tagDao.setForDocuments(mapOf(a to listOf("shared"), b to listOf("shared")))
             tagDao.tagsForDocument(a) shouldContainExactly listOf("shared")
             tagDao.tagsForDocument(b) shouldContainExactly listOf("shared")
-            tagDao.setForDocument(a, emptyList())
+            tagDao.setForDocuments(mapOf(a to emptyList()))
             tagDao.tagsForDocument(a) shouldBe emptyList()
             tagDao.tagsForDocument(b) shouldContainExactly listOf("shared")
         }
@@ -376,7 +372,7 @@ class NpnDatabaseTest {
                         ),
                 ),
             )
-            db.tagDao().upsert(TagEntity("Invoice tag"))
+            db.tagDao().upsertAll(listOf(TagEntity("Invoice tag")))
             db.ftsDao().upsertContent(
                 FtsRows.row(
                     id,
@@ -470,8 +466,7 @@ class NpnDatabaseTest {
                     doc(c, relPath = "c.pdf", reviewed = true),
                 ),
             )
-            tagDao.setForDocument(a, listOf("invoice"))
-            tagDao.setForDocument(c, listOf("invoice"))
+            tagDao.setForDocuments(mapOf(a to listOf("invoice"), c to listOf("invoice")))
 
             // Upper-layer-built SQL: unreviewed docs that carry the 'invoice' tag -> only `a`.
             val query =
@@ -519,15 +514,6 @@ class NpnDatabaseTest {
             // Re-projecting a doc's duplicates replaces the whole set for that doc.
             dao.replaceAll(id, listOf(DuplicateEntity(id, "copy2.pdf")))
             dao.observeAll().first().map { it.relPath } shouldContainExactly listOf("copy2.pdf")
-        }
-
-    @Test
-    fun clearAllWipesDocuments() =
-        runTest {
-            val dao = db.documentDao()
-            dao.upsert(doc("a".repeat(64)))
-            dao.clearAll()
-            dao.observeAll().first() shouldBe emptyList()
         }
 
     @Test

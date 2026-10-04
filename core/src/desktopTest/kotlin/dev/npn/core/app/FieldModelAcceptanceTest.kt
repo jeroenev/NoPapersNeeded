@@ -8,6 +8,7 @@ import dev.npn.core.ai.AiPromptContext
 import dev.npn.core.ai.AiPrompts
 import dev.npn.core.ai.LibraryAiTools
 import dev.npn.core.db.fieldTypes
+import dev.npn.core.db.searchDocIds
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldType
 import dev.npn.core.pathrules.StoragePathContext
