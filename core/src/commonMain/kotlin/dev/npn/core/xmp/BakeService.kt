@@ -39,9 +39,6 @@ class BakeService(
     private val io: PdfXmpIO,
     private val log: NpnLog = NpnLog.None,
 ) {
-    /** Suffix for the sibling temp file written during [bakeInPlace]. */
-    private val tmpSuffix = ".npnbake.tmp"
-
     /**
      * Bake [data] into a copy of the library file at [relPath] and return the new bytes.
      * The library file is not modified. The document id, when present in [data], is written
@@ -98,7 +95,7 @@ class BakeService(
                 throw BakeRefusedException("$norm cannot carry baked metadata", it)
             }
 
-        val tmpPath = norm + tmpSuffix
+        val tmpPath = NpnPaths.Temp.bakePath(norm)
         // Clean any stale temp from a prior interrupted bake so writeBytesOnce does not fail.
         if (fs.exists(tmpPath)) fs.delete(tmpPath)
         fs.writeBytesOnce(tmpPath, bakedBytes)

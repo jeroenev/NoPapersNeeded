@@ -156,9 +156,15 @@ object NpnPaths {
         val prefixMatches = expected?.startsWith(bucket.groupValues[2].lowercase()) == true
         return when {
             version != supported -> JournalPath.UnsupportedObjectStore(version)
-            objectStagingPattern.matches(name) -> JournalPath.Staging
+
+            // The direct filesystem stages a write beside its target, so publishing an object's
+            // staging file can leave one of its own in the bucket too.
+            objectStagingPattern.matches(name) || Temp.kindOf(name) == Temp.Kind.WRITE -> JournalPath.Staging
+
             expected == null || !prefixMatches -> JournalPath.Unknown
+
             snapshot -> JournalPath.SnapshotV2(expected, objectNamePattern.matches(name))
+
             else -> JournalPath.ObjectV2(expected, objectNamePattern.matches(name))
         }
     }
@@ -243,8 +249,92 @@ object NpnPaths {
      */
     fun trashHashPrefix(fileName: String): String? = trashNamePattern.find(fileName)?.groupValues?.get(1)
 
-    /** The staging path for one import attempt; [nonce] keeps concurrent imports apart. */
-    fun importStagingPath(nonce: String): String = "$TMP_DIR/$nonce.part"
+    /**
+     * The app's own temporary files in the library. Each kind is named here alone, so a rescan can
+     * tell one a crash left behind from a user's file ([kindOf]) and sweep it once it is old.
+     * Journal staging has its own names ([journalStagingPath]) and its own cleanup.
+     */
+    object Temp {
+        /**
+         * Prefix and suffix of a direct-filesystem write's staging file, `.npn-tmp-<random>.part`,
+         * created beside the file it becomes.
+         */
+        const val WRITE_PREFIX = ".npn-tmp-"
+        const val PART = ".part"
+        private const val MOVE_PREFIX = ".npn-move-"
+        private const val RELOCATION_INFIX = ".npn-"
+        private const val RELOCATION_SUFFIX = ".tmp"
+        private const val BAKE_SUFFIX = ".npnbake.tmp"
+        private val relocationPattern = Regex("\\.npn-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}\\.tmp$")
+
+        /** The kinds [kindOf] tells apart. */
+        enum class Kind { WRITE, MOVE, RELOCATION, BAKE, IMPORT, MARKER_STAGING }
+
+        /** A SAF move's verified copy in its target folder: `.npn-move-<nonce>.part`. */
+        fun moveName(nonce: String): String = "$MOVE_PREFIX$nonce$PART"
+
+        /** A relocation's verified copy across volumes, beside its [target]: `<target>.npn-<uuid>.tmp`. */
+        fun relocationPath(
+            target: String,
+            nonce: String,
+        ): String = "$target$RELOCATION_INFIX$nonce$RELOCATION_SUFFIX"
+
+        /** Where a bake leaves the baked bytes of [document] before they replace it: `<document>.npnbake.tmp`. */
+        fun bakePath(document: String): String = "$document$BAKE_SUFFIX"
+
+        /** The document a [bakePath] belongs to, or null for any other path. */
+        fun bakedDocument(path: String): String? = path.removeSuffix(BAKE_SUFFIX).takeIf { it != path }
+
+        /** One import attempt's staging file, `.npn/tmp/<nonce>.part`; [nonce] keeps concurrent imports apart. */
+        fun importPath(nonce: String): String = "$TMP_DIR/$nonce$PART"
+
+        /** A device marker's staging file beside it: `.<installationId>.<nonce>.part`. */
+        fun markerStagingName(
+            installationId: String,
+            nonce: String,
+        ): String = ".$installationId.$nonce$PART"
+
+        /**
+         * The name a document file is claimed under while it moves, `npn-recovery-<nonce>.pdf`. Not
+         * a temporary file ([kindOf] is null): it is an ordinary indexable PDF, because a move
+         * interrupted mid-way leaves the only copy of the document there.
+         */
+        fun recoveryName(nonce: String): String = "${DocumentPaths.RECOVERY_PREFIX}$nonce.pdf"
+
+        /** Which kind of temporary file [relPath] names, or null for a file that is none of them. */
+        fun kindOf(relPath: String): Kind? {
+            val name = relPath.substringAfterLast('/')
+            return when {
+                name.startsWith(WRITE_PREFIX) && name.endsWith(PART) -> {
+                    Kind.WRITE
+                }
+
+                name.startsWith(MOVE_PREFIX) && name.endsWith(PART) -> {
+                    Kind.MOVE
+                }
+
+                name.endsWith(BAKE_SUFFIX) -> {
+                    Kind.BAKE
+                }
+
+                relocationPattern.containsMatchIn(name) -> {
+                    Kind.RELOCATION
+                }
+
+                relPath.startsWith("$TMP_DIR/") && name.endsWith(PART) -> {
+                    Kind.IMPORT
+                }
+
+                relPath.startsWith("$DEVICES_DIR/") && name.startsWith('.') && name.endsWith(PART) -> {
+                    Kind.MARKER_STAGING
+                }
+
+                else -> {
+                    null
+                }
+            }
+        }
+    }
 
     /** True when [relPath] is inside the `.npn/` metadata directory (app-internal). */
     fun isInternal(relPath: String): Boolean {

@@ -57,6 +57,19 @@ class TrashOpsTest {
         }
 
     @Test
+    fun aMoveIntoTheTrashThatALeftTemporaryFileIsNotATrashEntry() =
+        runTest {
+            fs.writeBytesOnce("inbox/doc.pdf", "content".encodeToByteArray())
+            val trashed = trash.moveToTrash("inbox/doc.pdf", "deadbeefcafebabe")
+            fs.writeBytesOnce(
+                "${NpnPaths.TRASH_DIR}/${NpnPaths.Temp.moveName("interrupted")}",
+                "partial".encodeToByteArray(),
+            )
+
+            trash.listTrash().map { it.relPath } shouldBe listOf(trashed)
+        }
+
+    @Test
     fun restoreUniquifiesWhenTargetTaken() =
         runTest {
             fs.writeBytesOnce("inbox/doc.pdf", "orig".encodeToByteArray())

@@ -70,7 +70,7 @@ internal class DocumentPaths(
         runCatchingCancellable { fs.move(recovery, target) }.onFailure { failure ->
             // Taken meanwhile: leave it alone, and the caller puts the source back.
             if (fs.exists(target)) throw failure
-            val staging = "$target.npn-${Uuid.random()}.tmp"
+            val staging = NpnPaths.Temp.relocationPath(target, Uuid.random().toString())
             try {
                 fs.copyOnce(recovery, staging)
                 fs.publishVerifiedObjectOnce(staging, target, docId)
@@ -102,7 +102,7 @@ internal class DocumentPaths(
     /** Atomically take [source]'s name away under a fresh recovery name in the same folder. */
     private suspend fun claim(source: String): String {
         val directory = source.substringBeforeLast('/', "")
-        val name = "$RECOVERY_PREFIX${Uuid.random()}.pdf"
+        val name = NpnPaths.Temp.recoveryName(Uuid.random().toString())
         val recovery = if (directory.isEmpty()) name else "$directory/$name"
         fs.claimDocument(source, recovery)
         return recovery

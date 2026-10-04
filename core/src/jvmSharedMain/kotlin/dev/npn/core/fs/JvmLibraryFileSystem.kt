@@ -206,7 +206,7 @@ class JvmLibraryFileSystem internal constructor(
         if (parent != null) Files.createDirectories(parent)
         // Write to a temp file in the same directory, then install it under the final name,
         // which fails if the target appeared meanwhile.
-        val tmp = Files.createTempFile(parent ?: root, ".npn-tmp-", ".part")
+        val tmp = Files.createTempFile(parent ?: root, NpnPaths.Temp.WRITE_PREFIX, NpnPaths.Temp.PART)
         try {
             Files.write(tmp, bytes, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING)
             try {
@@ -425,7 +425,7 @@ class JvmLibraryFileSystem internal constructor(
         if (parent != null) Files.createDirectories(parent)
         // Stream into a same-directory temp file, then install it no-replace, so a partial PDF is
         // never visible at the final path and a target that appears meanwhile is not replaced.
-        val tmp = Files.createTempFile(parent ?: root, ".npn-tmp-", ".part")
+        val tmp = Files.createTempFile(parent ?: root, NpnPaths.Temp.WRITE_PREFIX, NpnPaths.Temp.PART)
         try {
             externalIo.openInput(source).use { input ->
                 Files.newOutputStream(tmp, StandardOpenOption.WRITE, StandardOpenOption.TRUNCATE_EXISTING).use {

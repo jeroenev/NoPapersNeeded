@@ -716,7 +716,7 @@ class LibrarySessionImpl private constructor(
             // Before anything reads the device id: an index from before device.db holds it.
             LegacyIndexTables.moveDeviceState(db, deviceDb, DEVICE_KEYS, RoomChatHistoryProvider.KEY_PREFIX)
 
-            val indexer = Indexer(fs, db, deps.clock)
+            val indexer = Indexer(fs, db, deps.clock, deps.log)
 
             val coordinator = createCoordinator(deps, indexer)
             val effectiveDeviceId =

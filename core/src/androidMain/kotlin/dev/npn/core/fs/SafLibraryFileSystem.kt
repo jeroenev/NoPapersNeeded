@@ -468,7 +468,7 @@ class SafLibraryFileSystem(
         toParentId: String,
         toName: String,
     ) {
-        val stagingName = ".npn-move-${UUID.randomUUID()}.part"
+        val stagingName = NpnPaths.Temp.moveName(UUID.randomUUID().toString())
         // The source is deleted below, so the staging copy is read back and checked first.
         val stagingUri =
             copyIntoNewFile(toParentId, stagingName, toRelPath, mimeForName(toName), verify = true) {

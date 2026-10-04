@@ -101,7 +101,7 @@ class DeviceIdentity(
         runCatchingCancellable {
             if (fs.exists(path)) return
             val bytes = """{"v":1,"device":"$deviceId","installation":"$installationId"}""".encodeToByteArray()
-            val staging = "${markerDir(deviceId)}/.$installationId.${randomUuidV4()}.part"
+            val staging = "${markerDir(deviceId)}/${NpnPaths.Temp.markerStagingName(installationId, randomUuidV4())}"
             fs.writeBytesOnce(staging, bytes)
             var published = false
             try {

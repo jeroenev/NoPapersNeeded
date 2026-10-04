@@ -11,6 +11,7 @@ import dev.npn.core.db.TagEntity
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.TempFileSweep
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.JournalEvent
@@ -21,6 +22,7 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
 import dev.npn.core.model.SystemProperty
+import dev.npn.core.util.NpnLog
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.coroutineScope
@@ -44,7 +46,8 @@ import kotlinx.coroutines.sync.withLock
  *  6. folds the journals and applies effective views (tags, props, trash, deletes, relinks) into the
  *     DB, then updates FTS,
  *  7. moves documents to the paths their intents name, and records where each was seen,
- *  8. returns a [ScanReport].
+ *  8. deletes the app's own temporary files a crash left behind ([TempFileSweep]),
+ *  9. returns a [ScanReport].
  *
  * Steps 3 to 6 write in one database transaction, as every fold does; step 7 is filesystem work
  * and runs after it commits (see [projection]).
@@ -57,8 +60,10 @@ class Indexer(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
     private val clock: EpochClock = SystemEpochClock,
+    log: NpnLog = NpnLog.None,
 ) {
     private val documentPaths = DocumentPathReconciler(fs, db)
+    private val tempFiles = TempFileSweep(fs, log)
 
     private val _scanState = MutableStateFlow<IndexProgress?>(null)
 
@@ -219,6 +224,9 @@ class Indexer(
                     recon.duplicates.map { DuplicateEntity(it.docId, it.extraRelPath) },
                 )
             }
+
+            // The listing is at hand: clear away what a crash left of the app's own temporary files.
+            tempFiles.sweep(all, started)
 
             report(IndexProgress(IndexProgress.Phase.DONE))
 

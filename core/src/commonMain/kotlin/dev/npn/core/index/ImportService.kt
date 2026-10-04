@@ -166,10 +166,11 @@ class ImportService(
         return ImportResult.Imported(hash, target)
     }
 
-    private fun freshTmpPath(): String = NpnPaths.importStagingPath(Uuid.random().toString())
+    private fun freshTmpPath(): String = NpnPaths.Temp.importPath(Uuid.random().toString())
 
     private suspend fun cleanup(tmpPath: String) {
-        // Best effort: a staging file left behind is never indexed (it lives under `.npn/`).
+        // Best effort: a staging file left behind is never indexed (it lives under `.npn/`), and a
+        // rescan sweeps it away once it is old (TempFileSweep).
         if (fs.exists(tmpPath)) runCatchingCancellable { fs.delete(tmpPath) }
     }
 
