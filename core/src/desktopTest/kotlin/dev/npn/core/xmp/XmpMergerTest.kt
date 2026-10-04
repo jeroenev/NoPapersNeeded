@@ -7,19 +7,14 @@ class XmpMergerTest {
     @Test
     fun noExistingProducesFreshPacket() {
         val data = xmp(tags = listOf("t"), reviewed = "false")
-        val merged = XmpMerger.merge(null, data)
-        XmpParser.parse(merged) shouldBe data
+        XmpMerger.merge(null, data) shouldBe XmpSerializer.serialize(data)
     }
 
     @Test
     fun carriesExistingTitleWhenDataTitleNull() {
         val existing = XmpSerializer.serialize(xmp(title = "Old Title", tags = listOf("x")))
         val data = xmp(tags = listOf("new"), reviewed = "true")
-        val merged = XmpMerger.merge(existing, data)
-        val parsed = XmpParser.parse(merged)
-        parsed.title shouldBe "Old Title"
-        parsed.tags shouldBe listOf("new")
-        parsed.reviewed shouldBe "true"
+        XmpMerger.merge(existing, data) shouldBe XmpSerializer.serialize(xmp(title = "Old Title", tags = listOf("new"), reviewed = "true"))
     }
 
     @Test

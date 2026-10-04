@@ -28,7 +28,6 @@
     <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
     <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
     <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
-    <ID>LoopWithTooManyJumpStatements:XmpParser.kt:XmpParser$while</ID>
     <ID>MapGetWithNotNullAssertionOperator:AdaptersTest.kt:AdaptersTest$byDevice["devA"]!!</ID>
     <ID>MapGetWithNotNullAssertionOperator:AdaptersTest.kt:AdaptersTest$byDevice["devB"]!!</ID>
     <ID>MapGetWithNotNullAssertionOperator:NpnDatabaseTest.kt:NpnDatabaseTest$counts["empty"]!!</ID>

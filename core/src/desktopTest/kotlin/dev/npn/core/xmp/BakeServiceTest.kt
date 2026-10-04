@@ -87,12 +87,7 @@ class BakeServiceTest {
             // File in place with new content parseable and carrying metadata + documentId=oldSha.
             val nowSha = fs.sha256("doc.pdf")
             nowSha shouldBe result.newSha256
-            val readXmp = io.readXmp(fs.readBytes("doc.pdf"))
-            readXmp.shouldNotBeNull()
-            val parsed = XmpParser.parse(readXmp)
-            parsed.tags shouldBe listOf("filed", "acme")
-            parsed.reviewed shouldBe "true"
-            parsed.documentId shouldBe oldSha
+            io.readXmp(fs.readBytes("doc.pdf")) shouldBe XmpSerializer.serialize(data.copy(documentId = oldSha))
 
             // No temp litter.
             noTempLitter().shouldBeTrue()

@@ -40,9 +40,7 @@ class PdfBoxXmpIOTest {
             val xmp = XmpSerializer.serialize(data)
             val baked = io.writeBaked(fixturePdf(), xmp, data.tags, data.title)
 
-            val readXmp = io.readXmp(baked)
-            readXmp.shouldNotBeNull()
-            XmpParser.parse(readXmp) shouldBe data
+            io.readXmp(baked) shouldBe xmp
         }
 
     @Test

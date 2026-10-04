@@ -83,6 +83,13 @@ class XmpSerializerTest {
     }
 
     @Test
+    fun fieldsBagEscapesKeysAndValues() {
+        val xml = XmpSerializer.serialize(xmp(fields = mapOf("total & tax" to "<b>bold</b> & \"quoted\"")))
+        xml.contains("<npn:fieldKey>total &amp; tax</npn:fieldKey>") shouldBe true
+        xml.contains("<npn:fieldValue>&lt;b&gt;bold&lt;/b&gt; &amp; &quot;quoted&quot;</npn:fieldValue>") shouldBe true
+    }
+
+    @Test
     fun interopKeysAreWrittenOnceNotAlsoInTheFieldsBag() {
         val xml =
             XmpSerializer.serialize(

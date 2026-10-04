@@ -52,21 +52,21 @@ class XmpParserTest {
         data.title shouldBe "Foreign Title"
         // No npn props present.
         data.documentId shouldBe null
-        data.reviewed shouldBe null
     }
 
     @Test
-    fun npnAttributeShorthand() {
-        val xml =
-            """
-            <rdf:Description rdf:about=""
-                xmlns:npn="https://npn.dev/xmp/1.0/"
-                npn:documentId="deadbeef"
-                npn:reviewed="true"/>
-            """.trimIndent()
-        val data = XmpParser.parse(xml)
-        data.documentId shouldBe "deadbeef"
-        data.reviewed shouldBe "true"
+    fun readsOnlyWhatBakeReadsBack() {
+        val written =
+            xmp(
+                documentId = "b".repeat(64),
+                tags = listOf("alpha"),
+                title = "A title",
+                correspondent = "Someone",
+                reviewed = "true",
+                fields = mapOf("amount" to "42.50"),
+            )
+        XmpParser.parse(XmpSerializer.serialize(written)) shouldBe
+            xmp(documentId = "b".repeat(64), tags = listOf("alpha"), title = "A title")
     }
 
     @Test
@@ -96,57 +96,9 @@ class XmpParserTest {
     }
 
     @Test
-    fun selfClosingAndUnterminatedContainersYieldEmpty() {
-        XmpParser
-            .parse(
-                """
-                <rdf:Description xmlns:npn="https://npn.dev/xmp/1.0/">
-                  <npn:fields/>
-                </rdf:Description>
-                """.trimIndent(),
-            ).fields shouldBe emptyMap()
-
+    fun unterminatedOrEmptyContainersYieldNothing() {
         XmpParser.parse("<dc:title><rdf:Alt><rdf:li>partial").title shouldBe null
-    }
-
-    @Test
-    fun fieldsContainerParsedFromElementForm() {
-        val xml =
-            """
-            <rdf:Description xmlns:npn="https://npn.dev/xmp/1.0/">
-              <npn:fields>
-                <rdf:Bag>
-                  <rdf:li>
-                    <npn:fieldKey>amount</npn:fieldKey>
-                    <npn:fieldValue>42.50</npn:fieldValue>
-                  </rdf:li>
-                  <rdf:li>
-                    <npn:fieldKey>ref</npn:fieldKey>
-                    <npn:fieldValue>INV-1</npn:fieldValue>
-                  </rdf:li>
-                </rdf:Bag>
-              </npn:fields>
-            </rdf:Description>
-            """.trimIndent()
-        XmpParser.parse(xml).fields shouldBe mapOf("amount" to "42.50", "ref" to "INV-1")
-    }
-
-    @Test
-    fun dedicatedPropertyWinsOverADuplicateBagEntry() {
-        val xml =
-            """
-            <rdf:Description xmlns:npn="https://npn.dev/xmp/1.0/">
-              <npn:correspondent>Dedicated</npn:correspondent>
-              <npn:fields><rdf:Bag>
-                <rdf:li rdf:parseType="Resource">
-                  <npn:fieldKey>correspondent</npn:fieldKey><npn:fieldValue>Bagged</npn:fieldValue>
-                </rdf:li>
-                <rdf:li rdf:parseType="Resource">
-                  <npn:fieldKey>amount</npn:fieldKey><npn:fieldValue>9</npn:fieldValue>
-                </rdf:li>
-              </rdf:Bag></npn:fields>
-            </rdf:Description>
-            """.trimIndent()
-        XmpParser.parse(xml).fields shouldBe mapOf("correspondent" to "Dedicated", "amount" to "9")
+        XmpParser.parse("<dc:subject><rdf:Bag><rdf:li/><rdf:li>kept</rdf:li></rdf:Bag></dc:subject>").tags shouldBe
+            listOf("kept")
     }
 }

@@ -4,9 +4,9 @@ package dev.npn.core.xmp
  * Serializes [NpnXmpData] into a full, self-contained XMP packet as RDF/XML.
  *
  * The output is deterministic (stable property order, fixed indentation) so it can be asserted
- * against golden fixtures and round-tripped by [XmpParser]. It is intentionally hand-written
- * rather than produced by xmpbox: pdfbox-android ships no usable xmpbox, and per PLAN section 2
- * PDFBox on each platform is only used to move the raw metadata bytes.
+ * against golden fixtures, and [XmpParser] reads back what bake needs from it. It is intentionally
+ * hand-written rather than produced by xmpbox: pdfbox-android ships no usable xmpbox, and per PLAN
+ * section 2 PDFBox on each platform is only used to move the raw metadata bytes.
  *
  * Namespaces emitted:
  * - `dc`  -> Dublin Core (`http://purl.org/dc/elements/1.1/`): `dc:subject`, `dc:title`
@@ -39,7 +39,7 @@ object XmpSerializer {
         // dc:title as an rdf:Alt with a single x-default entry.
         val title = data.title
         if (title != null) {
-            sb.append("      <dc:title>").append('\n')
+            sb.append("      <${XmpProperties.TITLE}>").append('\n')
             sb.append("        <rdf:Alt>").append('\n')
             sb
                 .append("          <rdf:li xml:lang=\"x-default\">")
@@ -47,12 +47,12 @@ object XmpSerializer {
                 .append("</rdf:li>")
                 .append('\n')
             sb.append("        </rdf:Alt>").append('\n')
-            sb.append("      </dc:title>").append('\n')
+            sb.append("      </${XmpProperties.TITLE}>").append('\n')
         }
 
         // dc:subject as an rdf:Bag of rdf:li (Dublin Core keywords).
         if (data.tags.isNotEmpty()) {
-            sb.append("      <dc:subject>").append('\n')
+            sb.append("      <${XmpProperties.SUBJECT}>").append('\n')
             sb.append("        <rdf:Bag>").append('\n')
             for (tag in data.tags) {
                 sb
@@ -62,40 +62,40 @@ object XmpSerializer {
                     .append('\n')
             }
             sb.append("        </rdf:Bag>").append('\n')
-            sb.append("      </dc:subject>").append('\n')
+            sb.append("      </${XmpProperties.SUBJECT}>").append('\n')
         }
 
         // npn: simple properties in a stable order.
-        appendSimple(sb, "npn:documentId", data.documentId)
-        appendSimple(sb, "npn:correspondent", data.correspondent)
-        appendSimple(sb, "npn:documentType", data.docType)
-        appendSimple(sb, "npn:documentDate", data.docDate)
-        appendSimple(sb, "npn:reviewed", data.reviewed)
+        appendSimple(sb, XmpProperties.DOCUMENT_ID, data.documentId)
+        for ((key, property) in XmpProperties.DEDICATED) {
+            if (property != XmpProperties.TITLE) appendSimple(sb, property, data.fields[key])
+        }
+        appendSimple(sb, XmpProperties.REVIEWED, data.reviewed)
 
         // npn:fields as an rdf:Bag of key/value structs (sorted for determinism). The keys that
         // already went out as dedicated properties above are skipped, so no value is written twice.
         // Wrapping keys in a value element avoids emitting user text as XML names.
-        val bagged = data.fields.filterKeys { it !in NpnXmpData.DEDICATED_KEYS }
+        val bagged = data.fields.filterKeys { it !in XmpProperties.DEDICATED }
         if (bagged.isNotEmpty()) {
-            sb.append("      <npn:fields>").append('\n')
+            sb.append("      <${XmpProperties.FIELDS}>").append('\n')
             sb.append("        <rdf:Bag>").append('\n')
             for (key in bagged.keys.sorted()) {
                 val value = bagged.getValue(key)
                 sb.append("          <rdf:li rdf:parseType=\"Resource\">").append('\n')
                 sb
-                    .append("            <npn:fieldKey>")
+                    .append("            <${XmpProperties.FIELD_KEY}>")
                     .append(escape(key))
-                    .append("</npn:fieldKey>")
+                    .append("</${XmpProperties.FIELD_KEY}>")
                     .append('\n')
                 sb
-                    .append("            <npn:fieldValue>")
+                    .append("            <${XmpProperties.FIELD_VALUE}>")
                     .append(escape(value))
-                    .append("</npn:fieldValue>")
+                    .append("</${XmpProperties.FIELD_VALUE}>")
                     .append('\n')
                 sb.append("          </rdf:li>").append('\n')
             }
             sb.append("        </rdf:Bag>").append('\n')
-            sb.append("      </npn:fields>").append('\n')
+            sb.append("      </${XmpProperties.FIELDS}>").append('\n')
         }
 
         sb.append("    </rdf:Description>").append('\n')

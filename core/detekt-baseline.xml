@@ -6,7 +6,6 @@
     <ID>EmptyWhileBlock:DocumentFilterTest.kt:DocumentFilterTest${}</ID>
     <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
     <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
-    <ID>LoopWithTooManyJumpStatements:XmpParser.kt:XmpParser$while</ID>
     <ID>MatchingDeclarationName:ExternalSource.desktop.kt:ExternalSource</ID>
     <ID>ReturnCount:FoldedState.kt:FoldedState$fun apply</ID>
     <ID>ReturnCount:NpnPaths.kt:NpnPaths$fun indexable: Boolean</ID>

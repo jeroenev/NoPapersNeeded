@@ -3,32 +3,28 @@ package dev.npn.core.xmp
 import dev.npn.core.model.FieldKeys
 
 /**
- * Tolerant, hand-rolled XMP reader. No XML library is used (none is available in commonMain and
- * we want identical behaviour on every platform).
+ * Tolerant, hand-rolled reader of what bake reads back from an XMP packet: the title, which a bake
+ * carries over when npn has none, and the document id and tags that tell a fresh bake verified. No
+ * XML library is used (none is available in commonMain and we want identical behaviour on every
+ * platform).
  *
- * Guarantees:
- * - Round-trip: any packet produced by [XmpSerializer] parses back to an equal [NpnXmpData].
- * - Best-effort on foreign packets: `dc:subject`, `dc:title` and `npn:*` are extracted when
- *   present in the element form this parser understands.
- * - Never throws. Malformed or unrecognized input yields an empty/partial [NpnXmpData].
- *
- * Limitations (documented, acceptable for v1 interop reads):
- * - `dc:subject`/`dc:title` are read from their standard element forms (`rdf:Bag`/`rdf:Alt`).
- *   Attribute-shorthand RDF for these container properties is not decoded.
- * - `npn:*` simple properties are read from either element form (`<npn:x>v</npn:x>`) or
- *   attribute shorthand (`npn:x="v"` on any tag), whichever appears first.
+ * - Round-trip: a packet from [XmpSerializer] gives back its documentId, tags and title.
+ * - Foreign packets: `dc:title` and `dc:subject` are read from their standard element forms
+ *   (`rdf:Alt`/`rdf:Bag`); attribute-shorthand RDF is not decoded.
  * - Namespace prefixes are assumed to be the conventional `dc`/`npn`/`rdf`; packets that remap
  *   these prefixes are not handled.
+ * - Never throws. Malformed or unrecognized input yields an empty/partial result.
  */
 object XmpParser {
+    /** The [NpnXmpData.documentId], [NpnXmpData.tags] and [NpnXmpData.title] in [xml]; nothing else. */
     fun parse(xml: String?): NpnXmpData {
         if (xml.isNullOrEmpty()) return NpnXmpData.EMPTY
         return try {
+            val title = readList(xml, XmpProperties.TITLE).firstOrNull()
             NpnXmpData(
-                documentId = readNpn(xml, "documentId"),
-                tags = readBag(xml, "dc:subject"),
-                reviewed = readNpn(xml, "reviewed"),
-                fields = readAllFields(xml),
+                documentId = elementText(xml, XmpProperties.DOCUMENT_ID),
+                tags = readList(xml, XmpProperties.SUBJECT),
+                fields = if (title == null) emptyMap() else mapOf(FieldKeys.TITLE to title),
             )
         } catch (_: Throwable) {
             // Never propagate parse failures; a partial/empty result is the contract.
@@ -37,34 +33,8 @@ object XmpParser {
     }
 
     /**
-     * One field map from both homes: the `npn:fields` bag first, then the dedicated interop
-     * properties on top. A packet we wrote never has a key in both, so the precedence only matters
-     * for foreign or hand-edited packets, where the dedicated property is the one other tools read.
-     */
-    private fun readAllFields(xml: String): Map<String, String> {
-        val out = LinkedHashMap(readFields(xml))
-        readAlt(xml, "dc:title")?.let { out[FieldKeys.TITLE] = it }
-        readNpn(xml, "correspondent")?.let { out[FieldKeys.CORRESPONDENT] = it }
-        readNpn(xml, "documentType")?.let { out[FieldKeys.DOC_TYPE] = it }
-        readNpn(xml, "documentDate")?.let { out[FieldKeys.DOC_DATE] = it }
-        return out
-    }
-
-    /** Read an `npn:<local>` value from element form first, then attribute shorthand. */
-    private fun readNpn(
-        xml: String,
-        local: String,
-    ): String? {
-        val q = "npn:$local"
-        elementText(xml, q)?.let { return it }
-        return attributeValue(xml, q)
-    }
-
-    /**
      * Inner content of the first non-self-closing `<qName ...>...</qName>` element, or null when
-     * the element is absent, self-closing, or unterminated. Shared preamble
-     * for every element reader (leaf text, rdf:Bag/Alt containers, npn:fields) so the open-tag +
-     * self-closing + matching-close-tag logic lives in exactly one place.
+     * the element is absent, self-closing, or unterminated.
      */
     private fun elementInner(
         xml: String,
@@ -91,98 +61,37 @@ object XmpParser {
         return unescape(raw)
     }
 
-    /** Extract an attribute value `qName="..."` (or single-quoted) from anywhere in the doc. */
-    private fun attributeValue(
-        xml: String,
-        qName: String,
-    ): String? {
-        var searchFrom = 0
-        while (true) {
-            val idx = xml.indexOf(qName, searchFrom)
-            if (idx < 0) return null
-            var i = idx + qName.length
-            // Skip whitespace, expect '='.
-            while (i < xml.length && xml[i].isWhitespace()) i++
-            if (i >= xml.length || xml[i] != '=') {
-                searchFrom = idx + qName.length
-                continue
-            }
-            i++
-            while (i < xml.length && xml[i].isWhitespace()) i++
-            if (i >= xml.length) return null
-            val quote = xml[i]
-            if (quote != '"' && quote != '\'') {
-                searchFrom = i
-                continue
-            }
-            val end = xml.indexOf(quote, i + 1)
-            if (end < 0) return null
-            return unescape(xml.substring(i + 1, end))
-        }
-    }
-
-    /** Read an rdf:Bag/rdf:Seq of rdf:li under [containerQName] into an ordered list. */
-    private fun readBag(
+    /** The `rdf:li` texts of the rdf:Bag/Seq/Alt under [containerQName], in order. */
+    private fun readList(
         xml: String,
         containerQName: String,
     ): List<String> {
         val inner = elementInner(xml, containerQName) ?: return emptyList()
-        return readListItems(inner)
-    }
-
-    /**
-     * Read the `npn:fields` container: an rdf:Bag whose rdf:li each hold an `npn:fieldKey` and
-     * `npn:fieldValue`. Later duplicate keys win. Missing/empty container yields an empty map.
-     */
-    private fun readFields(xml: String): Map<String, String> {
-        val inner = elementInner(xml, "npn:fields") ?: return emptyMap()
-        val out = LinkedHashMap<String, String>()
-        var cursor = 0
-        while (true) {
-            val li = findOpenTag(inner, "rdf:li", cursor) ?: break
-            if (li.selfClosing) {
-                cursor = li.endIndex
-                continue
-            }
-            val liClose = inner.indexOf("</rdf:li", li.endIndex)
-            if (liClose < 0) break
-            val liInner = inner.substring(li.endIndex, liClose)
-            val key = elementText(liInner, "npn:fieldKey")
-            val value = elementText(liInner, "npn:fieldValue")
-            if (key != null && value != null) out[key] = value
-            cursor = liClose + "</rdf:li".length
-        }
-        return out
-    }
-
-    /** Read an rdf:Alt under [containerQName]; return the first (x-default) li text. */
-    private fun readAlt(
-        xml: String,
-        containerQName: String,
-    ): String? {
-        val inner = elementInner(xml, containerQName) ?: return null
-        return readListItems(inner).firstOrNull()
-    }
-
-    /** Collect the text of every `<rdf:li ...>text</rdf:li>` in [fragment], in order. */
-    private fun readListItems(fragment: String): List<String> {
         val out = ArrayList<String>()
-        var cursor = 0
-        while (true) {
-            val open = findOpenTag(fragment, "rdf:li", cursor) ?: break
-            if (open.selfClosing) {
-                cursor = open.endIndex
-                continue
-            }
-            val close = fragment.indexOf("</rdf:li", open.endIndex)
-            if (close < 0) break
-            val raw = fragment.substring(open.endIndex, close)
-            if (!raw.contains('<')) {
-                out.add(unescape(raw))
-            }
-            cursor = close + "</rdf:li".length
+        var item = nextListItem(inner, 0)
+        while (item != null) {
+            item.text?.takeUnless { it.contains('<') }?.let { out.add(unescape(it)) }
+            item = nextListItem(inner, item.end)
         }
         return out
+    }
+
+    /** One `rdf:li`: its raw text, null when it is self-closing, and the index just past it. */
+    private class ListItem(
+        val text: String?,
+        val end: Int,
+    )
+
+    /** The first `rdf:li` in [fragment] at or after [from], or null when there is none or it is never closed. */
+    private fun nextListItem(
+        fragment: String,
+        from: Int,
+    ): ListItem? {
+        val open = findOpenTag(fragment, "rdf:li", from) ?: return null
+        if (open.selfClosing) return ListItem(null, open.endIndex)
+        val close = fragment.indexOf("</rdf:li", open.endIndex)
+        if (close < 0) return null
+        return ListItem(fragment.substring(open.endIndex, close), close + "</rdf:li".length)
     }
 
     private data class OpenTag(
@@ -225,37 +134,35 @@ object XmpParser {
         val sb = StringBuilder(value.length)
         var i = 0
         while (i < value.length) {
-            val ch = value[i]
-            if (ch != '&') {
-                sb.append(ch)
-                i++
-                continue
-            }
-            val semi = value.indexOf(';', i + 1)
-            if (semi < 0) {
-                sb.append(ch)
-                i++
-                continue
-            }
-            val entity = value.substring(i + 1, semi)
-            val decoded =
-                when (entity) {
-                    "amp" -> "&"
-                    "lt" -> "<"
-                    "gt" -> ">"
-                    "quot" -> "\""
-                    "apos" -> "'"
-                    else -> decodeNumeric(entity)
-                }
-            if (decoded != null) {
-                sb.append(decoded)
-                i = semi + 1
+            val reference = if (value[i] == '&') referenceAt(value, i) else null
+            if (reference != null) {
+                sb.append(reference.first)
+                i = reference.second
             } else {
-                sb.append(ch)
+                sb.append(value[i])
                 i++
             }
         }
         return sb.toString()
+    }
+
+    /** The character reference that starts at [amp], decoded, and the index past its `;`; null when there is none. */
+    private fun referenceAt(
+        value: String,
+        amp: Int,
+    ): Pair<String, Int>? {
+        val semi = value.indexOf(';', amp + 1)
+        if (semi < 0) return null
+        val decoded =
+            when (val entity = value.substring(amp + 1, semi)) {
+                "amp" -> "&"
+                "lt" -> "<"
+                "gt" -> ">"
+                "quot" -> "\""
+                "apos" -> "'"
+                else -> decodeNumeric(entity)
+            } ?: return null
+        return decoded to semi + 1
     }
 
     private fun decodeNumeric(entity: String): String? {
