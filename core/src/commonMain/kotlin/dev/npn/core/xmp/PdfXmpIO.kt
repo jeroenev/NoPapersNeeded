@@ -24,11 +24,4 @@ interface PdfXmpIO {
         keywords: List<String>,
         title: String?,
     ): ByteArray
-
-    /**
-     * Load [pdfBytes], read its XMP, and report whether it carries recognizable npn metadata
-     * (a `npn:documentId` or at least one `dc:subject` tag). Used to verify a freshly baked
-     * file before it replaces the original. Returns false (never throws) on unreadable input.
-     */
-    suspend fun verify(pdfBytes: ByteArray): Boolean
 }

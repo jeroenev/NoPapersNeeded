@@ -4,7 +4,6 @@ import android.content.Context
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.common.PDMetadata
 import dev.npn.core.pdf.PdfBoxAndroidInit
-import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import java.io.ByteArrayInputStream
@@ -69,14 +68,5 @@ class PdfBoxAndroidXmpIO(
                 doc.save(out)
                 out.toByteArray()
             }
-        }
-
-    override suspend fun verify(pdfBytes: ByteArray): Boolean =
-        withContext(Dispatchers.IO) {
-            runCatchingCancellable {
-                val xmp = readXmp(pdfBytes) ?: return@withContext false
-                val data = XmpParser.parse(xmp)
-                data.documentId != null || data.tags.isNotEmpty()
-            }.getOrDefault(false)
         }
 }

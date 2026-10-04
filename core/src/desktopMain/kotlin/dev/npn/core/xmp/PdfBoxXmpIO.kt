@@ -1,6 +1,5 @@
 package dev.npn.core.xmp
 
-import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
@@ -51,14 +50,5 @@ class PdfBoxXmpIO : PdfXmpIO {
                 doc.save(out)
                 out.toByteArray()
             }
-        }
-
-    override suspend fun verify(pdfBytes: ByteArray): Boolean =
-        withContext(Dispatchers.IO) {
-            runCatchingCancellable {
-                val xmp = readXmp(pdfBytes) ?: return@withContext false
-                val data = XmpParser.parse(xmp)
-                data.documentId != null || data.tags.isNotEmpty()
-            }.getOrDefault(false)
         }
 }

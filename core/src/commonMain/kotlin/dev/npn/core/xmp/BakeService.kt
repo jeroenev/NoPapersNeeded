@@ -101,7 +101,7 @@ class BakeService(
         fs.writeBytesOnce(tmpPath, bakedBytes)
 
         // Verify by re-reading the temp file (round-trips through the real filesystem).
-        val verified = runCatchingCancellable { io.verify(fs.readBytes(tmpPath)) }.getOrDefault(false)
+        val verified = runCatchingCancellable { carriesNpnMetadata(fs.readBytes(tmpPath)) }.getOrDefault(false)
         if (!verified) {
             // Left behind, the next bake of this document removes it first.
             log.runLogged("Removing the unverified bake of $norm") { fs.delete(tmpPath) }
@@ -121,6 +121,12 @@ class BakeService(
         val newSha = fs.sha256(norm)
         if (newSha != oldSha) emitRelink(oldSha, newSha)
         return BakeResult(oldSha256 = oldSha, newSha256 = newSha, finalRelPath = norm)
+    }
+
+    /** Whether [pdfBytes] carry recognizable npn metadata: a `npn:documentId` or at least one `dc:subject` tag. */
+    private suspend fun carriesNpnMetadata(pdfBytes: ByteArray): Boolean {
+        val data = XmpParser.parse(io.readXmp(pdfBytes) ?: return false)
+        return data.documentId != null || data.tags.isNotEmpty()
     }
 
     /**

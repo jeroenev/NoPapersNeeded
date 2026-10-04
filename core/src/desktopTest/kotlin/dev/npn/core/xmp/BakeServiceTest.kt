@@ -110,9 +110,7 @@ class BakeServiceTest {
                         xmp: String,
                         keywords: List<String>,
                         title: String?,
-                    ): ByteArray = fixturePdf() // valid pdf but no npn metadata -> verify() false
-
-                    override suspend fun verify(pdfBytes: ByteArray): Boolean = io.verify(pdfBytes)
+                    ): ByteArray = fixturePdf() // valid pdf but no npn metadata: does not verify
                 }
 
             var relinkCalled = false

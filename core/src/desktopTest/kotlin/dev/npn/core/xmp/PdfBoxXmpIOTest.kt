@@ -1,6 +1,5 @@
 package dev.npn.core.xmp
 
-import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -54,20 +53,6 @@ class PdfBoxXmpIOTest {
                 doc.documentInformation.keywords shouldBe "a, b, c"
                 doc.documentInformation.title shouldBe "Doc T"
             }
-        }
-
-    @Test
-    fun verifyTrueForBaked() =
-        runTest {
-            val data = xmp(documentId = "e".repeat(64), tags = listOf("x"))
-            val baked = io.writeBaked(fixturePdf(), XmpSerializer.serialize(data), data.tags, null)
-            io.verify(baked).shouldBeTrue()
-        }
-
-    @Test
-    fun verifyFalseForPlainPdf() =
-        runTest {
-            io.verify(fixturePdf()).shouldBeFalse()
         }
 
     @Test
