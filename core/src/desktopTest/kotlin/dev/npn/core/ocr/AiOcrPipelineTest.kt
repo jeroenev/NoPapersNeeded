@@ -146,7 +146,8 @@ class AiOcrPipelineTest {
 
             rig.deviceDb
                 .ocrQueueDao()
-                .getByDocId(docId).shouldNotBeNull()
+                .getByDocId(docId)
+                .shouldNotBeNull()
                 .state shouldBe OcrPipeline.STATE_DONE
         }
 
@@ -175,7 +176,8 @@ class AiOcrPipelineTest {
             ai.calls shouldBe 3
             rig.deviceDb
                 .ocrQueueDao()
-                .getByDocId(docId).shouldNotBeNull()
+                .getByDocId(docId)
+                .shouldNotBeNull()
                 .state shouldBe OcrPipeline.STATE_DONE
         }
 
