@@ -21,6 +21,7 @@ import dev.npn.app.doc
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.app.DocListItem
+import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.CoroutineScope
@@ -186,7 +187,7 @@ class DocumentLayoutTest {
                                         ),
                                     ai = ai,
                                 ),
-                            actions = actions(),
+                            writes = NoWrites,
                             preview = { Text("PDF preview", modifier = it) },
                             onReviewed = {},
                             hasNext = true,
@@ -196,21 +197,6 @@ class DocumentLayoutTest {
             }
         }
     }
-
-    private fun actions() =
-        MetadataActions(
-            edit =
-                MetadataEditActions(
-                    onCommitField = { _, _ -> },
-                    onRemoveField = {},
-                    onDefineField = { _, _ -> },
-                    onSetReviewed = {},
-                    onSetOcrEngine = {},
-                ),
-            tags = TagActions({}, {}, { _, _ -> }),
-            ai = AiActions({}, {}, {}, {}, {}, {}, {}),
-            history = HistoryActions({}, {}),
-        )
 
     private fun ImageComposeScene.nodes(): List<SemanticsNode> {
         fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
@@ -242,4 +228,39 @@ class DocumentLayoutTest {
         SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
         failure?.let { throw it }
     }
+}
+
+/** The layout is under test here, not the writes: every action the panel offers does nothing. */
+private object NoWrites : DocumentWrites {
+    override fun addTag(tag: String) = Unit
+
+    override fun removeTag(tag: String) = Unit
+
+    override fun addTagWithStyle(
+        tag: String,
+        color: String?,
+    ) = Unit
+
+    override fun defineField(
+        def: FieldDef,
+        value: String?,
+    ) = Unit
+
+    override fun setOcrEngine(engine: String?) = Unit
+
+    override fun suggestAiTags() = Unit
+
+    override fun acceptAiTag(tag: String) = Unit
+
+    override fun dismissAiTag(tag: String) = Unit
+
+    override fun clearAiTagSuggestions() = Unit
+
+    override fun suggestAiMetadata() = Unit
+
+    override fun acceptAiMetadata(key: String) = Unit
+
+    override fun dismissAiMetadata(key: String) = Unit
+
+    override fun loadHistory(refresh: Boolean) = Unit
 }

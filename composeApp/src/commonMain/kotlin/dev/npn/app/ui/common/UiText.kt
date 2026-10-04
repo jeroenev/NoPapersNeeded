@@ -27,7 +27,6 @@ import no_papers_needed.composeapp.generated.resources.common_action_suggest_tag
 import no_papers_needed.composeapp.generated.resources.common_action_tag
 import no_papers_needed.composeapp.generated.resources.common_action_trash
 import no_papers_needed.composeapp.generated.resources.common_action_update
-import no_papers_needed.composeapp.generated.resources.common_action_update_review_state
 import no_papers_needed.composeapp.generated.resources.common_action_update_rule
 import no_papers_needed.composeapp.generated.resources.common_action_update_tag_style
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_empty_answer
@@ -135,7 +134,6 @@ enum class UiAction {
     SAVE_FIELD,
     REMOVE_FIELD,
     DEFINE_FIELD,
-    UPDATE_REVIEW_STATE,
     MOVE_TO_TRASH,
     RENAME_FILE,
     RERUN_OCR,
@@ -395,7 +393,6 @@ private val UiAction.stringResource: StringResource
             UiAction.SAVE_FIELD -> Res.string.common_action_save_field
             UiAction.REMOVE_FIELD -> Res.string.common_action_remove_field
             UiAction.DEFINE_FIELD -> Res.string.common_action_define_field
-            UiAction.UPDATE_REVIEW_STATE -> Res.string.common_action_update_review_state
             UiAction.MOVE_TO_TRASH -> Res.string.common_action_move_to_trash
             UiAction.RENAME_FILE -> Res.string.common_action_rename_file
             UiAction.RERUN_OCR -> Res.string.common_action_rerun_ocr

@@ -110,12 +110,12 @@ import org.jetbrains.compose.resources.stringResource
 /**
  * Side panel for one document with three tabs: **Details** (editable metadata — the registry's
  * fields, tags, and file/OCR facts), **Text** (the extracted OCR/embedded full text), and
- * **History** (immutable journal timeline). Field editors update the shared draft through
- * [MetadataActions.edit]; text fields offer existing values as suggestions.
+ * **History** (immutable journal timeline). Text fields offer existing values as suggestions.
  *
  * Everything shown comes from [state] (assembled by `DocDetailViewModel.metadata`) and everything
- * it can do from [actions] (wired by [rememberMetadataActions]), so the two call sites — the
- * detail screen and the library's side panel — differ only in the last two parameters.
+ * it can do from [actions] (provided by [DocumentEditor], which routes field edits into the draft),
+ * so the two call sites — the detail screen and the library's side panel — differ only in the last
+ * two parameters.
  *
  * When [previewTab] is provided (the library's side-panel preview), it is prepended as an extra
  * **Preview** tab and selected initially; the detail screen omits it since the page viewer sits
@@ -145,7 +145,7 @@ internal fun MetadataTabs(
     val tab = savedTab.takeIf { it in tabs } ?: tabs.first()
     LaunchedEffect(tab) {
         if (tab == PanelTab.HISTORY) {
-            actions.history.onLoad()
+            actions.loadHistory()
         }
     }
     // Shared with OcrTextTab so Ctrl+F can move focus into its find field. Focus is only requested
@@ -211,7 +211,7 @@ internal fun MetadataTabs(
             PanelTab.HISTORY -> {
                 HistoryTab(
                     history = state.history,
-                    onRefresh = actions.history.onRefresh,
+                    onRefresh = { actions.loadHistory(refresh = true) },
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
             }
@@ -241,7 +241,6 @@ private fun DetailsTab(
     val item = state.document.item ?: return
     val doc = item.doc
     val vocabulary = state.vocabulary
-    val edit = actions.edit
 
     Column(
         modifier =
@@ -250,19 +249,19 @@ private fun DetailsTab(
                 .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        ReviewStatusSection(state.document.reviewMode, state.document.reviewed, edit.onSetReviewed)
+        ReviewStatusSection(state.document.reviewMode, state.document.reviewed, actions::setReviewed)
         FieldsSection(
             doc = doc,
             defs = state.document.fieldDefs,
             vocabulary = vocabulary,
-            edit = edit,
+            actions = actions,
         )
         AiMetadataSuggestions(
             available = state.ai.tags.available == true,
             state = state.ai.metadata,
             labels = state.document.fieldDefs.associate { it.key to it.label },
             current = doc.fields,
-            actions = actions.ai,
+            actions = actions,
         )
 
         HorizontalDivider()
@@ -277,14 +276,14 @@ private fun DetailsTab(
             tags = item.tags,
             allTagNames = vocabulary.allTagNames,
             tagColors = vocabulary.tagColors,
-            onAdd = actions.tags.onAdd,
-            onRemove = actions.tags.onRemove,
-            onAddWithStyle = actions.tags.onAddWithStyle,
+            onAdd = actions::addTag,
+            onRemove = actions::removeTag,
+            onAddWithStyle = actions::addTagWithStyle,
         )
 
         AiTagSuggestions(
             state = state.ai.tags,
-            actions = actions.ai,
+            actions = actions,
         )
 
         HorizontalDivider()
@@ -300,7 +299,7 @@ private fun DetailsTab(
                 indexedEngine = doc.ocrEngine,
                 pinned = doc.ocrEngineOverride != null,
                 versions = state.document.ocrVersions,
-                onSetEngine = edit.onSetOcrEngine,
+                onSetEngine = actions::setOcrEngine,
             )
         }
     }
@@ -339,7 +338,7 @@ private fun ReviewStatusSection(
 @Composable
 private fun AiTagSuggestions(
     state: AiTagState,
-    actions: AiActions,
+    actions: DocumentWrites,
 ) {
     if (state.available != true) return
     Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -348,7 +347,7 @@ private fun AiTagSuggestions(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = actions.onSuggestTags, enabled = !state.suggesting) {
+            TextButton(onClick = actions::suggestAiTags, enabled = !state.suggesting) {
                 Icon(
                     Icons.Outlined.AutoAwesome,
                     contentDescription = null,
@@ -370,10 +369,10 @@ private fun AiTagSuggestions(
         if (state.suggestions.isNotEmpty()) {
             FlowRow(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 state.suggestions.forEach { suggestion ->
-                    AiTagChip(suggestion, actions.onAcceptTag, actions.onDismissTag)
+                    AiTagChip(suggestion, actions::acceptAiTag, actions::dismissAiTag)
                 }
             }
-            TextButton(onClick = actions.onClearTagSuggestions) {
+            TextButton(onClick = actions::clearAiTagSuggestions) {
                 Text(stringResource(Res.string.detail_dismiss_all))
             }
         }
@@ -419,7 +418,7 @@ private fun AiMetadataSuggestions(
     state: AiMetadataState,
     labels: Map<String, String>,
     current: Map<String, String>,
-    actions: AiActions,
+    actions: DocumentWrites,
 ) {
     if (!available) return
     Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -428,7 +427,7 @@ private fun AiMetadataSuggestions(
             horizontalArrangement = Arrangement.spacedBy(8.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            TextButton(onClick = actions.onSuggestMetadata, enabled = !state.suggesting) {
+            TextButton(onClick = actions::suggestAiMetadata, enabled = !state.suggesting) {
                 Icon(
                     Icons.Outlined.AutoAwesome,
                     contentDescription = null,
@@ -453,8 +452,8 @@ private fun AiMetadataSuggestions(
                 value = value,
                 replaces = current[key]?.takeIf { it.isNotBlank() && it != value },
                 key = key,
-                onAccept = actions.onAcceptMetadata,
-                onDismiss = actions.onDismissMetadata,
+                onAccept = actions::acceptAiMetadata,
+                onDismiss = actions::dismissAiMetadata,
             )
         }
     }

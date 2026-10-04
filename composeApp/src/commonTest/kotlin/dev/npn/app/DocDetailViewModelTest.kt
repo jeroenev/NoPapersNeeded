@@ -111,21 +111,6 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun setReviewedAndUnreviewed() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession()
-            val model = vm(session = session)
-            model.setReviewed(true)
-            model.setReviewed(false)
-            advanceUntilIdle()
-            session.meta.reviewedSets shouldContainExactly
-                listOf(
-                    listOf("doc-1") to true,
-                    listOf("doc-1") to false,
-                )
-        }
-
-    @Test
     fun addTagFailureEmitsMessage() =
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { meta.failBatchOps = { error("journal write failed") } }
@@ -148,9 +133,8 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
             advanceUntilIdle()
             model.setField("amount", "42")
-            model.removeField("amount")
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not save field: io", "Could not remove field: io")
+            messages shouldContainExactly listOf("Could not save field: io")
             job.cancel()
         }
 

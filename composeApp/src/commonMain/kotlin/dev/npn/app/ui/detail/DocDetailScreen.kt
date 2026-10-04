@@ -73,6 +73,7 @@ fun DocDetailScreen(
     browse: BrowseContext,
     onBack: () -> Unit,
     onNavigateToDoc: (String) -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     val searchQuery = browse.searchQuery
     val vm: DocDetailViewModel =
@@ -81,7 +82,6 @@ fun DocDetailScreen(
         }
     val ui by vm.ui.collectAsStateWithLifecycle()
     val metadata by vm.metadata.collectAsStateWithLifecycle()
-    val actions = rememberMetadataActions(vm)
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
@@ -106,40 +106,58 @@ fun DocDetailScreen(
 
     // Loading and missing are distinct: a null item before the first observeDoc emission is still
     // loading, and must not flash the "unavailable" surface. Only a confirmed absence does.
-    val current =
+    Box(modifier) {
         when (val loadState = metadata.document.loadState) {
             is DocLoadState.Loading -> {
                 LoadingDocScaffold(onBack)
-                return
             }
 
             is DocLoadState.Missing -> {
                 UnavailableDocScaffold(onBack)
-                return
             }
 
             is DocLoadState.Present -> {
-                loadState.item
+                val current = loadState.item
+                // Reflect the open document in the native window title (desktop); inert elsewhere.
+                LaunchedEffect(current.doc.displayTitle) {
+                    DesktopBridge.windowTitle.value = current.doc.displayTitle
+                }
+                LoadedDocScreen(
+                    current = current,
+                    snackbar = snackbar,
+                    topBarActions = { compact ->
+                        DocActions(item = current, vm = vm, onGone = onBack, compact = compact)
+                    },
+                    editor = { editorModifier ->
+                        DocumentEditor(
+                            state = metadata,
+                            writes = vm,
+                            onReviewed = { goNextDoc?.invoke() ?: onBack() },
+                            hasNext = goNextDoc != null,
+                            preview = { m ->
+                                PageViewer(
+                                    pageIndex = ui.pageIndex,
+                                    pageCount = ui.pageCount,
+                                    render = { p, maxDim -> vm.renderPage(p, maxDim) },
+                                    onPageChange = vm::goToPage,
+                                    onRetryPageCount = vm::retryPageCount,
+                                    modifier =
+                                        m
+                                            .focusRequester(viewerFocus)
+                                            .focusable(),
+                                )
+                            },
+                            modifier = editorModifier,
+                        )
+                    },
+                    browsePosition = browsePosition,
+                    goPrevDoc = goPrevDoc,
+                    goNextDoc = goNextDoc,
+                    onBack = onBack,
+                )
             }
         }
-
-    // Reflect the open document in the native window title (desktop); inert elsewhere.
-    LaunchedEffect(current.doc.displayTitle) { DesktopBridge.windowTitle.value = current.doc.displayTitle }
-
-    LoadedDocScreen(
-        current = current,
-        ui = ui,
-        metadata = metadata,
-        actions = actions,
-        vm = vm,
-        snackbar = snackbar,
-        topBarActions = { compact -> DocActions(item = current, vm = vm, onGone = onBack, compact = compact) },
-        viewerFocus = viewerFocus,
-        browsePosition = browsePosition,
-        goPrevDoc = goPrevDoc,
-        goNextDoc = goNextDoc,
-        onBack = onBack,
-    )
+    }
 }
 
 /**
@@ -150,14 +168,11 @@ fun DocDetailScreen(
 @Composable
 private fun LoadedDocScreen(
     current: DocListItem,
-    ui: DetailUiState,
-    metadata: MetadataUiState,
-    actions: MetadataActions,
-    vm: DocDetailViewModel,
     snackbar: SnackbarHostState,
     /** The document actions for the top bar, given whether the bar is compact. */
     topBarActions: @Composable (compact: Boolean) -> Unit,
-    viewerFocus: FocusRequester,
+    /** The tabbed editor with the page viewer, filling the space below the bar. */
+    editor: @Composable (Modifier) -> Unit,
     browsePosition: Pair<Int, Int>?,
     goPrevDoc: (() -> Unit)?,
     goNextDoc: (() -> Unit)?,
@@ -198,26 +213,7 @@ private fun LoadedDocScreen(
             snackbarHost = { SnackbarHost(snackbar) },
         ) { padding ->
             Box(Modifier.fillMaxSize().padding(padding).consumeWindowInsets(padding)) {
-                DocumentEditor(
-                    state = metadata,
-                    actions = actions,
-                    onReviewed = { goNextDoc?.invoke() ?: onBack() },
-                    hasNext = goNextDoc != null,
-                    preview = { m ->
-                        PageViewer(
-                            pageIndex = ui.pageIndex,
-                            pageCount = ui.pageCount,
-                            render = { p, maxDim -> vm.renderPage(p, maxDim) },
-                            onPageChange = vm::goToPage,
-                            onRetryPageCount = vm::retryPageCount,
-                            modifier =
-                                m
-                                    .focusRequester(viewerFocus)
-                                    .focusable(),
-                        )
-                    },
-                    modifier = Modifier.fillMaxSize(),
-                )
+                editor(Modifier.fillMaxSize())
             }
         }
     }

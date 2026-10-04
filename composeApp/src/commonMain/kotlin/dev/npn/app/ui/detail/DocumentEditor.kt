@@ -15,9 +15,11 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
@@ -56,11 +58,15 @@ import org.jetbrains.compose.resources.stringResource
  */
 internal val LocalDocumentWriteBlocked = staticCompositionLocalOf { false }
 
-/** One explicit save model for all editable document fields, in either responsive presentation. */
+/**
+ * One explicit save model for all editable document fields, in either responsive presentation.
+ * Field values and the review flag go into the document's draft and wait for Save; every other
+ * action the panel offers is written at once through [writes].
+ */
 @Composable
 internal fun DocumentEditor(
     state: MetadataUiState,
-    actions: MetadataActions,
+    writes: DocumentWrites,
     preview: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
     onReviewed: (() -> Unit)? = null,
@@ -86,25 +92,9 @@ internal fun DocumentEditor(
         onDispose { store.unregisterEditing(docId) }
     }
     // The draft judges validity by the type each key was edited as; an unregistered key is text.
-    val types = state.document.fieldDefs.associate { it.key to it.type }
-    val editActions =
-        actions.edit.copy(
-            onSetReviewed = { store.save(docId, reviewed = it) },
-            onCommitField = { key, value ->
-                store.field(docId, key, value, item.doc.fields[key], types[key] ?: FieldType.TEXT)
-            },
-            onRemoveField = { store.field(docId, it, null, item.doc.fields[it]) },
-        )
-    val aiActions =
-        actions.ai.copy(
-            // Accepting a suggestion saves immediately (the "saved" notice says so), but any draft
-            // the user typed for that field must be dropped first — otherwise overlay would keep
-            // showing the typed value and the next save would overwrite the accepted suggestion.
-            onAcceptMetadata = { key ->
-                store.clearField(docId, key)
-                actions.ai.onAcceptMetadata(key)
-            },
-        )
+    val persisted = rememberUpdatedState(item.doc.fields)
+    val types = rememberUpdatedState(state.document.fieldDefs.associate { it.key to it.type })
+    val actions = remember(writes, store, docId) { DraftedActions(writes, store, docId, persisted, types) }
     Column(
         modifier.imePadding().onPreviewKeyEvent { event ->
             if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.S) {
@@ -118,7 +108,7 @@ internal fun DocumentEditor(
         CompositionLocalProvider(LocalDocumentWriteBlocked provides (draft.saving || !draft.writable)) {
             MetadataPanel(
                 state = state.copy(document = state.document.copy(item = edited)),
-                actions = actions.copy(edit = editActions, ai = aiActions),
+                actions = actions,
                 previewTab = preview,
                 modifier = Modifier.fillMaxSize().weight(1f),
             )
@@ -133,6 +123,37 @@ internal fun DocumentEditor(
                 },
             hasNext = hasNext,
         )
+    }
+}
+
+/**
+ * The panel's actions for one document: field values and the review flag go into [store]'s draft
+ * for it, measured against the [persisted] values, and everything else goes straight to [writes].
+ */
+private class DraftedActions(
+    private val writes: DocumentWrites,
+    private val store: DocumentDrafts,
+    private val docId: String,
+    private val persisted: State<Map<String, String>>,
+    private val types: State<Map<String, FieldType>>,
+) : MetadataActions,
+    DocumentWrites by writes {
+    override fun commitField(
+        key: String,
+        value: String,
+    ) = store.field(docId, key, value, persisted.value[key], types.value[key] ?: FieldType.TEXT)
+
+    override fun removeField(key: String) = store.field(docId, key, null, persisted.value[key])
+
+    // Saves the draft along with the flag, like the save bar's "reviewed" button.
+    override fun setReviewed(reviewed: Boolean) = store.save(docId, reviewed = reviewed)
+
+    // Accepting a suggestion saves immediately (the "saved" notice says so), but any draft the user
+    // typed for that field must be dropped first: otherwise the overlay would keep showing the typed
+    // value and the next save would overwrite the accepted suggestion.
+    override fun acceptAiMetadata(key: String) {
+        store.clearField(docId, key)
+        writes.acceptAiMetadata(key)
     }
 }
 

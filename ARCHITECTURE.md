@@ -181,9 +181,10 @@ AppImage and uber-jar on Linux, a Flatpak bundle (manifest in `desktopApp/flatpa
 - New screen → package under `app/ui/`, viewmodel + screen in `commonMain`,
   route in `app/ui/nav/Route.kt`.
 - New value or action in the document metadata panel → a field on `MetadataUiState`
-  (assembled once in `DocDetailViewModel.metadata`) or on one of the four action
-  holders in `MetadataPanelState.kt`. Both call sites (detail screen, library preview
-  panel) then pick it up for free; they pass only a preview tab and a modifier.
+  (assembled once in `DocDetailViewModel.metadata`), or a member of `DocumentWrites` (written
+  at once, implemented by `DocDetailViewModel`) or `MetadataActions` (edits that wait in the
+  document's draft, routed by `DocumentEditor`), both in `MetadataPanelState.kt`. Both call
+  sites (detail screen, library preview panel) then pick it up for free.
 - New platform behavior → interface in `core` commonMain, impl in each platform
   source set, wire in `AppEnvironment.*`.
 - Background work → `core.watch` importer loops, `NpnWork` (Android), and the

@@ -139,11 +139,11 @@ data class AiMetadataState(
  *
  * Everything the metadata panel renders is assembled into the single [metadata] state; the flows
  * behind it are private, so a panel that needs a new value gets it from there rather than from a
- * new public flow wired through two call sites. The screen's whole write surface lives here too —
- * every setter the panel's action holders bind — which is why the function count is suppressed.
+ * new public flow wired through two call sites. The panel's immediate writes are the
+ * [DocumentWrites] it implements; field values and the review flag go through the document's draft
+ * ([DocumentDrafts]), never through here.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@Suppress("TooManyFunctions")
 class DocDetailViewModel(
     val docId: String,
     private val documents: DocumentRepository,
@@ -165,7 +165,8 @@ class DocDetailViewModel(
      * every switch. Null when the caller only knows the id.
      */
     initialItem: DocListItem? = null,
-) : MessagesViewModel() {
+) : MessagesViewModel(),
+    DocumentWrites {
     constructor(
         docId: String,
         session: LibrarySession,
@@ -382,7 +383,7 @@ class DocDetailViewModel(
      * Start showing the history (the tab was opened); a no-op once it is showing, since it then
      * follows the document by itself. Pass [refresh] for an explicit retry or refresh.
      */
-    fun loadHistory(refresh: Boolean = false) {
+    override fun loadHistory(refresh: Boolean) {
         historyRequests.update { if (refresh || it == 0) it + 1 else it }
     }
 
@@ -395,10 +396,10 @@ class DocDetailViewModel(
             onFailure = { error -> HistoryUiState.Error(error.message.orEmpty()) },
         )
 
-    fun addTag(tag: String) = launchMetadata(UiAction.ADD_TAG) { meta.addTag(listOf(docId), tag) }
+    override fun addTag(tag: String) = launchMetadata(UiAction.ADD_TAG) { meta.addTag(listOf(docId), tag) }
 
     /** Create a brand-new tag on this doc, optionally with a color chosen inline in the editor. */
-    fun addTagWithStyle(
+    override fun addTagWithStyle(
         tag: String,
         color: String?,
     ) = launchMetadata(UiAction.CREATE_TAG) {
@@ -406,14 +407,14 @@ class DocDetailViewModel(
         if (color != null) tagAdmin.setTagStyle(tag, color, null)
     }
 
-    fun removeTag(tag: String) = launchMetadata(UiAction.REMOVE_TAG) { meta.removeTag(listOf(docId), tag) }
+    override fun removeTag(tag: String) = launchMetadata(UiAction.REMOVE_TAG) { meta.removeTag(listOf(docId), tag) }
 
     /**
      * Ask the AI endpoint for new-tag suggestions from this doc's indexed text. No-op while a
      * request is already in flight. Empty results surface an informational message (the document
      * likely has no OCR text yet); failures surface the error via [messages].
      */
-    fun suggestAiTags() {
+    override fun suggestAiTags() {
         if (aiTags.value.suggesting) return
         aiTags.update { it.copy(suggesting = true) }
         viewModelScope.launch {
@@ -433,19 +434,19 @@ class DocDetailViewModel(
     }
 
     /** Accept a suggestion: add it as a real tag (normal journal path) and drop it from the list. */
-    fun acceptAiTag(tag: String) =
+    override fun acceptAiTag(tag: String) =
         launchMetadata(UiAction.ADD_TAG) {
             meta.addTag(listOf(docId), tag)
             dismissAiTag(tag)
         }
 
-    fun dismissAiTag(tag: String) {
+    override fun dismissAiTag(tag: String) {
         aiTags.update { state ->
             state.copy(suggestions = state.suggestions.filterNot { it.tag == tag })
         }
     }
 
-    fun clearAiTagSuggestions() {
+    override fun clearAiTagSuggestions() {
         aiTags.update { it.copy(suggestions = emptyList()) }
     }
 
@@ -454,7 +455,7 @@ class DocDetailViewModel(
      * No-op while a request is already in flight. Empty results surface an informational message
      * (no OCR text yet, or nothing beyond the current values); failures surface via [messages].
      */
-    fun suggestAiMetadata() {
+    override fun suggestAiMetadata() {
         if (aiMetadata.value.suggesting) return
         aiMetadata.update { it.copy(suggesting = true) }
         viewModelScope.launch {
@@ -486,12 +487,12 @@ class DocDetailViewModel(
     }
 
     /** Accept one field's suggestion: write it via the normal journal path and drop it. */
-    fun acceptAiMetadata(key: String) {
+    override fun acceptAiMetadata(key: String) {
         aiMetadata.value.suggestion[key]?.let { setField(key, it) }
         dismissAiMetadata(key)
     }
 
-    fun dismissAiMetadata(key: String) {
+    override fun dismissAiMetadata(key: String) {
         aiMetadata.update { it.copy(suggestion = it.suggestion.without(key)) }
     }
 
@@ -500,22 +501,17 @@ class DocDetailViewModel(
         value: String?,
     ) = launchMetadata(UiAction.SAVE_FIELD) { meta.setField(docId, key, value) }
 
-    fun removeField(key: String) = launchMetadata(UiAction.REMOVE_FIELD) { meta.setField(docId, key, null) }
-
     /**
      * Register [def] and, when [value] is non-blank, set it on this document. The definition goes
      * first so the value is canonicalized against the new type rather than as plain text.
      */
-    fun defineField(
+    override fun defineField(
         def: FieldDef,
         value: String?,
     ) = launchMetadata(UiAction.DEFINE_FIELD) {
         fieldRegistry.upsert(def)
         if (!value.isNullOrBlank()) meta.setField(docId, def.key, value)
     }
-
-    fun setReviewed(reviewed: Boolean) =
-        launchMetadata(UiAction.UPDATE_REVIEW_STATE) { meta.setReviewed(listOf(docId), reviewed) }
 
     private fun launchMetadata(
         action: UiAction,
@@ -565,7 +561,8 @@ class DocDetailViewModel(
         }
 
     /** Pin [engine] as the searchable OCR version (null = automatic best-engine selection). */
-    fun setOcrEngine(engine: String?) = launchReporting(UiAction.CHANGE_OCR_ENGINE) { ocr.setOcrEngine(docId, engine) }
+    override fun setOcrEngine(engine: String?) =
+        launchReporting(UiAction.CHANGE_OCR_ENGINE) { ocr.setOcrEngine(docId, engine) }
 
     /**
      * Split into one document per [segments] entry. On success the original is trashed by the

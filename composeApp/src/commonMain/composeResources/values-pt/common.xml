@@ -55,7 +55,6 @@
     <string name="common_action_save_field">salvar campo</string>
     <string name="common_action_remove_field">remover campo</string>
     <string name="common_action_define_field">definir campo</string>
-    <string name="common_action_update_review_state">atualizar o status de revisão</string>
     <string name="common_action_move_to_trash">mover para a lixeira</string>
     <string name="common_action_rename_file">renomear arquivo</string>
     <string name="common_action_rerun_ocr">refazer o OCR</string>

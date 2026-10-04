@@ -68,7 +68,7 @@ internal fun FieldsSection(
     doc: Doc,
     defs: List<FieldDef>,
     vocabulary: VocabularyState,
-    edit: MetadataEditActions,
+    actions: MetadataActions,
 ) {
     // Keys the user picked from "Add field" this session; they render empty until a value lands.
     var revealed by remember(doc.docId) { mutableStateOf(emptySet<String>()) }
@@ -85,8 +85,8 @@ internal fun FieldsSection(
                     suggestions = vocabulary.fieldValues[def.key].orEmpty(),
                     // The title stands in for the file name when empty, so the file name is its placeholder.
                     placeholder = doc.fileName.takeIf { def.key == FieldKeys.TITLE },
-                    onCommit = { edit.onCommitField(def.key, it) },
-                    onRemove = { edit.onRemoveField(def.key) }.takeIf { !def.showByDefault },
+                    onCommit = { actions.commitField(def.key, it) },
+                    onRemove = { actions.removeField(def.key) }.takeIf { !def.showByDefault },
                 )
                 if (def.key == FieldKeys.TITLE) {
                     Text(
@@ -115,7 +115,7 @@ internal fun FieldsSection(
                         FieldEditor(
                             def = orphanDef(orphan),
                             value = value,
-                            onCommit = { edit.onCommitField(orphan, it) },
+                            onCommit = { actions.commitField(orphan, it) },
                             modifier = Modifier.weight(1f),
                         )
                         IconButton(onClick = { newField = NewFieldSeed(key = orphan, label = orphan, value = value) }) {
@@ -124,7 +124,7 @@ internal fun FieldsSection(
                                 contentDescription = stringResource(Res.string.detail_add_to_fields),
                             )
                         }
-                        IconButton(onClick = { edit.onRemoveField(orphan) }) {
+                        IconButton(onClick = { actions.removeField(orphan) }) {
                             Icon(
                                 Icons.Filled.Close,
                                 contentDescription = stringResource(Res.string.detail_remove_field, orphan),
@@ -147,7 +147,7 @@ internal fun FieldsSection(
             existing = defs,
             keySuggestions = vocabulary.orphanKeys,
             onConfirm = { def, value ->
-                edit.onDefineField(def, value)
+                actions.defineField(def, value)
                 newField = null
             },
             onDismiss = { newField = null },

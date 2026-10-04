@@ -55,7 +55,6 @@
     <string name="common_action_save_field">veld opslaan</string>
     <string name="common_action_remove_field">veld verwijderen</string>
     <string name="common_action_define_field">veld definiëren</string>
-    <string name="common_action_update_review_state">beoordelingsstatus bijwerken</string>
     <string name="common_action_move_to_trash">naar de prullenbak verplaatsen</string>
     <string name="common_action_rename_file">bestand hernoemen</string>
     <string name="common_action_rerun_ocr">OCR opnieuw uitvoeren</string>

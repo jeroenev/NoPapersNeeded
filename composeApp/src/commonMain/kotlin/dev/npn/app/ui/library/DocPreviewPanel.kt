@@ -35,7 +35,6 @@ import dev.npn.app.ui.detail.DocActions
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.DocumentEditor
 import dev.npn.app.ui.detail.PageViewer
-import dev.npn.app.ui.detail.rememberMetadataActions
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
@@ -118,7 +117,6 @@ private fun PreviewBody(
 
     val ui by vm.ui.collectAsStateWithLifecycle()
     val metadata by vm.metadata.collectAsStateWithLifecycle()
-    val actions = rememberMetadataActions(vm)
 
     // This panel is a sibling of the library's Scaffold, so nothing applies the bottom system-bar
     // inset for it: without this the pinned save/discard/review row would draw under the Android
@@ -136,7 +134,7 @@ private fun PreviewBody(
         HorizontalDivider()
         DocumentEditor(
             state = metadata,
-            actions = actions,
+            writes = vm,
             onReviewed = onReviewed,
             hasNext = hasNext,
             preview = { m ->

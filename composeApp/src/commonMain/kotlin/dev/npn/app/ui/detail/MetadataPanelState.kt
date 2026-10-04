@@ -1,8 +1,6 @@
 package dev.npn.app.ui.detail
 
-import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.remember
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.model.FieldDef
@@ -67,93 +65,60 @@ data class AiPanelState(
 )
 
 /**
- * Everything the panel can invoke, grouped by concern. Built once per viewmodel by
- * [rememberMetadataActions]; both call sites share that wiring.
+ * The writes the metadata panel makes at once: tags, AI suggestions, new field definitions, the
+ * searchable OCR version, and the history it shows. [DocDetailViewModel] implements it.
  */
-@Immutable
-data class MetadataActions(
-    val edit: MetadataEditActions,
-    val tags: TagActions,
-    val ai: AiActions,
-    val history: HistoryActions,
-)
+interface DocumentWrites {
+    fun addTag(tag: String)
 
-/** Edits to the document values; DocumentEditor redirects field edits into a retained draft. */
-@Immutable
-data class MetadataEditActions(
-    /** A keystroke or pick for one field; the value is in the field's canonical form when it parses. */
-    val onCommitField: (key: String, value: String) -> Unit,
-    val onRemoveField: (key: String) -> Unit,
-    /** Register a new field and, when [value] is non-blank, set it on this document in one go. */
-    val onDefineField: (def: FieldDef, value: String?) -> Unit,
-    val onSetReviewed: (Boolean) -> Unit,
+    fun removeTag(tag: String)
+
+    /** Create a brand-new tag on the document, with a colour chosen inline. */
+    fun addTagWithStyle(
+        tag: String,
+        color: String?,
+    )
+
+    /** Register [def] and, when [value] is non-blank, set it on the document in one go. */
+    fun defineField(
+        def: FieldDef,
+        value: String?,
+    )
+
     /** Pin the searchable OCR version, or null for automatic best-engine selection. */
-    val onSetOcrEngine: (String?) -> Unit,
-)
+    fun setOcrEngine(engine: String?)
 
-/** Tags on this document. [onAddWithStyle] creates a brand-new tag with a colour chosen inline. */
-@Immutable
-data class TagActions(
-    val onAdd: (String) -> Unit,
-    val onRemove: (String) -> Unit,
-    val onAddWithStyle: (name: String, color: String?) -> Unit,
-)
+    fun suggestAiTags()
 
-/** Asking for AI suggestions and accepting or dismissing them one at a time. */
-@Immutable
-data class AiActions(
-    val onSuggestTags: () -> Unit,
-    val onAcceptTag: (String) -> Unit,
-    val onDismissTag: (String) -> Unit,
-    val onClearTagSuggestions: () -> Unit,
-    val onSuggestMetadata: () -> Unit,
-    val onAcceptMetadata: (key: String) -> Unit,
-    val onDismissMetadata: (key: String) -> Unit,
-)
+    fun acceptAiTag(tag: String)
 
-/** The history tab: a first load when it is opened, and an explicit refresh/retry. */
-@Immutable
-data class HistoryActions(
-    val onLoad: () -> Unit,
-    val onRefresh: () -> Unit,
-)
+    fun dismissAiTag(tag: String)
+
+    fun clearAiTagSuggestions()
+
+    fun suggestAiMetadata()
+
+    fun acceptAiMetadata(key: String)
+
+    fun dismissAiMetadata(key: String)
+
+    /** Show the history (its tab opened), or read it again when [refresh] is set. */
+    fun loadHistory(refresh: Boolean = false)
+}
 
 /**
- * Wire the panel's actions to [vm]. Remembered on the viewmodel so the holders — and therefore
- * the panel's parameters — stay stable across recomposition.
+ * Everything the metadata panel can do: the [DocumentWrites], plus the edits that wait in the
+ * document's draft until Save. [DocumentEditor] provides it, so the panel never decides which of
+ * its edits are immediate.
  */
-@Composable
-fun rememberMetadataActions(vm: DocDetailViewModel): MetadataActions =
-    remember(vm) {
-        MetadataActions(
-            edit =
-                MetadataEditActions(
-                    onCommitField = vm::setField,
-                    onRemoveField = vm::removeField,
-                    onDefineField = vm::defineField,
-                    onSetReviewed = vm::setReviewed,
-                    onSetOcrEngine = vm::setOcrEngine,
-                ),
-            tags =
-                TagActions(
-                    onAdd = vm::addTag,
-                    onRemove = vm::removeTag,
-                    onAddWithStyle = vm::addTagWithStyle,
-                ),
-            ai =
-                AiActions(
-                    onSuggestTags = vm::suggestAiTags,
-                    onAcceptTag = vm::acceptAiTag,
-                    onDismissTag = vm::dismissAiTag,
-                    onClearTagSuggestions = vm::clearAiTagSuggestions,
-                    onSuggestMetadata = vm::suggestAiMetadata,
-                    onAcceptMetadata = vm::acceptAiMetadata,
-                    onDismissMetadata = vm::dismissAiMetadata,
-                ),
-            history =
-                HistoryActions(
-                    onLoad = { vm.loadHistory() },
-                    onRefresh = { vm.loadHistory(refresh = true) },
-                ),
-        )
-    }
+interface MetadataActions : DocumentWrites {
+    /** A keystroke or pick for one field; the value is in the field's canonical form when it parses. */
+    fun commitField(
+        key: String,
+        value: String,
+    )
+
+    fun removeField(key: String)
+
+    fun setReviewed(reviewed: Boolean)
+}

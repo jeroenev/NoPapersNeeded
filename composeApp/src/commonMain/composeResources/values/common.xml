@@ -56,7 +56,6 @@
     <string name="common_action_save_field">save field</string>
     <string name="common_action_remove_field">remove field</string>
     <string name="common_action_define_field">define field</string>
-    <string name="common_action_update_review_state">update review state</string>
     <string name="common_action_move_to_trash">move to trash</string>
     <string name="common_action_rename_file">rename file</string>
     <string name="common_action_rerun_ocr">re-run OCR</string>

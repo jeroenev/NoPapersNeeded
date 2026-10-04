@@ -55,7 +55,6 @@
     <string name="common_action_save_field">Feld speichern</string>
     <string name="common_action_remove_field">Feld entfernen</string>
     <string name="common_action_define_field">Feld definieren</string>
-    <string name="common_action_update_review_state">Prüfstatus aktualisieren</string>
     <string name="common_action_move_to_trash">In den Papierkorb verschieben</string>
     <string name="common_action_rename_file">Datei umbenennen</string>
     <string name="common_action_rerun_ocr">OCR erneut ausführen</string>

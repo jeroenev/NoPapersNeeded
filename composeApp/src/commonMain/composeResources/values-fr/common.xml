@@ -55,7 +55,6 @@
     <string name="common_action_save_field">enregistrer le champ</string>
     <string name="common_action_remove_field">retirer le champ</string>
     <string name="common_action_define_field">définir le champ</string>
-    <string name="common_action_update_review_state">mettre à jour l’état de vérification</string>
     <string name="common_action_move_to_trash">déplacer dans la corbeille</string>
     <string name="common_action_rename_file">renommer le fichier</string>
     <string name="common_action_rerun_ocr">relancer l’OCR</string>
