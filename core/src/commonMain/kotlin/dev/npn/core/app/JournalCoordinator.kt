@@ -96,15 +96,14 @@ private class SyncedSettings {
  * state must therefore go through [foldedState] rather than assume it already exists.
  *
  * This is the ONLY sanctioned journal write path (see AGENTS.md). The invariant is enforced at
- * the type level rather than by convention: [ContentAddressedJournalWriter] is `internal` to
- * `core`, and both the primary constructor and the held [writer] are `internal` too, so no caller
- * outside `core` can obtain the raw writer and skip the mutex, the live [FoldedState] refresh, or
- * the DB projection. Expose new capabilities as named members here rather than widening [writer]
- * back to public.
+ * the type level rather than by convention: [ContentAddressedJournalWriter] and the primary
+ * constructor are `internal` to `core` and the held [writer] is private, so no caller outside
+ * `core` can obtain the raw writer and skip the mutex, the live [FoldedState] refresh, or the DB
+ * projection. Expose new capabilities as named members here rather than widening [writer].
  */
 @Suppress("TooManyFunctions")
 class JournalCoordinator internal constructor(
-    internal val writer: ContentAddressedJournalWriter,
+    private val writer: ContentAddressedJournalWriter,
     private val indexer: Indexer,
     private val accumulator: MetadataAccumulator,
     private val compactor: SnapshotCompactor? = null,

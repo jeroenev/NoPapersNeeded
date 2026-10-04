@@ -93,7 +93,7 @@ class QueueDrainer(
      * Drain on the calling coroutine and return the items processed. A step that throws is logged
      * and ends the drain; cancellation is rethrown.
      */
-    suspend fun drain(): Int {
+    internal suspend fun drain(): Int {
         var count = 0
         mutex.withLock {
             runCatchingCancellable {

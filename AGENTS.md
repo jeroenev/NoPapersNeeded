@@ -108,8 +108,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   by their complete-file SHA-256 and require verified create-without-replacement publication;
   OCR sidecars are keyed by hash+deviceId. Never append to or rewrite a published object. New
   journal writes must go through `JournalCoordinator` — this is enforced at the type level, not
-  just by convention: `ContentAddressedJournalWriter` and the coordinator's `writer` are
-  `internal` to `core`, so no outside caller can grab a raw writer.
+  just by convention: `ContentAddressedJournalWriter` is `internal` to `core` and the
+  coordinator's `writer` is private, so no outside caller can grab a raw writer.
 - The journal is written only as storage-v2 objects; legacy v1 segments are read, never written.
   A filesystem that cannot publish without replacement (no hard link, no exclusive rename) refuses
   to open the library; never add a fallback format. `device.id` belongs to one installation:
