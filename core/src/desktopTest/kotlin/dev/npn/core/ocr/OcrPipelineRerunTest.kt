@@ -6,9 +6,11 @@ import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldMatch
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -88,6 +90,43 @@ class OcrPipelineRerunTest {
 
             tesseract.calls shouldBe 0
             rig.db.ftsDao().searchDocIds("phone") shouldContainExactly listOf(docId)
+        }
+
+    @Test
+    fun aFailedRerunKeepsTheRequestAndItsError() =
+        runTest {
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            rig
+                .pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "first reading"),
+                ).processDoc(docId)
+
+            val failing =
+                FakeOcrEngine(isAvailable = true, name = "mlkit").apply { failure = IOException("engine crashed") }
+            requestRerun(docId)
+            val pipe = rig.pipeline("devA", failing)
+            pipe.processDoc(docId)
+
+            failing.calls shouldBe 1
+            val row = rig.db.ocrQueueDao().getByDocId(docId).shouldNotBeNull()
+            row.state shouldBe OcrPipeline.STATE_PENDING
+            row.rerun shouldBe true
+            row.attempts shouldBe 1
+            row.lastError shouldBe "ocr failed: engine crashed"
+            // The version already stored stays indexed while the re-run is owed.
+            rig.db.ftsDao().searchDocIds("first") shouldContainExactly listOf(docId)
+            rig.db
+                .documentDao()
+                .getByDocId(docId)
+                ?.ocrState shouldBe OcrPipeline.OCR_DONE
+
+            // Nor does the next reconcile take the owed re-run for an adoption and drop it.
+            pipe.reconcileSidecars()
+            rig.db
+                .ocrQueueDao()
+                .getByDocId(docId)
+                ?.rerun shouldBe true
         }
 
     @Test

@@ -91,6 +91,9 @@ internal class FakeOcrEngine(
     var lastLang: String? = null
         private set
 
+    /** Thrown by every call while set, the way an engine reports a page it could not read. */
+    var failure: Exception? = null
+
     override suspend fun available(): Boolean = isAvailable
 
     override suspend fun languagesFor(lang: String): String = installed(lang)
@@ -101,6 +104,7 @@ internal class FakeOcrEngine(
     ): String {
         calls++
         lastLang = lang
+        failure?.let { throw it }
         return canned
     }
 }
