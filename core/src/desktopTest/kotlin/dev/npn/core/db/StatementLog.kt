@@ -6,7 +6,6 @@ import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.SQLiteDriver
 import androidx.sqlite.SQLiteStatement
 import androidx.sqlite.driver.bundled.BundledSQLiteDriver
-import kotlinx.coroutines.Dispatchers
 import java.io.File
 
 /**
@@ -62,7 +61,6 @@ fun recordingDatabase(
     return Room
         .databaseBuilder<NpnDatabase>(name = file.absolutePath)
         .setDriver(log)
-        .setQueryCoroutineContext(Dispatchers.IO)
         .build()
 }
 
