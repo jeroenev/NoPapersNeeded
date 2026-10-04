@@ -241,7 +241,28 @@ interface OcrQueueDao {
     fun countActive(): Flow<Int>
 
     @Query("DELETE FROM ocr_queue WHERE docId = :docId")
-    suspend fun delete(docId: String)
+    suspend fun deleteRow(docId: String)
+
+    /** Drop [docId] from the queue, with any pages its runs read: nothing will resume them now. */
+    @Transaction
+    suspend fun delete(docId: String) {
+        deleteRow(docId)
+        clearCachedPages(docId)
+    }
+
+    /** Pages a failed run of [engine] in [lang] already read for [docId] (see [OcrPageCacheEntity]). */
+    @Query("SELECT * FROM ocr_page_cache WHERE docId = :docId AND engine = :engine AND lang = :lang")
+    suspend fun cachedPages(
+        docId: String,
+        engine: String,
+        lang: String,
+    ): List<OcrPageCacheEntity>
+
+    @Upsert
+    suspend fun cachePage(page: OcrPageCacheEntity)
+
+    @Query("DELETE FROM ocr_page_cache WHERE docId = :docId")
+    suspend fun clearCachedPages(docId: String)
 }
 
 @Dao

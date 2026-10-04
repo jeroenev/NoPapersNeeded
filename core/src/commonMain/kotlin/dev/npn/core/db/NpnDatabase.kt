@@ -35,7 +35,8 @@ import androidx.room3.migration.AutoMigrationSpec
     // v18: adds documents.trashedAt (when the winning doc-trash happened) for the trash auto-purge.
     // v19: adds ocr_queue.aiRequested (an AI OCR run asked for on this device, unlike the synced pin).
     // v20: adds ocr_queue.nextAttemptAt (retry backoff for failed OCR runs).
-    version = 20,
+    // v21: adds ocr_page_cache (pages a failed OCR run read, so its retry does not pay for them).
+    version = 21,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -55,6 +56,7 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 17, to = 18),
         AutoMigration(from = 18, to = 19),
         AutoMigration(from = 19, to = 20),
+        AutoMigration(from = 20, to = 21),
     ],
     entities = [
         DocumentEntity::class,
@@ -67,6 +69,7 @@ import androidx.room3.migration.AutoMigrationSpec
         ThumbnailEntity::class,
         DuplicateEntity::class,
         OcrQueueEntity::class,
+        OcrPageCacheEntity::class,
         AiEnrichQueueEntity::class,
         AiEditJobEntity::class,
         AiEditJobDocEntity::class,

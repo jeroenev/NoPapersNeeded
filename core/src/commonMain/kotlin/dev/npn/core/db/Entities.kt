@@ -263,6 +263,28 @@ data class OcrQueueEntity(
 )
 
 /**
+ * One page an OCR run read before the run as a whole failed, kept so that its retry pays only for
+ * the pages still missing: a vision engine bills per page, and a scan that fails on page 150 would
+ * otherwise buy the first 149 again on every attempt.
+ *
+ * Keyed by everything that makes the text what it is — the document's hash, the engine and the
+ * languages it read — so a retry by another engine or in other languages reads afresh. Belongs to
+ * the owed run in [OcrQueueEntity]: cleared when the run publishes its sidecar or the document
+ * leaves the queue, and kept past the attempt cap, so a later explicit re-run resumes too.
+ */
+@Entity(
+    tableName = "ocr_page_cache",
+    primaryKeys = ["docId", "engine", "lang", "page"],
+)
+data class OcrPageCacheEntity(
+    val docId: String,
+    val engine: String,
+    val lang: String,
+    val page: Int,
+    val text: String,
+)
+
+/**
  * Work list for the automatic post-OCR AI enrichment pass. A row means "this document is owed an
  * enrichment call"; the completed fact lives on [DocumentEntity.aiEnrichedAt], so a successful pass
  * deletes the row rather than keeping a terminal state.

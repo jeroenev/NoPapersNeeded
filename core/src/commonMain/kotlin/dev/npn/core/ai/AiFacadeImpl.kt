@@ -290,13 +290,16 @@ class AiFacadeImpl(
         const val MAX_SESSION_TITLE_CHARS = 60
 
         /**
-         * Calls one page may cost: the attempt plus a single retry (see [transcribeWithRetry]).
+         * Calls one page may cost per attempt at its document: the call plus a single retry (see
+         * [transcribeWithRetry]).
          *
-         * One retry, and deliberately only one. Vision models do occasionally answer a page with a
-         * refusal, an empty message or a transient endpoint error, and asking again fixes it — but
-         * this runs once per PAGE, under a pipeline that already retries the whole document
-         * ([dev.npn.core.ocr.OcrConfig.maxAttempts]), so anything more multiplies a systematically
-         * failing endpoint into a bill instead of an error.
+         * One retry, and deliberately only one: this is the only immediate retry on the paid OCR
+         * path. Vision models do occasionally answer a page with a refusal, an empty message or a
+         * transient endpoint error, and asking again fixes it. The pipeline's own retries of the
+         * document ([dev.npn.core.ocr.OcrConfig.maxAttempts]) wait out a backoff and resume from
+         * the pages already read ([dev.npn.core.db.OcrPageCacheEntity]), so a page that was read is
+         * never paid for twice; anything more here would turn a systematically failing endpoint
+         * into a bill instead of an error.
          */
         const val PAGE_ATTEMPTS = 2
     }

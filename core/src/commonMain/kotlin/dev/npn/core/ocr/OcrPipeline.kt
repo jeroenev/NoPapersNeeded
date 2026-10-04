@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DocumentFieldDao
 import dev.npn.core.db.FtsDao
+import dev.npn.core.db.OcrPageCacheEntity
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.TagDao
@@ -236,6 +237,7 @@ class OcrPipeline(
             // Done even when a hook failed — the text is indexed and searchable, which is what
             // this queue tracks — but the failure is kept on the row rather than dropped, since
             // nothing retries a hook and there is no other trace of it.
+            ocrQueueDao.clearCachedPages(docId)
             ocrQueueDao.upsert(
                 OcrQueueEntity(
                     docId = docId,
@@ -386,6 +388,13 @@ class OcrPipeline(
             // Resolved once, like the engine, so every page reads the same languages and the
             // sidecar records the ones actually used.
             val lang = if (canOcr) engine.languagesFor(config.lang) else config.lang
+            // Pages an earlier, failed attempt already paid for (see OcrPageCacheEntity).
+            val read =
+                if (canOcr) {
+                    ocrQueueDao.cachedPages(doc.docId, engine.name, lang).associate { it.page to it.text }
+                } else {
+                    emptyMap()
+                }
             val pages = ArrayList<String>(handle.pageCount)
             var usedOcr = false
             for (i in 0 until handle.pageCount) {
@@ -394,8 +403,12 @@ class OcrPipeline(
                     // Usable text layer (or no engine): keep the embedded text as-is.
                     pages.add(embedded)
                 } else {
-                    val png = handle.renderPagePng(i, config.renderDpiDim)
-                    pages.add(engine.recognizePng(png, lang))
+                    val text =
+                        read[i] ?: engine.recognizePng(handle.renderPagePng(i, config.renderDpiDim), lang).also {
+                            // Kept until the run publishes: a later page failing must not cost this one again.
+                            ocrQueueDao.cachePage(OcrPageCacheEntity(doc.docId, engine.name, lang, i, it))
+                        }
+                    pages.add(text)
                     usedOcr = true
                 }
             }
