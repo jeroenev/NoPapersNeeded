@@ -160,6 +160,21 @@ interface DocumentDao {
     )
     fun countUnreviewedOrUntagged(): Flow<Int>
 
+    /**
+     * Live documents not reviewed yet, or with [taggedOnly] only those among them with a tag: what
+     * the review migration marks.
+     */
+    @Query(
+        "SELECT d.docId FROM documents d WHERE d.reviewed = 0 AND d.trashed = 0 AND d.deleted = 0 " +
+            "AND d.missing = 0 AND (:taggedOnly = 0 OR EXISTS " +
+            "(SELECT 1 FROM document_tags t WHERE t.docId = d.docId))",
+    )
+    suspend fun unreviewedLiveDocIds(taggedOnly: Boolean): List<String>
+
+    /** Live documents whose OCR state is [ocrState]: what a rescan still has to queue for OCR. */
+    @Query("SELECT docId FROM documents WHERE ocrState = :ocrState AND trashed = 0 AND deleted = 0 AND missing = 0")
+    suspend fun liveDocIdsWithOcrState(ocrState: String): List<String>
+
     /** Projection for the indexer diff: current known paths + fast-path fields. */
     @Query("SELECT relPath, docId, size, mtime FROM documents WHERE deleted = 0")
     suspend fun allPathsAndMeta(): List<PathMeta>

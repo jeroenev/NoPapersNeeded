@@ -173,23 +173,14 @@ class LibrarySessionImpl private constructor(
 
     override suspend fun markReviewedForMigration(onlyTagged: Boolean) = owned { markReviewed(onlyTagged) }
 
+    // Journal events are permanent, so only documents the projection does not show reviewed yet
+    // get one: a second run, or a library already reviewed, writes nothing.
     private suspend fun markReviewed(onlyTagged: Boolean) {
-        val dao = db.documentDao()
-        val live =
-            dao
-                .getByDocIds(dao.allPathsAndMeta().map { it.docId })
-                .filter { !it.trashed && !it.deleted && !it.missing }
-        val targets =
-            if (!onlyTagged) {
-                live
-            } else {
-                val tagged = dao.tagsForDocs(live.map { it.docId }).map { it.docId }.toHashSet()
-                live.filter { it.docId in tagged }
-            }
         val ops =
-            targets.map {
-                PendingOp.propSet(it.docId, SystemProperty.REVIEWED, "true")
-            }
+            db
+                .documentDao()
+                .unreviewedLiveDocIds(taggedOnly = onlyTagged)
+                .map { PendingOp.propSet(it, SystemProperty.REVIEWED, "true") }
         if (ops.isNotEmpty()) coordinator.commitAndApply(ops)
     }
 
@@ -654,15 +645,13 @@ class LibrarySessionImpl private constructor(
      */
     private suspend fun queuePendingOcr() {
         val dao = db.documentDao()
-        // One bulk read for the whole projection instead of a query per document; this runs after
-        // every rescan, so the per-row read was an N+1 across the library.
-        val docs = dao.getByDocIds(dao.allPathsAndMeta().map { it.docId })
-        for (doc in docs.filter { it.ocrState == OcrPipeline.OCR_NONE }) {
-            if (doc.trashed || doc.deleted || doc.missing) continue
-            when (deviceDb.ocrQueueDao().getByDocId(doc.docId)?.state) {
-                null, OcrPipeline.STATE_DONE -> enqueuePendingOcr(doc.docId)
-                OcrPipeline.STATE_FAILED -> dao.updateOcrState(doc.docId, OcrPipeline.OCR_FAILED, null, null)
-                else -> dao.updateOcrState(doc.docId, OcrPipeline.OCR_PENDING, null, null)
+        // This runs after every rescan, so it asks for the few live documents still without OCR
+        // rather than reading every row to filter them here.
+        for (docId in dao.liveDocIdsWithOcrState(OcrPipeline.OCR_NONE)) {
+            when (deviceDb.ocrQueueDao().getByDocId(docId)?.state) {
+                null, OcrPipeline.STATE_DONE -> enqueuePendingOcr(docId)
+                OcrPipeline.STATE_FAILED -> dao.updateOcrState(docId, OcrPipeline.OCR_FAILED, null, null)
+                else -> dao.updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
             }
         }
     }
