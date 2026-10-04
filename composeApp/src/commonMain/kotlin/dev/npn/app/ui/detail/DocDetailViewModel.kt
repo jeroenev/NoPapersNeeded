@@ -19,6 +19,7 @@ import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
+import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
 import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.DocContentFacade
@@ -53,6 +54,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_no_endpoint
 import no_papers_needed.composeapp.generated.resources.detail_bake_failed
 import no_papers_needed.composeapp.generated.resources.detail_bake_failed_not_saved
 import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unavailable
@@ -529,17 +531,19 @@ class DocDetailViewModel(
      * requeues of one document.
      *
      * Runs whatever [DetailUiState.aiOcr] reports short of [AiOcrOffer.Unavailable] — warning
-     * about a long document is the caller's job, not this one's. A rejected request still throws
-     * and surfaces as a snackbar via [launchReporting] rather than failing silently.
+     * about a long document is the caller's job, not this one's. A request refused for want of an
+     * endpoint (it went away after the action was offered) says so rather than doing nothing.
      */
     fun ocrWithAi() =
         launchReporting(UiAction.AI_OCR) {
             _ui.update { it.copy(reindexing = true) }
-            try {
-                ocr.ocrWithAi(docId)
-            } finally {
-                _ui.update { it.copy(reindexing = false) }
-            }
+            val outcome =
+                try {
+                    ocr.ocrWithAi(docId)
+                } finally {
+                    _ui.update { it.copy(reindexing = false) }
+                }
+            if (outcome == AiOcrOutcome.NO_ENDPOINT) message(uiText(Res.string.detail_ai_ocr_no_endpoint))
         }
 
     /** Pin [engine] as the searchable OCR version (null = automatic best-engine selection). */

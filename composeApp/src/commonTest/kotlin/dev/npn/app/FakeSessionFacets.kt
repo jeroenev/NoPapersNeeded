@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.app.AiEditQueueFacade
 import dev.npn.core.app.AiOcrOffer
+import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.EditRunReview
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
@@ -94,9 +95,13 @@ class FakeOcrFacade : OcrFacade {
 
     override suspend fun aiOcrOffer(docId: String): AiOcrOffer = aiOcr
 
-    override suspend fun ocrWithAi(docId: String) {
+    /** What [ocrWithAi] answers once it has recorded the request. */
+    var aiOcrOutcome: AiOcrOutcome = AiOcrOutcome.QUEUED
+
+    override suspend fun ocrWithAi(docId: String): AiOcrOutcome {
         failAiOcr?.invoke()
         aiOcrIds += docId
+        return aiOcrOutcome
     }
 
     override suspend fun ocrVersions(docId: String): List<OcrVersion> = ocrVersionsList

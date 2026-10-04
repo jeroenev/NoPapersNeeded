@@ -161,4 +161,5 @@
     <string name="detail_bake_failed_unavailable">De originele pdf kon niet worden bijgewerkt: het document staat niet meer in de bibliotheek.</string>
     <string name="detail_bake_failed_unsupported">De originele pdf kon niet worden bijgewerkt: deze pdf kan de tags en details niet bevatten. Het bestand is ongewijzigd gebleven.</string>
     <string name="detail_bake_failed_not_saved">De bijgewerkte pdf kon niet in de bibliotheek worden opgeslagen.</string>
+    <string name="detail_ai_ocr_no_endpoint">Stel in Instellingen een AI-assistent in om er tekst mee te lezen.</string>
 </resources>

@@ -5,6 +5,7 @@ import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
+import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
 import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.DocListItem
@@ -256,15 +257,33 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         }
 
     @Test
-    fun rejectedAiOcrRequestSurfacesAsAMessage() =
+    fun aiOcrRefusedForWantOfAnEndpointSaysWhy() =
         runTest(dispatcher) {
-            // A request the session refuses (the endpoint went away between offering the action and
-            // tapping it) comes back as a throw; the user has to see why nothing happened rather
-            // than watch the action do nothing.
+            // The endpoint went away between offering the action and tapping it: the user has to
+            // see why nothing happened rather than watch the action do nothing.
             val session =
                 FakeLibrarySession().apply {
                     ocr.aiOcr = AiOcrOffer.Ready
-                    ocr.failAiOcr = { error("AI OCR needs a configured AI endpoint (Settings > AI assistant)") }
+                    ocr.aiOcrOutcome = AiOcrOutcome.NO_ENDPOINT
+                }
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            advanceUntilIdle()
+            model.ocrWithAi()
+            advanceUntilIdle()
+            model.ui.value.reindexing shouldBe false
+            messages shouldContainExactly listOf("Set up an AI assistant in Settings to read text with it.")
+            job.cancel()
+        }
+
+    @Test
+    fun aiOcrThatThrowsSurfacesAsAMessage() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    ocr.aiOcr = AiOcrOffer.Ready
+                    ocr.failAiOcr = { error("Library session is closed") }
                 }
             val model = vm(session = session)
             val messages = mutableListOf<String>()
@@ -274,11 +293,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             session.ocr.aiOcrIds shouldBe emptyList()
             model.ui.value.reindexing shouldBe false
-            messages shouldContainExactly
-                listOf(
-                    "Could not read text with the assistant: " +
-                        "AI OCR needs a configured AI endpoint (Settings > AI assistant)",
-                )
+            messages shouldContainExactly listOf("Could not read text with the assistant: Library session is closed")
             job.cancel()
         }
 

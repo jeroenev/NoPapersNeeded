@@ -315,12 +315,10 @@ class LibrarySessionImpl private constructor(
         return if (ocrEngines.isLargeForAi(pages)) AiOcrOffer.Large(pages) else AiOcrOffer.Ready
     }
 
-    override suspend fun ocrWithAi(docId: String) =
+    override suspend fun ocrWithAi(docId: String): AiOcrOutcome =
         owned {
-            db.documentDao().getByDocId(docId) ?: return@owned
-            check(ocrEngines.aiAvailable()) {
-                "AI OCR needs a configured AI endpoint (Settings > AI assistant)"
-            }
+            db.documentDao().getByDocId(docId) ?: return@owned AiOcrOutcome.DOCUMENT_UNAVAILABLE
+            if (!ocrEngines.aiAvailable()) return@owned AiOcrOutcome.NO_ENDPOINT
             // Deliberately no page limit here: length is something aiOcrOffer warns about, not
             // something this refuses. The caller asked for this document by name.
             //
@@ -330,6 +328,7 @@ class LibrarySessionImpl private constructor(
             pinOcrEngine(docId, OcrEngines.AI)
             enqueuePendingOcr(docId, aiRequested = true)
             ocrWorker.kick()
+            AiOcrOutcome.QUEUED
         }
 
     override suspend fun ocrVersions(docId: String): List<OcrVersion> {

@@ -161,4 +161,5 @@
     <string name="detail_bake_failed_unavailable">Não foi possível atualizar o PDF original: o documento não está mais na biblioteca.</string>
     <string name="detail_bake_failed_unsupported">Não foi possível atualizar o PDF original: este PDF não pode conter as etiquetas e os detalhes. Ele não foi alterado.</string>
     <string name="detail_bake_failed_not_saved">Não foi possível salvar o PDF atualizado na biblioteca.</string>
+    <string name="detail_ai_ocr_no_endpoint">Configure um assistente de IA nas Configurações para ler o texto com ele.</string>
 </resources>

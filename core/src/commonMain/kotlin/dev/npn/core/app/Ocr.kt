@@ -40,13 +40,13 @@ interface OcrFacade {
      * Costs one model call per page, so it is never automatic unless the user made it so. Runs on
      * a document of any length: size is a warning for the caller to deliver
      * ([AiOcrOffer.Large]), not a refusal, because a long handwritten document is exactly what the
-     * vision model is for. Throws only when no endpoint is configured, so a caller that skipped
-     * [aiOcrOffer] sees a reason rather than a silent no-op.
+     * vision model is for. Without a configured endpoint it changes nothing and answers
+     * [AiOcrOutcome.NO_ENDPOINT], so a caller that skipped [aiOcrOffer] can say why.
      *
      * Does nothing visible for a document whose every page already has an embedded text layer: the
      * pipeline keeps that text rather than re-transcribing it, exactly as [reOcr] does.
      */
-    suspend fun ocrWithAi(docId: String)
+    suspend fun ocrWithAi(docId: String): AiOcrOutcome
 
     /** All stored OCR versions of [docId], best-ranked first. */
     suspend fun ocrVersions(docId: String): List<OcrVersion>
@@ -101,6 +101,18 @@ sealed interface AiOcrOffer {
     data class Large(
         val pages: Int,
     ) : AiOcrOffer
+}
+
+/** What [OcrFacade.ocrWithAi] did with the request. */
+enum class AiOcrOutcome {
+    /** Pinned to the AI engine and queued on this device. */
+    QUEUED,
+
+    /** The document is not in the library; nothing changed. */
+    DOCUMENT_UNAVAILABLE,
+
+    /** No AI endpoint is configured on this device; nothing changed. */
+    NO_ENDPOINT,
 }
 
 /**

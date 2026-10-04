@@ -161,4 +161,5 @@
     <string name="detail_bake_failed_unavailable">Impossible de mettre à jour le PDF d’origine : le document n’est plus dans la bibliothèque.</string>
     <string name="detail_bake_failed_unsupported">Impossible de mettre à jour le PDF d’origine : ce PDF ne peut pas contenir les étiquettes et les informations. Il est resté inchangé.</string>
     <string name="detail_bake_failed_not_saved">Impossible d’enregistrer le PDF mis à jour dans la bibliothèque.</string>
+    <string name="detail_ai_ocr_no_endpoint">Configurez un assistant IA dans les Paramètres pour lire le texte avec lui.</string>
 </resources>

@@ -167,6 +167,34 @@ class SessionSmokeTest {
             }
         }
 
+    /** Asked for without an endpoint, AI OCR changes nothing and says why, in an enum the UI words. */
+    @Test
+    fun aiOcrWithoutAnEndpointChangesNothingAndSaysWhy() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("one.pdf", PdfFixtures.embeddedTextPdf("first document"))
+                rig.session.rescan()
+                val id = rig.docId("one.pdf")
+
+                rig.session.ocr.ocrWithAi(id) shouldBe AiOcrOutcome.NO_ENDPOINT
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)
+                    ?.ocrEngineOverride shouldBe null
+                (
+                    rig.db
+                        .ocrQueueDao()
+                        .getByDocId(id)
+                        ?.aiRequested == true
+                ) shouldBe false
+
+                rig.session.ocr.ocrWithAi("f".repeat(64)) shouldBe AiOcrOutcome.DOCUMENT_UNAVAILABLE
+            } finally {
+                rig.close()
+            }
+        }
+
     /** A closed session stays closed: nothing restarts it, and no write reaches its database. */
     @Test
     fun closeIsFinalAndEveryLaterCallFailsFast() =

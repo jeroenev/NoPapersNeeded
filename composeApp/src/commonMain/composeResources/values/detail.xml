@@ -166,4 +166,5 @@
     <string name="detail_bake_failed_unavailable">Could not update the original PDF: the document is no longer in the library.</string>
     <string name="detail_bake_failed_unsupported">Could not update the original PDF: this PDF cannot carry the tags and details. It was left unchanged.</string>
     <string name="detail_bake_failed_not_saved">Could not save the updated PDF to the library.</string>
+    <string name="detail_ai_ocr_no_endpoint">Set up an AI assistant in Settings to read text with it.</string>
 </resources>
