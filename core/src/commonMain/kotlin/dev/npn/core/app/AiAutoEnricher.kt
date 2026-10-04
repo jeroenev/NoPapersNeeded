@@ -40,10 +40,10 @@ import dev.npn.core.work.backoffMs
  *
  * [enqueue] runs on the OCR pipeline's drain thread and does nothing but local DB work; the model
  * call happens later on the [dev.npn.core.work.QueueDrainer], so OCR of the remaining import is
- * never stalled behind the network. Because the intent to enrich is persisted, work also survives
- * the endpoint being down, the network being off and the process being killed mid-import: the row
- * stays and the next drain kick (queue change, rescan, or the periodic maintenance tick) picks it
- * up.
+ * never stalled behind the network. Queueing a document kicks that drain through [onEnqueued].
+ * Because the intent to enrich is persisted, work also survives the endpoint being down, the
+ * network being off and the process being killed mid-import: the row stays and the next drain kick
+ * (new work, a rescan, or the periodic maintenance tick) picks it up.
  *
  * ## Completion and retries
  *
@@ -69,6 +69,8 @@ class AiAutoEnricher(
     private val fieldRegistry: FieldRegistry,
     private val policy: UnattendedAiPolicy,
     private val clock: EpochClock,
+    /** Asks for a drain of this queue; called whenever [enqueue] writes a new row. */
+    private val onEnqueued: () -> Unit,
 ) {
     /** The shared write mechanics; this pass only projects the suggestion onto what it may write. */
     private val editApply = AiEditApply(meta)
@@ -96,10 +98,9 @@ class AiAutoEnricher(
      * possible (a re-OCR under a better engine), and resetting the row on each one would let a
      * document that always fails restart its backoff forever.
      *
-     * Returns whether a new row was written, which is the caller's cue to kick the drain. The kick
-     * is deliberately tied to *this* call rather than to an observer of the queue table: a table
-     * observer cannot tell a new document from a failed one being rescheduled, and only the former
-     * should wake the drain.
+     * A new row kicks the drain ([onEnqueued]) and returns true. The kick is deliberately tied to
+     * *this* call rather than to an observer of the queue table: a table observer cannot tell a new
+     * document from a failed one being rescheduled, and only the former should wake the drain.
      */
     suspend fun enqueue(docId: String): Boolean {
         if (!policy.autoEnrich()) return false
@@ -107,6 +108,7 @@ class AiAutoEnricher(
         if (queueDao.getByDocId(docId) != null) return false
         val now = clock.nowMillis()
         queueDao.upsert(AiEnrichQueueEntity(docId = docId, nextAttemptAt = now, updatedAt = now))
+        onEnqueued()
         return true
     }
 

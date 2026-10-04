@@ -157,6 +157,11 @@ interface AiEditQueueFacade {
  *
  * A chunk that made any progress clears the job's backoff *and* its budget, so a run recovers on
  * its next kick rather than serving out a delay earned while the network was down.
+ *
+ * ## Triggering
+ *
+ * Queueing a run asks for its drain through [onEnqueued], so a queued run never waits for the
+ * periodic tick, whoever holds the queue. The queue writes run through [ownWrite].
  */
 class AiEditQueue(
     private val dao: AiEditJobDao,
@@ -167,6 +172,10 @@ class AiEditQueue(
     private val fieldRegistry: FieldRegistry,
     private val readConfig: suspend () -> AiConfig,
     private val clock: EpochClock,
+    /** Asks for a drain of this queue; called once a run is queued. */
+    private val onEnqueued: () -> Unit,
+    /** Runs the queue's writes as work the session owns, so closing it waits for them. */
+    private val ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
     private val newJobId: () -> String = ::randomJobId,
 ) : AiEditQueueFacade {
     private val projector = ReviewProjector(content, fieldRegistry)
@@ -198,8 +207,19 @@ class AiEditQueue(
         request: AiEditRequest,
     ): String {
         require(docIds.isNotEmpty()) { "a queued edit run needs at least one document" }
-        val now = clock.nowMillis()
         val jobId = newJobId()
+        ownWrite { insertRun(jobId, docIds, request) }
+        // Queueing is a local write; the kick is what turns it into work, so the two belong together.
+        onEnqueued()
+        return jobId
+    }
+
+    private suspend fun insertRun(
+        jobId: String,
+        docIds: List<String>,
+        request: AiEditRequest,
+    ) {
+        val now = clock.nowMillis()
         dao.upsertJob(
             AiEditJobEntity(
                 jobId = jobId,
@@ -215,7 +235,6 @@ class AiEditQueue(
                 AiEditJobDocEntity(jobId = jobId, docId = docId, position = index)
             },
         )
-        return jobId
     }
 
     override suspend fun openEditRun(jobId: String): EditRunReview? {
@@ -242,7 +261,7 @@ class AiEditQueue(
         )
     }
 
-    override suspend fun discardEditRun(jobId: String) = drainLock.withLock { dao.deleteJob(jobId) }
+    override suspend fun discardEditRun(jobId: String) = ownWrite { drainLock.withLock { dao.deleteJob(jobId) } }
 
     /**
      * Suggest one chunk of the oldest due run, returning whether the drain should continue. See the

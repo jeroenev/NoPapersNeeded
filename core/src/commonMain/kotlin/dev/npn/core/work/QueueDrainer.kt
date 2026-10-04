@@ -112,3 +112,28 @@ class QueueDrainer(
         workerJob.cancelAndJoin()
     }
 }
+
+/** A persisted queue and the [worker] that drains it; see [drainedQueue]. */
+class DrainedQueue<Q>(
+    val queue: Q,
+    val worker: QueueDrainer,
+)
+
+/**
+ * Build a queue whose trigger kicks its own drainer: [build] receives the `onEnqueued` callback to
+ * call whenever it records new work, and the drainer runs [step] over that same queue. Built this
+ * way, a queue cannot record work that waits for a periodic tick, whoever holds it afterwards.
+ */
+fun <Q> drainedQueue(
+    scope: CoroutineScope,
+    name: String,
+    log: NpnLog,
+    build: (onEnqueued: () -> Unit) -> Q,
+    step: suspend (Q) -> Boolean,
+): DrainedQueue<Q> {
+    // The callback only runs once something is queued, which needs the queue, so after this is set.
+    lateinit var worker: QueueDrainer
+    val queue = build { worker.kick() }
+    worker = QueueDrainer(scope, name, log) { step(queue) }
+    return DrainedQueue(queue, worker)
+}

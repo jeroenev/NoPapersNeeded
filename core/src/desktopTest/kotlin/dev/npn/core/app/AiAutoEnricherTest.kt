@@ -87,9 +87,9 @@ class AiAutoEnricherTest {
         }
 
     /**
-     * The return value is what wakes the drain, so it must be true exactly when a row was newly
-     * written. A false positive costs a pointless drain; a false negative leaves a document waiting
-     * for the maintenance tick, since nothing observes the queue table.
+     * A new row is what wakes the drain, so the enricher kicks exactly when one was written. A
+     * false positive costs a pointless drain; a false negative leaves a document waiting for the
+     * maintenance tick, since nothing observes the queue table.
      */
     @Test
     fun `enqueue reports new work only when it actually queued something`() =
@@ -108,6 +108,7 @@ class AiAutoEnricherTest {
                 rig.insert("off")
                 rig.enricher.enqueue("off") shouldBe false
                 rig.deviceDb.aiEnrichQueueDao().countPending() shouldBe 1
+                rig.kicks shouldBe 1
             }
         }
 

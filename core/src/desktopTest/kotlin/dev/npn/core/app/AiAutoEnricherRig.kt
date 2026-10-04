@@ -118,6 +118,9 @@ internal class Rig(
     val clock = MutableClock(start = 5_000L)
     var config: AiConfig = ACTIVE
 
+    /** How often the enricher asked for its drain; the session's drainer would run once per kick. */
+    var kicks = 0
+
     val enricher: AiAutoEnricher by lazy { newEnricher() }
 
     /**
@@ -133,6 +136,7 @@ internal class Rig(
             fieldRegistry = fieldRegistry,
             policy = UnattendedAiPolicy.fromConfig { config },
             clock = clock,
+            onEnqueued = { kicks++ },
         )
 
     /**

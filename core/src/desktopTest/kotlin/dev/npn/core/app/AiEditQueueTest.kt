@@ -46,6 +46,9 @@ private class QueueRig(
     var config: AiConfig = ACTIVE
     private var ids = 0
 
+    /** How often a queue asked for its drain; the session's drainer would run once per kick. */
+    var kicks = 0
+
     val queue: AiEditQueue by lazy { newQueue() }
 
     /**
@@ -62,6 +65,7 @@ private class QueueRig(
             fieldRegistry = fieldRegistry,
             readConfig = { config },
             clock = clock,
+            onEnqueued = { kicks++ },
             newJobId = { "job-${++ids}" },
         )
 
@@ -139,6 +143,17 @@ class AiEditQueueSuggestionTest {
 
                 rig.queue.processNext() shouldBe true
                 rig.ai.suggestEditsCalls shouldContainExactly docIds
+            }
+        }
+
+    /** Queued work never waits for the maintenance tick: the queue itself asks for its drain. */
+    @Test
+    fun `queueing a run kicks the queue's own drain`() =
+        runTest {
+            withQueue { rig ->
+                rig.enqueue("a")
+
+                rig.kicks shouldBe 1
             }
         }
 

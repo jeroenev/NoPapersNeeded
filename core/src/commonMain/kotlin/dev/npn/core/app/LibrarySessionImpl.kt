@@ -2,7 +2,6 @@ package dev.npn.core.app
 
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiConfig
-import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiOcrEngine
 import dev.npn.core.ai.AiSuggest
@@ -54,6 +53,7 @@ import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import dev.npn.core.work.QueueDrainer
+import dev.npn.core.work.drainedQueue
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.PdfXmpIO
 import kotlinx.coroutines.CoroutineScope
@@ -91,7 +91,7 @@ class LibrarySessionImpl private constructor(
     private val ocrWorker: QueueDrainer,
     workQueueReader: WorkQueueReader,
     private val enrichWorker: QueueDrainer,
-    private val editQueue: AiEditQueue,
+    override val aiEditQueue: AiEditQueueFacade,
     private val editWorker: QueueDrainer,
     override val documents: DocumentRepository,
     override val tags: TagRepository,
@@ -104,8 +104,7 @@ class LibrarySessionImpl private constructor(
     private val aiFacade: AiFacadeImpl,
 ) : LibrarySession,
     IngestFacade,
-    WorkFacade,
-    AiEditQueueFacade {
+    WorkFacade {
     private val fs get() = deps.fs
     private val db get() = deps.db
     private val deviceDb get() = deps.deviceDb
@@ -117,7 +116,6 @@ class LibrarySessionImpl private constructor(
     override val ingest: IngestFacade get() = this
     override val ocr: OcrFacade get() = ocrFacade
     override val work: WorkFacade get() = this
-    override val aiEditQueue: AiEditQueueFacade get() = this
     override val meta: MetadataWriter get() = writer
     override val tagAdmin: TagAdmin get() = writer
     override val docLifecycle: DocLifecycle get() = writer
@@ -237,17 +235,6 @@ class LibrarySessionImpl private constructor(
         editWorker.drainAndAwait()
     }
 
-    // Queueing is a local write; the kick is what turns it into work, so the two belong together
-    // at the one boundary a caller reaches. The queue itself never sees the drainer.
-    override suspend fun enqueueEditRun(
-        docIds: List<String>,
-        request: AiEditRequest,
-    ): String = owned { editQueue.enqueueEditRun(docIds, request).also { editWorker.kick() } }
-
-    override suspend fun openEditRun(jobId: String): EditRunReview? = editQueue.openEditRun(jobId)
-
-    override suspend fun discardEditRun(jobId: String) = owned { editQueue.discardEditRun(jobId) }
-
     override fun start() {
         lifetime.checkOpen()
         if (started) return
@@ -256,23 +243,18 @@ class LibrarySessionImpl private constructor(
 
         ocrFacade.watchQueue(scope)
 
-        // Automatic AI enrichment is NOT driven by an observer of its queue table. Such an observer
-        // cannot distinguish new work from a failed document being rescheduled — a reschedule
-        // rewrites a row without changing the row count — so it would either loop the drain back
-        // into an endpoint that just failed, or, once filtered to changes only, silently drop a
-        // kick whenever a delete and an insert coalesce into one refresh at the same count.
-        // Instead every producer of new work kicks explicitly (see AiAutoEnricher.enqueue), and
-        // time-based retries come from the maintenance tick below.
+        // Automatic AI enrichment and queued edit runs are NOT driven by an observer of their
+        // queue tables. Such an observer cannot distinguish new work from a failed row being
+        // rescheduled, or a run's document getting its suggestion — the rows change without the
+        // row count moving — so it would either loop the drain back into an endpoint that just
+        // failed, or, once filtered to changes only, silently drop a kick whenever a delete and an
+        // insert coalesce into one refresh at the same count. Instead each queue kicks its own
+        // drain when it records new work (see drainedQueue), and time-based retries come from the
+        // maintenance tick below.
         //
-        // This one kick resumes whatever survived the last run: a killed process, an endpoint that
-        // was down. It costs a single query when the queue is empty.
+        // These kicks resume whatever survived the last run: a killed process, an endpoint that
+        // was down, a run left half-suggested. Each costs a single query when its queue is empty.
         enrichWorker.kick()
-
-        // Queued edit runs are kicked the same way and for the same reason: a run's rows change
-        // shape (a document gets its suggestion) without the row count moving, so an observer of
-        // the table could not tell new work from progress. Producers kick (see enqueueEditRun),
-        // this resumes a run the last process left half-suggested, and the maintenance tick below
-        // serves backoffs.
         editWorker.kick()
 
         // Metadata paths are routed separately so journal sync never scans or hashes PDFs.
@@ -565,18 +547,19 @@ class LibrarySessionImpl private constructor(
                     deps.log,
                     applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
                 )
-            val autoEnricher =
-                AiAutoEnricher(
-                    documentDao = db.documentDao(),
-                    queueDao = deviceDb.aiEnrichQueueDao(),
-                    ai = ai,
-                    meta = meta,
-                    fieldRegistry = fieldRegistry,
-                    policy = deps.unattendedAi,
-                    clock = deps.clock,
-                )
-            val enrichWorker =
-                QueueDrainer(lifetime.scope, "AI enrichment queue", deps.log) { autoEnricher.processNext() }
+            val enrichment =
+                drainedQueue(lifetime.scope, "AI enrichment queue", deps.log, build = { onEnqueued ->
+                    AiAutoEnricher(
+                        documentDao = db.documentDao(),
+                        queueDao = deviceDb.aiEnrichQueueDao(),
+                        ai = ai,
+                        meta = meta,
+                        fieldRegistry = fieldRegistry,
+                        policy = deps.unattendedAi,
+                        clock = deps.clock,
+                        onEnqueued = onEnqueued,
+                    )
+                }) { it.processNext() }
             // The pipeline's stale-file hook asks the session for a follow-up rescan; the session is
             // built last, and the hook only runs on a drain.
             lateinit var session: LibrarySessionImpl
@@ -600,7 +583,7 @@ class LibrarySessionImpl private constructor(
                     // rules above, so rule-applied tags and fields are part of the context the model
                     // sees. Only the *intent* is recorded here: this runs on the OCR queue-drain
                     // thread, where a network call would stall OCR of every remaining document.
-                    onOcrProduced = { docId -> if (autoEnricher.enqueue(docId)) enrichWorker.kick() },
+                    onOcrProduced = { docId -> enrichment.queue.enqueue(docId) },
                     // The file no longer matches its hash: rescan once it has settled.
                     onStaleFile = { session.scheduleSettleRescan(WriteSettle.QUIET_MILLIS) },
                 )
@@ -617,18 +600,21 @@ class LibrarySessionImpl private constructor(
                     worker = ocrWorker,
                     clock = deps.clock,
                 )
-            val editQueue =
-                AiEditQueue(
-                    dao = deviceDb.aiEditJobDao(),
-                    documents = documents,
-                    content = content,
-                    meta = meta,
-                    ai = ai,
-                    fieldRegistry = fieldRegistry,
-                    readConfig = deps.aiConfig,
-                    clock = deps.clock,
-                )
-            val editWorker = QueueDrainer(lifetime.scope, "AI edit queue", deps.log) { editQueue.processNext() }
+            val edits =
+                drainedQueue(lifetime.scope, "AI edit queue", deps.log, build = { onEnqueued ->
+                    AiEditQueue(
+                        dao = deviceDb.aiEditJobDao(),
+                        documents = documents,
+                        content = content,
+                        meta = meta,
+                        ai = ai,
+                        fieldRegistry = fieldRegistry,
+                        readConfig = deps.aiConfig,
+                        clock = deps.clock,
+                        onEnqueued = onEnqueued,
+                        ownWrite = { lifetime.owned(it) },
+                    )
+                }) { it.processNext() }
 
             val scanReports = MutableStateFlow<ScanReport?>(null)
             session = LibrarySessionImpl(
@@ -662,9 +648,9 @@ class LibrarySessionImpl private constructor(
                         deviceDb.aiEditJobDao(),
                         ocrPipeline.inFlight,
                     ),
-                enrichWorker = enrichWorker,
-                editQueue = editQueue,
-                editWorker = editWorker,
+                enrichWorker = enrichment.worker,
+                aiEditQueue = edits.queue,
+                editWorker = edits.worker,
                 documents = documents,
                 tags = tags,
                 savedViews = savedViews,

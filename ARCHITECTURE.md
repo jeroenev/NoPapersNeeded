@@ -53,7 +53,7 @@ source sets hold implementations. Key packages:
 | `core.pdf` | PDF rendering/thumbnails: `PdfEngine` (platform impl), `RenderGate`, `ThumbnailService`. |
 | `core.ocr` | OCR pipeline and sidecars: `OcrEngine` (the engine interface; `MlKitOcrEngine` on android, `TesseractCliEngine` on desktop, `core.ai.AiOcrEngine` for a vision model), `OcrEngines` (the engine vocabulary + ranking), `OcrEngineSelector` (which engine a document's run may use, given `core.ai.UnattendedAiPolicy`'s permission to spend), `OcrPipeline`, `OcrSidecar`. |
 | `core.util` | Shared primitives every layer uses: `runCatchingCancellable` (a `runCatching` that rethrows cancellation; use it, never `runCatching`, around suspend code) and `Throwable.reason()` (the message, else the class name). `NpnLog`, carried on `SessionDeps.log`, is where work nobody awaits reports a failure, through `runLogged("what") { }`: `AndroidLog` writes to logcat, desktop's `JvmLog` to stderr plus a file rolled over at 1 MB (the app's one `DesktopLog`, `npn.log` in the app directory under the platform data home). `NpnJson` holds the JSON configurations: `Persisted` for anything the app writes and reads back (tolerates other builds' records), `Lenient` for model output and third-party responses; only the journal codec keeps its own, pinned. |
-| `core.work` | `QueueDrainer`: the single-flight background drain shared by the OCR queue, the automatic AI enrichment queue and queued AI edit runs. One worker loop fed by conflated kicks, so a burst of kicks during a drain costs one more drain; a step that throws is logged and ends that drain, never the loop. `backoffMs`: the retry ramp every persisted queue's failed rows wait out (`nextAttemptAt`). |
+| `core.work` | `QueueDrainer`: the single-flight background drain shared by the OCR queue, the automatic AI enrichment queue and queued AI edit runs. One worker loop fed by conflated kicks, so a burst of kicks during a drain costs one more drain; a step that throws is logged and ends that drain, never the loop. `drainedQueue` builds a queue together with its drainer, handing the queue an `onEnqueued` callback that kicks that drainer. `backoffMs`: the retry ramp every persisted queue's failed rows wait out (`nextAttemptAt`). |
 | `core.xmp` | XMP metadata on export/bake-in-place: `PdfXmpIO` (platform), `XmpBytes`, `XmpParser`, `XmpSerializer`, `XmpMerger`, `NpnXmpData`, `BakeService`. |
 | `core.model` | Per-document vocabulary in `Document.kt` (`DocId`, `ReviewMode`, the app-owned `SystemProperty` keys) and the field model: `Field.kt` (`FieldType`, `FieldDef`, `FieldKeys` — well-known keys, seed definitions, key normalization) and `FieldValues.kt` (the one authority on a value's canonical form per type). |
 | `core.rules` / `core.pathrules` | Auto-match rules (`RuleMatcher`, `RuleApplier`, `AutoMatchRule`) and storage-path templates (`StoragePathRule*`, `StoragePathTemplate`, `StoragePathContext`). Both are library data: synced `setting-set` keys in the journal (`core.app.LibrarySettings`), so every device files and matches documents alike; the rules table in the index only caches the journal's list (`AutoMatchRuleRepositoryImpl`). A device's pre-journal settings are adopted once by a library that has no value yet. A template that cannot expand says why with a `StoragePathError`, which Settings maps to its own copy; the context always carries the registry's field types, since they decide which fields take a date pattern. |
@@ -240,10 +240,18 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
 - New platform behavior → interface in `core` commonMain, impl in each platform
   source set, wire in `AppEnvironment.*`.
 - Background work → `core.watch` importer loops, `NpnWork` (Android), and the
-  `core.work.QueueDrainer` instances in `LibrarySessionImpl` (OCR, AI enrichment,
+  `core.work.QueueDrainer` instances the session wires (OCR, AI enrichment,
   queued AI edit runs), exposed to callers that must await them as `session.work`
-  (`WorkFacade`). A new kind of deferrable work means a queue table + a drain step
-  + a kick, not a `launch` at the point of discovery.
+  (`WorkFacade`). A new kind of deferrable work means a queue table + a drain step,
+  not a `launch` at the point of discovery, and the queue triggers its own drain:
+  whatever records new work kicks that queue's drainer itself, so no caller has to
+  remember to. The enrichment and edit queues are built with `drainedQueue`, whose
+  `onEnqueued` callback is that kick; they deliberately have no table observer,
+  which could not tell new work from a failed row being rescheduled. The OCR queue
+  is owned by `OcrFacadeImpl`, which kicks on its own enqueues and watches the table
+  for rows other writers add (an import, an upgrade). Beyond that the session only
+  kicks every queue at start, to resume what a killed process left, and on its
+  15-minute tick, which is what serves a backoff that has fallen due.
 - A queue row records only that work is *owed*, never that it is under way. No queue
   table has a `running` state: the drain is single-flight in-process, so a row left
   claiming to be running has nobody alive to withdraw the claim, and every drain
