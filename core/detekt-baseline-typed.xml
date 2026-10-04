@@ -59,9 +59,7 @@
     <ID>SuspendFunSwallowedCancellation:AiEditRun.kt:AiEditRun$runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:AiEditRunTest.kt:AiEditRunSuggestTest$catch (e: CancellationException) { cancelled = true throw e }</ID>
     <ID>SuspendFunSwallowedCancellation:AiOcr.kt:runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:AiRuntimeTransportTest.kt:AiRuntimeTransportTest$runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:BakeService.kt:BakeService$catch (_: Throwable) { false }</ID>
-    <ID>SuspendFunSwallowedCancellation:BakeService.kt:BakeService$catch (e: Throwable) { // Restore from the temp file, which still holds the baked bytes. runCatching { val recovered = fs.readBytes(tmpPath) if (!fs.exists(norm)) fs.writeBytesOnce(norm, recovered) } runCatching { fs.delete(tmpPath) } throw e }</ID>
     <ID>SuspendFunSwallowedCancellation:BakeService.kt:BakeService$runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:ContentAddressedJournalWriter.kt:catch (failure: Throwable) { runCatching { fs.delete(stagingPath) } throw failure }</ID>
     <ID>SuspendFunSwallowedCancellation:ContentAddressedJournalWriter.kt:runCatching</ID>
@@ -72,7 +70,6 @@
     <ID>SuspendFunSwallowedCancellation:DocContentFacadeImpl.kt:DocContentFacadeImpl$catch (t: Throwable) { logFailure("renderPage failed for $docId p$pageIndex", t) null }</ID>
     <ID>SuspendFunSwallowedCancellation:DocContentFacadeImpl.kt:DocContentFacadeImpl$runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:ImportService.kt:ImportService$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:JournalCoordinator.kt:JournalCoordinator$catch (failure: Throwable) { blockWrites(failure) try { recoverDurableProjection() } catch (recoveryFailure: Throwable) { blockWrites(recoveryFailure) failure.addSuppressed(recoveryFailure) throw failure } throw failure }</ID>
     <ID>SuspendFunSwallowedCancellation:JournalCoordinator.kt:JournalCoordinator$catch (recoveryFailure: Throwable) { blockWrites(recoveryFailure) failure.addSuppressed(recoveryFailure) throw failure }</ID>
     <ID>SuspendFunSwallowedCancellation:JvmLibraryFileSystemNoReplaceTest.kt:JvmLibraryFileSystemNoReplaceTest$runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:KoogChatAgent.kt:KoogChatAgent$runCatching</ID>

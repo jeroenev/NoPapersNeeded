@@ -108,7 +108,6 @@
     <ID>SuspendFunSwallowedCancellation:AiEditReviewViewModel.kt:AiEditReviewViewModel$runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:AiEditViewModel.kt:AiEditViewModel$runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:App.kt:runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:DefaultAppEnvironment.kt:DefaultAppEnvironment$runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:DocActions.kt:runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:DocDetailViewModel.kt:DocDetailViewModel$runCatching</ID>
     <ID>SuspendFunSwallowedCancellation:DocThumbnail.kt:runCatching</ID>
