@@ -100,13 +100,15 @@ interface MetadataProjectionDao {
     @Query("DELETE FROM metadata_source_events WHERE sourcePath = :sourcePath")
     suspend fun deleteSourceEvents(sourcePath: String)
 
+    /** Delete one event if no source references it any more. Both lookups are by key. */
     @Query(
-        "DELETE FROM metadata_events WHERE NOT EXISTS (" +
-            "SELECT 1 FROM metadata_source_events " +
-            "WHERE eventDeviceId = metadata_events.deviceId AND eventSequence = metadata_events.sequence" +
-            ")",
+        "DELETE FROM metadata_events WHERE deviceId = :deviceId AND sequence = :sequence AND NOT EXISTS (" +
+            "SELECT 1 FROM metadata_source_events WHERE eventDeviceId = :deviceId AND eventSequence = :sequence)",
     )
-    suspend fun deleteUnreferencedEvents()
+    suspend fun deleteEventIfUnreferenced(
+        deviceId: String,
+        sequence: Long,
+    )
 
     @Query("SELECT * FROM metadata_source_events WHERE sourcePath = :sourcePath")
     suspend fun sourceEvents(sourcePath: String): List<MetadataSourceEventEntity>
@@ -167,65 +169,93 @@ interface MetadataProjectionDao {
     /**
      * Ingest a compaction snapshot source: record its events/provenance like any source, then
      * record its supersession facts. Idempotent — two overlapping snapshots each record their own
-     * (path, hash) rows and share event identities harmlessly.
+     * (path, hash) rows and share event identities harmlessly. Returns the events new to the table,
+     * as [ingestSource] does.
      */
     @Transaction
     suspend fun ingestSnapshot(
         source: MetadataSourceEntity,
         events: List<MetadataEventEntity>,
         supersedes: List<String>,
-    ): Boolean {
+    ): List<MetadataEventEntity> {
         val existing = source(source.path)
-        if (existing?.fingerprint == source.fingerprint && existing.status == STATUS_APPLIED) return false
-        for (incoming in events) {
-            val byIdentity = event(incoming.deviceId, incoming.sequence)
-            validateIdentity(byIdentity, incoming)
-            val byHlc = eventAtHlc(incoming.hlcPhysical, incoming.hlcCounter, incoming.hlcDevice)
-            validateHlc(byHlc, incoming)
-            insertEvent(incoming)
-        }
-        deleteSourceEvents(source.path)
-        insertSourceEvents(events.map { MetadataSourceEventEntity(source.path, it.deviceId, it.sequence) })
+        if (existing?.fingerprint == source.fingerprint && existing.status == STATUS_APPLIED) return emptyList()
+        val inserted = insertNewEvents(events)
+        replaceSourceEvents(source.path, events)
         deleteSupersededBy(source.path)
         insertSuperseded(supersedes.map { MetadataSupersededEntity(source.path, it) })
-        deleteUnreferencedEvents()
         upsertSource(source.copy(status = STATUS_APPLIED))
-        return true
+        return inserted
     }
 
+    /**
+     * Record [source] as applied with [events]. Returns the events new to the table, which are the
+     * ones a fold has not seen yet; empty when the source was already applied unchanged.
+     */
     @Transaction
     suspend fun ingestSource(
         source: MetadataSourceEntity,
         events: List<MetadataEventEntity>,
         transactionActor: MetadataTransactionActorEntity? = null,
-    ): Boolean {
+    ): List<MetadataEventEntity> {
         val existingSource = source(source.path)
         if (existingSource?.fingerprint == source.fingerprint && existingSource.status == STATUS_APPLIED) {
-            return false
+            return emptyList()
         }
         if (transactionActor != null) {
             val existingActor = actor(transactionActor.actorId)
             validateActor(existingActor, transactionActor)
             insertActor(transactionActor)
         }
-        for (incoming in events) {
-            val byIdentity = event(incoming.deviceId, incoming.sequence)
-            validateIdentity(byIdentity, incoming)
-            val byHlc = eventAtHlc(incoming.hlcPhysical, incoming.hlcCounter, incoming.hlcDevice)
-            validateHlc(byHlc, incoming)
-            insertEvent(incoming)
-        }
-        deleteSourceEvents(source.path)
-        insertSourceEvents(
-            events.map { MetadataSourceEventEntity(source.path, it.deviceId, it.sequence) },
-        )
-        deleteUnreferencedEvents()
+        val inserted = insertNewEvents(events)
+        replaceSourceEvents(source.path, events)
         upsertSource(source.copy(status = STATUS_APPLIED))
-        return true
+        return inserted
+    }
+
+    /**
+     * Insert those of [events] the table does not hold yet, after checking that none collides with
+     * an event it does hold. Returns the ones inserted.
+     */
+    @Transaction
+    suspend fun insertNewEvents(events: List<MetadataEventEntity>): List<MetadataEventEntity> {
+        val inserted = ArrayList<MetadataEventEntity>()
+        for (incoming in events) {
+            validateIdentity(event(incoming.deviceId, incoming.sequence), incoming)
+            validateHlc(eventAtHlc(incoming.hlcPhysical, incoming.hlcCounter, incoming.hlcDevice), incoming)
+            if (insertEvent(incoming) != IGNORED) inserted += incoming
+        }
+        return inserted
+    }
+
+    /**
+     * Point the source at [path] to [events], and drop the events it referenced before that no
+     * source references any more. Only a source read again with other contents (a grown legacy
+     * segment, a re-recorded snapshot) has such events, so the cleanup looks at those alone and a
+     * commit never walks the event table.
+     */
+    @Transaction
+    suspend fun replaceSourceEvents(
+        path: String,
+        events: List<MetadataEventEntity>,
+    ) {
+        val previous = sourceEvents(path)
+        deleteSourceEvents(path)
+        insertSourceEvents(events.map { MetadataSourceEventEntity(path, it.deviceId, it.sequence) })
+        if (previous.isEmpty()) return
+        val kept = events.mapTo(HashSet()) { it.deviceId to it.sequence }
+        for (ref in previous) {
+            if ((ref.eventDeviceId to ref.eventSequence) !in kept) {
+                deleteEventIfUnreferenced(ref.eventDeviceId, ref.eventSequence)
+            }
+        }
     }
 
     companion object {
         const val STATUS_APPLIED = "applied"
         const val STATUS_RETRYABLE = "retryable"
+
+        /** What [insertEvent] returns for an event the table already holds. */
+        private const val IGNORED = -1L
     }
 }

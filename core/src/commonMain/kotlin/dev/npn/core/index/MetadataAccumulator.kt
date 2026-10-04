@@ -150,24 +150,24 @@ class MetadataAccumulator(
             }
         return when (val result = StorageV2Reader.read(relPath, loaded.bytes)) {
             is JournalSourceRead.Accepted -> {
-                val unseen = result.events.filter { dao.event(it.event.dev, it.event.seq) == null }
-                dao.ingestSource(
-                    MetadataSourceEntity(
-                        relPath,
-                        NpnPaths.STORAGE_V2,
-                        loaded.fingerprint,
-                        loaded.contentHash,
-                        MetadataProjectionDao.STATUS_APPLIED,
-                    ),
-                    result.events.map(::eventEntity),
-                    MetadataTransactionActorEntity(
-                        result.events
-                            .first()
-                            .event.dev,
-                        loaded.contentHash,
-                    ),
-                )
-                unseen.map { it.event }
+                val inserted =
+                    dao.ingestSource(
+                        MetadataSourceEntity(
+                            relPath,
+                            NpnPaths.STORAGE_V2,
+                            loaded.fingerprint,
+                            loaded.contentHash,
+                            MetadataProjectionDao.STATUS_APPLIED,
+                        ),
+                        result.events.map(::eventEntity),
+                        MetadataTransactionActorEntity(
+                            result.events
+                                .first()
+                                .event.dev,
+                            loaded.contentHash,
+                        ),
+                    )
+                unseen(result.events, inserted)
             }
 
             is JournalSourceRead.Retryable -> {
@@ -371,8 +371,9 @@ class MetadataAccumulator(
         val newEvents = ArrayList<dev.npn.core.journal.JournalEvent>()
 
         // True if any source that was already APPLIED got re-ingested (mutated in place). Such a
-        // rewrite can drop events (deleteUnreferencedEvents), so the in-memory state may no longer
-        // be a strict superset -> the caller must fully refold rather than apply new events.
+        // rewrite can drop events (MetadataProjectionDao.replaceSourceEvents), so the in-memory state
+        // may no longer be a strict superset -> the caller must fully refold rather than apply new
+        // events.
         var reingestedExisting = false
     }
 
@@ -474,21 +475,21 @@ class MetadataAccumulator(
                         MetadataProjectionDao.STATUS_APPLIED,
                         diagnostic,
                     )
-                val unseen = result.events.filter { dao.event(it.event.dev, it.event.seq) == null }
-                if (snapshotSupersedes != null) {
-                    dao.ingestSnapshot(source, result.events.map(::eventEntity), snapshotSupersedes)
-                } else {
-                    val actor =
-                        result.events
-                            .firstOrNull()
-                            ?.event
-                            ?.dev
-                            ?.takeIf { storageVersion == NpnPaths.STORAGE_V2 }
-                            ?.let { MetadataTransactionActorEntity(it, contentHash) }
-                    dao.ingestSource(source, result.events.map(::eventEntity), actor)
-                }
+                val inserted =
+                    if (snapshotSupersedes != null) {
+                        dao.ingestSnapshot(source, result.events.map(::eventEntity), snapshotSupersedes)
+                    } else {
+                        val actor =
+                            result.events
+                                .firstOrNull()
+                                ?.event
+                                ?.dev
+                                ?.takeIf { storageVersion == NpnPaths.STORAGE_V2 }
+                                ?.let { MetadataTransactionActorEntity(it, contentHash) }
+                        dao.ingestSource(source, result.events.map(::eventEntity), actor)
+                    }
                 batch.read++
-                batch.newEvents.addAll(unseen.map { it.event })
+                batch.newEvents.addAll(unseen(result.events, inserted))
             }
 
             is JournalSourceRead.Retryable -> {
@@ -509,6 +510,16 @@ class MetadataAccumulator(
                 fail(result.message)
             }
         }
+    }
+
+    /** The events of [read] that its ingest [inserted]: the ones no fold has seen yet. */
+    private fun unseen(
+        read: List<CanonicalJournalEvent>,
+        inserted: List<MetadataEventEntity>,
+    ): List<dev.npn.core.journal.JournalEvent> {
+        if (inserted.isEmpty()) return emptyList()
+        val keys = inserted.mapTo(HashSet()) { it.deviceId to it.sequence }
+        return read.filter { (it.event.dev to it.event.seq) in keys }.map { it.event }
     }
 
     suspend fun recordLocalSource(
