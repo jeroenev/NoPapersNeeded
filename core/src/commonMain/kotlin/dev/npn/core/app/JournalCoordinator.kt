@@ -283,7 +283,9 @@ class JournalCoordinator internal constructor(
      * Compact old, stable storage-v2 objects into one supersession snapshot, then delete the
      * superseded files. Runs under the single-writer mutex so the snapshot write and deletions are
      * serialized against every other journal write. A no-op when compaction is unsupported, writes
-     * are blocked, or the threshold/stability gate is not met.
+     * are blocked, or the threshold/stability gate is not met. That gate is decided from the source
+     * table alone, so the usual tick reads no event and no file; only the objects a plan picks are
+     * checked on disk and have their events loaded.
      *
      * The snapshot ingest uses the full-refold path implicitly on the NEXT reconcile if needed;
      * here we record it directly (its events already exist in the DB, so the fold is unchanged) and
@@ -296,8 +298,8 @@ class JournalCoordinator internal constructor(
             val activeCompactor = compactor ?: return@locked null
             if (!activeCompactor.supported || writeBlockReason != null) return@locked null
             val support = accumulator.snapshotSupport
-            val (objects, snapshots) = support.compactionCandidates()
-            val plan =
+            val (objects, snapshots) = support.compactionSources()
+            val chosen =
                 activeCompactor.plan(
                     objects = objects,
                     snapshots = snapshots,
@@ -305,10 +307,11 @@ class JournalCoordinator internal constructor(
                     nowMillis = nowMillis,
                     stabilityWindowMs = compactionStabilityWindowMs,
                 ) ?: return@locked null
+            val plan = support.candidates(chosen) ?: return@locked null
             withContext(NonCancellable) {
                 val published = activeCompactor.publish(plan) ?: return@withContext null
                 withDurableProjectionRecovery {
-                    accumulator.withProjectionTransaction { support.recordLocalSnapshot(published) }
+                    support.recordLocalSnapshot(published)
                     support.deleteSupersededFiles(
                         published.supersedes.mapNotNull { hash ->
                             plan.firstOrNull { it.contentHash == hash }?.relPath

@@ -1,6 +1,5 @@
 package dev.npn.core.index
 
-import androidx.room3.withWriteTransaction
 import dev.npn.core.db.MetadataEventEntity
 import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataProjectionStateEntity
@@ -90,8 +89,6 @@ class MetadataAccumulator(
 
     /** Judges whether the source set is safe to fold; see [SourceSetValidator]. */
     private val validator = SourceSetValidator(dao)
-
-    suspend fun <T> withProjectionTransaction(block: suspend () -> T): T = db.withWriteTransaction { block() }
 
     /**
      * Shared stat/read/hash/fingerprint core for the two ingest paths ([ingestObject] and

@@ -5,6 +5,16 @@ import dev.npn.core.fs.VerifiedPublicationCapability
 import dev.npn.core.fs.sha256Bytes
 
 /**
+ * What planning a compaction knows of one applied object: where it is, its content hash, and its
+ * mtime. No events: a plan is made from these alone, and only the objects it picks are loaded.
+ */
+data class CompactionSource(
+    val relPath: String,
+    val contentHash: String,
+    val mtimeMillis: Long,
+)
+
+/**
  * One object considered for compaction: its content hash, the events it contributes, and its mtime.
  */
 data class CompactionCandidate(
@@ -47,12 +57,12 @@ class SnapshotCompactor(
      * plus a handful of new objects will not re-trigger until real growth resumes.
      */
     fun plan(
-        objects: List<CompactionCandidate>,
-        snapshots: List<CompactionCandidate>,
+        objects: List<CompactionSource>,
+        snapshots: List<CompactionSource>,
         threshold: Int,
         nowMillis: Long,
         stabilityWindowMs: Long,
-    ): List<CompactionCandidate>? {
+    ): List<CompactionSource>? {
         val liveCount = objects.size + snapshots.size
         if (liveCount <= threshold && snapshots.size < 2) return null
         val cutoff = nowMillis - stabilityWindowMs
