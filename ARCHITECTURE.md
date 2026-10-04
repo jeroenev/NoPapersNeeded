@@ -46,10 +46,10 @@ source sets hold implementations. Key packages:
 | Package | Contents |
 |---|---|
 | `core.app` | Public session API and orchestrators, one contract file per concept: `LibrarySession.kt` (the aggregate of facets), `Documents.kt` (`DocumentRepository`, `TagRepository`, `SavedViewRepository`), `Metadata.kt` (`MetadataWriter`, `TagAdmin`, `DocLifecycle`), `FieldRegistry.kt` (the library's field definitions, values vocabulary and usage), `Ingest.kt`, `Ocr.kt`, `ReviewConfigFacade.kt`, `Maintenance.kt`, `WorkFacade.kt`, `DocContentFacade.kt`, `Filters.kt`, `Settings.kt`. Consumers depend on the facets they use, not on `LibrarySession`. `LibrarySessionImpl` coordinates imports/indexing and is the main entry point. `JournalCoordinator` is the only sanctioned path for writing journal events, enforced at the type level: the writers it wraps are `internal` to `core` and its `writer` is not public. |
-| `core.journal` | The metadata journal: content-addressed JSONL transactions (`JournalEvent`, `JournalOp`), segments (`Segment`, `SegmentWriter`), codec (`JournalCodec`), HLC (`Hlc`), snapshot compaction (`SnapshotCompactor`, `SnapshotFormat`), and the HLC/OR-set fold (`FoldedState`; its convergence is property-tested by `FoldConvergencePropertyTest`). |
+| `core.journal` | The metadata journal: content-addressed JSONL transactions (`JournalEvent`, `JournalOp`, `PendingOp`) published as storage-v2 objects (`ContentAddressedJournalWriter`), the readers for v2 objects, snapshots and legacy v1 segments (`JournalSourceReaders`), codec (`JournalCodec`), HLC (`Hlc`, `HlcWatermarkAllocator`), snapshot compaction (`SnapshotCompactor`, `SnapshotFormat`), and the HLC/OR-set fold (`FoldedState`; its convergence is property-tested by `FoldConvergencePropertyTest`). See "Journal storage" below. |
 | `core.fs` | Filesystem abstraction over the library folder: `LibraryFileSystem` (platform impl), `NpnPaths` (`.npn/` layout, path classification, and the path-safety gate: every path reaches disk through `NpnPaths.normalize`, which refuses traversal; observation-side predicates use `isSafe` to ignore rather than throw), `ContentIdentity`/`HexEncoding` (hash handling), `OcrSidecarFiles`, `TrashOps`. |
-| `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsRows`, `ScanReport`; and `DeviceIdentity` and `DbLocalJournalState`, this device's journal identity, which they keep in the device database. |
-| `core.db` | Room entities and DAOs for two databases per library. `NpnDatabase` (`index.db`) is the disposable index (`DocumentDao`, `TagDao`, `FtsDao`, `MetadataProjectionDao`, `MiscDaos`, `Projections`); its builders fall back to a destructive migration, and anything a migration cannot rebuild must not live there. `DeviceDatabase` (`device.db`) is this device's own state, which nothing could rebuild: the `kv` device id, v1 journal state and chats, the OCR queue and paid-for OCR pages, the enrichment queue and its marks, queued AI edit runs. It has real migrations only, never a destructive fallback. `LegacyIndexTables` moves what older index schemas held into the journal or `device.db` on open. Schema files in `core/schemas/<database>/`. Platform `NpnDatabase.*.kt` / `DeviceDatabase.*.kt` build them. |
+| `core.index` | The rebuildable SQLite cache and maintenance: `Indexer`, `ImportService`, `MaintenanceService`, `RelinkService`, `SplitService`, `MetadataAccumulator`, `FtsRows`, `ScanReport`; and `DeviceIdentity`, this installation's device id for the library and the check that no other installation shares it (see "Journal storage"). |
+| `core.db` | Room entities and DAOs for two databases per library. `NpnDatabase` (`index.db`) is the disposable index (`DocumentDao`, `TagDao`, `FtsDao`, `MetadataProjectionDao`, `MiscDaos`, `Projections`); its builders fall back to a destructive migration, and anything a migration cannot rebuild must not live there. `DeviceDatabase` (`device.db`) is this device's own state, which nothing could rebuild: the `kv` device id (with the installation it belongs to) and chats, the OCR queue and paid-for OCR pages, the enrichment queue and its marks, queued AI edit runs. It has real migrations only, never a destructive fallback. `LegacyIndexTables` moves what older index schemas held into the journal or `device.db` on open. Schema files in `core/schemas/<database>/`. Platform `NpnDatabase.*.kt` / `DeviceDatabase.*.kt` build them. |
 | `core.pdf` | PDF rendering/thumbnails: `PdfEngine` (platform impl), `RenderGate`, `ThumbnailService`. |
 | `core.ocr` | OCR pipeline and sidecars: `OcrEngine` (the engine interface; `MlKitOcrEngine` on android, `TesseractCliEngine` on desktop, `core.ai.AiOcrEngine` for a vision model), `OcrEngines` (the engine vocabulary + ranking), `OcrEngineSelector` (which engine a document's run may use, given `core.ai.UnattendedAiPolicy`'s permission to spend), `OcrPipeline`, `OcrSidecar`. |
 | `core.util` | Shared primitives every layer uses: `runCatchingCancellable` (a `runCatching` that rethrows cancellation; use it, never `runCatching`, around suspend code) and `Throwable.reason()` (the message, else the class name). `NpnLog`, carried on `SessionDeps.log`, is where work nobody awaits reports a failure, through `runLogged("what") { }`: `AndroidLog` writes to logcat, desktop's `JvmLog` to stderr plus a file rolled over at 1 MB (the app's one `DesktopLog`, `npn.log` in the app directory under the platform data home). `NpnJson` holds the JSON configurations: `Persisted` for anything the app writes and reads back (tolerates other builds' records), `Lenient` for model output and third-party responses; only the journal codec keeps its own, pinned. |
@@ -128,9 +128,9 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
     rule, auto-match rules, saved views — trash, relink) is an immutable,
     content-addressed JSONL transaction written by
     `JournalCoordinator`. You cannot write to the journal directly: the underlying
-    `SegmentWriter`/`ContentAddressedJournalWriter` and the coordinator's held
-    `writer` are `internal` to `core`, so the coordinator is the only reachable
-    write path (enforced at the type level, not by convention).
+    `ContentAddressedJournalWriter` and the coordinator's held `writer` are
+    `internal` to `core`, so the coordinator is the only reachable write path
+    (enforced at the type level, not by convention).
     Explicit PDF renames/moves and storage-path rules also write the `storagePath`
     system property, keyed by document hash, before moving bytes. HLC LWW chooses
     the intended location across devices; `DocumentPathReconciler` materializes it
@@ -173,6 +173,33 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
    `OcrEngine` is the exception that proves the rule: its implementations are not all
    platform-specific — the vision engine (`core.ai.AiOcrEngine`) lives in `commonMain`
    and is picked per document rather than per target.
+
+## Journal storage
+
+- **Formats.** Every transaction is published as one storage-v2 object,
+  `.npn/journal/objects-v2-<xx>/<sha256>.jsonl`, named by the SHA-256 of its bytes, with a fresh
+  actor id per transaction; compaction folds old objects into snapshots
+  (`objects-snap-v2-<xx>/`). Builds before storage-v2 wrote per-device v1 segments,
+  `.npn/journal/<deviceId>/<seq>.jsonl`: those are still read and folded, never written. There is
+  no fallback format.
+- **Publication.** An object is staged under a `.part` name in its bucket, hash-checked, then
+  published without replacement: a hard link, or where the filesystem has none (Android's shared
+  storage, exFAT) an exclusive rename (`renameat2(RENAME_NOREPLACE)` on Linux and Android,
+  `MoveFileExW` without `MOVEFILE_REPLACE_EXISTING` on Windows), or on SAF a rename that is checked
+  by name and hash afterwards. A filesystem with neither primitive throws
+  `VerifiedPublicationUnavailableException`, and the library refuses to open with its own message
+  (`OpenFailureReason.UNSUPPORTED_STORAGE`) rather than writing anything.
+- **Device identity.** `device.id` (in `device.db`) names what this device writes under its own
+  name: OCR sidecars, and the watcher's filter of its own writes. Two installations must never share
+  one, so `DeviceIdentity` ties it to the installation (`SessionDeps.installationId`, which Android
+  keeps in the no-backup directory) twice, and either disagreeing gives a fresh id at open:
+  `device.db` records which installation the id belongs to (Android restores `device.db`, so a
+  restored or reinstalled app gets a new id and keeps its queued, paid-for work), and the library
+  holds one write-once marker per installation that used the id, `.npn/devices/<deviceId>/<installationId>.json`
+  (a second installation's marker means a clone; each moves off the id once it sees the other's).
+  Publishing that marker uses the journal's primitive, which is how an unsupported filesystem is
+  found out at the first open. A fresh id costs nothing: the old id's sidecars are adopted as
+  another device's.
 
 ## Where to look for common tasks
 

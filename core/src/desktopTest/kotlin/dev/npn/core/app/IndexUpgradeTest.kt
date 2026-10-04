@@ -7,6 +7,7 @@ import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.createFromSchema
 import dev.npn.core.db.exec
+import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.NpnJson
 import io.kotest.matchers.collections.shouldNotContain
@@ -66,9 +67,10 @@ class IndexUpgradeTest {
         }
 
     /**
-     * What an index from before device.db held for this device — the device id and the v1 writer's
-     * state, queued edit runs, the enrichment queue and its marks, the OCR queue with a paid-for
-     * request and pages, chats — reaches the device database, and the index keeps none of it.
+     * What an index from before device.db held for this device — the device id, queued edit runs,
+     * the enrichment queue and its marks, the OCR queue with a paid-for request and pages, chats —
+     * reaches the device database, and the index keeps none of it. The v1 writer's state, which
+     * nothing reads any more, is dropped from both.
      */
     @Test
     fun deviceStateInTheIndexMovesToTheDeviceDatabase() =
@@ -110,7 +112,8 @@ class IndexUpgradeTest {
             openSession(backgroundScope, library, data).use { session, deps ->
                 session.deviceId shouldBe "device-from-the-index"
                 val device = deps.deviceDb
-                device.keyValueDao().getAll(LEGACY_KV.keys.toList()) shouldBe LEGACY_KV - OBSERVATION_KEY
+                device.keyValueDao().getAll(LEGACY_KV.keys.toList()) shouldBe
+                    LEGACY_KV - OBSERVATION_KEY - DeviceIdentity.LEGACY_JOURNAL_KEYS.toSet()
                 device
                     .aiEditJobDao()
                     .docsFor("job-1")

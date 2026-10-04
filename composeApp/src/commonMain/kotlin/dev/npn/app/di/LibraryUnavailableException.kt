@@ -11,6 +11,12 @@ enum class OpenFailureReason {
     /** A new library's folder could not be created where the user asked. */
     FOLDER_NOT_CREATED,
 
+    /**
+     * The folder's filesystem cannot create a file without risking replacing one another device
+     * just wrote (no hard links and no exclusive rename), so the journal cannot be written there.
+     */
+    UNSUPPORTED_STORAGE,
+
     /** Anything else: the library or the app's data for it could not be read. */
     UNREADABLE,
 }

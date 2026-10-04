@@ -16,9 +16,9 @@ import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
 /**
- * Behaviour on a filesystem without `link(2)` — Android's FUSE-backed shared storage — simulated
- * through the [NoReplaceLinker] seam, since every filesystem a desktop test can reach has hard
- * links. [ObjectPublication] decides whether that is a hard stop or a verified rename.
+ * Behaviour on a filesystem without `link(2)` — Android's FUSE-backed shared storage, exFAT —
+ * simulated through the [NoReplaceLinker] seam, since every filesystem a desktop test can reach has
+ * hard links. Publication then falls back to the exclusive rename, never to a replacing one.
  */
 class JvmLibraryFileSystemPublicationTest {
     private lateinit var root: Path
@@ -35,7 +35,7 @@ class JvmLibraryFileSystemPublicationTest {
         root.toFile().deleteRecursively()
     }
 
-    private fun fs(publication: ObjectPublication) = JvmLibraryFileSystem(root, PathExternalIo, publication, noLinks)
+    private fun fs() = JvmLibraryFileSystem(root, PathExternalIo, noLinks)
 
     private fun stage(
         name: String,
@@ -47,23 +47,8 @@ class JvmLibraryFileSystemPublicationTest {
     }
 
     @Test
-    fun hardLinkOnlyWithoutLinksIsUnavailableAndKeepsTheStagingFile() {
-        val bytes = "tx".encodeToByteArray()
-        val staging = stage("s1.part", bytes)
-        assertFailsWith<VerifiedPublicationUnavailableException> {
-            runBlocking {
-                fs(
-                    ObjectPublication.HARD_LINK_ONLY,
-                ).publishVerifiedObjectOnce(staging, "bucket/obj", sha256Bytes(bytes))
-            }
-        }
-        Files.exists(root.resolve(staging)) shouldBe true
-        Files.exists(root.resolve("bucket/obj")) shouldBe false
-    }
-
-    @Test
     fun renameFallbackPublishesVerifiedBytesAndReportsALaterDuplicate() {
-        val fs = fs(ObjectPublication.HARD_LINK_OR_RENAME)
+        val fs = fs()
         val bytes = "tx".encodeToByteArray()
         val hash = sha256Bytes(bytes)
 
@@ -79,7 +64,7 @@ class JvmLibraryFileSystemPublicationTest {
 
     @Test
     fun renameFallbackNeverReplacesACanonicalObjectWithOtherBytes() {
-        val fs = fs(ObjectPublication.HARD_LINK_OR_RENAME)
+        val fs = fs()
         Files.createDirectories(root.resolve("bucket"))
         Files.write(root.resolve("bucket/obj"), "other".encodeToByteArray())
         val bytes = "tx".encodeToByteArray()
@@ -149,7 +134,7 @@ class JvmLibraryFileSystemPublicationTest {
                     true
                 }
             }
-        val fs = JvmLibraryFileSystem(root, PathExternalIo, ObjectPublication.HARD_LINK_ONLY, flaky)
+        val fs = JvmLibraryFileSystem(root, PathExternalIo, flaky)
         runBlocking {
             fs.writeBytesOnce("a/one.txt", "1".encodeToByteArray())
             fs.move("a/one.txt", "b/one.txt")
@@ -166,7 +151,7 @@ class JvmLibraryFileSystemPublicationTest {
 
     @Test
     fun ordinaryWritesAndMovesKeepWriteOnceWithoutLinks() {
-        val fs = fs(ObjectPublication.HARD_LINK_OR_RENAME)
+        val fs = fs()
         runBlocking {
             fs.writeBytesOnce("a/one.txt", "1".encodeToByteArray())
             assertFailsWith<IllegalStateException> { fs.writeBytesOnce("a/one.txt", "2".encodeToByteArray()) }
@@ -183,7 +168,7 @@ class JvmLibraryFileSystemPublicationTest {
 
     @Test
     fun importExternalStreamsBytesRefusesAnExistingTargetAndLeavesNoTempFiles() {
-        val fs = fs(ObjectPublication.HARD_LINK_ONLY)
+        val fs = fs()
         val external = Files.createTempFile("npn-external", ".pdf")
         try {
             val bytes = ByteArray(200_000) { (it % 251).toByte() }
@@ -201,7 +186,7 @@ class JvmLibraryFileSystemPublicationTest {
 
     @Test
     fun copyOutOverwritesTheCallerOwnedTarget() {
-        val fs = fs(ObjectPublication.HARD_LINK_ONLY)
+        val fs = fs()
         val target = Files.createTempFile("npn-export", ".pdf")
         try {
             Files.write(target, "stale and longer than the new content".encodeToByteArray())

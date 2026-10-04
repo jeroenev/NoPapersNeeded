@@ -181,6 +181,7 @@ suspend fun openSession(
     scope: CoroutineScope,
     library: Path,
     data: File,
+    installationId: String = "test-installation",
 ): OpenSession {
     val deps =
         jvmSessionDeps(
@@ -191,7 +192,7 @@ suspend fun openSession(
             trashRetentionDays = { 30 },
             // Far behind the files' real mtimes, so a just-written PDF counts as settled.
             clock = MutableClock(autoTick = true),
-            installationId = "test-installation",
+            installationId = installationId,
             ocrEngine = NoopOcrEngine(),
             thumbnailStore = FakeThumbStore(File(data, "thumbs")),
         )

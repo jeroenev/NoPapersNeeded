@@ -11,10 +11,16 @@ import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
+import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.ScanReport
+import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.HlcClock
-import dev.npn.core.journal.SegmentWriter
+import dev.npn.core.journal.HlcWatermarkAllocator
+import dev.npn.core.journal.JournalCodec
+import dev.npn.core.journal.JournalEvent
+import dev.npn.core.journal.JournalEventVersions
+import dev.npn.core.journal.PendingOp
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -32,11 +38,9 @@ class IndexRig private constructor(
     val deviceDb: DeviceDatabase,
     val clock: MutableClock,
 ) {
-    val fsSegmentStore = FsSegmentStore(fs)
-
     val indexer = Indexer(fs, db, clock)
 
-    /** Real persisted accumulator: reads the same V1 journal segments the writers produce. */
+    /** Real persisted accumulator: reads the same journal objects the writers publish. */
     val accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
 
     val importService =
@@ -64,18 +68,20 @@ class IndexRig private constructor(
         return report
     }
 
-    /** Build a SegmentWriter for [deviceId] over this library, with its own local state. */
-    internal fun writer(deviceId: String): SegmentWriter =
-        SegmentWriter(
-            store = fsSegmentStore,
-            deviceId = deviceId,
-            hlcClock = HlcClock(deviceId, clock),
-            localState = DbLocalJournalState(db.keyValueDao()),
-        )
+    /**
+     * A journal writer over this library, publishing storage-v2 objects as any replica does;
+     * [installation] only names its staging files. Writes through it bypass the rig's coordinator,
+     * the way another device's writes arrive.
+     */
+    internal fun writer(installation: String = "test-installation"): ContentAddressedJournalWriter =
+        ContentAddressedJournalWriter(fs, installation, HlcWatermarkAllocator(clock))
 
     /** Build a [JournalCoordinator] over [writer] backed by this rig's accumulator + indexer. */
-    internal fun coordinator(writer: SegmentWriter): JournalCoordinator =
+    internal fun coordinator(writer: ContentAddressedJournalWriter = writer()): JournalCoordinator =
         JournalCoordinator(writer, indexer, accumulator)
+
+    /** v1 segments for [deviceId] in this library, as builds before storage-v2 wrote them. */
+    fun legacySegments(deviceId: String): LegacySegments = LegacySegments(fs, deviceId, clock)
 
     /** Write a fake PDF (bytes need not be valid; only the .pdf suffix matters to the indexer). */
     fun writePdf(
@@ -138,6 +144,35 @@ class IndexRig private constructor(
             val db = if (statements == null) npnDatabase(dbFile) else recordingDatabase(dbFile, statements)
             return IndexRig(libRoot, dbDir, fs, db, deviceDatabase(File(dbDir, "device.db")), MutableClock(1_000L))
         }
+    }
+}
+
+/**
+ * Writes v1 segments, `.npn/journal/<deviceId>/<first seq>.jsonl`, the way builds before storage-v2
+ * did. Nothing writes these any more, but libraries still hold them and the reader must fold them.
+ */
+class LegacySegments(
+    private val fs: LibraryFileSystem,
+    private val deviceId: String,
+    clock: EpochClock,
+) {
+    private val hlc = HlcWatermarkAllocator(clock)
+    private var seq = 0L
+
+    /** Write [ops] as the next segment; returns its path. */
+    suspend fun write(ops: List<PendingOp>): String {
+        val first = seq + 1
+        val events =
+            ops.map {
+                JournalEvent(JournalEventVersions.CANONICAL, ++seq, hlc.next(deviceId), deviceId, it.doc, it.op)
+            }
+        val path = NpnPaths.journalSegmentPath(deviceId, first.toString().padStart(SEQ_WIDTH, '0') + ".jsonl")
+        fs.writeBytesOnce(path, JournalCodec.encodeLines(events).encodeToByteArray())
+        return path
+    }
+
+    private companion object {
+        const val SEQ_WIDTH = 16
     }
 }
 

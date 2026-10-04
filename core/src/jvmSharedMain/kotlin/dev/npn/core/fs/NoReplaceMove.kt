@@ -19,13 +19,17 @@ import java.nio.file.Path
  *
  * Linux and Android (including shared-storage FUSE) use renameat2(RENAME_NOREPLACE). Windows uses
  * MoveFileExW without MOVEFILE_REPLACE_EXISTING, which fails on an existing target. Neither falls
- * back to copying across volumes. Any other platform fails closed with
- * [VerifiedPublicationUnavailableException].
+ * back to copying across volumes. Any other platform, and a Linux filesystem that does not support
+ * the flag, fails closed with [VerifiedPublicationUnavailableException].
  */
 internal object NoReplaceMove {
     private const val AT_FDCWD = -100
     private const val RENAME_NOREPLACE = 1
     private const val EEXIST = 17
+
+    // EINVAL: the filesystem rejects RENAME_NOREPLACE (FUSE without rename2, NFS); ENOSYS: no
+    // renameat2 in the kernel; EOPNOTSUPP: the operation is not supported there.
+    private val UNSUPPORTED_ERRNOS = setOf(22, 38, 95)
 
     private const val ERROR_FILE_EXISTS = 80
     private const val ERROR_ALREADY_EXISTS = 183
@@ -86,7 +90,12 @@ internal object NoReplaceMove {
                 arrayOf(NativeLong(number), AT_FDCWD, from.toString(), AT_FDCWD, to.toString(), RENAME_NOREPLACE),
             )
         } catch (e: LastErrorException) {
-            // Do not degrade to a replacing rename, including on EXDEV or unsupported FUSE.
+            // Do not degrade to a replacing rename, including on EXDEV or unsupported FUSE. A
+            // filesystem or kernel that does not know the flag says so the same way every time,
+            // which is a capability, not a failed attempt.
+            if (e.errorCode in UNSUPPORTED_ERRNOS) {
+                throw VerifiedPublicationUnavailableException("Exclusive rename unsupported: errno ${e.errorCode}", e)
+            }
             throw failure(from, to, e.errorCode == EEXIST, "errno ${e.errorCode}").apply { initCause(e) }
         }
     }

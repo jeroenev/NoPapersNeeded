@@ -16,6 +16,7 @@ import no_papers_needed.composeapp.generated.resources.common_open_failed_folder
 import no_papers_needed.composeapp.generated.resources.common_open_failed_folder_not_created
 import no_papers_needed.composeapp.generated.resources.common_open_failed_storage_access
 import no_papers_needed.composeapp.generated.resources.common_open_failed_unreadable
+import no_papers_needed.composeapp.generated.resources.common_open_failed_unsupported_storage
 import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -41,5 +42,6 @@ private val OpenFailureReason.message: StringResource
             OpenFailureReason.FOLDER_MISSING -> Res.string.common_open_failed_folder_missing
             OpenFailureReason.NO_STORAGE_ACCESS -> Res.string.common_open_failed_storage_access
             OpenFailureReason.FOLDER_NOT_CREATED -> Res.string.common_open_failed_folder_not_created
+            OpenFailureReason.UNSUPPORTED_STORAGE -> Res.string.common_open_failed_unsupported_storage
             OpenFailureReason.UNREADABLE -> Res.string.common_open_failed_unreadable
         }

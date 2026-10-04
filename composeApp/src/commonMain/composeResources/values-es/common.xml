@@ -32,6 +32,7 @@
     <string name="common_open_failed_folder_missing">No se encontró la carpeta de la biblioteca. Si está en una unidad extraíble o una tarjeta de memoria, conéctala e inténtalo de nuevo.</string>
     <string name="common_open_failed_storage_access">No Papers Needed no tiene permiso para acceder al almacenamiento del dispositivo, así que no puede leer la carpeta de la biblioteca. Permite el acceso a todos los archivos e inténtalo de nuevo.</string>
     <string name="common_open_failed_folder_not_created">No se pudo crear la carpeta de la biblioteca en esa ubicación. Elige otra ubicación.</string>
+    <string name="common_open_failed_unsupported_storage">Este almacenamiento no puede guardar los cambios de la biblioteca de forma segura: no puede crear un archivo sin arriesgarse a reemplazar uno que otro dispositivo acaba de escribir. Elige una carpeta en otra unidad u otro sistema de archivos.</string>
     <string name="common_open_failed_unreadable">No se pudo leer la biblioteca. Los detalles técnicos indican el motivo.</string>
     <string name="common_pick_folder_again">Elegir la carpeta de nuevo</string>
 

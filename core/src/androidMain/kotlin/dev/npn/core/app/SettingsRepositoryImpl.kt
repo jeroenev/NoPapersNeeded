@@ -8,6 +8,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import java.io.File
 import java.util.UUID
 
 /**
@@ -39,6 +40,9 @@ class SettingsRepositoryImpl(
             override fun boolean(key: String): Boolean? =
                 if (prefs.contains(key)) prefs.getBoolean(key, false) else null
         }
+
+    // Before `state`, whose initializer reads it through load().
+    private val installationId: String by lazy { readOrMintInstallationId(context.applicationContext.noBackupFilesDir) }
 
     private val state = MutableStateFlow(load())
 
@@ -85,14 +89,7 @@ class SettingsRepositoryImpl(
             }
         }
 
-    private fun load(): SettingsSnapshot {
-        val installationId =
-            prefs.getString(SettingsKeys.INSTALLATION_ID, null)
-                ?: UUID.randomUUID().toString().also {
-                    prefs.edit().putString(SettingsKeys.INSTALLATION_ID, it).apply()
-                }
-        return SettingsCodec.load(reader, installationId)
-    }
+    private fun load(): SettingsSnapshot = SettingsCodec.load(reader, installationId)
 
     override val settings: Flow<SettingsSnapshot> = state
 
@@ -115,5 +112,23 @@ class SettingsRepositoryImpl(
 
     companion object {
         private const val PREFS_NAME = "npn_settings"
+        private const val INSTALLATION_ID_FILE = "installation-id"
+
+        /**
+         * This installation's id, kept in [noBackupDir]: Android restores backed-up app data,
+         * SharedPreferences included, onto a new phone or a reinstall, and an id that travelled
+         * with it would make two installations one (see `DeviceIdentity`). The id an older build
+         * kept in the preferences is ignored for that reason; its staging files go unclaimed.
+         */
+        private fun readOrMintInstallationId(noBackupDir: File): String {
+            val file = File(noBackupDir, INSTALLATION_ID_FILE)
+            file
+                .takeIf { it.isFile }
+                ?.readText()
+                ?.trim()
+                ?.takeIf { it.isNotEmpty() }
+                ?.let { return it }
+            return UUID.randomUUID().toString().also { file.writeText(it) }
+        }
     }
 }

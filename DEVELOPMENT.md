@@ -21,9 +21,11 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 - SQLite is a rebuildable cache. The index (search, thumbnails, source provenance,
   and incremental metadata projection) lives in device-local storage, never inside
   the library folder, and is never synced. Delete it and it rebuilds from the folder.
-  What only this device knows (its journal device id, its OCR and AI queues, AI edit
+  What only this device knows (its device id, its OCR and AI queues, AI edit
   runs awaiting review, assistant chats) sits beside it in a separate `device.db`,
-  which is never dropped.
+  which is never dropped. A `device.db` restored or copied onto another installation
+  keeps all of that but takes a new device id, so two installations never write
+  under one name.
 - OCR travels as sidecars. Extracted text is written to `.npn/ocr/` keyed by file
   hash and device id, so a device adopts another device's OCR instead of redoing it.
   The best-ranked engine is indexed (ai > mlkit > tesseract > embedded text layer);
@@ -53,6 +55,10 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 - Android 11+ (API 30).
 - Desktop: Java 17 or newer. Packaged distributions bundle their own Java 25 runtime, so
   no system JVM is required to run them.
+- Library storage that can create a file without replacing one another writer just created:
+  hard links, or an exclusive rename (`renameat2` on Linux and Android, `MoveFileExW` on
+  Windows), or Android's storage access framework. A library on storage with neither is
+  refused when it opens.
 - OCR on desktop: the Windows installers and the Flatpak bundle Tesseract with models for
   every UI language. The other Linux packages need `tesseract-ocr` on `PATH`; without it,
   only embedded PDF text is indexed.

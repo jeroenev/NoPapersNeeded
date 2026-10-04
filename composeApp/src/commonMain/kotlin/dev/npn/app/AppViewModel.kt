@@ -13,6 +13,7 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.importPdfs
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineDispatcher
@@ -199,6 +200,11 @@ class AppViewModel(
 
 private fun Throwable.toOpenFailure(): OpenFailure =
     OpenFailure(
-        reason = (this as? LibraryUnavailableException)?.reason ?: OpenFailureReason.UNREADABLE,
+        reason =
+            when (this) {
+                is LibraryUnavailableException -> reason
+                is VerifiedPublicationUnavailableException -> OpenFailureReason.UNSUPPORTED_STORAGE
+                else -> OpenFailureReason.UNREADABLE
+            },
         details = reason(),
     )

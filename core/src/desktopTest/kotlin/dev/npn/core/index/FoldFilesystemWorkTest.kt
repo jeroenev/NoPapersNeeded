@@ -5,9 +5,9 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.StatementLog
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
-import dev.npn.core.journal.HlcClock
+import dev.npn.core.journal.ContentAddressedJournalWriter
+import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -45,13 +45,7 @@ class FoldFilesystemWorkTest {
         fs.db = db
         indexer = Indexer(fs, db, clock)
         accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
-        val writer =
-            SegmentWriter(
-                store = FsSegmentStore(fs),
-                deviceId = "dev-main",
-                hlcClock = HlcClock("dev-main", clock),
-                localState = DbLocalJournalState(db.keyValueDao()),
-            )
+        val writer = ContentAddressedJournalWriter(fs, "test-installation", HlcWatermarkAllocator(clock))
         coordinator = JournalCoordinator(writer, indexer, accumulator)
     }
 

@@ -10,10 +10,8 @@ import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldBeNull
@@ -64,16 +62,9 @@ class CompactionPlanCostTest {
 
     private fun coordinator(threshold: Int): JournalCoordinator =
         JournalCoordinator(
-            writer =
-                SegmentWriter(
-                    store = FsSegmentStore(fs),
-                    deviceId = "dev-main",
-                    hlcClock = HlcClock("dev-main", clock),
-                    localState = DbLocalJournalState(db.keyValueDao()),
-                ),
             indexer = indexer,
             accumulator = accumulator,
-            objectWriter =
+            writer =
                 ContentAddressedJournalWriter(
                     fs = fs,
                     installationId = "test-installation",

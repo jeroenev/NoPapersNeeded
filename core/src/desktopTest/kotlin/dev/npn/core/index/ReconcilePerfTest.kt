@@ -11,9 +11,9 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationCapability
 import dev.npn.core.fs.VerifiedPublicationResult
-import dev.npn.core.journal.HlcClock
+import dev.npn.core.journal.ContentAddressedJournalWriter
+import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.SystemProperty
@@ -112,7 +112,6 @@ class ReconcilePerfTest {
     private lateinit var clock: MutableClock
     private lateinit var indexer: Indexer
     private lateinit var accumulator: MetadataAccumulator
-    private lateinit var fsSegmentStore: FsSegmentStore
 
     @BeforeTest
     fun setup() {
@@ -124,7 +123,6 @@ class ReconcilePerfTest {
         clock = MutableClock(1_000L)
         indexer = Indexer(fs, db, clock)
         accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
-        fsSegmentStore = FsSegmentStore(fs)
     }
 
     @AfterTest
@@ -143,15 +141,11 @@ class ReconcilePerfTest {
         Files.write(p, content.encodeToByteArray())
     }
 
-    private fun writer(deviceId: String): SegmentWriter =
-        SegmentWriter(
-            store = fsSegmentStore,
-            deviceId = deviceId,
-            hlcClock = HlcClock(deviceId, clock),
-            localState = DbLocalJournalState(db.keyValueDao()),
-        )
+    /** A journal writer for [installation], as another replica's writes arrive. */
+    private fun writer(installation: String): ContentAddressedJournalWriter =
+        ContentAddressedJournalWriter(fs, installation, HlcWatermarkAllocator(clock))
 
-    private fun coordinator(writer: SegmentWriter): JournalCoordinator =
+    private fun coordinator(writer: ContentAddressedJournalWriter): JournalCoordinator =
         JournalCoordinator(writer, indexer, accumulator)
 
     /**
@@ -179,14 +173,14 @@ class ReconcilePerfTest {
             rescan()
             val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
 
-            // A committed tag produces a v1 segment; project it through the coordinator.
+            // A committed tag publishes a journal object; project it through the coordinator.
             val writer = writer("dev-main")
             val coordinator = coordinator(writer)
             coordinator.refreshState()
             clock.advance()
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "invoice")))
 
-            // First reconcile after the commit reads the newly-written segment once.
+            // First reconcile after the commit reads the newly-written object at most once.
             coordinator.reconcileMetadata()
             fs.reads.clear()
 
@@ -205,31 +199,27 @@ class ReconcilePerfTest {
             rescan()
             val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
 
-            val writer = writer("dev-main")
-            val coordinator = coordinator(writer)
-            coordinator.refreshState()
+            // An older build's v1 segment, as libraries still hold them.
             clock.advance()
-            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "invoice")))
+            val segment = LegacySegments(fs, "dev-main", clock).write(listOf(PendingOp.tagAdd(docId, "invoice")))
+            val coordinator = coordinator(writer("dev-main"))
+            coordinator.refreshState()
             coordinator.reconcileMetadata()
 
-            val segment =
-                fs
-                    .listAllUnder(NpnPaths.JOURNAL_DIR)
-                    .single { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.Legacy }
-            val original = fs.readBytes(segment.relPath)
+            val original = fs.readBytes(segment)
             fs.reads.clear()
 
             // Grow the file (append padding) so size+mtime change -> it must be re-read, and the
             // padded content still folds to the same tag.
             val grown = original + "\n".repeat(64).encodeToByteArray()
-            Files.write(libRoot.resolve(segment.relPath), grown)
+            Files.write(libRoot.resolve(segment), grown)
             clock.advance()
             coordinator.reconcileMetadata()
-            fs.journalReads().contains(segment.relPath).shouldBeTrue()
+            fs.journalReads().contains(segment).shouldBeTrue()
             db.tagDao().tagsForDocument(docId) shouldContainExactly listOf("invoice")
 
             // Now shrink it below the recorded size -> the existing shrink guard must still latch.
-            Files.write(libRoot.resolve(segment.relPath), "x".encodeToByteArray())
+            Files.write(libRoot.resolve(segment), "x".encodeToByteArray())
             clock.advance()
             assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
             db.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_FAILED
@@ -257,7 +247,7 @@ class ReconcilePerfTest {
                 ),
             )
 
-            // A SECOND device writes a segment that reconcile will discover as a brand-new source.
+            // A SECOND device publishes an object that reconcile will discover as a brand-new source.
             val remote = writer("device-two")
             clock.advance()
             remote.commit(
@@ -423,21 +413,15 @@ class ReconcilePerfTest {
             rescan()
             val docId = db.documentDao().rowAtPath("a.pdf")!!.docId
 
-            val writer = writer("dev-main")
-            val coordinator = coordinator(writer)
-            coordinator.refreshState()
             clock.advance()
-            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "invoice")))
+            val segment = LegacySegments(fs, "dev-main", clock).write(listOf(PendingOp.tagAdd(docId, "invoice")))
+            val coordinator = coordinator(writer("dev-main"))
+            coordinator.refreshState()
             coordinator.reconcileMetadata()
 
-            val segment =
-                fs
-                    .listAllUnder(NpnPaths.JOURNAL_DIR)
-                    .single { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.Legacy }
-
-            // Deleting a previously-applied source with no validated replacement must latch the
+            // Deleting a previously-applied v1 source with no validated replacement must latch the
             // write-block via validatePublishedObjects (unchanged behaviour under the new path).
-            Files.delete(libRoot.resolve(segment.relPath))
+            Files.delete(libRoot.resolve(segment))
             clock.advance()
             assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
             db.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_FAILED

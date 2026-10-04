@@ -28,7 +28,6 @@ class DirectStorageDeviceTest {
             JvmLibraryFileSystem(
                 root,
                 ContentResolverExternalIo(context),
-                ObjectPublication.HARD_LINK_OR_RENAME,
                 NoReplaceLinker { _, _ -> false },
             )
     }

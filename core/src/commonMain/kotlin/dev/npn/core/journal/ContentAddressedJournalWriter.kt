@@ -14,12 +14,14 @@ data class PublishedTransaction(
 )
 
 /**
- * Publishes a journal transaction as a single write-once, content-addressed object (storage-v2).
+ * Publishes a journal transaction as a single write-once, content-addressed object (storage-v2),
+ * the only format this build writes. Every transaction gets a fresh actor id, so no two writers,
+ * on this device or a clone of it, can ever produce the same event identity.
  *
- * `internal` to the `core` module for the same reason as [SegmentWriter]: [JournalCoordinator]
- * is the only sanctioned write path, so its mutex + [FoldedState] refresh + DB projection cannot
- * be bypassed by an outside caller grabbing [commit] directly. `core`'s test source sets remain
- * in-module and may construct it.
+ * `internal` to the `core` module so the single write path is enforced at the type level:
+ * [dev.npn.core.app.JournalCoordinator] is the only sanctioned writer, so its mutex +
+ * [FoldedState] refresh + DB projection cannot be bypassed by an outside caller grabbing [commit]
+ * directly. `core`'s test source sets remain in-module and may construct it.
  */
 internal class ContentAddressedJournalWriter(
     private val fs: LibraryFileSystem,

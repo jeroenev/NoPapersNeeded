@@ -1,7 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.OpenReconciliation
@@ -13,8 +11,6 @@ import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.PublishedTransaction
-import dev.npn.core.journal.SegmentRef
-import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.systemNowMillis
 import dev.npn.core.model.FieldDef
@@ -80,9 +76,14 @@ private class SyncedSettings {
  *
  * Why this exists: building a correct OR-set `tag-remove` needs the dots currently observed for
  * `(tag, doc)`. Those live in the folded state. If two writers raced, one could commit a
- * `tag-remove` against stale dots. This class holds the [SegmentWriter] plus the current
- * [FoldedState] behind a [Mutex] so that "read current dots -> build ops -> publish -> reduce ->
- * project" is ordered.
+ * `tag-remove` against stale dots. This class holds the [ContentAddressedJournalWriter] plus the
+ * current [FoldedState] behind a [Mutex] so that "read current dots -> build ops -> publish ->
+ * reduce -> project" is ordered.
+ *
+ * Every transaction is published as one storage-v2 object. There is no other format to fall back
+ * to: a filesystem that cannot publish without replacement fails the write, and the session refuses
+ * to open such a library in the first place (see [LibrarySessionImpl.openSession]). Legacy v1
+ * segments are still read and folded.
  *
  * Normal commits apply their frozen events directly to the persisted accumulator and bounded DB
  * projection.
@@ -93,18 +94,17 @@ private class SyncedSettings {
  * state must therefore go through [foldedState] rather than assume it already exists.
  *
  * This is the ONLY sanctioned journal write path (see AGENTS.md). The invariant is enforced at
- * the type level rather than by convention: [SegmentWriter] and [ContentAddressedJournalWriter]
- * are `internal` to `core`, and both the primary constructor and the held [writer] are `internal`
- * too, so no caller outside `core` can obtain the raw writer and skip the mutex, the live
- * [FoldedState] refresh, or the DB projection. Expose new capabilities as named members here
- * rather than widening [writer] back to public.
+ * the type level rather than by convention: [ContentAddressedJournalWriter] is `internal` to
+ * `core`, and both the primary constructor and the held [writer] are `internal` too, so no caller
+ * outside `core` can obtain the raw writer and skip the mutex, the live [FoldedState] refresh, or
+ * the DB projection. Expose new capabilities as named members here rather than widening [writer]
+ * back to public.
  */
 @Suppress("TooManyFunctions")
 class JournalCoordinator internal constructor(
-    internal val writer: SegmentWriter,
+    internal val writer: ContentAddressedJournalWriter,
     private val indexer: Indexer,
     private val accumulator: MetadataAccumulator,
-    objectWriter: ContentAddressedJournalWriter? = null,
     private val compactor: SnapshotCompactor? = null,
     private val compactionThreshold: Int = DEFAULT_COMPACTION_THRESHOLD,
     private val compactionStabilityWindowMs: Long = DEFAULT_COMPACTION_STABILITY_WINDOW_MS,
@@ -112,7 +112,6 @@ class JournalCoordinator internal constructor(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val mutex = Mutex()
-    private var objectWriter = objectWriter
     private var writeBlockReason: String? = null
     private var closed = false
 
@@ -360,30 +359,28 @@ class JournalCoordinator internal constructor(
             val current = foldedState()
             val ops = block(current)
             if (ops.isEmpty()) return@locked false
-            // Once the write-once segment exists, cancellation must not leave the disposable DB
+            // Once the write-once object exists, cancellation must not leave the disposable DB
             // projection stale until the next rescan or edit.
             withContext(NonCancellable) {
-                val (published, written) = writeTransaction(ops)
-                projectWrittenTransaction(current, published, written)
+                projectWrittenTransaction(current, writeTransaction(ops))
             }
             true
         }
 
     /**
-     * Shared projection pipeline for an ALREADY-published/written transaction: record the local
-     * source, fold the frozen events into the live state, and incrementally project one DB
-     * transaction under the durable-recovery and projection-transaction wrappers, then update
-     * synced settings. Callers own the enclosing mutex + [NonCancellable] scope.
+     * Shared projection pipeline for an ALREADY-published transaction: record the local source,
+     * fold the frozen events into the live state, and incrementally project one DB transaction
+     * under the durable-recovery and projection-transaction wrappers, then update synced settings.
+     * Callers own the enclosing mutex + [NonCancellable] scope.
      */
     private suspend fun projectWrittenTransaction(
         current: FoldedState,
-        published: PublishedTransaction?,
-        written: List<JournalEvent>,
+        published: PublishedTransaction,
         preserveLifecycleDocs: Set<String> = emptySet(),
     ) {
-        val (path, version) = sourcePathAndVersion(published, written)
+        val written = published.events
         withDurableProjectionRecovery {
-            val local = accumulator.localSource(path, version, published?.contentHash, written)
+            val local = accumulator.localSource(published)
             indexer.projection {
                 accumulator.recordLocalSource(local)
                 written.forEach(current::apply)
@@ -439,19 +436,19 @@ class JournalCoordinator internal constructor(
             optimisticWrite()
             if (ops.isEmpty()) return@locked false
             withContext(NonCancellable) {
-                val (published, written) = writeTransaction(ops)
-                projectWrittenTransaction(current, published, written, preserveLifecycleDocs = lifecycleDocs)
+                projectWrittenTransaction(current, writeTransaction(ops), preserveLifecycleDocs = lifecycleDocs)
             }
             true
         }
 
     /**
-     * Commit [ops] as one segment and run a full [Indexer.rescan] inside the same critical section.
+     * Commit [ops] as one transaction and run a full [Indexer.rescan] inside the same critical
+     * section.
      *
      * Unlike [commitBuilt] (which only refolds), this is for ops such as `relink` whose fold effect
      * needs a full rescan to carry metadata onto the new id and mark the superseded doc. Serializing
-     * this against every other write preserves the single-writer invariant: the shared, non
-     * concurrency-safe [SegmentWriter] is never touched by two callers at once.
+     * this against every other write keeps the write, the fold it is built on and the rescan that
+     * projects it in one order.
      *
      * Returns the resulting [ScanReport]. Refreshes the folded state from the store after the
      * rescan.
@@ -461,16 +458,13 @@ class JournalCoordinator internal constructor(
             ensureWritable()
             val current = foldedState()
             withContext(NonCancellable) {
-                val (published, written) = writeTransaction(ops)
-                if (written.isNotEmpty()) {
-                    val (path, version) = sourcePathAndVersion(published, written)
-                    accumulator.recordLocalSource(
-                        accumulator.localSource(path, version, published?.contentHash, written),
-                    )
+                if (ops.isNotEmpty()) {
+                    val published = writeTransaction(ops)
+                    accumulator.recordLocalSource(accumulator.localSource(published))
                     // Fold the freshly-written events into the live state up front. reconcile()'s
                     // fast path returns currentState unchanged when it read no new sources (the events
                     // were just recorded directly), so the projection rescan below must see them here.
-                    written.forEach(current::apply)
+                    published.events.forEach(current::apply)
                 }
                 val reconciled = accumulator.reconcile(current).state ?: current
                 folded = reconciled
@@ -482,53 +476,24 @@ class JournalCoordinator internal constructor(
             }
         }
 
-    /**
-     * Storage-relative path and version for a just-written transaction: a published
-     * content-addressed object contributes its own relPath and [NpnPaths.STORAGE_V2]; a legacy
-     * [SegmentWriter] write (published == null) contributes the v1 segment path for this device's
-     * first written seq and [NpnPaths.STORAGE_V1].
-     */
-    private fun sourcePathAndVersion(
-        published: PublishedTransaction?,
-        written: List<JournalEvent>,
-    ): Pair<String, Int> {
-        val path =
-            published?.relPath ?: NpnPaths.journalSegmentPath(
-                writer.deviceId,
-                SegmentRef.plainName(written.first().seq),
-            )
-        val version = if (published == null) NpnPaths.STORAGE_V1 else NpnPaths.STORAGE_V2
-        return path to version
-    }
-
     /** Called under the coordinator mutex, which the external-move callback relies on too. */
     private suspend fun rescanWithExternalMoves(state: FoldedState): ScanReport =
         indexer.rescan(metadataState = state, onExternalMoves = { ops ->
             withContext(NonCancellable) {
-                val (published, written) = writeTransaction(ops)
-                val (path, version) = sourcePathAndVersion(published, written)
-                accumulator.recordLocalSource(accumulator.localSource(path, version, published?.contentHash, written))
-                written.forEach(state::apply)
+                val published = writeTransaction(ops)
+                accumulator.recordLocalSource(accumulator.localSource(published))
+                published.events.forEach(state::apply)
                 observeSourceHlc(state.maxHlc)
             }
         })
 
     /**
-     * Publish [ops] as one storage-v2 object, or as a v1 segment once this filesystem has shown it
-     * can never publish without replacement. Only that capability error switches formats; any other
-     * failure, a [dev.npn.core.fs.VerifiedPublicationFailedException] included, fails this write and
-     * leaves the next one on v2.
+     * Publish a non-empty [ops] as one storage-v2 object. Any failure fails this write and leaves
+     * the next one to try again the same way: a [dev.npn.core.fs.VerifiedPublicationFailedException]
+     * is transient, and a [dev.npn.core.fs.VerifiedPublicationUnavailableException] means the library
+     * should never have opened (the open-time check publishes through the same primitive).
      */
-    private suspend fun writeTransaction(ops: List<PendingOp>): Pair<PublishedTransaction?, List<JournalEvent>> {
-        val contentWriter = objectWriter ?: return null to writer.commit(ops)
-        return try {
-            val published = contentWriter.commit(ops)
-            published to checkNotNull(published).events
-        } catch (_: VerifiedPublicationUnavailableException) {
-            objectWriter = null
-            null to writer.commit(ops)
-        }
-    }
+    private suspend fun writeTransaction(ops: List<PendingOp>): PublishedTransaction = checkNotNull(writer.commit(ops))
 
     private fun ensureWritable() {
         check(writeBlockReason == null) { "Metadata writes are disabled: $writeBlockReason" }
@@ -559,15 +524,13 @@ class JournalCoordinator internal constructor(
         }
 
     /**
-     * Seed both write clocks past [maxHlc]. Takes the watermark explicitly rather than reading it
-     * off the folded state, so the open path can pass the value its stored projection recorded
-     * without folding anything.
+     * Seed the write clock past [maxHlc] and persist its watermark. Takes the watermark explicitly
+     * rather than reading it off the folded state, so the open path can pass the value its stored
+     * projection recorded without folding anything.
      */
     private suspend fun observeSourceHlc(maxHlc: Hlc) {
         writer.observeHlc(maxHlc)
-        val contentWriter = objectWriter ?: return
-        contentWriter.observeHlc(maxHlc)
-        val (physical, counter) = contentWriter.watermark
+        val (physical, counter) = writer.watermark
         accumulator.persistAllocator(physical, counter)
     }
 

@@ -1,66 +1,157 @@
 package dev.npn.core.index
 
 import dev.npn.core.db.KeyValueDao
-import dev.npn.core.journal.ForkCheck
-import dev.npn.core.journal.LocalJournalState
-import dev.npn.core.journal.SegmentWriter
-import kotlin.uuid.ExperimentalUuidApi
-import kotlin.uuid.Uuid
+import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.VerifiedPublicationUnavailableException
+import dev.npn.core.fs.randomUuidV4
+import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.util.NpnLog
+import dev.npn.core.util.info
+import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.warn
 
 /**
- * Manages this installation's `deviceId`.
+ * This installation's `deviceId` for one library, and the check that no other installation uses it.
  *
- * The id is an install-generated UUID stored in the device database's `kv` table (device-private,
- * never in the synced library, and kept when the index is rebuilt). On startup the app must verify
- * the newest segment in its own journal directory is one it wrote; if the store contains an own
- * segment the local state does not know about, another installation shares this id (backup
- * restore / clone) and we fork a fresh id to preserve the single-writer invariant.
+ * The id is a UUID kept in the device database's `kv` table (device-private, never in the synced
+ * library, kept when the index is rebuilt). It names what this device writes under its own name:
+ * its OCR sidecars, which the watcher also uses to skip its own writes. Journal transactions do not
+ * carry it; each gets a fresh actor id.
+ *
+ * Two installations must never share it, and a restore or a copy of `device.db` (Android restores
+ * its backup onto a new phone) carries it to another one. So the id is tied to the installation
+ * ([installationId], which the app keeps out of every backup) in two places, and either one
+ * disagreeing gives this installation a fresh id:
+ * - `device.db` records which installation the id belongs to. A restored or copied `device.db`
+ *   names another installation, so a reinstall or a new phone takes a fresh id at once, while
+ *   keeping everything else `device.db` holds (queued AI edits, the OCR queue, chats).
+ * - The library holds one write-once marker per installation that used the id,
+ *   `.npn/devices/<deviceId>/<installationId>.json`. A marker from another installation means a
+ *   second installation claims this id: a clone that predates the first check, or whose record
+ *   came along with it. Both then move to fresh ids as each sees the other's marker.
+ *
+ * A fresh id costs nothing that matters: the old id's OCR sidecars read as another device's, which
+ * the OCR pipeline adopts rather than runs again.
+ *
+ * Publishing the marker is also where a library on a filesystem that cannot publish without
+ * replacement is found out: [resolve] lets that [VerifiedPublicationUnavailableException] through so
+ * the library refuses to open. Any other failure to publish is retried at the next open.
  */
-@OptIn(ExperimentalUuidApi::class)
 class DeviceIdentity(
     private val kv: KeyValueDao,
+    private val fs: LibraryFileSystem,
+    private val installationId: String,
+    private val log: NpnLog = NpnLog.None,
 ) {
-    /** Get the stored device id, generating and persisting a fresh one on first use. */
-    suspend fun getOrCreate(): String {
-        kv.get(KEY_DEVICE_ID)?.let { return it }
-        val fresh = Uuid.random().toString()
+    init {
+        require(installationPattern.matches(installationId)) { "Unusable installation id: $installationId" }
+    }
+
+    /** The device id this installation uses for the library, minting a fresh one when it must. */
+    suspend fun resolve(): String {
+        forgetLegacyJournalState()
+        val stored = kv.get(KEY_DEVICE_ID)
+        val owner = kv.get(KEY_INSTALLATION)
+        val id =
+            when {
+                stored == null -> {
+                    mint()
+                }
+
+                owner != null && owner != installationId -> {
+                    log.info("This device's state was restored from another installation; using a new device id")
+                    mint()
+                }
+
+                claimedElsewhere(stored) -> {
+                    log.info("Another installation uses this device id in the library; using a new device id")
+                    mint()
+                }
+
+                else -> {
+                    // A device.db from before installations were recorded: it is this one's.
+                    if (owner == null) kv.put(KEY_INSTALLATION, installationId)
+                    stored
+                }
+            }
+        publishMarker(id)
+        return id
+    }
+
+    private suspend fun mint(): String {
+        val fresh = randomUuidV4()
         kv.put(KEY_DEVICE_ID, fresh)
+        kv.put(KEY_INSTALLATION, installationId)
         return fresh
     }
 
-    /**
-     * Run the journal fork check for [writer]. If a fork is needed (a foreign own-device segment
-     * appeared), generate and persist a fresh device id, reset [localState] so the new id starts
-     * clean, and return it. Otherwise return the current id unchanged.
-     *
-     * [localState] is the same state the [writer] uses; it must be reset on fork so the new device
-     * id does not inherit the old device's `lastSeq` or known-segment set (which belong to the id
-     * that was cloned). The caller is expected to build a new [SegmentWriter] with the returned id
-     * and this now-reset [localState] when the id differs.
-     *
-     * `internal`: it takes a raw [SegmentWriter], which is `internal` to `core` so the single-writer
-     * invariant is enforced at the type level. The fork check is a `core`-internal boot step.
-     */
-    internal suspend fun ensureSingleWriter(
-        writer: SegmentWriter,
-        localState: LocalJournalState,
-    ): String {
-        writer.recover()
-        return when (writer.checkSingleWriter()) {
-            is ForkCheck.Ok -> {
-                writer.deviceId
-            }
+    /** Whether the library holds a marker for [deviceId] from an installation other than this one. */
+    private suspend fun claimedElsewhere(deviceId: String): Boolean =
+        fs
+            .listAllUnder(markerDir(deviceId))
+            .asSequence()
+            .filter { !it.isDirectory }
+            .mapNotNull { markerInstallation(it.name) }
+            .any { it != installationId }
 
-            is ForkCheck.ForkNeeded -> {
-                val fresh = Uuid.random().toString()
-                kv.put(KEY_DEVICE_ID, fresh)
-                localState.reset()
-                fresh
+    /** Publish this installation's marker for [deviceId] once, through the journal's own primitive. */
+    private suspend fun publishMarker(deviceId: String) {
+        val path = markerPath(deviceId, installationId)
+        runCatchingCancellable {
+            if (fs.exists(path)) return
+            val bytes = """{"v":1,"device":"$deviceId","installation":"$installationId"}""".encodeToByteArray()
+            val staging = "${markerDir(deviceId)}/.$installationId.${randomUuidV4()}.part"
+            fs.writeBytesOnce(staging, bytes)
+            var published = false
+            try {
+                fs.publishVerifiedObjectOnce(staging, path, sha256Bytes(bytes))
+                published = true
+            } finally {
+                if (!published) runCatchingCancellable { fs.delete(staging) }
             }
+        }.onFailure { failure ->
+            if (failure is VerifiedPublicationUnavailableException) throw failure
+            log.warn("Recording this installation in the library failed; trying again at the next open", failure)
         }
+    }
+
+    /**
+     * Drop the bookkeeping a build that still wrote v1 segments kept about them (the last sequence
+     * number and the segment names it wrote). Nothing reads it any more; a no-op once it is gone.
+     */
+    private suspend fun forgetLegacyJournalState() {
+        LEGACY_JOURNAL_KEYS.forEach { kv.delete(it) }
     }
 
     companion object {
         const val KEY_DEVICE_ID = "device.id"
+
+        /** The installation [KEY_DEVICE_ID] belongs to. */
+        const val KEY_INSTALLATION = "device.installation"
+
+        private const val MARKER_SUFFIX = ".json"
+
+        /** What a build that still wrote v1 segments kept about them; [resolve] drops it. */
+        val LEGACY_JOURNAL_KEYS = listOf("journal.lastSeq", "journal.knownOwnSegments")
+
+        private val installationPattern = Regex("^[A-Za-z0-9_-]+$")
+
+        private fun markerDir(deviceId: String): String = "${NpnPaths.DEVICES_DIR}/$deviceId"
+
+        internal fun markerPath(
+            deviceId: String,
+            installationId: String,
+        ): String = "${markerDir(deviceId)}/$installationId$MARKER_SUFFIX"
+
+        /**
+         * The installation a marker file name records, or null for anything else that can sit in a
+         * marker directory: a staging file, a sync tool's conflict or temporary copy.
+         */
+        private fun markerInstallation(fileName: String): String? =
+            fileName
+                .takeIf { it.endsWith(MARKER_SUFFIX) && !NpnPaths.isSyncConflict(it) && !NpnPaths.isSyncTemp(it) }
+                ?.removeSuffix(MARKER_SUFFIX)
+                ?.takeIf(installationPattern::matches)
     }
 }

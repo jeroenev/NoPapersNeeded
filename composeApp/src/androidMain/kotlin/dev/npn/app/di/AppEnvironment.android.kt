@@ -14,7 +14,6 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.ContentResolverExternalIo
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.ObjectPublication
 import dev.npn.core.fs.SafLibraryFileSystem
 import dev.npn.core.ocr.MlKitOcrEngine
 import dev.npn.core.ocr.OcrLanguages
@@ -109,6 +108,6 @@ private fun libraryFileSystem(
             "Storage access was revoked; allow \"All files access\" for No Papers Needed to open $location",
         )
     }
-    // Shared storage is a FUSE mount without link(2), hence the verified-rename publication.
-    return JvmLibraryFileSystem(root, ContentResolverExternalIo(context), ObjectPublication.HARD_LINK_OR_RENAME)
+    // Shared storage is a FUSE mount without link(2), so objects publish by exclusive rename there.
+    return JvmLibraryFileSystem(root, ContentResolverExternalIo(context))
 }

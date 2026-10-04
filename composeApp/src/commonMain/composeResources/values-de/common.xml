@@ -32,6 +32,7 @@
     <string name="common_open_failed_folder_missing">Der Bibliotheksordner wurde nicht gefunden. Wenn er auf einem Wechseldatenträger oder einer Speicherkarte liegt, schließe ihn an und versuche es erneut.</string>
     <string name="common_open_failed_storage_access">No Papers Needed darf nicht auf den Gerätespeicher zugreifen und kann den Bibliotheksordner daher nicht lesen. Erlaube den Zugriff auf alle Dateien und versuche es dann erneut.</string>
     <string name="common_open_failed_folder_not_created">Der Bibliotheksordner konnte dort nicht angelegt werden. Wähle einen anderen Speicherort.</string>
+    <string name="common_open_failed_unsupported_storage">Dieser Speicher kann die Änderungen an der Bibliothek nicht sicher speichern: Er kann keine Datei anlegen, ohne zu riskieren, eine Datei zu ersetzen, die ein anderes Gerät gerade geschrieben hat. Wähle einen Ordner auf einem anderen Laufwerk oder Dateisystem.</string>
     <string name="common_open_failed_unreadable">Die Bibliothek konnte nicht gelesen werden. Die technischen Details nennen den Grund.</string>
     <string name="common_pick_folder_again">Ordner erneut wählen</string>
 

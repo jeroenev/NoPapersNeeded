@@ -10,8 +10,8 @@ import dev.npn.core.journal.PendingOp
  * (see [Indexer.applyFold]).
  *
  * The commit + rescan go through [JournalCoordinator.commitAndRescan] so they are serialized against
- * every other journal write. Committing directly through the shared, non concurrency-safe
- * `SegmentWriter` here would race metadata writes and corrupt the single-writer bookkeeping.
+ * every other journal write: a relink folded and projected out of order with another write could
+ * project metadata onto the wrong id.
  */
 class RelinkService(
     private val coordinator: JournalCoordinator,

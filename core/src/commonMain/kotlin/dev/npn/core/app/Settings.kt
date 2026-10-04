@@ -9,7 +9,11 @@ import kotlinx.coroutines.flow.Flow
 // ---------- settings (app-global, not per library) ----------
 
 data class SettingsSnapshot(
-    /** Stable app installation identity used only for owned staging-file cleanup and diagnostics. */
+    /**
+     * This installation's identity: it names the installation's journal staging files and tells a
+     * restored or copied device database from its own (`DeviceIdentity`). Never part of a backup:
+     * Android keeps it in the no-backup directory.
+     */
     val installationId: String,
     val libraryLocation: String? = null,
     val appLanguage: String? = null,
@@ -240,15 +244,14 @@ object SettingsCodec {
     /**
      * Persist a snapshot through [writer]. The snapshot is normalised first, so stored values are
      * always in range. Nullable string settings are removed when null (so their default applies on
-     * next read) rather than stored as an empty string. [installationId] is written too so a
-     * freshly minted id survives.
+     * next read) rather than stored as an empty string. [SettingsSnapshot.installationId] is not
+     * written: each platform keeps it where it minted it.
      */
     fun store(
         writer: Writer,
         snapshot: SettingsSnapshot,
     ) {
         val s = normalise(snapshot)
-        writer.putString(SettingsKeys.INSTALLATION_ID, s.installationId)
         writer.putOptional(SettingsKeys.LIBRARY_LOCATION, s.libraryLocation)
         writer.putOptional(SettingsKeys.APP_LANGUAGE, s.appLanguage)
         writer.putOptional(SettingsKeys.OCR_LANGUAGES, s.ocrLanguage)

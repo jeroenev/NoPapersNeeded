@@ -1,8 +1,6 @@
 package dev.npn.core.index
 
-import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -404,53 +402,6 @@ class IndexerTest {
                 .tagDao()
                 .tagsForDocument(docId)
                 .sorted() shouldContainExactly listOf("2026", "urgent", "work")
-        }
-
-    @Test
-    fun deviceIdForkOnForeignSegment() =
-        runTest {
-            val kv = rig.db.keyValueDao()
-            val identity = DeviceIdentity(kv)
-            val deviceId = identity.getOrCreate()
-
-            // This installation writes a segment normally, populating local journal state.
-            rig.writePdf("a.pdf", "alpha")
-            rig.rescan()
-            val docId =
-                rig.db
-                    .documentDao()
-                    .rowAtPath("a.pdf")!!
-                    .docId
-            val localState = DbLocalJournalState(kv)
-            val writer =
-                SegmentWriter(
-                    store = rig.fsSegmentStore,
-                    deviceId = deviceId,
-                    hlcClock = HlcClock(deviceId, rig.clock),
-                    localState = localState,
-                )
-            rig.clock.advance()
-            writer.commit(listOf(PendingOp.tagAdd(docId, "mine")))
-            // Precondition: local state now knows a seq and at least one own segment.
-            (localState.getLastSeq() != null).shouldBeTrue()
-            localState.getKnownOwnSegments().isNotEmpty().shouldBeTrue()
-
-            // Simulate a foreign installation sharing this device id: a segment appears in the same
-            // device directory that our local state does not know about.
-            rig.clock.advance()
-            rig.fsSegmentStore.writeSegment(
-                deviceId,
-                dev.npn.core.journal.SegmentRef
-                    .plainName(999L),
-                "",
-            )
-
-            val newId = identity.ensureSingleWriter(writer, localState)
-            (newId != deviceId).shouldBeTrue()
-            kv.get(DeviceIdentity.KEY_DEVICE_ID) shouldBe newId
-            // Regression: fork must clear the old device's local bookkeeping.
-            localState.getLastSeq() shouldBe null
-            localState.getKnownOwnSegments() shouldBe emptySet()
         }
 
     @Test

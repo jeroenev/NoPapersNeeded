@@ -13,6 +13,13 @@ object NpnPaths {
     const val TRASH_DIR = ".npn/trash"
 
     /**
+     * `<deviceId>/<installationId>.json`: one write-once marker per installation that has used a
+     * device id in this library, which is how a cloned installation is found out
+     * (see `DeviceIdentity`).
+     */
+    const val DEVICES_DIR = ".npn/devices"
+
+    /**
      * Import staging: a file is copied here, hashed, dedup-checked, then moved into place or
      * deleted. Under `.npn/` so it is never indexed; `.part` so an interrupted import is
      * recognizable as incomplete rather than mistaken for a document.

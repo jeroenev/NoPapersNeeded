@@ -6,10 +6,8 @@ import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.ContentAddressedJournalWriter
-import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactly
@@ -61,13 +59,6 @@ class CompactionReconcileTest {
 
     private fun coordinator(threshold: Int = 3): JournalCoordinator {
         val writer =
-            SegmentWriter(
-                store = FsSegmentStore(fs),
-                deviceId = "dev-main",
-                hlcClock = HlcClock("dev-main", clock),
-                localState = DbLocalJournalState(db.keyValueDao()),
-            )
-        val objectWriter =
             ContentAddressedJournalWriter(
                 fs = fs,
                 installationId = "test-installation",
@@ -77,7 +68,6 @@ class CompactionReconcileTest {
             writer = writer,
             indexer = indexer,
             accumulator = accumulator,
-            objectWriter = objectWriter,
             compactor = SnapshotCompactor(fs, "test-installation"),
             compactionThreshold = threshold,
             compactionStabilityWindowMs = window,

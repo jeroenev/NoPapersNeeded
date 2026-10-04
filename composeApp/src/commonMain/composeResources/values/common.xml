@@ -33,6 +33,7 @@
     <string name="common_open_failed_folder_missing">The library folder was not found. If it is on a removable drive or memory card, connect it and try again.</string>
     <string name="common_open_failed_storage_access">No Papers Needed is not allowed to access device storage, so it cannot read the library folder. Allow access to all files, then try again.</string>
     <string name="common_open_failed_folder_not_created">The library folder could not be created there. Choose another location.</string>
+    <string name="common_open_failed_unsupported_storage">This storage cannot save the library’s changes safely: it cannot create a file without risking replacing one another device has just written. Choose a folder on another drive or file system.</string>
     <string name="common_open_failed_unreadable">The library could not be read. The technical details say why.</string>
     <string name="common_pick_folder_again">Pick folder again</string>
 

@@ -5,6 +5,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationFailedException
 import dev.npn.core.fs.VerifiedPublicationResult
+import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.index.IndexRig
 import dev.npn.core.index.Indexer
 import dev.npn.core.journal.ContentAddressedJournalWriter
@@ -14,6 +15,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.awaitCancellation
@@ -45,7 +47,7 @@ class JournalCoordinatorWritesTest {
                     }
                 }
             val coordinator =
-                JournalCoordinator(rig.writer("dev-a"), Indexer(stalling, rig.db, rig.clock), rig.accumulator)
+                JournalCoordinator(rig.writer(), Indexer(stalling, rig.db, rig.clock), rig.accumulator)
             coordinator.refreshState()
 
             val rescan = launch { coordinator.rescan() }
@@ -72,11 +74,9 @@ class JournalCoordinatorWritesTest {
                 }
             val coordinator =
                 JournalCoordinator(
-                    writer = rig.writer("dev-a"),
-                    indexer = rig.indexer,
-                    accumulator = rig.accumulator,
-                    objectWriter =
-                        ContentAddressedJournalWriter(flaky, "test-installation", HlcWatermarkAllocator(rig.clock)),
+                    ContentAddressedJournalWriter(flaky, "test-installation", HlcWatermarkAllocator(rig.clock)),
+                    rig.indexer,
+                    rig.accumulator,
                 )
             coordinator.refreshState()
 
@@ -90,13 +90,64 @@ class JournalCoordinatorWritesTest {
             journal.filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.Legacy }.shouldBeEmpty()
         }
 
+    /** There is no older format to fall back to: a filesystem that cannot publish fails the write. */
+    @Test
+    fun aFilesystemThatCannotPublishFailsTheWriteInsteadOfWritingV1() =
+        runTest {
+            val noPrimitive =
+                object : LibraryFileSystem by rig.fs {
+                    override suspend fun publishVerifiedObjectOnce(
+                        stagingPath: String,
+                        canonicalPath: String,
+                        expectedHash: String,
+                    ): VerifiedPublicationResult = throw VerifiedPublicationUnavailableException("no link, no rename")
+                }
+            val coordinator =
+                JournalCoordinator(
+                    ContentAddressedJournalWriter(noPrimitive, "test-installation", HlcWatermarkAllocator(rig.clock)),
+                    rig.indexer,
+                    rig.accumulator,
+                )
+            coordinator.refreshState()
+
+            repeat(2) {
+                assertFailsWith<VerifiedPublicationUnavailableException> {
+                    coordinator.commitAndApply(listOf(PendingOp.tagAdd(DOC, "never")))
+                }
+            }
+
+            rig.fs
+                .listAllUnder(NpnPaths.JOURNAL_DIR)
+                .filter { !it.isDirectory && NpnPaths.journalPath(it.relPath) !is NpnPaths.JournalPath.Staging }
+                .shouldBeEmpty()
+        }
+
+    /** Every commit, whatever the entry point, publishes one storage-v2 object and nothing else. */
+    @Test
+    fun everyWritePublishesAStorageV2Object() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            val coordinator = rig.coordinator()
+            coordinator.rescan()
+            val doc = rig.fs.sha256("a.pdf")
+
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(doc, "one")))
+            coordinator.commitBuilt { state -> state.tagRemovalOps(listOf(doc), "one") }
+            coordinator.commitWithOptimisticLifecycle(listOf(PendingOp.docTrash(doc, "a.pdf")), setOf(doc)) {}
+            coordinator.commitAndRescan(listOf(PendingOp.docRestore(doc)))
+
+            val journal = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR).filter { !it.isDirectory }
+            journal.forEach { NpnPaths.journalPath(it.relPath).shouldBeInstanceOf<NpnPaths.JournalPath.ObjectV2>() }
+            journal shouldHaveSize 4
+        }
+
     /** A viewmodel commits from the main thread; the fold and the write must not run there. */
     @Test
     fun aCommitRunsOffTheCallersThread() =
         runTest {
             val caller = Executors.newSingleThreadExecutor { Thread(it, CALLER_THREAD) }.asCoroutineDispatcher()
             try {
-                val coordinator = JournalCoordinator(rig.writer("dev-a"), rig.indexer, rig.accumulator)
+                val coordinator = rig.coordinator()
                 coordinator.refreshState()
                 var buildThread: String? = null
 

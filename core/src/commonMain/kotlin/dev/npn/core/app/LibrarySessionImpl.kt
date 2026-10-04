@@ -19,11 +19,10 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.fs.debounced
-import dev.npn.core.index.DbLocalJournalState
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.EmptyImportException
-import dev.npn.core.index.FsSegmentStore
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
@@ -35,10 +34,8 @@ import dev.npn.core.index.SplitService
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.HlcClock
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SegmentWriter
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldKeys
@@ -79,7 +76,7 @@ import kotlinx.coroutines.sync.withLock
 
 /**
  * Everything wired for one opened library folder. Constructed by [openSession] (a suspend factory
- * that runs the device-identity + fork check and initial fold), then [start]ed.
+ * that settles the device identity and runs the initial fold), then [start]ed.
  *
  * Everything the session runs — background loops, queue drains, caller-driven operations — belongs
  * to one [SessionLifetime] under [SessionDeps.scope], so [close] stops all of it at once, for good.
@@ -703,20 +700,22 @@ class LibrarySessionImpl private constructor(
         private const val SETTLE_RESCAN_MARGIN_MS = 500L
         private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
 
-        /** The `kv` keys an index from before [DeviceDatabase] kept for this device. */
-        private val DEVICE_KEYS =
-            listOf(
-                DeviceIdentity.KEY_DEVICE_ID,
-                DbLocalJournalState.KEY_LAST_SEQ,
-                DbLocalJournalState.KEY_KNOWN_SEGMENTS,
-            )
+        /**
+         * The `kv` keys an index from before [DeviceDatabase] kept for this device. The v1 writer's
+         * bookkeeping moves too, so the index sheds it; [DeviceIdentity] then drops it.
+         */
+        private val DEVICE_KEYS = listOf(DeviceIdentity.KEY_DEVICE_ID) + DeviceIdentity.LEGACY_JOURNAL_KEYS
 
         /**
          * Boot a session over [deps]: move device state an older index still holds into the device
-         * database, get-or-create the deviceId, run the single-writer fork check (rebuilding the
-         * writer under a fresh id if a fork is detected), wire the journal engine, repositories,
-         * pipelines, then do the initial fold so [documents] is populated before the caller's
-         * initial rescan.
+         * database, settle the device id ([DeviceIdentity]: a fresh one for a restored or cloned
+         * installation), wire the journal engine, repositories, pipelines, then do the initial fold
+         * so [documents] is populated before the caller's initial rescan.
+         *
+         * Refuses, with [VerifiedPublicationUnavailableException], a library on a filesystem that
+         * cannot publish without replacement: there is no other journal format to write. Recording
+         * this installation in the library publishes through the same primitive, so the first open
+         * finds out.
          */
         @Suppress("LongMethod")
         suspend fun openSession(deps: SessionDeps): LibrarySessionImpl {
@@ -728,35 +727,12 @@ class LibrarySessionImpl private constructor(
             // Before anything reads the device id: an index from before device.db holds it.
             LegacyIndexTables.moveDeviceState(db, deviceDb, DEVICE_KEYS, RoomChatHistoryProvider.KEY_PREFIX)
 
-            val segmentStore = FsSegmentStore(fs)
             val indexer = Indexer(fs, db, deps.clock)
 
-            val identity = DeviceIdentity(deviceDb.keyValueDao())
-            val initialDeviceId = identity.getOrCreate()
-            val localState = DbLocalJournalState(deviceDb.keyValueDao())
+            val coordinator = createCoordinator(deps, indexer)
+            val effectiveDeviceId =
+                DeviceIdentity(deviceDb.keyValueDao(), fs, deps.installationId, deps.log).resolve()
 
-            // Build a provisional writer to run the fork check.
-            val provisional =
-                SegmentWriter(
-                    store = segmentStore,
-                    deviceId = initialDeviceId,
-                    hlcClock = HlcClock(initialDeviceId, deps.clock),
-                    localState = localState,
-                )
-            val effectiveDeviceId = identity.ensureSingleWriter(provisional, localState)
-            val writer =
-                if (effectiveDeviceId == initialDeviceId) {
-                    provisional
-                } else {
-                    SegmentWriter(
-                        store = segmentStore,
-                        deviceId = effectiveDeviceId,
-                        hlcClock = HlcClock(effectiveDeviceId, deps.clock),
-                        localState = localState,
-                    )
-                }
-
-            val coordinator = createCoordinator(deps, writer, indexer)
             coordinator.refreshState()
             coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) })
             // Once per library: what this device kept as settings before they became library data.
@@ -936,37 +912,38 @@ class LibrarySessionImpl private constructor(
         }
 
         /**
-         * v2 (content-addressed objects) is the only write format. Every production filesystem
-         * reports [dev.npn.core.fs.VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE], so this
-         * always returns a writer there. It returns null only for a filesystem that does not
-         * support verified publication (unknown future provider), in which case the coordinator
-         * falls back to the legacy v1 [SegmentWriter]. v1 remains fully readable regardless.
+         * The journal writer: storage-v2 content-addressed objects are the only format this build
+         * writes (v1 segments are still read). A filesystem that does not report verified
+         * publication is refused here rather than written in a weaker format.
          */
-        private suspend fun createObjectWriter(deps: SessionDeps): ContentAddressedJournalWriter? {
+        private suspend fun createObjectWriter(deps: SessionDeps): ContentAddressedJournalWriter {
             val state = deps.db.metadataProjectionDao().state()
-            return ContentAddressedJournalWriter(
-                fs = deps.fs,
-                installationId = deps.installationId,
-                allocator =
-                    HlcWatermarkAllocator(
-                        clock = deps.clock,
-                        initialPhysicalMillis = state?.allocatorPhysical ?: 0L,
-                        initialCounter = state?.allocatorCounter ?: 0,
-                    ),
-            ).takeIf { it.supported }
+            val writer =
+                ContentAddressedJournalWriter(
+                    fs = deps.fs,
+                    installationId = deps.installationId,
+                    allocator =
+                        HlcWatermarkAllocator(
+                            clock = deps.clock,
+                            initialPhysicalMillis = state?.allocatorPhysical ?: 0L,
+                            initialCounter = state?.allocatorCounter ?: 0,
+                        ),
+                )
+            if (!writer.supported) {
+                throw VerifiedPublicationUnavailableException("This storage cannot publish journal objects safely")
+            }
+            return writer
         }
 
         private suspend fun createCoordinator(
             deps: SessionDeps,
-            writer: SegmentWriter,
             indexer: Indexer,
         ): JournalCoordinator =
             JournalCoordinator(
-                writer = writer,
+                writer = createObjectWriter(deps),
                 indexer = indexer,
                 accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId),
-                objectWriter = createObjectWriter(deps),
-                compactor = SnapshotCompactor(deps.fs, deps.installationId).takeIf { it.supported },
+                compactor = SnapshotCompactor(deps.fs, deps.installationId),
             )
     }
 }

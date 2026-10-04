@@ -16,6 +16,7 @@ import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalSourceRead
+import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotV2Reader
 import dev.npn.core.journal.StorageV1Reader
 import dev.npn.core.journal.StorageV2Reader
@@ -527,31 +528,22 @@ class MetadataAccumulator(
         internal val actor: MetadataTransactionActorEntity?,
     )
 
-    suspend fun localSource(
-        path: String,
-        storageVersion: Int,
-        contentHash: String?,
-        events: List<dev.npn.core.journal.JournalEvent>,
-    ): LocalSource {
+    suspend fun localSource(published: PublishedTransaction): LocalSource {
+        val events = published.events
         val canonical = events.map(EventDecoderRegistry::canonical)
-        // The written bytes are needed only for a legacy segment's hash, or when the stat failed.
+        // The written bytes are needed only when the stat failed.
         val bytes by lazy { JournalCodec.encodeLines(events).encodeToByteArray() }
-        val hash = contentHash ?: sha256Bytes(bytes)
-        val meta = fs.stat(path)
+        val meta = fs.stat(published.relPath)
+        val stat = "${meta?.size ?: bytes.size.toLong()},${meta?.mtimeMillis ?: 0L}"
         val source =
             MetadataSourceEntity(
-                path = path,
-                storageVersion = storageVersion,
-                fingerprint = "${meta?.size ?: bytes.size.toLong()},${meta?.mtimeMillis ?: 0L}:$hash",
-                contentHash = contentHash,
+                path = published.relPath,
+                storageVersion = NpnPaths.STORAGE_V2,
+                fingerprint = "$stat:${published.contentHash}",
+                contentHash = published.contentHash,
                 status = MetadataProjectionDao.STATUS_APPLIED,
             )
-        val actor =
-            if (storageVersion == NpnPaths.STORAGE_V2) {
-                MetadataTransactionActorEntity(events.first().dev, checkNotNull(contentHash))
-            } else {
-                null
-            }
+        val actor = MetadataTransactionActorEntity(events.first().dev, published.contentHash)
         return LocalSource(source, canonical.map(::eventEntity), actor)
     }
 

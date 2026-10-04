@@ -32,6 +32,7 @@
     <string name="common_open_failed_folder_missing">De bibliotheekmap is niet gevonden. Staat ze op een externe schijf of geheugenkaart, sluit die dan aan en probeer het opnieuw.</string>
     <string name="common_open_failed_storage_access">No Papers Needed heeft geen toegang tot de opslag van dit apparaat en kan de bibliotheekmap daarom niet lezen. Sta toegang tot alle bestanden toe en probeer het opnieuw.</string>
     <string name="common_open_failed_folder_not_created">De bibliotheekmap kon daar niet worden aangemaakt. Kies een andere locatie.</string>
+    <string name="common_open_failed_unsupported_storage">Deze opslag kan de wijzigingen in de bibliotheek niet veilig bewaren: ze kan geen bestand aanmaken zonder het risico een bestand te vervangen dat een ander apparaat net heeft geschreven. Kies een map op een andere schijf of een ander bestandssysteem.</string>
     <string name="common_open_failed_unreadable">De bibliotheek kon niet worden gelezen. De technische details vermelden waarom.</string>
     <string name="common_pick_folder_again">Map opnieuw kiezen</string>
 

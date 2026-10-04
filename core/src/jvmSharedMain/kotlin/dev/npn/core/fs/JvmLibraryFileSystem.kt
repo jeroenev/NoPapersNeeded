@@ -24,28 +24,6 @@ import java.security.DigestInputStream
 import java.security.MessageDigest
 import kotlin.io.path.name
 
-/**
- * How [JvmLibraryFileSystem.publishVerifiedObjectOnce] installs a hash-verified staging object
- * under its canonical name when the filesystem has no usable `link(2)`.
- */
-enum class ObjectPublication {
-    /**
-     * Hard link or nothing: a filesystem without `link(2)` gets a
-     * [VerifiedPublicationUnavailableException], and the journal stays on the v1 writer for the
-     * session. The desktop default, where every supported filesystem has hard links.
-     */
-    HARD_LINK_ONLY,
-
-    /**
-     * Hard link, else an exclusive rename ([NoReplaceMove]) of the verified staging file within
-     * its bucket.
-     * Android's shared storage is a FUSE mount that refuses `link(2)` with EPERM, so this is the
-     * exclusive rename primitive there. Both operations refuse an existing target atomically,
-     * including one concurrently installed by a sync client. Unsupported filesystems fail closed.
-     */
-    HARD_LINK_OR_RENAME,
-}
-
 /** The one no-replace primitive, abstracted so tests can simulate a filesystem without `link(2)`. */
 internal fun interface NoReplaceLinker {
     /**
@@ -83,20 +61,17 @@ internal object HardLinkLinker : NoReplaceLinker {
  * file in the same directory and then install it under its final name with a primitive that
  * cannot replace an existing entry ([atomicMoveNoReplace]). Never appends or overwrites.
  *
- * [externalIo] opens the platform's external files for import/export (see [ExternalIo]);
- * [publication] picks the fallback when the filesystem has no hard links (see [ObjectPublication]).
+ * [externalIo] opens the platform's external files for import/export (see [ExternalIo]).
  */
 class JvmLibraryFileSystem internal constructor(
     private val root: Path,
     private val externalIo: ExternalIo,
-    private val publication: ObjectPublication,
     private val linker: NoReplaceLinker,
 ) : LibraryFileSystem {
     constructor(
         root: Path,
         externalIo: ExternalIo = defaultExternalIo(),
-        publication: ObjectPublication = ObjectPublication.HARD_LINK_ONLY,
-    ) : this(root, externalIo, publication, HardLinkLinker)
+    ) : this(root, externalIo, HardLinkLinker)
 
     override val verifiedPublicationCapability: VerifiedPublicationCapability =
         VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
@@ -276,9 +251,12 @@ class JvmLibraryFileSystem internal constructor(
 
     /**
      * Install the verified [staging] object as [canonical] without ever replacing an existing
-     * entry. A hard link installs one complete directory entry and cannot replace; without hard
-     * links the behaviour follows [publication]. Throws [java.nio.file.FileAlreadyExistsException]
-     * when the canonical object is already there.
+     * entry. A hard link installs one complete directory entry and cannot replace; a filesystem
+     * without hard links (Android's shared-storage FUSE mount, exFAT, FAT) gets [NoReplaceMove]'s
+     * exclusive rename of the staging file within its bucket, which refuses an existing target just
+     * as atomically, including one a sync client installed meanwhile. A filesystem with neither
+     * fails with [VerifiedPublicationUnavailableException]. Throws
+     * [java.nio.file.FileAlreadyExistsException] when the canonical object is already there.
      */
     private fun publishObject(
         staging: Path,
@@ -289,18 +267,8 @@ class JvmLibraryFileSystem internal constructor(
         if (linkNoReplace(staging, canonical)) return VerifiedPublicationResult.PUBLISHED
         // A generic failure with the target in place is a lost race, not a missing primitive.
         if (Files.isRegularFile(canonical)) throw java.nio.file.FileAlreadyExistsException(canonical.toString())
-        return when (publication) {
-            ObjectPublication.HARD_LINK_ONLY -> {
-                throw VerifiedPublicationUnavailableException(
-                    "Atomic no-replace publication is unsupported on this filesystem: $canonical",
-                )
-            }
-
-            ObjectPublication.HARD_LINK_OR_RENAME -> {
-                NoReplaceMove.move(staging, canonical)
-                VerifiedPublicationResult.PUBLISHED
-            }
-        }
+        NoReplaceMove.move(staging, canonical)
+        return VerifiedPublicationResult.PUBLISHED
     }
 
     override val supportsDocumentRelocation: Boolean get() = true
