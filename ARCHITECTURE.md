@@ -143,8 +143,11 @@ bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Wind
    columns on `documents` are written from the same map as a read cache for list
    queries. One FTS `fields` column indexes every value. FTS5 finds a row only by MATCH or
    rowid, so a document's FTS row is reached through `fts_keys`; the fold writes its metadata
-   columns and `OcrPipeline` its extracted text, and neither rewrites the other's. The db lives
-   device-local, outside the library folder, and is rebuildable from the folder.
+   columns and `OcrPipeline` its extracted text, and neither rewrites the other's. Every fold
+   writes in one transaction (`Indexer.projection`, which a commit's journal bookkeeping joins), so
+   no reader sees a row before its tags and fields; moving a PDF to its intended path and recording
+   where documents were seen is filesystem work, and runs after that transaction commits. The db
+   lives device-local, outside the library folder, and is rebuildable from the folder.
    The projection is a pure function of the applied source set, so
    `MetadataAccumulator` fingerprints that set and records it alongside the ready
    marker: opening a library whose fingerprint still matches reuses the stored

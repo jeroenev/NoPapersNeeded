@@ -195,6 +195,19 @@ interface DuplicateDao {
         deleteForDoc(docId)
         if (rows.isNotEmpty()) insertAll(rows)
     }
+
+    @Query("DELETE FROM duplicates WHERE docId IN (:docIds)")
+    suspend fun deleteForDocs(docIds: List<String>)
+
+    /** Replace the duplicate paths recorded for each of [docIds] with those in [rows], at once. */
+    @Transaction
+    suspend fun replaceForDocs(
+        docIds: Collection<String>,
+        rows: List<DuplicateEntity>,
+    ) {
+        for (chunk in docIds.chunked(DocumentDao.BIND_CHUNK)) deleteForDocs(chunk)
+        if (rows.isNotEmpty()) insertAll(rows)
+    }
 }
 
 @Dao

@@ -112,19 +112,23 @@ internal class DocumentPathReconciler(
             if (intended == null || intended == row.relPath) null else PathConflict(row.docId, row.relPath, intended)
         }
 
+    /**
+     * Retire each extra copy in [duplicates] whose document already sits at its intended path, and
+     * keep in the list only the copies still on disk. The caller records what is left.
+     */
     suspend fun reconcileDuplicates(
         state: FoldedState,
         duplicates: MutableList<DuplicateReport>,
     ) {
+        val rows = db.documentDao().getByDocIds(duplicates.map { it.docId }.distinct()).associateBy { it.docId }
         val retained = ArrayList<DuplicateReport>()
         for (duplicate in duplicates) {
             val intended = intendedPath(state, duplicate.docId)
-            val row = db.documentDao().getByDocId(duplicate.docId)
+            val row = rows[duplicate.docId]
             if (intended != null && row?.relPath == intended) {
                 reconcileAvailable(duplicate.docId, duplicate.extraRelPath, intended)
             }
             if (fs.exists(duplicate.extraRelPath) && duplicate.extraRelPath != row?.relPath) retained.add(duplicate)
-            db.duplicateDao().replaceAll(duplicate.docId, emptyList())
         }
         duplicates.clear()
         duplicates.addAll(retained)

@@ -14,6 +14,9 @@ interface TagDao {
     @Upsert
     suspend fun upsert(tag: TagEntity)
 
+    @Upsert
+    suspend fun upsertAll(tags: List<TagEntity>)
+
     @Delete
     suspend fun delete(tag: TagEntity)
 

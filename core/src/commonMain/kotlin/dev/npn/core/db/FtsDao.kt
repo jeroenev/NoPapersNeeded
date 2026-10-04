@@ -70,7 +70,11 @@ interface FtsDao {
             if (rowid != null) {
                 updateMetadata(rowid, row.fileName, row.tags, row.fields)
             } else {
-                rowids[row.docId] = insertNew(row)
+                // insertNew's two statements inline: this method is already one transaction, and
+                // calling the @Transaction method would open a savepoint per new document.
+                val newRowid = insertKey(FtsKeyEntity(docId = row.docId))
+                insertRow(newRowid, row.docId, row.fileName, row.content, row.tags, row.fields)
+                rowids[row.docId] = newRowid
             }
         }
     }
