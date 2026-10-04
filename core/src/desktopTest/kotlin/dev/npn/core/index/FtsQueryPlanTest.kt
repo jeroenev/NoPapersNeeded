@@ -53,7 +53,7 @@ class FtsQueryPlanTest {
                 rig.writePdf("a.pdf", "alpha")
                 rig.writePdf("b.pdf", "bravo")
                 rig.rescan()
-                val docId = rig.db.documentDao().rowAtPath("a.pdf")!!.docId
+                val docId = checkNotNull(rig.db.documentDao().rowAtPath("a.pdf")).docId
                 val coordinator = rig.coordinator(rig.writer("dev-main"))
                 coordinator.refreshState()
                 rig.clock.advance()

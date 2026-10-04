@@ -61,7 +61,7 @@ class FtsKeysMigrationTest {
             val db = npnDatabase(file)
             try {
                 // A destructive fallback would have emptied every table.
-                db.documentDao().getByDocId(a)!!.relPath shouldBe "a.pdf"
+                db.documentDao().getByDocId(a)?.relPath shouldBe "a.pdf"
                 val fts = db.ftsDao()
                 fts.contentForDoc(a) shouldBe "aardvark"
                 fts.contentForDoc(b) shouldBe "buffalo"
