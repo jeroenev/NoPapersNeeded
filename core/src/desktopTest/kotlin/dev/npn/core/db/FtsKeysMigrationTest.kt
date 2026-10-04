@@ -94,10 +94,15 @@ class FtsKeysMigrationTest {
         try {
             for (entity in schema.getValue("entities").jsonArray.map { it.jsonObject }) {
                 val table = entity.getValue("tableName").jsonPrimitive.content
+
                 fun create(sql: String) = connection.execSQL(sql.replace("\${TABLE_NAME}", table))
                 create(entity.getValue("createSql").jsonPrimitive.content)
                 entity["indices"]?.jsonArray?.forEach { index ->
-                    create(index.jsonObject.getValue("createSql").jsonPrimitive.content)
+                    create(
+                        index.jsonObject
+                            .getValue("createSql")
+                            .jsonPrimitive.content,
+                    )
                 }
             }
             schema.getValue("setupQueries").jsonArray.forEach { connection.execSQL(it.jsonPrimitive.content) }

@@ -7,8 +7,9 @@ package dev.npn.core.fs
  * versions co-exist). Single-writer by construction (writer key in the name) and write-once.
  * Devices adopt one another's sidecars instead of re-OCRing with the same or a worse engine.
  */
-class OcrSidecarFiles(private val fs: LibraryFileSystem) {
-
+class OcrSidecarFiles(
+    private val fs: LibraryFileSystem,
+) {
     /** All sidecar files in `.npn/ocr/` (files only). Walks that directory alone, not the library. */
     suspend fun list(): List<FileMeta> {
         val prefix = "${NpnPaths.OCR_DIR}/"
@@ -20,11 +21,17 @@ class OcrSidecarFiles(private val fs: LibraryFileSystem) {
     }
 
     /** Read the sidecar for [sha256] written under [writerKey] (a deviceId or `deviceId.engine`). */
-    suspend fun read(sha256: String, writerKey: String): String =
-        fs.readBytes(NpnPaths.ocrSidecarPath(sha256, writerKey)).decodeToString()
+    suspend fun read(
+        sha256: String,
+        writerKey: String,
+    ): String = fs.readBytes(NpnPaths.ocrSidecarPath(sha256, writerKey)).decodeToString()
 
     /** Write-once publish of a sidecar under [writerKey] (a deviceId or `deviceId.engine`). */
-    suspend fun writeOnce(sha256: String, writerKey: String, json: String) {
+    suspend fun writeOnce(
+        sha256: String,
+        writerKey: String,
+        json: String,
+    ) {
         fs.writeBytesOnce(NpnPaths.ocrSidecarPath(sha256, writerKey), json.encodeToByteArray())
     }
 

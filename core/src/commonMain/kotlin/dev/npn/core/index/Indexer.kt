@@ -297,7 +297,12 @@ class Indexer(
                 recon.added++
                 recon.changed++
                 recon.relinkCandidates.add(
-                    RelinkCandidate(docAtPath.docId, hash, reason = "path-match", score = RelinkPairing.SCORE_PATH_MATCH),
+                    RelinkCandidate(
+                        docAtPath.docId,
+                        hash,
+                        reason = "path-match",
+                        score = RelinkPairing.SCORE_PATH_MATCH,
+                    ),
                 )
             } else {
                 recon.existingByDocId[hash] = insertNewDocument(hash, meta, now)

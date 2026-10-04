@@ -149,4 +149,3 @@ interface FtsDao {
         }
     }
 }
-

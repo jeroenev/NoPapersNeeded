@@ -57,13 +57,17 @@ class MetadataIngestCostTest {
             )
             coordinator.reconcileMetadata()
 
-            rig.db.tagDao().tagsForDocument(docId).filter { it.startsWith("remote") } shouldContainExactly
+            rig.db
+                .tagDao()
+                .tagsForDocument(docId)
+                .filter { it.startsWith("remote") } shouldContainExactly
                 listOf("remote-1", "remote-2", "remote-3")
             val eventStatements = log.statements.filter { "metadata_events" in it }.distinct()
             eventStatements.shouldNotBeEmpty()
-            eventStatements.filter { sql ->
-                rig.db.queryPlan(sql).any { isFullTableScan(it, "metadata_events") }
-            }.shouldBeEmpty()
+            eventStatements
+                .filter { sql ->
+                    rig.db.queryPlan(sql).any { isFullTableScan(it, "metadata_events") }
+                }.shouldBeEmpty()
             // One identity check per event recorded (one local, three remote), and no second lookup
             // to learn which of them were new.
             log.statements.count { it.startsWith(EVENT_BY_IDENTITY) } shouldBe 4
