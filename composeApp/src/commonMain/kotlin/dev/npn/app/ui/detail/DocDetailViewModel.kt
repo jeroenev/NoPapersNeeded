@@ -3,6 +3,7 @@ package dev.npn.app.ui.detail
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
+import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.isConfiguredOrFalse
@@ -29,6 +30,7 @@ import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.OcrFacade
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.app.ReviewConfigFacade
+import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.TagAdmin
 import dev.npn.core.app.TagRepository
@@ -48,6 +50,12 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.detail_split_failed
+import no_papers_needed.composeapp.generated.resources.detail_split_failed_invalid_parts
+import no_papers_needed.composeapp.generated.resources.detail_split_failed_not_completed
+import no_papers_needed.composeapp.generated.resources.detail_split_failed_unavailable
+import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
 
 /**
  * Transient UI state for the detail viewer (page index, page count, busy flags). Zoom/pan are
@@ -526,19 +534,22 @@ class DocDetailViewModel(
 
     /**
      * Split into one document per [segments] entry. On success the original is trashed by the
-     * session, so the screen should navigate back; failures surface via [onResult]'s message.
+     * session and [onDone] runs, so the screen can leave; a failure is reported as a message.
      */
     fun split(
         segments: List<IntRange>,
-        onResult: (SplitOutcome) -> Unit,
-    ) {
-        viewModelScope.launch {
-            _ui.update { it.copy(splitting = true) }
-            val outcome =
-                runCatchingCancellable { maintenance.splitPdf(docId, segments) }
-                    .getOrElse { SplitOutcome.Failed(it.message.orEmpty()) }
-            _ui.update { it.copy(splitting = false) }
-            onResult(outcome)
+        onDone: () -> Unit,
+    ) = launchReporting({ reason -> uiText(Res.string.detail_split_failed, reason) }) {
+        _ui.update { it.copy(splitting = true) }
+        val outcome =
+            try {
+                maintenance.splitPdf(docId, segments)
+            } finally {
+                _ui.update { it.copy(splitting = false) }
+            }
+        when (outcome) {
+            is SplitOutcome.Done -> onDone()
+            is SplitOutcome.Failed -> message(outcome.reason.text())
         }
     }
 
@@ -559,3 +570,11 @@ class DocDetailViewModel(
         maxDim: Int,
     ): ByteArray? = runCatchingCancellable { content.renderPage(docId, pageIndex, maxDim) }.getOrNull()
 }
+
+private fun SplitFailure.text(): UiText =
+    when (this) {
+        SplitFailure.DOCUMENT_UNAVAILABLE -> uiText(Res.string.detail_split_failed_unavailable)
+        SplitFailure.INVALID_PARTS -> uiText(Res.string.detail_split_failed_invalid_parts)
+        SplitFailure.UNREADABLE_PDF -> uiText(Res.string.detail_split_failed_unreadable)
+        SplitFailure.NOT_COMPLETED -> uiText(Res.string.detail_split_failed_not_completed)
+    }

@@ -18,6 +18,9 @@ interface MaintenanceFacade {
      * contiguous and cover all pages). Parts are imported as regular new documents (deduped,
      * OCR queued), tags and single-value properties are copied onto them, and the original is
      * moved to trash. The original file itself is never modified.
+     *
+     * A split that cannot finish returns [SplitOutcome.Failed] and leaves the library as it was;
+     * it throws only when the session is closed.
      */
     suspend fun splitPdf(
         docId: String,
@@ -32,6 +35,21 @@ sealed interface SplitOutcome {
     ) : SplitOutcome
 
     data class Failed(
-        val message: String,
+        val reason: SplitFailure,
     ) : SplitOutcome
+}
+
+/** Why a split did not happen. The underlying cause, if any, is in the session log. */
+enum class SplitFailure {
+    /** The document is gone, trashed or missing. */
+    DOCUMENT_UNAVAILABLE,
+
+    /** The page ranges are not at least two parts covering every page once, in order. */
+    INVALID_PARTS,
+
+    /** The PDF could not be read. */
+    UNREADABLE_PDF,
+
+    /** A part, its metadata or the trashing of the original failed; the parts were taken back. */
+    NOT_COMPLETED,
 }

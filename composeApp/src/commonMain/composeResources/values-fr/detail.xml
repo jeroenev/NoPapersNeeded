@@ -154,4 +154,8 @@
     <string name="detail_find_next">Résultat suivant</string>
     <string name="detail_no_matches_found">Aucun résultat</string>
     <string name="detail_find_position">%1$d / %2$d</string>
+    <string name="detail_split_failed_unavailable">Impossible de diviser le document : il n’est plus dans la bibliothèque.</string>
+    <string name="detail_split_failed_invalid_parts">Impossible de diviser le document : les parties doivent couvrir chaque page une seule fois, dans l’ordre.</string>
+    <string name="detail_split_failed_unreadable">Impossible de diviser le document : le PDF n’a pas pu être lu.</string>
+    <string name="detail_split_failed_not_completed">Impossible de diviser le document. La bibliothèque est restée inchangée.</string>
 </resources>

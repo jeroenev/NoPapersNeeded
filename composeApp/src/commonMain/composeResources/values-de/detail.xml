@@ -154,4 +154,8 @@
     <string name="detail_find_next">Nächster Treffer</string>
     <string name="detail_no_matches_found">Keine Treffer gefunden</string>
     <string name="detail_find_position">%1$d / %2$d</string>
+    <string name="detail_split_failed_unavailable">Das Dokument konnte nicht aufgeteilt werden: Es ist nicht mehr in der Bibliothek.</string>
+    <string name="detail_split_failed_invalid_parts">Das Dokument konnte nicht aufgeteilt werden: Die Teile müssen jede Seite genau einmal und in der richtigen Reihenfolge abdecken.</string>
+    <string name="detail_split_failed_unreadable">Das Dokument konnte nicht aufgeteilt werden: Das PDF konnte nicht gelesen werden.</string>
+    <string name="detail_split_failed_not_completed">Das Dokument konnte nicht aufgeteilt werden. Die Bibliothek blieb unverändert.</string>
 </resources>

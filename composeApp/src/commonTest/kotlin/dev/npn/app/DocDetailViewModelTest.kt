@@ -7,6 +7,8 @@ import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
+import dev.npn.core.app.SplitFailure
+import dev.npn.core.app.SplitOutcome
 import dev.npn.core.app.TagInfo
 import dev.npn.core.db.FieldKeyCount
 import dev.npn.core.model.FieldDef
@@ -399,6 +401,46 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.metadata.value.document.reviewed shouldBe true
+        }
+
+    @Test
+    fun aSplitThatWorkedLeavesTheScreenWithoutAMessage() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { maintenance.splitOutcome = SplitOutcome.Done(listOf("p1", "p2")) }
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            var left = false
+
+            model.split(listOf(0..0, 1..1)) { left = true }
+            advanceUntilIdle()
+            collector.cancel()
+
+            left shouldBe true
+            messages shouldBe emptyList()
+            model.ui.value.splitting shouldBe false
+            session.maintenance.splits shouldContainExactly listOf("doc-1" to listOf(0..0, 1..1))
+        }
+
+    @Test
+    fun aSplitThatFailedSaysWhyAndStays() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    maintenance.splitOutcome = SplitOutcome.Failed(SplitFailure.UNREADABLE_PDF)
+                }
+            val model = vm(session = session)
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            var left = false
+
+            model.split(listOf(0..0, 1..1)) { left = true }
+            advanceUntilIdle()
+            collector.cancel()
+
+            left shouldBe false
+            messages shouldContainExactly listOf("Could not split the document: the PDF could not be read.")
+            model.ui.value.splitting shouldBe false
         }
 
     @Test

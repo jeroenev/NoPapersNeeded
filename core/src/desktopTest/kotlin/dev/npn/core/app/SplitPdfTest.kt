@@ -61,14 +61,33 @@ class SplitPdfTest {
                 val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("bad split"), "doc.pdf")
                 val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
 
-                rig.session.splitPdf(imported.docId, listOf(0..0)).shouldBeInstanceOf<SplitOutcome.Failed>()
-                rig.session.splitPdf(imported.docId, listOf(0..0, 0..1)).shouldBeInstanceOf<SplitOutcome.Failed>()
-                rig.session.splitPdf(imported.docId, listOf(0..0, 1..2)).shouldBeInstanceOf<SplitOutcome.Failed>()
+                val invalid = SplitOutcome.Failed(SplitFailure.INVALID_PARTS)
+                rig.session.splitPdf(imported.docId, listOf(0..0)) shouldBe invalid
+                rig.session.splitPdf(imported.docId, listOf(0..0, 0..1)) shouldBe invalid
+                rig.session.splitPdf(imported.docId, listOf(0..0, 1..2)) shouldBe invalid
 
                 // Original untouched.
                 rig.session.documents
                     .observeTrashed()
                     .first() shouldHaveSize 0
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun aSplitOfADocumentThatIsGoneSaysSo() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("gone"), "doc.pdf")
+                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+                rig.session.docLifecycle.trashDoc(imported.docId)
+
+                rig.session.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
+                    SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
+                rig.session.splitPdf("f".repeat(64), listOf(0..0, 1..1)) shouldBe
+                    SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
             } finally {
                 rig.close()
             }

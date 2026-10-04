@@ -398,10 +398,9 @@ class LibrarySessionImpl private constructor(
         docId: String,
         segments: List<IntRange>,
     ): SplitOutcome {
-        val result = splitService.split(docId, segments)
         val parts =
-            when (result) {
-                is SplitService.Result.Failed -> return SplitOutcome.Failed(result.message)
+            when (val result = splitService.split(docId, segments)) {
+                is SplitService.Result.Failed -> return SplitOutcome.Failed(result.reason)
                 is SplitService.Result.Done -> result.parts
             }
         val partIds =
@@ -413,11 +412,16 @@ class LibrarySessionImpl private constructor(
             }
         var finished = false
         try {
-            copyMetadataToParts(docId, partIds)
             // Trash last, so a failure anywhere leaves the original untouched; the parts are then
             // taken back. Metadata already copied onto them stays in the journal under their
             // hashes, harmless: a retry makes the same parts and copies the same metadata.
-            writer.trashDoc(docId)
+            runCatchingCancellable {
+                copyMetadataToParts(docId, partIds)
+                writer.trashDoc(docId)
+            }.getOrElse {
+                log.warn("Finishing the split of $docId failed; taking its parts back", it)
+                return SplitOutcome.Failed(SplitFailure.NOT_COMPLETED)
+            }
             finished = true
         } finally {
             if (!finished) splitService.rollBack(parts)

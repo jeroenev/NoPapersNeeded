@@ -26,7 +26,6 @@ import dev.npn.app.ui.common.sharePdfBytes
 import dev.npn.app.ui.common.supportsSharing
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
-import dev.npn.core.app.SplitOutcome
 import dev.npn.core.util.runCatchingCancellable
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
@@ -59,7 +58,6 @@ import no_papers_needed.composeapp.generated.resources.detail_share_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_split_document
-import no_papers_needed.composeapp.generated.resources.detail_split_failed
 import no_papers_needed.composeapp.generated.resources.detail_splitting
 import no_papers_needed.composeapp.generated.resources.detail_trash
 import no_papers_needed.composeapp.generated.resources.detail_trash_document
@@ -332,11 +330,13 @@ private fun DocActionDialogs(
         }
 
         DocActionDialog.SPLIT -> {
-            SplitActionDialog(
+            SplitDialog(
                 pageCount = pageCount,
-                vm = vm,
-                snackbar = snackbar,
-                onGone = onGone,
+                onConfirm = { segments ->
+                    onDismiss()
+                    // The original is trashed on success; the host should leave/close.
+                    vm.split(segments, onGone)
+                },
                 onDismiss = onDismiss,
             )
         }
@@ -367,44 +367,6 @@ private fun BakeDialog(
                             getString(Res.string.detail_bake_failed)
                         },
                     )
-                }
-            }
-        },
-        onDismiss = onDismiss,
-    )
-}
-
-@Composable
-private fun SplitActionDialog(
-    pageCount: Int,
-    vm: DocDetailViewModel,
-    snackbar: SnackbarHostState,
-    onGone: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    val scope = rememberCoroutineScope()
-    val unknownError = stringResource(Res.string.common_unknown_error)
-    SplitDialog(
-        pageCount = pageCount,
-        onConfirm = { segments ->
-            onDismiss()
-            vm.split(segments) { outcome ->
-                when (outcome) {
-                    // The original is trashed on success; the host should leave/close.
-                    is SplitOutcome.Done -> {
-                        onGone()
-                    }
-
-                    is SplitOutcome.Failed -> {
-                        scope.launch {
-                            snackbar.showSnackbar(
-                                getString(
-                                    Res.string.detail_split_failed,
-                                    outcome.message.ifBlank { unknownError },
-                                ),
-                            )
-                        }
-                    }
                 }
             }
         },

@@ -1,13 +1,14 @@
 package dev.npn.core.index
 
+import dev.npn.core.app.SplitFailure
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.util.NpnLog
-import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.warn
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
@@ -34,7 +35,7 @@ class SplitService(
         ) : Result
 
         data class Failed(
-            val message: String,
+            val reason: SplitFailure,
         ) : Result
     }
 
@@ -48,19 +49,14 @@ class SplitService(
         docId: String,
         segments: List<IntRange>,
     ): Result {
-        val doc = documentDao.getByDocId(docId)
-        val precondition =
-            when {
-                doc == null -> "Document not found"
-                doc.trashed || doc.deleted || doc.missing -> "Document is not available"
-                segments.size < 2 -> "A split needs at least two parts"
-                else -> null
-            }
-        if (doc == null || precondition != null) {
-            return Result.Failed(precondition ?: "Document not found")
+        val doc =
+            documentDao.getByDocId(docId)?.takeUnless { it.trashed || it.deleted || it.missing }
+                ?: return Result.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
+        if (segments.size < 2) return Result.Failed(SplitFailure.INVALID_PARTS)
+        return runCatchingCancellable { splitLoaded(doc, segments) }.getOrElse {
+            log.warn("Reading ${doc.relPath} to split it failed", it)
+            Result.Failed(SplitFailure.UNREADABLE_PDF)
         }
-        return runCatchingCancellable { splitLoaded(doc, segments) }
-            .getOrElse { Result.Failed("Could not read the PDF: ${it.reason()}") }
     }
 
     private suspend fun splitLoaded(
@@ -75,7 +71,7 @@ class SplitService(
             } finally {
                 handle.close()
             }
-        validateSegments(segments, pageCount)?.let { return Result.Failed(it) }
+        if (!coversEveryPage(segments, pageCount)) return Result.Failed(SplitFailure.INVALID_PARTS)
 
         val baseName = doc.fileName.removeSuffix(".pdf").removeSuffix(".PDF")
         val parts = ArrayList<ImportResult>(segments.size)
@@ -86,7 +82,10 @@ class SplitService(
                     runCatchingCancellable {
                         val partBytes = pdfEngine.extractPages(bytes, segment.toList())
                         importService.importBytes(partBytes, "$baseName (part ${i + 1}).pdf", parentDirOf(doc.relPath))
-                    }.getOrElse { return Result.Failed("Splitting failed on part ${i + 1}: ${it.reason()}") }
+                    }.getOrElse {
+                        log.warn("Making part ${i + 1} of ${doc.relPath} failed", it)
+                        return Result.Failed(SplitFailure.NOT_COMPLETED)
+                    }
                 parts.add(outcome)
             }
             complete = true
@@ -112,18 +111,16 @@ class SplitService(
     /** Same folder as the original ("" = library root) so a split never moves documents around. */
     private fun parentDirOf(relPath: String): String = relPath.substringBeforeLast('/', missingDelimiterValue = "")
 
-    /** Null when valid, else a user-facing error message. */
-    private fun validateSegments(
+    /** Whether [segments] are non-empty, contiguous from the first page, and end at the last. */
+    private fun coversEveryPage(
         segments: List<IntRange>,
         pageCount: Int,
-    ): String? {
+    ): Boolean {
         var expectedStart = 0
         for (segment in segments) {
-            if (segment.isEmpty()) return "Empty page range"
-            if (segment.first != expectedStart) return "Page ranges must be contiguous from page 1"
+            if (segment.isEmpty() || segment.first != expectedStart) return false
             expectedStart = segment.last + 1
         }
-        if (expectedStart != pageCount) return "Page ranges must cover all $pageCount pages"
-        return null
+        return expectedStart == pageCount
     }
 }

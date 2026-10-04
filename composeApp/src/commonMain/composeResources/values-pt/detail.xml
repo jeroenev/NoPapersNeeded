@@ -154,4 +154,8 @@
     <string name="detail_find_next">Próxima ocorrência</string>
     <string name="detail_no_matches_found">Nenhuma ocorrência encontrada</string>
     <string name="detail_find_position">%1$d / %2$d</string>
+    <string name="detail_split_failed_unavailable">Não foi possível dividir o documento: ele não está mais na biblioteca.</string>
+    <string name="detail_split_failed_invalid_parts">Não foi possível dividir o documento: as partes devem cobrir cada página uma única vez, em ordem.</string>
+    <string name="detail_split_failed_unreadable">Não foi possível dividir o documento: não foi possível ler o PDF.</string>
+    <string name="detail_split_failed_not_completed">Não foi possível dividir o documento. A biblioteca não foi alterada.</string>
 </resources>

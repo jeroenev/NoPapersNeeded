@@ -1,12 +1,12 @@
 package dev.npn.core.index
 
+import dev.npn.core.app.SplitFailure
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.shouldBe
-import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.first
@@ -71,7 +71,7 @@ class SplitServiceTest {
 
             val result = split.split(original.docId, listOf(0..0, 1..1))
 
-            result.shouldBeInstanceOf<SplitService.Result.Failed>().message shouldContain "part 2"
+            result.shouldBeInstanceOf<SplitService.Result.Failed>().reason shouldBe SplitFailure.NOT_COMPLETED
             libraryPdfs() shouldBe listOf("contract.pdf")
             rig.db
                 .documentDao()
