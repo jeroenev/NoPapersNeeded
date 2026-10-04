@@ -208,6 +208,7 @@ class MetadataWriterImpl(
         coordinator.checkWritable()
         val origPath = doc.relPath
         val trashPath = if (fs.exists(origPath)) trashOps.moveToTrash(origPath, docId) else null
+        var committed = false
         try {
             // Immediate DB sync so the UI hides it now; the event carries origPath for cross-device
             // restore. The optimistic row write runs under the coordinator mutex, atomically with
@@ -219,27 +220,26 @@ class MetadataWriterImpl(
             ) {
                 documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
             }
-        } catch (failure: Throwable) {
-            if (trashPath != null) moveBack(trashPath, origPath, failure)
-            throw failure
+            committed = true
+        } finally {
+            if (!committed && trashPath != null) moveBack(trashPath, origPath)
         }
     }
 
     /**
-     * Best-effort undo of a move whose commit failed. [failure] stays what the caller sees; an undo
-     * that fails too is attached to it.
+     * Best-effort undo of a move whose commit failed or was cancelled. The caller still sees the
+     * commit's failure; an undo that fails too is only logged.
      */
     private suspend fun moveBack(
         from: String,
         to: String,
-        failure: Throwable,
     ) = withContext(NonCancellable) {
         try {
             fs.move(from, to)
         } catch (e: CancellationException) {
             throw e
         } catch (undoFailure: Exception) {
-            failure.addSuppressed(undoFailure)
+            println("Could not move $from back to $to: ${undoFailure.message}")
         }
     }
 

@@ -159,9 +159,8 @@ class TrashLifecycleTest {
                 rig.exists("a.pdf").shouldBeTrue()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
-                    .trashed
-                    .shouldBeFalse()
+                    .getByDocId(id)
+                    ?.trashed shouldBe false
             } finally {
                 rig.close()
             }
@@ -182,9 +181,8 @@ class TrashLifecycleTest {
                 rig.exists("a.pdf").shouldBeTrue()
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
-                    .deleted
-                    .shouldBeFalse()
+                    .getByDocId(id)
+                    ?.deleted shouldBe false
             } finally {
                 rig.close()
             }

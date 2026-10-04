@@ -239,7 +239,13 @@ class AutoMatchRuleIntegrationTest {
     private fun rule(
         id: String,
         name: String,
-    ) = AutoMatchRule(id = id, name = name, algorithm = MatchAlgorithm.ANY_WORD, pattern = "invoice", tags = listOf("t"))
+    ) = AutoMatchRule(
+        id = id,
+        name = name,
+        algorithm = MatchAlgorithm.ANY_WORD,
+        pattern = "invoice",
+        tags = listOf("t"),
+    )
 
     /** The device settings that hold the rules blob, reopened against one library and index. */
     private class RulesSettings(

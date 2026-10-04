@@ -538,9 +538,8 @@ class JournalCoordinator internal constructor(
         try {
             attempt()
         } catch (cancelled: CancellationException) {
-            // The projection transaction rolled back; the live fold may hold events it did not
-            // keep. Refold from the store on next use rather than block writes.
-            folded = null
+            // Not a failure, so nothing to latch. A rolled-back ingest can leave its events in the
+            // live fold, which is harmless: the object is ingested again and folding is idempotent.
             throw cancelled
         } catch (failure: Throwable) {
             blockWrites(failure)
