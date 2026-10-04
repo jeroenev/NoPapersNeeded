@@ -262,7 +262,7 @@ class MetadataWriterImpl(
                     trashedOrigPath = null,
                     trashedAt = null,
                     relPath = finalPath,
-                    fileName = finalPath.substringAfterLast('/'),
+                    fileName = NpnPaths.fileName(finalPath),
                     missing = false,
                 ),
             )
@@ -291,7 +291,7 @@ class MetadataWriterImpl(
     ) {
         relocate(docId) { doc ->
             val clean = NpnPaths.sanitizeFileName(newFileName.trim()).ifEmpty { return@relocate null }
-            val dir = doc.relPath.substringBeforeLast('/', "")
+            val dir = NpnPaths.parentDir(doc.relPath)
             val target = if (dir.isEmpty()) clean else "$dir/$clean"
             target to clean
         }
@@ -304,7 +304,7 @@ class MetadataWriterImpl(
         relocate(docId) { doc ->
             val dir = NpnPaths.normalize(newDirRelPath)
             val target = if (dir.isEmpty()) doc.fileName else "$dir/${doc.fileName}"
-            target to target.substringAfterLast('/')
+            target to NpnPaths.fileName(target)
         }
     }
 

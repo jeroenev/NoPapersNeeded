@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.NpnPaths
 
 /**
  * Pairs the documents a rescan found missing with the files it found new, as relink candidates the
@@ -31,7 +32,7 @@ internal object RelinkPairing {
         val relPath: String,
     ) {
         val stem = NameSimilarity.stem(name)
-        val dir = NameSimilarity.parentDir(relPath)
+        val dir = NpnPaths.parentDir(relPath)
     }
 
     /** Candidates for [missingDocs] among [newDocs], leaving out the pairs [existing] proposes already. */

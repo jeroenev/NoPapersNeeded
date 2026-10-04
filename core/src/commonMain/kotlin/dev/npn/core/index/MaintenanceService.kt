@@ -50,7 +50,7 @@ class MaintenanceService(
             documentDao.upsert(
                 doc.copy(
                     relPath = extraRelPath,
-                    fileName = extraRelPath.substringAfterLast('/'),
+                    fileName = NpnPaths.fileName(extraRelPath),
                 ),
             )
         }
@@ -86,7 +86,7 @@ class MaintenanceService(
             }
 
             is ConflictAction.ImportAsNew -> {
-                val cleanName = cleanConflictName(relPath).substringAfterLast('/')
+                val cleanName = NpnPaths.fileName(cleanConflictName(relPath))
                 val bytes = fs.readBytes(relPath)
                 val result = importService.importBytes(bytes, cleanName, NpnPaths.DEFAULT_INBOX)
                 if (fs.exists(relPath)) runCatchingCancellable { fs.delete(relPath) }
@@ -103,9 +103,8 @@ class MaintenanceService(
      * Handles syncthing (`.sync-conflict-...`) and Dropbox/Nextcloud parenthetical forms.
      */
     private fun cleanConflictName(relPath: String): String {
-        val slash = relPath.lastIndexOf('/')
-        val dir = if (slash >= 0) relPath.substring(0, slash + 1) else ""
-        val name = if (slash >= 0) relPath.substring(slash + 1) else relPath
+        val dir = NpnPaths.parentDir(relPath)
+        val name = NpnPaths.fileName(relPath)
 
         val dot = name.lastIndexOf('.')
         val base = if (dot > 0) name.substring(0, dot) else name
@@ -123,7 +122,7 @@ class MaintenanceService(
         if (caseIdx >= 0) cleanedBase = cleanedBase.substring(0, caseIdx)
 
         cleanedBase = cleanedBase.trim().ifEmpty { "document" }
-        return "$dir$cleanedBase$ext"
+        return if (dir.isEmpty()) "$cleanedBase$ext" else "$dir/$cleanedBase$ext"
     }
 
     private suspend fun uniquify(path: String): String =

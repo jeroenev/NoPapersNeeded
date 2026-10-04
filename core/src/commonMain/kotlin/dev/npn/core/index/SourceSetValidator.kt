@@ -112,11 +112,11 @@ class SourceSetValidator(
         current: List<MetadataSourceEntity>,
         files: Map<String, FileMeta>,
     ): Boolean {
-        val deviceDir = missing.path.substringBeforeLast('/')
+        val deviceDir = NpnPaths.parentDir(missing.path)
         val required = dao.sourceEvents(missing.path).map { it.eventDeviceId to it.eventSequence }.toSet()
         val replacements =
             current.filter { source ->
-                source.path in files && source.path.substringBeforeLast('/') == deviceDir &&
+                source.path in files && NpnPaths.parentDir(source.path) == deviceDir &&
                     source.status == SourceStatus.APPLIED
             }
         val covered =

@@ -183,7 +183,7 @@ object StoragePathTemplate {
     private fun resolveTitle(context: StoragePathContext): String {
         val raw =
             context.title?.ifBlank { null }
-                ?: context.originalFileName?.baseName()?.ifBlank { null }
+                ?: context.originalFileName?.let(NpnPaths::stripPdfExtension)?.ifBlank { null }
                 ?: DEFAULT_FALLBACK_TITLE
         return sanitizeSegment(raw)
     }
@@ -216,11 +216,6 @@ object StoragePathTemplate {
      * directory separators and Windows-reserved characters with '_' and trims edge whitespace/dots.
      */
     fun sanitizeSegment(input: String): String = NpnPaths.sanitizeSegment(input)
-
-    private fun String.baseName(): String {
-        val dot = lastIndexOf('.')
-        return if (dot > 0) substring(0, dot) else this
-    }
 
     /** Format [date] using a tiny subset of Java date-pattern symbols. */
     @Suppress("CyclomaticComplexMethod")
@@ -304,7 +299,7 @@ suspend fun resolveUniqueTarget(
 ): String {
     val normalized = NpnPaths.normalize(target)
     val withExtension =
-        if (NpnPaths.isPdf(normalized.substringAfterLast('/'))) {
+        if (NpnPaths.isPdf(NpnPaths.fileName(normalized))) {
             normalized
         } else {
             "$normalized.pdf"

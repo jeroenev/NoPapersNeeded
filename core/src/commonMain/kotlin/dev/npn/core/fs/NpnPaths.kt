@@ -113,8 +113,7 @@ object NpnPaths {
         nonce: String,
         snapshot: Boolean = false,
     ): String =
-        journalObjectPath(hash, snapshot).substringBeforeLast('/') +
-            "/.$hash.$installationId.$nonce.part"
+        parentDir(journalObjectPath(hash, snapshot)) + "/.$hash.$installationId.$nonce.part"
 
     /** Classify direct journal source files without letting object buckets masquerade as devices. */
     fun journalPath(relPath: String): JournalPath {
@@ -303,7 +302,7 @@ object NpnPaths {
 
         /** Which kind of temporary file [relPath] names, or null for a file that is none of them. */
         fun kindOf(relPath: String): Kind? {
-            val name = relPath.substringAfterLast('/')
+            val name = fileName(relPath)
             return when {
                 name.startsWith(WRITE_PREFIX) && name.endsWith(PART) -> {
                     Kind.WRITE
@@ -371,6 +370,22 @@ object NpnPaths {
 
     /** True when [name] has a `.pdf` extension (case-insensitive). */
     fun isPdf(name: String): Boolean = name.substringAfterLast('.', "").equals("pdf", ignoreCase = true)
+
+    /** The folder [relPath] is in, `""` at the library root. */
+    fun parentDir(relPath: String): String = relPath.substringBeforeLast('/', "")
+
+    /** The last segment of [relPath]: a file's own name. */
+    fun fileName(relPath: String): String = relPath.substringAfterLast('/')
+
+    /** [name] without its `.pdf` extension, in any case; a name that is nothing but the extension stays. */
+    fun stripPdfExtension(name: String): String =
+        if (name.length > PDF_EXTENSION.length && name.endsWith(PDF_EXTENSION, ignoreCase = true)) {
+            name.dropLast(PDF_EXTENSION.length)
+        } else {
+            name
+        }
+
+    private const val PDF_EXTENSION = ".pdf"
 
     /** Reserved filesystem characters within a path segment: Windows-invalid plus '/' and '\\'. */
     private val invalidSegmentChars = setOf('/', '\\', ':', '*', '?', '"', '<', '>', '|')

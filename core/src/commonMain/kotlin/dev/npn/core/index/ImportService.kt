@@ -156,7 +156,7 @@ class ImportService(
             DocumentEntity(
                 docId = hash,
                 relPath = target,
-                fileName = target.substringAfterLast('/'),
+                fileName = NpnPaths.fileName(target),
                 size = meta.size,
                 mtime = meta.mtimeMillis,
                 addedAt = now,

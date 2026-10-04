@@ -4,6 +4,7 @@ import dev.npn.core.app.SplitFailure
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
@@ -73,7 +74,9 @@ class SplitService(
             }
         if (!coversEveryPage(segments, pageCount)) return Result.Failed(SplitFailure.INVALID_PARTS)
 
-        val baseName = doc.fileName.removeSuffix(".pdf").removeSuffix(".PDF")
+        val baseName = NpnPaths.stripPdfExtension(doc.fileName)
+        // Next to the original, so a split never moves documents around.
+        val folder = NpnPaths.parentDir(doc.relPath)
         val parts = ArrayList<ImportResult>(segments.size)
         var complete = false
         try {
@@ -81,7 +84,7 @@ class SplitService(
                 val outcome =
                     runCatchingCancellable {
                         val partBytes = pdfEngine.extractPages(bytes, segment.toList())
-                        importService.importBytes(partBytes, "$baseName (part ${i + 1}).pdf", parentDirOf(doc.relPath))
+                        importService.importBytes(partBytes, "$baseName (part ${i + 1}).pdf", folder)
                     }.getOrElse {
                         log.warn("Making part ${i + 1} of ${doc.relPath} failed", it)
                         return Result.Failed(SplitFailure.NOT_COMPLETED)
@@ -107,9 +110,6 @@ class SplitService(
                 log.runLogged("Taking back split part ${part.relPath}") { importService.undoImport(part) }
             }
         }
-
-    /** Same folder as the original ("" = library root) so a split never moves documents around. */
-    private fun parentDirOf(relPath: String): String = relPath.substringBeforeLast('/', missingDelimiterValue = "")
 
     /** Whether [segments] are non-empty, contiguous from the first page, and end at the last. */
     private fun coversEveryPage(

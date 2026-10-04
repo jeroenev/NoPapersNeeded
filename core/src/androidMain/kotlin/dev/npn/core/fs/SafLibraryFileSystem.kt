@@ -230,7 +230,7 @@ class SafLibraryFileSystem(
             val norm = NpnPaths.normalize(relPath)
             FileMeta(
                 relPath = norm,
-                name = entry.name.ifEmpty { norm.substringAfterLast('/') },
+                name = entry.name.ifEmpty { NpnPaths.fileName(norm) },
                 size = if (entry.isDir) 0L else entry.size,
                 mtimeMillis = entry.mtime,
                 isDirectory = entry.isDir,

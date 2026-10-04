@@ -15,6 +15,24 @@ class NpnPathsTest {
     }
 
     @Test
+    fun pathParts() {
+        NpnPaths.parentDir("a/b/c.pdf") shouldBe "a/b"
+        NpnPaths.parentDir("c.pdf") shouldBe ""
+        NpnPaths.fileName("a/b/c.pdf") shouldBe "c.pdf"
+        NpnPaths.fileName("c.pdf") shouldBe "c.pdf"
+    }
+
+    @Test
+    fun stripPdfExtensionIgnoresCaseAndKeepsOtherNames() {
+        NpnPaths.stripPdfExtension("scan.pdf") shouldBe "scan"
+        NpnPaths.stripPdfExtension("Scan.PDF") shouldBe "Scan"
+        NpnPaths.stripPdfExtension("Scan.Pdf") shouldBe "Scan"
+        NpnPaths.stripPdfExtension("report.2024.pdf") shouldBe "report.2024"
+        NpnPaths.stripPdfExtension("notes.txt") shouldBe "notes.txt"
+        NpnPaths.stripPdfExtension(".pdf") shouldBe ".pdf"
+    }
+
+    @Test
     fun engineQualifiedOcrPaths() {
         // ocrWriterKey composes the device+engine key; ocrSidecarPath treats it as an opaque
         // middle so the file lands at `<hash>.<deviceId>.<engine>.json`.

@@ -7,6 +7,7 @@ import dev.npn.core.db.PathMeta
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.PendingOp
@@ -87,7 +88,7 @@ internal class ExternalDocumentMoves(
         paths: Set<String>,
     ): Boolean {
         if (old.relPath in paths || old.relPath == target ||
-            target.substringAfterLast('/').startsWith(DocumentPaths.RECOVERY_PREFIX)
+            NpnPaths.fileName(target).startsWith(DocumentPaths.RECOVERY_PREFIX)
         ) {
             return false
         }

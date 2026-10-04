@@ -845,7 +845,7 @@ class Indexer(
                 missing = false
                 if (origOnDisk != null) {
                     relPath = origOnDisk
-                    fileName = origOnDisk.substringAfterLast('/')
+                    fileName = NpnPaths.fileName(origOnDisk)
                 }
                 val hiddenAt = state.hiddenBy(doc)?.physicalMillis ?: 0L
                 resurrected.add(Resurrected(doc, relPath, wasDeleted = journalDeleted, hiddenAtMillis = hiddenAt))

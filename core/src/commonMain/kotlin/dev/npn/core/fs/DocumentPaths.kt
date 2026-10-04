@@ -101,7 +101,7 @@ internal class DocumentPaths(
 
     /** Atomically take [source]'s name away under a fresh recovery name in the same folder. */
     private suspend fun claim(source: String): String {
-        val directory = source.substringBeforeLast('/', "")
+        val directory = NpnPaths.parentDir(source)
         val name = NpnPaths.Temp.recoveryName(Uuid.random().toString())
         val recovery = if (directory.isEmpty()) name else "$directory/$name"
         fs.claimDocument(source, recovery)
@@ -114,6 +114,6 @@ internal class DocumentPaths(
 
         fun isDocumentPath(path: String): Boolean =
             NpnPaths.isSafe(path) && NpnPaths.normalize(path) == path &&
-                NpnPaths.indexable(FileMeta(path, path.substringAfterLast('/'), 0, 0, false))
+                NpnPaths.indexable(FileMeta(path, NpnPaths.fileName(path), 0, 0, false))
     }
 }

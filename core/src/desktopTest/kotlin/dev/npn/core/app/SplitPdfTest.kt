@@ -54,6 +54,24 @@ class SplitPdfTest {
         }
 
     @Test
+    fun aPartIsNamedAfterItsOriginalWithoutTheExtensionInAnyCase() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("mixed case"), "Scan.Pdf")
+                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+
+                val split = rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1))
+                val done = split.shouldBeInstanceOf<SplitOutcome.Done>()
+
+                val part = checkNotNull(rig.session.documents.observeDoc(done.partDocIds[0]).first())
+                part.doc.fileName shouldBe "Scan (part 1).pdf"
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
     fun splitRejectsNonCoveringSegments() =
         runTest {
             val rig = AppSessionRig.create(backgroundScope)

@@ -1,5 +1,6 @@
 package dev.npn.core.index
 
+import dev.npn.core.fs.NpnPaths
 import kotlin.math.abs
 
 /**
@@ -7,7 +8,7 @@ import kotlin.math.abs
  */
 internal object NameSimilarity {
     /** What [similar] compares of a file name: the name without its extension, in lower case. */
-    fun stem(name: String): String = stripExt(name).lowercase()
+    fun stem(name: String): String = NpnPaths.stripPdfExtension(name).lowercase()
 
     /**
      * True when two [stem]s are alike: one is a prefix of the other, or they are within a small edit
@@ -69,15 +70,5 @@ internal object NameSimilarity {
             cur = tmp
         }
         return prev[t.length]
-    }
-
-    private fun stripExt(name: String): String {
-        val dot = name.lastIndexOf('.')
-        return if (dot > 0) name.substring(0, dot) else name
-    }
-
-    fun parentDir(relPath: String): String {
-        val slash = relPath.lastIndexOf('/')
-        return if (slash >= 0) relPath.substring(0, slash) else ""
     }
 }

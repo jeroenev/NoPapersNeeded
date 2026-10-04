@@ -18,7 +18,7 @@ class TrashOps(
         relPath: String,
         sha256: String,
     ): String {
-        val name = NpnPaths.sanitizeFileName(relPath.substringAfterLast('/'))
+        val name = NpnPaths.sanitizeFileName(NpnPaths.fileName(relPath))
         val base = NpnPaths.trashPath(name, sha256)
         val target = uniquify(base)
         fs.move(relPath, target)
