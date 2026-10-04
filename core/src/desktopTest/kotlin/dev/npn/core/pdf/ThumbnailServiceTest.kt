@@ -1,5 +1,6 @@
 package dev.npn.core.pdf
 
+import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.npnDatabase
@@ -60,6 +61,61 @@ class ThumbnailServiceTest {
         // pageCount backfilled from the open handle.
         db.documentDao().getByDocId(docId)!!.pageCount shouldBe 2
         db.thumbnailDao().get(docId)!!.cachePath shouldBe path
+    }
+
+    /**
+     * Thumbnails generate while the first rescan updates rows. The page-count backfill must touch
+     * only that column: a row copy read before a fold moved the file must not move it back.
+     */
+    @Test
+    fun backfillingThePageCountKeepsWhatAConcurrentFoldWrote() = runTest {
+        val bytes = PdfFixtures.embeddedTextPdf("hello world")
+        fs.writeBytesOnce("doc.pdf", bytes)
+        val docId = fs.sha256("doc.pdf")
+        val dao = db.documentDao()
+        dao.upsert(
+            DocumentEntity(
+                docId = docId, relPath = "doc.pdf", fileName = "doc.pdf",
+                size = bytes.size.toLong(), mtime = 1, addedAt = 1, pageCount = null,
+            ),
+        )
+        // A fold moves the document just before the backfill writes, whichever way it writes.
+        val racingDao =
+            object : DocumentDao by dao {
+                suspend fun foldLands() {
+                    dao.upsert(dao.getByDocId(docId)!!.copy(relPath = "moved/doc.pdf", title = "Folded"))
+                }
+
+                override suspend fun upsert(doc: DocumentEntity) {
+                    foldLands()
+                    dao.upsert(doc)
+                }
+
+                override suspend fun fillPageCount(
+                    docId: String,
+                    pageCount: Int,
+                ) {
+                    foldLands()
+                    dao.fillPageCount(docId, pageCount)
+                }
+            }
+        val service = ThumbnailService(PdfBoxEngine(), fs, RecordingThumbnailStore(), db.thumbnailDao(), racingDao)
+
+        service.ensureThumbnail(docId, "doc.pdf") shouldNotBe null
+
+        val row = dao.getByDocId(docId)!!
+        row.pageCount shouldBe 2
+        row.relPath shouldBe "moved/doc.pdf"
+        row.title shouldBe "Folded"
+    }
+
+    @Test
+    fun aKnownPageCountIsNeverOverwritten() = runTest {
+        db.documentDao().upsert(
+            DocumentEntity(docId = "d", relPath = "d.pdf", fileName = "d.pdf", size = 1, mtime = 1, addedAt = 1, pageCount = 3),
+        )
+        db.documentDao().fillPageCount("d", 5)
+        db.documentDao().getByDocId("d")!!.pageCount shouldBe 3
     }
 
     @Test

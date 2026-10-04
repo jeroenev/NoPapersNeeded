@@ -69,6 +69,18 @@ interface DocumentDao {
     )
 
     /**
+     * Fill in a page count the row does not have yet, the way every background writer that opens
+     * a PDF anyway records one. A partial UPDATE, never a row upsert: such a writer read the row
+     * before its slow open, and writing that copy back would revert whatever a fold projected onto
+     * the row meanwhile (a move, a title, the OCR state). A count already there is left alone.
+     */
+    @Query("UPDATE documents SET pageCount = :pageCount WHERE docId = :docId AND pageCount IS NULL")
+    suspend fun fillPageCount(
+        docId: String,
+        pageCount: Int,
+    )
+
+    /**
      * Stamp the post-OCR AI enrichment marker. A partial UPDATE for the same reason as
      * [updateOcrState]: enrichment runs off the OCR thread, so a row upsert could clobber metadata
      * columns a concurrent journal fold just projected — including the ones enrichment itself

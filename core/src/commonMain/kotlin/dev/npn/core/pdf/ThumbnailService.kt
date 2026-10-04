@@ -77,11 +77,8 @@ class ThumbnailService(
             ),
         )
 
-        // Backfill pageCount if unknown. DocumentDao exposes only upsert, so read-modify-upsert.
-        val doc = documentDao.getByDocId(docId)
-        if (doc != null && doc.pageCount == null) {
-            documentDao.upsert(doc.copy(pageCount = pageCount))
-        }
+        // The document is open anyway, so record its page count if the row has none yet.
+        documentDao.fillPageCount(docId, pageCount)
 
         return cachePath
     }

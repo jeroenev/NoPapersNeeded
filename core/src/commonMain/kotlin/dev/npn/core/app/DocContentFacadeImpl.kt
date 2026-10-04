@@ -53,9 +53,7 @@ class DocContentFacadeImpl internal constructor(
         return log.runLogged("Reading the page count of $docId") {
             val bytes = fs.readBytes(doc.relPath)
             pdfEngine.open(bytes).use { handle ->
-                val pc = handle.pageCount
-                if (doc.pageCount == null) documentDao.upsert(doc.copy(pageCount = pc))
-                pc
+                handle.pageCount.also { documentDao.fillPageCount(docId, it) }
             }
         }
     }
