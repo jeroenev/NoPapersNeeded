@@ -1,6 +1,7 @@
 package dev.npn.core.watch
 
 import dev.npn.core.app.ImportOutcome
+import dev.npn.core.app.ImportTally
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
@@ -15,13 +16,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-
-/** What one watched-folder sweep did. */
-data class WatchedFolderScan(
-    val imported: Int,
-    val duplicates: Int,
-    val failed: Int,
-)
 
 /**
  * Auto-imports PDFs from a [WatchedFolder] through the library's [IngestFacade]. Import goes
@@ -51,12 +45,10 @@ class WatchedFolderImporter(
     private val attempts = HashMap<String, Int>()
 
     /** One sweep: list, import what is new and stable, optionally delete consumed sources. */
-    suspend fun scanOnce(): WatchedFolderScan = sweepLock.withLock { sweep() }
+    suspend fun scanOnce(): ImportTally = sweepLock.withLock { sweep() }
 
-    private suspend fun sweep(): WatchedFolderScan {
-        var imported = 0
-        var duplicates = 0
-        var failed = 0
+    private suspend fun sweep(): ImportTally {
+        var tally = ImportTally()
         val now = clock.nowMillis()
         for (file in folder.listPdfs()) {
             val key = "${file.id}|${file.size}|${file.mtimeMillis}"
@@ -67,25 +59,19 @@ class WatchedFolderImporter(
                 runCatchingCancellable { ingest.importPdf(file.source, file.name) }
                     .onFailure { log.warn("Watched folder import of ${file.name} failed", it) }
                     .getOrNull()
+            tally += outcome
             when (outcome) {
-                is ImportOutcome.Imported -> {
-                    imported++
-                    consume(file, key)
-                }
-
-                is ImportOutcome.Duplicate -> {
-                    duplicates++
+                is ImportOutcome.Imported, is ImportOutcome.Duplicate -> {
                     consume(file, key)
                 }
 
                 is ImportOutcome.Failed, null -> {
-                    failed++
                     attempts[key] = (attempts[key] ?: 0) + 1
                     if (outcome != null) log.warn("Watched folder import of ${file.name} failed: ${outcome.reason}")
                 }
             }
         }
-        return WatchedFolderScan(imported, duplicates, failed)
+        return tally
     }
 
     /** Already handled, retried out, or possibly still being written (empty / freshly modified). */

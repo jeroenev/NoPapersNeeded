@@ -7,7 +7,7 @@ import android.net.Uri
 import android.os.Build
 import android.os.Parcelable
 import android.provider.OpenableColumns
-import dev.npn.core.app.ImportOutcome
+import dev.npn.core.app.ImportTally
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.util.runCatchingCancellable
@@ -35,31 +35,6 @@ object IntentImport {
 
     private const val FALLBACK_SHARED_PDF = "shared.pdf"
     private const val FALLBACK_SCAN_PDF = "scan.pdf"
-
-    data class Result(
-        val imported: Int,
-        val duplicates: Int,
-        val failed: Int,
-        val total: Int,
-    ) {
-        /** True when the intent carried no importable content (nothing was attempted). */
-        val isEmpty: Boolean get() = total == 0
-    }
-
-    private class Tally {
-        var imported = 0
-        var duplicates = 0
-        var failed = 0
-
-        /** Count [outcome]; null is an import that threw. */
-        fun record(outcome: ImportOutcome?) {
-            when (outcome) {
-                is ImportOutcome.Imported -> imported++
-                is ImportOutcome.Duplicate -> duplicates++
-                is ImportOutcome.Failed, null -> failed++
-            }
-        }
-    }
 
     /** Extract shareable content URIs from a SEND / SEND_MULTIPLE / VIEW intent. */
     fun extractUris(intent: Intent): List<Uri> =
@@ -89,41 +64,38 @@ object IntentImport {
         }
 
     /**
-     * Import all content URIs in [intent] into [session] and summarise what became of them. Images
-     * across the intent are merged into a single PDF; PDFs are imported one per file.
+     * Import all content URIs in [intent] into [session] and tally what became of them; an empty
+     * tally means the intent carried nothing importable. Images across the intent are merged into a
+     * single PDF; PDFs are imported one per file.
      */
     suspend fun import(
         context: Context,
         session: LibrarySession,
         intent: Intent,
-    ): Result {
+    ): ImportTally {
         val uris = extractUris(intent)
-        if (uris.isEmpty()) return Result(0, 0, 0, 0)
+        if (uris.isEmpty()) return ImportTally()
 
         val resolver = context.contentResolver
         val (pdfUris, imageBytes) = partitionUris(resolver, uris)
 
-        val tally = Tally()
-        var total = 0
+        var tally = ImportTally()
 
         // An import reports what went wrong with the file as an outcome; it throws only when
         // the session closed under it, which still counts against this file.
         for (uri in pdfUris) {
-            total++
-            tally.record(
+            tally +=
                 runCatchingCancellable {
                     session.ingest.importPdf(ExternalSource(uri), displayName(resolver, uri) ?: FALLBACK_SHARED_PDF)
-                }.getOrNull(),
-            )
+                }.getOrNull()
         }
 
         if (imageBytes.isNotEmpty()) {
-            total++
-            val outcome = runCatchingCancellable { session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF) }
-            tally.record(outcome.getOrNull())
+            tally +=
+                runCatchingCancellable { session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF) }.getOrNull()
         }
 
-        return Result(tally.imported, tally.duplicates, tally.failed, total)
+        return tally
     }
 
     /**

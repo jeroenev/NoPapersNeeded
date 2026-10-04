@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.RecordingLog
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
@@ -36,6 +37,32 @@ class ImportOutcomeTest {
                 rig.session.importImagesAsPdf(listOf("not an image".encodeToByteArray()), "scan.pdf") shouldBe
                     ImportOutcome.Failed(ImportFailure.UNREADABLE_IMAGES)
                 log.entries shouldHaveSize 1
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A batch tallies each file's outcome: a document, one already there, or one that failed. */
+    @Test
+    fun importAllTalliesEachFile() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            val dir = Files.createTempDirectory("npn-import")
+            val pdf = dir.resolve("a.pdf").also { Files.write(it, PdfFixtures.embeddedTextPdf("alpha")) }
+            val copy = dir.resolve("copy.pdf").also { Files.write(it, Files.readAllBytes(pdf)) }
+            val gone = dir.resolve("gone.pdf")
+            try {
+                val tally =
+                    rig.session.importAll(
+                        listOf(
+                            ExternalSource(pdf) to "a.pdf",
+                            ExternalSource(copy) to "copy.pdf",
+                            ExternalSource(gone) to "gone.pdf",
+                        ),
+                    )
+
+                tally shouldBe ImportTally(imported = 1, duplicates = 1, failed = 1)
+                tally.total shouldBe 3
             } finally {
                 rig.close()
             }

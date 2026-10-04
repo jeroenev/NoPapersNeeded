@@ -1,7 +1,8 @@
 package dev.npn.app
 
 import dev.npn.app.platform.ScanResult
-import dev.npn.app.ui.library.ImportSummary
+import dev.npn.app.ui.library.asUiText
+import dev.npn.core.app.ImportTally
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.core.ai.AiProvider
@@ -220,9 +221,9 @@ class LibraryViewModelTest : MainDispatcherTest() {
     @Test
     fun importSummaryMessageFormatsCounts() =
         runTest(dispatcher) {
-            ImportSummary(3, 0, 0).asUiText().resolveEnglish() shouldBe "3 imported"
-            ImportSummary(2, 1, 0).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate"
-            ImportSummary(2, 1, 3).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate, 3 failed"
+            ImportTally(3, 0, 0).asUiText().resolveEnglish() shouldBe "3 imported"
+            ImportTally(2, 1, 0).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate"
+            ImportTally(2, 1, 3).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate, 3 failed"
         }
 
     @Test

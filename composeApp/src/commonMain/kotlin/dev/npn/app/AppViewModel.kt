@@ -11,8 +11,9 @@ import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.clearThumbCache
 import dev.npn.app.ui.common.createLibraryFolder
 import dev.npn.app.ui.common.uiText
-import dev.npn.app.ui.library.importPdfs
+import dev.npn.app.ui.library.asUiText
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.util.reason
@@ -197,7 +198,7 @@ class AppViewModel(
             return
         }
         launchReporting({ reason -> uiText(Res.string.library_import_failed, reason) }) {
-            message(session.ingest.importPdfs(files).asUiText())
+            message(session.ingest.importAll(files).asUiText())
         }
     }
 }

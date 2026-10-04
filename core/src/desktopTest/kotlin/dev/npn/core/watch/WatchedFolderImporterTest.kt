@@ -1,5 +1,6 @@
 package dev.npn.core.watch
 
+import dev.npn.core.app.ImportTally
 import dev.npn.core.app.AppSessionRig
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
@@ -55,7 +56,7 @@ class WatchedFolderImporterTest {
                 first.failed shouldBe 0
 
                 // Second sweep: nothing new, sources kept (delete-after-import off).
-                importer.scanOnce() shouldBe WatchedFolderScan(0, 0, 0)
+                importer.scanOnce() shouldBe ImportTally()
                 Files.exists(watchDir.resolve("scan-a.pdf")) shouldBe true
 
                 val docs =
@@ -138,7 +139,7 @@ class WatchedFolderImporterTest {
                 // Fresh mtime = inside the quiet window; must not be touched this sweep.
                 Files.write(watchDir.resolve("hot.pdf"), PdfFixtures.embeddedTextPdf("still writing"))
                 val scan = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false }).scanOnce()
-                scan shouldBe WatchedFolderScan(0, 0, 0)
+                scan shouldBe ImportTally()
             } finally {
                 rig.close()
             }

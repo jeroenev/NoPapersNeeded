@@ -15,6 +15,7 @@ import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.ForegroundImport
 import dev.npn.app.platform.LocalDocumentScanner
 import dev.npn.app.platform.importIntoLibrary
+import dev.npn.core.app.ImportTally
 import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
@@ -99,7 +100,7 @@ class MainActivity : ComponentActivity() {
 
     private fun importMessage(
         context: Context,
-        outcome: ForegroundImport<IntentImport.Result>,
+        outcome: ForegroundImport<ImportTally>,
     ): String =
         when (outcome) {
             ForegroundImport.NoLibrary -> {
@@ -112,7 +113,7 @@ class MainActivity : ComponentActivity() {
 
             is ForegroundImport.Done -> {
                 val result = outcome.result
-                if (result.isEmpty) {
+                if (result.total == 0) {
                     context.getString(R.string.import_nothing_found)
                 } else {
                     importSummary(context, result).ifEmpty { context.getString(R.string.import_complete) }
@@ -122,7 +123,7 @@ class MainActivity : ComponentActivity() {
 
     private fun importSummary(
         context: Context,
-        result: IntentImport.Result,
+        result: ImportTally,
     ): String =
         buildList {
             if (result.imported > 0) {

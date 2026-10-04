@@ -16,8 +16,8 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.ImportFailure
+import dev.npn.core.app.ImportTally
 import dev.npn.core.app.ImportOutcome
-import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySort
@@ -28,6 +28,7 @@ import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SortField
 import dev.npn.core.app.TagInfo
 import dev.npn.core.app.ViewType
+import dev.npn.core.app.importAll
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
@@ -60,29 +61,8 @@ import no_papers_needed.composeapp.generated.resources.library_undo
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-/** Import result summary shown as a snackbar. */
-data class ImportSummary(
-    val imported: Int,
-    val duplicate: Int,
-    val failed: Int,
-) {
-    fun asUiText(): UiText = uiText(UiTextKey.IMPORT_SUMMARY, imported, duplicate, failed)
-}
-
-/** Import each of [sources] (a file and the name to give it) as a PDF, and tally the outcomes. */
-suspend fun IngestFacade.importPdfs(sources: List<Pair<ExternalSource, String>>): ImportSummary {
-    var imported = 0
-    var duplicate = 0
-    var failed = 0
-    sources.forEach { (source, name) ->
-        when (importPdf(source, name)) {
-            is ImportOutcome.Imported -> imported++
-            is ImportOutcome.Duplicate -> duplicate++
-            is ImportOutcome.Failed -> failed++
-        }
-    }
-    return ImportSummary(imported, duplicate, failed)
-}
+/** An import batch's tally as the snackbar reports it. */
+fun ImportTally.asUiText(): UiText = uiText(UiTextKey.IMPORT_SUMMARY, imported, duplicates, failed)
 
 /** The filter and sort a result set was queried with. */
 data class LibraryQuery(
@@ -480,7 +460,7 @@ class LibraryViewModel(
     /** Import PDFs from external sources, tallying the per-source outcome into a message. */
     fun import(sources: List<Pair<ExternalSource, String>>) =
         launchReporting({ reason -> uiText(Res.string.library_import_failed, reason) }) {
-            message(ingest.importPdfs(sources).asUiText())
+            message(ingest.importAll(sources).asUiText())
         }
 
     /** What a platform scan came to: import the PDF, say the scanner failed, or stay quiet. */
