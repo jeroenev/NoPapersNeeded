@@ -54,9 +54,8 @@ class BakeService(
         src: ByteArray,
         data: NpnXmpData,
     ): ByteArray {
-        val xmp = XmpMerger.merge(io.readXmp(src), data)
-        val effectiveTitle = XmpParser.parse(xmp).title
-        return io.writeBaked(src, xmp, data.tags, effectiveTitle)
+        val effective = XmpMerger.merge(io.readXmp(src), data)
+        return io.writeBaked(src, XmpSerializer.serialize(effective), data.tags, effective.title)
     }
 
     /**
