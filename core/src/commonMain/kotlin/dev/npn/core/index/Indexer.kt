@@ -19,7 +19,6 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.util.NpnLog
@@ -547,7 +546,7 @@ class Indexer(
 
         // Bulk preload the current projection (rows, tags, fields, FTS content) so the per-doc
         // pass below issues no serial reads; diffed writes are collected and flushed once.
-        val preloaded = preloadRows(state, journalDocs)
+        val preloaded = preloadRows(journalDocs)
         upsertReferencedTags(state, journalDocs, (scope as? FoldScope.Events)?.styledTags.orEmpty())
         // The registry is library-wide and small; a diffed replace per fold keeps it in step
         // with the fold at negligible cost and needs no per-op scoping.
@@ -578,8 +577,6 @@ class Indexer(
         val rows: HashMap<String, DocumentEntity>,
         val tags: Map<String, List<String>>,
         val fields: Map<String, List<DocumentFieldEntity>>,
-        /** Registry types by key, for the numeric shadow on field rows. */
-        val fieldTypes: Map<String, FieldType>,
         /**
          * Docs that already have an FTS row. Presence only, never the text: the projection just
          * needs to know whether a doc has been indexed yet.
@@ -599,10 +596,7 @@ class Indexer(
         val ftsRows = ArrayList<FtsDocumentEntity>()
     }
 
-    private suspend fun preloadRows(
-        state: FoldedState,
-        journalDocs: Set<String>,
-    ): PreloadedRows {
+    private suspend fun preloadRows(journalDocs: Set<String>): PreloadedRows {
         val docIds = journalDocs.toList()
         val rows = HashMap<String, DocumentEntity>(docIds.size)
         for (row in documentDao.getByDocIds(docIds)) rows[row.docId] = row
@@ -613,10 +607,9 @@ class Indexer(
         }
 
         val fields = fieldDao.fieldsForDocs(docIds).groupBy { it.docId }
-        val fieldTypes = state.effectiveFieldDefs().associate { it.key to it.type }
 
         val ftsIndexed = ftsDao.indexedDocIds(docIds).toHashSet()
-        return PreloadedRows(rows, tags, fields, fieldTypes, ftsIndexed)
+        return PreloadedRows(rows, tags, fields, ftsIndexed)
     }
 
     /** Flush one fold's diffed changes, one bulk call per table. */
@@ -802,8 +795,8 @@ class Indexer(
             effFields.putAll(state.effectiveFields(doc)) // own values override inherited ones
             val rows =
                 effFields.map { (key, value) ->
-                    val type = preloaded.fieldTypes[key]
-                    DocumentFieldEntity(doc, key, value, numValue = type?.let { FieldValues.numeric(it, value) })
+                    val numValue = FieldValues.numeric(state.effectiveFieldType(key), value)
+                    DocumentFieldEntity(doc, key, value, numValue = numValue)
                 }
             if (preloaded.fields[doc].orEmpty().sortedBy { it.fieldKey } != rows.sortedBy { it.fieldKey }) {
                 changes.fields[doc] = rows
