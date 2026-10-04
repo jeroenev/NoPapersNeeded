@@ -375,6 +375,22 @@ interface AiEditJobDao {
     @Upsert
     suspend fun upsertDocs(rows: List<AiEditJobDocEntity>)
 
+    /**
+     * Write what a drain step learned about [job]: its own row and [docs], in one transaction and
+     * only while the job still exists. A run discarded while its model calls were in flight stays
+     * discarded. Returns whether anything was written.
+     */
+    @Transaction
+    suspend fun writeBackIfPresent(
+        job: AiEditJobEntity,
+        docs: List<AiEditJobDocEntity>,
+    ): Boolean {
+        if (job(job.jobId) == null) return false
+        if (docs.isNotEmpty()) upsertDocs(docs)
+        upsertJob(job)
+        return true
+    }
+
     /** Drop documents that stopped being worth a call — trashed or deleted since they were queued. */
     @Query("DELETE FROM ai_edit_job_docs WHERE jobId = :jobId AND docId IN (:docIds)")
     suspend fun deleteDocs(

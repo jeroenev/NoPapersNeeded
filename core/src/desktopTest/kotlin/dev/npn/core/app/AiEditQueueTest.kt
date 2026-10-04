@@ -260,6 +260,30 @@ class AiEditQueueSuggestionTest {
                 rig.rows(jobId) shouldBe emptyList()
             }
         }
+
+    /** The user abandons a run against a slow endpoint; the drain must not make them wait for it. */
+    @Test
+    fun `a discard returns while the run's model calls are still in flight`() =
+        runTest {
+            withQueue { rig ->
+                rig.ai.edit = suggestion()
+                val jobId = rig.enqueue("a")
+                val gate = CompletableDeferred<Unit>()
+                rig.ai.gate = gate
+                val draining = backgroundScope.launch { rig.queue.processNext() }
+                while (rig.ai.suggestEditsCalls.isEmpty()) runCurrent()
+
+                rig.queue.discardEditRun(jobId)
+
+                gate.isCompleted shouldBe false
+                rig.job(jobId) shouldBe null
+                // The answer that arrives afterwards finds the run gone and writes nothing back.
+                gate.complete(Unit)
+                draining.join()
+                rig.job(jobId) shouldBe null
+                rig.rows(jobId) shouldBe emptyList()
+            }
+        }
 }
 
 class AiEditQueueFailureTest {

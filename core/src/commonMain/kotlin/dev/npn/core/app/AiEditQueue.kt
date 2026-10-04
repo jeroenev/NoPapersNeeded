@@ -12,8 +12,6 @@ import dev.npn.core.util.NpnJson
 import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueRetryPolicy
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -107,7 +105,10 @@ interface AiEditQueueFacade {
      */
     suspend fun openEditRun(jobId: String): EditRunReview?
 
-    /** Drop a queued run and its suggestions, whether or not it ever finished. */
+    /**
+     * Drop a queued run and its suggestions, whether or not it ever finished. Returns at once, even
+     * while the drain is waiting on model calls for the run: their answers are dropped.
+     */
     suspend fun discardEditRun(jobId: String)
 }
 
@@ -155,6 +156,10 @@ interface AiEditQueueFacade {
  * A chunk that made any progress clears the job's backoff *and* its budget, so a run recovers on
  * its next kick rather than serving out a delay earned while the network was down.
  *
+ * The drain steps are single-flight ([dev.npn.core.work.QueueDrainer]), but nothing holds a run
+ * while its model calls are out: a step writes its results back only if the run still exists
+ * ([AiEditJobDao.writeBackIfPresent]), so a discard lands at once and stays.
+ *
  * ## Triggering
  *
  * Queueing a run asks for its drain through [onEnqueued], so a queued run never waits for the
@@ -184,18 +189,6 @@ class AiEditQueue(
     /** A document is given up on at [MAX_DOC_ATTEMPTS]; a job's own backoff has no cap. */
     private val docRetry = QueueRetryPolicy(MAX_DOC_ATTEMPTS)
     private val jobRetry = QueueRetryPolicy()
-
-    /**
-     * Serialises the drain against the user's cancels. The drain steps themselves are already
-     * single-flight via the [dev.npn.core.work.QueueDrainer] wrapping [processNext] in the
-     * session, but that mutex does not reach [discardEditRun]: without this lock a discard could
-     * slip between the drain reading a job and its write-back, and the write-back would recreate
-     * a row the user explicitly deleted. Holding it across the model calls costs nothing — the
-     * drain is already strictly serial there — and it makes discarding authoritative: the delete
-     * always lands after the in-flight chunk has finished writing, so a discarded run never comes
-     * back.
-     */
-    private val drainLock = Mutex()
 
     override suspend fun enqueueEditRun(
         docIds: List<String>,
@@ -256,7 +249,7 @@ class AiEditQueue(
         )
     }
 
-    override suspend fun discardEditRun(jobId: String) = ownWrite { drainLock.withLock { dao.deleteJob(jobId) } }
+    override suspend fun discardEditRun(jobId: String) = ownWrite { dao.deleteJob(jobId) }
 
     /**
      * Suggest one chunk of the oldest due run, returning whether the drain should continue. See the
@@ -264,12 +257,11 @@ class AiEditQueue(
      * false, parking the drain until the next kick rather than firing every remaining chunk at a
      * dead endpoint.
      */
-    suspend fun processNext(): Boolean =
-        drainLock.withLock {
-            val job = dueJob() ?: return@withLock false
-            val request = job.request() ?: return@withLock dropUndecodableJob(job)
-            suggestNextChunk(job, request)
-        }
+    suspend fun processNext(): Boolean {
+        val job = dueJob() ?: return false
+        val request = job.request() ?: return dropUndecodableJob(job)
+        return suggestNextChunk(job, request)
+    }
 
     /**
      * The run to work on now, or null when there is nothing to do: the endpoint is unconfigured,
@@ -297,7 +289,10 @@ class AiEditQueue(
         return recordChunk(job, live, runner.suggest(live.map { it.docId }, request) { _, suggestion -> suggestion })
     }
 
-    /** Persist a chunk's outcomes and decide what its failures mean; see the class docs. */
+    /**
+     * Persist a chunk's outcomes and decide what its failures mean (see the class docs), unless
+     * the run was discarded meanwhile.
+     */
     private suspend fun recordChunk(
         job: AiEditJobEntity,
         rows: List<AiEditJobDocEntity>,
@@ -306,21 +301,23 @@ class AiEditQueue(
         val allFailed = outcomes.all { it.isFailure }
         // Read a total failure as an outage only while the job still has budget for that reading;
         // past it the documents are charged, or a run whose last document is poison never ends.
-        if (allFailed && job.attempts < MAX_JOB_ATTEMPTS) {
-            parkJob(job, outcomes.firstCause())
-            return false
-        }
-        dao.upsertDocs(rows.mapIndexed { index, row -> row.recording(outcomes[index]) })
+        val charged =
+            if (allFailed && job.attempts < MAX_JOB_ATTEMPTS) {
+                emptyList()
+            } else {
+                rows.mapIndexed { index, row -> row.recording(outcomes[index]) }
+            }
+        val now = clock.nowMillis()
         if (allFailed) {
-            // Charged above, but still nothing to carry on with right now.
-            parkJob(job, outcomes.firstCause())
+            // Nothing to carry on with right now, charged or not.
+            health.failed(now)
+            dao.writeBackIfPresent(job.parked(now, outcomes.firstCause()), charged)
             return false
         }
         // Progress means the endpoint is alive, so the backoff and the systemic budget this job
         // spent while it was not are both stale; clearing them lets the next kick carry straight on.
-        val now = clock.nowMillis()
-        dao.upsertJob(job.copy(attempts = 0, nextAttemptAt = now, updatedAt = now, lastError = null))
         health.answered()
+        dao.writeBackIfPresent(job.copy(attempts = 0, nextAttemptAt = now, updatedAt = now, lastError = null), charged)
         return true
     }
 
@@ -339,22 +336,18 @@ class AiEditQueue(
             },
         )
 
-    /** Push the whole run's next attempt out by the shared backoff, and put the endpoint on its cooldown. */
-    private suspend fun parkJob(
-        job: AiEditJobEntity,
+    /** The run with its next attempt pushed out by the shared backoff. */
+    private fun AiEditJobEntity.parked(
+        now: Long,
         cause: Throwable?,
-    ) {
-        val attempts = job.attempts + 1
-        val now = clock.nowMillis()
-        dao.upsertJob(
-            job.copy(
-                attempts = attempts,
-                nextAttemptAt = jobRetry.nextAttemptAt(now, attempts),
-                updatedAt = now,
-                lastError = cause?.let { it.message ?: it::class.simpleName },
-            ),
+    ): AiEditJobEntity {
+        val tried = attempts + 1
+        return copy(
+            attempts = tried,
+            nextAttemptAt = jobRetry.nextAttemptAt(now, tried),
+            updatedAt = now,
+            lastError = cause?.let { it.message ?: it::class.simpleName },
         )
-        health.failed(now)
     }
 
     /**
