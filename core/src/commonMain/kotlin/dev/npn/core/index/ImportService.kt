@@ -15,6 +15,7 @@ import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.pathrules.resolveUniqueTarget
+import dev.npn.core.util.runCatchingCancellable
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -54,7 +55,7 @@ class ImportService(
     private val ocrQueueDao: OcrQueueDao,
     private val clock: EpochClock = SystemEpochClock,
     private val ruleProvider: suspend () -> StoragePathRule? = { null },
-    private val serialize: suspend (suspend () -> ImportResult) -> ImportResult = { it() },
+    private val serialize: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
     suspend fun importPdf(
         source: ExternalSource,
@@ -92,8 +93,27 @@ class ImportService(
         // An empty file is never a document; its hash would claim the empty-content identity.
         if (fs.stat(tmpPath)?.size == 0L) throw EmptyImportException()
         val hash = fs.sha256(tmpPath)
-        return serialize { place(tmpPath, hash, suggestedName, toDir) }
+        var result: ImportResult? = null
+        serialize { result = place(tmpPath, hash, suggestedName, toDir) }
+        return checkNotNull(result)
     }
+
+    /**
+     * Take back an import this service just made, for a caller whose larger operation failed after
+     * it: a split whose later part could not be made. An import writes no journal event, so taking
+     * it back is removing the file and its rows, not a trash or a tombstone; a tombstone would hide
+     * the same bytes when the caller retries and makes the same part again. Leaves alone a document
+     * that no longer sits where the import put it.
+     */
+    suspend fun undoImport(imported: ImportResult.Imported) =
+        serialize {
+            val row = documentDao.getByDocId(imported.docId)
+            if (row != null && row.relPath == imported.relPath && !row.deleted && !row.trashed) {
+                if (fs.exists(imported.relPath)) fs.delete(imported.relPath)
+                documentDao.delete(imported.docId)
+                ocrQueueDao.delete(imported.docId)
+            }
+        }
 
     private suspend fun place(
         tmpPath: String,
@@ -131,9 +151,8 @@ class ImportService(
     private fun freshTmpPath(): String = NpnPaths.importStagingPath(Uuid.random().toString())
 
     private suspend fun cleanup(tmpPath: String) {
-        if (fs.exists(tmpPath)) {
-            runCatching { fs.delete(tmpPath) }
-        }
+        // Best effort: a staging file left behind is never indexed (it lives under `.npn/`).
+        if (fs.exists(tmpPath)) runCatchingCancellable { fs.delete(tmpPath) }
     }
 
     private fun ensurePdfName(name: String): String {

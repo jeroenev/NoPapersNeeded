@@ -402,9 +402,17 @@ class LibrarySessionImpl private constructor(
                     is ImportResult.Duplicate -> it.existingDocId
                 }
             }
-        copyMetadataToParts(docId, partIds)
-        // Trash last: if anything above fails the original stays untouched next to the parts.
-        writer.trashDoc(docId)
+        var finished = false
+        try {
+            copyMetadataToParts(docId, partIds)
+            // Trash last, so a failure anywhere leaves the original untouched; the parts are then
+            // taken back. Metadata already copied onto them stays in the journal under their
+            // hashes, harmless: a retry makes the same parts and copies the same metadata.
+            writer.trashDoc(docId)
+            finished = true
+        } finally {
+            if (!finished) splitService.rollBack(parts)
+        }
         ocrWorker.kick()
         return SplitOutcome.Done(partIds)
     }
@@ -730,7 +738,7 @@ class LibrarySessionImpl private constructor(
                 )
             val maintenance = MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
             val relinkService = RelinkService(coordinator)
-            val splitService = SplitService(fs, deps.pdfEngine, importService, db.documentDao())
+            val splitService = SplitService(fs, deps.pdfEngine, importService, db.documentDao(), deps.log)
 
             // Built before the OCR pipeline because it is also the pipeline's AI engine: one
             // facade, so the vision calls share the cached endpoint client with chat and edits.

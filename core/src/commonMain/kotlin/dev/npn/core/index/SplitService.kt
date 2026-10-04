@@ -4,18 +4,28 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.pdf.PdfEngine
+import dev.npn.core.util.NpnLog
+import dev.npn.core.util.reason
+import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 
 /**
  * Splits one library PDF into multiple new documents (PLAN "PDFs are immutable": the original is
  * never rewritten; each part is a brand-new file that flows through the normal [ImportService]
  * path, so parts get dedup, canonical inbox placement and an OCR queue entry for free). Trashing
  * the original and carrying metadata over is the session's job, not this service's.
+ *
+ * A split is all or nothing: when a later part cannot be made, or the split is cancelled, the parts
+ * it already imported are taken back ([rollBack]) and the library is left as it was.
  */
 class SplitService(
     private val fs: LibraryFileSystem,
     private val pdfEngine: PdfEngine,
     private val importService: ImportService,
     private val documentDao: DocumentDao,
+    private val log: NpnLog = NpnLog.None,
 ) {
     sealed interface Result {
         /** One [ImportResult] per requested segment, in segment order. */
@@ -40,11 +50,8 @@ class SplitService(
         if (doc == null || precondition != null) {
             return Result.Failed(precondition ?: "Document not found")
         }
-        return try {
-            splitLoaded(doc, segments)
-        } catch (t: Throwable) {
-            Result.Failed("Could not read the PDF: ${t.message}")
-        }
+        return runCatchingCancellable { splitLoaded(doc, segments) }
+            .getOrElse { Result.Failed("Could not read the PDF: ${it.reason()}") }
     }
 
     private suspend fun splitLoaded(doc: DocumentEntity, segments: List<IntRange>): Result {
@@ -59,17 +66,34 @@ class SplitService(
 
         val baseName = doc.fileName.removeSuffix(".pdf").removeSuffix(".PDF")
         val parts = ArrayList<ImportResult>(segments.size)
-        for ((i, segment) in segments.withIndex()) {
-            val outcome = try {
-                val partBytes = pdfEngine.extractPages(bytes, segment.toList())
-                importService.importBytes(partBytes, "$baseName (part ${i + 1}).pdf", toDir = parentDirOf(doc.relPath))
-            } catch (t: Throwable) {
-                return Result.Failed("Splitting failed on part ${i + 1}: ${t.message}")
+        var complete = false
+        try {
+            for ((i, segment) in segments.withIndex()) {
+                val outcome = runCatchingCancellable {
+                    val partBytes = pdfEngine.extractPages(bytes, segment.toList())
+                    importService.importBytes(partBytes, "$baseName (part ${i + 1}).pdf", parentDirOf(doc.relPath))
+                }.getOrElse { return Result.Failed("Splitting failed on part ${i + 1}: ${it.reason()}") }
+                parts.add(outcome)
             }
-            parts.add(outcome)
+            complete = true
+            return Result.Done(parts)
+        } finally {
+            if (!complete) rollBack(parts)
         }
-        return Result.Done(parts)
     }
+
+    /**
+     * Take back the parts a split imported, for a split that will not complete. Only the parts it
+     * created: a part that turned out to be an existing document ([ImportResult.Duplicate]) was
+     * there before and stays. Runs even when the split was cancelled, and best effort: a part that
+     * cannot be taken back is logged and stays in the library.
+     */
+    suspend fun rollBack(parts: List<ImportResult>) =
+        withContext(NonCancellable) {
+            for (part in parts.asReversed().filterIsInstance<ImportResult.Imported>()) {
+                log.runLogged("Taking back split part ${part.relPath}") { importService.undoImport(part) }
+            }
+        }
 
     /** Same folder as the original ("" = library root) so a split never moves documents around. */
     private fun parentDirOf(relPath: String): String =

@@ -184,6 +184,10 @@ interface DocumentDao {
     /** Chunked [getByDocIdsChunk] so large id sets stay under SQLite's bind-variable limit. */
     suspend fun getByDocIds(docIds: List<String>): List<DocumentEntity> = chunkedQuery(docIds) { getByDocIdsChunk(it) }
 
+    /** Drop one row outright: only for taking back an import nothing else has seen yet. */
+    @Query("DELETE FROM documents WHERE docId = :docId")
+    suspend fun delete(docId: String)
+
     @Query("DELETE FROM documents")
     suspend fun clearAll()
 
