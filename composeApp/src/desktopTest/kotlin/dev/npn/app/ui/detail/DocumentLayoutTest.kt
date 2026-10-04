@@ -19,6 +19,7 @@ import androidx.lifecycle.compose.LocalLifecycleOwner
 import dev.npn.app.FakeMetadataWriter
 import dev.npn.app.doc
 import dev.npn.app.ui.theme.NpnTheme
+import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.app.DocListItem
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
@@ -121,10 +122,33 @@ class DocumentLayoutTest {
             }
         }
 
+    /**
+     * Accepting a suggestion overwrites the value on screen, so the row says what it replaces, as
+     * the bulk Review does. On screen means the draft: what the user typed is what gets replaced.
+     */
+    @Test
+    fun anAiSuggestionShowsTheValueItReplaces() =
+        onUiThread {
+            val suggested =
+                AiPanelState(
+                    tags = AiTagState(available = true),
+                    metadata = AiMetadataState(suggestion = FieldSuggestion(mapOf(FieldKeys.TITLE to "March bill"))),
+                )
+            val scene = scene(1280, 800, ai = suggested)
+            try {
+                scene.render()
+                assertNotNull(scene.text("March bill"))
+                assertNotNull(scene.text("Replaces: Electricity invoice 2026"))
+            } finally {
+                scene.close()
+            }
+        }
+
     private fun scene(
         width: Int,
         height: Int,
         fontScale: Float = 1f,
+        ai: AiPanelState = AiPanelState(),
     ): ImageComposeScene {
         val owner =
             object : LifecycleOwner {
@@ -160,6 +184,7 @@ class DocumentLayoutTest {
                                                     )
                                                 },
                                         ),
+                                    ai = ai,
                                 ),
                             actions = actions(),
                             preview = { Text("PDF preview", modifier = it) },

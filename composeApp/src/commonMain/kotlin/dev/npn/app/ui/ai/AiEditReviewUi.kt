@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
+import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.resolve
@@ -70,7 +71,6 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_no_suggestions
 import no_papers_needed.composeapp.generated.resources.ai_edit_open_document
 import no_papers_needed.composeapp.generated.resources.ai_edit_remove_tag
 import no_papers_needed.composeapp.generated.resources.ai_edit_remove_tags_label
-import no_papers_needed.composeapp.generated.resources.ai_edit_replaces
 import no_papers_needed.composeapp.generated.resources.ai_edit_select_all
 import no_papers_needed.composeapp.generated.resources.ai_edit_select_recommended
 import no_papers_needed.composeapp.generated.resources.ai_edit_skip
@@ -306,30 +306,12 @@ private fun ReviewFieldRow(
     ) {
         // Null callback: the row is the target, so the checkbox must not be a second one.
         Checkbox(checked = field.selected, onCheckedChange = null)
-        Column(Modifier.weight(1f).padding(start = 4.dp)) {
-            Text(
-                field.label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(
-                field.value,
-                style = MaterialTheme.typography.bodyMedium,
-                maxLines = 3,
-                overflow = TextOverflow.Ellipsis,
-            )
-            // What this would destroy, in the error colour: it is the one suggestion kind that
-            // does not add to the library but replaces part of it.
-            field.current?.let {
-                Text(
-                    stringResource(Res.string.ai_edit_replaces, it),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    maxLines = 3,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
+        SuggestedFieldValue(
+            label = field.label,
+            value = field.value,
+            replaces = field.current,
+            modifier = Modifier.weight(1f).padding(start = 4.dp),
+        )
     }
 }
 

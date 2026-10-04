@@ -64,6 +64,7 @@ import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.IsoDatePickerDialog
 import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
 import dev.npn.app.ui.common.ReviewedBadge
+import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagEditor
 import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.TestTags
@@ -260,6 +261,7 @@ private fun DetailsTab(
             available = state.ai.tags.available == true,
             state = state.ai.metadata,
             labels = state.document.fieldDefs.associate { it.key to it.label },
+            current = doc.fields,
             actions = actions.ai,
         )
 
@@ -407,14 +409,16 @@ private fun AiTagChip(
 /**
  * AI suggestions for the document's fields. Hidden entirely unless the AI endpoint is configured
  * ([available], shared with the tag probe). Offers a "Suggest details" button (spinner while
- * running) and renders each suggested field as a row labelled from the registry: the check
- * accepts it through the normal commit path, the × dismisses it.
+ * running) and renders each suggested field as a row labelled from the registry, showing the
+ * [current] value it would replace the way the bulk Review does: the check accepts it through the
+ * normal commit path, the × dismisses it.
  */
 @Composable
 private fun AiMetadataSuggestions(
     available: Boolean,
     state: AiMetadataState,
     labels: Map<String, String>,
+    current: Map<String, String>,
     actions: AiActions,
 ) {
     if (!available) return
@@ -447,6 +451,7 @@ private fun AiMetadataSuggestions(
             AiMetadataSuggestionRow(
                 label = labels[key] ?: key,
                 value = value,
+                replaces = current[key]?.takeIf { it.isNotBlank() && it != value },
                 key = key,
                 onAccept = actions.onAcceptMetadata,
                 onDismiss = actions.onDismissMetadata,
@@ -455,11 +460,12 @@ private fun AiMetadataSuggestions(
     }
 }
 
-/** One suggested field value with accept (check) and dismiss (×) actions. */
+/** One suggested field value, with what it replaces, and accept (check) and dismiss (×) actions. */
 @Composable
 private fun AiMetadataSuggestionRow(
     label: String,
     value: String,
+    replaces: String?,
     key: String,
     onAccept: (String) -> Unit,
     onDismiss: (String) -> Unit,
@@ -469,14 +475,7 @@ private fun AiMetadataSuggestionRow(
         horizontalArrangement = Arrangement.spacedBy(8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Column(Modifier.weight(1f)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
-            Text(value, style = MaterialTheme.typography.bodyMedium)
-        }
+        SuggestedFieldValue(label = label, value = value, replaces = replaces, modifier = Modifier.weight(1f))
         IconButton(onClick = { onAccept(key) }) {
             Icon(
                 Icons.Filled.Check,
