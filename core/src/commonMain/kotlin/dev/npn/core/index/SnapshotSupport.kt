@@ -3,6 +3,8 @@ package dev.npn.core.index
 import dev.npn.core.db.MetadataEventEntity
 import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataSourceEntity
+import dev.npn.core.db.SourceKind
+import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.CanonicalJournalEvent
@@ -38,10 +40,10 @@ class SnapshotSupport(
         val source =
             MetadataSourceEntity(
                 path = published.relPath,
-                storageVersion = NpnPaths.STORAGE_SNAPSHOT,
+                kind = SourceKind.SNAPSHOT,
                 fingerprint = fingerprint,
                 contentHash = published.contentHash,
-                status = MetadataProjectionDao.STATUS_APPLIED,
+                status = SourceStatus.APPLIED,
             )
         dao.ingestSnapshot(source, canonical.map(eventEntity), published.supersedes)
     }
@@ -56,15 +58,15 @@ class SnapshotSupport(
         val superseded = dao.appliedSupersededHashes().toHashSet()
         val live =
             dao.allSources().filter { source ->
-                source.status == MetadataProjectionDao.STATUS_APPLIED && source.contentHash !in superseded
+                source.status == SourceStatus.APPLIED && source.contentHash !in superseded
             }
 
-        fun ofVersion(storageVersion: Int): List<CompactionSource> =
-            live.filter { it.storageVersion == storageVersion }.mapNotNull { source ->
+        fun ofKind(kind: SourceKind): List<CompactionSource> =
+            live.filter { it.kind == kind }.mapNotNull { source ->
                 val hash = source.contentHash ?: return@mapNotNull null
                 recordedMtime(source)?.let { CompactionSource(source.path, hash, it) }
             }
-        return ofVersion(NpnPaths.STORAGE_V2) to ofVersion(NpnPaths.STORAGE_SNAPSHOT)
+        return ofKind(SourceKind.OBJECT) to ofKind(SourceKind.SNAPSHOT)
     }
 
     /**

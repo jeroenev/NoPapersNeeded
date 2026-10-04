@@ -1,6 +1,7 @@
 package dev.npn.core.db
 
 import androidx.room3.AutoMigration
+import androidx.room3.ColumnTypeConverters
 import androidx.room3.ConstructedBy
 import androidx.room3.Database
 import androidx.room3.DeleteColumn
@@ -89,6 +90,7 @@ import androidx.sqlite.execSQL
     ],
 )
 @ConstructedBy(NpnDatabaseConstructor::class)
+@ColumnTypeConverters(MetadataColumnConverters::class)
 abstract class NpnDatabase : RoomDatabase() {
     abstract fun documentDao(): DocumentDao
 

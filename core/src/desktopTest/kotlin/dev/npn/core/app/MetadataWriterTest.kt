@@ -1,8 +1,8 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
-import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.MetadataWriteBlocked
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
@@ -507,7 +507,7 @@ class MetadataWriterTest {
                 // Device 2 rescans: applies the snapshot, tolerates the now-missing objects.
                 session2.rescan()
                 db2.tagDao().tagsForDocument(id).size shouldBe 5
-                db2.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_READY
+                db2.metadataProjectionDao().state()!!.migrationState shouldBe ProjectionStatus.READY
                 session2.close()
             } finally {
                 if (secondDb !== rig.db) secondDb.close()
@@ -532,7 +532,7 @@ class MetadataWriterTest {
                 rig.db
                     .metadataProjectionDao()
                     .state()!!
-                    .migrationState shouldBe MetadataAccumulator.MIGRATION_FAILED
+                    .migrationState shouldBe ProjectionStatus.FAILED
                 val items =
                     rig.session.documents
                         .observeDocuments(LibraryFilter(), LibrarySort())

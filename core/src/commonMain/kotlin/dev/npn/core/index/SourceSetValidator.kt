@@ -2,6 +2,8 @@ package dev.npn.core.index
 
 import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataSourceEntity
+import dev.npn.core.db.SourceKind
+import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
 
@@ -60,12 +62,12 @@ class SourceSetValidator(
         val hardMissing =
             previous.firstOrNull { source ->
                 if (source.path in files) return@firstOrNull false
-                when (source.storageVersion) {
-                    NpnPaths.STORAGE_V2, NpnPaths.STORAGE_SNAPSHOT -> {
+                when (source.kind) {
+                    SourceKind.OBJECT, SourceKind.SNAPSHOT -> {
                         isUnexplainedObjectLoss(source, current, files, supersededHashes, stillMissing)
                     }
 
-                    else -> {
+                    SourceKind.LEGACY_SEGMENT -> {
                         !hasLegacyReplacement(source, current, files)
                     }
                 }
@@ -93,7 +95,7 @@ class SourceSetValidator(
     ): Boolean {
         val hasReplacement =
             current.any { candidate ->
-                candidate.path in files && candidate.status == MetadataProjectionDao.STATUS_APPLIED &&
+                candidate.path in files && candidate.status == SourceStatus.APPLIED &&
                     candidate.contentHash == source.contentHash
             }
         if (hasReplacement) return false
@@ -115,7 +117,7 @@ class SourceSetValidator(
         val replacements =
             current.filter { source ->
                 source.path in files && source.path.substringBeforeLast('/') == deviceDir &&
-                    source.status == MetadataProjectionDao.STATUS_APPLIED
+                    source.status == SourceStatus.APPLIED
             }
         val covered =
             replacements

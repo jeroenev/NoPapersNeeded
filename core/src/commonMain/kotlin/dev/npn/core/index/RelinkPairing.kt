@@ -12,6 +12,8 @@ import dev.npn.core.fs.FileMeta
 internal object RelinkPairing {
     const val MAX_CANDIDATES_PER_DOC = 3
 
+    /** The reason of a file replaced in place: same path, other bytes. */
+    const val PATH_MATCH = "path-match"
     const val SCORE_PATH_MATCH = 100
     private const val SCORE_NAME = 50
     private const val SCORE_SIZE = 40

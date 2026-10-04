@@ -1,11 +1,13 @@
 package dev.npn.core.index
 
 import dev.npn.core.db.MetadataEventEntity
-import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataProjectionStateEntity
 import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.MetadataTransactionActorEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.ProjectionStatus
+import dev.npn.core.db.SourceKind
+import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -115,7 +117,7 @@ class MetadataAccumulator(
     ): PreparedSource {
         val alreadyApplied =
             existingSource != null &&
-                existingSource.status == MetadataProjectionDao.STATUS_APPLIED
+                existingSource.status == SourceStatus.APPLIED
         // Cheap gate: an already-applied source whose size+mtime are byte-for-byte unchanged is
         // treated as unchanged without reading/hashing. Only an exact match on BOTH fields
         // short-circuits (mtime granularity means an approximate match could hide a mutation), so
@@ -160,7 +162,7 @@ class MetadataAccumulator(
             }
         return StagedObject(
             relPath = relPath,
-            previouslyApplied = existingSource?.status == MetadataProjectionDao.STATUS_APPLIED,
+            previouslyApplied = existingSource?.status == SourceStatus.APPLIED,
             fingerprint = loaded.fingerprint,
             contentHash = loaded.contentHash,
             read = StorageV2Reader.read(relPath, loaded.bytes, loaded.contentHash),
@@ -175,10 +177,10 @@ class MetadataAccumulator(
                     dao.ingestSource(
                         MetadataSourceEntity(
                             staged.relPath,
-                            NpnPaths.STORAGE_V2,
+                            SourceKind.OBJECT,
                             staged.fingerprint,
                             staged.contentHash,
-                            MetadataProjectionDao.STATUS_APPLIED,
+                            SourceStatus.APPLIED,
                         ),
                         result.events.map(::eventEntity),
                         MetadataTransactionActorEntity(
@@ -198,10 +200,10 @@ class MetadataAccumulator(
                 dao.upsertSource(
                     MetadataSourceEntity(
                         staged.relPath,
-                        NpnPaths.STORAGE_V2,
+                        SourceKind.OBJECT,
                         staged.fingerprint,
                         staged.contentHash,
-                        MetadataProjectionDao.STATUS_RETRYABLE,
+                        SourceStatus.RETRYABLE,
                         result.message,
                     ),
                 )
@@ -275,7 +277,7 @@ class MetadataAccumulator(
         // Skipped entirely on a no-op pass: it would otherwise overwrite the ready marker (and the
         // source-set fingerprint that lets the next open reuse the projection) for no change.
         if (state != null) {
-            dao.upsertState(projectionState(MIGRATION_RECONCILING, state.maxHlc))
+            dao.upsertState(projectionState(ProjectionStatus.RECONCILING, state.maxHlc))
         }
         return MetadataReconciliation(
             state = state,
@@ -300,7 +302,7 @@ class MetadataAccumulator(
         val reusable =
             !pass.projectionCleared &&
                 stored != null &&
-                stored.migrationState == MIGRATION_READY &&
+                stored.migrationState == ProjectionStatus.READY &&
                 stored.sourceSetFingerprint != null &&
                 stored.sourceSetFingerprint == sourceSetFingerprint()
         if (reusable) {
@@ -309,13 +311,13 @@ class MetadataAccumulator(
             )
         }
         val state = loadState()
-        dao.upsertState(projectionState(MIGRATION_RECONCILING, state.maxHlc))
+        dao.upsertState(projectionState(ProjectionStatus.RECONCILING, state.maxHlc))
         return OpenReconciliation.Refolded(state)
     }
 
     suspend fun markReady(maxHlc: Hlc) {
         dao.upsertState(
-            projectionState(MIGRATION_READY, maxHlc, sourceSetFingerprint = sourceSetFingerprint()),
+            projectionState(ProjectionStatus.READY, maxHlc, sourceSetFingerprint = sourceSetFingerprint()),
         )
     }
 
@@ -334,7 +336,7 @@ class MetadataAccumulator(
         val applied =
             dao
                 .allSources()
-                .filter { it.status == MetadataProjectionDao.STATUS_APPLIED }
+                .filter { it.status == SourceStatus.APPLIED }
                 .sortedBy { it.path }
         val payload =
             buildString {
@@ -368,7 +370,7 @@ class MetadataAccumulator(
         physicalMillis: Long,
         counter: Int,
     ) {
-        val current = dao.state() ?: projectionState(MIGRATION_RECONCILING, Hlc.ZERO)
+        val current = dao.state() ?: projectionState(ProjectionStatus.RECONCILING, Hlc.ZERO)
         dao.upsertState(current.copy(allocatorPhysical = physicalMillis, allocatorCounter = counter))
     }
 
@@ -417,11 +419,11 @@ class MetadataAccumulator(
             fail("Unsupported metadata object store version ${path.version}")
         }
         val existing = dao.source(meta.relPath)
-        val alreadyApplied = existing != null && existing.status == MetadataProjectionDao.STATUS_APPLIED
+        val alreadyApplied = existing != null && existing.status == SourceStatus.APPLIED
         // v1-tolerant shrink guard: a legacy (mutable) source is allowed to grow but never shrink.
         // Runs before the read; when the stat gate below short-circuits the size is unchanged, so
         // this is a no-op there and only fires on a genuine shrink.
-        if (alreadyApplied && existing.storageVersion == NpnPaths.STORAGE_V1) {
+        if (alreadyApplied && existing.kind == SourceKind.LEGACY_SEGMENT) {
             val previousSize = existing.fingerprint.substringBefore(',').toLongOrNull()
             if (previousSize != null && meta.size < previousSize) {
                 fail("Legacy metadata source shrank: ${meta.relPath}")
@@ -434,11 +436,11 @@ class MetadataAccumulator(
                 PreparedSource.Unchanged -> return
                 is PreparedSource.Loaded -> prepared
             }
-        val storageVersion =
+        val kind =
             when (path) {
-                is NpnPaths.JournalPath.SnapshotV2 -> NpnPaths.STORAGE_SNAPSHOT
-                is NpnPaths.JournalPath.ObjectV2 -> NpnPaths.STORAGE_V2
-                else -> NpnPaths.STORAGE_V1
+                is NpnPaths.JournalPath.SnapshotV2 -> SourceKind.SNAPSHOT
+                is NpnPaths.JournalPath.ObjectV2 -> SourceKind.OBJECT
+                else -> SourceKind.LEGACY_SEGMENT
             }
         val result = readSource(meta.relPath, path, loaded.bytes, loaded.contentHash)
         if (result is JournalSourceRead.Retryable && alreadyApplied) {
@@ -451,12 +453,12 @@ class MetadataAccumulator(
             } else {
                 null
             }
-        applyReadResult(meta.relPath, storageVersion, loaded.fingerprint, loaded.contentHash, result, batch, supersedes)
+        applyReadResult(meta.relPath, kind, loaded.fingerprint, loaded.contentHash, result, batch, supersedes)
     }
 
     private suspend fun applyReadResult(
         path: String,
-        storageVersion: Int,
+        kind: SourceKind,
         fingerprint: String,
         contentHash: String,
         result: JournalSourceRead,
@@ -470,14 +472,14 @@ class MetadataAccumulator(
                         .joinToString("\n") { item ->
                             item.line?.let { "line $it: ${item.message}" } ?: item.message
                         }.ifEmpty { null }
-                val hashCol = contentHash.takeIf { storageVersion != NpnPaths.STORAGE_V1 }
+                val hashCol = contentHash.takeIf { kind != SourceKind.LEGACY_SEGMENT }
                 val source =
                     MetadataSourceEntity(
                         path,
-                        storageVersion,
+                        kind,
                         fingerprint,
                         hashCol,
-                        MetadataProjectionDao.STATUS_APPLIED,
+                        SourceStatus.APPLIED,
                         diagnostic,
                     )
                 val inserted =
@@ -489,7 +491,7 @@ class MetadataAccumulator(
                                 .firstOrNull()
                                 ?.event
                                 ?.dev
-                                ?.takeIf { storageVersion == NpnPaths.STORAGE_V2 }
+                                ?.takeIf { kind == SourceKind.OBJECT }
                                 ?.let { MetadataTransactionActorEntity(it, contentHash) }
                         dao.ingestSource(source, result.events.map(::eventEntity), actor)
                     }
@@ -501,10 +503,10 @@ class MetadataAccumulator(
                 dao.upsertSource(
                     MetadataSourceEntity(
                         path,
-                        storageVersion,
+                        kind,
                         fingerprint,
                         contentHash,
-                        MetadataProjectionDao.STATUS_RETRYABLE,
+                        SourceStatus.RETRYABLE,
                         result.message,
                     ),
                 )
@@ -539,10 +541,10 @@ class MetadataAccumulator(
         val source =
             MetadataSourceEntity(
                 path = published.relPath,
-                storageVersion = NpnPaths.STORAGE_V2,
+                kind = SourceKind.OBJECT,
                 fingerprint = "$stat:${published.contentHash}",
                 contentHash = published.contentHash,
-                status = MetadataProjectionDao.STATUS_APPLIED,
+                status = SourceStatus.APPLIED,
             )
         val actor = MetadataTransactionActorEntity(events.first().dev, published.contentHash)
         return LocalSource(source, canonical.map(::eventEntity), actor, events)
@@ -561,12 +563,12 @@ class MetadataAccumulator(
     val snapshotSupport: SnapshotSupport by lazy { SnapshotSupport(fs, dao, ::eventEntity) }
 
     private suspend fun fail(message: String): Nothing {
-        dao.upsertState(projectionState(MIGRATION_FAILED, Hlc.ZERO, message))
+        dao.upsertState(projectionState(ProjectionStatus.FAILED, Hlc.ZERO, message))
         throw MetadataWriteBlocked(message)
     }
 
     private suspend fun projectionState(
-        status: String,
+        status: ProjectionStatus,
         maxHlc: Hlc,
         diagnostic: String? = null,
         sourceSetFingerprint: String? = null,
@@ -618,15 +620,6 @@ class MetadataAccumulator(
          */
         const val PROJECTION_VERSION = 6
         private const val STAGING_MAX_AGE_MS = 60L * 60L * 1000L
-
-        /** Transient marker while a reconcile is in flight; not observed by any caller. */
-        const val MIGRATION_RECONCILING = "reconciling"
-
-        /** Terminal: reconcile completed and the coordinator marked the projection ready. */
-        const val MIGRATION_READY = "ready-v2"
-
-        /** Terminal: reconcile failed; writes are latched off by the coordinator. */
-        const val MIGRATION_FAILED = "failed"
     }
 }
 

@@ -340,7 +340,7 @@ class Indexer(
                     RelinkCandidate(
                         docAtPath.docId,
                         hash,
-                        reason = "path-match",
+                        reason = RelinkPairing.PATH_MATCH,
                         score = RelinkPairing.SCORE_PATH_MATCH,
                     ),
                 )

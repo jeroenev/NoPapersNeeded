@@ -535,7 +535,8 @@ class NpnDatabaseTest {
         runTest {
             val dao = db.metadataProjectionDao()
 
-            fun source(path: String) = MetadataSourceEntity(path, 1, path, null, "applied")
+            fun source(path: String) =
+                MetadataSourceEntity(path, SourceKind.LEGACY_SEGMENT, path, null, SourceStatus.APPLIED)
 
             fun event(
                 dev: String,

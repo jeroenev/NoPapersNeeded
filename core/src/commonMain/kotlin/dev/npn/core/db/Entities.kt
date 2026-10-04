@@ -386,10 +386,10 @@ data class KeyValueEntity(
 @Entity(tableName = "metadata_sources")
 data class MetadataSourceEntity(
     @PrimaryKey val path: String,
-    val storageVersion: Int,
+    @ColumnInfo(name = "storageVersion") val kind: SourceKind,
     val fingerprint: String,
     val contentHash: String?,
-    val status: String,
+    val status: SourceStatus,
     val diagnostic: String? = null,
 )
 
@@ -452,7 +452,7 @@ data class MetadataSupersededEntity(
 data class MetadataProjectionStateEntity(
     @PrimaryKey val id: Int = SINGLETON_ID,
     val projectionVersion: Int,
-    val migrationState: String,
+    val migrationState: ProjectionStatus,
     val sourceMaxPhysical: Long,
     val sourceMaxCounter: Int,
     val sourceMaxDevice: String,

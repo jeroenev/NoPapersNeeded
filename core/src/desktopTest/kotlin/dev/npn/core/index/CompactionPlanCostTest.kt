@@ -1,8 +1,9 @@
 package dev.npn.core.index
 
 import dev.npn.core.app.JournalCoordinator
-import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.ProjectionStatus
+import dev.npn.core.db.SourceStatus
 import dev.npn.core.db.StatementLog
 import dev.npn.core.db.isFullTableScan
 import dev.npn.core.db.queryPlan
@@ -123,11 +124,11 @@ class CompactionPlanCostTest {
             fs
                 .calls("stat")
                 .count { NpnPaths.journalPath(it.substringAfter(' ')) is NpnPaths.JournalPath.ObjectV2 } shouldBe 6
-            db.metadataProjectionDao().state()?.migrationState shouldBe MetadataAccumulator.MIGRATION_READY
+            db.metadataProjectionDao().state()?.migrationState shouldBe ProjectionStatus.READY
             db
                 .metadataProjectionDao()
                 .allSources()
-                .count { it.status == MetadataProjectionDao.STATUS_APPLIED } shouldBe 7
+                .count { it.status == SourceStatus.APPLIED } shouldBe 7
         }
 
     private companion object {

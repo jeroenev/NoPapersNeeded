@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -161,7 +162,7 @@ class CompactionReconcileTest {
 
             // Pending supersession: events still applied locally, so reconcile must NOT hard-block.
             repeat(3) { coordinator.reconcileMetadata() }
-            db.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_READY
+            db.metadataProjectionDao().state()!!.migrationState shouldBe ProjectionStatus.READY
             db.tagDao().tagsForDocument(docId).size shouldBe 5
 
             // Now the snapshot arrives (build it from the stashed objects' events via the compactor).
@@ -172,7 +173,7 @@ class CompactionReconcileTest {
 
             // After the snapshot is applied and superseded objects deleted, reconcile stays clean.
             coordinator.reconcileMetadata()
-            db.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_READY
+            db.metadataProjectionDao().state()!!.migrationState shouldBe ProjectionStatus.READY
             db.tagDao().tagsForDocument(docId).size shouldBe 5
         }
 
@@ -200,7 +201,7 @@ class CompactionReconcileTest {
             // Tolerated for the grace window, then escalates to a hard block.
             repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { coordinator.reconcileMetadata() }
             assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
-            db.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_FAILED
+            db.metadataProjectionDao().state()!!.migrationState shouldBe ProjectionStatus.FAILED
         }
 
     @Test

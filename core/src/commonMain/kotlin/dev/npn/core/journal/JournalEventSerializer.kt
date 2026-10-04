@@ -207,32 +207,32 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
         p: JsonObject,
     ): JournalOp =
         when (opWire) {
-            "tag-add" -> {
+            JournalOp.TagAdd.WIRE -> {
                 JournalOp.TagAdd(p.string("tag"))
             }
 
-            "tag-remove" -> {
+            JournalOp.TagRemove.WIRE -> {
                 JournalOp.TagRemove(tag = p.string("tag"), dots = decodeDots(p["dots"]))
             }
 
-            "prop-set" -> {
+            JournalOp.PropSet.WIRE -> {
                 decodePropSet(p) ?: JournalOp.Unknown(opWire, p)
             }
 
-            "field-set" -> {
+            JournalOp.FieldSet.WIRE -> {
                 p.stringOrNull("key")?.let { JournalOp.FieldSet(it, p.nullableString("value")) }
                     ?: JournalOp.Unknown(opWire, p)
             }
 
-            "doc-trash" -> {
+            JournalOp.DocTrash.WIRE -> {
                 JournalOp.DocTrash(p.string("origPath"))
             }
 
-            "doc-restore" -> {
+            JournalOp.DocRestore.WIRE -> {
                 JournalOp.DocRestore
             }
 
-            "doc-delete" -> {
+            JournalOp.DocDelete.WIRE -> {
                 JournalOp.DocDelete
             }
 
@@ -240,23 +240,23 @@ object JournalEventSerializer : KSerializer<JournalEvent> {
                 JournalOp.DocUndelete
             }
 
-            "relink" -> {
+            JournalOp.Relink.WIRE -> {
                 JournalOp.Relink(p.string("newDoc"))
             }
 
-            "tag-rename" -> {
+            JournalOp.TagRename.WIRE -> {
                 JournalOp.TagRename(p.string("from"), p.string("to"))
             }
 
-            "tag-merge" -> {
+            JournalOp.TagMerge.WIRE -> {
                 JournalOp.TagMerge(p.string("from"), p.string("to"))
             }
 
-            "tag-style" -> {
+            JournalOp.TagStyle.WIRE -> {
                 JournalOp.TagStyle(p.string("tag"), p.nullableString("color"), p.nullableString("icon"))
             }
 
-            "setting-set" -> {
+            JournalOp.SettingSet.WIRE -> {
                 JournalOp.SettingSet(p.string("key"), p.nullableString("value"))
             }
 

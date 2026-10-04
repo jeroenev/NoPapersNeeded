@@ -25,7 +25,11 @@ sealed class JournalOp {
     data class TagAdd(
         val tag: String,
     ) : JournalOp() {
-        override val wire get() = "tag-add"
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "tag-add"
+        }
     }
 
     /** {"tag": String, "dots": [[deviceId, seq], ...]}; observed-remove. doc required. */
@@ -33,7 +37,11 @@ sealed class JournalOp {
         val tag: String,
         val dots: List<Dot>,
     ) : JournalOp() {
-        override val wire get() = "tag-remove"
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "tag-remove"
+        }
     }
 
     /**
@@ -45,7 +53,11 @@ sealed class JournalOp {
         val key: SystemProperty,
         val value: String?,
     ) : JournalOp() {
-        override val wire get() = "prop-set"
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "prop-set"
+        }
     }
 
     /**
@@ -58,7 +70,11 @@ sealed class JournalOp {
         val key: String,
         val value: String?,
     ) : JournalOp() {
-        override val wire get() = "field-set"
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "field-set"
+        }
     }
 
     /**
@@ -95,12 +111,16 @@ sealed class JournalOp {
 
     /** {}; doc required. Takes the document out of the trash: last-writer-wins against [DocTrash]. */
     data object DocRestore : JournalOp() {
-        override val wire get() = "doc-restore"
+        override val wire get() = WIRE
+
+        const val WIRE = "doc-restore"
     }
 
     /** {}; doc required. Deletes the document: last-writer-wins against [DocUndelete]. */
     data object DocDelete : JournalOp() {
-        override val wire get() = "doc-delete"
+        override val wire get() = WIRE
+
+        const val WIRE = "doc-delete"
     }
 
     /**
@@ -119,7 +139,11 @@ sealed class JournalOp {
     data class Relink(
         val newDoc: String,
     ) : JournalOp() {
-        override val wire get() = "relink"
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "relink"
+        }
     }
 
     /** {"from": String, "to": String}; doc null, library-wide. */
@@ -127,7 +151,11 @@ sealed class JournalOp {
         val from: String,
         val to: String,
     ) : JournalOp() {
-        override val wire get() = "tag-rename"
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "tag-rename"
+        }
     }
 
     /** {"from": String, "to": String}; doc null. Same folding as rename, kept distinct for UI/history. */
@@ -135,7 +163,11 @@ sealed class JournalOp {
         val from: String,
         val to: String,
     ) : JournalOp() {
-        override val wire get() = "tag-merge"
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "tag-merge"
+        }
     }
 
     /** {"tag": String, "color": String?, "icon": String?}; doc null. */
@@ -144,7 +176,11 @@ sealed class JournalOp {
         val color: String?,
         val icon: String?,
     ) : JournalOp() {
-        override val wire get() = "tag-style"
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "tag-style"
+        }
     }
 
     /** {"key": String, "value": String?}; doc null, library-wide. LWW synced setting. */

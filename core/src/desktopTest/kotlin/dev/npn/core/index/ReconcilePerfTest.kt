@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FileMeta
@@ -222,7 +223,7 @@ class ReconcilePerfTest {
             Files.write(libRoot.resolve(segment), "x".encodeToByteArray())
             clock.advance()
             assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
-            db.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_FAILED
+            db.metadataProjectionDao().state()!!.migrationState shouldBe ProjectionStatus.FAILED
         }
 
     @Test
@@ -350,7 +351,7 @@ class ReconcilePerfTest {
             reopened.settingFlow("someLaterSetting").first() shouldBe "on"
             // ...and the ready marker (with its watermark) was left as the last session wrote it.
             val after = db.metadataProjectionDao().state()!!
-            after.migrationState shouldBe MetadataAccumulator.MIGRATION_READY
+            after.migrationState shouldBe ProjectionStatus.READY
             after.sourceMaxPhysical shouldBe expectedHlc.sourceMaxPhysical
             after.sourceSetFingerprint shouldBe expectedHlc.sourceSetFingerprint
         }
@@ -424,6 +425,6 @@ class ReconcilePerfTest {
             Files.delete(libRoot.resolve(segment))
             clock.advance()
             assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
-            db.metadataProjectionDao().state()!!.migrationState shouldBe MetadataAccumulator.MIGRATION_FAILED
+            db.metadataProjectionDao().state()!!.migrationState shouldBe ProjectionStatus.FAILED
         }
 }

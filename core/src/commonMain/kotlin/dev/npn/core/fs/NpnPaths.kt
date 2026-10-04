@@ -27,7 +27,7 @@ object NpnPaths {
     const val TMP_DIR = ".npn/tmp"
     const val DEFAULT_INBOX = "inbox"
 
-    const val STORAGE_V1 = 1
+    /** Object-store version of the `objects-v2-<xx>` buckets this build reads and writes. */
     const val STORAGE_V2 = 2
 
     /** Length of a SHA-256 digest rendered as lowercase hex (document/content identity). */
@@ -35,9 +35,6 @@ object NpnPaths {
 
     /** Number of leading hash characters used to disambiguate write-once trash filenames. */
     const val TRASH_HASH_PREFIX_LENGTH = 8
-
-    /** Device-local source classification for compaction snapshots (not an on-disk store marker). */
-    const val STORAGE_SNAPSHOT = 3
 
     private val objectBucketPattern = Regex("^objects-v([1-9][0-9]*)-([0-9a-fA-F]{2})$")
 

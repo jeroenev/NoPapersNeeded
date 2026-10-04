@@ -190,8 +190,8 @@ class JournalCoordinator internal constructor(
         accumulator
             .loadStateOf(
                 JournalOp.DocTrash.WIRE,
-                JournalOp.DocRestore.wire,
-                JournalOp.DocDelete.wire,
+                JournalOp.DocRestore.WIRE,
+                JournalOp.DocDelete.WIRE,
                 JournalOp.DocUndelete.WIRE,
             ).trashTimes()
 

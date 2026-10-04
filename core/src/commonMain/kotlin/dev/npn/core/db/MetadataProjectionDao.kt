@@ -155,7 +155,7 @@ interface MetadataProjectionDao {
     @Query(
         "SELECT DISTINCT s.supersededHash FROM metadata_superseded s " +
             "JOIN metadata_sources src ON src.path = s.snapshotPath " +
-            "WHERE src.status = 'applied'",
+            "WHERE src.status = '$SOURCE_APPLIED'",
     )
     suspend fun appliedSupersededHashes(): List<String>
 
@@ -196,12 +196,12 @@ interface MetadataProjectionDao {
         supersedes: List<String>,
     ): List<MetadataEventEntity> {
         val existing = source(source.path)
-        if (existing?.fingerprint == source.fingerprint && existing.status == STATUS_APPLIED) return emptyList()
+        if (existing?.fingerprint == source.fingerprint && existing.status == SourceStatus.APPLIED) return emptyList()
         val inserted = insertNewEvents(events)
         replaceSourceEvents(source.path, events)
         deleteSupersededBy(source.path)
         insertSuperseded(supersedes.map { MetadataSupersededEntity(source.path, it) })
-        upsertSource(source.copy(status = STATUS_APPLIED))
+        upsertSource(source.copy(status = SourceStatus.APPLIED))
         return inserted
     }
 
@@ -216,7 +216,7 @@ interface MetadataProjectionDao {
         transactionActor: MetadataTransactionActorEntity? = null,
     ): List<MetadataEventEntity> {
         val existingSource = source(source.path)
-        if (existingSource?.fingerprint == source.fingerprint && existingSource.status == STATUS_APPLIED) {
+        if (existingSource?.fingerprint == source.fingerprint && existingSource.status == SourceStatus.APPLIED) {
             return emptyList()
         }
         if (transactionActor != null) {
@@ -226,7 +226,7 @@ interface MetadataProjectionDao {
         }
         val inserted = insertNewEvents(events)
         replaceSourceEvents(source.path, events)
-        upsertSource(source.copy(status = STATUS_APPLIED))
+        upsertSource(source.copy(status = SourceStatus.APPLIED))
         return inserted
     }
 
@@ -269,9 +269,6 @@ interface MetadataProjectionDao {
     }
 
     companion object {
-        const val STATUS_APPLIED = "applied"
-        const val STATUS_RETRYABLE = "retryable"
-
         /** What [insertEvent] returns for an event the table already holds. */
         private const val IGNORED = -1L
     }
