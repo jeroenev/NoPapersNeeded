@@ -21,7 +21,7 @@ class SplitPdfTest {
                 rig.session.meta.setField(listOf(imported.docId), "correspondent", "acme")
                 rig.session.meta.setField(imported.docId, "docDate", "2026-01-15")
 
-                val split = rig.session.splitPdf(imported.docId, listOf(0..0, 1..1))
+                val split = rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1))
                 val done = split.shouldBeInstanceOf<SplitOutcome.Done>()
                 done.partDocIds shouldHaveSize 2
 
@@ -62,9 +62,9 @@ class SplitPdfTest {
                 val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
 
                 val invalid = SplitOutcome.Failed(SplitFailure.INVALID_PARTS)
-                rig.session.splitPdf(imported.docId, listOf(0..0)) shouldBe invalid
-                rig.session.splitPdf(imported.docId, listOf(0..0, 0..1)) shouldBe invalid
-                rig.session.splitPdf(imported.docId, listOf(0..0, 1..2)) shouldBe invalid
+                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0)) shouldBe invalid
+                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 0..1)) shouldBe invalid
+                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..2)) shouldBe invalid
 
                 // Original untouched.
                 rig.session.documents
@@ -84,9 +84,9 @@ class SplitPdfTest {
                 val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
                 rig.session.docLifecycle.trashDoc(imported.docId)
 
-                rig.session.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
+                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
                     SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
-                rig.session.splitPdf("f".repeat(64), listOf(0..0, 1..1)) shouldBe
+                rig.session.maintenance.splitPdf("f".repeat(64), listOf(0..0, 1..1)) shouldBe
                     SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
             } finally {
                 rig.close()

@@ -38,7 +38,6 @@ import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldKeys
-import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngine
@@ -85,9 +84,9 @@ class LibrarySessionImpl private constructor(
     private val coordinator: JournalCoordinator,
     private val indexer: Indexer,
     private val importService: ImportService,
-    private val maintenanceService: MaintenanceService,
-    private val relinkService: RelinkService,
-    private val splitService: SplitService,
+    private val scanReports: MutableStateFlow<ScanReport?>,
+    override val maintenance: MaintenanceFacade,
+    override val reviewConfig: ReviewConfigFacade,
     private val ocrFacade: OcrFacadeImpl,
     private val ocrWorker: QueueDrainer,
     workQueueReader: WorkQueueReader,
@@ -105,8 +104,6 @@ class LibrarySessionImpl private constructor(
     private val aiFacade: AiFacadeImpl,
 ) : LibrarySession,
     IngestFacade,
-    ReviewConfigFacade,
-    MaintenanceFacade,
     WorkFacade,
     AiEditQueueFacade {
     private val fs get() = deps.fs
@@ -119,8 +116,6 @@ class LibrarySessionImpl private constructor(
     // [AiFacadeImpl] backs both AI facets.
     override val ingest: IngestFacade get() = this
     override val ocr: OcrFacade get() = ocrFacade
-    override val reviewConfig: ReviewConfigFacade get() = this
-    override val maintenance: MaintenanceFacade get() = this
     override val work: WorkFacade get() = this
     override val aiEditQueue: AiEditQueueFacade get() = this
     override val meta: MetadataWriter get() = writer
@@ -129,8 +124,7 @@ class LibrarySessionImpl private constructor(
     override val aiChat: AiChat get() = aiFacade
     override val aiSuggest: AiSuggest get() = aiFacade
 
-    private val _lastScanReport = MutableStateFlow<ScanReport?>(null)
-    override val lastScanReport: Flow<ScanReport?> = _lastScanReport.asStateFlow()
+    override val lastScanReport: Flow<ScanReport?> = scanReports.asStateFlow()
 
     override val scanProgress: Flow<ScanProgressUi?> =
         indexer.scanState.map { p ->
@@ -141,26 +135,6 @@ class LibrarySessionImpl private constructor(
 
     override val editRuns: Flow<List<QueuedEditRun>> = workQueueReader.editRuns
 
-    override val reviewMode: Flow<ReviewMode> =
-        coordinator.settingFlow(ReviewMode.WIRE_KEY).map(ReviewMode::fromWire)
-
-    override suspend fun setReviewMode(mode: ReviewMode) {
-        owned { coordinator.commitAndApply(listOf(PendingOp.settingSet(ReviewMode.WIRE_KEY, mode.wire))) }
-    }
-
-    override suspend fun markReviewedForMigration(onlyTagged: Boolean) = owned { markReviewed(onlyTagged) }
-
-    // Journal events are permanent, so only documents the projection does not show reviewed yet
-    // get one: a second run, or a library already reviewed, writes nothing.
-    private suspend fun markReviewed(onlyTagged: Boolean) {
-        val ops =
-            db
-                .documentDao()
-                .unreviewedLiveDocIds(taggedOnly = onlyTagged)
-                .map { PendingOp.propSet(it, SystemProperty.REVIEWED, "true") }
-        if (ops.isNotEmpty()) coordinator.commitAndApply(ops)
-    }
-
     private var started = false
 
     // Every facet write runs here rather than on the caller's coroutine; see SessionLifetime.owned.
@@ -169,7 +143,7 @@ class LibrarySessionImpl private constructor(
     override suspend fun rescan(): ScanReport =
         owned {
             val report = coordinator.rescan()
-            _lastScanReport.value = report
+            scanReports.value = report
             report.retryAfterMillis?.let { scheduleSettleRescan(it) }
             ocrFacade.reconcileAfterRescan()
             report
@@ -233,20 +207,6 @@ class LibrarySessionImpl private constructor(
             },
         )
 
-    override suspend fun resolveDuplicate(
-        docId: String,
-        extraRelPath: String,
-        keepCanonical: Boolean,
-    ) = owned { maintenanceService.resolveDuplicate(docId, extraRelPath, keepCanonical) }
-
-    override suspend fun applyRelink(
-        oldDocId: String,
-        newDocId: String,
-    ) = owned {
-        // commitAndRescan already refreshes the coordinator's folded state under the lock.
-        _lastScanReport.value = relinkService.applyRelink(oldDocId, newDocId)
-    }
-
     /**
      * Internal auto-purge, run after watch-triggered rescans; not part of any public facet.
      *
@@ -287,81 +247,6 @@ class LibrarySessionImpl private constructor(
     override suspend fun openEditRun(jobId: String): EditRunReview? = editQueue.openEditRun(jobId)
 
     override suspend fun discardEditRun(jobId: String) = owned { editQueue.discardEditRun(jobId) }
-
-    override suspend fun splitPdf(
-        docId: String,
-        segments: List<IntRange>,
-    ): SplitOutcome = owned { split(docId, segments) }
-
-    private suspend fun split(
-        docId: String,
-        segments: List<IntRange>,
-    ): SplitOutcome {
-        val parts =
-            when (val result = splitService.split(docId, segments)) {
-                is SplitService.Result.Failed -> return SplitOutcome.Failed(result.reason)
-                is SplitService.Result.Done -> result.parts
-            }
-        val partIds =
-            parts.map {
-                when (it) {
-                    is ImportResult.Imported -> it.docId
-                    is ImportResult.Duplicate -> it.existingDocId
-                }
-            }
-        var finished = false
-        try {
-            // Trash last, so a failure anywhere leaves the original untouched; the parts are then
-            // taken back. Metadata already copied onto them stays in the journal under their
-            // hashes, harmless: a retry makes the same parts and copies the same metadata.
-            runCatchingCancellable {
-                copyMetadataToParts(docId, partIds)
-                writer.trashDoc(docId)
-            }.getOrElse {
-                log.warn("Finishing the split of $docId failed; taking its parts back", it)
-                return SplitOutcome.Failed(SplitFailure.NOT_COMPLETED)
-            }
-            finished = true
-        } finally {
-            if (!finished) splitService.rollBack(parts)
-        }
-        ocrFacade.kick()
-        return SplitOutcome.Done(partIds)
-    }
-
-    /**
-     * Carry tags and single-value properties of the split source onto its parts.
-     *
-     * One [MetadataWriter.applyEdits] for every part rather than a setter per tag and per property:
-     * the setters each re-run the storage path rules, so a source with several tags would rename
-     * every part once per tag before it settled. Parts are brand-new files, so those intermediate
-     * names are churn no replica needs to see.
-     *
-     * All-or-nothing across the parts is what this path wants: the parts were created together
-     * from one source, so a half-copied set is worse than none, and the caller's retry is a rerun
-     * of the same split.
-     */
-    private suspend fun copyMetadataToParts(
-        docId: String,
-        partIds: List<String>,
-    ) {
-        db.documentDao().getByDocId(docId) ?: return
-        val tags =
-            db
-                .documentDao()
-                .tagsForDocs(listOf(docId))
-                .map { it.tag }
-                .distinct()
-        // Every field carries onto the parts except the ones that describe the whole document
-        // (title, notes): a part is not "the" invoice, and its notes would be misleading.
-        val fields =
-            db
-                .documentFieldDao()
-                .fieldsForDocs(listOf(docId))
-                .filter { it.fieldKey !in FieldKeys.NOT_INHERITED_ON_SPLIT }
-                .associate<_, String, String?> { it.fieldKey to it.fieldValue }
-        writer.applyEdits(partIds, addTags = tags, fields = fields)
-    }
 
     override fun start() {
         lifetime.checkOpen()
@@ -745,6 +630,7 @@ class LibrarySessionImpl private constructor(
                 )
             val editWorker = QueueDrainer(lifetime.scope, "AI edit queue", deps.log) { editQueue.processNext() }
 
+            val scanReports = MutableStateFlow<ScanReport?>(null)
             session = LibrarySessionImpl(
                 deviceId = effectiveDeviceId,
                 deps = deps,
@@ -752,9 +638,20 @@ class LibrarySessionImpl private constructor(
                 coordinator = coordinator,
                 indexer = indexer,
                 importService = importService,
-                maintenanceService = maintenance,
-                relinkService = relinkService,
-                splitService = splitService,
+                scanReports = scanReports,
+                maintenance =
+                    MaintenanceFacadeImpl(
+                        lifetime = lifetime,
+                        db = db,
+                        maintenance = maintenance,
+                        relink = relinkService,
+                        splitter = splitService,
+                        writer = meta,
+                        ocr = ocr,
+                        scanReports = scanReports,
+                        log = deps.log,
+                    ),
+                reviewConfig = JournalReviewConfig(coordinator, db.documentDao()) { lifetime.owned(it) },
                 ocrFacade = ocr,
                 ocrWorker = ocrWorker,
                 workQueueReader =
