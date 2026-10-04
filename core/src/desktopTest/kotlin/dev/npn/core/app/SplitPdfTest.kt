@@ -64,7 +64,12 @@ class SplitPdfTest {
                 val split = rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1))
                 val done = split.shouldBeInstanceOf<SplitOutcome.Done>()
 
-                val part = checkNotNull(rig.session.documents.observeDoc(done.partDocIds[0]).first())
+                val part =
+                    checkNotNull(
+                        rig.session.documents
+                            .observeDoc(done.partDocIds[0])
+                            .first(),
+                    )
                 part.doc.fileName shouldBe "Scan (part 1).pdf"
             } finally {
                 rig.close()

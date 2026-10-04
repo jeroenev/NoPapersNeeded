@@ -74,9 +74,9 @@ data class OcrSidecarName(
             val engine = writerKey.substringAfterLast('.', "")
             if (!isEngine(engine)) return Writer(writerKey, engine = null)
             val device = writerKey.removeSuffix(".$engine")
-            val rerun = rerunWriter.matchEntire(device)
-            val run = rerun?.groupValues?.get(2)?.toLongOrNull()
-            return if (rerun != null && run != null) Writer(rerun.groupValues[1], engine, run) else Writer(device, engine)
+            val rerun = rerunWriter.matchEntire(device)?.groupValues
+            val run = rerun?.get(2)?.toLongOrNull()
+            return if (rerun == null || run == null) Writer(device, engine) else Writer(rerun[1], engine, run)
         }
 
         /** Whether [writerKey] is one [deviceId] writes under: its legacy key, or any of its engine keys. */

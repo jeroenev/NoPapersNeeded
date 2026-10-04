@@ -422,5 +422,6 @@ class JvmLibraryFileSystem internal constructor(
         Unit
     }
 
-    override fun watch(): Flow<FsEvent> = watchDirs(root, recursive = true).map { changed -> FsEvent(changed?.let(::relOf)) }
+    override fun watch(): Flow<FsEvent> =
+        watchDirs(root, recursive = true).map { changed -> FsEvent(changed?.let(::relOf)) }
 }

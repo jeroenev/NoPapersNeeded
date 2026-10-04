@@ -166,11 +166,11 @@ object StoragePathTemplate {
     ): String {
         ensure(template.isNotBlank()) { StoragePathError.Blank }
         ensure(!template.startsWith('/') && !template.startsWith('\\')) { StoragePathError.Absolute }
+        // A NUL is left to the segment check below, which reports it as an invalid segment.
         when (NpnPaths.unsafeReason(expanded)) {
             NpnPaths.UnsafePath.DRIVE_PREFIX -> fail(StoragePathError.Absolute)
             NpnPaths.UnsafePath.BACKSLASH -> fail(StoragePathError.Backslash)
             NpnPaths.UnsafePath.TRAVERSAL -> fail(StoragePathError.Traversal)
-            // NUL is one more character no file name carries: an InvalidSegment below.
             NpnPaths.UnsafePath.NUL, null -> Unit
         }
 

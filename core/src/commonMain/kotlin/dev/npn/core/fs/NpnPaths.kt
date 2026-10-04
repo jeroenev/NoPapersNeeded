@@ -112,8 +112,7 @@ object NpnPaths {
         installationId: String,
         nonce: String,
         snapshot: Boolean = false,
-    ): String =
-        parentDir(journalObjectPath(hash, snapshot)) + "/.$hash.$installationId.$nonce.part"
+    ): String = parentDir(journalObjectPath(hash, snapshot)) + "/.$hash.$installationId.$nonce.part"
 
     /** Classify direct journal source files without letting object buckets masquerade as devices. */
     fun journalPath(relPath: String): JournalPath {

@@ -58,7 +58,8 @@ class ThumbnailServiceTest {
                 ),
             )
             val store = RecordingThumbnailStore()
-            val service = ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
+            val service =
+                ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
 
             val path = service.ensureThumbnail(docId, "doc.pdf")
             path shouldNotBe null
@@ -113,7 +114,15 @@ class ThumbnailServiceTest {
                         dao.fillPageCount(docId, pageCount)
                     }
                 }
-            val service = ThumbnailService(PdfBoxEngine(), fs, RecordingThumbnailStore(), db.thumbnailDao(), racingDao, RenderGate(1))
+            val service =
+                ThumbnailService(
+                    PdfBoxEngine(),
+                    fs,
+                    RecordingThumbnailStore(),
+                    db.thumbnailDao(),
+                    racingDao,
+                    RenderGate(1),
+                )
 
             service.ensureThumbnail(docId, "doc.pdf") shouldNotBe null
 
@@ -162,7 +171,8 @@ class ThumbnailServiceTest {
                 ),
             )
             val store = RecordingThumbnailStore()
-            val service = ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
+            val service =
+                ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
 
             val first = service.ensureThumbnail(docId, "doc.pdf")
             val second = service.ensureThumbnail(docId, "doc.pdf")
@@ -174,7 +184,8 @@ class ThumbnailServiceTest {
     fun returnsNullWhenFileMissing() =
         runTest {
             val store = RecordingThumbnailStore()
-            val service = ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
+            val service =
+                ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
             service.ensureThumbnail("a".repeat(64), "nope.pdf") shouldBe null
         }
 
@@ -195,7 +206,8 @@ class ThumbnailServiceTest {
                 ),
             )
             val store = RecordingThumbnailStore()
-            val service = ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
+            val service =
+                ThumbnailService(PdfBoxEngine(), fs, store, db.thumbnailDao(), db.documentDao(), RenderGate(1))
 
             service.ensureThumbnail(docId, "doc.pdf")
             db.thumbnailDao().get(docId) shouldNotBe null

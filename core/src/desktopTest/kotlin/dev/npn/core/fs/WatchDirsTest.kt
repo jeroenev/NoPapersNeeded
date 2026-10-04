@@ -55,7 +55,8 @@ class WatchDirsTest {
 
     @Test
     fun aMissingDirectoryGoesQuietInsteadOfFailing() {
-        val first = runBlocking { withTimeoutOrNull(QUIET_MILLIS) { watchDirs(root.resolve("absent"), recursive = true).first() } }
+        val absent = watchDirs(root.resolve("absent"), recursive = true)
+        val first = runBlocking { withTimeoutOrNull(QUIET_MILLIS) { absent.first() } }
         first shouldBe null
     }
 
@@ -66,21 +67,22 @@ class WatchDirsTest {
     private fun watching(
         flow: Flow<Path?>,
         block: suspend CoroutineScope.(ReceiveChannel<Path?>) -> Unit,
-    ): Unit = runBlocking {
-        withTimeout(TIMEOUT_MILLIS) {
-            val changes = Channel<Path?>(Channel.UNLIMITED)
-            val collector = launch { flow.collect { changes.send(it) } }
-            try {
-                var probe = 0
-                while (withTimeoutOrNull(PROBE_MILLIS) { changes.receive() } == null) {
-                    Files.write(root.resolve("probe-${probe++}"), byteArrayOf(1))
+    ): Unit =
+        runBlocking {
+            withTimeout(TIMEOUT_MILLIS) {
+                val changes = Channel<Path?>(Channel.UNLIMITED)
+                val collector = launch { flow.collect { changes.send(it) } }
+                try {
+                    var probe = 0
+                    while (withTimeoutOrNull(PROBE_MILLIS) { changes.receive() } == null) {
+                        Files.write(root.resolve("probe-${probe++}"), byteArrayOf(1))
+                    }
+                    block(changes)
+                } finally {
+                    collector.cancel()
                 }
-                block(changes)
-            } finally {
-                collector.cancel()
             }
         }
-    }
 
     /** Receive until [path] is reported; returns everything received before it. */
     private suspend fun ReceiveChannel<Path?>.receiveUntil(path: Path): List<Path?> {

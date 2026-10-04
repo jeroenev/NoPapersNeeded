@@ -54,5 +54,10 @@ class JvmWatchedFolder(
             runCatching { Files.deleteIfExists(Paths.get(file.id)) }.getOrDefault(false)
         }
 
-    override fun changes(): Flow<Unit> = watchDirs(dir, recursive = false, kinds = arrayOf(ENTRY_CREATE, ENTRY_MODIFY)).map { }
+    override fun changes(): Flow<Unit> = watchDirs(dir, recursive = false, kinds = NEW_OR_REWRITTEN).map { }
+
+    private companion object {
+        /** What the folder is watched for: new and rewritten files, not deleted ones. */
+        val NEW_OR_REWRITTEN = arrayOf(ENTRY_CREATE, ENTRY_MODIFY)
+    }
 }

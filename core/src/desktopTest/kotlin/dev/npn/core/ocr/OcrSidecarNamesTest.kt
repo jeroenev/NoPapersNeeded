@@ -42,7 +42,10 @@ class OcrSidecarNamesTest {
         name: String,
         engine: String = "tesseract",
     ) {
-        val json = OcrSidecarCodec.encode(OcrSidecar(doc = hash, dev = "x", engine = engine, lang = "eng", createdAt = 1, pages = listOf("t")))
+        val json =
+            OcrSidecarCodec.encode(
+                OcrSidecar(doc = hash, dev = "x", engine = engine, lang = "eng", createdAt = 1, pages = listOf("t")),
+            )
         fs.writeBytesOnce("${NpnPaths.OCR_DIR}/$name", json.encodeToByteArray())
     }
 

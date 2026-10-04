@@ -393,7 +393,12 @@ class SafLibraryFileSystem(
                 null
             } else {
                 try {
-                    DocumentsContract.moveDocument(resolver, docUri(source.docId), docUri(fromParentId), docUri(toParentId))
+                    DocumentsContract.moveDocument(
+                        resolver,
+                        docUri(source.docId),
+                        docUri(fromParentId),
+                        docUri(toParentId),
+                    )
                 } catch (_: Exception) {
                     null
                 }
