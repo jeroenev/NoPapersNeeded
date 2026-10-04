@@ -362,25 +362,13 @@ class SafLibraryFileSystem(
 
     private fun sha256OfEntry(entry: Entry): String = digestSha256(docUri(entry.docId), entry.docId)
 
-    /**
-     * Stream the content at [uri] through a SHA-256 [DigestInputStream] (64 KiB buffer) and return
-     * the lowercase hex digest. [relForError] is only used to build the not-found message.
-     */
+    /** SHA-256 of the content at [uri], streamed; [relForError] only names it in the not-found message. */
     private fun digestSha256(
         uri: Uri,
         relForError: String,
-    ): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        resolver.openInputStream(uri)?.use { input ->
-            DigestInputStream(input, digest).use { dis ->
-                val buffer = ByteArray(64 * 1024)
-                while (dis.read(buffer) != -1) {
-                    // read feeds the digest
-                }
-            }
-        } ?: throw IOException("Cannot open for read: $relForError")
-        return digest.digest().toHexLower()
-    }
+    ): String =
+        resolver.openInputStream(uri)?.use { it.sha256Hex() }
+            ?: throw IOException("Cannot open for read: $relForError")
 
     override suspend fun move(
         fromRelPath: String,
@@ -645,8 +633,6 @@ class SafLibraryFileSystem(
     /** SAF provides no reliable change notifications; indexing is rescan-driven. */
     override fun watch(): Flow<FsEvent> = emptyFlow()
 }
-
-private const val STREAM_BUFFER_SIZE = 64 * 1024
 
 private fun streamInto(
     resolver: ContentResolver,

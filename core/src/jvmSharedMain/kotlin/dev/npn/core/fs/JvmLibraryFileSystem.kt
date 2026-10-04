@@ -20,8 +20,6 @@ import java.nio.file.StandardWatchEventKinds
 import java.nio.file.WatchKey
 import java.nio.file.WatchService
 import java.nio.file.attribute.BasicFileAttributes
-import java.security.DigestInputStream
-import java.security.MessageDigest
 import kotlin.io.path.name
 
 /** The one no-replace primitive, abstracted so tests can simulate a filesystem without `link(2)`. */
@@ -396,18 +394,7 @@ class JvmLibraryFileSystem internal constructor(
             hashPath(resolve(relPath))
         }
 
-    private fun hashPath(path: Path): String {
-        val digest = MessageDigest.getInstance("SHA-256")
-        Files.newInputStream(path).use { input ->
-            DigestInputStream(input, digest).use { dis ->
-                val buffer = ByteArray(64 * 1024)
-                while (dis.read(buffer) != -1) {
-                    // read feeds the digest
-                }
-            }
-        }
-        return digest.digest().toHexLower()
-    }
+    private fun hashPath(path: Path): String = Files.newInputStream(path).use { it.sha256Hex() }
 
     override suspend fun importExternal(
         source: ExternalSource,
@@ -533,5 +520,3 @@ class JvmLibraryFileSystem internal constructor(
             }
         }
 }
-
-private const val STREAM_BUFFER_SIZE = 64 * 1024
