@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.OcrSidecarName
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.delay
@@ -35,12 +36,12 @@ class WatchActionTest {
     @Test
     fun aWriteInProgressOrOurOwnEchoIsIgnored() {
         action(NpnPaths.journalStagingPath(hash, "installation", "nonce")) shouldBe WatchAction.Ignore
-        action(NpnPaths.ocrSidecarPath(hash, NpnPaths.ocrWriterKey(DEVICE, "mlkit"))) shouldBe WatchAction.Ignore
+        action(OcrSidecarName(hash, OcrSidecarName.writerKey(DEVICE, "mlkit")).path) shouldBe WatchAction.Ignore
     }
 
     @Test
     fun anotherDevicesSidecarReselectsOcr() {
-        action(NpnPaths.ocrSidecarPath(hash, NpnPaths.ocrWriterKey("other-device", "mlkit"))) shouldBe
+        action(OcrSidecarName(hash, OcrSidecarName.writerKey("other-device", "mlkit")).path) shouldBe
             WatchAction.ReconcileOcr
     }
 

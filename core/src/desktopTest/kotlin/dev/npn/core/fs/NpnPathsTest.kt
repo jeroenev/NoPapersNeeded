@@ -11,7 +11,7 @@ class NpnPathsTest {
     fun journalAndOcrPaths() {
         NpnPaths.journalDeviceDir("dev1") shouldBe ".npn/journal/dev1"
         NpnPaths.journalSegmentPath("dev1", "0001.jsonl") shouldBe ".npn/journal/dev1/0001.jsonl"
-        NpnPaths.ocrSidecarPath("abc123", "dev1") shouldBe ".npn/ocr/abc123.dev1.json"
+        OcrSidecarName("abc123", "dev1").path shouldBe ".npn/ocr/abc123.dev1.json"
     }
 
     @Test
@@ -34,11 +34,11 @@ class NpnPathsTest {
 
     @Test
     fun engineQualifiedOcrPaths() {
-        // ocrWriterKey composes the device+engine key; ocrSidecarPath treats it as an opaque
+        // writerKey composes the device+engine key; the sidecar's path treats it as an opaque
         // middle so the file lands at `<hash>.<deviceId>.<engine>.json`.
-        val key = NpnPaths.ocrWriterKey("dev1", "tesseract")
+        val key = OcrSidecarName.writerKey("dev1", "tesseract")
         key shouldBe "dev1.tesseract"
-        NpnPaths.ocrSidecarPath("abc123", key) shouldBe ".npn/ocr/abc123.dev1.tesseract.json"
+        OcrSidecarName("abc123", key).path shouldBe ".npn/ocr/abc123.dev1.tesseract.json"
     }
 
     @Test

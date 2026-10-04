@@ -1,7 +1,7 @@
 package dev.npn.core.ocr
 
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.fs.OcrSidecarName
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -26,7 +26,7 @@ class OcrVersions internal constructor(
         val writerKey: String,
         val deviceId: String,
         val engine: String,
-        /** Run stamp of a re-run ([NpnPaths.ocrRerunWriterKey]); 0 for a device's first run. */
+        /** Run stamp of a re-run ([OcrSidecarName.rerunWriterKey]); 0 for a device's first run. */
         val run: Long = 0,
     )
 
@@ -45,20 +45,12 @@ class OcrVersions internal constructor(
     /** Whether an `embedded` sidecar has a usable text layer on every page, per `<hash>.<writerKey>`. */
     private val fullTextLayerCache = SidecarFacts<Boolean>()
 
-    /** Hash -> writer keys for every well-formed sidecar in `.npn/ocr/`. */
-    suspend fun writerKeysByHash(): Map<String, List<String>> {
-        val prefix = "${NpnPaths.OCR_DIR}/"
-        return sidecars
+    /** Hash -> writer keys for every sidecar in `.npn/ocr/` named by a document hash. */
+    suspend fun writerKeysByHash(): Map<String, List<String>> =
+        sidecars
             .list()
-            .mapNotNull { meta ->
-                val fileName = meta.relPath.removePrefix(prefix)
-                // Shared lenient parser; additionally require a full 64-char SHA-256 hash here so
-                // reconciliation only ever keys off a canonical content hash.
-                val (hash, dev) = OcrSidecarFiles.parseSidecarName(fileName) ?: return@mapNotNull null
-                if (hash.length != NpnPaths.SHA256_HEX_LENGTH) return@mapNotNull null
-                hash to dev
-            }.groupBy({ it.first }, { it.second })
-    }
+            .mapNotNull { meta -> OcrSidecarName.parse(meta.name)?.takeIf { it.hasDocumentHash } }
+            .groupBy({ it.hash }, { it.writerKey })
 
     /** The readable versions of [hash] among [writerKeys]. */
     suspend fun of(
@@ -106,9 +98,9 @@ class OcrVersions internal constructor(
         runMillis: Long,
     ): String =
         if (stored.any { it.engine == engine && it.deviceId == deviceId }) {
-            NpnPaths.ocrRerunWriterKey(deviceId, runMillis, engine)
+            OcrSidecarName.rerunWriterKey(deviceId, runMillis, engine)
         } else {
-            NpnPaths.ocrWriterKey(deviceId, engine)
+            OcrSidecarName.writerKey(deviceId, engine)
         }
 
     /** Whether [version] of [docId] is an `embedded` sidecar with a usable text layer on every page. */
@@ -134,32 +126,19 @@ class OcrVersions internal constructor(
     ): OcrSidecar? = runCatchingCancellable { OcrSidecarCodec.decode(sidecars.read(hash, writerKey)) }.getOrNull()
 
     /**
-     * Resolve a writer key to a [Version]. Engine-qualified keys (`<deviceId>.<engine>`)
-     * resolve without I/O; legacy keys (`<deviceId>`) decode the sidecar once to learn its
-     * engine (cached). Returns null for unreadable sidecars.
+     * Resolve a writer key to a [Version]. Engine-qualified keys resolve without I/O; legacy keys
+     * decode the sidecar once to learn its engine (cached). Returns null for unreadable sidecars.
      */
     private suspend fun versionFor(
         hash: String,
         writerKey: String,
     ): Version? {
-        val suffix = writerKey.substringAfterLast('.', "")
-        if (OcrEngineId.fromColumn(suffix) != null) {
-            val writer = writerKey.removeSuffix(".$suffix")
-            val rerun = RERUN_WRITER.matchEntire(writer)
-            val run = rerun?.groupValues?.get(2)?.toLongOrNull()
-            return if (rerun != null && run != null) {
-                Version(writerKey, rerun.groupValues[1], suffix, run)
-            } else {
-                Version(writerKey, writer, suffix)
-            }
-        }
-        val engine = engineCache.getOrCompute("$hash.$writerKey") { read(hash, writerKey)?.engine } ?: return null
-        return Version(writerKey, writerKey, engine)
-    }
-
-    private companion object {
-        /** The device part of a re-run writer key: `<deviceId>.r<runMillis>`. */
-        val RERUN_WRITER = Regex("""(.+)\.r(\d+)""")
+        val writer = OcrSidecarName.writer(writerKey) { OcrEngineId.fromColumn(it) != null }
+        val engine =
+            writer.engine
+                ?: engineCache.getOrCompute("$hash.$writerKey") { read(hash, writerKey)?.engine }
+                ?: return null
+        return Version(writerKey, writer.deviceId, engine, writer.run)
     }
 }
 

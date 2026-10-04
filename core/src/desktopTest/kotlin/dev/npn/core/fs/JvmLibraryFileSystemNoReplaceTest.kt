@@ -56,7 +56,7 @@ class JvmLibraryFileSystemNoReplaceTest {
     fun concurrentSidecarWritersNeverReplaceThePublishedSidecar() {
         val sidecars = OcrSidecarFiles(fs)
         val hash = "a".repeat(64)
-        val path = NpnPaths.ocrSidecarPath(hash, "device1")
+        val path = OcrSidecarName(hash, "device1").path
         val winners =
             raceWriters(WRITERS) { i ->
                 sidecars.writeOnce(hash, "device1", payload(i))

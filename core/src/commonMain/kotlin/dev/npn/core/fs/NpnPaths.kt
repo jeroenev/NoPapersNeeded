@@ -193,35 +193,6 @@ object NpnPaths {
     }
 
     /**
-     * `.npn/ocr/<sha256>.<writerKey>.json`. The writer key is `<deviceId>` for legacy sidecars
-     * (one per device) and `<deviceId>.<engine>` for engine-qualified sidecars (one per
-     * device+engine, letting multiple OCR versions co-exist). A deliberate re-run of an engine this
-     * device already published for gets [ocrRerunWriterKey], since sidecars are write-once. Readers
-     * treat the whole middle as an opaque key; see [OcrSidecarFiles.listForHash].
-     */
-    fun ocrSidecarPath(
-        sha256: String,
-        writerKey: String,
-    ): String = "$OCR_DIR/$sha256.$writerKey.json"
-
-    /** Writer key for an engine-qualified sidecar: `<deviceId>.<engine>`. */
-    fun ocrWriterKey(
-        deviceId: String,
-        engine: String,
-    ): String = "$deviceId.$engine"
-
-    /**
-     * Writer key for a re-run of [engine] on a device that already published one:
-     * `<deviceId>.r<runMillis>.<engine>`. The run stamp orders runs of one engine, newest first,
-     * and builds that predate it read the key as one more device's version of that engine.
-     */
-    fun ocrRerunWriterKey(
-        deviceId: String,
-        runMillis: Long,
-        engine: String,
-    ): String = "$deviceId.r$runMillis.$engine"
-
-    /**
      * `.npn/trash/<baseName>__<first 8 hash chars>.<ext>`
      *
      * The hash suffix keeps trash filenames collision-resistant across devices while staying
@@ -357,12 +328,8 @@ object NpnPaths {
         val ownJournal = journalDeviceDir(deviceId)
         if (norm == ownJournal || norm.startsWith("$ownJournal/")) return true
         if (!norm.startsWith("$OCR_DIR/")) return false
-        // Own sidecars: legacy `<hash>.<deviceId>.json` or engine-qualified
-        // `<hash>.<deviceId>.<engine>.json`.
-        if (norm.endsWith(".$deviceId.json")) return true
-        val stem = norm.substringAfterLast('/').removeSuffix(".json")
-        val writerKey = stem.substringAfter('.', "")
-        return writerKey.startsWith("$deviceId.")
+        val sidecar = OcrSidecarName.parse(fileName(norm)) ?: return false
+        return OcrSidecarName.isWrittenBy(sidecar.writerKey, deviceId)
     }
 
     /** True when any path segment begins with a dot (hidden file/dir), e.g. `.npn`, `a/.b/c`. */
