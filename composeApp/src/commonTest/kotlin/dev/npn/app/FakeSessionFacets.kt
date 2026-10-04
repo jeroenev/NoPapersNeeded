@@ -93,7 +93,13 @@ class FakeOcrFacade : OcrFacade {
         reOcrIds += docId
     }
 
-    override suspend fun aiOcrOffer(docId: String): AiOcrOffer = aiOcr
+    /** If set, [aiOcrOffer] throws this. */
+    var failAiOcrOffer: (() -> Nothing)? = null
+
+    override suspend fun aiOcrOffer(docId: String): AiOcrOffer {
+        failAiOcrOffer?.invoke()
+        return aiOcr
+    }
 
     /** What [ocrWithAi] answers once it has recorded the request. */
     var aiOcrOutcome: AiOcrOutcome = AiOcrOutcome.QUEUED
@@ -104,7 +110,13 @@ class FakeOcrFacade : OcrFacade {
         return aiOcrOutcome
     }
 
-    override suspend fun ocrVersions(docId: String): List<OcrVersion> = ocrVersionsList
+    /** If set, [ocrVersions] throws this. */
+    var failOcrVersions: (() -> Nothing)? = null
+
+    override suspend fun ocrVersions(docId: String): List<OcrVersion> {
+        failOcrVersions?.invoke()
+        return ocrVersionsList
+    }
 
     override suspend fun setOcrEngine(
         docId: String,

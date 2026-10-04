@@ -58,6 +58,7 @@
     <string name="detail_added">Added</string>
     <string name="detail_pages">Pages</string>
     <string name="detail_ocr">OCR</string>
+    <string name="detail_ocr_details_failed">Could not load this document’s OCR details: %1$s</string>
     <string name="detail_suggest_tags">Suggest tags</string>
     <string name="detail_suggest_metadata">Suggest details</string>
     <string name="detail_suggesting_tags">Suggesting tags…</string>

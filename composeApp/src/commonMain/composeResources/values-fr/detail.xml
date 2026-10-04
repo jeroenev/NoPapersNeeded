@@ -57,6 +57,7 @@
     <string name="detail_added">Ajouté le</string>
     <string name="detail_pages">Pages</string>
     <string name="detail_ocr">OCR</string>
+    <string name="detail_ocr_details_failed">Impossible de charger les informations OCR de ce document : %1$s</string>
     <string name="detail_suggest_tags">Suggérer des étiquettes</string>
     <string name="detail_suggest_metadata">Suggérer des informations</string>
     <string name="detail_suggesting_tags">Recherche d’étiquettes…</string>

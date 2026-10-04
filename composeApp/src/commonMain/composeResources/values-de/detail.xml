@@ -57,6 +57,7 @@
     <string name="detail_added">Hinzugefügt</string>
     <string name="detail_pages">Seiten</string>
     <string name="detail_ocr">OCR</string>
+    <string name="detail_ocr_details_failed">Die OCR-Angaben dieses Dokuments konnten nicht geladen werden: %1$s</string>
     <string name="detail_suggest_tags">Tags vorschlagen</string>
     <string name="detail_suggest_metadata">Details vorschlagen</string>
     <string name="detail_suggesting_tags">Tags werden vorgeschlagen…</string>

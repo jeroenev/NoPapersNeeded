@@ -57,6 +57,7 @@
     <string name="detail_added">Toegevoegd</string>
     <string name="detail_pages">Pagina's</string>
     <string name="detail_ocr">OCR</string>
+    <string name="detail_ocr_details_failed">Kan de OCR-gegevens van dit document niet laden: %1$s</string>
     <string name="detail_suggest_tags">Tags voorstellen</string>
     <string name="detail_suggest_metadata">Details voorstellen</string>
     <string name="detail_suggesting_tags">Tags voorstellen…</string>

@@ -173,6 +173,27 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     }
 
     @Test
+    fun ocrDetailsThatCannotBeReadAreReported() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.singleDoc.value = listItem("doc-1")
+                    ocr.failOcrVersions = { error("index busy") }
+                    ocr.failAiOcrOffer = { error("index busy") }
+                }
+            val model = DocDetailViewModel("doc-1", session)
+            val messages = mutableListOf<String>()
+            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val panel = launch { model.metadata.collect {} }
+            advanceUntilIdle()
+            panel.cancel()
+            collector.cancel()
+
+            messages shouldContainExactly List(2) { "Could not load this document’s OCR details: index busy" }
+            model.ui.value.aiOcr shouldBe AiOcrOffer.Unavailable
+        }
+
+    @Test
     fun aiOcrActionIsOfferedOnlyWithAConfiguredEndpoint() =
         runTest(dispatcher) {
             val without = vm(session = FakeLibrarySession())

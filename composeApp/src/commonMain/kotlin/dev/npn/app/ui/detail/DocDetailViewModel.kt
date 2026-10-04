@@ -70,6 +70,7 @@ import no_papers_needed.composeapp.generated.resources.detail_export_failed
 import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_invalid_parts
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_not_completed
@@ -260,7 +261,11 @@ class DocDetailViewModel(
         doc
             .map { it?.doc?.ocrState to it?.doc?.ocrEngine }
             .distinctUntilChanged()
-            .map { runCatchingCancellable { ocr.ocrVersions(docId) }.getOrDefault(emptyList()) }
+            .map {
+                runCatchingCancellable { ocr.ocrVersions(docId) }
+                    .onFailure(::reportOcrDetailsFailure)
+                    .getOrDefault(emptyList())
+            }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
 
     /** 0 until the History tab first asks; every explicit refresh then counts up. */
@@ -353,10 +358,17 @@ class DocDetailViewModel(
             aiTags.update { it.copy(available = configured) }
         }
         viewModelScope.launch {
-            val offer = runCatchingCancellable { ocr.aiOcrOffer(docId) }.getOrDefault(AiOcrOffer.Unavailable)
+            val offer =
+                runCatchingCancellable { ocr.aiOcrOffer(docId) }
+                    .onFailure(::reportOcrDetailsFailure)
+                    .getOrDefault(AiOcrOffer.Unavailable)
             _ui.update { it.copy(aiOcr = offer) }
         }
     }
+
+    /** The OCR versions and the assistant-reading offer fall back to nothing, and say why. */
+    private fun reportOcrDetailsFailure(failure: Throwable) =
+        message(uiText(Res.string.detail_ocr_details_failed, failure.reasonText()))
 
     /**
      * Resolve the page count. A null result (unreadable/corrupt file, or a missing row) is a
