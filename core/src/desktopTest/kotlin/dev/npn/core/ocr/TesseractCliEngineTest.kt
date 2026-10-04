@@ -1,10 +1,19 @@
 package dev.npn.core.ocr
 
+import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.longs.shouldBeLessThan
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import org.junit.Assume.assumeTrue
+import java.io.File
+import java.io.IOException
 import java.nio.file.Files
+import java.nio.file.Path
 import kotlin.test.Test
 
 class TesseractCliEngineTest {
@@ -15,8 +24,88 @@ class TesseractCliEngineTest {
             // IOException and report unavailable rather than throwing.
             val engine = TesseractCliEngine(binary = "tesseract-does-not-exist-xyz")
             engine.available().shouldBeFalse()
-            // recognizePng on an unavailable engine returns empty, never throws.
-            engine.recognizePng("png".encodeToByteArray(), "eng") shouldBe ""
+            // Asked to read a page anyway, it fails rather than reporting a blank page.
+            shouldThrow<IOException> { engine.recognizePng("png".encodeToByteArray(), "eng") }
+        }
+
+    @Test
+    fun aHungRunTimesOutAndItsProcessIsKilled() =
+        runTest {
+            assumeTrue(isLinux())
+            val dir = Files.createTempDirectory("npn-tess")
+            val pidFile = dir.resolve("pid").toFile()
+            // `exec`, so the pid written is the sleeping process itself.
+            val fake = fakeTesseract(dir, "echo $$ > '${pidFile.absolutePath}'; exec sleep 30")
+            try {
+                val engine = TesseractCliEngine(binary = fake.absolutePath, timeoutSeconds = 1)
+
+                val error = shouldThrow<IOException> { engine.recognizePng(byteArrayOf(), "eng") }
+
+                error.message.orEmpty() shouldContain "timed out"
+                isAlive(pidFile).shouldBeFalse()
+            } finally {
+                dir.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
+    fun aCancelledRunKillsItsProcess() =
+        runTest {
+            assumeTrue(isLinux())
+            val dir = Files.createTempDirectory("npn-tess")
+            val pidFile = dir.resolve("pid").toFile()
+            val fake = fakeTesseract(dir, "echo $$ > '${pidFile.absolutePath}'; exec sleep 30")
+            try {
+                val engine = TesseractCliEngine(binary = fake.absolutePath, timeoutSeconds = 30)
+                val run = launch { engine.recognizePng(byteArrayOf(), "eng") }
+                testScheduler.runCurrent()
+                awaitStarted(pidFile)
+
+                val cancelledAt = System.nanoTime()
+                run.cancelAndJoin()
+
+                // A run that ignored cancellation would hold the join for the script's whole sleep.
+                (System.nanoTime() - cancelledAt) shouldBeLessThan CANCEL_BOUND_NANOS
+                isAlive(pidFile).shouldBeFalse()
+            } finally {
+                dir.toFile().deleteRecursively()
+            }
+        }
+
+    @Test
+    fun aNonZeroExitThrowsWithTheProcessError() =
+        runTest {
+            assumeTrue(isLinux())
+            val dir = Files.createTempDirectory("npn-tess")
+            val fake = fakeTesseract(dir, "echo 'Error opening data file' >&2; exit 1")
+            try {
+                val engine = TesseractCliEngine(binary = fake.absolutePath)
+
+                val error = shouldThrow<IOException> { engine.recognizePng(byteArrayOf(), "eng") }
+
+                error.message.orEmpty() shouldContain "Error opening data file"
+            } finally {
+                dir.toFile().deleteRecursively()
+            }
+        }
+
+    /** A `tesseract` that answers the probes and runs [onRecognize] for a page. */
+    private fun fakeTesseract(
+        dir: Path,
+        onRecognize: String,
+    ): File =
+        dir.resolve("tesseract").toFile().apply {
+            writeText(
+                """
+                #!/bin/sh
+                case "${'$'}1" in
+                  --version) exit 0 ;;
+                  --list-langs) printf 'List of available languages:\neng\n' ;;
+                  *) $onRecognize ;;
+                esac
+                """.trimIndent() + "\n",
+            )
+            setExecutable(true)
         }
 
     @Test
@@ -105,5 +194,27 @@ class TesseractCliEngineTest {
     @Test
     fun nameIsTesseract() {
         TesseractCliEngine().name shouldBe "tesseract"
+    }
+
+    private fun isLinux() = System.getProperty("os.name").startsWith("Linux")
+
+    /** Blocks until the fake has written its pid: the process is up and sleeping. */
+    private fun awaitStarted(pidFile: File) {
+        repeat(POLL_ATTEMPTS) {
+            if (pidFile.exists() && pidFile.readText().isNotBlank()) return
+            Thread.sleep(POLL_MS)
+        }
+        error("the fake tesseract never started")
+    }
+
+    private fun isAlive(pidFile: File): Boolean {
+        val pid = pidFile.readText().trim().toLong()
+        return ProcessHandle.of(pid).map { it.isAlive }.orElse(false)
+    }
+
+    private companion object {
+        const val POLL_MS = 20L
+        const val POLL_ATTEMPTS = 250
+        const val CANCEL_BOUND_NANOS = 5_000_000_000L
     }
 }

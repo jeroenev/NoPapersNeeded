@@ -157,6 +157,9 @@ class OcrPipelineTest {
                     .first { it.docId == docId }
             entry.attempts shouldBe 1
             entry.state shouldBe OcrPipeline.STATE_PENDING
+            entry.lastError shouldBe "ocr failed: boom"
+            // A failed page is a failed run: nothing is published for it, blank or otherwise.
+            OcrSidecarFiles(fs).listForHash(docId) shouldBe emptyList()
 
             // reset to pending for the next pop (nextPending picks pending rows)
             pipe.processNext()
