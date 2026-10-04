@@ -123,27 +123,6 @@ class DocumentRepositoryImpl(
             }.flowOn(Dispatchers.Default)
     }
 
-    /**
-     * Live count of documents matching [filter] (same WHERE semantics as [observeDocuments]).
-     * Unlike observing the list, this never materializes rows or attaches tags/fields, so it is
-     * cheap even for large libraries. Impl-only: no UI consumer yet, so it is deliberately not
-     * part of [DocumentRepository].
-     */
-    fun observeCount(filter: LibraryFilter): Flow<Int> {
-        // FTS matches can't be expressed as a COUNT predicate, so the query-text path reuses the
-        // (FTS-bounded, already cheap) list flow instead of scanning the library.
-        if (!filter.query.isNullOrBlank()) {
-            return observeDocuments(filter, LibrarySort()).map { it.size }
-        }
-        val parts = buildWhere(filter)
-        val sql = "SELECT COUNT(*) FROM documents d WHERE ${parts.where.joinToString(" AND ")}"
-        return documentDao.observeCount(
-            RoomRawQuery(sql = sql, onBindStatement = { st ->
-                parts.binds.forEachIndexed { idx, bind -> bind(st, idx + 1) }
-            }),
-        )
-    }
-
     override fun observeDoc(docId: String): Flow<DocListItem?> =
         combine(
             documentDao.observeByDocId(docId),
@@ -275,7 +254,7 @@ class DocumentRepositoryImpl(
         })
     }
 
-    /** WHERE clause + bind lambdas shared by the list query and [observeCount]. */
+    /** WHERE clause + bind lambdas of the list query. */
     private fun buildWhere(filter: LibraryFilter): QueryParts {
         val where = ArrayList<String>()
         val binds = ArrayList<(androidx.sqlite.SQLiteStatement, Int) -> Unit>()

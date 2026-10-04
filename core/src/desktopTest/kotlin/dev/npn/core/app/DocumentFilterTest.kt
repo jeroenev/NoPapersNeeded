@@ -180,9 +180,11 @@ class DocumentFilterTest {
                 ).shouldContainExactlyInAnyOrder(listOf(b, c))
                 // Combines (AND) with the rest of the filter.
                 repo
-                    .observeCount(
+                    .observeDocuments(
                         LibraryFilter(missingFields = listOf(FieldKeys.CORRESPONDENT), untaggedOnly = true),
-                    ).first() shouldBe 2
+                        LibrarySort(),
+                    ).first()
+                    .size shouldBe 2
             } finally {
                 rig.close()
             }
