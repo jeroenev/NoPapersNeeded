@@ -44,7 +44,7 @@ interface DocumentFieldDao {
     @Query(
         "SELECT DISTINCT f.fieldValue FROM document_fields f JOIN documents d ON d.docId = f.docId " +
             "WHERE f.fieldKey = :key AND f.fieldValue LIKE :likePrefix ESCAPE '\\' " +
-            "AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "AND $LIVE_DOCUMENT " +
             "ORDER BY f.fieldValue COLLATE NOCASE LIMIT :limit",
     )
     suspend fun valuesForPrefix(
@@ -61,7 +61,7 @@ interface DocumentFieldDao {
     @Query(
         "SELECT f.fieldKey, COUNT(*) AS count FROM document_fields f " +
             "JOIN documents d ON d.docId = f.docId " +
-            "WHERE d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "WHERE $LIVE_DOCUMENT " +
             "GROUP BY f.fieldKey ORDER BY f.fieldKey COLLATE NOCASE",
     )
     suspend fun keysWithLiveCounts(): List<FieldKeyCount>
@@ -395,7 +395,7 @@ interface KeyValueDao {
 
 private const val DISTINCT_VALUES =
     "SELECT DISTINCT f.fieldValue FROM document_fields f JOIN documents d ON d.docId = f.docId " +
-        "WHERE f.fieldKey = :key AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+        "WHERE f.fieldKey = :key AND $LIVE_DOCUMENT " +
         "ORDER BY f.fieldValue COLLATE NOCASE LIMIT :limit"
 
 /** Custom-field key usage count, for the AI's list_fields tool. */

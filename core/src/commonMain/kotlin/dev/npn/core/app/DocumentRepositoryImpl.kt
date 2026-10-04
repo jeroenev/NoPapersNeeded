@@ -4,6 +4,7 @@ import androidx.room3.RoomRawQuery
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
+import dev.npn.core.db.LIVE_DOCUMENT
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.toFieldDef
 import dev.npn.core.journal.Hlc
@@ -287,9 +288,7 @@ class DocumentRepositoryImpl(
             binds.add { st, i -> st.bindLong(i, v) }
         }
 
-        where.add("d.trashed = 0")
-        where.add("d.deleted = 0")
-        where.add("d.missing = 0")
+        where.add(LIVE_DOCUMENT)
 
         for (tag in filter.tagsAll) {
             where.add("EXISTS (SELECT 1 FROM document_tags dt WHERE dt.docId = d.docId AND dt.tag = ?)")

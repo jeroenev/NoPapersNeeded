@@ -7,6 +7,12 @@ import androidx.room3.RoomRawQuery
 import androidx.room3.Upsert
 import kotlinx.coroutines.flow.Flow
 
+/**
+ * SQL for the documents the library shows: not trashed, not deleted, and on disk. Expects
+ * `documents` under the alias `d`.
+ */
+internal const val LIVE_DOCUMENT = "d.trashed = 0 AND d.deleted = 0 AND d.missing = 0"
+
 @Dao
 interface DocumentDao {
     @Upsert
@@ -35,7 +41,7 @@ interface DocumentDao {
     /** Bounded live document rows carrying an exact tag, for AI tool context. */
     @Query(
         "SELECT d.* FROM documents d INNER JOIN document_tags t ON d.docId = t.docId " +
-            "WHERE t.tag = :tag AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+            "WHERE t.tag = :tag AND $LIVE_DOCUMENT " +
             "ORDER BY d.addedAt DESC LIMIT :limit",
     )
     suspend fun getLiveWithTag(
@@ -117,7 +123,7 @@ interface DocumentDao {
     @RawQuery(observedEntities = [DocumentEntity::class, DocumentTagEntity::class])
     fun observeCount(query: RoomRawQuery): Flow<Int>
 
-    @Query("SELECT * FROM documents WHERE trashed = 0 AND deleted = 0 AND missing = 0 ORDER BY addedAt DESC")
+    @Query("SELECT * FROM documents d WHERE $LIVE_DOCUMENT ORDER BY addedAt DESC")
     suspend fun getAllLive(): List<DocumentEntity>
 
     @Query("SELECT * FROM documents WHERE trashed = 1 AND deleted = 0 ORDER BY addedAt DESC")
@@ -131,7 +137,7 @@ interface DocumentDao {
     @Query(
         "SELECT COUNT(*) FROM documents d " +
             "LEFT JOIN document_tags t ON d.docId = t.docId " +
-            "WHERE t.tag IS NULL AND d.trashed = 0 AND d.deleted = 0 AND d.missing = 0",
+            "WHERE t.tag IS NULL AND $LIVE_DOCUMENT",
     )
     fun countUntagged(): Flow<Int>
 
@@ -140,7 +146,7 @@ interface DocumentDao {
      * (UNTAGGED_ONLY mode uses [countUntagged].)
      */
     @Query(
-        "SELECT COUNT(*) FROM documents d WHERE d.trashed = 0 AND d.deleted = 0 AND d.missing = 0 " +
+        "SELECT COUNT(*) FROM documents d WHERE $LIVE_DOCUMENT " +
             "AND (d.reviewed = 0 OR NOT EXISTS " +
             "(SELECT 1 FROM document_tags t WHERE t.docId = d.docId))",
     )
@@ -151,14 +157,14 @@ interface DocumentDao {
      * the review migration marks.
      */
     @Query(
-        "SELECT d.docId FROM documents d WHERE d.reviewed = 0 AND d.trashed = 0 AND d.deleted = 0 " +
-            "AND d.missing = 0 AND (:taggedOnly = 0 OR EXISTS " +
+        "SELECT d.docId FROM documents d WHERE d.reviewed = 0 AND $LIVE_DOCUMENT " +
+            "AND (:taggedOnly = 0 OR EXISTS " +
             "(SELECT 1 FROM document_tags t WHERE t.docId = d.docId))",
     )
     suspend fun unreviewedLiveDocIds(taggedOnly: Boolean): List<String>
 
     /** Live documents whose OCR state is [ocrState]: what a rescan still has to queue for OCR. */
-    @Query("SELECT docId FROM documents WHERE ocrState = :ocrState AND trashed = 0 AND deleted = 0 AND missing = 0")
+    @Query("SELECT d.docId FROM documents d WHERE d.ocrState = :ocrState AND $LIVE_DOCUMENT")
     suspend fun liveDocIdsWithOcrState(ocrState: String): List<String>
 
     /** Projection for the indexer diff: current known paths + fast-path fields. */
