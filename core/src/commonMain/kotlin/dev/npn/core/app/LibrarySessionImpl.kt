@@ -11,7 +11,6 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FsEvent
@@ -44,7 +43,6 @@ import dev.npn.core.model.SystemProperty
 import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngineSelector
-import dev.npn.core.ocr.OcrEngines
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfEngine
@@ -65,7 +63,6 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
@@ -91,10 +88,9 @@ class LibrarySessionImpl private constructor(
     private val maintenanceService: MaintenanceService,
     private val relinkService: RelinkService,
     private val splitService: SplitService,
-    private val ocrPipeline: OcrPipeline,
-    /** Same instance the pipeline runs on, so the AI-OCR facet answers from the real policy. */
-    private val ocrEngines: OcrEngineSelector,
+    private val ocrFacade: OcrFacadeImpl,
     private val ocrWorker: QueueDrainer,
+    workQueueReader: WorkQueueReader,
     private val enrichWorker: QueueDrainer,
     private val editQueue: AiEditQueue,
     private val editWorker: QueueDrainer,
@@ -109,7 +105,6 @@ class LibrarySessionImpl private constructor(
     private val aiFacade: AiFacadeImpl,
 ) : LibrarySession,
     IngestFacade,
-    OcrFacade,
     ReviewConfigFacade,
     MaintenanceFacade,
     WorkFacade,
@@ -123,7 +118,7 @@ class LibrarySessionImpl private constructor(
     // consumer sees. [MetadataWriterImpl] likewise backs all three write facets, and
     // [AiFacadeImpl] backs both AI facets.
     override val ingest: IngestFacade get() = this
-    override val ocr: OcrFacade get() = this
+    override val ocr: OcrFacade get() = ocrFacade
     override val reviewConfig: ReviewConfigFacade get() = this
     override val maintenance: MaintenanceFacade get() = this
     override val work: WorkFacade get() = this
@@ -141,24 +136,6 @@ class LibrarySessionImpl private constructor(
         indexer.scanState.map { p ->
             p?.let { ScanProgressUi(it.phase.name, it.hashed, it.total) }
         }
-
-    // `running` is asked of the pipeline rather than inferred from the count. The two are not the
-    // same question — a queue can be full while nothing is draining it (nothing has kicked yet, or
-    // the endpoint is down) — and inferring it made the indicator claim work was under way whenever
-    // anything was owed, including for rows no drain would ever pick up.
-    override val ocrStatus: Flow<OcrStatus> =
-        combine(deviceDb.ocrQueueDao().countActive(), ocrPipeline.inFlight) { owed, inFlight ->
-            OcrStatus(pending = owed, running = inFlight != null)
-        }
-
-    private val workQueueReader =
-        WorkQueueReader(
-            db.documentDao(),
-            deviceDb.ocrQueueDao(),
-            deviceDb.aiEnrichQueueDao(),
-            deviceDb.aiEditJobDao(),
-            ocrPipeline.inFlight,
-        )
 
     override val queue: Flow<List<QueuedWork>> = workQueueReader.queue
 
@@ -194,9 +171,7 @@ class LibrarySessionImpl private constructor(
             val report = coordinator.rescan()
             _lastScanReport.value = report
             report.retryAfterMillis?.let { scheduleSettleRescan(it) }
-            // Adopt/re-select OCR sidecars picked up by the rescan, then queue/kick + purge trash.
-            ocrPipeline.reconcileSidecars()
-            queuePendingOcr()
+            ocrFacade.reconcileAfterRescan()
             report
         }
 
@@ -285,71 +260,6 @@ class LibrarySessionImpl private constructor(
         trashOps().purgeOlderThan(cutoff, coordinator.journalTrashTimes() + rows)
     }
 
-    override suspend fun reOcr(docId: String) =
-        owned {
-            if (db.documentDao().getByDocId(docId) == null) return@owned
-            enqueuePendingOcr(docId, rerun = true)
-            ocrWorker.kick()
-        }
-
-    /**
-     * The page count is asked of [content] rather than read off `DocumentEntity`: the row's
-     * `pageCount` is a backfilled cache that stays NULL until something has opened the PDF, and a
-     * NULL would quietly downgrade a 200-page document's warning to [AiOcrOffer.Ready]. A count
-     * that cannot be read at all (unreadable PDF) is not this warning's problem — offer it plainly
-     * and let the OCR run report the real fault.
-     */
-    override suspend fun aiOcrOffer(docId: String): AiOcrOffer {
-        if (!ocrEngines.aiAvailable()) return AiOcrOffer.Unavailable
-        val pages = content.pageCount(docId) ?: return AiOcrOffer.Ready
-        return if (ocrEngines.isLargeForAi(pages)) AiOcrOffer.Large(pages) else AiOcrOffer.Ready
-    }
-
-    override suspend fun ocrWithAi(docId: String): AiOcrOutcome =
-        owned {
-            db.documentDao().getByDocId(docId) ?: return@owned AiOcrOutcome.DOCUMENT_UNAVAILABLE
-            if (!ocrEngines.aiAvailable()) return@owned AiOcrOutcome.NO_ENDPOINT
-            // Deliberately no page limit here: length is something aiOcrOffer warns about, not
-            // something this refuses. The caller asked for this document by name.
-            //
-            // The pin picks the ai sidecar for search once it exists, on every replica; the request
-            // to pay for one is this device's queue flag (see OcrFacade.ocrWithAi). Queue after
-            // pinning so the run that drains sees the override already folded onto the row.
-            pinOcrEngine(docId, OcrEngines.AI)
-            enqueuePendingOcr(docId, aiRequested = true)
-            ocrWorker.kick()
-            AiOcrOutcome.QUEUED
-        }
-
-    override suspend fun ocrVersions(docId: String): List<OcrVersion> {
-        val doc = db.documentDao().getByDocId(docId)
-        return ocrPipeline.listVersions(docId).map {
-            OcrVersion(
-                engine = it.engine,
-                deviceId = it.deviceId,
-                lang = it.lang,
-                createdAt = it.createdAt,
-                // Rows indexed before the writer key was recorded only know the engine.
-                active = doc?.ocrSource?.let { source -> it.writerKey == source } ?: (it.engine == doc?.ocrEngine),
-            )
-        }
-    }
-
-    override suspend fun setOcrEngine(
-        docId: String,
-        engine: String?,
-    ) = owned { pinOcrEngine(docId, engine) }
-
-    private suspend fun pinOcrEngine(
-        docId: String,
-        engine: String?,
-    ) {
-        writer.setOcrEngine(docId, engine)
-        // The commit above already folded the override into the doc row; re-select now so this
-        // device's index reflects the choice immediately.
-        ocrPipeline.reselect(docId)
-    }
-
     // The drains go through the session's own drainers rather than running on the caller's
     // coroutine, so closing the session cancels them (see QueueDrainer.drainAndAwait).
     override suspend fun drainOcr() {
@@ -415,7 +325,7 @@ class LibrarySessionImpl private constructor(
         } finally {
             if (!finished) splitService.rollBack(parts)
         }
-        ocrWorker.kick()
+        ocrFacade.kick()
         return SplitOutcome.Done(partIds)
     }
 
@@ -459,12 +369,7 @@ class LibrarySessionImpl private constructor(
         started = true
         val scope = lifetime.scope
 
-        // OCR worker drain loop: kick on each queue change.
-        scope.launch {
-            deviceDb.ocrQueueDao().countActive().collect { active ->
-                if (active > 0) ocrWorker.kick()
-            }
-        }
+        ocrFacade.watchQueue(scope)
 
         // Automatic AI enrichment is NOT driven by an observer of its queue table. Such an observer
         // cannot distinguish new work from a failed document being rescheduled — a reschedule
@@ -497,7 +402,7 @@ class LibrarySessionImpl private constructor(
                 .collect { event ->
                     val rel = (event as? FsEvent.Changed)?.relPath
                     if (rel != null && rel.startsWith("${NpnPaths.OCR_DIR}/")) {
-                        log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
+                        log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
                     } else {
                         log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
                         log.runLogged("Watch-triggered rescan") { doWatchTriggeredRescan() }
@@ -527,7 +432,7 @@ class LibrarySessionImpl private constructor(
                 // OCR retries, enrichment rows and edit runs become due by the passage of time,
                 // which no Room flow can observe; this tick is what actually retries a backed-off
                 // one.
-                ocrWorker.kick()
+                ocrFacade.kick()
                 enrichWorker.kick()
                 editWorker.kick()
             }
@@ -585,7 +490,7 @@ class LibrarySessionImpl private constructor(
                 log.runLogged("Journal object ingest") { coordinator.ingestObject(rel) }
                 // A remote OCR-engine override may have just folded in; re-select promptly
                 // instead of waiting for the next rescan.
-                log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
+                log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
             }
 
             // A staging file is a write in progress, and a null path means the event was not a
@@ -594,7 +499,7 @@ class LibrarySessionImpl private constructor(
 
             else -> {
                 log.runLogged("Metadata reconcile") { coordinator.reconcileMetadata() }
-                log.runLogged("OCR sidecar reconcile") { ocrPipeline.reconcileSidecars() }
+                log.runLogged("OCR sidecar reconcile") { ocrFacade.reconcileSidecars() }
             }
         }
         return route
@@ -602,7 +507,7 @@ class LibrarySessionImpl private constructor(
 
     private suspend fun doWatchTriggeredRescan() {
         rescan()
-        ocrWorker.kick()
+        ocrFacade.kick()
         enrichWorker.kick()
         editWorker.kick()
         // Respect the configured retention at call time.
@@ -631,52 +536,8 @@ class LibrarySessionImpl private constructor(
 
     private fun afterImport(outcome: ImportOutcome) {
         if (outcome is ImportOutcome.Imported) {
-            ocrWorker.kick()
+            ocrFacade.kick()
         }
-    }
-
-    /**
-     * Queue OCR for any live doc that has not been processed yet. A run this device's queue still
-     * owes it keeps its attempts and requests (the queue outlives a rebuilt index); the doc row
-     * only learns where that run stands.
-     */
-    private suspend fun queuePendingOcr() {
-        val dao = db.documentDao()
-        // This runs after every rescan, so it asks for the few live documents still without OCR
-        // rather than reading every row to filter them here.
-        for (docId in dao.liveDocIdsWithOcrState(OcrPipeline.OCR_NONE)) {
-            when (deviceDb.ocrQueueDao().getByDocId(docId)?.state) {
-                null, OcrPipeline.STATE_DONE -> enqueuePendingOcr(docId)
-                OcrPipeline.STATE_FAILED -> dao.updateOcrState(docId, OcrPipeline.OCR_FAILED, null, null)
-                else -> dao.updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
-            }
-        }
-    }
-
-    /**
-     * Mark [docId] pending in the OCR queue and flip its doc-row OCR state to pending. The row
-     * write is a partial UPDATE so this state flip cannot clobber metadata columns a concurrent
-     * journal fold just projected onto the same row.
-     *
-     * A request already on the row ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]) is kept:
-     * asking for one thing does not withdraw what was asked before it ran.
-     */
-    private suspend fun enqueuePendingOcr(
-        docId: String,
-        rerun: Boolean = false,
-        aiRequested: Boolean = false,
-    ) {
-        val existing = deviceDb.ocrQueueDao().getByDocId(docId)
-        deviceDb.ocrQueueDao().upsert(
-            OcrQueueEntity(
-                docId = docId,
-                state = OcrPipeline.STATE_PENDING,
-                updatedAt = deps.clock.nowMillis(),
-                rerun = rerun || existing?.rerun == true,
-                aiRequested = aiRequested || existing?.aiRequested == true,
-            ),
-        )
-        db.documentDao().updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
     }
 
     companion object {
@@ -859,6 +720,18 @@ class LibrarySessionImpl private constructor(
                     onStaleFile = { session.scheduleSettleRescan(WriteSettle.QUIET_MILLIS) },
                 )
             val ocrWorker = QueueDrainer(lifetime.scope, "OCR queue", deps.log) { ocrPipeline.processNext() }
+            val ocr =
+                OcrFacadeImpl(
+                    lifetime = lifetime,
+                    documentDao = db.documentDao(),
+                    queue = deviceDb.ocrQueueDao(),
+                    pipeline = ocrPipeline,
+                    engines = ocrEngines,
+                    writer = meta,
+                    content = content,
+                    worker = ocrWorker,
+                    clock = deps.clock,
+                )
             val editQueue =
                 AiEditQueue(
                     dao = deviceDb.aiEditJobDao(),
@@ -882,9 +755,16 @@ class LibrarySessionImpl private constructor(
                 maintenanceService = maintenance,
                 relinkService = relinkService,
                 splitService = splitService,
-                ocrPipeline = ocrPipeline,
-                ocrEngines = ocrEngines,
+                ocrFacade = ocr,
                 ocrWorker = ocrWorker,
+                workQueueReader =
+                    WorkQueueReader(
+                        db.documentDao(),
+                        deviceDb.ocrQueueDao(),
+                        deviceDb.aiEnrichQueueDao(),
+                        deviceDb.aiEditJobDao(),
+                        ocrPipeline.inFlight,
+                    ),
                 enrichWorker = enrichWorker,
                 editQueue = editQueue,
                 editWorker = editWorker,

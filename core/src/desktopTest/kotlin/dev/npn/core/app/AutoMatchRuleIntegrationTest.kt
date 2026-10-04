@@ -38,7 +38,7 @@ class AutoMatchRuleIntegrationTest {
                 rig.session.rescan()
 
                 val id = rig.fs.sha256("inv.pdf")
-                rig.session.ocrStatus.first { it.pending == 0 && !it.running }
+                rig.session.ocr.ocrStatus.first { it.pending == 0 && !it.running }
 
                 // Rule application runs in the post-OCR onTextIndexed callback, which fires after the
                 // queue is marked done, so wait for the rule-produced metadata rather than mere
@@ -66,7 +66,7 @@ class AutoMatchRuleIntegrationTest {
                 rig.session.rescan()
 
                 val id = rig.fs.sha256("bill.pdf")
-                rig.session.ocrStatus.first { it.pending == 0 && !it.running }
+                rig.session.ocr.ocrStatus.first { it.pending == 0 && !it.running }
 
                 rig.session.rules.save(
                     AutoMatchRule(
@@ -115,7 +115,7 @@ class AutoMatchRuleIntegrationTest {
                 rig.session.rescan()
 
                 val id = rig.fs.sha256("doc.pdf")
-                rig.session.ocrStatus.first { it.pending == 0 && !it.running }
+                rig.session.ocr.ocrStatus.first { it.pending == 0 && !it.running }
 
                 val item =
                     rig.session.documents
@@ -145,7 +145,7 @@ class AutoMatchRuleIntegrationTest {
                 rig.writePdf("doc.pdf", PdfFixtures.embeddedTextPdf("plain text"))
                 rig.session.rescan()
                 val id = rig.fs.sha256("doc.pdf")
-                rig.session.ocrStatus.first { it.pending == 0 && !it.running }
+                rig.session.ocr.ocrStatus.first { it.pending == 0 && !it.running }
                 rig.session.fieldRegistry.upsert(
                     FieldDef("dueDate", "Due", FieldType.DATE, showByDefault = false, aiEnabled = false, position = 9),
                 )
