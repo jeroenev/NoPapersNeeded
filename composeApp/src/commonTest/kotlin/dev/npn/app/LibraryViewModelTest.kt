@@ -3,8 +3,6 @@ package dev.npn.app
 import dev.npn.app.ui.library.ImportSummary
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
-import dev.npn.core.app.ImportFailure
-import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
@@ -177,73 +175,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.applyReviewPreset()
             model.queryText.value shouldBe ""
-        }
-
-    @Test
-    fun importScannedPdfImportedMessage() =
-        runTest(dispatcher) {
-            val session =
-                FakeLibrarySession().apply {
-                    ingest.importOutcomes = listOf(ImportOutcome.Imported("a", "a.pdf"))
-                }
-            val model = vm(session = session)
-            val messages = collectMessages(model)
-            model.importScannedPdf(byteArrayOf(1, 2, 3))
-            advanceUntilIdle()
-            messages shouldBe listOf("Scan imported")
-        }
-
-    @Test
-    fun importScannedPdfDuplicateMessage() =
-        runTest(dispatcher) {
-            val session =
-                FakeLibrarySession().apply {
-                    ingest.importOutcomes = listOf(ImportOutcome.Duplicate("a", "a.pdf"))
-                }
-            val model = vm(session = session)
-            val messages = collectMessages(model)
-            model.importScannedPdf(byteArrayOf(1))
-            advanceUntilIdle()
-            messages shouldBe listOf("Scan already in library")
-        }
-
-    @Test
-    fun importScannedPdfFailureSurfacesMessage() =
-        runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { ingest.failImport = { error("disk full") } }
-            val model = vm(session = session)
-            val messages = collectMessages(model)
-            model.importScannedPdf(byteArrayOf(1))
-            advanceUntilIdle()
-            messages shouldBe listOf("Scan import failed: disk full")
-        }
-
-    @Test
-    fun importScannedPdfRefusedNamesTheReason() =
-        runTest(dispatcher) {
-            val session =
-                FakeLibrarySession().apply {
-                    ingest.importOutcomes = listOf(ImportOutcome.Failed(ImportFailure.EMPTY_FILE))
-                }
-            val model = vm(session = session)
-            val messages = collectMessages(model)
-            model.importScannedPdf(byteArrayOf(1))
-            advanceUntilIdle()
-            messages shouldBe listOf("Scan import failed: the file is empty")
-        }
-
-    @Test
-    fun importScannedPdfFailureUsesUnknownErrorFallback() =
-        runTest(dispatcher) {
-            val session =
-                FakeLibrarySession().apply {
-                    ingest.failImport = { throw object : Throwable() {} }
-                }
-            val model = vm(session = session)
-            val messages = collectMessages(model)
-            model.importScannedPdf(byteArrayOf(1))
-            advanceUntilIdle()
-            messages shouldBe listOf("Scan import failed: unknown error")
         }
 
     @Test

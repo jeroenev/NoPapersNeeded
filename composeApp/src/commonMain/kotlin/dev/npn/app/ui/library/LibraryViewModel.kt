@@ -495,11 +495,6 @@ class LibraryViewModel(
             message(ImportSummary(imported, duplicate, failed).asUiText())
         }
 
-    /** Import a scanned PDF (raw bytes from the platform scanner) through the staging import path. */
-    fun importScannedPdf(bytes: ByteArray) {
-        viewModelScope.launch { importScannedPdfNow(bytes) }
-    }
-
     /** Launch a platform scan; cancellation stays quiet while an actual scanner failure is visible. */
     fun scan(scanToPdf: suspend () -> ScannedPdf?) {
         viewModelScope.launch {
@@ -508,21 +503,14 @@ class LibraryViewModel(
                     message(uiText(UiTextKey.SCAN_CAPTURE_FAILED))
                     return@launch
                 }
-            if (scanned != null) importScannedPdfNow(scanned)
+            if (scanned != null) importScanned(scanned)
         }
     }
 
-    private suspend fun importScannedPdfNow(scanned: ScannedPdf) {
-        reportScanImport { ingest.importPdf(scanned.source, scanned.suggestedName) }
-    }
-
-    private suspend fun importScannedPdfNow(bytes: ByteArray) {
-        val name = "scan-${randomId()}.pdf"
-        reportScanImport { ingest.importPdfBytes(bytes, name) }
-    }
-
-    private suspend fun reportScanImport(import: suspend () -> ImportOutcome) =
-        reporting({ reason -> uiText(UiTextKey.SCAN_IMPORT_FAILED, reason) }) { message(scanOutcomeMessage(import())) }
+    private suspend fun importScanned(scanned: ScannedPdf) =
+        reporting({ reason -> uiText(UiTextKey.SCAN_IMPORT_FAILED, reason) }) {
+            message(scanOutcomeMessage(ingest.importPdf(scanned.source, scanned.suggestedName)))
+        }
 
     private fun scanOutcomeMessage(outcome: ImportOutcome): UiText =
         when (outcome) {

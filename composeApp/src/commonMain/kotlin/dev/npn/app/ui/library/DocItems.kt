@@ -111,10 +111,6 @@ data class TagColors(
     private val colors: Map<String, String?>,
 ) {
     operator fun get(name: String): String? = colors[name]
-
-    companion object {
-        val EMPTY = TagColors(emptyMap())
-    }
 }
 
 /**
