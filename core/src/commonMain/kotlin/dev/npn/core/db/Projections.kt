@@ -14,6 +14,12 @@ data class DocTrashTime(
     val trashedAt: Long?,
 )
 
+/** A field key with the number of documents carrying a value for it. */
+data class FieldKeyCount(
+    val fieldKey: String,
+    val count: Int,
+)
+
 /** Tag with its live document count, for the tag management screen. */
 data class TagWithCount(
     val name: String,
