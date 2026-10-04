@@ -2,8 +2,10 @@ package dev.npn.core.fs
 
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.ReceiveChannel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -54,6 +56,19 @@ class WatchDirsTest {
         }
 
     @Test
+    fun stoppingWhileStillRegisteringEndsQuietly() =
+        runBlocking {
+            // Enough directories that registering them all takes a while.
+            repeat(DIRECTORIES) { Files.createDirectories(root.resolve("d$it/e")) }
+            repeat(STOPS) { stop ->
+                val collector = launch { watchDirs(root, recursive = true).collect { } }
+                // Stop at different points of the registration walk.
+                delay(stop % STOP_SPREAD_MILLIS)
+                collector.cancelAndJoin()
+            }
+        }
+
+    @Test
     fun aMissingDirectoryGoesQuietInsteadOfFailing() {
         val absent = watchDirs(root.resolve("absent"), recursive = true)
         val first = runBlocking { withTimeoutOrNull(QUIET_MILLIS) { absent.first() } }
@@ -99,5 +114,8 @@ class WatchDirsTest {
         const val TIMEOUT_MILLIS = 10_000L
         const val PROBE_MILLIS = 100L
         const val QUIET_MILLIS = 300L
+        const val DIRECTORIES = 500
+        const val STOPS = 40
+        const val STOP_SPREAD_MILLIS = 8L
     }
 }

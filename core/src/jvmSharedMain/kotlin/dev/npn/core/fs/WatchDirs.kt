@@ -26,9 +26,9 @@ import java.nio.file.attribute.BasicFileAttributes
  * for, or null when the watcher lost track (an overflow). With [recursive] every directory below
  * [root] is watched, including those created later; otherwise [root] alone.
  *
- * Registering walks the tree, so it runs on [io], like the blocking wait for events. A directory
- * that cannot be watched is skipped. Once nothing is watched the flow goes quiet; it ends only when
- * its collector stops, which closes the watcher.
+ * Registering walks the tree, so it runs on [io], like the blocking wait for events, and stops when
+ * the collector does. A directory that cannot be watched is skipped. Once nothing is watched the
+ * flow goes quiet; it ends only when its collector stops, which closes the watcher.
  */
 internal fun watchDirs(
     root: Path,
@@ -69,7 +69,10 @@ private class DirWatch(
         }
     }
 
-    /** The path [event] in [dir] reports, null when it names none; a new directory below a recursive watch is watched too. */
+    /**
+     * The path [event] in [dir] reports, null when it names none. A directory it reports created
+     * below a recursive watch is watched from then on.
+     */
     private fun changed(
         dir: Path?,
         event: WatchEvent<*>,
@@ -93,10 +96,7 @@ private class DirWatch(
                 override fun preVisitDirectory(
                     dir: Path,
                     attrs: BasicFileAttributes,
-                ): FileVisitResult {
-                    watch(dir)
-                    return FileVisitResult.CONTINUE
-                }
+                ): FileVisitResult = if (watch(dir)) FileVisitResult.CONTINUE else FileVisitResult.TERMINATE
 
                 override fun visitFileFailed(
                     file: Path,
@@ -106,12 +106,19 @@ private class DirWatch(
         )
     }
 
-    private fun watch(dir: Path) {
+    /**
+     * Watch [dir], skipping one that cannot be watched. False once [watcher] is closed: the collector
+     * stopped while directories were still being registered, so there is no point going on.
+     */
+    private fun watch(dir: Path): Boolean =
         try {
-            dirs[dir.register(watcher, *kinds)] = dir
+            dirs[dir.register(watcher, kinds)] = dir
+            true
+        } catch (_: ClosedWatchServiceException) {
+            false
         } catch (_: IOException) {
+            true
         }
-    }
 
     /** The next key with events, or null once [watcher] is closed or the thread interrupted. */
     private fun take(): WatchKey? =
