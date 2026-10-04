@@ -3,10 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>InjectDispatcher:IntentImport.kt:IntentImport$IO</ID>
-    <ID>SuspendFunSwallowedCancellation:MainActivity.kt:MainActivity$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:MlKitDocumentScanner.kt:MlKitDocumentScanner$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:NpnWork.kt:RescanOcrWorker$catch (t: Throwable) { Log.w(TAG, "rescan/OCR maintenance failed; retrying", t) Result.retry() }</ID>
-    <ID>SuspendFunSwallowedCancellation:NpnWork.kt:RescanOcrWorker$runCatching</ID>
     <ID>UseOrEmpty:IntentImport.kt:IntentImport$intent.getParcelableArrayListExtraCompat&lt;Uri&gt;(Intent.EXTRA_STREAM) ?: emptyList()</ID>
   </CurrentIssues>
 </SmellBaseline>

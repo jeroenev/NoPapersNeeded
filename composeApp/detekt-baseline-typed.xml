@@ -103,20 +103,6 @@
     <ID>SpreadOperator:HistoryTextResources.kt:(key.resource, *arguments.toTypedArray())</ID>
     <ID>SpreadOperator:UiText.kt:(res, *args.renderAll())</ID>
     <ID>SpreadOperator:UiText.kt:(res, quantity, *args.renderAll())</ID>
-    <ID>SuspendFunSwallowedCancellation:AiChatViewModel.kt:AiChatViewModel$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:AiConfigured.kt:runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:AiEditReviewViewModel.kt:AiEditReviewViewModel$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:AiEditViewModel.kt:AiEditViewModel$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:App.kt:runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:DocActions.kt:runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:DocDetailViewModel.kt:DocDetailViewModel$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:DocThumbnail.kt:runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:DocumentDrafts.kt:DocumentDrafts$catch (cancelled: CancellationException) { // Clear the saving flag even while cancelling, so the draft is not stuck. withContext(NonCancellable + Dispatchers.Main) { edit(docId) { it.copy(saving = false) } } throw cancelled }</ID>
-    <ID>SuspendFunSwallowedCancellation:LibraryViewModel.kt:LibraryViewModel$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:MessagesViewModel.kt:MessagesViewModel$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:PageViewer.kt:runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:QueueViewModel.kt:QueueViewModel$runCatching</ID>
-    <ID>SuspendFunSwallowedCancellation:TrashViewModel.kt:TrashViewModel$runCatching</ID>
     <ID>UnsafeCallOnNullableType:App.kt:restoreError!!</ID>
     <ID>UnsafeCallOnNullableType:LocalAppLocale.kt:LocalAppLocale$default!!</ID>
     <ID>UnsafeCallOnNullableType:OnboardingScreen.kt:error!!</ID>
