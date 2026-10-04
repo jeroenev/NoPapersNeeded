@@ -11,7 +11,7 @@ import java.nio.file.FileAlreadyExistsException
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermissions
 import java.util.Properties
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * Desktop [SettingsRepository] persisted to a `settings.properties` file under
@@ -82,7 +82,7 @@ class SettingsRepositoryImpl(
         }
         val installationId =
             props.getProperty(SettingsKeys.INSTALLATION_ID)
-                ?: UUID.randomUUID().toString().also { fresh ->
+                ?: Uuid.random().toString().also { fresh ->
                     props.setProperty(SettingsKeys.INSTALLATION_ID, fresh)
                     runCatching { storeProperties() }
                 }

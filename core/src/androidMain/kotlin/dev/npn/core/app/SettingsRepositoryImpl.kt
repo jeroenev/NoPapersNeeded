@@ -9,7 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * Android [SettingsRepository] backed by [SharedPreferences]. Values are mirrored into a
@@ -128,7 +128,7 @@ class SettingsRepositoryImpl(
                 ?.trim()
                 ?.takeIf { it.isNotEmpty() }
                 ?.let { return it }
-            return UUID.randomUUID().toString().also { file.writeText(it) }
+            return Uuid.random().toString().also { file.writeText(it) }
         }
     }
 }

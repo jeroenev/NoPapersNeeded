@@ -3,9 +3,9 @@ package dev.npn.core.journal
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationCapability
-import dev.npn.core.fs.randomUuidV4
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.runCatchingCancellable
+import kotlin.uuid.Uuid
 
 data class PublishedTransaction(
     val relPath: String,
@@ -39,7 +39,7 @@ internal class ContentAddressedJournalWriter(
     suspend fun commit(ops: List<PendingOp>): PublishedTransaction? {
         if (ops.isEmpty()) return null
         check(supported) { "Storage provider does not support verified object publication" }
-        val actor = randomUuidV4()
+        val actor = Uuid.random().toString()
         val events =
             ops.mapIndexed { index, pending ->
                 JournalEvent(
@@ -73,7 +73,7 @@ internal suspend fun stageAndPublishVerifiedObject(
     snapshot: Boolean,
 ): String {
     val canonicalPath = NpnPaths.journalObjectPath(hash, snapshot = snapshot)
-    val stagingPath = NpnPaths.journalStagingPath(hash, installationId, randomUuidV4(), snapshot = snapshot)
+    val stagingPath = NpnPaths.journalStagingPath(hash, installationId, Uuid.random().toString(), snapshot = snapshot)
     fs.writeBytesOnce(stagingPath, bytes)
     var published = false
     try {

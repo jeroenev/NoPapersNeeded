@@ -4,12 +4,12 @@ import dev.npn.core.db.KeyValueDao
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
-import dev.npn.core.fs.randomUuidV4
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.info
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.warn
+import kotlin.uuid.Uuid
 
 /**
  * This installation's `deviceId` for one library, and the check that no other installation uses it.
@@ -80,7 +80,7 @@ class DeviceIdentity(
     }
 
     private suspend fun mint(): String {
-        val fresh = randomUuidV4()
+        val fresh = Uuid.random().toString()
         kv.put(KEY_DEVICE_ID, fresh)
         kv.put(KEY_INSTALLATION, installationId)
         return fresh
@@ -101,7 +101,7 @@ class DeviceIdentity(
         runCatchingCancellable {
             if (fs.exists(path)) return
             val bytes = """{"v":1,"device":"$deviceId","installation":"$installationId"}""".encodeToByteArray()
-            val staging = "${markerDir(deviceId)}/${NpnPaths.Temp.markerStagingName(installationId, randomUuidV4())}"
+            val staging = "${markerDir(deviceId)}/${NpnPaths.Temp.markerStagingName(installationId, Uuid.random().toString())}"
             fs.writeBytesOnce(staging, bytes)
             var published = false
             try {

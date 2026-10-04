@@ -14,7 +14,7 @@ import java.io.IOException
 import java.io.InputStream
 import java.security.DigestInputStream
 import java.security.MessageDigest
-import java.util.UUID
+import kotlin.uuid.Uuid
 
 /**
  * Storage Access Framework backed [LibraryFileSystem] for Android (PLAN section 4, "Android
@@ -465,7 +465,7 @@ class SafLibraryFileSystem(
         toParentId: String,
         toName: String,
     ) {
-        val stagingName = NpnPaths.Temp.moveName(UUID.randomUUID().toString())
+        val stagingName = NpnPaths.Temp.moveName(Uuid.random().toString())
         // The source is deleted below, so the staging copy is read back and checked first.
         val stagingUri =
             copyIntoNewFile(toParentId, stagingName, toRelPath, mimeForName(toName), verify = true) {
