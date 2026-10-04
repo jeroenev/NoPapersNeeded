@@ -223,9 +223,8 @@ internal class DocumentDrafts(
         if (captured.saving || !captured.writable) return
         edit(docId) { it.copy(saving = true) }
         scope.launch {
-            // The writer calls stay off the main thread: [scope] is the app scope on
-            // Dispatchers.Default and JournalCoordinator does no dispatcher switching of its own.
-            // State mutation, by contrast, is main-thread-only by construction (the plain
+            // [scope] is the app scope, which is not the main thread; the writer is main-safe either
+            // way. State mutation, by contrast, is main-thread-only by construction (the plain
             // mutableStateOf relies on it), so every touch of [drafts] hops to Main.
             var finished = false
             val outcome =

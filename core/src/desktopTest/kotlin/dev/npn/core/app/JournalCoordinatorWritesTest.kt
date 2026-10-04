@@ -13,11 +13,15 @@ import dev.npn.core.journal.PendingOp
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.awaitCancellation
 import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import java.util.concurrent.Executors
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -86,7 +90,33 @@ class JournalCoordinatorWritesTest {
             journal.filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.Legacy }.shouldBeEmpty()
         }
 
+    /** A viewmodel commits from the main thread; the fold and the write must not run there. */
+    @Test
+    fun aCommitRunsOffTheCallersThread() =
+        runTest {
+            val caller = Executors.newSingleThreadExecutor { Thread(it, CALLER_THREAD) }.asCoroutineDispatcher()
+            try {
+                val coordinator = JournalCoordinator(rig.writer("dev-a"), rig.indexer, rig.accumulator)
+                coordinator.refreshState()
+                var buildThread: String? = null
+
+                withContext(caller) {
+                    coordinator.commitBuilt {
+                        buildThread = Thread.currentThread().name
+                        listOf(PendingOp.tagAdd(DOC, "main-safe"))
+                    }
+                }
+
+                buildThread shouldNotBe null
+                buildThread shouldNotBe CALLER_THREAD
+            } finally {
+                caller.close()
+            }
+        }
+
     private companion object {
+        const val CALLER_THREAD = "caller"
+
         val DOC = "a".repeat(64)
     }
 }

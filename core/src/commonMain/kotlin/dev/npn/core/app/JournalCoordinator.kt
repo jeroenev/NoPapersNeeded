@@ -22,6 +22,8 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CoroutineDispatcher
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
@@ -105,6 +107,8 @@ class JournalCoordinator internal constructor(
     private val compactor: SnapshotCompactor? = null,
     private val compactionThreshold: Int = DEFAULT_COMPACTION_THRESHOLD,
     private val compactionStabilityWindowMs: Long = DEFAULT_COMPACTION_STABILITY_WINDOW_MS,
+    /** Where folds and writes run, whatever dispatcher the caller is on. */
+    private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
 ) {
     private val mutex = Mutex()
     private var objectWriter = objectWriter
@@ -112,14 +116,17 @@ class JournalCoordinator internal constructor(
     private var closed = false
 
     /**
-     * Run [block] under the single-writer [mutex], refusing once [close] has run. Every fold and
-     * journal write goes through here, so [close] doubles as the barrier the session needs before
-     * its database is closed.
+     * Run [block] on [dispatcher] under the single-writer [mutex], refusing once [close] has run.
+     * Every fold and journal write goes through here, so [close] doubles as the barrier the session
+     * needs before its database is closed, and every entry point is main-safe: a facet called from
+     * the UI thread never folds, encodes or hashes there.
      */
-    private suspend inline fun <T> locked(block: () -> T): T =
-        mutex.withLock {
-            check(!closed) { "Library session is closed" }
-            block()
+    private suspend inline fun <T> locked(crossinline block: suspend () -> T): T =
+        withContext(dispatcher) {
+            mutex.withLock {
+                check(!closed) { "Library session is closed" }
+                block()
+            }
         }
 
     /**
