@@ -2,7 +2,6 @@ package dev.npn.app
 
 import dev.npn.app.di.AppEnvironment
 import dev.npn.app.platform.withLibraryForForegroundImport
-import dev.npn.app.ui.common.UiText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import io.kotest.matchers.shouldBe
@@ -35,12 +34,9 @@ class ForegroundImportTest {
         private val mutableSession = MutableStateFlow<LibrarySession?>(null)
         override val session: StateFlow<LibrarySession?> = mutableSession
         override val opening: StateFlow<Boolean> = MutableStateFlow(false)
-        override val openError: StateFlow<UiText?> = MutableStateFlow(null)
         var restoreCalls = 0
 
         override suspend fun openLibrary(location: String) = Unit
-
-        override fun requestOpenLibrary(location: String) = Unit
 
         override suspend fun closeLibrary() = Unit
 

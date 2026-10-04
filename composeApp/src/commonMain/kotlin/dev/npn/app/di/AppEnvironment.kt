@@ -1,6 +1,5 @@
 package dev.npn.app.di
 
-import dev.npn.app.ui.common.UiText
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import kotlinx.coroutines.CoroutineScope
@@ -8,7 +7,8 @@ import kotlinx.coroutines.flow.StateFlow
 
 /**
  * App-level dependency container. One per process, created by the platform entry point
- * (MainActivity / desktop main) and handed to the root App composable.
+ * (MainActivity / desktop main) and handed to the root App composable, whose `AppViewModel` drives
+ * opening and restoring the library through it.
  */
 interface AppEnvironment {
     val settings: SettingsRepository
@@ -20,27 +20,23 @@ interface AppEnvironment {
     /** True while a session is being constructed/opened. */
     val opening: StateFlow<Boolean>
 
-    /** Last open failure message, or null. Cleared when a new open starts or succeeds. */
-    val openError: StateFlow<UiText?>
-
     /**
      * Open (or switch to) the library at [location] and persist it as the configured library.
-     * Desktop: absolute folder path. Android: SAF tree uri string (persistable permission
-     * must already be taken by the caller).
+     * Desktop: absolute folder path. Android: a device-storage path, or a SAF tree uri whose
+     * persistable permission the caller has already taken.
+     *
+     * Throws when the library cannot be opened, a [LibraryUnavailableException] when the platform
+     * knows why. A failed switch goes back to the library that was open before, so [session] is
+     * then that library again rather than null.
      */
     suspend fun openLibrary(location: String)
 
-    /**
-     * Fire-and-forget variant of [openLibrary] that runs on the long-lived [appScope] instead of
-     * the caller's scope. UI event handlers (pickers, buttons) must use this: the composable
-     * [CoroutineScope] can be cancelled by recomposition while the picker dismisses, which would
-     * abort a directly-launched open. Progress and failures surface via [opening] and [openError].
-     */
-    fun requestOpenLibrary(location: String)
-
     suspend fun closeLibrary()
 
-    /** Restore the persisted library on app start, if any. */
+    /**
+     * Restore the persisted library on app start, if any; a no-op when one is already open or none
+     * is configured. Throws like [openLibrary] when the saved library cannot be opened.
+     */
     suspend fun openPersistedLibrary()
 
     /**

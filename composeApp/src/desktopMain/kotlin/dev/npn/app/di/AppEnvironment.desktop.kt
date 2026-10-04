@@ -12,6 +12,7 @@ import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.watch.JvmWatchedFolder
 import kotlinx.coroutines.flow.first
 import java.io.File
+import java.nio.file.Files
 import java.nio.file.Path
 import java.util.Locale
 
@@ -27,9 +28,14 @@ fun createAppEnvironment(): AppEnvironment {
             runCatching { JvmWatchedFolder(Path.of(location)) }.getOrNull()
         }
     return DefaultAppEnvironment(settings, watchedFolders, DesktopLog) { location, scope ->
+        val root = Path.of(location)
+        // An unplugged drive must not open as a library with every document gone.
+        if (!Files.isDirectory(root)) {
+            throw LibraryUnavailableException(OpenFailureReason.FOLDER_MISSING, "Library folder not found: $location")
+        }
         val deps =
             jvmSessionDeps(
-                libraryRoot = Path.of(location),
+                libraryRoot = root,
                 dirs = AppDirs.desktop(location),
                 scope = scope,
                 ocrLanguage = {

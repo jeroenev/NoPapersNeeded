@@ -33,7 +33,6 @@ import no_papers_needed.composeapp.generated.resources.common_ai_assistant_empty
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unreachable
 import no_papers_needed.composeapp.generated.resources.common_could_not_action
 import no_papers_needed.composeapp.generated.resources.common_could_not_documents
-import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
 import no_papers_needed.composeapp.generated.resources.common_could_not_partial_documents
 import no_papers_needed.composeapp.generated.resources.common_could_not_queue_edit_run
 import no_papers_needed.composeapp.generated.resources.common_could_not_suggest_tags_partial
@@ -104,7 +103,6 @@ data class UiMessage(
 
 /** Stable identifiers for messages crossing the ViewModel/UI boundary. */
 enum class UiTextKey {
-    COULD_NOT_OPEN_LIBRARY,
     UNKNOWN_ERROR,
     COULD_NOT_ACTION,
     COULD_NOT_DOCUMENTS,
@@ -226,10 +224,6 @@ internal fun UiText.spec(): TextSpec =
 
 private fun UiTextKey.spec(args: List<Any?>): TextSpec =
     when (this) {
-        UiTextKey.COULD_NOT_OPEN_LIBRARY -> {
-            TextSpec.Str(Res.string.common_could_not_open_library)
-        }
-
         UiTextKey.UNKNOWN_ERROR -> {
             TextSpec.Str(Res.string.common_unknown_error)
         }

@@ -1,8 +1,5 @@
 package dev.npn.app.di
 
-import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.UiTextKey
-import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepository
@@ -81,9 +78,6 @@ class DefaultAppEnvironment(
     private val _opening = MutableStateFlow(false)
     override val opening: StateFlow<Boolean> = _opening.asStateFlow()
 
-    private val _openError = MutableStateFlow<UiText?>(null)
-    override val openError: StateFlow<UiText?> = _openError.asStateFlow()
-
     // Closes the resources (db) backing the current session, kept so we can free them on swap.
     private var currentClose: (() -> Unit)? = null
 
@@ -142,30 +136,19 @@ class DefaultAppEnvironment(
         return importer.scanOnce().imported
     }
 
-    override fun requestOpenLibrary(location: String) {
-        // Run on the process-lived appScope, not the caller's (composable) scope, which can be
-        // cancelled by recomposition while a picker dismisses.
-        appScope.launch {
-            // A failure is already published as openError.
-            runCatchingCancellable { openLibrary(location) }
-        }
-    }
-
     override suspend fun openLibrary(location: String) = sessionMutex.withLock { openLibraryLocked(location) }
 
     /**
      * Swap the open session for one at [location]. If that fails, the user goes back to the library
      * they had rather than to onboarding: the previous location is reopened, best effort, and the
-     * failure is published as [openError] and rethrown.
+     * failure is rethrown for the caller to report.
      */
     private suspend fun openLibraryLocked(location: String) {
         _opening.value = true
-        _openError.value = null
         try {
             val previous = currentLocation
             closeCurrentInternal()
             runCatchingCancellable { startSession(location) }.onFailure { failure ->
-                _openError.value = failure.message?.let(UiText::Dynamic) ?: uiText(UiTextKey.COULD_NOT_OPEN_LIBRARY)
                 if (previous != null && previous != location) reopen(previous)
                 throw failure
             }
@@ -216,8 +199,8 @@ class DefaultAppEnvironment(
             // rebuild it underneath the import.
             if (_session.value != null) return@withLock
             val location = settings.settings.first().libraryLocation ?: return@withLock
-            // Keep the persisted location on failure; surface the error by leaving the
-            // session null and rethrowing so the UI can handle it.
+            // Keep the persisted location on failure: the session stays null and the failure is
+            // rethrown, so the user can retry it or pick the folder again.
             openLibraryLocked(location)
         }
 

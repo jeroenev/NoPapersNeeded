@@ -28,8 +28,11 @@
     <string name="common_could_not_queue_edit_run">No se pudo poner en cola la edición con IA: %1$s</string>
 
     <string name="common_opening_library">Abriendo biblioteca...</string>
-    <string name="common_open_saved_library_failed">No se pudo abrir la biblioteca guardada.</string>
     <string name="common_open_library_title">No se pudo abrir tu biblioteca</string>
+    <string name="common_open_failed_folder_missing">No se encontró la carpeta de la biblioteca. Si está en una unidad extraíble o una tarjeta de memoria, conéctala e inténtalo de nuevo.</string>
+    <string name="common_open_failed_storage_access">No Papers Needed no tiene permiso para acceder al almacenamiento del dispositivo, así que no puede leer la carpeta de la biblioteca. Permite el acceso a todos los archivos e inténtalo de nuevo.</string>
+    <string name="common_open_failed_folder_not_created">No se pudo crear la carpeta de la biblioteca en esa ubicación. Elige otra ubicación.</string>
+    <string name="common_open_failed_unreadable">No se pudo leer la biblioteca. Los detalles técnicos indican el motivo.</string>
     <string name="common_pick_folder_again">Elegir la carpeta de nuevo</string>
 
     <string name="common_onboarding_intro">Mantén tus PDF, etiquetas y detalles juntos en una carpeta que es tuya. Elige dónde guardar tu biblioteca para empezar.</string>
@@ -146,7 +149,6 @@
     <string name="common_storage_access_help">No Papers Needed mantiene tu biblioteca como una carpeta normal en este dispositivo. Para leerla y escribir en ella, incluidos los archivos añadidos por otras aplicaciones como Syncthing, permite el acceso a todos los archivos.</string>
     <string name="common_storage_access_grant">Permitir acceso</string>
     <string name="common_ok">Aceptar</string>
-    <string name="common_folder_unusable_title">No se puede usar la carpeta</string>
     <string name="common_folder_not_on_device">Esta carpeta no está en el almacenamiento del dispositivo. Elige una carpeta en el almacenamiento interno o en una tarjeta SD, o activa la opción Storage Access Framework en Avanzado para usar carpetas de otras aplicaciones.</string>
     <string name="common_settings_advanced">Avanzado</string>
     <string name="common_settings_use_saf">Usar Storage Access Framework</string>

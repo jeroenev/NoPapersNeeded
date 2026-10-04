@@ -1,34 +1,27 @@
 package dev.npn.app
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.testTag
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -42,22 +35,13 @@ import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
 import dev.npn.app.ui.common.DesktopBridge
-import dev.npn.app.ui.common.LocaleProvider
-import dev.npn.app.ui.common.SafStorageSwitch
-import dev.npn.app.ui.common.TechnicalDetails
-import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.LocalWindowWidthClass
+import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.ProvideWindowWidthClass
-import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.aiConfigured
-import dev.npn.app.ui.common.rememberLibraryFolderPicker
-import dev.npn.app.ui.common.rememberStorageAccess
-import dev.npn.app.ui.common.resolve
-import dev.npn.app.ui.common.supportsSafStorage
+import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.testTagsAsResourceIds
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.DocumentDraftHost
-import dev.npn.app.ui.detail.LocalDocumentDrafts
 import dev.npn.app.ui.detail.WithDraftResumeBanner
 import dev.npn.app.ui.library.LibraryFilterHandoff
 import dev.npn.app.ui.library.LibraryScreen
@@ -68,6 +52,8 @@ import dev.npn.app.ui.nav.Route
 import dev.npn.app.ui.nav.TopLevelDestination
 import dev.npn.app.ui.nav.queueStatus
 import dev.npn.app.ui.onboarding.OnboardingScreen
+import dev.npn.app.ui.onboarding.OpenFailureMessage
+import dev.npn.app.ui.onboarding.RestoreFailedScreen
 import dev.npn.app.ui.queue.QueueScreen
 import dev.npn.app.ui.rules.AutoMatchRulesScreen
 import dev.npn.app.ui.settings.SettingsCategoryId
@@ -76,30 +62,14 @@ import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.trash.TrashScreen
 import dev.npn.app.ui.update.WithUpdateBanner
-import dev.npn.core.app.LibraryLocations
-import dev.npn.core.util.runCatchingCancellable
-import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
-import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
-import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
-import no_papers_needed.composeapp.generated.resources.common_folder_unusable_title
 import no_papers_needed.composeapp.generated.resources.common_ok
-import no_papers_needed.composeapp.generated.resources.common_open_library_title
-import no_papers_needed.composeapp.generated.resources.common_open_saved_library_failed
 import no_papers_needed.composeapp.generated.resources.common_opening_library
-import no_papers_needed.composeapp.generated.resources.common_pick_folder_again
-import no_papers_needed.composeapp.generated.resources.common_retry
-import no_papers_needed.composeapp.generated.resources.common_settings_advanced
-import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
-import no_papers_needed.composeapp.generated.resources.common_storage_access_help
-import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
 import no_papers_needed.composeapp.generated.resources.library_settings
 import no_papers_needed.composeapp.generated.resources.library_tags
 import no_papers_needed.composeapp.generated.resources.library_trash
-import no_papers_needed.composeapp.generated.resources.ux_library_draft_warning
-import no_papers_needed.composeapp.generated.resources.ux_resume_draft
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
@@ -116,71 +86,67 @@ fun App(env: AppEnvironment) {
 }
 
 @Composable
-private fun AppRoot(env: AppEnvironment) {
-    val session by env.session.collectAsStateWithLifecycle()
-    val opening by env.opening.collectAsStateWithLifecycle()
-    val openError by env.openError.collectAsStateWithLifecycle()
-    val scope = rememberCoroutineScope()
+private fun AppRoot(
+    env: AppEnvironment,
+    modifier: Modifier = Modifier,
+    vm: AppViewModel = viewModel { AppViewModel(env) },
+) {
+    val state by vm.state.collectAsStateWithLifecycle()
+    val useSaf by vm.useSafStorage.collectAsStateWithLifecycle()
+    val snackbar = remember { SnackbarHostState() }
+    SnackbarMessages(vm.messages, snackbar)
 
-    var restoreError by remember { mutableStateOf<String?>(null) }
-    var restoreAttempted by remember { mutableStateOf(false) }
-    val defaultRestoreError = stringResource(Res.string.common_open_saved_library_failed)
+    Box(modifier.fillMaxSize()) {
+        when (val current = state) {
+            AppState.Restoring, AppState.Opening -> {
+                LoadingScreen()
+            }
 
-    LaunchedEffect(Unit) {
-        restoreError = null
-        runCatchingCancellable { env.openPersistedLibrary() }
-            .onFailure { restoreError = it.message ?: defaultRestoreError }
-        restoreAttempted = true
-    }
+            is AppState.NoLibrary -> {
+                OnboardingScreen(
+                    failure = current.failure,
+                    useSaf = useSaf,
+                    onUseSafChange = vm::setUseSafStorage,
+                    onOpen = vm::open,
+                    onCreate = vm::createLibrary,
+                    onUseRecommendedFolder = vm::useRecommended,
+                )
+            }
 
-    val current = session
-    when {
-        restoreError != null && current == null && !opening -> {
-            val settingsSnapshot by env.settings.settings.collectAsStateWithLifecycle(null)
-            RestoreErrorScreen(
-                message = restoreError!!,
-                savedLocation = settingsSnapshot?.libraryLocation,
-                preferSaf = settingsSnapshot?.useSafStorage == true,
-                onRetry = {
-                    scope.launch {
-                        restoreError = null
-                        runCatchingCancellable { env.openPersistedLibrary() }
-                            .onFailure { restoreError = it.message ?: defaultRestoreError }
-                    }
-                },
-                onRepickReturned = { location ->
-                    restoreError = null
-                    env.requestOpenLibrary(location)
-                },
-            )
+            is AppState.RestoreFailed -> {
+                RestoreFailedScreen(
+                    failure = current.failure,
+                    useSaf = useSaf,
+                    onUseSafChange = vm::setUseSafStorage,
+                    onRetry = vm::retry,
+                    onOpen = vm::open,
+                )
+            }
+
+            is AppState.Open -> {
+                val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
+                DocumentDraftHost(current.session, env.appScope) {
+                    MainNav(env = env, session = current.session, aiConfigured = aiConfigured, onOpenLibrary = vm::open)
+                }
+                // A switch to another library that failed lands back in this one; say why.
+                current.failure?.let { OpenFailedDialog(it, onDismiss = vm::dismissFailure) }
+            }
         }
-
-        opening || !restoreAttempted -> {
-            LoadingScreen()
-        }
-
-        current == null -> {
-            OnboardingScreen(env)
-        }
-
-        else -> {
-            DocumentDraftHost(current, env.appScope) { MainNav(env = env, session = current) }
-            // A switch to another library that failed lands back in this one; say why.
-            openError?.let { OpenErrorDialog(it) }
-        }
+        SnackbarHost(snackbar, Modifier.align(Alignment.BottomCenter).navigationBarsPadding())
     }
 }
 
 @Composable
-private fun OpenErrorDialog(error: UiText) {
-    var dismissed by remember(error) { mutableStateOf(false) }
-    if (dismissed) return
+private fun OpenFailedDialog(
+    failure: OpenFailure,
+    onDismiss: () -> Unit,
+) {
     AlertDialog(
-        onDismissRequest = { dismissed = true },
+        onDismissRequest = onDismiss,
         title = { Text(stringResource(Res.string.common_could_not_open_library)) },
-        text = { Text(error.resolve()) },
+        text = { OpenFailureMessage(failure) },
         confirmButton = {
-            TextButton(onClick = { dismissed = true }) { Text(stringResource(Res.string.common_ok)) }
+            TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_ok)) }
         },
     )
 }
@@ -189,6 +155,8 @@ private fun OpenErrorDialog(error: UiText) {
 private fun MainNav(
     env: AppEnvironment,
     session: dev.npn.core.app.LibrarySession,
+    aiConfigured: Boolean,
+    onOpenLibrary: (location: String) -> Unit,
 ) {
     val nav = rememberNavController()
     // Ordered doc list for prev/next-document paging in the detail screen; populated on open.
@@ -197,8 +165,6 @@ private fun MainNav(
             dev.npn.app.ui.detail
                 .BrowseContext()
         }
-    // Gates the AI entries in the rail and bar; follows Settings as AI is configured or turned off.
-    val aiConfigured by remember(env.settings) { env.settings.aiConfigured() }.collectAsStateWithLifecycle(false)
     // Outstanding background work, for the shell's queue badge. Read here rather than in a screen
     // because the badge is the only standing sign that the app is still busy — or, once a
     // background AI edit finishes, that it is waiting on the user — and on compact layouts the
@@ -216,15 +182,7 @@ private fun MainNav(
 
     DriveWindowTitle(nav)
     WithUpdateBanner(env.settings) {
-        WithDraftResumeBanner(
-            onOpen = { docId ->
-                browse.setOrder(listOf(docId), null)
-                nav.navigate(Route.DocDetail(docId)) {
-                    popUpTo(Route.Library)
-                    launchSingleTop = true
-                }
-            },
-        ) {
+        WithDraftResumeBanner(onOpen = { docId -> nav.resumeDraft(docId, browse) }) {
             // The rail carries AI edit on a wide window, so the chat's top bar offers it only on a
             // compact one.
             val aiEditInSidebar = LocalWindowWidthClass.current.isWide
@@ -248,9 +206,25 @@ private fun MainNav(
                     aiSelection = aiSelection,
                     libraryFilterHandoff = libraryFilterHandoff,
                     showAiEditTopBar = !aiEditInSidebar,
+                    onOpenLibrary = onOpenLibrary,
                 )
             }
         }
+    }
+}
+
+/**
+ * Open the document a draft was left on, the way the resume banner does: back on Library with the
+ * detail on top, so Back returns to the library rather than to wherever the user was.
+ */
+private fun NavHostController.resumeDraft(
+    docId: String,
+    browse: dev.npn.app.ui.detail.BrowseContext,
+) {
+    browse.setOrder(listOf(docId), null)
+    navigate(Route.DocDetail(docId)) {
+        popUpTo(Route.Library)
+        launchSingleTop = true
     }
 }
 
@@ -263,6 +237,7 @@ private fun MainNavHost(
     aiSelection: dev.npn.app.ui.ai.AiEditSelection,
     libraryFilterHandoff: LibraryFilterHandoff,
     showAiEditTopBar: Boolean,
+    onOpenLibrary: (location: String) -> Unit,
 ) {
     NavHost(navController = nav, startDestination = Route.Library) {
         composable<Route.Library> {
@@ -317,7 +292,7 @@ private fun MainNavHost(
                 onOpenEditRun = { jobId -> nav.navigate(Route.AiEditReview(jobId)) },
             )
         }
-        settingsRoutes(nav, env, session, browse)
+        settingsRoutes(nav, env, session, browse, onOpenLibrary)
         aiRoutes(nav, session, env.settings, aiSelection, libraryFilterHandoff, showAiEditTopBar)
     }
 }
@@ -328,71 +303,19 @@ private fun NavGraphBuilder.settingsRoutes(
     env: AppEnvironment,
     session: dev.npn.core.app.LibrarySession,
     browse: dev.npn.app.ui.detail.BrowseContext,
+    onOpenLibrary: (location: String) -> Unit,
 ) {
     composable<Route.Settings> { entry ->
-        val draftStore = LocalDocumentDrafts.current
-        // Holds the document id to resume, resolved when the dialog opens with the same predicate
-        // the confirm button uses — so "Resume draft" always has somewhere to go, even when the
-        // only unsaved work is an in-flight save with no dirty entry.
-        var draftWarning by remember { mutableStateOf<String?>(null) }
-        var folderUnusable by remember { mutableStateOf(false) }
-        val settingsSnapshot by env.settings.settings.collectAsStateWithLifecycle(null)
-        val changePicker =
-            rememberLibraryFolderPicker(
-                useSaf = settingsSnapshot?.useSafStorage == true,
-                onPicked = env::requestOpenLibrary,
-                onUnusable = { folderUnusable = true },
-            )
         SettingsScreen(
             env = env,
             session = session,
             category = SettingsCategoryId.fromRouteKey(entry.toRoute<Route.Settings>().category),
             onOpenCategory = { id -> nav.navigate(Route.Settings(id.routeKey)) },
             onBack = { nav.popBackStack() },
-            onChangeLibrary = {
-                val pending = draftStore.state.entries.firstOrNull { it.value.dirty || it.value.saving }
-                if (pending != null) {
-                    draftWarning = pending.key
-                } else {
-                    changePicker()
-                }
-            },
+            onOpenLibrary = onOpenLibrary,
+            onResumeDraft = { docId -> nav.resumeDraft(docId, browse) },
             onAutoMatchRules = { nav.navigate(Route.AutoMatchRules) },
         )
-        if (folderUnusable) {
-            AlertDialog(
-                onDismissRequest = { folderUnusable = false },
-                title = { Text(stringResource(Res.string.common_folder_unusable_title)) },
-                text = { Text(stringResource(Res.string.common_folder_not_on_device)) },
-                confirmButton = {
-                    TextButton(onClick = { folderUnusable = false }) { Text(stringResource(Res.string.common_ok)) }
-                },
-            )
-        }
-        draftWarning?.let { docId ->
-            AlertDialog(
-                onDismissRequest = { draftWarning = null },
-                title = { Text(stringResource(Res.string.detail_unsaved_changes)) },
-                text = { Text(stringResource(Res.string.ux_library_draft_warning)) },
-                confirmButton = {
-                    TextButton(onClick = {
-                        draftWarning = null
-                        // Mirror the resume banner: land back on Library with the detail on top,
-                        // so Back returns to the library rather than the settings stack.
-                        browse.setOrder(listOf(docId), null)
-                        nav.navigate(Route.DocDetail(docId)) {
-                            popUpTo(Route.Library)
-                            launchSingleTop = true
-                        }
-                    }) { Text(stringResource(Res.string.ux_resume_draft)) }
-                },
-                dismissButton = {
-                    TextButton(
-                        onClick = { draftWarning = null },
-                    ) { Text(stringResource(Res.string.common_cancel)) }
-                },
-            )
-        }
     }
     composable<Route.AutoMatchRules> {
         AutoMatchRulesScreen(
@@ -556,81 +479,6 @@ private fun LoadingScreen() {
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
             CircularProgressIndicator()
             Text(stringResource(Res.string.common_opening_library), Modifier.padding(top = 16.dp))
-        }
-    }
-}
-
-@Composable
-private fun RestoreErrorScreen(
-    message: String,
-    savedLocation: String?,
-    preferSaf: Boolean,
-    onRetry: () -> Unit,
-    onRepickReturned: (String) -> Unit,
-) {
-    val genericMessage = stringResource(Res.string.common_open_saved_library_failed)
-    var folderUnusable by remember { mutableStateOf(false) }
-    // The factory refuses to open a direct library at all without the all-files grant, so a
-    // revoked grant lands here, not in the settings screen: offer the same request flow onboarding
-    // does, rather than leaving "Retry" as the only, doomed-to-repeat action.
-    val storage = rememberStorageAccess()
-    val savedUsesSaf = savedLocation?.let(LibraryLocations::isContentUri)
-    var useSaf by remember(savedLocation) { mutableStateOf(savedUsesSaf ?: preferSaf) }
-    var showAdvanced by remember { mutableStateOf(false) }
-    val storageAccessMissing = !storage.usable && (savedUsesSaf == false || !useSaf)
-    val pick =
-        rememberLibraryFolderPicker(
-            useSaf = useSaf,
-            onPicked = {
-                folderUnusable = false
-                onRepickReturned(it)
-            },
-            onUnusable = { folderUnusable = true },
-        )
-    Box(Modifier.fillMaxSize().padding(32.dp), contentAlignment = Alignment.Center) {
-        Column(
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(16.dp),
-        ) {
-            Icon(Icons.Filled.Warning, contentDescription = null)
-            Text(stringResource(Res.string.common_open_library_title), style = MaterialTheme.typography.titleMedium)
-            Text(
-                genericMessage,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-            )
-            if (message != genericMessage) {
-                TechnicalDetails(message)
-            }
-            if (storageAccessMissing) {
-                Text(
-                    text = stringResource(Res.string.common_storage_access_help),
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    textAlign = TextAlign.Center,
-                )
-                Button(onClick = storage.request, modifier = Modifier.testTag(TestTags.STORAGE_ACCESS_GRANT)) {
-                    Text(stringResource(Res.string.common_storage_access_grant))
-                }
-            }
-            Button(onClick = onRetry) { Text(stringResource(Res.string.common_retry)) }
-            OutlinedButton(onClick = pick, enabled = useSaf || storage.usable) {
-                Text(stringResource(Res.string.common_pick_folder_again))
-            }
-            if (supportsSafStorage()) {
-                TextButton(onClick = { showAdvanced = !showAdvanced }) {
-                    Text(stringResource(Res.string.common_settings_advanced))
-                }
-                if (showAdvanced) {
-                    SafStorageSwitch(checked = useSaf, onCheckedChange = { useSaf = it })
-                }
-            }
-            if (folderUnusable) {
-                Text(
-                    stringResource(Res.string.common_folder_not_on_device),
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                )
-            }
         }
     }
 }

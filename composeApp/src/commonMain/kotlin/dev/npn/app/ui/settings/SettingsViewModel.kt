@@ -42,6 +42,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 
@@ -300,6 +301,9 @@ class SettingsViewModel(
                 },
             )
         }
+
+    /** A library folder was picked that direct mode cannot use: it is not on device storage. */
+    fun folderNotOnDevice() = message(uiText(Res.string.common_folder_not_on_device))
 
     /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */
     fun setUntaggedOnlyMode() =

@@ -28,8 +28,11 @@
     <string name="common_could_not_queue_edit_run">KI-Bearbeitung konnte nicht eingereiht werden: %1$s</string>
 
     <string name="common_opening_library">Bibliothek wird geöffnet...</string>
-    <string name="common_open_saved_library_failed">Die gespeicherte Bibliothek konnte nicht geöffnet werden.</string>
     <string name="common_open_library_title">Deine Bibliothek konnte nicht geöffnet werden</string>
+    <string name="common_open_failed_folder_missing">Der Bibliotheksordner wurde nicht gefunden. Wenn er auf einem Wechseldatenträger oder einer Speicherkarte liegt, schließe ihn an und versuche es erneut.</string>
+    <string name="common_open_failed_storage_access">No Papers Needed darf nicht auf den Gerätespeicher zugreifen und kann den Bibliotheksordner daher nicht lesen. Erlaube den Zugriff auf alle Dateien und versuche es dann erneut.</string>
+    <string name="common_open_failed_folder_not_created">Der Bibliotheksordner konnte dort nicht angelegt werden. Wähle einen anderen Speicherort.</string>
+    <string name="common_open_failed_unreadable">Die Bibliothek konnte nicht gelesen werden. Die technischen Details nennen den Grund.</string>
     <string name="common_pick_folder_again">Ordner erneut wählen</string>
 
     <string name="common_onboarding_intro">Bewahre deine PDFs, Tags und Details gemeinsam in einem Ordner auf, der dir gehört. Wähle zum Start den Speicherort deiner Bibliothek.</string>
@@ -146,7 +149,6 @@
     <string name="common_storage_access_help">No Papers Needed speichert deine Bibliothek als normalen Ordner auf diesem Gerät. Um sie zu lesen und zu schreiben, auch Dateien anderer Apps wie Syncthing, erlaube den Zugriff auf alle Dateien.</string>
     <string name="common_storage_access_grant">Zugriff erlauben</string>
     <string name="common_ok">OK</string>
-    <string name="common_folder_unusable_title">Ordner kann nicht verwendet werden</string>
     <string name="common_folder_not_on_device">Dieser Ordner liegt nicht im Gerätespeicher. Wähle einen Ordner im internen Speicher oder auf einer SD-Karte, oder aktiviere unter Erweitert die Option Storage Access Framework, um Ordner anderer Apps zu nutzen.</string>
     <string name="common_settings_advanced">Erweitert</string>
     <string name="common_settings_use_saf">Storage Access Framework verwenden</string>

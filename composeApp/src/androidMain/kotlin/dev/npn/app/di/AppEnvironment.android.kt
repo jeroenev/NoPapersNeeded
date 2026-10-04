@@ -26,7 +26,6 @@ import dev.npn.core.watch.WatchedFolder
 import dev.npn.core.xmp.PdfBoxAndroidXmpIO
 import kotlinx.coroutines.flow.first
 import java.io.File
-import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.Paths
 import java.util.Locale
@@ -105,9 +104,12 @@ private fun libraryFileSystem(
     // Fail here, with the reason, rather than let the first listing come back empty and be read as
     // "every document was deleted": the folder may be on an unmounted SD card, or the all-files
     // grant may have been revoked in system settings since the library was chosen.
-    if (!Files.isDirectory(root)) throw IOException("Library folder not found: $location")
+    if (!Files.isDirectory(root)) {
+        throw LibraryUnavailableException(OpenFailureReason.FOLDER_MISSING, "Library folder not found: $location")
+    }
     if (!hasDirectStorageAccess()) {
-        throw IOException(
+        throw LibraryUnavailableException(
+            OpenFailureReason.NO_STORAGE_ACCESS,
             "Storage access was revoked; allow \"All files access\" for No Papers Needed to open $location",
         )
     }

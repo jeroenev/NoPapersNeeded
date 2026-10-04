@@ -28,8 +28,11 @@
     <string name="common_could_not_queue_edit_run">Impossible de mettre la modification IA en file : %1$s</string>
 
     <string name="common_opening_library">Ouverture de la bibliothèque…</string>
-    <string name="common_open_saved_library_failed">Impossible d’ouvrir la bibliothèque enregistrée.</string>
     <string name="common_open_library_title">Impossible d’ouvrir votre bibliothèque</string>
+    <string name="common_open_failed_folder_missing">Le dossier de la bibliothèque est introuvable. S’il se trouve sur un disque amovible ou une carte mémoire, connectez-le et réessayez.</string>
+    <string name="common_open_failed_storage_access">No Papers Needed n’est pas autorisé à accéder au stockage de l’appareil et ne peut donc pas lire le dossier de la bibliothèque. Autorisez l’accès à tous les fichiers, puis réessayez.</string>
+    <string name="common_open_failed_folder_not_created">Le dossier de la bibliothèque n’a pas pu être créé à cet endroit. Choisissez un autre emplacement.</string>
+    <string name="common_open_failed_unreadable">La bibliothèque n’a pas pu être lue. Les détails techniques en donnent la raison.</string>
     <string name="common_pick_folder_again">Rechoisir le dossier</string>
 
     <string name="common_onboarding_intro">Gardez vos PDF, étiquettes et informations ensemble dans un dossier qui vous appartient. Choisissez où stocker votre bibliothèque pour commencer.</string>
@@ -147,7 +150,6 @@
     <string name="common_storage_access_help">No Papers Needed conserve votre bibliothèque sous forme de simple dossier sur cet appareil. Pour la lire et y écrire, y compris les fichiers ajoutés par d’autres applications comme Syncthing, autorisez l’accès à tous les fichiers.</string>
     <string name="common_storage_access_grant">Autoriser l’accès</string>
     <string name="common_ok">OK</string>
-    <string name="common_folder_unusable_title">Dossier inutilisable</string>
     <string name="common_folder_not_on_device">Ce dossier ne se trouve pas dans le stockage de l’appareil. Choisissez un dossier sur le stockage interne ou une carte SD, ou activez l’option Storage Access Framework sous Avancé pour utiliser des dossiers d’autres applications.</string>
     <string name="common_settings_advanced">Avancé</string>
     <string name="common_settings_use_saf">Utiliser le Storage Access Framework</string>

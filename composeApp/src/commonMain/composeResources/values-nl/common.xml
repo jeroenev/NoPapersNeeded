@@ -28,8 +28,11 @@
     <string name="common_could_not_queue_edit_run">De AI-bewerking kon niet in de wachtrij worden gezet: %1$s</string>
 
     <string name="common_opening_library">Bibliotheek openen...</string>
-    <string name="common_open_saved_library_failed">De opgeslagen bibliotheek kon niet worden geopend.</string>
     <string name="common_open_library_title">Je bibliotheek kon niet worden geopend</string>
+    <string name="common_open_failed_folder_missing">De bibliotheekmap is niet gevonden. Staat ze op een externe schijf of geheugenkaart, sluit die dan aan en probeer het opnieuw.</string>
+    <string name="common_open_failed_storage_access">No Papers Needed heeft geen toegang tot de opslag van dit apparaat en kan de bibliotheekmap daarom niet lezen. Sta toegang tot alle bestanden toe en probeer het opnieuw.</string>
+    <string name="common_open_failed_folder_not_created">De bibliotheekmap kon daar niet worden aangemaakt. Kies een andere locatie.</string>
+    <string name="common_open_failed_unreadable">De bibliotheek kon niet worden gelezen. De technische details vermelden waarom.</string>
     <string name="common_pick_folder_again">Map opnieuw kiezen</string>
 
     <string name="common_onboarding_intro">Bewaar je pdf-bestanden, tags en details samen in je eigen map. Kies waar je bibliotheek komt te staan.</string>
@@ -147,7 +150,6 @@
     <string name="common_storage_access_help">No Papers Needed bewaart je bibliotheek als een gewone map op dit apparaat. Om die te lezen en te schrijven, inclusief bestanden die andere apps zoals Syncthing toevoegen, is toegang tot alle bestanden nodig.</string>
     <string name="common_storage_access_grant">Toegang toestaan</string>
     <string name="common_ok">OK</string>
-    <string name="common_folder_unusable_title">Map kan niet worden gebruikt</string>
     <string name="common_folder_not_on_device">Deze map staat niet op de opslag van dit apparaat. Kies een map op de interne opslag of een SD-kaart, of zet de optie Storage Access Framework onder Geavanceerd aan om mappen van andere apps te gebruiken.</string>
     <string name="common_settings_advanced">Geavanceerd</string>
     <string name="common_settings_use_saf">Storage Access Framework gebruiken</string>

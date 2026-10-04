@@ -8,7 +8,6 @@ import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
@@ -16,45 +15,29 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import dev.npn.app.di.AppEnvironment
-import dev.npn.app.ui.common.SafStorageSwitch
-import dev.npn.app.ui.common.StorageAccessState
+import dev.npn.app.OpenFailure
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.TextInputDialog
-import dev.npn.app.ui.common.createLibraryFolder
 import dev.npn.app.ui.common.defaultLibraryLocation
-import dev.npn.app.ui.common.rememberLibraryFolderPicker
-import dev.npn.app.ui.common.rememberStorageAccess
-import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.common.supportsLibraryFolderCreation
-import dev.npn.app.ui.common.supportsSafStorage
-import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_choose_library_folder
 import no_papers_needed.composeapp.generated.resources.common_could_not_open_library
 import no_papers_needed.composeapp.generated.resources.common_create
 import no_papers_needed.composeapp.generated.resources.common_create_new_library
-import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_new_library_folder_name
 import no_papers_needed.composeapp.generated.resources.common_onboarding_intro
 import no_papers_needed.composeapp.generated.resources.common_onboarding_recommended_help
 import no_papers_needed.composeapp.generated.resources.common_onboarding_sync
 import no_papers_needed.composeapp.generated.resources.common_onboarding_use_recommended
-import no_papers_needed.composeapp.generated.resources.common_opening_library
-import no_papers_needed.composeapp.generated.resources.common_settings_advanced
-import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
-import no_papers_needed.composeapp.generated.resources.common_storage_access_help
-import no_papers_needed.composeapp.generated.resources.common_storage_access_title
-import no_papers_needed.composeapp.generated.resources.common_try_again
 import no_papers_needed.composeapp.generated.resources.ux_library_name
 import no_papers_needed.composeapp.generated.resources.ux_sync_help
 import org.jetbrains.compose.resources.stringResource
@@ -64,61 +47,27 @@ import org.jetbrains.compose.resources.stringResource
  * is a plain path; Android first needs the all-files grant and proposes `Documents/NoPapersNeeded`.
  * The advanced Storage Access Framework switch is Android's escape hatch for folders that have no
  * path (cloud document providers) and is the only way to reach the SAF library implementation.
+ *
+ * [failure] says why the last attempt from here did not open; the choices below it are the retry.
  */
 @Composable
-@Suppress("CyclomaticComplexMethod")
-fun OnboardingScreen(env: AppEnvironment) {
-    val opening by env.opening.collectAsStateWithLifecycle()
-    val error by env.openError.collectAsStateWithLifecycle()
-    val settings by env.settings.settings.collectAsStateWithLifecycle(null)
-    val useSaf = settings?.useSafStorage == true
-    val storage = rememberStorageAccess()
-
-    var showSyncHelp by remember { mutableStateOf(false) }
-    var showAdvanced by remember { mutableStateOf(false) }
-    var createParent by remember { mutableStateOf<String?>(null) }
-    var createError by remember { mutableStateOf<String?>(null) }
-    var pickError by remember { mutableStateOf(false) }
-
-    // Extract the location synchronously in the picker callback, then hand the open to the
-    // environment's long-lived scope. Launching on a composable scope here fails: recomposition
-    // while the picker dismisses cancels it before the (suspending) library open completes.
-    val pickExisting =
-        rememberLibraryFolderPicker(
-            useSaf = useSaf,
-            onPicked = {
-                pickError = false
-                env.requestOpenLibrary(it)
-            },
-            onUnusable = { pickError = true },
-        )
-
-    // The create flow first picks the PARENT folder, then asks for a name via dialog. Like
-    // [pickExisting] the open after creation runs on the environment scope, not this composable's.
-    val pickCreateParent =
-        rememberLibraryFolderPicker(
-            useSaf = false,
-            onPicked = {
-                pickError = false
-                createParent = it
-            },
-            onUnusable = { pickError = true },
-        )
-
-    val couldNotOpen = stringResource(Res.string.common_could_not_open_library)
+fun OnboardingScreen(
+    failure: OpenFailure?,
+    useSaf: Boolean,
+    onUseSafChange: (Boolean) -> Unit,
+    onOpen: (location: String) -> Unit,
+    onCreate: (parent: String, name: String) -> Unit,
+    onUseRecommendedFolder: (location: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    var showSyncHelp by rememberSaveable { mutableStateOf(false) }
+    // The create flow picks the PARENT folder first, then asks for the new folder's name.
+    var createParent by rememberSaveable { mutableStateOf<String?>(null) }
     val recommended = if (useSaf) null else defaultLibraryLocation()
-
-    fun openRecommended(location: String) {
-        env.appScope.launch {
-            val opened = createLibraryFolder(location.substringBeforeLast('/'), location.substringAfterLast('/'))
-            createError = if (opened != null) null else couldNotOpen
-            if (opened != null) env.requestOpenLibrary(opened)
-        }
-    }
 
     Column(
         modifier =
-            Modifier
+            modifier
                 .fillMaxSize()
                 .verticalScroll(rememberScrollState())
                 .padding(32.dp),
@@ -151,97 +100,28 @@ fun OnboardingScreen(env: AppEnvironment) {
                     textAlign = TextAlign.Center,
                 )
             }
-
-            when {
-                opening -> {
-                    CircularProgressIndicator(modifier = Modifier.padding(top = 16.dp))
-                    Text(
-                        stringResource(Res.string.common_opening_library),
-                        style = MaterialTheme.typography.bodyMedium,
-                    )
-                }
-
-                !useSaf && !storage.usable -> {
-                    StorageAccessStep(storage)
-                }
-
-                else -> {
-                    if (recommended != null) {
-                        Button(
-                            onClick = { openRecommended(recommended) },
-                            modifier = Modifier.testTag(TestTags.USE_RECOMMENDED_FOLDER),
-                        ) {
-                            Text(stringResource(Res.string.common_onboarding_use_recommended))
-                        }
-                        Text(
-                            text = stringResource(Res.string.common_onboarding_recommended_help, recommended),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                            textAlign = TextAlign.Center,
-                        )
-                    }
-                    val canCreate = !useSaf && supportsLibraryFolderCreation()
-                    if (canCreate && recommended == null) {
-                        Button(onClick = pickCreateParent) {
-                            Text(stringResource(Res.string.common_create_new_library))
-                        }
-                    }
-                    val openButton: @Composable () -> Unit = {
-                        Text(stringResource(Res.string.common_choose_library_folder))
-                    }
-                    if (recommended != null || canCreate) {
-                        OutlinedButton(onClick = pickExisting, content = { openButton() })
-                    } else {
-                        Button(onClick = pickExisting, content = { openButton() })
-                    }
-                    if (canCreate && recommended != null) {
-                        TextButton(onClick = pickCreateParent) {
-                            Text(stringResource(Res.string.common_create_new_library))
-                        }
-                    }
-                }
-            }
-
-            if (pickError) {
+            if (failure != null) {
                 Text(
-                    text = stringResource(Res.string.common_folder_not_on_device),
+                    text = stringResource(Res.string.common_could_not_open_library),
+                    style = MaterialTheme.typography.titleSmall,
                     color = MaterialTheme.colorScheme.error,
                     textAlign = TextAlign.Center,
                 )
+                OpenFailureMessage(failure, color = MaterialTheme.colorScheme.error)
             }
-
-            if (error != null) {
-                Text(
-                    text = error!!.resolve(),
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
+            LibraryLocationChooser(
+                useSaf = useSaf,
+                onUseSafChange = onUseSafChange,
+                onPick = onOpen,
+                onPickParent = { createParent = it },
+            ) { pickLibrary, pickParent ->
+                LibraryChoices(
+                    recommended = recommended,
+                    useSaf = useSaf,
+                    onPickLibrary = pickLibrary,
+                    onPickParent = pickParent,
+                    onUseRecommendedFolder = onUseRecommendedFolder,
                 )
-                Button(onClick = pickExisting) {
-                    Text(stringResource(Res.string.common_try_again))
-                }
-            }
-
-            createError?.let { message ->
-                Text(
-                    text = message,
-                    color = MaterialTheme.colorScheme.error,
-                    textAlign = TextAlign.Center,
-                )
-            }
-
-            if (supportsSafStorage()) {
-                TextButton(onClick = { showAdvanced = !showAdvanced }) {
-                    Text(stringResource(Res.string.common_settings_advanced))
-                }
-                if (showAdvanced) {
-                    SafStorageSwitch(
-                        checked = useSaf,
-                        onCheckedChange = { enabled ->
-                            pickError = false
-                            env.appScope.launch { env.settings.edit { it.copy(useSafStorage = enabled) } }
-                        },
-                    )
-                }
             }
         }
     }
@@ -254,32 +134,64 @@ fun OnboardingScreen(env: AppEnvironment) {
             confirmLabel = stringResource(Res.string.common_create),
             onConfirm = { name ->
                 createParent = null
-                env.appScope.launch {
-                    val location = createLibraryFolder(parent, name)
-                    createError = if (location != null) null else couldNotOpen
-                    if (location != null) env.requestOpenLibrary(location)
-                }
+                onCreate(parent, name)
             },
             onDismiss = { createParent = null },
         )
     }
 }
 
-/** Android's all-files grant, which the direct mode cannot do without (see [StorageAccessState]). */
+/**
+ * The ways to a library: the platform's recommended folder when it has one, a new folder, or an
+ * existing one. The first choice on offer is the filled button.
+ */
 @Composable
-private fun StorageAccessStep(storage: StorageAccessState) {
-    Text(
-        text = stringResource(Res.string.common_storage_access_title),
-        style = MaterialTheme.typography.titleMedium,
-        textAlign = TextAlign.Center,
-    )
-    Text(
-        text = stringResource(Res.string.common_storage_access_help),
-        style = MaterialTheme.typography.bodyMedium,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        textAlign = TextAlign.Center,
-    )
-    Button(onClick = storage.request, modifier = Modifier.testTag(TestTags.STORAGE_ACCESS_GRANT)) {
-        Text(stringResource(Res.string.common_storage_access_grant))
+private fun LibraryChoices(
+    recommended: String?,
+    useSaf: Boolean,
+    onPickLibrary: () -> Unit,
+    onPickParent: () -> Unit,
+    onUseRecommendedFolder: (location: String) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val canCreate = !useSaf && supportsLibraryFolderCreation()
+    Column(
+        modifier = modifier,
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+    ) {
+        if (recommended != null) {
+            Button(
+                onClick = { onUseRecommendedFolder(recommended) },
+                modifier = Modifier.testTag(TestTags.USE_RECOMMENDED_FOLDER),
+            ) {
+                Text(stringResource(Res.string.common_onboarding_use_recommended))
+            }
+            Text(
+                text = stringResource(Res.string.common_onboarding_recommended_help, recommended),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+            )
+        }
+        if (canCreate && recommended == null) {
+            Button(onClick = onPickParent) {
+                Text(stringResource(Res.string.common_create_new_library))
+            }
+        }
+        if (recommended != null || canCreate) {
+            OutlinedButton(onClick = onPickLibrary) {
+                Text(stringResource(Res.string.common_choose_library_folder))
+            }
+        } else {
+            Button(onClick = onPickLibrary) {
+                Text(stringResource(Res.string.common_choose_library_folder))
+            }
+        }
+        if (canCreate && recommended != null) {
+            TextButton(onClick = onPickParent) {
+                Text(stringResource(Res.string.common_create_new_library))
+            }
+        }
     }
 }

@@ -28,8 +28,11 @@
     <string name="common_could_not_queue_edit_run">Não foi possível adicionar a edição com IA à fila: %1$s</string>
 
     <string name="common_opening_library">Abrindo biblioteca...</string>
-    <string name="common_open_saved_library_failed">Não foi possível abrir a biblioteca salva.</string>
     <string name="common_open_library_title">Não foi possível abrir sua biblioteca</string>
+    <string name="common_open_failed_folder_missing">A pasta da biblioteca não foi encontrada. Se ela estiver em uma unidade removível ou em um cartão de memória, conecte-a e tente novamente.</string>
+    <string name="common_open_failed_storage_access">O No Papers Needed não tem permissão para acessar o armazenamento do dispositivo e, por isso, não consegue ler a pasta da biblioteca. Permita o acesso a todos os arquivos e tente novamente.</string>
+    <string name="common_open_failed_folder_not_created">Não foi possível criar a pasta da biblioteca nesse local. Escolha outro local.</string>
+    <string name="common_open_failed_unreadable">Não foi possível ler a biblioteca. Os detalhes técnicos informam o motivo.</string>
     <string name="common_pick_folder_again">Escolher a pasta novamente</string>
 
     <string name="common_onboarding_intro">Mantenha seus PDFs, etiquetas e detalhes juntos em uma pasta sua. Escolha onde guardar sua biblioteca para começar.</string>
@@ -147,7 +150,6 @@
     <string name="common_storage_access_help">O No Papers Needed mantém sua biblioteca como uma pasta comum neste dispositivo. Para ler e gravar nela, inclusive arquivos adicionados por outros apps, como o Syncthing, permita o acesso a todos os arquivos.</string>
     <string name="common_storage_access_grant">Permitir acesso</string>
     <string name="common_ok">OK</string>
-    <string name="common_folder_unusable_title">Não é possível usar a pasta</string>
     <string name="common_folder_not_on_device">Esta pasta não está no armazenamento do dispositivo. Escolha uma pasta no armazenamento interno ou em um cartão SD, ou ative a opção Storage Access Framework em Avançado para usar pastas de outros apps.</string>
     <string name="common_settings_advanced">Avançado</string>
     <string name="common_settings_use_saf">Usar o Storage Access Framework</string>

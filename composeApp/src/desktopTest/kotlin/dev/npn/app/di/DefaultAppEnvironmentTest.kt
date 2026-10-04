@@ -69,7 +69,6 @@ class DefaultAppEnvironmentTest {
                 // The previous library closed for the switch, then the failed one's database.
                 closed shouldContainExactly listOf(good, bad)
                 env.session.value.shouldNotBeNull()
-                env.openError.value.shouldNotBeNull()
                 env.opening.value shouldBe false
                 settings.settingsFlow.value
                     ?.libraryLocation shouldBe good
@@ -94,7 +93,6 @@ class DefaultAppEnvironmentTest {
                 assertFails { flaky.openLibrary(missing) }
 
                 flaky.session.value.shouldNotBeNull()
-                flaky.openError.value.shouldNotBeNull()
                 settings.settingsFlow.value
                     ?.libraryLocation shouldBe good
             } finally {
@@ -112,6 +110,5 @@ class DefaultAppEnvironmentTest {
 
             closed shouldContainExactly listOf(bad)
             env.session.value.shouldBeNull()
-            env.openError.value.shouldNotBeNull()
         }
 }

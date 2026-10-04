@@ -43,8 +43,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.di.AppEnvironment
+import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.rememberLibraryFolderPicker
+import dev.npn.app.ui.detail.LocalDocumentDrafts
 import dev.npn.core.app.LibrarySession
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_back
@@ -52,6 +55,9 @@ import no_papers_needed.composeapp.generated.resources.common_clear_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search
 import no_papers_needed.composeapp.generated.resources.common_settings_search_no_results
 import no_papers_needed.composeapp.generated.resources.common_settings_title
+import no_papers_needed.composeapp.generated.resources.detail_unsaved_changes
+import no_papers_needed.composeapp.generated.resources.ux_library_draft_warning
+import no_papers_needed.composeapp.generated.resources.ux_resume_draft
 import org.jetbrains.compose.resources.stringResource
 
 /** Width of the category list when it sits beside a pane. Matches the Material nav-drawer width. */
@@ -71,6 +77,10 @@ private val PaneGroupSpacing: Dp = 24.dp
  * [category] comes from the route, which makes a pane deep-linkable and survives process death.
  * A null category means "no pane chosen yet": the list on compact, the first category on wide,
  * where an empty right-hand pane would just be a hole.
+ *
+ * Changing the library hands the picked folder to [onOpenLibrary], which closes this library. A
+ * document with unsaved changes would go with it, so the user is sent back to it first
+ * ([onResumeDraft]) rather than shown the picker.
  */
 @Composable
 fun SettingsScreen(
@@ -79,7 +89,8 @@ fun SettingsScreen(
     category: SettingsCategoryId?,
     onOpenCategory: (SettingsCategoryId) -> Unit,
     onBack: () -> Unit,
-    onChangeLibrary: () -> Unit,
+    onOpenLibrary: (location: String) -> Unit,
+    onResumeDraft: (docId: String) -> Unit,
     onAutoMatchRules: () -> Unit,
 ) {
     val vm: SettingsViewModel = viewModel { SettingsViewModel(env.settings, session) }
@@ -92,6 +103,21 @@ fun SettingsScreen(
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
+
+    val drafts = LocalDocumentDrafts.current
+    var draftToResume by remember { mutableStateOf<String?>(null) }
+    val pickLibrary =
+        rememberLibraryFolderPicker(
+            useSaf = state.useSafStorage,
+            onPicked = onOpenLibrary,
+            onUnusable = vm::folderNotOnDevice,
+        )
+    val onChangeLibrary = {
+        // Resolved with the same predicate the dialog acts on, so "Continue editing" always has a
+        // document to go to, even when the only unsaved work is a save still in flight.
+        val pending = drafts.state.entries.firstOrNull { it.value.dirty || it.value.saving }
+        if (pending != null) draftToResume = pending.key else pickLibrary()
+    }
 
     val context =
         SettingsPaneContext(
@@ -125,6 +151,18 @@ fun SettingsScreen(
         onSelect = { id -> if (wide) picked = id.routeKey else onOpenCategory(id) },
         onBack = onBack,
     )
+    draftToResume?.let { docId ->
+        ConfirmDialog(
+            title = stringResource(Res.string.detail_unsaved_changes),
+            message = stringResource(Res.string.ux_library_draft_warning),
+            confirmLabel = stringResource(Res.string.ux_resume_draft),
+            onConfirm = {
+                draftToResume = null
+                onResumeDraft(docId)
+            },
+            onDismiss = { draftToResume = null },
+        )
+    }
 }
 
 @Composable
