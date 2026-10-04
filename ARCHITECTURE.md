@@ -63,6 +63,21 @@ Platform impls live in the same package under `androidMain`/`desktopMain` (e.g.
 `core.fs.LibraryFileSystem`, `core.pdf.PdfEngine`, `core.ocr.OcrEngine`,
 `core.db.NpnDatabase`).
 
+Every `core.app` facet keeps one contract, so a caller needs no defensive wrapping:
+
+- **Main-safe.** A viewmodel may call a facet from the main thread. `JournalCoordinator` runs every
+  fold and journal write on its own dispatcher; the filesystem, Room and PDF engines switch for
+  their own work.
+- **Expected failures are typed outcomes.** What normal use can run into — a file that cannot be
+  imported, a split or bake that cannot happen, AI OCR without an endpoint — comes back as an
+  outcome carrying an error enum (`ImportFailure`, `SplitFailure`, `BakeFailure`, `AiOcrOutcome`),
+  with the cause in the session log. `composeApp` maps each enum to a string resource: no English
+  text built in `core` is shown to the user. `DocContentFacade`'s nullable reads return null for
+  anything they cannot show.
+- **Bugs and misuse throw**, a closed session included. A viewmodel runs its writes through
+  `launchReporting`, which turns a throw into a message instead of a crash.
+- **Cancellation is always rethrown** (`runCatchingCancellable`), never reported as a failure.
+
 Opening a library is `LibrarySessionImpl.openSession(SessionDeps)` (commonMain) followed by
 `start()`. Everything the session runs — background loops, queue drains, every facet write — is a
 child of one `SessionLifetime` job under `SessionDeps.scope`, so `close()` stops and awaits all of
@@ -80,7 +95,7 @@ Shared Compose Multiplatform UI + viewmodels + dependency wiring.
 | `app/App.kt` | Root composable / app shell. |
 | `app/di/` | `AppEnvironment` (session lifecycle: open/close/swap, watched folder; a failed swap closes what it built and reopens the previous library) + `DefaultAppEnvironment`. `PlatformLibraryFactory`/`WatchedFolderFactory` are fun interfaces the platform source sets implement; `AppEnvironment.android/desktop.kt` build the real per-target pieces. On desktop the per-library wiring itself is `core`'s `jvmSessionDeps` (see below); the DI file only binds settings to the session's knobs. Android's factory dispatches on the location string: direct path → `JvmLibraryFileSystem` with `ContentResolverExternalIo` and exclusive `renameat2(RENAME_NOREPLACE)` publication through JNA, `content://` → `SafLibraryFileSystem`. |
 | `app/platform/` | Small shared platform hooks. |
-| `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split), `tags/`, `rules/`, `settings/`, `trash/`, `queue/` (the read-only OCR + AI enrichment backlog; a top-level rail destination on wide layouts, reached from settings on compact ones), `onboarding/`, `nav/` (shell + routes), `ai/`, `common/` (shared components: `TagEditor`, `DocThumbnail`, `SearchField`, `MessagesViewModel`, `SnackbarMessages`, `UiText`), `theme/`. ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). |
+| `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split), `tags/`, `rules/`, `settings/`, `trash/`, `queue/` (the read-only OCR + AI enrichment backlog; a top-level rail destination on wide layouts, reached from settings on compact ones), `onboarding/`, `nav/` (shell + routes), `ai/`, `common/` (shared components: `TagEditor`, `DocThumbnail`, `SearchField`, `MessagesViewModel`, `SnackbarMessages`, `UiText`), `theme/`. ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). One-shot messages have one path: a `MessagesViewModel` sends `UiMessage`s (text, plus an optional action such as Undo) into a buffered channel with `message` or `launchReporting`, and the screen's one `SnackbarMessages` shows them one at a time, in order. |
 | `commonMain/composeResources` | `values/` (English) plus `values-nl/`, `values-de/`, `values-fr/`, `values-es/` and `values-pt/` string resources; `checkLocalization` checks every translation for missing keys and placeholder parity. |
 
 ### `androidApp` — `dev.npn.*`
