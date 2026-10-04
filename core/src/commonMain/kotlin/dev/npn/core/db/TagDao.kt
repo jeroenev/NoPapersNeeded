@@ -16,6 +16,10 @@ interface TagDao {
     @Query("SELECT * FROM tags")
     suspend fun all(): List<TagEntity>
 
+    /** Every tag name, in name order. */
+    @Query("SELECT name FROM tags ORDER BY name")
+    suspend fun names(): List<String>
+
     /** Tag names starting with [prefix], for search autocomplete. */
     @Query("SELECT name FROM tags WHERE name LIKE :prefix ESCAPE '\\' ORDER BY name COLLATE NOCASE LIMIT :limit")
     suspend fun tagsForPrefix(
@@ -39,7 +43,7 @@ interface TagDao {
             "AND $LIVE_DOCUMENT " +
             "GROUP BY t.name, t.color, t.icon ORDER BY t.name",
     )
-    fun observeAllWithLiveCounts(): Flow<List<TagWithCount>>
+    suspend fun allWithLiveCounts(): List<TagWithCount>
 
     /**
      * Remove tag rows that no non-deleted document references. Tags exist only through use: when

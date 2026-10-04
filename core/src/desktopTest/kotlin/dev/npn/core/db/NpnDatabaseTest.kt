@@ -149,8 +149,7 @@ class NpnDatabaseTest {
             tagDao.setForDocuments(listOf(live, trashed, missing).associateWith { listOf("invoice") })
 
             tagDao
-                .observeAllWithLiveCounts()
-                .first()
+                .allWithLiveCounts()
                 .single { it.name == "invoice" }
                 .count shouldBe 1
         }

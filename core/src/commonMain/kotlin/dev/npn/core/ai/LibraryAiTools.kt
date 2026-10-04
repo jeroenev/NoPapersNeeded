@@ -17,7 +17,6 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.util.NpnJson
-import kotlinx.coroutines.flow.first
 import kotlinx.serialization.KSerializer
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
@@ -264,7 +263,7 @@ object LibraryAiTools {
         class Args
 
         override suspend fun execute(args: Args): String {
-            val tags = tagDao.observeAllWithLiveCounts().first()
+            val tags = tagDao.allWithLiveCounts()
             return if (tags.isEmpty()) {
                 "The library has no tags yet."
             } else {
