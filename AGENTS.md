@@ -124,7 +124,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   the UI, where the type picks a control: `FieldEditor.kt` (the editor and its type label) and the
   filter sheet's per-type filter control. Every other branch reads the `FieldDef`'s data (type,
   flags, hint), never switches on the type. Storage is always the canonical form; a blank value
-  clears the field and is never stored as `""`.
+  clears the field and is never stored as `""`. Each number has exactly one canonical form (`7`,
+  `1.5`), so canonical strings compare as values; the fold reads what older builds stored
+  (`007`, `1.50`) through `FieldValues.normalized`.
   The five typed `documents` columns are a read cache the fold writes from the field map, never
   a second source.
 

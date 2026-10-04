@@ -83,6 +83,36 @@ class FieldValuesTest {
     }
 
     @Test
+    fun a_number_has_exactly_one_canonical_form() {
+        assertEquals("7", ok(FieldType.NUMBER, "007"))
+        assertEquals("-7", ok(FieldType.NUMBER, "-007"))
+        assertEquals("100", ok(FieldType.NUMBER, "100"))
+        assertEquals("0", ok(FieldType.NUMBER, "000"))
+        assertEquals("0", ok(FieldType.NUMBER, "-0"))
+        assertEquals("1.5", ok(FieldType.DECIMAL, "1.50"))
+        assertEquals("2", ok(FieldType.DECIMAL, "2.0"))
+        assertEquals("10", ok(FieldType.DECIMAL, "10.00"))
+        assertEquals("0.5", ok(FieldType.DECIMAL, "0.5"))
+        assertEquals("0.5", ok(FieldType.DECIMAL, "00.50"))
+        assertEquals("0", ok(FieldType.DECIMAL, "0"))
+        assertEquals("0", ok(FieldType.DECIMAL, "-0.00"))
+        assertEquals("-0.25", ok(FieldType.DECIMAL, "-0.250"))
+        assertEquals("1.5", ok(FieldType.DECIMAL, "1,50", nl))
+        assertTrue(!FieldValues.isCanonical(FieldType.NUMBER, "007"))
+        assertTrue(!FieldValues.isCanonical(FieldType.DECIMAL, "1.50"))
+    }
+
+    @Test
+    fun a_stored_value_reads_back_in_todays_canonical_form() {
+        assertEquals("7", FieldValues.normalized(FieldType.NUMBER, "007"))
+        assertEquals("1.5", FieldValues.normalized(FieldType.DECIMAL, "1.50"))
+        // Off-type and non-numeric values are kept verbatim, never rewritten or dropped.
+        assertEquals("twelve", FieldValues.normalized(FieldType.DECIMAL, "twelve"))
+        assertEquals("12.5", FieldValues.normalized(FieldType.NUMBER, "12.5"))
+        assertEquals("007", FieldValues.normalized(FieldType.TEXT, "007"))
+    }
+
+    @Test
     fun display_localizes_decimals_and_leaves_the_rest_alone() {
         assertEquals("12,5", FieldValues.display(FieldType.DECIMAL, "12.5", nl))
         assertEquals("12.5", FieldValues.display(FieldType.DECIMAL, "12.5"))

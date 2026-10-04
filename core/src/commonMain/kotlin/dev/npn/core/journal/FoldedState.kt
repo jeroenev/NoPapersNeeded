@@ -2,6 +2,7 @@ package dev.npn.core.journal
 
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldType
+import dev.npn.core.model.FieldValues
 import dev.npn.core.model.SystemProperty
 
 /**
@@ -256,13 +257,15 @@ class FoldedState {
 
     /**
      * Effective custom fields for a document: only keys whose winning value is non-null (a null
-     * value means the field was cleared). Ordered by key for deterministic projection.
+     * value means the field was cleared). Ordered by key for deterministic projection. Values are
+     * read in the registry type's canonical form ([FieldValues.normalized]), so a number an older
+     * build stored as `007` folds to `7`.
      */
     fun effectiveFields(doc: String): Map<String, String> {
         val byKey = fields[doc] ?: return emptyMap()
         val out = LinkedHashMap<String, String>()
         for (key in byKey.keys.sorted()) {
-            byKey[key]?.value?.let { out[key] = it }
+            byKey[key]?.value?.let { out[key] = FieldValues.normalized(effectiveFieldType(key), it) }
         }
         return out
     }

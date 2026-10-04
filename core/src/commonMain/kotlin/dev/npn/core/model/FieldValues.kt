@@ -46,8 +46,12 @@ data class FieldLocale(
  * |---|---|---|
  * | TEXT / LONG_TEXT | trimmed string | — |
  * | DATE | `yyyy-MM-dd` (sorts lexicographically) | — |
- * | NUMBER | `-?\d+` | the value |
- * | DECIMAL | `-?\d+(\.\d+)?`, always `.` | the value |
+ * | NUMBER | `-?\d+`, no leading zeros | the value |
+ * | DECIMAL | `-?\d+(\.\d+)?`, always `.`, no leading zeros, no trailing fraction zeros | the value |
+ *
+ * Each number has exactly one canonical form (`007` is `7`, `1.50` is `1.5`, `2.0` is `2`, `-0` is
+ * `0`), so comparing two canonical strings compares the numbers. Values stored before that by older
+ * builds are read through [normalized].
  *
  * A blank input always canonicalizes to `Ok(null)`: a cleared field has no stored row (P4 in the
  * plan), and this is the one place that turns `""` into "no value".
@@ -76,7 +80,7 @@ object FieldValues {
             FieldType.NUMBER -> {
                 val cleaned = stripGrouping(trimmed, locale)?.removePrefix("+")
                 if (cleaned != null && integerPattern.matches(cleaned)) {
-                    FieldParse.Ok(cleaned)
+                    FieldParse.Ok(uniqueNumber(cleaned))
                 } else {
                     FieldParse.Invalid(trimmed)
                 }
@@ -85,12 +89,25 @@ object FieldValues {
             FieldType.DECIMAL -> {
                 val cleaned = stripGrouping(trimmed, locale)?.replace(locale.decimalSeparator, '.')?.removePrefix("+")
                 if (cleaned != null && decimalPattern.matches(cleaned)) {
-                    FieldParse.Ok(cleaned)
+                    FieldParse.Ok(uniqueNumber(cleaned))
                 } else {
                     FieldParse.Invalid(trimmed)
                 }
             }
         }
+    }
+
+    /**
+     * [stored] as the fold reads it: a NUMBER or DECIMAL value that parses comes back in today's
+     * canonical form, so `007` stored by an older build reads as `7`; anything else, an off-type
+     * value included, comes back verbatim.
+     */
+    fun normalized(
+        type: FieldType,
+        stored: String,
+    ): String {
+        if (!type.isNumeric) return stored
+        return (canonicalize(type, stored) as? FieldParse.Ok)?.canonical ?: stored
     }
 
     /** True when [canonical] is already in the canonical form for [type]. */
@@ -128,6 +145,20 @@ object FieldValues {
     fun isIsoDate(value: String): Boolean {
         if (!isoDatePattern.matches(value)) return false
         return runCatching { LocalDate.parse(value) }.isSuccess
+    }
+
+    /**
+     * The one spelling of a sign-and-digits literal ([integerPattern] or [decimalPattern], no `+`):
+     * no leading zeros before the point, no trailing zeros after it, no point without a fraction,
+     * and no sign on zero.
+     */
+    private fun uniqueNumber(literal: String): String {
+        val negative = literal.startsWith('-')
+        val body = literal.removePrefix("-")
+        val whole = body.substringBefore('.').trimStart('0').ifEmpty { "0" }
+        val fraction = body.substringAfter('.', "").trimEnd('0')
+        val magnitude = if (fraction.isEmpty()) whole else "$whole.$fraction"
+        return if (negative && magnitude != "0") "-$magnitude" else magnitude
     }
 
     private fun canonicalDate(trimmed: String): FieldParse =

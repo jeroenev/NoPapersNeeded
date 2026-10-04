@@ -36,6 +36,32 @@ class FieldDefFoldTest {
         dev: String = "d1",
     ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, null, JournalOp.FieldDefSet(key, null))
 
+    private fun value(
+        seq: Long,
+        key: String,
+        value: String,
+        t: Long,
+    ) = JournalEvent(1, seq, Hlc(t, 0, "d1"), "d1", "a".repeat(64), JournalOp.FieldSet(key, value))
+
+    /** Numbers an older build stored in another form fold to the one canonical form. */
+    @Test
+    fun the_fold_reads_stored_numbers_in_their_canonical_form() {
+        val state =
+            JournalFolder.fold(
+                listOf(
+                    set(1, def("count", type = FieldType.NUMBER), 10),
+                    set(2, def("amount", type = FieldType.DECIMAL), 10),
+                    value(3, "count", "007", 20),
+                    value(4, "amount", "1.50", 20),
+                    value(5, "reference", "007", 20),
+                ),
+            )
+        assertEquals(
+            mapOf("amount" to "1.5", "count" to "7", "reference" to "007"),
+            state.effectiveFields("a".repeat(64)),
+        )
+    }
+
     @Test
     fun wire_shape_and_roundtrip() {
         val e =

@@ -154,7 +154,8 @@ class FieldRegistryTest {
                 registry.fields.first { it.isNotEmpty() }
                 registry.upsert(def("amount", type = FieldType.DECIMAL))
                 rig.session.meta.setField(id, "amount", "12.50")
-                registry.distinctValues("amount").first { it.isNotEmpty() } shouldBe listOf("12.50")
+                // Stored in its one canonical form.
+                registry.distinctValues("amount").first { it.isNotEmpty() } shouldBe listOf("12.5")
                 val before = rig.journalObjectCount()
 
                 registry.remove("amount", clearValues = true)
