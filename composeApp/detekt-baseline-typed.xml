@@ -95,8 +95,6 @@
     <ID>UnsafeCallOnNullableType:LocalAppLocale.kt:LocalAppLocale$default!!</ID>
     <ID>UnsafeCallOnNullableType:PageViewer.kt:parsed!!</ID>
     <ID>UnsafeCallOnNullableType:TagDialogs.kt:selected!!</ID>
-    <ID>UnusedPrivateProperty:LocalAppLocale.kt:LocalAppLocale$private val currentLocale = staticCompositionLocalOf { Locale.getDefault().toString() }</ID>
-    <ID>UnusedPrivateProperty:LocalAppLocale.kt:LocalAppLocale$private var default: Locale? = null</ID>
     <ID>UseOrEmpty:AutoMatchRulesScreen.kt:rule?.id ?: ""</ID>
     <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$filter.query ?: ""</ID>
     <ID>UseOrEmpty:LibraryViewModel.kt:LibraryViewModel$view.filter.query ?: ""</ID>
