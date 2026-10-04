@@ -89,6 +89,7 @@ class HlcSeedingTest {
                         ocrEngine = NoopOcrEngine(),
                         xmpIO = PdfBoxXmpIO(),
                         thumbnailStore = FakeThumbStore(File(rig.dbDir, "thumbs-reopen")),
+                        renderParallelism = 1,
                         scope = backgroundScope,
                         settings = SessionSettings(ocrLanguage = { "eng" }, trashRetentionDays = { 30 }),
                         log = NpnLog.None,

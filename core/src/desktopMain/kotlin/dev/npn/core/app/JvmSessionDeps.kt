@@ -10,6 +10,7 @@ import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.ThumbnailStore
+import dev.npn.core.pdf.renderParallelism
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.PdfBoxXmpIO
@@ -52,6 +53,7 @@ fun jvmSessionDeps(
         ocrEngine = ocrEngine,
         xmpIO = PdfBoxXmpIO(),
         thumbnailStore = thumbnailStore,
+        renderParallelism = renderParallelism(max = 4),
         scope = scope,
         settings = settings,
         log = log,

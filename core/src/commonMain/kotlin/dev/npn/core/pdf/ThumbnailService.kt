@@ -32,7 +32,7 @@ class ThumbnailService(
     private val store: ThumbnailStore,
     private val thumbnailDao: ThumbnailDao,
     private val documentDao: DocumentDao,
-    private val renderGate: RenderGate = RenderGate(),
+    private val renderGate: RenderGate,
     private val clock: EpochClock = SystemEpochClock,
 ) {
     /**

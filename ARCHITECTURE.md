@@ -27,7 +27,8 @@ desktopApp ─┘
 The KMP JVM target is named `desktop`, so every module has `commonMain`,
 `androidMain`, `desktopMain` (+ `commonTest`/`desktopTest`). `core` also has
 `jvmSharedMain`, shared by the Android and desktop targets, for java.nio code both run:
-the direct-filesystem `JvmLibraryFileSystem` and `JvmWatchedFolder`. `androidApp` and
+the direct-filesystem `JvmLibraryFileSystem` and `JvmWatchedFolder`, and every `actual` the two
+JVMs would otherwise write twice. `androidApp` and
 `desktopApp` are thin entrypoints that launch the shared Compose UI.
 
 Android picks the library implementation from the persisted location string

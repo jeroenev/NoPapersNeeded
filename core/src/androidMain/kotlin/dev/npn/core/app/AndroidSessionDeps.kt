@@ -10,6 +10,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.SafLibraryFileSystem
 import dev.npn.core.ocr.MlKitOcrEngine
 import dev.npn.core.pdf.PdfBoxAndroidEngine
+import dev.npn.core.pdf.renderParallelism
 import dev.npn.core.util.AndroidLog
 import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.PdfBoxAndroidXmpIO
@@ -46,6 +47,8 @@ fun androidSessionDeps(
         ocrEngine = MlKitOcrEngine(),
         xmpIO = PdfBoxAndroidXmpIO(context),
         thumbnailStore = DirThumbnailStore(thumbsDir.absolutePath),
+        // Below desktop's 4: every render holds a page bitmap, and phones have less memory.
+        renderParallelism = renderParallelism(max = 3),
         scope = scope,
         settings = settings,
         log = log,

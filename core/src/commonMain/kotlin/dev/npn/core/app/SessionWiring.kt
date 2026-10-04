@@ -172,7 +172,7 @@ private fun buildContent(
 ): DocContentFacadeImpl {
     // Single shared gate so thumbnail + page rendering share one bounded concurrency budget and a
     // first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
-    val renderGate = RenderGate()
+    val renderGate = RenderGate(deps.renderParallelism)
     val thumbnails =
         ThumbnailService(
             engine = deps.pdfEngine,

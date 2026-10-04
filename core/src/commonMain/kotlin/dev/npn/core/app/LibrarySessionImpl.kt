@@ -394,6 +394,8 @@ class SessionDeps(
     val ocrEngine: OcrEngine,
     val xmpIO: PdfXmpIO,
     val thumbnailStore: ThumbnailStore,
+    /** How many pages render at once, thumbnails and page views together; the platform's pick. */
+    val renderParallelism: Int,
     val scope: CoroutineScope,
     val settings: SessionSettings,
     /** Where the session reports what fails in the background, with no caller to tell. */

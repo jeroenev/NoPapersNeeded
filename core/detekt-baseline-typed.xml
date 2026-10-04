@@ -13,7 +13,6 @@
     <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.SAVED_VIEW, savedView = view))</ID>
     <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.UNTAGGED))</ID>
     <ID>ImplicitDefaultLocale:JvmLibraryFileSystemTest.kt:JvmLibraryFileSystemTest$"%02x".format(it)</ID>
-    <ID>InjectDispatcher:DirThumbnailStore.kt:DirThumbnailStore$IO</ID>
     <ID>InjectDispatcher:DocumentRepositoryImpl.kt:DocumentRepositoryImpl$Default</ID>
     <ID>InjectDispatcher:Indexer.kt:Indexer$Default</ID>
     <ID>InjectDispatcher:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$IO</ID>
@@ -25,8 +24,6 @@
     <ID>InjectDispatcher:PdfBoxAndroidXmpIO.kt:PdfBoxAndroidXmpIO$IO</ID>
     <ID>InjectDispatcher:PdfBoxEngine.kt:PdfBoxEngine$IO</ID>
     <ID>InjectDispatcher:PdfBoxXmpIO.kt:PdfBoxXmpIO$IO</ID>
-    <ID>InjectDispatcher:RenderGate.android.kt:Default</ID>
-    <ID>InjectDispatcher:RenderGate.desktop.kt:Default</ID>
     <ID>InjectDispatcher:SafLibraryFileSystem.kt:SafLibraryFileSystem$IO</ID>
     <ID>InjectDispatcher:SafWatchedFolder.kt:SafWatchedFolder$IO</ID>
     <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
