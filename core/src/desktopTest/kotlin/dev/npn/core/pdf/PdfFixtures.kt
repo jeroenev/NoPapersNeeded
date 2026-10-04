@@ -97,3 +97,13 @@ object PdfFixtures {
         return img
     }
 }
+
+/** The eight-byte PNG signature: 89 50 4E 47 0D 0A 1A 0A. */
+private val PNG_SIGNATURE = byteArrayOf(0x89.toByte(), 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A)
+
+/** Whether [bytes] start with the PNG signature. */
+internal fun isPng(bytes: ByteArray): Boolean =
+    bytes.size >= PNG_SIGNATURE.size && bytes.copyOf(PNG_SIGNATURE.size).contentEquals(PNG_SIGNATURE)
+
+/** Whether [bytes] start with the PDF header `%PDF`. */
+internal fun looksLikePdf(bytes: ByteArray): Boolean = bytes.size >= 4 && bytes.copyOf(4).decodeToString() == "%PDF"

@@ -1,20 +1,5 @@
 package dev.npn.core.model
 
-import kotlinx.serialization.Serializable
-
-/** Document identity: SHA-256 of file bytes, lowercase hex. Stable forever because documents are immutable. */
-@Serializable
-@JvmInline
-value class DocId(
-    val sha256: String,
-) {
-    init {
-        require(sha256.length == 64) { "DocId must be a sha256 hex string" }
-    }
-
-    override fun toString(): String = sha256
-}
-
 /**
  * Library-wide review workflow, a synced setting (see [dev.npn.core.journal.JournalOp.SettingSet],
  * key [WIRE_KEY]). Determines how the review queue and the per-doc reviewed marker behave.

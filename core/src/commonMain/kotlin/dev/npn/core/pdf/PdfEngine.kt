@@ -112,19 +112,3 @@ internal fun isJpeg(bytes: ByteArray): Boolean =
         bytes[0] == 0xFF.toByte() &&
         bytes[1] == 0xD8.toByte() &&
         bytes[2] == 0xFF.toByte()
-
-/** PNG magic bytes: 89 50 4E 47 0D 0A 1A 0A. */
-internal fun isPng(bytes: ByteArray): Boolean =
-    bytes.size >= 8 &&
-        bytes[0] == 0x89.toByte() &&
-        bytes[1] == 0x50.toByte() &&
-        bytes[2] == 0x4E.toByte() &&
-        bytes[3] == 0x47.toByte()
-
-/** PDF magic bytes: %PDF (25 50 44 46). */
-internal fun looksLikePdf(bytes: ByteArray): Boolean =
-    bytes.size >= 4 &&
-        bytes[0] == 0x25.toByte() &&
-        bytes[1] == 0x50.toByte() &&
-        bytes[2] == 0x44.toByte() &&
-        bytes[3] == 0x46.toByte()
