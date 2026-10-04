@@ -1,6 +1,5 @@
 package dev.npn.core.index
 
-import dev.npn.core.db.MetadataEventEntity
 import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.SourceFingerprint
@@ -8,7 +7,6 @@ import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.journal.CanonicalJournalEvent
 import dev.npn.core.journal.CompactionCandidate
 import dev.npn.core.journal.CompactionSource
 import dev.npn.core.journal.EventDecoderRegistry
@@ -18,14 +16,13 @@ import dev.npn.core.journal.SnapshotManifest
 import dev.npn.core.util.runCatchingCancellable
 
 /**
- * Compaction-side bookkeeping for the metadata accumulator: recording a locally-published snapshot,
- * gathering compaction candidates from applied sources, and deleting superseded files. Split from
- * [MetadataAccumulator] to keep that class focused on ingestion/validation.
+ * Compaction-side bookkeeping over the metadata accumulator's tables: recording a locally-published
+ * snapshot, gathering compaction candidates from applied sources, and deleting superseded files.
+ * [dev.npn.core.app.JournalCoordinator.compact] and [MetadataAccumulator]'s reconcile share one.
  */
 class SnapshotSupport(
     private val fs: LibraryFileSystem,
     private val dao: MetadataProjectionDao,
-    private val eventEntity: (CanonicalJournalEvent) -> MetadataEventEntity,
 ) {
     /**
      * Record a locally-published compaction snapshot as an applied source with its supersession
@@ -45,7 +42,7 @@ class SnapshotSupport(
                 contentHash = published.contentHash,
                 status = SourceStatus.APPLIED,
             )
-        dao.ingest(source, canonical.map(eventEntity), supersedes = published.supersedes)
+        dao.ingest(source, canonical.map { it.toEventEntity() }, supersedes = published.supersedes)
     }
 
     /**

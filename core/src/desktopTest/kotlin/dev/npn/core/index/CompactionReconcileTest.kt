@@ -73,6 +73,7 @@ class CompactionReconcileTest {
             indexer = indexer,
             accumulator = accumulator,
             compactor = SnapshotCompactor(fs, "test-installation"),
+            snapshots = SnapshotSupport(fs, db.metadataProjectionDao()),
             compactionThreshold = threshold,
             compactionStabilityWindowMs = window,
         )

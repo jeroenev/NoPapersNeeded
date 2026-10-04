@@ -91,6 +91,8 @@ class MetadataAccumulator(
     /** Marks the journal staging files this installation wrote; the first reconcile deletes stale ones. */
     private val installationId: String,
     private val clock: EpochClock = SystemEpochClock,
+    /** Deletes what an applied snapshot superseded; the coordinator's compaction shares it. */
+    private val snapshots: SnapshotSupport = SnapshotSupport(fs, db.metadataProjectionDao()),
 ) {
     private val dao = db.metadataProjectionDao()
     private var stagingCleaned = false
@@ -185,7 +187,7 @@ class MetadataAccumulator(
                         ?.takeIf { staged.kind == SourceKind.OBJECT }
                         ?.let { MetadataTransactionActorEntity(it.event.dev, staged.contentHash) }
                 val supersedes = result.manifest?.supersedes.orEmpty()
-                unseen(result.events, dao.ingest(source, result.events.map(::eventEntity), actor, supersedes))
+                unseen(result.events, dao.ingest(source, result.events.map { it.toEventEntity() }, actor, supersedes))
             }
 
             is JournalSourceRead.Retryable -> {
@@ -230,7 +232,7 @@ class MetadataAccumulator(
         cleanOwnedStaging(entries)
         validator.unsupportedStorage(entries)?.let { fail(it) }
         val previous = dao.allSources()
-        val swept = snapshotSupport.deleteSupersededLeftovers(entries, previous)
+        val swept = snapshots.deleteSupersededLeftovers(entries, previous)
         val files = entries.filter { !it.isDirectory && it.relPath !in swept }.associateBy { it.relPath }
 
         val ingest = ingestFiles(files.values)
@@ -453,7 +455,7 @@ class MetadataAccumulator(
                 status = SourceStatus.APPLIED,
             )
         val actor = MetadataTransactionActorEntity(events.first().dev, published.contentHash)
-        return LocalSource(source, canonical.map(::eventEntity), actor, events)
+        return LocalSource(source, canonical.map { it.toEventEntity() }, actor, events)
     }
 
     suspend fun recordLocalSource(local: LocalSource) {
@@ -464,9 +466,6 @@ class MetadataAccumulator(
         FoldedState().also { state ->
             dao.allEvents().forEach { stored -> state.apply(EventDecoderRegistry.decodeStored(stored.canonicalJson)) }
         }
-
-    /** Compaction bookkeeping (snapshot record/plan/delete) lives in [SnapshotSupport]. */
-    val snapshotSupport: SnapshotSupport by lazy { SnapshotSupport(fs, dao, ::eventEntity) }
 
     private suspend fun fail(message: String): Nothing {
         dao.upsertState(projectionState(ProjectionStatus.FAILED, Hlc.ZERO, message))
@@ -492,20 +491,6 @@ class MetadataAccumulator(
             // Only a ready projection may advertise a reusable source set; every transient or
             // failed state clears it so the next open refolds rather than trusting a half-pass.
             sourceSetFingerprint = sourceSetFingerprint,
-        )
-    }
-
-    private fun eventEntity(canonical: CanonicalJournalEvent): MetadataEventEntity {
-        val event = canonical.event
-        return MetadataEventEntity(
-            deviceId = event.dev,
-            sequence = event.seq,
-            canonicalJson = canonical.canonicalJson,
-            hlcPhysical = event.hlc.physicalMillis,
-            hlcCounter = event.hlc.counter,
-            hlcDevice = event.hlc.deviceId,
-            documentId = event.doc,
-            operation = event.op.wire,
         )
     }
 
@@ -565,3 +550,16 @@ private fun readSource(
         is NpnPaths.JournalPath.ObjectV2 -> StorageV2Reader.read(relPath, bytes, contentHash)
         else -> StorageV1Reader.read(bytes)
     }
+
+/** The row an event is stored as in `metadata_events`. */
+internal fun CanonicalJournalEvent.toEventEntity(): MetadataEventEntity =
+    MetadataEventEntity(
+        deviceId = event.dev,
+        sequence = event.seq,
+        canonicalJson = canonicalJson,
+        hlcPhysical = event.hlc.physicalMillis,
+        hlcCounter = event.hlc.counter,
+        hlcDevice = event.hlc.deviceId,
+        documentId = event.doc,
+        operation = event.op.wire,
+    )

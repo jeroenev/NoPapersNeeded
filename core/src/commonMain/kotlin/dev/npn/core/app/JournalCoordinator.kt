@@ -5,6 +5,7 @@ import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.OpenReconciliation
 import dev.npn.core.index.Resurrected
 import dev.npn.core.index.ScanReport
+import dev.npn.core.index.SnapshotSupport
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.FoldedState
@@ -107,6 +108,8 @@ class JournalCoordinator internal constructor(
     private val indexer: Indexer,
     private val accumulator: MetadataAccumulator,
     private val compactor: SnapshotCompactor? = null,
+    /** The source bookkeeping [compact] plans from and records into; given with a [compactor]. */
+    private val snapshots: SnapshotSupport? = null,
     private val compactionThreshold: Int = DEFAULT_COMPACTION_THRESHOLD,
     private val compactionStabilityWindowMs: Long = DEFAULT_COMPACTION_STABILITY_WINDOW_MS,
     /** Where folds and writes run, whatever dispatcher the caller is on. */
@@ -322,8 +325,8 @@ class JournalCoordinator internal constructor(
     suspend fun compact(nowMillis: Long = clock.nowMillis()): String? =
         locked {
             val activeCompactor = compactor ?: return@locked null
+            val support = checkNotNull(snapshots) { "A coordinator that compacts needs its SnapshotSupport" }
             if (!activeCompactor.supported || writeBlockReason != null) return@locked null
-            val support = accumulator.snapshotSupport
             val (objects, snapshots) = support.compactionSources()
             val chosen =
                 activeCompactor.plan(

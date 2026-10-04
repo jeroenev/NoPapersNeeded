@@ -73,6 +73,7 @@ class CompactionPlanCostTest {
                     allocator = HlcWatermarkAllocator(clock),
                 ),
             compactor = SnapshotCompactor(fs, "test-installation"),
+            snapshots = SnapshotSupport(fs, db.metadataProjectionDao()),
             compactionThreshold = threshold,
             compactionStabilityWindowMs = 1_000L,
         )

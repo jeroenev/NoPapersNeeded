@@ -16,6 +16,7 @@ import dev.npn.core.index.MaintenanceService
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
+import dev.npn.core.index.SnapshotSupport
 import dev.npn.core.index.SplitService
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
@@ -76,14 +77,17 @@ private suspend fun createObjectWriter(deps: SessionDeps): ContentAddressedJourn
 internal suspend fun createCoordinator(
     deps: SessionDeps,
     indexer: Indexer,
-): JournalCoordinator =
-    JournalCoordinator(
+): JournalCoordinator {
+    val snapshots = SnapshotSupport(deps.fs, deps.db.metadataProjectionDao())
+    return JournalCoordinator(
         writer = createObjectWriter(deps),
         indexer = indexer,
-        accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId, deps.clock),
+        accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId, deps.clock, snapshots),
         compactor = SnapshotCompactor(deps.fs, deps.installationId),
+        snapshots = snapshots,
         clock = deps.clock,
     )
+}
 
 /**
  * Fold the journal, so the documents are there before the caller's initial rescan, and bring the
