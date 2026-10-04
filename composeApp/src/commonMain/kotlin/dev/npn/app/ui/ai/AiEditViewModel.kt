@@ -446,49 +446,26 @@ class AiEditViewModel(
      * Also the way back: re-picking the task the run already carries resets it to the preset, so a
      * form the user has edited into a corner has a one-click way out.
      */
-    fun setTask(task: EditTask) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.withTask(task) }
-    }
+    fun setTask(task: EditTask) = updateIdle { it.withTask(task) }
 
     /** Drop back to the task chooser, keeping the scope and the numeric overrides (Idle only). */
-    fun clearTask() {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.copy(task = null) }
-    }
+    fun clearTask() = updateIdle { it.copy(task = null) }
 
     /** Change the scope (Idle only); unavailable scopes are ignored. */
-    fun setScope(scope: EditScope) {
-        val state = _ui.value
-        if (state.phase != EditPhase.Idle) return
-        if (!state.scopeAvailable(scope)) return
-        _ui.update { it.copy(scope = scope) }
-    }
+    fun setScope(scope: EditScope) = updateIdle { if (it.scopeAvailable(scope)) it.copy(scope = scope) else it }
 
     /** Pick which saved view backs the [EditScope.SAVED_VIEW] scope (Idle only). */
-    fun setSavedView(id: String) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        if (_ui.value.savedViews.none { it.id == id }) return
-        _ui.update { it.copy(savedViewId = id) }
-    }
+    fun setSavedView(id: String) =
+        updateIdle { state -> if (state.savedViews.any { it.id == id }) state.copy(savedViewId = id) else state }
 
     /** Set the per-run max suggested tags per document (Idle only); clamped to [AiTagging.RANGE]. */
-    fun setMaxTags(value: Int) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.copy(maxTags = value.coerceIn(AiTagging.RANGE)) }
-    }
+    fun setMaxTags(value: Int) = updateIdle { it.copy(maxTags = value.coerceIn(AiTagging.RANGE)) }
 
     /** Set the per-run max new tags per document (Idle only); clamped to [AiTagging.NEW_TAGS_RANGE]. */
-    fun setMaxNewTags(value: Int) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.copy(maxNewTags = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
-    }
+    fun setMaxNewTags(value: Int) = updateIdle { it.copy(maxNewTags = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
 
     /** Set the per-run batch size (Idle only); clamped to [AiTagging.BATCH_RANGE]. */
-    fun setBatchSize(value: Int) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.copy(batchSize = value.coerceIn(AiTagging.BATCH_RANGE)) }
-    }
+    fun setBatchSize(value: Int) = updateIdle { it.copy(batchSize = value.coerceIn(AiTagging.BATCH_RANGE)) }
 
     /** Toggle whether field [key] participates in the run (Idle only). */
     fun setFieldEnabled(
@@ -503,59 +480,40 @@ class AiEditViewModel(
     ) = updateFieldOption(key) { it.copy(mode = mode) }
 
     /** Add a registered field the seed left out to this run, enabled (Idle only). */
-    fun addField(key: String) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update {
-            if (key in
-                it.fieldOptions
-            ) {
-                it
-            } else {
-                it.asCustom().copy(fieldOptions = it.fieldOptions + (key to AiFieldOption()))
-            }
+    fun addField(key: String) =
+        updateIdle {
+            if (key in it.fieldOptions) it else it.asCustom().copy(fieldOptions = it.fieldOptions + (key to AiFieldOption()))
         }
-    }
 
     /** Toggle whether tag additions are suggested at all (Idle only). */
-    fun setIncludeTags(value: Boolean) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.asCustom().copy(includeTags = value) }
-    }
+    fun setIncludeTags(value: Boolean) = updateIdle { it.asCustom().copy(includeTags = value) }
 
     /** Toggle whether the model may invent tags outside the current vocabulary (Idle only). */
-    fun setAllowNewTags(value: Boolean) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.asCustom().copy(allowNewTags = value) }
-    }
+    fun setAllowNewTags(value: Boolean) = updateIdle { it.asCustom().copy(allowNewTags = value) }
 
     /** Toggle whether tag removals are suggested (Idle only). */
-    fun setIncludeTagRemovals(value: Boolean) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.asCustom().copy(includeTagRemovals = value) }
-    }
+    fun setIncludeTagRemovals(value: Boolean) = updateIdle { it.asCustom().copy(includeTagRemovals = value) }
 
     /** Set the free-text extra instructions (Idle only). */
-    fun setCustomPrompt(value: String) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.copy(customPrompt = value) }
-    }
+    fun setCustomPrompt(value: String) = updateIdle { it.copy(customPrompt = value) }
 
     /** Choose whether this run goes to the background queue, overriding the size-based default. */
-    fun setBackground(value: Boolean) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update { it.copy(backgroundOverride = value) }
-    }
+    fun setBackground(value: Boolean) = updateIdle { it.copy(backgroundOverride = value) }
 
     private fun updateFieldOption(
         key: String,
         transform: (AiFieldOption) -> AiFieldOption,
-    ) {
-        if (_ui.value.phase != EditPhase.Idle) return
-        _ui.update {
-            val option = it.fieldOptions[key] ?: return@update it
-            it.asCustom().copy(fieldOptions = it.fieldOptions + (key to transform(option)))
-        }
+    ) = updateIdle {
+        val option = it.fieldOptions[key] ?: return@updateIdle it
+        it.asCustom().copy(fieldOptions = it.fieldOptions + (key to transform(option)))
     }
+
+    /**
+     * Change the setup form. Outside [EditPhase.Idle] the run works from a snapshot of it, so every
+     * setter is a no-op there; checked inside the update, so a phase change cannot slip between.
+     */
+    private fun updateIdle(transform: (AiEditUiState) -> AiEditUiState) =
+        _ui.update { if (it.phase == EditPhase.Idle) transform(it) else it }
 
     /**
      * Editing what a task stands for makes the run custom, so the chosen task never describes a
@@ -570,22 +528,33 @@ class AiEditViewModel(
      * Start the run: suggest the next batch here, or hand the whole scope to the background queue.
      * Which one is [AiEditUiState.runsInBackground] of the *current* scope size, resolved here
      * rather than from the preview flow so the decision cannot be made against a stale count.
+     *
+     * Refuses whatever [AiEditUiState.startBlocker] refuses, judged against that fresh count: the
+     * same gate the button reads, so nothing spends model calls while the page says it cannot. A
+     * finished run asked for a next batch that is no longer there stops offering one.
      */
     fun start() {
         if (run?.isActive == true) return
-        // The same gate the button reads, enforced here too: nothing may spend model calls while
-        // the page would tell the user why it cannot.
-        if (_ui.value.task == null || !_ui.value.hasEdits()) return
+        val state = _ui.value
         run =
             viewModelScope.launch {
-                val remaining = edit.remainingDocs(_ui.value.scopeKey())
-                if (_ui.value.runsInBackground(remaining.size)) {
-                    queueRun(remaining.map { it.doc.docId })
-                } else {
-                    suggestBatch()
+                val remaining = edit.remainingDocs(state.scopeKey())
+                val blocker = state.startBlocker(ScopePreview(remaining.size, emptyList()))
+                when {
+                    blocker == StartBlocker.NO_DOCUMENTS -> endWithoutNextBatch()
+                    blocker != null -> Unit
+                    state.runsInBackground(remaining.size) -> queueRun(remaining.map { it.doc.docId })
+                    else -> suggestBatch()
                 }
             }
     }
+
+    /** A finished run whose next batch has gone (reviewed or removed elsewhere) stops offering it. */
+    private fun endWithoutNextBatch() =
+        _ui.update { state ->
+            val done = state.phase as? EditPhase.Done ?: return@update state
+            state.copy(phase = done.copy(result = done.result.copy(moreRemain = false)))
+        }
 
     /**
      * Hand the whole remaining scope to the background queue. The whole scope, not one batch: the
@@ -593,10 +562,6 @@ class AiEditViewModel(
      * back for the rest.
      */
     private suspend fun queueRun(docIds: List<String>) {
-        if (docIds.isEmpty()) {
-            _ui.update { it.copy(phase = EditPhase.Done(ApplyResult(0, 0, moreRemain = false))) }
-            return
-        }
         runCatchingCancellable { editQueue.enqueueEditRun(docIds, buildRequest()) }
             .onSuccess {
                 // Queued documents are spent as far as this page is concerned: the preview and any

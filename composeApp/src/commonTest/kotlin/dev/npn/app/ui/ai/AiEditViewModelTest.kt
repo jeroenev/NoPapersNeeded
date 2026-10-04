@@ -843,6 +843,54 @@ class AiEditConfigurationTest : MainDispatcherTest() {
         }
 
     @Test
+    fun startRefusesASavedViewThatIsGone() =
+        runTest(dispatcher) {
+            val view =
+                SavedView(
+                    id = "v1",
+                    name = "Invoices",
+                    filter = LibraryFilter(),
+                    sort = LibrarySort(SortField.Name, ascending = true),
+                )
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"))
+                    savedViews.views.value = listOf(view)
+                    aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
+                }
+            val model = vm(session)
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+            model.setScope(EditScope.SAVED_VIEW)
+            // Deleted elsewhere: the scope keeps pointing at a view that no longer exists.
+            session.savedViews.views.value = emptyList()
+            advanceUntilIdle()
+            model.ui.value.startBlocker(ScopePreview(1, emptyList())) shouldBe StartBlocker.NO_SAVED_VIEW
+
+            model.start()
+            advanceUntilIdle()
+
+            session.aiSuggest.suggestEditsCalls shouldBe emptyList()
+            model.ui.value.phase shouldBe EditPhase.Idle
+            job.cancel()
+        }
+
+    @Test
+    fun startRefusesAnEmptyScope() =
+        runTest(dispatcher) {
+            val model = vm()
+            val job = launch { model.ui.collect {} }
+            advanceUntilIdle()
+
+            model.start()
+            advanceUntilIdle()
+
+            // The button reads "no documents"; Start must not turn that into a finished run.
+            model.ui.value.phase shouldBe EditPhase.Idle
+            job.cancel()
+        }
+
+    @Test
     fun settersAreNoOpsOutsideIdle() =
         runTest(dispatcher) {
             val session =
