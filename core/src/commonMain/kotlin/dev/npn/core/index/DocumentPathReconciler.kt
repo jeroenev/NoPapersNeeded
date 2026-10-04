@@ -21,9 +21,10 @@ import dev.npn.core.util.runCatchingCancellable
 internal class DocumentPathReconciler(
     private val fs: LibraryFileSystem,
     private val db: NpnDatabase,
+    /** Where this device last saw each settled document; the rescan detects external moves from it. */
+    private val externalMoves: ExternalDocumentMoves,
 ) {
     private val paths = DocumentPaths(fs)
-    private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
 
     /** The work of the outermost [deferring] call in progress; null outside one. */
     private var open: PathWork? = null

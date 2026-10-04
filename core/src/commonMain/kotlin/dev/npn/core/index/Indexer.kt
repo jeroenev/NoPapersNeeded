@@ -61,7 +61,8 @@ class Indexer(
     private val clock: EpochClock = SystemEpochClock,
     log: NpnLog = NpnLog.None,
 ) {
-    private val documentPaths = DocumentPathReconciler(fs, db)
+    private val externalMoves = ExternalDocumentMoves(fs, db.keyValueDao())
+    private val documentPaths = DocumentPathReconciler(fs, db, externalMoves)
     private val tempFiles = TempFileSweep(fs, log)
 
     private val _scanState = MutableStateFlow<IndexProgress?>(null)
@@ -174,11 +175,7 @@ class Indexer(
 
             _scanState.value = IndexProgress(IndexProgress.Phase.RECONCILING)
             if (onExternalMoves != null) {
-                val moves =
-                    ExternalDocumentMoves(
-                        fs,
-                        db.keyValueDao(),
-                    ).detect(metadataState, dbProjection, indexable, hashes)
+                val moves = externalMoves.detect(metadataState, dbProjection, indexable, hashes)
                 if (moves.isNotEmpty()) onExternalMoves(moves)
             }
             val diskPaths = indexable.map { it.relPath }.toHashSet()
