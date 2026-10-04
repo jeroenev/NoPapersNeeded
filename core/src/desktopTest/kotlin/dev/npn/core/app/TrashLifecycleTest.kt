@@ -1,9 +1,11 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.index.MutableClock
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
@@ -225,6 +227,35 @@ class TrashLifecycleTest {
                 left shouldBe listOf("today__${today.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}.pdf")
                 rig.session.docLifecycle.restoreDoc(today)
                 rig.exists("today.pdf").shouldBeTrue()
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun aDeviceWithNoRowForATrashedDocumentKeepsItUntilItsRetentionEnds() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val now = 400 * DAY
+                rig.clock.now = now
+                rig.writePdf("old.pdf", PdfFixtures.embeddedTextPdf("old"))
+                Files.setLastModifiedTime(rig.libRoot.resolve("old.pdf"), FileTime.fromMillis(now - 90 * DAY))
+                rig.session.rescan()
+                rig.session.docLifecycle.trashDoc(rig.docId("old.pdf"))
+
+                // A device that joins now indexes only the PDFs on disk: the trashed one has no row.
+                val (second, secondDb) = rig.secondSession(backgroundScope, clock = MutableClock(now + 1))
+                try {
+                    second.purgeTrash(olderThanDays = 30)
+                } finally {
+                    second.close()
+                    secondDb.close()
+                }
+
+                rig.fs
+                    .listAllUnder(NpnPaths.TRASH_DIR)
+                    .filter { !it.isDirectory } shouldHaveSize 1
             } finally {
                 rig.close()
             }

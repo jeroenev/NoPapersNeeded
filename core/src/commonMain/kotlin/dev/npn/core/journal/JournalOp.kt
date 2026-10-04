@@ -86,7 +86,11 @@ sealed class JournalOp {
     data class DocTrash(
         val origPath: String,
     ) : JournalOp() {
-        override val wire get() = "doc-trash"
+        override val wire get() = WIRE
+
+        companion object {
+            const val WIRE = "doc-trash"
+        }
     }
 
     /** {}; doc required. */

@@ -288,11 +288,17 @@ class LibrarySessionImpl private constructor(
         _lastScanReport.value = relinkService.applyRelink(oldDocId, newDocId)
     }
 
-    /** Internal auto-purge, run after watch-triggered rescans; not part of any public facet. */
+    /**
+     * Internal auto-purge, run after watch-triggered rescans; not part of any public facet.
+     *
+     * A document's row decides when it has one: it also covers a trash in progress, whose PDF is
+     * moved before the event is committed. The journal covers documents with no row, which is every
+     * trashed one on a device whose index was just built; their PDFs keep an old mtime too.
+     */
     internal suspend fun purgeTrash(olderThanDays: Int) {
         val cutoff = deps.clock.nowMillis() - olderThanDays.toLong() * MILLIS_PER_DAY
-        val trashTimes = db.documentDao().trashTimes().associate { it.docId to it.trashedAt }
-        trashOps().purgeOlderThan(cutoff, trashTimes)
+        val rows = db.documentDao().trashTimes().associate { it.docId to it.trashedAt }
+        trashOps().purgeOlderThan(cutoff, coordinator.journalTrashTimes() + rows)
     }
 
     override suspend fun reOcr(docId: String) {

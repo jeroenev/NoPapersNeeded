@@ -273,6 +273,12 @@ class FoldedState {
     }
 
     /**
+     * Every document with a trash history that is not deleted, mapped to [trashedAtMillis]: when
+     * it was trashed, or null once it was restored.
+     */
+    fun trashTimes(): Map<String, Long?> = trash.keys.filterNot(::isDeleted).associateWith(::trashedAtMillis)
+
+    /**
      * Resolve the effective (current) document id by following the relink chain from [doc].
      * a->b->c yields c. Concurrent relinks for the same old doc resolve to the highest-HLC
      * winner (deviceId tiebreak inside HLC guarantees determinism).

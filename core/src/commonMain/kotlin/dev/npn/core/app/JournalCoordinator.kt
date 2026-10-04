@@ -34,7 +34,7 @@ import kotlinx.coroutines.withContext
  *
  * These are `setting-set` events in the journal, so their effective values come out the same from a
  * settings-only fold as from the whole state — which is what lets [JournalCoordinator.refreshState]
- * seed them at open without replaying the journal (see [MetadataAccumulator.loadSettingsState]).
+ * seed them at open without replaying the journal (see [MetadataAccumulator.loadStateOf]).
  */
 private class SyncedSettings {
     private val values = MutableStateFlow<Map<String, String?>>(emptyMap())
@@ -145,6 +145,15 @@ class JournalCoordinator internal constructor(
     fun settingFlow(key: String): kotlinx.coroutines.flow.Flow<String?> = syncedSettings.flow(key)
 
     /**
+     * When each document with a trash history was trashed, per the journal ingested so far: null
+     * once restored, absent once deleted. Folds only the lifecycle events, not the whole journal.
+     */
+    suspend fun journalTrashTimes(): Map<String, Long?> =
+        accumulator
+            .loadStateOf(JournalOp.DocTrash.WIRE, JournalOp.DocRestore.wire, JournalOp.DocDelete.wire)
+            .trashTimes()
+
+    /**
      * Write the well-known field definitions once per library. Guarded by the synced
      * [FieldKeys.SEEDED_SETTING] marker rather than by "are there any definitions", so a user who
      * deletes every default field does not get them back when another device opens the library.
@@ -180,7 +189,7 @@ class JournalCoordinator internal constructor(
                     is OpenReconciliation.ProjectionCurrent -> {
                         folded = null
                         observeSourceHlc(outcome.maxHlc)
-                        syncedSettings.seed(accumulator.loadSettingsState())
+                        syncedSettings.seed(accumulator.loadStateOf(JournalOp.SettingSet.WIRE))
                     }
 
                     is OpenReconciliation.Refolded -> {

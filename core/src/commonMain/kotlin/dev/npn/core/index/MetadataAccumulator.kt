@@ -328,17 +328,18 @@ class MetadataAccumulator(
     }
 
     /**
-     * Fold ONLY the library settings.
-     *
-     * Settings are the one slice of the folded state a reader needs at open time (the review mode
-     * and standard-field choices drive the UI), and there are a handful of setting events against
-     * a table holding every event ever recorded. Folding just those keeps the reuse path from
-     * having to materialize the whole state for two strings.
+     * Fold ONLY the events of [operations]: a slice of the state that is needed without the
+     * whole journal. The library settings are one, read at open time (the review mode and
+     * standard-field choices drive the UI); the trash lifecycle is another, read by the trash
+     * auto-purge for documents with no row. Either is a handful of events against a table holding
+     * every event ever recorded, so the reuse path need not materialize the whole state for them.
      */
-    suspend fun loadSettingsState(): FoldedState =
+    suspend fun loadStateOf(vararg operations: String): FoldedState =
         FoldedState().also { state ->
-            dao.eventsForOperation(dev.npn.core.journal.JournalOp.SettingSet.WIRE).forEach { stored ->
-                state.apply(EventDecoderRegistry.decode(stored.canonicalJson, allowMissingV1 = false).event)
+            for (operation in operations) {
+                dao.eventsForOperation(operation).forEach { stored ->
+                    state.apply(EventDecoderRegistry.decode(stored.canonicalJson, allowMissingV1 = false).event)
+                }
             }
         }
 

@@ -129,6 +129,7 @@ class AppSessionRig private constructor(
     suspend fun secondSession(
         scope: CoroutineScope,
         ocr: OcrEngine = NoopOcrEngine(),
+        clock: MutableClock = MutableClock(50_000L, autoTick = true),
     ): Pair<LibrarySessionImpl, NpnDatabase> {
         val deps =
             jvmSessionDeps(
@@ -137,7 +138,7 @@ class AppSessionRig private constructor(
                 scope = scope,
                 ocrLanguage = { "eng" },
                 trashRetentionDays = { 30 },
-                clock = MutableClock(50_000L, autoTick = true),
+                clock = clock,
                 ocrEngine = ocr,
                 thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
             )
