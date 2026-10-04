@@ -1,5 +1,6 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.db.QueueState
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.fs.OcrSidecarFiles
@@ -115,7 +116,7 @@ class OcrPipelineRerunTest {
                     .ocrQueueDao()
                     .getByDocId(docId)
                     .shouldNotBeNull()
-            row.state shouldBe OcrPipeline.STATE_PENDING
+            row.state shouldBe QueueState.PENDING.column
             row.rerun shouldBe true
             row.attempts shouldBe 1
             row.lastError shouldBe "ocr failed: engine crashed"
@@ -124,7 +125,7 @@ class OcrPipelineRerunTest {
             rig.db
                 .documentDao()
                 .getByDocId(docId)
-                ?.ocrState shouldBe OcrPipeline.OCR_DONE
+                ?.ocrState shouldBe OcrState.DONE.column
 
             // Nor does the next reconcile take the owed re-run for an adoption and drop it.
             pipe.reconcileSidecars()
@@ -179,6 +180,6 @@ class OcrPipelineRerunTest {
         }
 
     private suspend fun requestRerun(docId: String) {
-        rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, rerun = true))
+        rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2, rerun = true))
     }
 }

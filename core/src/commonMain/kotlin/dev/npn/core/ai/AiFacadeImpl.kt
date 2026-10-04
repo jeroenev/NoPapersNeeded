@@ -9,7 +9,7 @@ import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.toFieldDef
 import dev.npn.core.ocr.OcrEngine
-import dev.npn.core.ocr.OcrEngines
+import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.work.EndpointHealth
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emitAll
@@ -229,7 +229,7 @@ class AiFacadeImpl(
      */
     val ocrEngine: OcrEngine =
         object : OcrEngine {
-            override val name: String = OcrEngines.AI
+            override val name: String = OcrEngineId.AI.column
 
             override suspend fun available(): Boolean = configured()
 

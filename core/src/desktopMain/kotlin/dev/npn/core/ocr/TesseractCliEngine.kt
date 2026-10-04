@@ -23,7 +23,7 @@ class TesseractCliEngine(
     private val tessdataDir: String? = null,
     private val io: CoroutineDispatcher = Dispatchers.IO,
 ) : OcrEngine {
-    override val name: String = OcrEngines.TESSERACT
+    override val name: String = OcrEngineId.TESSERACT.column
 
     /** Probed once; the binary does not appear or disappear over a session's lifetime. */
     private val detected: Boolean by lazy { query("--version") != null }

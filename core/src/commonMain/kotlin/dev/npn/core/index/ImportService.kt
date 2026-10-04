@@ -11,7 +11,8 @@ import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldType
-import dev.npn.core.ocr.OcrPipeline
+import dev.npn.core.db.QueueState
+import dev.npn.core.ocr.OcrState
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathTemplate
@@ -159,10 +160,10 @@ class ImportService(
                 size = meta.size,
                 mtime = meta.mtimeMillis,
                 addedAt = now,
-                ocrState = OcrPipeline.OCR_PENDING,
+                ocrState = OcrState.PENDING.column,
             ),
         )
-        ocrQueueDao.upsert(OcrQueueEntity(docId = hash, state = OcrPipeline.STATE_PENDING, updatedAt = now))
+        ocrQueueDao.upsert(OcrQueueEntity(docId = hash, state = QueueState.PENDING.column, updatedAt = now))
         return ImportResult.Imported(hash, target)
     }
 

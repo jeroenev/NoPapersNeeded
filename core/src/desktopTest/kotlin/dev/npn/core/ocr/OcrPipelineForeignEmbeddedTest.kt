@@ -40,7 +40,7 @@ class OcrPipelineForeignEmbeddedTest {
             rig.db
                 .documentDao()
                 .getByDocId(docId)!!
-                .ocrState shouldBe OcrPipeline.OCR_ADOPTED
+                .ocrState shouldBe OcrState.ADOPTED.column
             rig.db.ftsDao().searchDocIds("layer") shouldContainExactly listOf(docId)
         }
 

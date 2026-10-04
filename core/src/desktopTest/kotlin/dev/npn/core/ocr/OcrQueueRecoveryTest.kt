@@ -1,5 +1,6 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.db.QueueState
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.nulls.shouldNotBeNull
@@ -72,7 +73,7 @@ class OcrQueueRecoveryTest {
                     .ocrQueueDao()
                     .getByDocId(docId)
                     .shouldNotBeNull()
-            entry.state shouldBe OcrPipeline.STATE_PENDING
+            entry.state shouldBe QueueState.PENDING.column
             // Cancellation is not the document's fault, so it costs it nothing: three interrupted
             // app sessions must not spend the attempt cap on a scan that was never even read.
             entry.attempts shouldBe 0
@@ -84,8 +85,8 @@ class OcrQueueRecoveryTest {
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldNotBeNull()
-                .state shouldBe OcrPipeline.STATE_DONE
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
+                .state shouldBe QueueState.DONE.column
+            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
         }
 
     @Test
@@ -103,7 +104,7 @@ class OcrQueueRecoveryTest {
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldNotBeNull()
-                .state shouldBe OcrPipeline.STATE_DONE
+                .state shouldBe QueueState.DONE.column
         }
 
     @Test
@@ -122,7 +123,7 @@ class OcrQueueRecoveryTest {
                     .ocrQueueDao()
                     .getByDocId(docId)
                     .shouldNotBeNull()
-            entry.state shouldBe OcrPipeline.STATE_PENDING
+            entry.state shouldBe QueueState.PENDING.column
             entry.attempts shouldBe 0
             entry.lastError shouldBe null
         }
@@ -134,7 +135,7 @@ class OcrQueueRecoveryTest {
             // drain that reclaimed it too would retry a hopeless document on every start.
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             rig.deviceDb.ocrQueueDao().upsert(
-                OcrQueueEntity(docId, OcrPipeline.STATE_FAILED, attempts = 3, updatedAt = 1),
+                OcrQueueEntity(docId, QueueState.FAILED.column, attempts = 3, updatedAt = 1),
             )
 
             val engine = workingEngine()
@@ -145,7 +146,7 @@ class OcrQueueRecoveryTest {
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldNotBeNull()
-                .state shouldBe OcrPipeline.STATE_FAILED
+                .state shouldBe QueueState.FAILED.column
         }
 }
 

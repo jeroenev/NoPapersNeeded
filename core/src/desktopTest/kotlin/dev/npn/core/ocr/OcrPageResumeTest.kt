@@ -1,5 +1,6 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.db.QueueState
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.index.MutableClock
@@ -36,7 +37,7 @@ class OcrPageResumeTest {
     @Test
     fun aRetryReadsOnlyThePagesTheFailedRunDidNotGetTo() =
         runTest {
-            val ai = PageCountingEngine(OcrEngines.AI).apply { failOnCall = 3 }
+            val ai = PageCountingEngine(OcrEngineId.AI.column).apply { failOnCall = 3 }
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "should-not-run")
             val docId = rig.stageDoc("ledger.pdf", PdfFixtures.imageOnlyPdf(pages = 4))
             askForAi(docId)
@@ -60,11 +61,11 @@ class OcrPageResumeTest {
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldNotBeNull()
-                .state shouldBe OcrPipeline.STATE_DONE
+                .state shouldBe QueueState.DONE.column
             // Published, so nothing is kept for a run that is no longer owed.
             rig.deviceDb
                 .ocrQueueDao()
-                .cachedPages(docId, OcrEngines.AI, "eng")
+                .cachedPages(docId, OcrEngineId.AI.column, "eng")
                 .shouldBeEmpty()
         }
 
@@ -74,8 +75,8 @@ class OcrPageResumeTest {
             // AI is this device's automatic engine, and its run fails on page 2 of 4. Another
             // device's local reading arrives meanwhile and is adopted for search, but the paid
             // run is still owed here: with its backoff, and the pages it already bought.
-            val ai = PageCountingEngine(OcrEngines.AI).apply { failOnCall = 3 }
-            val local = FakeOcrEngine(isAvailable = true, name = OcrEngines.MLKIT, canned = "should-not-run")
+            val ai = PageCountingEngine(OcrEngineId.AI.column).apply { failOnCall = 3 }
+            val local = FakeOcrEngine(isAvailable = true, name = OcrEngineId.MLKIT.column, canned = "should-not-run")
             val docId = rig.stageDoc("ledger.pdf", PdfFixtures.imageOnlyPdf(pages = 4))
             val clock = MutableClock()
             val engines = OcrEngineSelector(local, ai, aiAuto = { true })
@@ -87,7 +88,7 @@ class OcrPageResumeTest {
                 OcrSidecar(
                     doc = docId,
                     dev = "devB",
-                    engine = OcrEngines.MLKIT,
+                    engine = OcrEngineId.MLKIT.column,
                     lang = "eng",
                     createdAt = 1,
                     pages = List(4) { "local words" },
@@ -148,10 +149,10 @@ class OcrPageResumeTest {
     /** What `OcrFacade.ocrWithAi` leaves behind on this device: the folded pin and the request. */
     private suspend fun askForAi(docId: String) {
         val doc = db.documentDao().getByDocId(docId).shouldNotBeNull()
-        db.documentDao().upsert(doc.copy(ocrEngineOverride = OcrEngines.AI))
+        db.documentDao().upsert(doc.copy(ocrEngineOverride = OcrEngineId.AI.column))
         rig.deviceDb
             .ocrQueueDao()
-            .upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, aiRequested = true))
+            .upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2, aiRequested = true))
     }
 }
 

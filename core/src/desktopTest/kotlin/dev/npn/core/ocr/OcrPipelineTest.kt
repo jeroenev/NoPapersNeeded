@@ -1,5 +1,6 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.db.QueueState
 import dev.npn.core.app.DocumentRepositoryImpl
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.OcrQueueEntity
@@ -42,14 +43,14 @@ class OcrPipelineTest {
             rig.pipeline("devA", fake).processDoc(docId)
 
             fake.calls shouldBe 0
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
+            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
             db.ftsDao().searchDocIds("invoice") shouldContainExactly listOf(docId)
 
             // Sidecar written once for this device+engine, engine=embedded.
             val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.embedded"))
-            sidecar.engine shouldBe OcrPipeline.ENGINE_EMBEDDED
+            sidecar.engine shouldBe OcrEngineId.EMBEDDED.column
             sidecar.pages.size shouldBe 2
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrPipeline.ENGINE_EMBEDDED
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.EMBEDDED.column
         }
 
     @Test
@@ -64,7 +65,7 @@ class OcrPipelineTest {
             fake.calls shouldBe 1 // one page
             val sidecar = OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.mlkit"))
             sidecar.engine shouldBe "mlkit"
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
+            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
             db.ftsDao().searchDocIds("scanned") shouldContainExactly listOf(docId)
         }
@@ -112,7 +113,7 @@ class OcrPipelineTest {
                 rig.pipeline("devB", fakeB, dbB, deviceB.ocrQueueDao()).processDoc(docId)
 
                 fakeB.calls shouldBe 0
-                dbB.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_ADOPTED
+                dbB.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.ADOPTED.column
                 dbB.ftsDao().searchDocIds("alpha") shouldContainExactly listOf(docId)
             } finally {
                 dbB.close()
@@ -133,7 +134,7 @@ class OcrPipelineTest {
                     .observeQueue()
                     .first()
                     .first { it.docId == docId }
-            entry.state shouldBe OcrPipeline.STATE_DONE
+            entry.state shouldBe QueueState.DONE.column
         }
 
     @Test
@@ -154,7 +155,7 @@ class OcrPipelineTest {
                     .first()
                     .first { it.docId == docId }
             entry.attempts shouldBe 1
-            entry.state shouldBe OcrPipeline.STATE_PENDING
+            entry.state shouldBe QueueState.PENDING.column
             entry.lastError shouldBe "ocr failed: boom"
             entry.nextAttemptAt shouldBe clock.now + backoffMs(1)
             // A failed page is a failed run: nothing is published for it, blank or otherwise.
@@ -172,7 +173,7 @@ class OcrPipelineTest {
                     .first()
                     .first { it.docId == docId }
             entry.attempts shouldBe 2
-            entry.state shouldBe OcrPipeline.STATE_PENDING
+            entry.state shouldBe QueueState.PENDING.column
 
             pipe.processNext() shouldBe false
             clock.advance(backoffMs(2))
@@ -184,8 +185,8 @@ class OcrPipelineTest {
                     .first()
                     .first { it.docId == docId }
             entry.attempts shouldBe 3
-            entry.state shouldBe OcrPipeline.STATE_FAILED
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_FAILED
+            entry.state shouldBe QueueState.FAILED.column
+            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.FAILED.column
         }
 
     @Test
@@ -214,7 +215,7 @@ class OcrPipelineTest {
                     .first()
                     .first { it.docId == docId }
             entry.attempts shouldBe 1
-            entry.state shouldBe OcrPipeline.STATE_PENDING // < maxAttempts
+            entry.state shouldBe QueueState.PENDING.column // < maxAttempts
         }
 
     @Test
@@ -227,7 +228,7 @@ class OcrPipelineTest {
 
             rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "tesseract")).reconcileSidecars()
 
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_ADOPTED
+            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.ADOPTED.column
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "tesseract"
             db.ftsDao().searchDocIds("charlie") shouldContainExactly listOf(docId)
             rig.deviceDb
@@ -247,7 +248,7 @@ class OcrPipelineTest {
             // mlkit outranks tesseract: adopt the foreign text now, but queue an own OCR run.
             rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit")).reconcileSidecars()
 
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_ADOPTED
+            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.ADOPTED.column
             db.ftsDao().searchDocIds("charlie") shouldContainExactly listOf(docId)
             val entry =
                 rig.deviceDb
@@ -255,7 +256,7 @@ class OcrPipelineTest {
                     .observeQueue()
                     .first()
                     .first { it.docId == docId }
-            entry.state shouldBe OcrPipeline.STATE_PENDING
+            entry.state shouldBe QueueState.PENDING.column
         }
 
     @Test
@@ -273,7 +274,7 @@ class OcrPipelineTest {
             OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.mlkit")).engine shouldBe "mlkit"
             OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "otherdev")).engine shouldBe "tesseract"
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
+            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
             db.ftsDao().searchDocIds("delta") shouldContainExactly listOf(docId)
             db.ftsDao().searchDocIds("charlie") shouldBe emptyList()
         }
@@ -364,7 +365,7 @@ class OcrPipelineTest {
                 .ocrQueueDao()
                 .observeQueue()
                 .first()
-                .none { it.docId == docId && it.state == OcrPipeline.STATE_PENDING } shouldBe true
+                .none { it.docId == docId && it.state == QueueState.PENDING.column } shouldBe true
         }
 
     /**
@@ -421,7 +422,7 @@ class OcrPipelineTest {
                     .ocrQueueDao()
                     .observeQueue()
                     .first()
-                    .all { it.state == OcrPipeline.STATE_DONE } shouldBe true
+                    .all { it.state == QueueState.DONE.column } shouldBe true
             } finally {
                 worker.close()
             }

@@ -5,6 +5,7 @@ import androidx.room3.Entity
 import androidx.room3.Fts5
 import androidx.room3.Index
 import androidx.room3.PrimaryKey
+import dev.npn.core.ocr.OcrState
 
 /**
  * Materialized document row. This is a disposable cache: it is a fold of the file library
@@ -69,9 +70,12 @@ data class DocumentEntity(
     val deleted: Boolean = false,
     /** File disappeared from library, awaiting relink. */
     val missing: Boolean = false,
-    /** none | pending | done | failed | adopted */
-    val ocrState: String = "none",
-    /** Engine of the OCR sidecar currently indexed for search (null until first indexing). */
+    /** An [OcrState.column]. */
+    val ocrState: String = OcrState.NONE.column,
+    /**
+     * Engine of the OCR sidecar currently indexed for search, an [dev.npn.core.ocr.OcrEngineId.column]
+     * (null until first indexing).
+     */
     val ocrEngine: String? = null,
     /**
      * User override of the searchable OCR engine, projected from the journal's
@@ -238,7 +242,7 @@ data class DuplicateEntity(
 @Entity(tableName = "ocr_queue")
 data class OcrQueueEntity(
     @PrimaryKey val docId: String,
-    /** pending | done | failed — see the class doc for why `running` is not one of them. */
+    /** A [QueueState.column] — see the class doc for why `running` is not one of them. */
     val state: String,
     val attempts: Int = 0,
     val updatedAt: Long,
@@ -262,6 +266,38 @@ data class OcrQueueEntity(
      */
     @ColumnInfo(defaultValue = "0") val nextAttemptAt: Long = 0,
 )
+
+/** [QueueState.DONE]'s stored value, for a query that filters on it. */
+internal const val QUEUE_DONE = "done"
+
+/** [QueueState.FAILED]'s stored value, for a query that filters on it. */
+internal const val QUEUE_FAILED = "failed"
+
+/** Where an [OcrQueueEntity] row stands; [column] is the spelling in `ocr_queue.state`. */
+enum class QueueState(
+    val column: String,
+) {
+    /** Owed a pass, now or once its backoff ([OcrQueueEntity.nextAttemptAt]) has passed. */
+    PENDING("pending"),
+
+    /** This device's run is settled; the row stays as history. */
+    DONE(QUEUE_DONE),
+
+    /** Given up on after the attempt cap, until an explicit re-run. */
+    FAILED(QUEUE_FAILED),
+    ;
+
+    companion object {
+        /**
+         * Decode a stored state. Anything else — the `running` older builds wrote — is owed work, as
+         * `OcrQueueDao.nextPending` treats it.
+         */
+        fun fromColumn(value: String): QueueState = entries.firstOrNull { it.column == value } ?: PENDING
+    }
+}
+
+/** This row's [QueueState]. */
+val OcrQueueEntity.queueState: QueueState get() = QueueState.fromColumn(state)
 
 /**
  * One page an OCR run read before the run as a whole failed, kept so that its retry pays only for

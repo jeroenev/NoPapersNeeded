@@ -63,7 +63,7 @@ class OcrPipelineStaleFileTest {
         runTest {
             val docId = rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("moved away"))
             val dao = rig.db.documentDao()
-            dao.upsert(dao.getByDocId(docId).shouldNotBeNull().copy(missing = true, ocrState = OcrPipeline.OCR_PENDING))
+            dao.upsert(dao.getByDocId(docId).shouldNotBeNull().copy(missing = true, ocrState = OcrState.PENDING.column))
             val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"))
 
             pipeline.processNext()
@@ -72,7 +72,7 @@ class OcrPipelineStaleFileTest {
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldBeNull()
-            dao.getByDocId(docId)?.ocrState shouldBe OcrPipeline.OCR_NONE
+            dao.getByDocId(docId)?.ocrState shouldBe OcrState.NONE.column
         }
 
     @Test
@@ -95,7 +95,7 @@ class OcrPipelineStaleFileTest {
                         docId = EMPTY,
                         relPath = "empty.pdf",
                         fileName = "empty.pdf",
-                        ocrState = OcrPipeline.OCR_NONE,
+                        ocrState = OcrState.NONE.column,
                     ),
             )
             rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(EMPTY, "pending", updatedAt = 1))
@@ -106,7 +106,7 @@ class OcrPipelineStaleFileTest {
             rig.db
                 .documentDao()
                 .getByDocId(EMPTY)
-                ?.ocrState shouldBe OcrPipeline.OCR_NONE
+                ?.ocrState shouldBe OcrState.NONE.column
             rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(EMPTY)

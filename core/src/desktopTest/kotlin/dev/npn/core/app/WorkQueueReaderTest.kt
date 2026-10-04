@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.QueueState
 import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.db.AiEnrichQueueEntity
@@ -9,7 +10,6 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
-import dev.npn.core.ocr.OcrPipeline
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -84,7 +84,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
 
     private suspend fun putOcr(
         id: String,
-        state: String = OcrPipeline.STATE_PENDING,
+        state: String = QueueState.PENDING.column,
         attempts: Int = 0,
         updatedAt: Long = 1,
         lastError: String? = null,
@@ -171,7 +171,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
     fun `a finished OCR row is history, not outstanding work`() =
         runTest {
             putDoc("a")
-            putOcr("a", state = OcrPipeline.STATE_DONE)
+            putOcr("a", state = QueueState.DONE.column)
 
             queue() shouldBe emptyList()
         }
@@ -180,7 +180,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
     fun `a failed OCR row stays visible because it needs attention`() =
         runTest {
             putDoc("a")
-            putOcr("a", state = OcrPipeline.STATE_FAILED, attempts = 3, lastError = "boom", nextAttemptAt = 9_000)
+            putOcr("a", state = QueueState.FAILED.column, attempts = 3, lastError = "boom", nextAttemptAt = 9_000)
 
             val entry = queue().single()
             entry.state shouldBe WorkState.FAILED
@@ -194,7 +194,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
     fun `a pending OCR row that has already burned attempts reads as a retry`() =
         runTest {
             putDoc("a")
-            putOcr("a", state = OcrPipeline.STATE_PENDING, attempts = 1, nextAttemptAt = 9_000)
+            putOcr("a", state = QueueState.PENDING.column, attempts = 1, nextAttemptAt = 9_000)
 
             queue().single().state shouldBe WorkState.RETRYING
             queue().single().nextAttemptAt shouldBe 9_000

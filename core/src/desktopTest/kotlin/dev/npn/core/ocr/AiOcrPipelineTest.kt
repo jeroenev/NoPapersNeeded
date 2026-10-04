@@ -1,5 +1,6 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.db.QueueState
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.pdf.PdfFixtures
@@ -37,7 +38,7 @@ class AiOcrPipelineTest {
             // The trap this guards: "ai" ranks above every local engine, so a configured endpoint
             // alone would silently make the whole library a paid job.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "should-not-run")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "should-not-run")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
 
             rig.pipeline("devA", local, engines = selector(local, ai, auto = false)).processDoc(docId)
@@ -52,16 +53,16 @@ class AiOcrPipelineTest {
     fun aiEngineRunsWhenItIsTheDevicesAutomaticEngine() =
         runTest {
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "should-not-run")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "transcribed by model")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "transcribed by model")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
 
             rig.pipeline("devA", local, engines = selector(local, ai, auto = true)).processDoc(docId)
 
             ai.calls shouldBe 1
             local.calls shouldBe 0
-            OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.ai")).engine shouldBe OcrEngines.AI
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngines.AI
-            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrPipeline.OCR_DONE
+            OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.ai")).engine shouldBe OcrEngineId.AI.column
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
+            db.documentDao().getByDocId(docId)!!.ocrState shouldBe OcrState.DONE.column
             db.ftsDao().searchDocIds("transcribed") shouldContainExactly listOf(docId)
         }
 
@@ -71,7 +72,7 @@ class AiOcrPipelineTest {
             // The per-document request path: OcrFacade.ocrWithAi pins the engine and marks the run as
             // asked for here, which has to be enough to spend a call on this one document.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "should-not-run")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "model read the scan")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "model read the scan")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             askForAi(docId)
 
@@ -79,7 +80,7 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 1
             local.calls shouldBe 0
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngines.AI
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
             db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
         }
 
@@ -87,7 +88,7 @@ class AiOcrPipelineTest {
     fun anAskedForAiRunUpgradesADocumentThisDeviceAlreadyOcrdLocally() =
         runTest {
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "blurry locel guess")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "accurate model reading")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "accurate model reading")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             rig.pipeline("devA", local, engines = selector(local, ai)).processDoc(docId)
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
@@ -98,8 +99,8 @@ class AiOcrPipelineTest {
             ai.calls shouldBe 1
             // Both versions co-exist (sidecars are write-once); search follows the better one.
             OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.mlkit")).engine shouldBe "mlkit"
-            OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.ai")).engine shouldBe OcrEngines.AI
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngines.AI
+            OcrSidecarCodec.decode(OcrSidecarFiles(fs).read(docId, "devA.ai")).engine shouldBe OcrEngineId.AI.column
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
             db.ftsDao().searchDocIds("accurate") shouldContainExactly listOf(docId)
             db.ftsDao().searchDocIds("locel") shouldBe emptyList()
         }
@@ -110,7 +111,7 @@ class AiOcrPipelineTest {
             // The pin is the user naming an engine for this document. Running the model anyway
             // would bill a transcription that then loses the selection to the pinned version.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "should-not-run")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "should-not-run")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             setOverride(docId, "mlkit")
 
@@ -130,7 +131,7 @@ class AiOcrPipelineTest {
             // a local sidecar instead, and is queued again on every reconcile — a paid-looking
             // upgrade loop that never converges.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "should-not-run")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "should-not-run")
             val docId = rig.stageDoc("big.pdf", PdfFixtures.imageOnlyPdf(pages = 3))
             val engines = selector(local, ai, auto = true, largeDocumentPages = 2)
             val pipe = rig.pipeline("devA", local, engines = engines)
@@ -148,7 +149,7 @@ class AiOcrPipelineTest {
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldNotBeNull()
-                .state shouldBe OcrPipeline.STATE_DONE
+                .state shouldBe QueueState.DONE.column
         }
 
     @Test
@@ -158,7 +159,7 @@ class AiOcrPipelineTest {
             // is exactly what the vision model is wanted for, so asking runs it and the run
             // converges (the sidecar it publishes stops the next canImprove).
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "should-not-run")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "model read it")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "model read it")
             val docId = rig.stageDoc("ledger.pdf", PdfFixtures.imageOnlyPdf(pages = 3))
             val engines = selector(local, ai, auto = false, largeDocumentPages = 2)
             val pipe = rig.pipeline("devA", local, engines = engines)
@@ -168,7 +169,7 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 3
             local.calls shouldBe 0
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngines.AI
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
             db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
 
             pipe.reconcileSidecars()
@@ -178,7 +179,7 @@ class AiOcrPipelineTest {
                 .ocrQueueDao()
                 .getByDocId(docId)
                 .shouldNotBeNull()
-                .state shouldBe OcrPipeline.STATE_DONE
+                .state shouldBe QueueState.DONE.column
         }
 
     @Test
@@ -188,7 +189,7 @@ class AiOcrPipelineTest {
             // the sidecars. The document reads as pending then, so reconcile re-adopts its stored
             // text; the queue row is the only record of the request and must outlive that.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "model words")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "model words")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             val pipe = rig.pipeline("devA", local, engines = selector(local, ai, auto = false))
             pipe.processDoc(docId)
@@ -198,7 +199,7 @@ class AiOcrPipelineTest {
             pipe.drain()
 
             ai.calls shouldBe 1
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngines.AI
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
             db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
         }
 
@@ -208,12 +209,12 @@ class AiOcrPipelineTest {
             // The pin is synced library data; the request behind it was made on another device,
             // which pays for its own transcription. This one only follows the pin for selection.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "should-not-run")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "should-not-run")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             val pipe = rig.pipeline("devB", local, engines = selector(local, ai, auto = false))
             pipe.processDoc(docId)
 
-            setOverride(docId, OcrEngines.AI)
+            setOverride(docId, OcrEngineId.AI.column)
             pipe.reconcileSidecars()
             pipe.drain()
 
@@ -225,7 +226,7 @@ class AiOcrPipelineTest {
     fun anAiPinFromAnotherDeviceAdoptsTheAiVersionThatDevicePublished() =
         runTest {
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "should-not-run")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "should-not-run")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             val pipe = rig.pipeline("devB", local, engines = selector(local, ai, auto = false))
             pipe.processDoc(docId)
@@ -235,18 +236,18 @@ class AiOcrPipelineTest {
                 OcrSidecar(
                     doc = docId,
                     dev = "devA",
-                    engine = OcrEngines.AI,
+                    engine = OcrEngineId.AI.column,
                     lang = "eng",
                     createdAt = 1,
                     pages = listOf("model words"),
                 )
             OcrSidecarFiles(fs).writeOnce(docId, "devA.ai", OcrSidecarCodec.encode(fromA))
-            setOverride(docId, OcrEngines.AI)
+            setOverride(docId, OcrEngineId.AI.column)
             pipe.reconcileSidecars()
             pipe.drain()
 
             ai.calls shouldBe 0
-            db.documentDao().getByDocId(docId)?.ocrEngine shouldBe OcrEngines.AI
+            db.documentDao().getByDocId(docId)?.ocrEngine shouldBe OcrEngineId.AI.column
             db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
         }
 
@@ -256,12 +257,12 @@ class AiOcrPipelineTest {
             // With AI as this device's automatic engine, a pinned document is unattended work like
             // any other: under the cap the policy may spend, over it the run stays local.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "should-not-run")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "should-not-run")
             val docId = rig.stageDoc("big.pdf", PdfFixtures.imageOnlyPdf(pages = 3))
             val pipe = rig.pipeline("devB", local, engines = selector(local, ai, auto = true, largeDocumentPages = 2))
             pipe.processDoc(docId)
 
-            setOverride(docId, OcrEngines.AI)
+            setOverride(docId, OcrEngineId.AI.column)
             pipe.reconcileSidecars()
             pipe.drain()
 
@@ -275,7 +276,7 @@ class AiOcrPipelineTest {
             // AI turned on in settings but not usable (no model/key yet). The document must still
             // get text from the local engine rather than sit unprocessed.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local fallback words")
-            val ai = FakeOcrEngine(isAvailable = false, name = OcrEngines.AI, canned = "should-not-run")
+            val ai = FakeOcrEngine(isAvailable = false, name = OcrEngineId.AI.column, canned = "should-not-run")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
             askForAi(docId)
             val engines = selector(local, ai, auto = true)
@@ -301,7 +302,7 @@ class AiOcrPipelineTest {
             // Embedded text short-circuits before any engine is asked, so asking for the expensive
             // engine on a born-digital PDF costs nothing. OcrFacade.ocrWithAi documents this.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit")
-            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI)
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column)
             val docId = rig.stageDoc("inv.pdf", PdfFixtures.embeddedTextPdf("invoice 42 acme corporation"))
             askForAi(docId)
 
@@ -309,7 +310,7 @@ class AiOcrPipelineTest {
 
             ai.calls shouldBe 0
             local.calls shouldBe 0
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrPipeline.ENGINE_EMBEDDED
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.EMBEDDED.column
         }
 
     private fun selector(
@@ -329,11 +330,11 @@ class AiOcrPipelineTest {
      * it onto the row, a queue row marking the run as asked for here, and the document pending.
      */
     private suspend fun askForAi(docId: String) {
-        setOverride(docId, OcrEngines.AI)
+        setOverride(docId, OcrEngineId.AI.column)
         rig.deviceDb
             .ocrQueueDao()
-            .upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, aiRequested = true))
-        db.documentDao().updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
+            .upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2, aiRequested = true))
+        db.documentDao().updateOcrState(docId, OcrState.PENDING.column, null, null)
     }
 
     /** Work the queue the way the session's drainer does. */

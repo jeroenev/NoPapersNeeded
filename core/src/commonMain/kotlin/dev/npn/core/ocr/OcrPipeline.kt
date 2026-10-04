@@ -7,7 +7,9 @@ import dev.npn.core.db.FtsDao
 import dev.npn.core.db.OcrPageCacheEntity
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.QueueState
 import dev.npn.core.db.TagDao
+import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarFiles
@@ -47,7 +49,7 @@ data class OcrConfig(
 /**
  * Hybrid OCR pipeline with co-existing OCR versions. Every device+engine pair may publish its
  * own sidecar for a document; the version indexed for search is the highest-priority engine
- * ([OcrEngines.rank]) unless the user pinned an engine per document
+ * ([OcrEngineId.rank]) unless the user pinned an engine per document
  * (`DocumentEntity.ocrEngineOverride`, synced via the journal). A device runs its own engine
  * only when that engine outranks every existing version; otherwise it adopts the best sidecar.
  *
@@ -85,19 +87,7 @@ class OcrPipeline(
     private val onStaleFile: suspend (docId: String) -> Unit = {},
 ) {
     companion object {
-        const val STATE_PENDING = "pending"
-        const val STATE_DONE = "done"
-        const val STATE_FAILED = "failed"
-
-        const val OCR_NONE = "none"
-        const val OCR_PENDING = "pending"
-        const val OCR_DONE = "done"
-        const val OCR_FAILED = "failed"
-        const val OCR_ADOPTED = "adopted"
-
-        const val ENGINE_EMBEDDED = OcrEngines.EMBEDDED
-
-        private val UNPROCESSED_STATES = setOf(OCR_NONE, OCR_PENDING, OCR_FAILED)
+        private val UNPROCESSED_STATES = setOf(OcrState.NONE, OcrState.PENDING, OcrState.FAILED)
 
         /**
          * SHA-256 of no bytes. Never a document, so never an OCR key: a sidecar under it was
@@ -188,7 +178,7 @@ class OcrPipeline(
             // No file to read. Unqueued as never processed, so the rescan that brings it back
             // queues it again.
             ocrQueueDao.delete(docId)
-            if (doc.ocrState == OCR_PENDING) setOcrState(docId, OCR_NONE)
+            if (OcrState.fromColumn(doc.ocrState) == OcrState.PENDING) setOcrState(docId, OcrState.NONE)
             return
         }
 
@@ -235,7 +225,7 @@ class OcrPipeline(
             ocrQueueDao.upsert(
                 OcrQueueEntity(
                     docId = docId,
-                    state = STATE_DONE,
+                    state = QueueState.DONE.column,
                     attempts = ocrQueueDao.getByDocId(docId)?.attempts ?: 0,
                     updatedAt = clock.nowMillis(),
                     lastError = hookError,
@@ -396,7 +386,7 @@ class OcrPipeline(
             // The engine label records which OCR engine produced the OCR'd pages; embedded
             // pages are deterministic and identical across devices, so a partially embedded
             // result is still labeled (and ranked) by its OCR engine.
-            val name = if (usedOcr) engine.name else ENGINE_EMBEDDED
+            val name = if (usedOcr) engine.name else OcrEngineId.EMBEDDED.column
             return PageResult(pages, name, lang)
         } finally {
             handle.close()
@@ -439,7 +429,7 @@ class OcrPipeline(
                 decode(docId, v.writerKey)?.let {
                     StoredVersion(v.writerKey, v.deviceId, it.engine, it.lang, it.createdAt)
                 }
-            }.sortedWith(compareByDescending<StoredVersion> { OcrEngines.rank(it.engine) }.thenBy { it.writerKey })
+            }.sortedWith(compareByDescending<StoredVersion> { OcrEngineId.rank(it.engine) }.thenBy { it.writerKey })
 
     // --- selection ---
 
@@ -454,7 +444,7 @@ class OcrPipeline(
     ): Version? {
         val pool = versions.filter { it.engine == override }.ifEmpty { versions }
         return pool.maxWithOrNull(
-            compareBy<Version> { OcrEngines.rank(it.engine) }
+            compareBy<Version> { OcrEngineId.rank(it.engine) }
                 .thenBy { it.run }
                 .thenByDescending { it.writerKey },
         )
@@ -466,7 +456,7 @@ class OcrPipeline(
         versions: List<Version>,
     ) {
         val desired = select(versions, doc.ocrEngineOverride) ?: return
-        val needsIndex = doc.ocrState in UNPROCESSED_STATES || doc.ocrSource != desired.writerKey
+        val needsIndex = OcrState.fromColumn(doc.ocrState) in UNPROCESSED_STATES || doc.ocrSource != desired.writerKey
         if (!needsIndex) return
         val sidecar = decode(doc.docId, desired.writerKey) ?: return
         indexAndMarkSelected(doc.docId, desired, sidecar)
@@ -485,7 +475,8 @@ class OcrPipeline(
      * their cap and the pages they already read. Dropping such a row on adoption would forget the
      * request, or queue the same run afresh and pay for those pages again.
      */
-    private fun OcrQueueEntity.isOwedHere(): Boolean = state != STATE_DONE && (rerun || aiRequested || attempts > 0)
+    private fun OcrQueueEntity.isOwedHere(): Boolean =
+        queueState != QueueState.DONE && (rerun || aiRequested || attempts > 0)
 
     /**
      * True when running this device's engine for [doc] would produce a better version than anything
@@ -511,12 +502,12 @@ class OcrPipeline(
         val engine = engines.forDocument(doc.ocrEngineOverride, doc.pageCount, aiRequested)
         if (!engine.available()) return false
         if (versions.isEmpty()) return true
-        val ownRank = OcrEngines.rank(engine.name)
-        if (rerun) return ownRank >= OcrEngines.rank(select(versions, doc.ocrEngineOverride)?.engine)
-        val outranksStored = ownRank > versions.maxOf { OcrEngines.rank(it.engine) }
+        val ownRank = OcrEngineId.rank(engine.name)
+        if (rerun) return ownRank >= OcrEngineId.rank(select(versions, doc.ocrEngineOverride)?.engine)
+        val outranksStored = ownRank > versions.maxOf { OcrEngineId.rank(it.engine) }
         val triedHere =
             versions.any {
-                it.deviceId == deviceId && (it.engine == engine.name || it.engine == ENGINE_EMBEDDED)
+                it.deviceId == deviceId && (it.engine == engine.name || it.engine == OcrEngineId.EMBEDDED.column)
             }
         if (!outranksStored || triedHere) return false
         // Another device's `embedded` sidecar whose every page has a usable text layer means this
@@ -525,7 +516,7 @@ class OcrPipeline(
         // not count, since it may come from a device that had no OCR engine to run.
         val fullTextLayer =
             versions.any { version ->
-                version.engine == ENGINE_EMBEDDED &&
+                version.engine == OcrEngineId.EMBEDDED.column &&
                     fullTextLayerCache.getOrCompute("${doc.docId}.${version.writerKey}") {
                         decode(doc.docId, version.writerKey)?.let { sidecar ->
                             sidecar.pages.all { it.trim().length >= config.minEmbeddedCharsPerPage }
@@ -550,11 +541,11 @@ class OcrPipeline(
         if (doc.trashed || doc.deleted || doc.missing) return
         if (!canImprove(doc, versions)) return
         val entry = ocrQueueDao.getByDocId(doc.docId)
-        if (entry != null && (entry.state != STATE_DONE || retry.givesUp(entry.attempts))) return
+        if (entry != null && (entry.queueState != QueueState.DONE || retry.givesUp(entry.attempts))) return
         ocrQueueDao.upsert(
             OcrQueueEntity(
                 docId = doc.docId,
-                state = STATE_PENDING,
+                state = QueueState.PENDING.column,
                 attempts = entry?.attempts ?: 0,
                 updatedAt = clock.nowMillis(),
             ),
@@ -591,7 +582,7 @@ class OcrPipeline(
         writerKey: String,
     ): Version? {
         val suffix = writerKey.substringAfterLast('.', "")
-        if (suffix.isNotEmpty() && OcrEngines.isKnown(suffix)) {
+        if (OcrEngineId.fromColumn(suffix) != null) {
             val writer = writerKey.removeSuffix(".$suffix")
             val rerun = RERUN_WRITER.matchEntire(writer)
             val run = rerun?.groupValues?.get(2)?.toLongOrNull()
@@ -619,7 +610,7 @@ class OcrPipeline(
 
     /**
      * Index the selected [sidecar]'s text for [docId] and record the resulting OCR state on the
-     * doc row: [OCR_DONE] when this device produced [desired], else [OCR_ADOPTED]. Shared by the
+     * doc row: [OcrState.DONE] when this device produced [desired], else [OcrState.ADOPTED]. Shared by the
      * queue-drain path ([processDoc]) and the reconcile/re-select path ([applySelection]); each
      * caller handles its own queue-entry bookkeeping and [onTextIndexed] notification afterwards.
      */
@@ -642,13 +633,13 @@ class OcrPipeline(
                 content = OcrSidecar.joinPages(sidecar.pages),
             ),
         )
-        val state = if (desired.deviceId == deviceId) OCR_DONE else OCR_ADOPTED
+        val state = if (desired.deviceId == deviceId) OcrState.DONE else OcrState.ADOPTED
         setOcrState(docId, state, pageCount = sidecar.pages.size, engine = sidecar.engine, source = desired.writerKey)
     }
 
     private suspend fun setOcrState(
         docId: String,
-        state: String,
+        state: OcrState,
         pageCount: Int? = null,
         engine: String? = null,
         source: String? = null,
@@ -657,7 +648,7 @@ class OcrPipeline(
         // columns a concurrent journal fold just projected onto the same row: [pageCount] only
         // fills a NULL page count and a null [engine] keeps the stored engine (see
         // DocumentDao.updateOcrState).
-        documentDao.updateOcrState(docId, state, pageCount, engine, source)
+        documentDao.updateOcrState(docId, state.column, pageCount, engine, source)
     }
 
     /**
@@ -676,12 +667,12 @@ class OcrPipeline(
     ) {
         val entry = ocrQueueDao.getByDocId(docId)
         val attempts = (entry?.attempts ?: 0) + 1
-        val state = if (retry.givesUp(attempts)) STATE_FAILED else STATE_PENDING
+        val state = if (retry.givesUp(attempts)) QueueState.FAILED else QueueState.PENDING
         val now = clock.nowMillis()
         ocrQueueDao.upsert(
             OcrQueueEntity(
                 docId = docId,
-                state = state,
+                state = state.column,
                 attempts = attempts,
                 updatedAt = now,
                 nextAttemptAt = retry.nextAttemptAt(now, attempts),
@@ -691,7 +682,7 @@ class OcrPipeline(
                 aiRequested = entry?.aiRequested ?: false,
             ),
         )
-        if (!textIndexed) setOcrState(docId, if (state == STATE_FAILED) OCR_FAILED else OCR_PENDING)
+        if (!textIndexed) setOcrState(docId, if (state == QueueState.FAILED) OcrState.FAILED else OcrState.PENDING)
     }
 }
 

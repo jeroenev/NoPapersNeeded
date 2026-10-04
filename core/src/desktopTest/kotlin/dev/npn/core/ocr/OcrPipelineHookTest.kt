@@ -1,5 +1,6 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.db.QueueState
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.work.QueueDrainer
@@ -55,11 +56,11 @@ class OcrPipelineHookTest {
 
             // Still owed while the hook runs — the queue has no "being worked on" state, only the
             // in-process [OcrPipeline.inFlight] does.
-            stateDuringHook shouldBe OcrPipeline.STATE_PENDING
+            stateDuringHook shouldBe QueueState.PENDING.column
             rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)
-                ?.state shouldBe OcrPipeline.STATE_DONE
+                ?.state shouldBe QueueState.DONE.column
         }
 
     /** New text on this device is what the paid follow-up is for, so both hooks fire. */
@@ -100,10 +101,10 @@ class OcrPipelineHookTest {
                     rig.db
                         .documentDao()
                         .getByDocId(docId)!!
-                        .copy(ocrState = OcrPipeline.OCR_NONE),
+                        .copy(ocrState = OcrState.NONE.column),
                 )
                 // The queue is this device's and outlives the index; re-queued as a rebuild's rescan would.
-                rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 1))
+                rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 1))
                 val indexed = mutableListOf<String>()
                 val produced = mutableListOf<String>()
                 val pipeline =
@@ -147,7 +148,7 @@ class OcrPipelineHookTest {
                         .ocrQueueDao()
                         .observeQueue()
                         .first()
-                rows.all { it.state == OcrPipeline.STATE_DONE } shouldBe true
+                rows.all { it.state == QueueState.DONE.column } shouldBe true
                 // The other hook still ran: containment is per hook, not per document.
                 produced.size shouldBe 2
                 // Nothing retries a hook, so the failure has to survive somewhere.

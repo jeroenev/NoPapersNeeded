@@ -3,10 +3,13 @@ package dev.npn.core.app
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.QueueState
+import dev.npn.core.db.queueState
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.ocr.OcrEngineSelector
-import dev.npn.core.ocr.OcrEngines
+import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ocr.OcrPipeline
+import dev.npn.core.ocr.OcrState
 import dev.npn.core.work.QueueDrainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.flow.Flow
@@ -76,7 +79,7 @@ internal class OcrFacadeImpl(
             // The pin picks the ai sidecar for search once it exists, on every replica; the request
             // to pay for one is this device's queue flag (see OcrFacade.ocrWithAi). Queue after
             // pinning so the run that drains sees the override already folded onto the row.
-            pin(docId, OcrEngines.AI)
+            pin(docId, OcrEngineId.AI.column)
             enqueue(docId, aiRequested = true)
             AiOcrOutcome.QUEUED
         }
@@ -124,11 +127,11 @@ internal class OcrFacadeImpl(
         pipeline.reconcileSidecars()
         // This runs after every rescan, so it asks for the few live documents still without OCR
         // rather than reading every row to filter them here.
-        for (docId in documentDao.liveDocIdsWithOcrState(OcrPipeline.OCR_NONE)) {
-            when (queue.getByDocId(docId)?.state) {
-                null, OcrPipeline.STATE_DONE -> enqueue(docId)
-                OcrPipeline.STATE_FAILED -> documentDao.updateOcrState(docId, OcrPipeline.OCR_FAILED, null, null)
-                else -> documentDao.updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
+        for (docId in documentDao.liveDocIdsWithOcrState(OcrState.NONE.column)) {
+            when (queue.getByDocId(docId)?.queueState) {
+                null, QueueState.DONE -> enqueue(docId)
+                QueueState.FAILED -> documentDao.updateOcrState(docId, OcrState.FAILED.column, null, null)
+                QueueState.PENDING -> documentDao.updateOcrState(docId, OcrState.PENDING.column, null, null)
             }
         }
     }
@@ -160,13 +163,13 @@ internal class OcrFacadeImpl(
         queue.upsert(
             OcrQueueEntity(
                 docId = docId,
-                state = OcrPipeline.STATE_PENDING,
+                state = QueueState.PENDING.column,
                 updatedAt = clock.nowMillis(),
                 rerun = rerun || existing?.rerun == true,
                 aiRequested = aiRequested || existing?.aiRequested == true,
             ),
         )
-        documentDao.updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)
+        documentDao.updateOcrState(docId, OcrState.PENDING.column, null, null)
         worker.kick()
     }
 }

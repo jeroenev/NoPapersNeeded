@@ -1,28 +1,28 @@
 package dev.npn.core.ocr
 
 /**
- * Where a document stands in the OCR pipeline, as a closed vocabulary. [column] is the wire
- * spelling stored in `documents.ocrState` (a plain TEXT column, unchanged); the enum is what
- * crosses the `dev.npn.core.app` read seam, so adding a state is a compile error at every UI site
- * that labels one rather than a raw token shipped to users.
+ * Where a document stands in the OCR pipeline, as a closed vocabulary and the one source of its
+ * names. [column] is the spelling stored in `documents.ocrState` (a plain TEXT column); the enum is
+ * what crosses the `dev.npn.core.app` read seam, so adding a state is a compile error at every UI
+ * site that labels one rather than a raw token shipped to users.
  */
 enum class OcrState(
     val column: String,
 ) {
     /** Never processed: no sidecar on any device and nothing queued here. */
-    NONE(OcrPipeline.OCR_NONE),
+    NONE("none"),
 
     /** Queued for this device's engine. */
-    PENDING(OcrPipeline.OCR_PENDING),
+    PENDING("pending"),
 
     /** This device produced the indexed text. */
-    DONE(OcrPipeline.OCR_DONE),
+    DONE("done"),
 
     /** This device tried and gave up after [OcrConfig.maxAttempts]. */
-    FAILED(OcrPipeline.OCR_FAILED),
+    FAILED("failed"),
 
     /** Indexed text came from another device's sidecar, not from a run here. */
-    ADOPTED(OcrPipeline.OCR_ADOPTED),
+    ADOPTED("adopted"),
     ;
 
     companion object {

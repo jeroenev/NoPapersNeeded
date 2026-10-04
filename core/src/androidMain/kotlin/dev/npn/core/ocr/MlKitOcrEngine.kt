@@ -20,7 +20,7 @@ import kotlin.coroutines.resumeWithException
  * which the pipeline would publish to a write-once sidecar and never retry.
  */
 class MlKitOcrEngine : OcrEngine {
-    override val name: String = OcrEngines.MLKIT
+    override val name: String = OcrEngineId.MLKIT.column
 
     override suspend fun available(): Boolean = true
 

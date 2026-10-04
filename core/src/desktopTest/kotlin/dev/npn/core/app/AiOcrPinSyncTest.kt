@@ -1,11 +1,11 @@
 package dev.npn.core.app
 
+import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.FakeSseGateway
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.ocr.FakeOcrEngine
-import dev.npn.core.ocr.OcrEngines
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldNotBeEmpty
@@ -34,7 +34,7 @@ class AiOcrPinSyncTest {
                 // Device B has a vision endpoint configured, but not as its automatic engine.
                 val endpoint =
                     AiConfig(enabled = true, provider = AiProvider.CUSTOM, baseUrl = gateway.baseUrl, model = "vision")
-                val local = FakeOcrEngine(isAvailable = true, name = OcrEngines.MLKIT, canned = "local words")
+                val local = FakeOcrEngine(isAvailable = true, name = OcrEngineId.MLKIT.column, canned = "local words")
                 val (second, db) = rig.secondSession(backgroundScope, ocr = local, aiConfig = { endpoint })
                 secondDb = db
                 second.rescan()
@@ -42,14 +42,14 @@ class AiOcrPinSyncTest {
                 local.calls shouldBe 1
 
                 // Device A pins the document to the AI engine; B ingests that event.
-                rig.session.ocr.setOcrEngine(docId, OcrEngines.AI)
+                rig.session.ocr.setOcrEngine(docId, OcrEngineId.AI.column)
                 second.rescan()
                 second.work.drainOcr()
 
                 gateway.requestedPaths.shouldBeEmpty()
                 val doc = db.documentDao().getByDocId(docId).shouldNotBeNull()
-                doc.ocrEngineOverride shouldBe OcrEngines.AI
-                doc.ocrEngine shouldBe OcrEngines.MLKIT
+                doc.ocrEngineOverride shouldBe OcrEngineId.AI.column
+                doc.ocrEngine shouldBe OcrEngineId.MLKIT.column
 
                 // The endpoint is live: asked for on B itself, the run does reach it.
                 second.ocr.ocrWithAi(docId)

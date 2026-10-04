@@ -210,7 +210,7 @@ interface OcrQueueDao {
      * [OcrQueueEntity]).
      */
     @Query(
-        "SELECT * FROM ocr_queue WHERE state NOT IN ('done', 'failed') AND nextAttemptAt <= :now " +
+        "SELECT * FROM ocr_queue WHERE state NOT IN ('$QUEUE_DONE', '$QUEUE_FAILED') AND nextAttemptAt <= :now " +
             "ORDER BY updatedAt LIMIT 1",
     )
     suspend fun nextPending(now: Long): OcrQueueEntity?
@@ -226,7 +226,7 @@ interface OcrQueueDao {
      * Excludes `done`, which this table keeps as history rather than deleting, for
      * [dev.npn.core.app.WorkFacade.queue].
      */
-    @Query("SELECT * FROM ocr_queue WHERE state <> 'done' ORDER BY updatedAt")
+    @Query("SELECT * FROM ocr_queue WHERE state <> '$QUEUE_DONE' ORDER BY updatedAt")
     fun observeOutstanding(): Flow<List<OcrQueueEntity>>
 
     @Query("SELECT * FROM ocr_queue WHERE docId = :docId")
@@ -238,7 +238,7 @@ interface OcrQueueDao {
      * user sees drains to zero; rows given up on are reported separately, as failures rather than
      * as work outstanding.
      */
-    @Query("SELECT COUNT(*) FROM ocr_queue WHERE state NOT IN ('done', 'failed')")
+    @Query("SELECT COUNT(*) FROM ocr_queue WHERE state NOT IN ('$QUEUE_DONE', '$QUEUE_FAILED')")
     fun countActive(): Flow<Int>
 
     @Query("DELETE FROM ocr_queue WHERE docId = :docId")

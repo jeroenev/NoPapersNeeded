@@ -8,7 +8,8 @@ import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
-import dev.npn.core.ocr.OcrPipeline
+import dev.npn.core.db.QueueState
+import dev.npn.core.db.queueState
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.map
@@ -140,7 +141,7 @@ internal class WorkQueueReader(
                 // document is owed a pass, which stays true while the pass is happening.
                 docId == inFlight -> WorkState.RUNNING
 
-                state == OcrPipeline.STATE_FAILED -> WorkState.FAILED
+                queueState == QueueState.FAILED -> WorkState.FAILED
 
                 // A pending row that has already burned attempts is a retry, not fresh work.
                 attempts > 0 -> WorkState.RETRYING
@@ -150,7 +151,7 @@ internal class WorkQueueReader(
         attempts = attempts,
         updatedAt = updatedAt,
         // Only a retry waits for a time; a row given up on is not coming back by itself.
-        nextAttemptAt = nextAttemptAt.takeIf { attempts > 0 && state != OcrPipeline.STATE_FAILED },
+        nextAttemptAt = nextAttemptAt.takeIf { attempts > 0 && queueState != QueueState.FAILED },
         lastError = lastError,
     )
 

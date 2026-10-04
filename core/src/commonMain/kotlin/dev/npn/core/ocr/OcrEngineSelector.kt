@@ -5,7 +5,7 @@ package dev.npn.core.ocr
  *
  * This exists as its own type because the answer stopped being obvious. With only local engines
  * there was nothing to decide — one engine, run it. An LLM vision engine changes that: it outranks
- * every local engine ([OcrEngines.rank]), so the pipeline's own "run the best engine available"
+ * every local engine ([OcrEngineId.rank]), so the pipeline's own "run the best engine available"
  * instinct would quietly turn a configured endpoint into a paid pass over the whole library. The
  * rule that prevents that is small, but it is a policy, and it is the one piece of the OCR path
  * that spends the user's money — so it gets a name, one home, and its own tests.
@@ -71,8 +71,8 @@ class OcrEngineSelector(
         val ai = ai ?: return local
         val wanted =
             when {
-                pinnedEngine != null && pinnedEngine != OcrEngines.AI -> false
-                pinnedEngine == OcrEngines.AI && aiRequested -> true
+                pinnedEngine != null && pinnedEngine != OcrEngineId.AI.column -> false
+                pinnedEngine == OcrEngineId.AI.column && aiRequested -> true
                 pageCount != null && isLargeForAi(pageCount) -> false
                 else -> aiAuto()
             }
