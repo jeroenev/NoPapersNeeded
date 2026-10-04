@@ -90,8 +90,7 @@ class HlcSeedingTest {
                         xmpIO = PdfBoxXmpIO(),
                         thumbnailStore = FakeThumbStore(File(rig.dbDir, "thumbs-reopen")),
                         scope = backgroundScope,
-                        ocrLanguage = { "eng" },
-                        trashRetentionDays = { 30 },
+                        settings = SessionSettings(ocrLanguage = { "eng" }, trashRetentionDays = { 30 }),
                         log = NpnLog.None,
                         clock = MutableClock(1L, autoTick = true),
                     )

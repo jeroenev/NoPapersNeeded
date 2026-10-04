@@ -142,6 +142,8 @@ kotlin {
                 // Skiko natives. ViewModel tests assert real wording read from composeResources,
                 // and the desktop resource reader initialises Skiko even with no composition.
                 implementation(compose.desktop.currentOs)
+                // The environment tests query a library's databases to see that a swap closed them.
+                implementation(libs.room3.runtime)
             }
         }
         getByName("androidHostTest") {

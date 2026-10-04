@@ -100,7 +100,7 @@ internal suspend fun foldJournal(
     coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) })
     // Once per library. A failure leaves it for the next open rather than refusing this one.
     deps.log.runLogged("Adopting this device's library settings") {
-        coordinator.adoptSettings(deps.legacyLibrarySettings().journalSettings())
+        coordinator.adoptSettings(deps.settings.legacyLibrarySettings().journalSettings())
     }
 }
 
@@ -233,7 +233,7 @@ internal fun buildEditQueue(
             meta = library.writer,
             ai = ai,
             fieldRegistry = library.fieldRegistry,
-            readConfig = deps.aiConfig,
+            readConfig = deps.settings.aiConfig,
             clock = deps.clock,
             onEnqueued = onEnqueued,
             ownWrite = { lifetime.owned(it) },
@@ -272,7 +272,7 @@ internal suspend fun buildOcr(
             tagDao = deps.db.tagDao(),
             fieldDao = deps.db.documentFieldDao(),
             deviceId = deviceId,
-            config = OcrConfig(lang = deps.ocrLanguage()),
+            config = OcrConfig(lang = deps.settings.ocrLanguage()),
             clock = deps.clock,
             // Deterministic local rules run on any newly indexed text, including a re-index.
             onTextIndexed = { docId, text -> library.ruleApplier.applyToDoc(docId, text) },

@@ -1,7 +1,6 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiChat
-import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiFacadeImpl
 import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.UnattendedAiPolicy
@@ -330,7 +329,7 @@ class LibrarySessionImpl private constructor(
         queues.kickAll()
         // Respect the configured retention at call time.
         val days =
-            log.runLogged("Reading the trash retention") { deps.trashRetentionDays() }
+            log.runLogged("Reading the trash retention") { deps.settings.trashRetentionDays() }
                 ?: TrashSettings.DEFAULT_TRASH_RETENTION_DAYS
         log.runLogged("Trash auto-purge") { purgeTrash(days) }
     }
@@ -394,7 +393,7 @@ class LibrarySessionImpl private constructor(
                     deps.db,
                     chats = deps.deviceDb.keyValueDao(),
                     ownWrite = { lifetime.owned(it) },
-                    configProvider = deps.aiConfig,
+                    configProvider = deps.settings.aiConfig,
                 )
             val enrichment = buildEnrichment(deps, lifetime, library, ai)
             val edits = buildEditQueue(deps, lifetime, library, ai)
@@ -436,9 +435,8 @@ class LibrarySessionImpl private constructor(
 }
 
 /**
- * Bundle of everything a [LibrarySessionImpl] needs, assembled by the platform [AppEnvironment].
- * Settings values are read as suspend accessors so the session picks up live changes at call time
- * (e.g. trash retention on each purge, ocr language when a pipeline is built).
+ * Bundle of everything a [LibrarySessionImpl] needs, assembled per platform: `jvmSessionDeps` on a
+ * plain JVM, `androidSessionDeps` on Android.
  */
 class SessionDeps(
     val fs: LibraryFileSystem,
@@ -451,19 +449,14 @@ class SessionDeps(
     val xmpIO: PdfXmpIO,
     val thumbnailStore: ThumbnailStore,
     val scope: CoroutineScope,
-    val ocrLanguage: suspend () -> String,
-    val trashRetentionDays: suspend () -> Int,
+    val settings: SessionSettings,
     /** Where the session reports what fails in the background, with no caller to tell. */
     val log: NpnLog,
-    /** What this device kept as settings for library behaviour, adopted by a library that has none. */
-    val legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
-    val aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
     /**
-     * Who may spend on AI unattended. Defaults to the user's own [aiConfig] toggles — the device
-     * policy; a host with a different answer (a server running on a library's behalf) supplies
-     * its own.
+     * Who may spend on AI unattended. Defaults to the user's own AI settings — the device policy; a
+     * host with a different answer (a server running on a library's behalf) supplies its own.
      */
-    val unattendedAi: UnattendedAiPolicy = UnattendedAiPolicy.fromConfig(aiConfig),
+    val unattendedAi: UnattendedAiPolicy = UnattendedAiPolicy.fromConfig(settings.aiConfig),
     val clock: EpochClock = SystemEpochClock,
     val installationId: String = "local-installation",
 ) {

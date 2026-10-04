@@ -8,6 +8,7 @@ import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.aiConfigured
+import dev.npn.app.ui.common.clearThumbCache
 import dev.npn.app.ui.common.createLibraryFolder
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.importPdfs
@@ -119,6 +120,9 @@ class AppViewModel(
 
     init {
         restore()
+        // Decoded thumbnails belong to the library they were drawn for: whenever it closes or
+        // changes, the next one starts with an empty cache.
+        viewModelScope.launch { env.session.collect { clearThumbCache() } }
     }
 
     /** Try the saved library again. */

@@ -22,8 +22,8 @@ enum class OpenFailureReason {
 }
 
 /**
- * Thrown by a [PlatformLibraryFactory] that can tell why a library cannot be opened, so the user is
- * told [reason] rather than the exception's English [message], which stays a technical detail.
+ * Thrown by a platform's library wiring when it can tell why a library cannot be opened, so the user
+ * is told [reason] rather than the exception's English [message], which stays a technical detail.
  */
 class LibraryUnavailableException(
     val reason: OpenFailureReason,

@@ -1,6 +1,5 @@
 package dev.npn.core.app
 
-import dev.npn.core.ai.AiConfig
 import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
@@ -26,8 +25,7 @@ import java.nio.file.Path
  *
  * Platform adapters default to the production ones and are parameters only so a host can swap
  * the pieces that legitimately vary (a test's no-op OCR engine, a fixed clock, the app's
- * [DesktopLog] in place of plain stderr); the behaviour knobs mirror [SessionDeps] and are read
- * live for the same reason it documents. The index
+ * [DesktopLog] in place of plain stderr). The index
  * database is `index.db` under [AppDirs.dbDir], with this device's own state in `device.db` beside
  * it — two sessions over one folder (two "devices") therefore need two [AppDirs], which is also
  * what keeps their device identities apart.
@@ -36,10 +34,7 @@ fun jvmSessionDeps(
     libraryRoot: Path,
     dirs: AppDirs,
     scope: CoroutineScope,
-    ocrLanguage: suspend () -> String,
-    trashRetentionDays: suspend () -> Int,
-    legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
-    aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
+    settings: SessionSettings,
     clock: EpochClock = SystemEpochClock,
     installationId: String = "local-installation",
     ocrEngine: OcrEngine = TesseractCliEngine(),
@@ -57,11 +52,8 @@ fun jvmSessionDeps(
         xmpIO = PdfBoxXmpIO(),
         thumbnailStore = thumbnailStore,
         scope = scope,
-        ocrLanguage = ocrLanguage,
-        trashRetentionDays = trashRetentionDays,
+        settings = settings,
         log = log,
-        legacyLibrarySettings = legacyLibrarySettings,
-        aiConfig = aiConfig,
         clock = clock,
         installationId = installationId,
     )

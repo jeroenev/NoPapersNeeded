@@ -3,7 +3,6 @@ package dev.npn.app.ui.common
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
-import android.os.Environment
 import android.provider.Settings
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -12,9 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.lifecycle.compose.LifecycleResumeEffect
-
-/** True when the app may read and write any folder on shared storage (see [StorageAccessState]). */
-fun hasDirectStorageAccess(): Boolean = Environment.isExternalStorageManager()
+import dev.npn.app.platform.hasDirectStorageAccess
 
 /**
  * All-files access has no runtime prompt: the user flips a switch on the app's system settings

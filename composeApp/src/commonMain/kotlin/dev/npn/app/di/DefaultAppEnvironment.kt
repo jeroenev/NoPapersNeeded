@@ -27,42 +27,21 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 
 /**
- * Platform-built pieces for one library, returned by [PlatformLibraryFactory.build]. The
- * environment drives the [SessionDeps] into [LibrarySessionImpl.openSession] and calls [close] on
- * swap. [close] closes the Room database (the platform factory owns that, since the Room runtime is
- * on the platform source set's classpath, not composeApp commonMain's).
- */
-class OpenedLibrary(
-    val deps: SessionDeps,
-    val close: () -> Unit,
-)
-
-/** Platform hook: build the per-library pieces (fs, db, engines, dirs) for [location]. */
-fun interface PlatformLibraryFactory {
-    suspend fun build(
-        location: String,
-        scope: CoroutineScope,
-    ): OpenedLibrary
-}
-
-/**
- * Platform hook: open a [WatchedFolder] for a persisted location string (desktop: absolute path;
- * android: SAF tree uri). Returns null when the location cannot be resolved.
- */
-fun interface WatchedFolderFactory {
-    fun open(location: String): WatchedFolder?
-}
-
-/**
  * Shared [AppEnvironment] implementation. Platform factory functions ([createAppEnvironment])
- * construct it with a platform [SettingsRepository] and a [PlatformLibraryFactory]; all session
+ * construct it with a platform [SettingsRepository] and the platform's wiring; all session
  * open/close/swap logic lives here so both platforms behave identically.
+ *
+ * @param watchedFolder opens a [WatchedFolder] for a persisted location string (desktop: absolute
+ *  path; Android: a path or a SAF tree uri), or null when the location cannot be resolved.
+ * @param factory builds the per-library pieces (fs, databases, engines) for a location, throwing
+ *  [LibraryUnavailableException] when it can tell why the library cannot open. The environment
+ *  drives them into [LibrarySessionImpl.openSession] and closes their databases on a swap.
  */
 class DefaultAppEnvironment(
     override val settings: SettingsRepository,
-    private val watchedFolderFactory: WatchedFolderFactory = WatchedFolderFactory { null },
+    private val watchedFolder: (location: String) -> WatchedFolder?,
     private val log: NpnLog = NpnLog.None,
-    private val factory: PlatformLibraryFactory,
+    private val factory: suspend (location: String, scope: CoroutineScope) -> SessionDeps,
 ) : AppEnvironment {
     override val appScope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
 
@@ -78,8 +57,8 @@ class DefaultAppEnvironment(
     private val _opening = MutableStateFlow(false)
     override val opening: StateFlow<Boolean> = _opening.asStateFlow()
 
-    // Closes the resources (db) backing the current session, kept so we can free them on swap.
-    private var currentClose: (() -> Unit)? = null
+    // The pieces backing the current session, kept so their databases are freed on a swap.
+    private var currentDeps: SessionDeps? = null
 
     // Where the current session is open, so a switch that fails can go back there.
     private var currentLocation: String? = null
@@ -105,7 +84,7 @@ class DefaultAppEnvironment(
             combine(_session, watchedFolder) { s, loc -> s to loc }
                 .collectLatest { (session, location) ->
                     if (session == null || location == null) return@collectLatest
-                    val folder = watchedFolderFactory.open(location) ?: return@collectLatest
+                    val folder = watchedFolder(location) ?: return@collectLatest
                     val importer = buildImporter(session, folder)
                     runningImporter.value = RunningImporter(session, location, importer)
                     try {
@@ -132,7 +111,7 @@ class DefaultAppEnvironment(
         val location = settings.settings.first().watchedFolder ?: return 0
         val session = _session.value ?: return 0
         val running = runningImporter.value?.takeIf { it.session === session && it.location == location }
-        val importer = running?.importer ?: buildImporter(session, watchedFolderFactory.open(location) ?: return 0)
+        val importer = running?.importer ?: buildImporter(session, watchedFolder(location) ?: return 0)
         return importer.scanOnce().imported
     }
 
@@ -163,20 +142,20 @@ class DefaultAppEnvironment(
      * left open, each Retry would leak another Room instance on the same file.
      */
     private suspend fun startSession(location: String) {
-        val opened = factory.build(location, appScope)
+        val deps = factory(location, appScope)
         var session: LibrarySessionImpl? = null
         var started = false
         try {
-            session = LibrarySessionImpl.openSession(opened.deps)
+            session = LibrarySessionImpl.openSession(deps)
             session.start()
             started = true
         } finally {
             if (!started) {
                 withContext(NonCancellable) { session?.close() }
-                opened.close()
+                deps.closeDb()
             }
         }
-        currentClose = opened.close
+        currentDeps = deps
         currentLocation = location
         _session.value = session
     }
@@ -207,10 +186,8 @@ class DefaultAppEnvironment(
     private suspend fun closeCurrentInternal() {
         _session.value?.close()
         _session.value = null
-        dev.npn.app.ui.common
-            .clearThumbCache()
-        currentClose?.invoke()
-        currentClose = null
+        currentDeps?.closeDb()
+        currentDeps = null
         currentLocation = null
     }
 }

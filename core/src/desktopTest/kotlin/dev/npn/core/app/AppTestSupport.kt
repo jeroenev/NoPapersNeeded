@@ -114,9 +114,12 @@ class AppSessionRig private constructor(
                     libraryRoot = libRoot,
                     dirs = appDirs(dbDir, "first"),
                     scope = scope,
-                    ocrLanguage = { "eng" },
-                    trashRetentionDays = trashRetentionDays,
-                    legacyLibrarySettings = legacyLibrarySettings,
+                    settings =
+                        SessionSettings(
+                            ocrLanguage = { "eng" },
+                            trashRetentionDays = trashRetentionDays,
+                            legacyLibrarySettings = legacyLibrarySettings,
+                        ),
                     clock = clock,
                     installationId = "test-installation",
                     ocrEngine = ocr,
@@ -158,10 +161,13 @@ class AppSessionRig private constructor(
                 libraryRoot = libRoot,
                 dirs = appDirs(dbDir, "second"),
                 scope = scope,
-                ocrLanguage = { "eng" },
-                trashRetentionDays = { 30 },
-                legacyLibrarySettings = legacyLibrarySettings,
-                aiConfig = aiConfig,
+                settings =
+                    SessionSettings(
+                        ocrLanguage = { "eng" },
+                        trashRetentionDays = { 30 },
+                        legacyLibrarySettings = legacyLibrarySettings,
+                        aiConfig = aiConfig,
+                    ),
                 clock = clock,
                 ocrEngine = ocr,
                 thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),
@@ -188,8 +194,7 @@ suspend fun openSession(
             libraryRoot = library,
             dirs = AppDirs(dbDir = data.path, thumbsDir = "$data/thumbs", tmpDir = "$data/tmp"),
             scope = scope,
-            ocrLanguage = { "eng" },
-            trashRetentionDays = { 30 },
+            settings = SessionSettings(ocrLanguage = { "eng" }, trashRetentionDays = { 30 }),
             // Far behind the files' real mtimes, so a just-written PDF counts as settled.
             clock = MutableClock(autoTick = true),
             installationId = installationId,
