@@ -6,9 +6,11 @@ import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.agent.functionalStrategy
 import ai.koog.agents.core.agent.session.AIAgentLLMWriteSession
 import ai.koog.agents.core.tools.ToolRegistry
+import ai.koog.prompt.Prompt
 import ai.koog.prompt.dsl.prompt
 import ai.koog.prompt.executor.model.PromptExecutor
 import ai.koog.prompt.llm.LLModel
+import ai.koog.prompt.message.Message
 import ai.koog.prompt.params.LLMParams
 import ai.koog.prompt.streaming.StreamFrame
 import ai.koog.prompt.streaming.toMessageResponse
@@ -38,9 +40,19 @@ class KoogChatAgent(
         conversationId: String,
     ): Flow<AiChatEvent> =
         channelFlow {
+            val basePrompt = prompt("npn-chat", params ?: LLMParams()) { system(systemPrompt) }
             val strategy =
                 functionalStrategy<String, String>("npn-chat") {
-                    llm.writeSession { appendPrompt { user(question) } }
+                    llm.writeSession {
+                        // Chat memory has replaced the prompt with the stored conversation, whose system
+                        // message is the one its first turn was asked under. The field registry, the
+                        // language and today's date may have changed since, so this turn's replaces it.
+                        prompt =
+                            prompt.withMessages { stored ->
+                                basePrompt.messages + stored.filterNot { it is Message.System }
+                            }
+                        appendPrompt { user(question) }
+                    }
                     val answer = StringBuilder()
                     var iteration = 0
                     var finished = false
@@ -94,7 +106,7 @@ class KoogChatAgent(
             val agent =
                 AIAgent(
                     promptExecutor = executor,
-                    agentConfig = aiConfig(),
+                    agentConfig = aiConfig(basePrompt),
                     strategy = strategy,
                     toolRegistry = toolRegistry,
                 ) {
@@ -113,9 +125,9 @@ class KoogChatAgent(
                 .getOrElse { "Error running ${call.name}: ${it.reason()}" }
         } ?: "Error: unknown tool \"${call.name}\"."
 
-    private fun aiConfig() =
+    private fun aiConfig(prompt: Prompt) =
         ai.koog.agents.core.agent.config.AIAgentConfig(
-            prompt = prompt("npn-chat", params ?: LLMParams()) { system(systemPrompt) },
+            prompt = prompt,
             model = model,
             maxAgentIterations = maxIterations,
         )
