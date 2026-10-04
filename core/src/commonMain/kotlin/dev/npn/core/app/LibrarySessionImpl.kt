@@ -328,11 +328,11 @@ class LibrarySessionImpl private constructor(
         // Deliberately no page limit here: length is something aiOcrOffer warns about, not
         // something this refuses. The caller asked for this document by name.
         //
-        // The pin is the request (see OcrFacade.ocrWithAi): it survives an index rebuild and picks
-        // the ai sidecar for search once it exists. Queue after pinning so the run that drains sees
-        // the override already folded onto the row.
+        // The pin picks the ai sidecar for search once it exists, on every replica; the request to
+        // pay for one is this device's queue flag (see OcrFacade.ocrWithAi). Queue after pinning so
+        // the run that drains sees the override already folded onto the row.
         setOcrEngine(docId, OcrEngines.AI)
-        enqueuePendingOcr(docId)
+        enqueuePendingOcr(docId, aiRequested = true)
         ocrWorker.kick()
     }
 
@@ -649,17 +649,23 @@ class LibrarySessionImpl private constructor(
      * Mark [docId] pending in the OCR queue and flip its doc-row OCR state to pending. The row
      * write is a partial UPDATE so this state flip cannot clobber metadata columns a concurrent
      * journal fold just projected onto the same row.
+     *
+     * A request already on the row ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]) is kept:
+     * asking for one thing does not withdraw what was asked before it ran.
      */
     private suspend fun enqueuePendingOcr(
         docId: String,
         rerun: Boolean = false,
+        aiRequested: Boolean = false,
     ) {
+        val existing = db.ocrQueueDao().getByDocId(docId)
         db.ocrQueueDao().upsert(
             OcrQueueEntity(
                 docId = docId,
                 state = OcrPipeline.STATE_PENDING,
                 updatedAt = deps.clock.nowMillis(),
-                rerun = rerun,
+                rerun = rerun || existing?.rerun == true,
+                aiRequested = aiRequested || existing?.aiRequested == true,
             ),
         )
         db.documentDao().updateOcrState(docId, OcrPipeline.OCR_PENDING, null, null)

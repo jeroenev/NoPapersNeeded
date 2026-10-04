@@ -247,6 +247,13 @@ data class OcrQueueEntity(
      * at least as high as the indexed version, not only when it would rank higher.
      */
     @ColumnInfo(defaultValue = "0") val rerun: Boolean = false,
+    /**
+     * The user asked *on this device* for the AI engine to read this document
+     * (`OcrFacade.ocrWithAi`), so its run may spend without the automatic setting and past the page
+     * cap. Local on purpose: the engine pin that comes with the request is synced library data, and
+     * a pin arriving from another replica must not make this one pay as well.
+     */
+    @ColumnInfo(defaultValue = "0") val aiRequested: Boolean = false,
 )
 
 /**

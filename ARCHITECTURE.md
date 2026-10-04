@@ -207,7 +207,10 @@ AppImage and uber-jar on Linux, a Flatpak bundle (manifest in `desktopApp/flatpa
   policy's yes/no, and is the reason the pipeline's "run the best-ranked engine" instinct cannot
   quietly bill a whole library. Its page threshold binds the *unattended* path only; an
   asked-for run (`OcrFacade.ocrWithAi`) runs at any length, and `OcrFacade.aiOcrOffer` is what
-  warns the user first.
+  warns the user first. "Asked for" means asked on this device: `ocrWithAi` writes the engine pin,
+  which syncs and only selects which version is searched, plus `ocr_queue.aiRequested`, the local
+  request to pay. An `ai` pin synced from another replica selects that replica's sidecar, or runs
+  the model here only as unattended work (policy plus threshold).
 - Follow-up work after OCR → `OcrPipeline.onTextIndexed` fires whenever text is indexed,
   including on every index rebuild, so hang free/idempotent work there (auto-match rules).
   `OcrPipeline.onOcrProduced` fires only when this device just wrote a sidecar; anything

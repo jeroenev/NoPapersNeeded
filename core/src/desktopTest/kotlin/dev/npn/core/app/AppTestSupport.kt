@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.ai.AiConfig
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -130,6 +131,7 @@ class AppSessionRig private constructor(
         scope: CoroutineScope,
         ocr: OcrEngine = NoopOcrEngine(),
         clock: MutableClock = MutableClock(50_000L, autoTick = true),
+        aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
     ): Pair<LibrarySessionImpl, NpnDatabase> {
         val deps =
             jvmSessionDeps(
@@ -138,6 +140,7 @@ class AppSessionRig private constructor(
                 scope = scope,
                 ocrLanguage = { "eng" },
                 trashRetentionDays = { 30 },
+                aiConfig = aiConfig,
                 clock = clock,
                 ocrEngine = ocr,
                 thumbnailStore = FakeThumbStore(File(dbDir, "thumbs2")),

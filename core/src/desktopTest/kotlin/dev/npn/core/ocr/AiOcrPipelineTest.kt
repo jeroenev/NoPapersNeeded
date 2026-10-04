@@ -1,5 +1,6 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
@@ -64,14 +65,14 @@ class AiOcrPipelineTest {
         }
 
     @Test
-    fun pinningADocumentToAiRunsItWithoutTheAutomaticSetting() =
+    fun askingForAiOnThisDeviceRunsItWithoutTheAutomaticSetting() =
         runTest {
-            // The per-document request path: OcrFacade.ocrWithAi pins the engine, and the pin alone
-            // has to be enough to spend a call on this one document.
+            // The per-document request path: OcrFacade.ocrWithAi pins the engine and marks the run as
+            // asked for here, which has to be enough to spend a call on this one document.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "should-not-run")
             val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "model read the scan")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            setOverride(docId, OcrEngines.AI)
+            askForAi(docId)
 
             rig.pipeline("devA", local, engines = selector(local, ai, auto = false)).processDoc(docId)
 
@@ -82,7 +83,7 @@ class AiOcrPipelineTest {
         }
 
     @Test
-    fun pinnedAiRunUpgradesADocumentThisDeviceAlreadyOcrdLocally() =
+    fun anAskedForAiRunUpgradesADocumentThisDeviceAlreadyOcrdLocally() =
         runTest {
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "blurry locel guess")
             val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "accurate model reading")
@@ -90,7 +91,7 @@ class AiOcrPipelineTest {
             rig.pipeline("devA", local, engines = selector(local, ai)).processDoc(docId)
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
 
-            setOverride(docId, OcrEngines.AI)
+            askForAi(docId)
             rig.pipeline("devA", local, engines = selector(local, ai)).processDoc(docId)
 
             ai.calls shouldBe 1
@@ -149,14 +150,14 @@ class AiOcrPipelineTest {
     fun anAskedForAiRunIsNotRefusedForBeingLarge() =
         runTest {
             // The threshold stops unattended spending, not the user. A long handwritten document
-            // is exactly what the vision model is wanted for, so a pin runs it and the run
+            // is exactly what the vision model is wanted for, so asking runs it and the run
             // converges (the sidecar it publishes stops the next canImprove).
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "should-not-run")
             val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "model read it")
             val docId = rig.stageDoc("ledger.pdf", PdfFixtures.imageOnlyPdf(pages = 3))
             val engines = selector(local, ai, auto = false, largeDocumentPages = 2)
             val pipe = rig.pipeline("devA", local, engines = engines)
-            setOverride(docId, OcrEngines.AI)
+            askForAi(docId)
 
             pipe.processDoc(docId)
 
@@ -172,14 +173,81 @@ class AiOcrPipelineTest {
         }
 
     @Test
-    fun unconfiguredAiEngineIsIgnoredEvenWhenAutomaticAndPinned() =
+    fun anAiPinFromAnotherDeviceDoesNotSpendHere() =
+        runTest {
+            // The pin is synced library data; the request behind it was made on another device,
+            // which pays for its own transcription. This one only follows the pin for selection.
+            val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "should-not-run")
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val pipe = rig.pipeline("devB", local, engines = selector(local, ai, auto = false))
+            pipe.processDoc(docId)
+
+            setOverride(docId, OcrEngines.AI)
+            pipe.reconcileSidecars()
+            pipe.drain()
+
+            ai.calls shouldBe 0
+            db.documentDao().getByDocId(docId)?.ocrEngine shouldBe "mlkit"
+        }
+
+    @Test
+    fun anAiPinFromAnotherDeviceAdoptsTheAiVersionThatDevicePublished() =
+        runTest {
+            val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "should-not-run")
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val pipe = rig.pipeline("devB", local, engines = selector(local, ai, auto = false))
+            pipe.processDoc(docId)
+
+            // Device A's transcription arrives along with its pin.
+            val fromA =
+                OcrSidecar(
+                    doc = docId,
+                    dev = "devA",
+                    engine = OcrEngines.AI,
+                    lang = "eng",
+                    createdAt = 1,
+                    pages = listOf("model words"),
+                )
+            OcrSidecarFiles(fs).writeOnce(docId, "devA.ai", OcrSidecarCodec.encode(fromA))
+            setOverride(docId, OcrEngines.AI)
+            pipe.reconcileSidecars()
+            pipe.drain()
+
+            ai.calls shouldBe 0
+            db.documentDao().getByDocId(docId)?.ocrEngine shouldBe OcrEngines.AI
+            db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
+        }
+
+    @Test
+    fun anAiPinFromAnotherDeviceIsHeldToThePageCapOfTheAutomaticSetting() =
+        runTest {
+            // With AI as this device's automatic engine, a pinned document is unattended work like
+            // any other: under the cap the policy may spend, over it the run stays local.
+            val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI, canned = "should-not-run")
+            val docId = rig.stageDoc("big.pdf", PdfFixtures.imageOnlyPdf(pages = 3))
+            val pipe = rig.pipeline("devB", local, engines = selector(local, ai, auto = true, largeDocumentPages = 2))
+            pipe.processDoc(docId)
+
+            setOverride(docId, OcrEngines.AI)
+            pipe.reconcileSidecars()
+            pipe.drain()
+
+            ai.calls shouldBe 0
+            db.documentDao().getByDocId(docId)?.ocrEngine shouldBe "mlkit"
+        }
+
+    @Test
+    fun unconfiguredAiEngineIsIgnoredEvenWhenAutomaticAndAskedFor() =
         runTest {
             // AI turned on in settings but not usable (no model/key yet). The document must still
             // get text from the local engine rather than sit unprocessed.
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local fallback words")
             val ai = FakeOcrEngine(isAvailable = false, name = OcrEngines.AI, canned = "should-not-run")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            setOverride(docId, OcrEngines.AI)
+            askForAi(docId)
             val engines = selector(local, ai, auto = true)
 
             engines.aiAvailable() shouldBe false
@@ -205,7 +273,7 @@ class AiOcrPipelineTest {
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit")
             val ai = FakeOcrEngine(isAvailable = true, name = OcrEngines.AI)
             val docId = rig.stageDoc("inv.pdf", PdfFixtures.embeddedTextPdf("invoice 42 acme corporation"))
-            setOverride(docId, OcrEngines.AI)
+            askForAi(docId)
 
             rig.pipeline("devA", local, engines = selector(local, ai, auto = true)).processDoc(docId)
 
@@ -225,6 +293,22 @@ class AiOcrPipelineTest {
         largeDocumentPages = largeDocumentPages,
         aiAuto = { auto },
     )
+
+    /**
+     * What `OcrFacade.ocrWithAi` leaves behind on this device: the pin, as the journal fold projects
+     * it onto the row, and a queue row marking the run as asked for here.
+     */
+    private suspend fun askForAi(docId: String) {
+        setOverride(docId, OcrEngines.AI)
+        db.ocrQueueDao().upsert(OcrQueueEntity(docId, OcrPipeline.STATE_PENDING, updatedAt = 2, aiRequested = true))
+    }
+
+    /** Work the queue the way the session's drainer does. */
+    private suspend fun OcrPipeline.drain() {
+        while (processNext()) {
+            // Each call processes one document.
+        }
+    }
 
     /** Simulate the journal fold projecting a SystemProperty.OCR_ENGINE override onto the row. */
     private suspend fun setOverride(

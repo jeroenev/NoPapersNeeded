@@ -33,7 +33,8 @@ import androidx.room3.migration.AutoMigrationSpec
     // v16: auto_match_rules sets any field (JSON `sets` column) instead of correspondent/docType.
     // v17: adds documents.ocrSource (the indexed sidecar's writer key) + ocr_queue.rerun.
     // v18: adds documents.trashedAt (when the winning doc-trash happened) for the trash auto-purge.
-    version = 18,
+    // v19: adds ocr_queue.aiRequested (an AI OCR run asked for on this device, unlike the synced pin).
+    version = 19,
     exportSchema = true,
     autoMigrations = [
         AutoMigration(from = 3, to = 4),
@@ -51,6 +52,7 @@ import androidx.room3.migration.AutoMigrationSpec
         AutoMigration(from = 15, to = 16, spec = NpnDatabase.RuleSetsColumn::class),
         AutoMigration(from = 16, to = 17),
         AutoMigration(from = 17, to = 18),
+        AutoMigration(from = 18, to = 19),
     ],
     entities = [
         DocumentEntity::class,

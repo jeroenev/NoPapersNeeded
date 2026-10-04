@@ -28,11 +28,14 @@ interface OcrFacade {
     /**
      * Transcribe [docId] with the AI (vision-model) engine, for a scan the local engine read badly.
      *
-     * Pins the document to the `ai` engine and queues an OCR run. The pin is deliberate, not
-     * incidental: it is a journal event, so the request outlives an index rebuild and reaches other
-     * replicas, and it makes the resulting `ai` sidecar the version indexed for search. Clear it
-     * like any other pin with [setOcrEngine] — and note that pinning any *other* engine is how a
-     * document opts out of automatic AI OCR (`AiConfig.ocrAuto`).
+     * Pins the document to the `ai` engine and queues an OCR run marked as asked for on this
+     * device. The two are separate on purpose. The pin is a journal event: it reaches every replica
+     * and makes the resulting `ai` sidecar the version indexed for search there too. The request
+     * to pay for that sidecar stays here, on this device's queue row, so another replica with an
+     * endpoint of its own does not pay for a second transcription — it waits for this one's, unless
+     * AI is its own automatic engine. Clear the pin like any other with [setOcrEngine] — and note
+     * that pinning any *other* engine is how a document opts out of automatic AI OCR
+     * (`AiConfig.ocrAuto`).
      *
      * Costs one model call per page, so it is never automatic unless the user made it so. Runs on
      * a document of any length: size is a warning for the caller to deliver

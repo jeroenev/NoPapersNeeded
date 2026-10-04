@@ -195,9 +195,10 @@ class OcrPipeline(
 
         var versions = loadVersions(docId)
         var own: OwnOcr? = null
-        val rerun = ocrQueueDao.getByDocId(docId)?.rerun == true
-        if (versions.isEmpty() || canImprove(doc, versions, rerun)) {
-            own = runOwnOcr(doc, versions)
+        val entry = ocrQueueDao.getByDocId(docId)
+        val aiRequested = entry?.aiRequested == true
+        if (versions.isEmpty() || canImprove(doc, versions, rerun = entry?.rerun == true, aiRequested)) {
+            own = runOwnOcr(doc, versions, aiRequested)
             if (own == OwnOcr.Stale) {
                 // Not this document's bytes, so not its failure either. Left out of the queue: the
                 // rescan replaces the row, or refreshes it if the file turns out unchanged.
@@ -294,6 +295,7 @@ class OcrPipeline(
     private suspend fun runOwnOcr(
         doc: DocumentEntity,
         stored: List<Version>,
+        aiRequested: Boolean,
     ): OwnOcr {
         var step = "read failed"
         val result =
@@ -303,7 +305,7 @@ class OcrPipeline(
                 // bytes would stick to this document everywhere.
                 if (sha256Bytes(bytes) != doc.docId) return OwnOcr.Stale
                 step = "ocr failed"
-                extractOrOcr(bytes, doc)
+                extractOrOcr(bytes, doc, aiRequested)
             } catch (e: CancellationException) {
                 throw e
             } catch (t: Throwable) {
@@ -368,13 +370,14 @@ class OcrPipeline(
     private suspend fun extractOrOcr(
         bytes: ByteArray,
         doc: DocumentEntity,
+        aiRequested: Boolean,
     ): PageResult {
         val handle = pdfEngine.open(bytes) // throws PdfOpenException on invalid pdf
         try {
             // Chosen once, off the PDF's real page count (the doc row's may still be null on a
             // first run), so the whole document is transcribed by one engine and its sidecar's
             // engine label is the truth about every OCR'd page in it.
-            val engine = engines.forDocument(doc.ocrEngineOverride, handle.pageCount)
+            val engine = engines.forDocument(doc.ocrEngineOverride, handle.pageCount, aiRequested)
             val canOcr = engine.available()
             // Resolved once, like the engine, so every page reads the same languages and the
             // sidecar records the ones actually used.
@@ -489,14 +492,16 @@ class OcrPipeline(
      * again on the next reconcile, forever.
      *
      * A [rerun] the user asked for lowers the bar to "at least as good as the indexed version":
-     * re-running an engine that ranks below it would produce text nobody selects.
+     * re-running an engine that ranks below it would produce text nobody selects. [aiRequested] is
+     * the user's "OCR with AI" on this device; see [OcrEngineSelector.forDocument].
      */
     private suspend fun canImprove(
         doc: DocumentEntity,
         versions: List<Version>,
         rerun: Boolean = false,
+        aiRequested: Boolean = false,
     ): Boolean {
-        val engine = engines.forDocument(doc.ocrEngineOverride, doc.pageCount)
+        val engine = engines.forDocument(doc.ocrEngineOverride, doc.pageCount, aiRequested)
         if (!engine.available()) return false
         if (versions.isEmpty()) return true
         val ownRank = OcrEngines.rank(engine.name)
@@ -526,6 +531,9 @@ class OcrPipeline(
      * Queue an upgrade OCR run for [doc] when [canImprove]. Never resurrects an active or
      * failed entry, and respects the attempts cap: a doc whose own-engine runs kept failing
      * (it adopted a foreign version instead) is not retried until an explicit re-OCR.
+     *
+     * Asks the unattended question only: nothing here was asked for on this device, so an `ai` pin
+     * synced from another replica queues a paid run only as the automatic setting would.
      */
     private suspend fun maybeQueueUpgrade(
         doc: DocumentEntity,
@@ -675,8 +683,9 @@ class OcrPipeline(
                 attempts = attempts,
                 updatedAt = now(),
                 lastError = error,
-                // A retry of a requested re-run is still that re-run.
+                // A retry of a requested run is still that request.
                 rerun = entry?.rerun ?: false,
+                aiRequested = entry?.aiRequested ?: false,
             ),
         )
         if (!textIndexed) setOcrState(docId, if (state == STATE_FAILED) OCR_FAILED else OCR_PENDING)
