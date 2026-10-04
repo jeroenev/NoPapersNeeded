@@ -35,13 +35,33 @@ object StoragePathTemplate {
     private const val DEFAULT_FALLBACK_TITLE = "document"
 
     /**
-     * Expand [template] with [context] and normalize the result. The returned path is
-     * library-relative, uses '/' separators, and has no leading or trailing slashes.
+     * Expand [template] with [context] and normalize the result. The path is library-relative,
+     * uses '/' separators, and has no leading or trailing slashes. A template that cannot expand
+     * says why with a [StoragePathError]; anything else that throws is a bug and propagates.
      */
     fun expand(
         template: String,
         context: StoragePathContext,
-    ): Result<String> = runCatching { expandInternal(template, context) }
+    ): StoragePathExpansion =
+        try {
+            StoragePathExpansion.Path(expandInternal(template, context))
+        } catch (invalid: InvalidTemplate) {
+            StoragePathExpansion.Invalid(invalid.error)
+        }
+
+    /** Unwinds the parser to [expand] with the reason; never escapes this object. */
+    private class InvalidTemplate(
+        val error: StoragePathError,
+    ) : Exception()
+
+    private fun fail(error: StoragePathError): Nothing = throw InvalidTemplate(error)
+
+    private inline fun ensure(
+        condition: Boolean,
+        error: () -> StoragePathError,
+    ) {
+        if (!condition) fail(error())
+    }
 
     private fun expandInternal(
         template: String,
@@ -64,7 +84,7 @@ object StoragePathTemplate {
 
                 char == PLACEHOLDER_START -> {
                     val end = template.indexOf(PLACEHOLDER_END, index)
-                    require(end != -1) { "Unclosed placeholder starting at $index" }
+                    ensure(end != -1) { StoragePathError.UnclosedPlaceholder(index) }
                     val inner = template.substring(index + 1, end)
                     val colon = inner.indexOf(FORMAT_SEPARATOR)
                     val name = if (colon == -1) inner else inner.substring(0, colon)
@@ -74,7 +94,7 @@ object StoragePathTemplate {
                 }
 
                 char == PLACEHOLDER_END -> {
-                    error("Unexpected '}' at $index")
+                    fail(StoragePathError.UnexpectedClosingBrace(index))
                 }
 
                 else -> {
@@ -103,7 +123,7 @@ object StoragePathTemplate {
             "correspondent" -> resolveField(FieldKeys.CORRESPONDENT, format, context)
             "tags" -> formatless(format, name) { resolveTags(context.tags) }
             "field" -> resolveGenericField(format, context)
-            else -> error("Unknown template variable '$name'")
+            else -> fail(StoragePathError.UnknownVariable(name))
         }
 
     /** `{field:key}` or `{field:key:pattern}`: the part after the first colon is `key[:pattern]`. */
@@ -111,11 +131,12 @@ object StoragePathTemplate {
         spec: String?,
         context: StoragePathContext,
     ): String {
-        require(!spec.isNullOrBlank()) { "{field} needs a key: {field:key}" }
+        if (spec.isNullOrBlank()) fail(StoragePathError.MissingFieldKey)
         val colon = spec.indexOf(FORMAT_SEPARATOR)
-        val key = FieldKeys.normalize(if (colon == -1) spec else spec.substring(0, colon))
+        val key =
+            FieldKeys.normalize(if (colon == -1) spec else spec.substring(0, colon))
+                ?: fail(StoragePathError.MissingFieldKey)
         val pattern = if (colon == -1) null else spec.substring(colon + 1).trim()
-        requireNotNull(key) { "{field} needs a key: {field:key}" }
         return resolveField(key, pattern, context)
     }
 
@@ -127,7 +148,7 @@ object StoragePathTemplate {
     ): String {
         val value = context.fields[key]
         if (format.isNullOrBlank()) return sanitizeSegment(value ?: "")
-        require(context.fieldTypes[key] == FieldType.DATE) { "Formatting is only supported for date fields" }
+        ensure(context.fieldTypes[key] == FieldType.DATE) { StoragePathError.NotADateField(key) }
         return sanitizeSegment(resolveDate(value, format))
     }
 
@@ -136,7 +157,7 @@ object StoragePathTemplate {
         name: String,
         value: () -> String,
     ): String {
-        require(format.isNullOrBlank()) { "{$name} does not take a format" }
+        ensure(format.isNullOrBlank()) { StoragePathError.FormatNotAllowed(name) }
         return value()
     }
 
@@ -144,20 +165,18 @@ object StoragePathTemplate {
         template: String,
         expanded: String,
     ): String {
-        require(template.isNotBlank()) { "Path must not be blank" }
-        require(!template.startsWith('/') && !template.startsWith('\\')) { "Absolute paths are not allowed" }
-        require(!Regex("^[A-Za-z]:[/\\\\]").containsMatchIn(template)) { "Absolute paths are not allowed" }
-        require('\\' !in expanded) { "Backslashes are not allowed" }
+        ensure(template.isNotBlank()) { StoragePathError.Blank }
+        ensure(!template.startsWith('/') && !template.startsWith('\\')) { StoragePathError.Absolute }
+        ensure(!Regex("^[A-Za-z]:[/\\\\]").containsMatchIn(template)) { StoragePathError.Absolute }
+        ensure('\\' !in expanded) { StoragePathError.Backslash }
 
         val segments = expanded.split('/').filter { it.isNotBlank() }
-        require(segments.isNotEmpty()) { "Path must not be blank" }
+        ensure(segments.isNotEmpty()) { StoragePathError.Blank }
         segments.forEach { segment ->
-            require(segment != "." && segment != "..") { "Path traversal is not allowed" }
-            require(!segment.equals(NpnPaths.NPN_DIR, ignoreCase = true)) { "The .npn directory is reserved" }
-            require(segment == segment.trim()) { "Path segments may not start or end with whitespace" }
-            require(NpnPaths.sanitizeSegment(segment) == segment) {
-                "Invalid filename segment '$segment'"
-            }
+            ensure(segment != "." && segment != "..") { StoragePathError.Traversal }
+            ensure(!segment.equals(NpnPaths.NPN_DIR, ignoreCase = true)) { StoragePathError.ReservedDirectory(segment) }
+            ensure(segment == segment.trim()) { StoragePathError.EdgeWhitespace }
+            ensure(NpnPaths.sanitizeSegment(segment) == segment) { StoragePathError.InvalidSegment(segment) }
         }
         return segments.joinToString("/")
     }

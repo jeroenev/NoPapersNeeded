@@ -7,10 +7,12 @@ import dev.npn.core.ai.AiFieldSpec
 import dev.npn.core.ai.AiPromptContext
 import dev.npn.core.ai.AiPrompts
 import dev.npn.core.ai.LibraryAiTools
+import dev.npn.core.db.fieldTypes
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldType
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathTemplate
+import dev.npn.core.pathrules.pathOrNull
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
@@ -92,8 +94,13 @@ class FieldModelAcceptanceTest {
                 StoragePathTemplate
                     .expand(
                         "{field:amount}/{title}.pdf",
-                        StoragePathContext(mapOf("amount" to "4210", "title" to "A"), emptyList(), "a.pdf"),
-                    ).getOrThrow() shouldBe "4210/A.pdf"
+                        StoragePathContext(
+                            fields = mapOf("amount" to "4210", "title" to "A"),
+                            tags = emptyList(),
+                            originalFileName = "a.pdf",
+                            fieldTypes = rig.db.fieldDefDao().fieldTypes(),
+                        ),
+                    ).pathOrNull shouldBe "4210/A.pdf"
 
                 // The assistant's field list names it, with its type and count.
                 val listed =

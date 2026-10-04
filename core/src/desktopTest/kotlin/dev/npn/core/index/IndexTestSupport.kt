@@ -4,6 +4,7 @@ import dev.npn.core.app.JournalCoordinator
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.index.ScanReport
@@ -34,7 +35,7 @@ class IndexRig private constructor(
     val accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
 
     val importService =
-        ImportService(fs, db.documentDao(), db.ocrQueueDao(), clock)
+        ImportService(fs, db.documentDao(), db.ocrQueueDao(), clock, fieldTypes = { db.fieldDefDao().fieldTypes() })
 
     val maintenance =
         MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)

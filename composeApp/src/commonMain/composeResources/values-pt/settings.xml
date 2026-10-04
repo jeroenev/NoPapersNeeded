@@ -73,7 +73,9 @@
 
     <string name="common_settings_storage_error_unclosed">Marcador não fechado a partir da posição %1$s</string>
     <string name="common_settings_storage_error_unexpected_closing">Chave de fechamento inesperada na posição %1$s</string>
-    <string name="common_settings_storage_error_date_format_only">A formatação só é aceita para %1$s</string>
+    <string name="common_settings_storage_error_not_a_date">%1$s não é um campo de data, então não aceita formato de data</string>
+    <string name="common_settings_storage_error_format_not_allowed">{%1$s} não aceita formato</string>
+    <string name="common_settings_storage_error_missing_field_key">{field} precisa de uma chave de campo, por exemplo {field:amount}</string>
     <string name="common_settings_storage_error_unknown_variable">Variável de modelo desconhecida: %1$s</string>
     <string name="common_settings_storage_error_blank">O caminho não pode estar em branco</string>
     <string name="common_settings_storage_error_absolute">Caminhos absolutos não são permitidos</string>
@@ -82,7 +84,6 @@
     <string name="common_settings_storage_error_reserved">O diretório %1$s é reservado</string>
     <string name="common_settings_storage_error_whitespace">Segmentos do caminho não podem começar nem terminar com espaço</string>
     <string name="common_settings_storage_error_invalid_segment">Segmento de nome de arquivo inválido: %1$s</string>
-    <string name="common_settings_storage_error_invalid">Modelo de caminho inválido</string>
 
     <string name="common_settings_watched_folder_help">Os PDFs salvos nesta pasta (por exemplo, por um app de digitalização) são importados automaticamente para a biblioteca e processados com OCR.</string>
     <string name="common_settings_no_watched_folder">Nenhuma pasta monitorada</string>

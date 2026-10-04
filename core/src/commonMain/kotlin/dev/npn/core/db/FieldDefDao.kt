@@ -73,3 +73,7 @@ fun FieldDefEntity.toFieldDef(): FieldDef? {
         hint = hint,
     )
 }
+
+/** Every registered field's type by key, skipping types this build does not know. */
+suspend fun FieldDefDao.fieldTypes(): Map<String, FieldType> =
+    all().mapNotNull { it.toFieldDef() }.associate { it.key to it.type }

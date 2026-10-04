@@ -10,10 +10,12 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
+import dev.npn.core.model.FieldType
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathTemplate
+import dev.npn.core.pathrules.pathOrNull
 import dev.npn.core.pathrules.resolveUniqueTarget
 import dev.npn.core.util.runCatchingCancellable
 import kotlin.uuid.ExperimentalUuidApi
@@ -55,6 +57,8 @@ class ImportService(
     private val ocrQueueDao: OcrQueueDao,
     private val clock: EpochClock = SystemEpochClock,
     private val ruleProvider: suspend () -> StoragePathRule? = { null },
+    /** The registry's field types by key, which decide where a template accepts a date pattern. */
+    private val fieldTypes: suspend () -> Map<String, FieldType>,
     private val serialize: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
     suspend fun importPdf(
@@ -168,8 +172,13 @@ class ImportService(
             return uniqueTargetPath(toDir, cleanName)
         }
         val context =
-            StoragePathContext(fields = emptyMap(), tags = emptyList(), originalFileName = cleanName)
-        val expanded = StoragePathTemplate.expand(rule.template, context).getOrNull()
+            StoragePathContext(
+                fields = emptyMap(),
+                tags = emptyList(),
+                originalFileName = cleanName,
+                fieldTypes = fieldTypes(),
+            )
+        val expanded = StoragePathTemplate.expand(rule.template, context).pathOrNull
         return if (expanded.isNullOrBlank()) {
             uniqueTargetPath(toDir, cleanName)
         } else {

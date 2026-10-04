@@ -26,8 +26,11 @@ import dev.npn.core.app.ViewType
 import dev.npn.core.app.toAiConfig
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
+import dev.npn.core.pathrules.StoragePathError
+import dev.npn.core.pathrules.StoragePathExpansion
 import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
@@ -94,26 +97,6 @@ data class AiModelListState(
     val models: List<String> = emptyList(),
     val error: UiText? = null,
 )
-
-data class StoragePathError(
-    val kind: StoragePathErrorKind,
-    val argument: String? = null,
-)
-
-enum class StoragePathErrorKind {
-    UNCLOSED_PLACEHOLDER,
-    UNEXPECTED_CLOSING_BRACE,
-    DATE_FORMAT_ONLY,
-    UNKNOWN_VARIABLE,
-    BLANK,
-    ABSOLUTE,
-    BACKSLASH,
-    TRAVERSAL,
-    RESERVED_DIRECTORY,
-    WHITESPACE,
-    INVALID_SEGMENT,
-    INVALID,
-}
 
 /** Choice offered by the 1->2 (UNTAGGED_ONLY -> INBOX_WORKFLOW) migration prompt. */
 enum class ReviewMigration { MARK_ALL, MARK_TAGGED, MARK_NONE }
@@ -237,7 +220,8 @@ class SettingsViewModel(
                     true
                 } else {
                     val template = settings.settings.first().storagePathTemplate ?: DEFAULT_STORAGE_PATH_TEMPLATE
-                    StoragePathTemplate.expand(template, VALIDATION_CONTEXT).isSuccess
+                    val types = fieldRegistry.current().associate { it.key to it.type }
+                    StoragePathTemplate.expand(template, validationContext(types)) is StoragePathExpansion.Path
                 }
             if (valid) settings.edit { it.copy(storagePathEnabled = enabled) }
         }
@@ -337,7 +321,8 @@ class SettingsViewModel(
         }
 
     private companion object {
-        val VALIDATION_CONTEXT =
+        /** A document carrying every seed field, judged against the library's own field types. */
+        fun validationContext(fieldTypes: Map<String, FieldType>) =
             StoragePathContext(
                 fields =
                     mapOf(
@@ -348,6 +333,7 @@ class SettingsViewModel(
                     ),
                 tags = listOf("sample-tag"),
                 originalFileName = "scan.pdf",
+                fieldTypes = fieldTypes,
             )
     }
 }
@@ -360,73 +346,8 @@ internal data class StoragePathEvaluation(
 internal fun evaluateStoragePath(
     template: String,
     context: StoragePathContext,
-): StoragePathEvaluation {
-    val result = StoragePathTemplate.expand(template, context)
-    return StoragePathEvaluation(
-        preview = result.getOrNull(),
-        error = result.exceptionOrNull()?.message?.toStoragePathError(),
-    )
-}
-
-private fun String.toStoragePathError(): StoragePathError =
-    when {
-        startsWith("Unclosed placeholder starting at ") -> {
-            StoragePathError(
-                StoragePathErrorKind.UNCLOSED_PLACEHOLDER,
-                removePrefix("Unclosed placeholder starting at "),
-            )
-        }
-
-        startsWith("Unexpected '}' at ") -> {
-            StoragePathError(
-                StoragePathErrorKind.UNEXPECTED_CLOSING_BRACE,
-                removePrefix("Unexpected '}' at "),
-            )
-        }
-
-        this == "Formatting is only supported for doc_date" -> {
-            StoragePathError(StoragePathErrorKind.DATE_FORMAT_ONLY, "doc_date")
-        }
-
-        startsWith("Unknown template variable '") -> {
-            StoragePathError(
-                StoragePathErrorKind.UNKNOWN_VARIABLE,
-                removePrefix("Unknown template variable '").removeSuffix("'"),
-            )
-        }
-
-        this == "Path must not be blank" -> {
-            StoragePathError(StoragePathErrorKind.BLANK)
-        }
-
-        this == "Absolute paths are not allowed" -> {
-            StoragePathError(StoragePathErrorKind.ABSOLUTE)
-        }
-
-        this == "Backslashes are not allowed" -> {
-            StoragePathError(StoragePathErrorKind.BACKSLASH)
-        }
-
-        this == "Path traversal is not allowed" -> {
-            StoragePathError(StoragePathErrorKind.TRAVERSAL)
-        }
-
-        this == "The .npn directory is reserved" -> {
-            StoragePathError(StoragePathErrorKind.RESERVED_DIRECTORY, ".npn")
-        }
-
-        this == "Path segments may not start or end with whitespace" -> {
-            StoragePathError(StoragePathErrorKind.WHITESPACE)
-        }
-
-        startsWith("Invalid filename segment '") -> {
-            StoragePathError(
-                StoragePathErrorKind.INVALID_SEGMENT,
-                removePrefix("Invalid filename segment '").removeSuffix("'"),
-            )
-        }
-
-        else -> {
-            StoragePathError(StoragePathErrorKind.INVALID)
-        }
+): StoragePathEvaluation =
+    when (val expansion = StoragePathTemplate.expand(template, context)) {
+        is StoragePathExpansion.Path -> StoragePathEvaluation(preview = expansion.path, error = null)
+        is StoragePathExpansion.Invalid -> StoragePathEvaluation(preview = null, error = expansion.error)
     }

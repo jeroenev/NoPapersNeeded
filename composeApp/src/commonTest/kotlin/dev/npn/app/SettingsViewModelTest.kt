@@ -2,8 +2,8 @@ package dev.npn.app
 
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsViewModel
-import dev.npn.app.ui.settings.StoragePathErrorKind
 import dev.npn.app.ui.settings.evaluateStoragePath
+import dev.npn.app.ui.settings.text
 import dev.npn.core.ai.AiCheck
 import dev.npn.core.ai.AiCheckOutcome
 import dev.npn.core.ai.AiCheckStatus
@@ -18,6 +18,7 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pathrules.StoragePathContext
+import dev.npn.core.pathrules.StoragePathError
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -120,9 +121,77 @@ class SettingsViewModelTest : MainDispatcherTest() {
     @Test
     fun storagePathErrorsAreProjectedAsLocalizableData() {
         val result = evaluateStoragePath("{unknown}/{title}.pdf", PREVIEW_CONTEXT)
-        result.error?.kind shouldBe StoragePathErrorKind.UNKNOWN_VARIABLE
-        result.error?.argument shouldBe "unknown"
+        result.error shouldBe StoragePathError.UnknownVariable("unknown")
     }
+
+    @Test
+    fun aDatePatternOnANonDateFieldSaysSo() =
+        runTest(dispatcher) {
+            val result = evaluateStoragePath("{field:amount:yyyy}/{title}.pdf", PREVIEW_CONTEXT)
+
+            result.error shouldBe StoragePathError.NotADateField("amount")
+            result.error?.text()?.resolveEnglish() shouldBe "amount is not a date field, so it takes no date format"
+        }
+
+    @Test
+    fun everyStoragePathErrorHasCopy() =
+        runTest(dispatcher) {
+            val errors =
+                listOf(
+                    StoragePathError.UnclosedPlaceholder(3),
+                    StoragePathError.UnexpectedClosingBrace(3),
+                    StoragePathError.UnknownVariable("author"),
+                    StoragePathError.MissingFieldKey,
+                    StoragePathError.NotADateField("amount"),
+                    StoragePathError.FormatNotAllowed("tags"),
+                    StoragePathError.Blank,
+                    StoragePathError.Absolute,
+                    StoragePathError.Backslash,
+                    StoragePathError.Traversal,
+                    StoragePathError.ReservedDirectory(".npn"),
+                    StoragePathError.EdgeWhitespace,
+                    StoragePathError.InvalidSegment("a:b"),
+                )
+            errors.map { it.text().resolveEnglish() } shouldContainExactly
+                listOf(
+                    "Unclosed placeholder starting at position 3",
+                    "Unexpected closing brace at position 3",
+                    "Unknown template variable author",
+                    "{field} needs a field key, for example {field:amount}",
+                    "amount is not a date field, so it takes no date format",
+                    "{tags} does not take a format",
+                    "Path must not be blank",
+                    "Absolute paths are not allowed",
+                    "Backslashes are not allowed",
+                    "Path traversal is not allowed",
+                    "The .npn directory is reserved",
+                    "Path segments may not start or end with whitespace",
+                    "Invalid filename segment a:b",
+                )
+        }
+
+    /**
+     * A field the user defined as a date takes a date pattern like the seeded document date does.
+     * Judged against the seed types alone, Settings refused to enable a template the import path
+     * would have expanded.
+     */
+    @Test
+    fun aDatePatternOnAUserDefinedDateFieldValidatesAndEnables() =
+        runTest(dispatcher) {
+            val invoiceDate =
+                FieldDef("invoiceDate", "Invoice date", FieldType.DATE, showByDefault = false, aiEnabled = false, position = 9)
+            val session = FakeLibrarySession().apply { fieldRegistry.defs.value = fieldRegistry.defs.value + invoiceDate }
+            val template = "{field:invoiceDate:yyyy}/{title}.pdf"
+            val settings = FakeSettingsRepository().apply { updateSettings { it.copy(storagePathTemplate = template) } }
+            val model = vm(settings = settings, session = session)
+            val types = session.fieldRegistry.defs.value.associate { it.key to it.type }
+
+            evaluateStoragePath(template, PREVIEW_CONTEXT.copy(fieldTypes = types)).error shouldBe null
+            model.setStoragePathEnabled(true)
+            advanceUntilIdle()
+
+            settings.settingsFlow.value?.storagePathEnabled shouldBe true
+        }
 
     @Test
     fun storagePathPreviewUsesProvidedLocalizedSamples() {
@@ -397,6 +466,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
                     ),
                 tags = listOf("thuis", "nutsvoorzieningen"),
                 originalFileName = "scan.pdf",
+                fieldTypes =
+                    FieldKeys.seedDefinitions().associate { it.key to it.type } + ("amount" to FieldType.DECIMAL),
             )
     }
 

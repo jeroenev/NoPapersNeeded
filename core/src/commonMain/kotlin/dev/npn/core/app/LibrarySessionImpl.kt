@@ -9,6 +9,7 @@ import dev.npn.core.ai.AiSuggest
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.toEntity
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FsEvent
@@ -746,6 +747,7 @@ class LibrarySessionImpl private constructor(
                     ocrQueueDao = db.ocrQueueDao(),
                     clock = deps.clock,
                     ruleProvider = deps.storagePathRule,
+                    fieldTypes = { db.fieldDefDao().fieldTypes() },
                     serialize = { coordinator.serialized(it) },
                 )
             val maintenance = MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)

@@ -73,7 +73,9 @@
 
     <string name="common_settings_storage_error_unclosed">Niet-afgesloten tijdelijke aanduiding vanaf positie %1$s</string>
     <string name="common_settings_storage_error_unexpected_closing">Onverwachte sluitaccolade op positie %1$s</string>
-    <string name="common_settings_storage_error_date_format_only">Opmaak wordt alleen ondersteund voor %1$s</string>
+    <string name="common_settings_storage_error_not_a_date">%1$s is geen datumveld en krijgt dus geen datumopmaak</string>
+    <string name="common_settings_storage_error_format_not_allowed">{%1$s} krijgt geen opmaak</string>
+    <string name="common_settings_storage_error_missing_field_key">{field} heeft een veldsleutel nodig, bijvoorbeeld {field:amount}</string>
     <string name="common_settings_storage_error_unknown_variable">Onbekende sjabloonvariabele %1$s</string>
     <string name="common_settings_storage_error_blank">Pad mag niet leeg zijn</string>
     <string name="common_settings_storage_error_absolute">Absolute paden zijn niet toegestaan</string>
@@ -82,7 +84,6 @@
     <string name="common_settings_storage_error_reserved">De map %1$s is gereserveerd</string>
     <string name="common_settings_storage_error_whitespace">Padsegmenten mogen niet met witruimte beginnen of eindigen</string>
     <string name="common_settings_storage_error_invalid_segment">Ongeldig bestandsnaamsegment %1$s</string>
-    <string name="common_settings_storage_error_invalid">Ongeldig padsjabloon</string>
 
     <string name="common_settings_watched_folder_help">Pdf-bestanden in deze map worden automatisch geïmporteerd en met OCR verwerkt.</string>
     <string name="common_settings_no_watched_folder">Geen bewaakte map</string>

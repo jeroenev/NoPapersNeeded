@@ -73,7 +73,9 @@
 
     <string name="common_settings_storage_error_unclosed">Nicht geschlossener Platzhalter ab Position %1$s</string>
     <string name="common_settings_storage_error_unexpected_closing">Unerwartete schließende Klammer an Position %1$s</string>
-    <string name="common_settings_storage_error_date_format_only">Formatierung wird nur für %1$s unterstützt</string>
+    <string name="common_settings_storage_error_not_a_date">%1$s ist kein Datumsfeld und erhält daher kein Datumsformat</string>
+    <string name="common_settings_storage_error_format_not_allowed">{%1$s} unterstützt kein Format</string>
+    <string name="common_settings_storage_error_missing_field_key">{field} braucht einen Feldschlüssel, zum Beispiel {field:amount}</string>
     <string name="common_settings_storage_error_unknown_variable">Unbekannte Vorlagenvariable %1$s</string>
     <string name="common_settings_storage_error_blank">Der Pfad darf nicht leer sein</string>
     <string name="common_settings_storage_error_absolute">Absolute Pfade sind nicht erlaubt</string>
@@ -82,7 +84,6 @@
     <string name="common_settings_storage_error_reserved">Das Verzeichnis %1$s ist reserviert</string>
     <string name="common_settings_storage_error_whitespace">Pfadsegmente dürfen nicht mit Leerzeichen beginnen oder enden</string>
     <string name="common_settings_storage_error_invalid_segment">Ungültiger Teil des Pfads: %1$s</string>
-    <string name="common_settings_storage_error_invalid">Ungültige Pfadvorlage</string>
 
     <string name="common_settings_watched_folder_help">PDFs, die in diesem Ordner gespeichert werden (zum Beispiel von einer Scanner-App), werden automatisch in die Bibliothek importiert und per OCR verarbeitet.</string>
     <string name="common_settings_no_watched_folder">Kein Ordner überwacht</string>

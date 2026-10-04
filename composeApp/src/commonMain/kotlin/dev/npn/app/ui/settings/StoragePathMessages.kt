@@ -1,92 +1,79 @@
 package dev.npn.app.ui.settings
 
-import androidx.compose.runtime.Composable
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
+import dev.npn.core.pathrules.StoragePathError
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_absolute
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_backslash
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_blank
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_date_format_only
-import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_invalid
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_format_not_allowed
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_invalid_segment
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_missing_field_key
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_not_a_date
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_reserved
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_traversal
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_unclosed
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_unexpected_closing
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_unknown_variable
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_whitespace
-import org.jetbrains.compose.resources.stringResource
 
 /**
- * Renders a [StoragePathError] as user-facing copy. Kept apart from the pane that shows it because
- * it is a pure resource lookup over the whole [StoragePathErrorKind] surface: one exhaustive
- * `when` that would otherwise dominate the pane it belongs to.
+ * A [StoragePathError] as user-facing copy. Kept apart from the pane that shows it because it is a
+ * pure resource lookup over the whole error surface: one exhaustive `when` that would otherwise
+ * dominate the pane it belongs to.
  */
-@Composable
-internal fun StoragePathError.localizedMessage(): String =
-    when (kind) {
-        StoragePathErrorKind.UNCLOSED_PLACEHOLDER -> {
-            stringResource(
-                Res.string.common_settings_storage_error_unclosed,
-                argument.orEmpty(),
-            )
+internal fun StoragePathError.text(): UiText =
+    when (this) {
+        is StoragePathError.UnclosedPlaceholder -> {
+            uiText(Res.string.common_settings_storage_error_unclosed, position)
         }
 
-        StoragePathErrorKind.UNEXPECTED_CLOSING_BRACE -> {
-            stringResource(
-                Res.string.common_settings_storage_error_unexpected_closing,
-                argument.orEmpty(),
-            )
+        is StoragePathError.UnexpectedClosingBrace -> {
+            uiText(Res.string.common_settings_storage_error_unexpected_closing, position)
         }
 
-        StoragePathErrorKind.DATE_FORMAT_ONLY -> {
-            stringResource(
-                Res.string.common_settings_storage_error_date_format_only,
-                argument.orEmpty(),
-            )
+        is StoragePathError.UnknownVariable -> {
+            uiText(Res.string.common_settings_storage_error_unknown_variable, name)
         }
 
-        StoragePathErrorKind.UNKNOWN_VARIABLE -> {
-            stringResource(
-                Res.string.common_settings_storage_error_unknown_variable,
-                argument.orEmpty(),
-            )
+        StoragePathError.MissingFieldKey -> {
+            uiText(Res.string.common_settings_storage_error_missing_field_key)
         }
 
-        StoragePathErrorKind.BLANK -> {
-            stringResource(Res.string.common_settings_storage_error_blank)
+        is StoragePathError.NotADateField -> {
+            uiText(Res.string.common_settings_storage_error_not_a_date, key)
         }
 
-        StoragePathErrorKind.ABSOLUTE -> {
-            stringResource(Res.string.common_settings_storage_error_absolute)
+        is StoragePathError.FormatNotAllowed -> {
+            uiText(Res.string.common_settings_storage_error_format_not_allowed, name)
         }
 
-        StoragePathErrorKind.BACKSLASH -> {
-            stringResource(Res.string.common_settings_storage_error_backslash)
+        StoragePathError.Blank -> {
+            uiText(Res.string.common_settings_storage_error_blank)
         }
 
-        StoragePathErrorKind.TRAVERSAL -> {
-            stringResource(Res.string.common_settings_storage_error_traversal)
+        StoragePathError.Absolute -> {
+            uiText(Res.string.common_settings_storage_error_absolute)
         }
 
-        StoragePathErrorKind.RESERVED_DIRECTORY -> {
-            stringResource(
-                Res.string.common_settings_storage_error_reserved,
-                argument.orEmpty(),
-            )
+        StoragePathError.Backslash -> {
+            uiText(Res.string.common_settings_storage_error_backslash)
         }
 
-        StoragePathErrorKind.WHITESPACE -> {
-            stringResource(Res.string.common_settings_storage_error_whitespace)
+        StoragePathError.Traversal -> {
+            uiText(Res.string.common_settings_storage_error_traversal)
         }
 
-        StoragePathErrorKind.INVALID_SEGMENT -> {
-            stringResource(
-                Res.string.common_settings_storage_error_invalid_segment,
-                argument.orEmpty(),
-            )
+        is StoragePathError.ReservedDirectory -> {
+            uiText(Res.string.common_settings_storage_error_reserved, name)
         }
 
-        StoragePathErrorKind.INVALID -> {
-            stringResource(Res.string.common_settings_storage_error_invalid)
+        StoragePathError.EdgeWhitespace -> {
+            uiText(Res.string.common_settings_storage_error_whitespace)
+        }
+
+        is StoragePathError.InvalidSegment -> {
+            uiText(Res.string.common_settings_storage_error_invalid_segment, segment)
         }
     }

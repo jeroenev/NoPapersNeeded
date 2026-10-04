@@ -7,9 +7,11 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import dev.npn.app.ui.common.rememberStorageAccess
+import dev.npn.app.ui.common.resolve
 import dev.npn.app.ui.common.supportsSafStorage
 import dev.npn.core.app.LibraryLocations
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.pathrules.StoragePathContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
@@ -76,6 +78,7 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
         StoragePathRuleEditor(
             template = context.state.storagePathTemplate,
             enabled = context.state.storagePathEnabled,
+            fieldTypes = context.fields.associate { it.key to it.type },
             onTemplateChange = { template -> context.vm.edit { it.copy(storagePathTemplate = template) } },
             onEnabledChange = context.vm::setStoragePathEnabled,
         )
@@ -109,10 +112,12 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
 private fun StoragePathRuleEditor(
     template: String,
     enabled: Boolean,
+    /** The library's field types: a date pattern is valid on any field the registry calls a date. */
+    fieldTypes: Map<String, FieldType>,
     onTemplateChange: (String) -> Unit,
     onEnabledChange: (Boolean) -> Unit,
 ) {
-    val evaluation = evaluateStoragePath(template, sampleStoragePathContext())
+    val evaluation = evaluateStoragePath(template, sampleStoragePathContext(fieldTypes))
     SettingsSwitchRow(
         title = stringResource(Res.string.common_settings_storage_organize_paths),
         help = stringResource(Res.string.common_settings_storage_organize_help),
@@ -127,7 +132,7 @@ private fun StoragePathRuleEditor(
         supportingText = {
             Text(
                 text =
-                    evaluation.error?.localizedMessage()
+                    evaluation.error?.text()?.resolve()
                         ?: stringResource(Res.string.common_settings_storage_preview, evaluation.preview.orEmpty()),
             )
         },
@@ -139,7 +144,7 @@ private fun StoragePathRuleEditor(
 
 /** The fictional document the template preview is rendered against. */
 @Composable
-private fun sampleStoragePathContext(): StoragePathContext =
+private fun sampleStoragePathContext(fieldTypes: Map<String, FieldType>): StoragePathContext =
     StoragePathContext(
         fields =
             mapOf(
@@ -154,4 +159,5 @@ private fun sampleStoragePathContext(): StoragePathContext =
                 stringResource(Res.string.common_settings_storage_sample_tag_utilities),
             ),
         originalFileName = "scan.pdf",
+        fieldTypes = fieldTypes,
     )
