@@ -235,7 +235,10 @@ Desktop, build a Linux AppImage:
 jpackage cannot emit AppImage directly, so this task wraps the jpackage app-image
 (bundled JRE plus launcher) with `appimagetool`. `appimagetool` is downloaded
 automatically into `desktopApp/build/appimage/` on first run, so this task needs
-network access. It builds with `--appimage-extract-and-run` and therefore does not
+network access. It is pinned to a tagged release and its SHA-256
+(`appImageToolVersion`/`appImageToolSha256` in `desktopApp/build.gradle.kts`, checked by
+`VerifiedDownload` in buildSrc, as the Windows Tesseract downloads are); to bump it, take the
+hash GitHub lists for the asset. It builds with `--appimage-extract-and-run` and therefore does not
 need FUSE on the build host; running the resulting AppImage still needs FUSE, or the
 end user can run it with `--appimage-extract-and-run`. The AppImage is x86_64 only.
 

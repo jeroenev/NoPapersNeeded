@@ -3,8 +3,6 @@ import org.gradle.process.ExecOperations
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
 import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
-import java.net.URI
-import java.security.MessageDigest
 import javax.inject.Inject
 
 plugins {
@@ -320,33 +318,37 @@ tasks.register<PackageLinuxInstallerTask>("packageRpm") { packageAs("rpm") }
 // (needs network) and run with --appimage-extract-and-run, so no host FUSE is
 // needed to build. The resulting AppImage still needs FUSE (or that same flag) to
 // run on the end-user machine.
+//
+// A tagged release, pinned by hash: the release job runs this binary, so it must be the bytes
+// that were reviewed, never whatever the rolling "continuous" release holds that day. To bump it,
+// take the SHA-256 GitHub lists for the asset on the release page.
 val appImageArch = "x86_64"
+val appImageToolVersion = "1.9.1"
 val appImageToolUrl =
-    "https://github.com/AppImage/appimagetool/releases/download/continuous/appimagetool-$appImageArch.AppImage"
+    "https://github.com/AppImage/appimagetool/releases/download/$appImageToolVersion/appimagetool-$appImageArch.AppImage"
+val appImageToolSha256 = "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 
 abstract class DownloadAppImageToolTask : DefaultTask() {
     @get:Input
     abstract val url: Property<String>
+
+    @get:Input
+    abstract val sha256: Property<String>
 
     @get:OutputFile
     abstract val outFile: RegularFileProperty
 
     @TaskAction
     fun download() {
-        val target = outFile.get().asFile
-        if (target.exists() && target.length() > 0L) return
-        target.parentFile.mkdirs()
-        logger.lifecycle("Downloading appimagetool from ${url.get()}")
-        URI(url.get()).toURL().openStream().use { input ->
-            target.outputStream().use { input.copyTo(it) }
-        }
-        target.setExecutable(true)
+        val tool = VerifiedDownload.fetch(url.get(), sha256.get(), outFile.get().asFile) { logger.lifecycle(it) }
+        tool.setExecutable(true)
     }
 }
 
 val downloadAppImageTool =
     tasks.register<DownloadAppImageToolTask>("downloadAppImageTool") {
         url.set(appImageToolUrl)
+        sha256.set(appImageToolSha256)
         outFile.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
     }
 
@@ -615,26 +617,7 @@ abstract class PrepareWindowsTesseractTask
             url: String,
             sha256: String,
             target: File,
-        ): File {
-            if (target.isFile && sha256Of(target) == sha256) return target
-            logger.lifecycle("Downloading $url")
-            val partial = File(target.path + ".part")
-            URI(url).toURL().openStream().use { input -> partial.outputStream().use { input.copyTo(it) } }
-            val actual = sha256Of(partial)
-            if (actual != sha256) {
-                partial.delete()
-                throw GradleException("$url has SHA-256 $actual, expected $sha256")
-            }
-            partial.copyTo(target, overwrite = true)
-            partial.delete()
-            return target
-        }
-
-        private fun sha256Of(file: File): String =
-            MessageDigest
-                .getInstance("SHA-256")
-                .digest(file.readBytes())
-                .joinToString("") { "%02x".format(it) }
+        ): File = VerifiedDownload.fetch(url, sha256, target) { logger.lifecycle(it) }
 
         private fun sevenZip(): String =
             (onPath("7z.exe", "7z", "7zz") ?: File("C:/Program Files/7-Zip/7z.exe").takeIf { it.isFile })
