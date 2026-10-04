@@ -31,9 +31,6 @@ data class SettingsSnapshot(
      * already opened library keeps the mode its location string encodes ([LibraryLocations]).
      */
     val useSafStorage: Boolean = false,
-    val storagePathTemplate: String? = null,
-    val storagePathEnabled: Boolean = false,
-    val autoMatchRulesJson: String = "[]",
     val aiEnabled: Boolean = false,
     val aiProvider: AiProvider = AiProvider.OPENAI,
     val aiBaseUrl: String = "",
@@ -78,7 +75,9 @@ fun SettingsSnapshot.toAiConfig(systemLanguage: String? = null): AiConfig =
 
 /**
  * Device-local, app-global settings (never per library, never synced through the journal — the
- * API key, watched-folder path and UI preferences are meaningless on another device).
+ * API key, watched-folder path and UI preferences are meaningless on another device). How a library
+ * behaves is not here: its storage-path rule and auto-match rules are library settings in its
+ * journal ([StoragePathFacade], [AutoMatchRuleRepository]), which every device reads the same.
  *
  * The seam is deliberately narrow: one [settings] snapshot flow to read and one [edit] mutation
  * to write. It used to be 27 members — a snapshot flow plus 26 one-line setters — so the interface
@@ -102,7 +101,23 @@ interface SettingsRepository {
      * write path; there are no per-field setters to keep in sync.
      */
     suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot)
+
+    /**
+     * What this device stored for library behaviour before it moved into each library's journal.
+     * Read only to adopt it into a library that has no value of its own yet; nothing writes it.
+     */
+    suspend fun legacyLibrarySettings(): LegacyLibrarySettings = LegacyLibrarySettings()
 }
+
+/**
+ * The library behaviour older builds kept as device settings, shared by every library the device
+ * opened: the storage-path rule and the auto-match rules blob ([dev.npn.core.rules.AutoMatchRuleJson]).
+ */
+data class LegacyLibrarySettings(
+    val storagePathTemplate: String? = null,
+    val storagePathEnabled: Boolean = false,
+    val autoMatchRulesJson: String? = null,
+)
 
 /**
  * The single home for how a [SettingsSnapshot] maps to and from stored key/value strings, and for
@@ -161,7 +176,6 @@ object SettingsCodec {
                     ?.ifEmpty { null }
                     ?.let(OcrLanguages::format),
             watchedFolder = snapshot.watchedFolder?.ifEmpty { null },
-            storagePathTemplate = snapshot.storagePathTemplate?.ifEmpty { null },
             gridColumnWidth =
                 snapshot.gridColumnWidth.coerceIn(GridSizing.MIN_COLUMN_WIDTH, GridSizing.MAX_COLUMN_WIDTH),
             aiMaxTagsPerDoc = snapshot.aiMaxTagsPerDoc.coerceIn(AiTagging.RANGE),
@@ -201,9 +215,6 @@ object SettingsCodec {
                     reader.boolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT)
                         ?: DEFAULTS.watchedFolderDeleteAfterImport,
                 useSafStorage = reader.boolean(SettingsKeys.USE_SAF_STORAGE) ?: DEFAULTS.useSafStorage,
-                storagePathTemplate = reader.string(SettingsKeys.STORAGE_PATH_TEMPLATE),
-                storagePathEnabled = reader.boolean(SettingsKeys.STORAGE_PATH_ENABLED) ?: DEFAULTS.storagePathEnabled,
-                autoMatchRulesJson = reader.string(SettingsKeys.AUTO_MATCH_RULES_JSON) ?: DEFAULTS.autoMatchRulesJson,
                 aiEnabled = reader.boolean(SettingsKeys.AI_ENABLED) ?: DEFAULTS.aiEnabled,
                 aiProvider =
                     aiProviderProp(
@@ -251,9 +262,6 @@ object SettingsCodec {
         writer.putOptional(SettingsKeys.WATCHED_FOLDER, s.watchedFolder)
         writer.putBoolean(SettingsKeys.WATCHED_FOLDER_DELETE_AFTER_IMPORT, s.watchedFolderDeleteAfterImport)
         writer.putBoolean(SettingsKeys.USE_SAF_STORAGE, s.useSafStorage)
-        writer.putOptional(SettingsKeys.STORAGE_PATH_TEMPLATE, s.storagePathTemplate)
-        writer.putBoolean(SettingsKeys.STORAGE_PATH_ENABLED, s.storagePathEnabled)
-        writer.putString(SettingsKeys.AUTO_MATCH_RULES_JSON, s.autoMatchRulesJson)
         writer.putBoolean(SettingsKeys.AI_ENABLED, s.aiEnabled)
         writer.putString(SettingsKeys.AI_PROVIDER, s.aiProvider.name)
         writer.putString(SettingsKeys.AI_BASE_URL, s.aiBaseUrl)
@@ -268,6 +276,18 @@ object SettingsCodec {
         writer.putBoolean(SettingsKeys.UPDATE_CHECK_ENABLED, s.updateCheckEnabled)
         writer.putOptional(SettingsKeys.DISMISSED_UPDATE_VERSION, s.dismissedUpdateVersion)
     }
+
+    /**
+     * The library behaviour this device stored before it moved into each library's journal. [store]
+     * never writes these keys again but leaves them in place, so every library opened afterwards for
+     * the first time can still adopt them.
+     */
+    fun legacyLibrarySettings(reader: Reader): LegacyLibrarySettings =
+        LegacyLibrarySettings(
+            storagePathTemplate = reader.string(SettingsKeys.STORAGE_PATH_TEMPLATE),
+            storagePathEnabled = reader.boolean(SettingsKeys.STORAGE_PATH_ENABLED) ?: false,
+            autoMatchRulesJson = reader.string(SettingsKeys.AUTO_MATCH_RULES_JSON),
+        )
 
     /**
      * The single code stored before automatic existed. Every install wrote one, "eng" by default,
@@ -311,6 +331,8 @@ internal object SettingsKeys {
     const val WATCHED_FOLDER = "watchedFolder"
     const val WATCHED_FOLDER_DELETE_AFTER_IMPORT = "watchedFolderDeleteAfterImport"
     const val USE_SAF_STORAGE = "useSafStorage"
+
+    // Library behaviour, now in each library's journal; only read to adopt them (legacyLibrarySettings).
     const val STORAGE_PATH_TEMPLATE = "storagePathTemplate"
     const val STORAGE_PATH_ENABLED = "storagePathEnabled"
     const val AUTO_MATCH_RULES_JSON = "autoMatchRulesJson"

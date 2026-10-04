@@ -79,7 +79,7 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
             template = context.state.storagePathTemplate,
             enabled = context.state.storagePathEnabled,
             fieldTypes = context.fields.associate { it.key to it.type },
-            onTemplateChange = { template -> context.vm.edit { it.copy(storagePathTemplate = template) } },
+            onTemplateChange = context.vm::setStoragePathTemplate,
             onEnabledChange = context.vm::setStoragePathEnabled,
         )
         SettingsActionRow(

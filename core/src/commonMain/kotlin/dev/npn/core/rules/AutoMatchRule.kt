@@ -21,8 +21,9 @@ import kotlinx.serialization.json.jsonObject
  * User-defined rule that assigns tags and/or field values by matching document text against a
  * pattern.
  *
- * Rules are local to the device (persisted as settings JSON, mirrored into Room, not synced
- * through the journal). Their actions are applied as ordinary journal ops via [JournalCoordinator].
+ * Rules belong to the library: the list is one synced journal setting ([AutoMatchRuleJson]),
+ * cached in Room, so every device matches with the same rules and the same field keys. Their
+ * actions are applied as ordinary journal ops via [dev.npn.core.app.JournalCoordinator].
  */
 @Serializable
 data class AutoMatchRule(
@@ -74,7 +75,7 @@ sealed class RuleField {
     }
 }
 
-/** [RuleField] travels as its [RuleField.wire] string, so a settings blob stays hand-readable. */
+/** [RuleField] travels as its [RuleField.wire] string, so the stored rule list stays hand-readable. */
 object RuleFieldSerializer : KSerializer<RuleField> {
     override val descriptor: SerialDescriptor = PrimitiveSerialDescriptor("RuleField", PrimitiveKind.STRING)
 
@@ -98,8 +99,9 @@ enum class MatchAlgorithm {
 }
 
 /**
- * The settings-blob codec for the rule list. Reads the pre-registry shape too, where a rule
- * carried `correspondent` and `docType` as top-level strings instead of [AutoMatchRule.sets].
+ * The codec for the stored rule list: the journal setting, and the device setting it was adopted
+ * from. Reads the pre-registry shape too, where a rule carried `correspondent` and `docType` as
+ * top-level strings instead of [AutoMatchRule.sets].
  */
 object AutoMatchRuleJson {
     private val json = NpnJson.Persisted

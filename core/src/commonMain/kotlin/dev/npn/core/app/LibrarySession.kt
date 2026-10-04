@@ -23,6 +23,7 @@ interface LibrarySession {
     val ingest: IngestFacade
     val ocr: OcrFacade
     val reviewConfig: ReviewConfigFacade
+    val storagePath: StoragePathFacade
     val maintenance: MaintenanceFacade
     val work: WorkFacade
     val aiEditQueue: AiEditQueueFacade

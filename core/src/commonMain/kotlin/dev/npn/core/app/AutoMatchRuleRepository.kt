@@ -3,7 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.rules.AutoMatchRule
 import kotlinx.coroutines.flow.Flow
 
-/** Local-only repository for document auto-matching rules. */
+/** The library's document auto-matching rules, synced through its journal. */
 interface AutoMatchRuleRepository {
     fun observeRules(): Flow<List<AutoMatchRule>>
     suspend fun save(rule: AutoMatchRule): String

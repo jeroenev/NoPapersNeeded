@@ -7,7 +7,6 @@ import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.TesseractCliEngine
-import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.util.JvmLog
@@ -37,9 +36,7 @@ fun jvmSessionDeps(
     scope: CoroutineScope,
     ocrLanguage: suspend () -> String,
     trashRetentionDays: suspend () -> Int,
-    storagePathRule: suspend () -> StoragePathRule? = { null },
-    autoMatchRulesJson: suspend () -> String = { "[]" },
-    persistAutoMatchRulesJson: suspend (String) -> Unit = {},
+    legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
     aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
     clock: EpochClock = SystemEpochClock,
     installationId: String = "local-installation",
@@ -60,9 +57,7 @@ fun jvmSessionDeps(
         ocrLanguage = ocrLanguage,
         trashRetentionDays = trashRetentionDays,
         log = log,
-        storagePathRule = storagePathRule,
-        autoMatchRulesJson = autoMatchRulesJson,
-        persistAutoMatchRulesJson = persistAutoMatchRulesJson,
+        legacyLibrarySettings = legacyLibrarySettings,
         aiConfig = aiConfig,
         clock = clock,
         installationId = installationId,

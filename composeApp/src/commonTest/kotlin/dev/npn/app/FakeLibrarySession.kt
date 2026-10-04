@@ -26,6 +26,7 @@ class FakeLibrarySession : LibrarySession {
     override val ingest = FakeIngestFacade()
     override val ocr = FakeOcrFacade()
     override val reviewConfig = FakeReviewConfigFacade()
+    override val storagePath = FakeStoragePathFacade()
     override val maintenance = FakeMaintenanceFacade()
     override val work = FakeWorkFacade()
     override val aiEditQueue = FakeAiEditQueue()

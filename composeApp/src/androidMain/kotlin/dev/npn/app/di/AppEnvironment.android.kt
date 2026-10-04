@@ -17,7 +17,6 @@ import dev.npn.core.fs.ObjectPublication
 import dev.npn.core.fs.SafLibraryFileSystem
 import dev.npn.core.ocr.MlKitOcrEngine
 import dev.npn.core.ocr.OcrLanguages
-import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfBoxAndroidEngine
 import dev.npn.core.util.AndroidLog
 import dev.npn.core.watch.JvmWatchedFolder
@@ -69,13 +68,7 @@ fun createAppEnvironment(context: Context): AppEnvironment {
                 trashRetentionDays = { settings.settings.first().trashRetentionDays },
                 log = AndroidLog,
                 installationId = settings.settings.first().installationId,
-                storagePathRule = {
-                    val snapshot = settings.settings.first()
-                    val template = snapshot.storagePathTemplate
-                    if (template.isNullOrBlank()) null else StoragePathRule(template, snapshot.storagePathEnabled)
-                },
-                autoMatchRulesJson = { settings.settings.first().autoMatchRulesJson },
-                persistAutoMatchRulesJson = { json -> settings.edit { it.copy(autoMatchRulesJson = json) } },
+                legacyLibrarySettings = settings::legacyLibrarySettings,
                 // Locale.getDefault() is what LocalAppLocale sets when the user picks a UI
                 // language, so it doubles as the effective app language here; read per call
                 // because it changes while the app runs.

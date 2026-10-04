@@ -15,8 +15,9 @@ import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.flow.Flow
 
 /**
- * Local-only rule storage. Rules are not part of the journal; they live in the disposable index
- * DB and are rebuilt by the user on each device.
+ * Cache of the library's rule list, whose master copy is a synced setting in the journal
+ * (`dev.npn.core.app.AutoMatchRuleRepositoryImpl` keeps the two in step). Disposable like the
+ * rest of the index.
  */
 @Entity(tableName = "auto_match_rules")
 data class AutoMatchRuleEntity(

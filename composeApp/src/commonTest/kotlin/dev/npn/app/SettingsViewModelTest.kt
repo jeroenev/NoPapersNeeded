@@ -12,6 +12,7 @@ import dev.npn.core.ai.AiProvider
 import dev.npn.core.ai.AiReasoningLevel
 import dev.npn.core.ai.AiSelfTestReport
 import dev.npn.core.app.AiTagging
+import dev.npn.core.app.StoragePathSetting
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -24,6 +25,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
@@ -33,7 +35,14 @@ class SettingsViewModelTest : MainDispatcherTest() {
         settings: FakeSettingsRepository = FakeSettingsRepository(),
         session: FakeLibrarySession = FakeLibrarySession(),
         selfTest: suspend (AiConfig) -> AiSelfTestReport = { error("no self-test expected") },
-    ) = SettingsViewModel(settings, session.content, session.reviewConfig, session.fieldRegistry, selfTest)
+    ) = SettingsViewModel(
+        settings,
+        session.content,
+        session.reviewConfig,
+        session.storagePath,
+        session.fieldRegistry,
+        selfTest,
+    )
 
     @Test
     fun clearingTheThumbnailCacheSaysWhatItCleared() =
@@ -67,8 +76,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
                             trashRetentionDays = 14,
                             defaultViewType = ViewType.GRID,
                             landscapeListColumns = true,
-                            storagePathTemplate = "{doc_date:yyyy}/{title}.pdf",
-                            storagePathEnabled = true,
                             aiEnabled = true,
                             aiProvider = AiProvider.OLLAMA,
                             aiBaseUrl = "http://localhost:11434",
@@ -81,7 +88,10 @@ class SettingsViewModelTest : MainDispatcherTest() {
                         )
                     }
                 }
-            val model = vm(settings = settings)
+            val session = FakeLibrarySession()
+            session.storagePath.storagePathFlow.value =
+                StoragePathSetting("{doc_date:yyyy}/{title}.pdf", enabled = true)
+            val model = vm(settings = settings, session = session)
             val job = launch { model.state.collect {} }
             advanceUntilIdle()
             val s = model.state.value
@@ -91,6 +101,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             s.trashRetentionDays shouldBe 14
             s.defaultViewType shouldBe ViewType.GRID
             s.landscapeListColumns shouldBe true
+            s.storagePathTemplate shouldBe "{doc_date:yyyy}/{title}.pdf"
             s.storagePathEnabled shouldBe true
             s.aiEnabled shouldBe true
             s.aiProvider shouldBe AiProvider.OLLAMA
@@ -192,8 +203,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
                     fieldRegistry.defs.value = fieldRegistry.defs.value + invoiceDate
                 }
             val template = "{field:invoiceDate:yyyy}/{title}.pdf"
-            val settings = FakeSettingsRepository().apply { updateSettings { it.copy(storagePathTemplate = template) } }
-            val model = vm(settings = settings, session = session)
+            session.storagePath.storagePathFlow.value = StoragePathSetting(template)
+            val model = vm(session = session)
             val types =
                 session.fieldRegistry.defs.value
                     .associate { it.key to it.type }
@@ -202,7 +213,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.setStoragePathEnabled(true)
             advanceUntilIdle()
 
-            settings.settingsFlow.value?.storagePathEnabled shouldBe true
+            session.storagePath.storagePathFlow.value.enabled shouldBe true
         }
 
     @Test
@@ -221,8 +232,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.edit { it.copy(trashRetentionDays = 60) }
             model.edit { it.copy(defaultViewType = ViewType.GRID) }
             model.edit { it.copy(landscapeListColumns = true) }
-            model.edit { it.copy(storagePathTemplate = "{docType}/{title}.pdf") }
-            model.setStoragePathEnabled(true)
             model.edit { it.copy(appLanguage = "nl") }
             advanceUntilIdle()
             val s = settings.settingsFlow.value
@@ -230,9 +239,50 @@ class SettingsViewModelTest : MainDispatcherTest() {
             s?.trashRetentionDays shouldBe 60
             s?.defaultViewType shouldBe ViewType.GRID
             s?.landscapeListColumns shouldBe true
-            s?.storagePathTemplate shouldBe "{docType}/{title}.pdf"
-            s?.storagePathEnabled shouldBe true
             s?.appLanguage shouldBe "nl"
+        }
+
+    @Test
+    fun storagePathEditsWriteThroughTheLibrary() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            model.setStoragePathTemplate("{docType}/{title}.pdf")
+            model.setStoragePathEnabled(true)
+            advanceUntilIdle()
+            session.storagePath.storagePathFlow.value shouldBe
+                StoragePathSetting("{docType}/{title}.pdf", enabled = true)
+        }
+
+    @Test
+    fun aTemplateIsSavedOnceTypingPauses() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val job = launch { model.state.collect {} }
+            for (typed in listOf("{d", "{docType}", "{docType}/{title}.pdf")) {
+                model.setStoragePathTemplate(typed)
+                runCurrent()
+                // The screen follows every keystroke before anything is saved.
+                model.state.value.storagePathTemplate shouldBe typed
+            }
+            session.storagePath.templateWrites shouldBe emptyList()
+
+            advanceUntilIdle()
+
+            session.storagePath.templateWrites shouldContainExactly listOf("{docType}/{title}.pdf")
+            model.state.value.storagePathTemplate shouldBe "{docType}/{title}.pdf"
+            job.cancel()
+        }
+
+    @Test
+    fun enablingArmsTheTemplateTheScreenShows() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            model.setStoragePathEnabled(true)
+            advanceUntilIdle()
+            session.storagePath.storagePathFlow.value shouldBe StoragePathSetting("{doc_date:yyyy}/{title}.pdf", true)
         }
 
     @Test

@@ -23,7 +23,7 @@ class MetadataWriterBatchTest {
     fun applyEditsCommitsMetadataAndPathIntentAndMovesOnce() =
         runTest {
             val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePathRule = { rule })
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
             try {
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
                 rig.session.rescan()
@@ -68,7 +68,7 @@ class MetadataWriterBatchTest {
     fun applyEditsWritesManyDocumentsInOneTransaction() =
         runTest {
             val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePathRule = { rule })
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
             try {
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
                 rig.writePdf("b.pdf", PdfFixtures.embeddedTextPdf("beta"))

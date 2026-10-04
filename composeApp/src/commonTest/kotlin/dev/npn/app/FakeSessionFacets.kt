@@ -16,14 +16,18 @@ import dev.npn.core.app.QueuedWork
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SplitOutcome
+import dev.npn.core.app.StoragePathFacade
+import dev.npn.core.app.StoragePathSetting
 import dev.npn.core.app.WorkFacade
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import dev.npn.core.model.ReviewMode
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.update
 
-// Test doubles for the session's own facets: ingest, OCR ops, review config, maintenance and work.
+// Test doubles for the session's own facets: ingest, OCR ops, review config, storage path,
+// maintenance and work.
 // Flows are public MutableStateFlows so tests can push emissions; calls are recorded in lists.
 
 /** Imports and rescans. [FakeIngestFacade.importOutcomes] is consumed in order, repeating the last. */
@@ -146,6 +150,23 @@ class FakeReviewConfigFacade : ReviewConfigFacade {
 
     override suspend fun markReviewedForMigration(onlyTagged: Boolean) {
         migrations += onlyTagged
+    }
+}
+
+/** The library's storage-path rule. [templateWrites] records every template saved. */
+class FakeStoragePathFacade : StoragePathFacade {
+    val storagePathFlow = MutableStateFlow(StoragePathSetting())
+    override val storagePath: Flow<StoragePathSetting> get() = storagePathFlow
+
+    val templateWrites = mutableListOf<String?>()
+
+    override suspend fun setStoragePathTemplate(template: String?) {
+        templateWrites += template
+        storagePathFlow.update { it.copy(template = template?.takeIf(String::isNotBlank)) }
+    }
+
+    override suspend fun setStoragePathEnabled(enabled: Boolean) {
+        storagePathFlow.update { it.copy(enabled = enabled) }
     }
 }
 

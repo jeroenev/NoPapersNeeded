@@ -48,6 +48,9 @@ private class SyncedSettings {
     /** The current value of a key, without touching the fold. */
     fun current(key: String): String? = values.value[key]
 
+    /** Whether [key] was ever written, a cleared value included. */
+    fun written(key: String): Boolean = key in values.value
+
     /** Replace every setting from [source]. */
     fun seed(source: FoldedState) {
         values.value = source.settings()
@@ -144,6 +147,23 @@ class JournalCoordinator internal constructor(
     private val syncedSettings = SyncedSettings()
 
     fun settingFlow(key: String): kotlinx.coroutines.flow.Flow<String?> = syncedSettings.flow(key)
+
+    /** The current value of the synced setting [key], without touching the fold. */
+    fun setting(key: String): String? = syncedSettings.current(key)
+
+    /**
+     * Write each of [values] under a key the journal has never held, a cleared one included: a
+     * one-time adoption of what this device had, which must not overwrite what any replica already
+     * decided. Like [seedFieldRegistryIfNeeded], the in-memory check runs first, so only an open
+     * that has something to adopt pays for the fold.
+     */
+    suspend fun adoptSettings(values: Map<String, String>) {
+        if (values.keys.all(syncedSettings::written) || writeBlockReason != null) return
+        commitBuilt { state ->
+            val held = state.settings()
+            values.filterKeys { it !in held }.map { (key, value) -> PendingOp.settingSet(key, value) }
+        }
+    }
 
     /**
      * When each document with a trash history was trashed, per the journal ingested so far: null

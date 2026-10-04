@@ -10,8 +10,6 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.fieldTypes
-import dev.npn.core.db.toEntity
-import dev.npn.core.db.toRule
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.LibraryFileSystem
@@ -48,13 +46,11 @@ import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrEngines
 import dev.npn.core.ocr.OcrPipeline
-import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.pdf.ThumbnailStore
-import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.RuleApplier
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
@@ -70,6 +66,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import kotlinx.coroutines.flow.filterNot
 import kotlinx.coroutines.flow.map
@@ -105,7 +102,8 @@ class LibrarySessionImpl private constructor(
     override val documents: DocumentRepository,
     override val tags: TagRepository,
     override val savedViews: SavedViewRepository,
-    override val rules: AutoMatchRuleRepository,
+    override val rules: AutoMatchRuleRepositoryImpl,
+    override val storagePath: StoragePathFacade,
     override val fieldRegistry: FieldRegistry,
     private val writer: MetadataWriterImpl,
     override val content: DocContentFacade,
@@ -522,6 +520,13 @@ class LibrarySessionImpl private constructor(
         // Initial rescan.
         scope.launch { log.runLogged("Initial rescan") { doWatchTriggeredRescan() } }
 
+        // Another device's rule list arrives as a journal setting; the rules table only caches it.
+        scope.launch {
+            coordinator.settingFlow(LibrarySettingKeys.AUTO_MATCH_RULES).distinctUntilChanged().collect {
+                log.runLogged("Caching the auto-match rules") { rules.mirror() }
+            }
+        }
+
         // Watch services and sync providers may omit events. This reconciliation reads only the
         // metadata directory and skips unchanged source fingerprints; it never walks PDFs.
         scope.launch {
@@ -732,9 +737,15 @@ class LibrarySessionImpl private constructor(
             val coordinator = createCoordinator(deps, writer, indexer)
             coordinator.refreshState()
             coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) })
+            // Once per library: what this device kept as settings before they became library data.
+            // A failure leaves it for the next open rather than refusing this one.
+            deps.log.runLogged("Adopting this device's library settings") {
+                coordinator.adoptSettings(deps.legacyLibrarySettings().journalSettings())
+            }
 
+            val storagePath = JournalStoragePath(coordinator) { lifetime.owned(it) }
             val pathRuleApplicator =
-                StoragePathRuleApplicator(fs, db, deps.storagePathRule) { docId, path ->
+                StoragePathRuleApplicator(fs, db, storagePath::rule) { docId, path ->
                     coordinator.commitAndApply(listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, path)))
                 }
             val importService =
@@ -743,7 +754,7 @@ class LibrarySessionImpl private constructor(
                     documentDao = db.documentDao(),
                     ocrQueueDao = db.ocrQueueDao(),
                     clock = deps.clock,
-                    ruleProvider = deps.storagePathRule,
+                    ruleProvider = storagePath::rule,
                     fieldTypes = { db.fieldDefDao().fieldTypes() },
                     serialize = { coordinator.serialized(it) },
                 )
@@ -809,21 +820,20 @@ class LibrarySessionImpl private constructor(
                     deps.log,
                 )
 
+            lateinit var rules: AutoMatchRuleRepositoryImpl
             val ruleApplier =
                 RuleApplier(
-                    rules = { db.autoMatchRuleDao().getAll().map { it.toRule() } },
+                    rules = { rules.current() },
                     ftsDao = db.ftsDao(),
                     documentDao = db.documentDao(),
                     coordinator = coordinator,
                     onMetadataApplied = pathRuleApplicator::applyFor,
                 )
-            val rulesReadable = mirrorAutoMatchRules(deps)
-            val rules =
-                AutoMatchRuleRepositoryImpl(
-                    dao = db.autoMatchRuleDao(),
-                    applier = ruleApplier,
-                    persist = if (rulesReadable) deps.persistAutoMatchRulesJson else { _ -> },
-                )
+            rules =
+                AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleApplier, coordinator, deps.log) {
+                    lifetime.owned(it)
+                }
+            rules.mirror()
             val meta =
                 MetadataWriterImpl(
                     coordinator,
@@ -888,41 +898,12 @@ class LibrarySessionImpl private constructor(
                 tags = tags,
                 savedViews = savedViews,
                 rules = rules,
+                storagePath = storagePath,
                 fieldRegistry = fieldRegistry,
                 writer = meta,
                 content = content,
                 aiFacade = ai,
             )
-        }
-
-        /**
-         * Bring the rules table in step with the settings JSON it mirrors, and report whether that
-         * JSON could be read at all.
-         *
-         * The JSON is the source of truth; the table is its disposable mirror, reconciled only when
-         * it actually differs — an unconditional clear + per-rule upsert on every open is a write
-         * burst on the awaited open path that invalidates the rules Room flow for no change.
-         *
-         * JSON that does not decode (written by a newer build, or damaged) is not "no rules". The
-         * table keeps the last rules that did decode, and the caller must not persist the table
-         * over the JSON either: the next save would write back only what this build understood.
-         */
-        private suspend fun mirrorAutoMatchRules(deps: SessionDeps): Boolean {
-            val json = deps.autoMatchRulesJson()
-            val decoded =
-                try {
-                    AutoMatchRuleJson.decodeList(json)
-                } catch (e: IllegalArgumentException) {
-                    deps.log.warn("Auto-match rules did not decode; keeping the last ones that did", e)
-                    return false
-                }
-            val storedRules =
-                decoded
-                    .map { it.toEntity() }
-                    .sortedWith(compareBy({ it.position }, { it.id }))
-            val dao = deps.db.autoMatchRuleDao()
-            if (dao.getAll() != storedRules) dao.replaceAll(storedRules)
-            return true
         }
 
         /**
@@ -978,9 +959,8 @@ class SessionDeps(
     val trashRetentionDays: suspend () -> Int,
     /** Where the session reports what fails in the background, with no caller to tell. */
     val log: NpnLog,
-    val storagePathRule: suspend () -> StoragePathRule? = { null },
-    val autoMatchRulesJson: suspend () -> String = { "[]" },
-    val persistAutoMatchRulesJson: suspend (String) -> Unit = {},
+    /** What this device kept as settings for library behaviour, adopted by a library that has none. */
+    val legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
     val aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
     /**
      * Who may spend on AI unattended. Defaults to the user's own [aiConfig] toggles — the device

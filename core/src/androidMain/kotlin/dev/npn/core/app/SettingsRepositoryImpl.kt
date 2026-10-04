@@ -102,15 +102,16 @@ class SettingsRepositoryImpl(
             withContext(Dispatchers.IO) {
                 val editor = prefs.edit()
                 SettingsCodec.store(writer(editor), next)
-                // commit() (synchronous) rather than apply() so a following settings read — e.g.
-                // the rules flow re-reading autoMatchRulesJson right after a write — never sees the
-                // previous value. It writes to disk inline, hence the IO dispatcher: callers reach
+                // commit() (synchronous) rather than apply() so a following settings read never sees
+                // the previous value. It writes to disk inline, hence the IO dispatcher: callers reach
                 // here from viewModelScope (Dispatchers.Main.immediate), and the text settings
                 // write on every keystroke.
                 editor.commit()
             }
             state.value = next
         }
+
+    override suspend fun legacyLibrarySettings(): LegacyLibrarySettings = SettingsCodec.legacyLibrarySettings(reader)
 
     companion object {
         private const val PREFS_NAME = "npn_settings"

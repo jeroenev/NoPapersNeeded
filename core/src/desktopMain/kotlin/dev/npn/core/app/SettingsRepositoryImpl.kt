@@ -123,6 +123,8 @@ class SettingsRepositoryImpl(
             persist(next)
         }
 
+    override suspend fun legacyLibrarySettings(): LegacyLibrarySettings = SettingsCodec.legacyLibrarySettings(reader)
+
     companion object {
         private val OWNER_ONLY_PERMISSIONS = PosixFilePermissions.fromString("rw-------")
 

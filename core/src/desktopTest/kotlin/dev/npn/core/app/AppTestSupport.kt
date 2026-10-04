@@ -92,9 +92,11 @@ class AppSessionRig private constructor(
         suspend fun create(
             scope: CoroutineScope,
             ocr: OcrEngine = NoopOcrEngine(),
-            storagePathRule: suspend () -> StoragePathRule? = { null },
+            /** The library's storage-path rule, written to its journal once the session is open. */
+            storagePath: StoragePathRule? = null,
             log: NpnLog = JvmLog(),
             trashRetentionDays: suspend () -> Int = { 30 },
+            legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
         ): AppSessionRig {
             val libRoot = Files.createTempDirectory("npn-app-lib")
             val dbDir = Files.createTempDirectory("npn-app-db").toFile()
@@ -106,7 +108,7 @@ class AppSessionRig private constructor(
                     scope = scope,
                     ocrLanguage = { "eng" },
                     trashRetentionDays = trashRetentionDays,
-                    storagePathRule = storagePathRule,
+                    legacyLibrarySettings = legacyLibrarySettings,
                     clock = clock,
                     installationId = "test-installation",
                     ocrEngine = ocr,
@@ -114,6 +116,10 @@ class AppSessionRig private constructor(
                     log = log,
                 )
             val session = LibrarySessionImpl.openSession(deps)
+            storagePath?.let {
+                session.storagePath.setStoragePathTemplate(it.template)
+                session.storagePath.setStoragePathEnabled(it.enabled)
+            }
             return AppSessionRig(libRoot, dbDir, deps.fs, deps.db, clock, scope, session)
         }
 
@@ -137,6 +143,7 @@ class AppSessionRig private constructor(
         ocr: OcrEngine = NoopOcrEngine(),
         clock: MutableClock = MutableClock(50_000L, autoTick = true),
         aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
+        legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
     ): Pair<LibrarySessionImpl, NpnDatabase> {
         val deps =
             jvmSessionDeps(
@@ -145,6 +152,7 @@ class AppSessionRig private constructor(
                 scope = scope,
                 ocrLanguage = { "eng" },
                 trashRetentionDays = { 30 },
+                legacyLibrarySettings = legacyLibrarySettings,
                 aiConfig = aiConfig,
                 clock = clock,
                 ocrEngine = ocr,

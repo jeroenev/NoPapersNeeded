@@ -21,6 +21,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.ReviewConfigFacade
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SettingsSnapshot
+import dev.npn.core.app.StoragePathFacade
 import dev.npn.core.app.TrashSettings
 import dev.npn.core.app.ViewType
 import dev.npn.core.app.toAiConfig
@@ -34,19 +35,25 @@ import dev.npn.core.pathrules.StoragePathExpansion
 import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 
 private const val DEFAULT_STORAGE_PATH_TEMPLATE = "{doc_date:yyyy}/{title}.pdf"
+
+/** How long typing in the storage-path template must pause before the template is saved. */
+private const val TEMPLATE_SAVE_DELAY_MS = 800L
 
 data class SettingsUiState(
     val libraryLocation: String? = null,
@@ -59,6 +66,7 @@ data class SettingsUiState(
     val watchedFolder: String? = null,
     val watchedFolderDeleteAfterImport: Boolean = false,
     val useSafStorage: Boolean = false,
+    /** The library's template, synced through its journal; an unsaved edit shows here first. */
     val storagePathTemplate: String = DEFAULT_STORAGE_PATH_TEMPLATE,
     val storagePathEnabled: Boolean = false,
     val aiEnabled: Boolean = false,
@@ -103,11 +111,11 @@ data class AiModelListState(
 enum class ReviewMigration { MARK_ALL, MARK_TAGGED, MARK_NONE }
 
 /**
- * Settings screen view model. Writes go through the one [SettingsRepository.edit] mutation, so the
- * screen edits a field with `vm.edit { it.copy(field = value) }` and there is no per-setting
- * forwarder to keep in sync. The few settings that need surrounding logic (provider switch clears
- * the stale model list, storage-path enable is gated on template validity, the review-mode
- * migration) keep their own methods.
+ * Settings screen view model. Device settings go through the one [SettingsRepository.edit]
+ * mutation, so the screen edits a field with `vm.edit { it.copy(field = value) }` and there is no
+ * per-setting forwarder to keep in sync. The library's own settings (review mode, storage path) are
+ * written through the session; they, and the device settings that need surrounding logic (provider
+ * switch clears the stale model list), keep their own methods.
  *
  * Extends [MessagesViewModel] so a failed write (properties-file I/O, SAF errors) surfaces as a
  * "Could not update …" snackbar instead of being silently swallowed — every write is routed
@@ -117,6 +125,7 @@ class SettingsViewModel(
     private val settings: SettingsRepository,
     private val content: DocContentFacade,
     private val reviewConfig: ReviewConfigFacade,
+    private val storagePath: StoragePathFacade,
     private val fieldRegistry: FieldRegistry,
     /**
      * How the AI self-test is run. Injectable so [runAiSelfTest]'s consequence — switching AI page
@@ -125,13 +134,16 @@ class SettingsViewModel(
     private val selfTest: suspend (AiConfig) -> AiSelfTestReport = AiSelfTest::run,
 ) : MessagesViewModel() {
     constructor(settings: SettingsRepository, session: LibrarySession) :
-        this(settings, session.content, session.reviewConfig, session.fieldRegistry)
+        this(settings, session.content, session.reviewConfig, session.storagePath, session.fieldRegistry)
+
+    /** The template as typed and not saved yet, or null when the screen shows the saved one. */
+    private val templateDraft = MutableStateFlow<String?>(null)
+
+    private var templateSave: Job? = null
 
     val state: StateFlow<SettingsUiState> =
-        settings.settings
-            .map { snapshot ->
-                val template = snapshot.storagePathTemplate ?: DEFAULT_STORAGE_PATH_TEMPLATE
-                SettingsUiState(
+        combine(settings.settings, storagePath.storagePath, templateDraft) { snapshot, path, draft ->
+            SettingsUiState(
                     libraryLocation = snapshot.libraryLocation,
                     appLanguage = snapshot.appLanguage,
                     ocrLanguage = snapshot.ocrLanguage,
@@ -141,8 +153,8 @@ class SettingsViewModel(
                     watchedFolder = snapshot.watchedFolder,
                     watchedFolderDeleteAfterImport = snapshot.watchedFolderDeleteAfterImport,
                     useSafStorage = snapshot.useSafStorage,
-                    storagePathTemplate = template,
-                    storagePathEnabled = snapshot.storagePathEnabled,
+                    storagePathTemplate = draft ?: path.template ?: DEFAULT_STORAGE_PATH_TEMPLATE,
+                    storagePathEnabled = path.enabled,
                     aiEnabled = snapshot.aiEnabled,
                     aiProvider = snapshot.aiProvider,
                     aiBaseUrl = snapshot.aiBaseUrl,
@@ -157,7 +169,7 @@ class SettingsViewModel(
                     aiConfigured = snapshot.toAiConfig().configured,
                     updateCheckEnabled = snapshot.updateCheckEnabled,
                 )
-            }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 
     val reviewMode: StateFlow<ReviewMode> =
         reviewConfig.reviewMode.stateIn(viewModelScope, WhileSubscribedTimeout, ReviewMode.DEFAULT)
@@ -212,19 +224,47 @@ class SettingsViewModel(
     fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
         launchReporting(UiAction.UPDATE) { settings.edit(transform) }
 
+    /**
+     * Edit the library's storage-path template. Each saved value is a journal event every replica
+     * keeps, so a keystroke only updates what the screen shows, and the template is saved once
+     * typing pauses. Leaving the screen during that pause still saves it.
+     */
+    fun setStoragePathTemplate(template: String) {
+        templateDraft.value = template
+        templateSave?.cancel()
+        templateSave =
+            viewModelScope.launch {
+                try {
+                    delay(TEMPLATE_SAVE_DELAY_MS)
+                } finally {
+                    // Not when a later keystroke replaced it; otherwise even when the pause was cut short.
+                    if (templateDraft.value == template) withContext(NonCancellable) { saveTemplate(template) }
+                }
+            }
+    }
+
+    private suspend fun saveTemplate(template: String) {
+        reporting({ reason -> uiText(UiTextKey.COULD_NOT_ACTION, UiAction.UPDATE, reason) }) {
+            storagePath.setStoragePathTemplate(template)
+        }
+        templateDraft.compareAndSet(template, null)
+    }
+
     fun setStoragePathEnabled(enabled: Boolean) =
         launchReporting(UiAction.UPDATE) {
-            // Re-derive validity from the stored template rather than the projected UI state, which
-            // can be the stale default when nothing is currently collecting `state`.
-            val valid =
-                if (!enabled) {
-                    true
-                } else {
-                    val template = settings.settings.first().storagePathTemplate ?: DEFAULT_STORAGE_PATH_TEMPLATE
-                    val types = fieldRegistry.current().associate { it.key to it.type }
-                    StoragePathTemplate.expand(template, validationContext(types)) is StoragePathExpansion.Path
+            if (enabled) {
+                // Arm the template the screen shows, saved or not: a draft still waiting for its
+                // pause, or the default a library without a template is shown. Read here rather than
+                // off `state`, which can be stale when nothing is collecting it.
+                val template =
+                    templateDraft.value ?: storagePath.storagePath.first().template ?: DEFAULT_STORAGE_PATH_TEMPLATE
+                val types = fieldRegistry.current().associate { it.key to it.type }
+                if (StoragePathTemplate.expand(template, validationContext(types)) !is StoragePathExpansion.Path) {
+                    return@launchReporting
                 }
-            if (valid) settings.edit { it.copy(storagePathEnabled = enabled) }
+                storagePath.setStoragePathTemplate(template)
+            }
+            storagePath.setStoragePathEnabled(enabled)
         }
 
     /**

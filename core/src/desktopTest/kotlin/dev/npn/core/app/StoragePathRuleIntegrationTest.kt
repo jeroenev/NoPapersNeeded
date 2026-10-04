@@ -14,7 +14,7 @@ class StoragePathRuleIntegrationTest {
     fun importUsesRuleAndUniquifiesCollisions() =
         runTest {
             val rule = StoragePathRule("organized/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePathRule = { rule })
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
             try {
                 val first =
                     rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "same.pdf")
@@ -41,7 +41,7 @@ class StoragePathRuleIntegrationTest {
     fun importExpandsADatePatternOnAUserDefinedDateField() =
         runTest {
             val rule = StoragePathRule("organized/{field:invoiceDate:yyyy}/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePathRule = { rule })
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
             try {
                 rig.session.fieldRegistry.upsert(
                     FieldDef(
@@ -72,7 +72,7 @@ class StoragePathRuleIntegrationTest {
     fun metadataChangeMovesOnceAndKeepsProjectionCoherent() =
         runTest {
             val rule = StoragePathRule("by-title/{title}.pdf", enabled = true)
-            val rig = AppSessionRig.create(backgroundScope, storagePathRule = { rule })
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
             try {
                 val imported =
                     rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("content"), "scan.pdf")
