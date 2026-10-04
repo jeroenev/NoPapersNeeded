@@ -13,7 +13,9 @@ import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.app.AiTagging
+import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.DocListItem
+import dev.npn.core.app.EditProgress
 import dev.npn.core.app.EditScope
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
@@ -1436,6 +1438,17 @@ class AiEditStartBlockerTest {
             fieldOptions = mapOf(FieldKeys.TITLE to AiFieldOption()),
         )
     private val loaded = ScopePreview(total = 3, batch = emptyList(), loaded = true)
+
+    @Test
+    fun leavingAsksFirstExactlyWhilePaidSuggestionsWouldBeLost() {
+        val progress = EditProgress(done = 1, total = 2, currentTitle = null, currentFileName = "a.pdf")
+        EditPhase.Suggesting(progress).leavingDiscardsSuggestions shouldBe true
+        EditPhase.Review(emptyList(), emptyList()).leavingDiscardsSuggestions shouldBe true
+        EditPhase.Idle.leavingDiscardsSuggestions shouldBe false
+        EditPhase.Applying.leavingDiscardsSuggestions shouldBe false
+        EditPhase.Queued(documents = 3).leavingDiscardsSuggestions shouldBe false
+        EditPhase.Done(ApplyResult(1, 1, moreRemain = false)).leavingDiscardsSuggestions shouldBe false
+    }
 
     @Test
     fun aReadyRunHasNoBlocker() {

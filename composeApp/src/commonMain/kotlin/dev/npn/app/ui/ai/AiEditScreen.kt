@@ -32,6 +32,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigationevent.NavigationEventInfo
+import androidx.navigationevent.compose.NavigationBackHandler
+import androidx.navigationevent.compose.rememberNavigationEventState
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.EditProgress
@@ -93,11 +96,12 @@ fun AiEditScreen(
         }
 
     // Leaving mid-flight throws away answers that were already paid for, so Back asks first in
-    // exactly the phases where that is true.
+    // exactly the phases where that is true: the top-bar arrow, the system gesture and, on
+    // desktop, Esc (which the window routes to the same back dispatcher).
     var confirmingLeave by remember { mutableStateOf(false) }
-    val phase = ui.phase
-    val leavingCostsSuggestions = phase is EditPhase.Review || phase is EditPhase.Suggesting
+    val leavingCostsSuggestions = ui.phase.leavingDiscardsSuggestions
     val requestBack = { if (leavingCostsSuggestions) confirmingLeave = true else onBack() }
+    LeaveGuard(guarding = leavingCostsSuggestions, onBackGuarded = { confirmingLeave = true })
 
     Scaffold(
         topBar = {
@@ -133,6 +137,22 @@ fun AiEditScreen(
             onDismiss = { confirmingLeave = false },
         )
     }
+}
+
+/**
+ * Takes Back — the system gesture or Esc on desktop — while [guarding], calling [onBackGuarded]
+ * instead of leaving; otherwise Back falls through to the navigation host.
+ */
+@Composable
+internal fun LeaveGuard(
+    guarding: Boolean,
+    onBackGuarded: () -> Unit,
+) {
+    NavigationBackHandler(
+        state = rememberNavigationEventState(NavigationEventInfo.None),
+        isBackEnabled = guarding,
+        onBackCompleted = onBackGuarded,
+    )
 }
 
 /** The one step of the flow that is currently on screen; see [EditPhase]. */

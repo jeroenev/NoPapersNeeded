@@ -147,6 +147,13 @@ sealed interface EditPhase {
 }
 
 /**
+ * Whether leaving the page now throws away suggestions already paid for: a run still suggesting
+ * (the viewmodel goes with the page and cancels it) or a Review nobody has applied.
+ */
+val EditPhase.leavingDiscardsSuggestions: Boolean
+    get() = this is EditPhase.Suggesting || this is EditPhase.Review
+
+/**
  * Full UI state. [scope] and [reviewQueueAvailable] drive the Idle controls; [phase] is the current
  * step. Selection toggles live inside [EditPhase.Review.docs].
  *
