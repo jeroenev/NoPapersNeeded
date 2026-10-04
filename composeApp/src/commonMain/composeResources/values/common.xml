@@ -8,6 +8,7 @@
     <string name="common_apply">Apply</string>
     <string name="common_delete">Delete</string>
     <string name="common_retry">Retry</string>
+    <string name="common_number_out_of_range">Enter a number from %1$d to %2$d</string>
     <string name="common_save">Save</string>
     <string name="common_try_again">Try again</string>
     <string name="common_show_technical_details">Show technical details</string>
