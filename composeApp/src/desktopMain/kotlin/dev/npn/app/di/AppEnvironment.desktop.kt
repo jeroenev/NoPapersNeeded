@@ -1,6 +1,7 @@
 package dev.npn.app.di
 
 import dev.npn.core.app.AppDirs
+import dev.npn.core.app.DesktopLog
 import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.app.desktop
 import dev.npn.core.app.jvmSessionDeps
@@ -48,6 +49,7 @@ fun createAppEnvironment(): AppEnvironment {
                 // because it changes while the app runs.
                 aiConfig = { settings.settings.first().toAiConfig(Locale.getDefault().language) },
                 ocrEngine = bundledTesseract() ?: TesseractCliEngine(),
+                log = DesktopLog,
             )
         OpenedLibrary(deps) { deps.closeDb() }
     }

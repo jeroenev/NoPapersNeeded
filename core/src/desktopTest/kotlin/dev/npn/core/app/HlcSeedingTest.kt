@@ -4,6 +4,7 @@ import dev.npn.core.index.MutableClock
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
+import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.PdfBoxXmpIO
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
@@ -90,6 +91,7 @@ class HlcSeedingTest {
                         scope = backgroundScope,
                         ocrLanguage = { "eng" },
                         trashRetentionDays = { 30 },
+                        log = NpnLog.None,
                         clock = MutableClock(1L, autoTick = true),
                     )
                 val session2 = LibrarySessionImpl.openSession(deps)

@@ -10,6 +10,8 @@ import dev.npn.core.ocr.TesseractCliEngine
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.ThumbnailStore
+import dev.npn.core.util.JvmLog
+import dev.npn.core.util.NpnLog
 import dev.npn.core.xmp.PdfBoxXmpIO
 import kotlinx.coroutines.CoroutineScope
 import java.io.File
@@ -23,8 +25,9 @@ import java.nio.file.Path
  * each host owns that lifecycle differently.
  *
  * Platform adapters default to the production ones and are parameters only so a host can swap
- * the pieces that legitimately vary (a test's no-op OCR engine, a fixed clock); the behaviour
- * knobs mirror [SessionDeps] and are read live for the same reason it documents. The index
+ * the pieces that legitimately vary (a test's no-op OCR engine, a fixed clock, the app's
+ * [DesktopLog] in place of plain stderr); the behaviour knobs mirror [SessionDeps] and are read
+ * live for the same reason it documents. The index
  * database is `index.db` under [AppDirs.dbDir] — two sessions over one folder (two "devices")
  * therefore need two [AppDirs], which is also what keeps their device identities apart.
  */
@@ -42,6 +45,7 @@ fun jvmSessionDeps(
     installationId: String = "local-installation",
     ocrEngine: OcrEngine = TesseractCliEngine(),
     thumbnailStore: ThumbnailStore = DirThumbnailStore(dirs.thumbsDir),
+    log: NpnLog = JvmLog(),
 ): SessionDeps {
     File(dirs.thumbsDir).mkdirs()
     File(dirs.tmpDir).mkdirs()
@@ -55,6 +59,7 @@ fun jvmSessionDeps(
         scope = scope,
         ocrLanguage = ocrLanguage,
         trashRetentionDays = trashRetentionDays,
+        log = log,
         storagePathRule = storagePathRule,
         autoMatchRulesJson = autoMatchRulesJson,
         persistAutoMatchRulesJson = persistAutoMatchRulesJson,
@@ -72,3 +77,10 @@ fun AppDirs.Companion.desktop(location: String): AppDirs {
     val base = "${PlatformDirs.dataHome()}/no-papers-needed/${AppDirs.libraryKey(location)}"
     return AppDirs(dbDir = "$base/db", thumbsDir = "$base/thumbs", tmpDir = "$base/tmp")
 }
+
+/**
+ * The desktop app's one log, shared by everything in the process: stderr plus `npn.log` in the
+ * app's directory under the platform data home, beside every library's own directory, so a user
+ * report has one file to attach whichever library was open.
+ */
+object DesktopLog : NpnLog by JvmLog(Path.of(PlatformDirs.dataHome(), "no-papers-needed", "npn.log"))

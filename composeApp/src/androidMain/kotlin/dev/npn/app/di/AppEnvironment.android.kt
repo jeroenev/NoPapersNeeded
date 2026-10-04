@@ -19,6 +19,7 @@ import dev.npn.core.ocr.MlKitOcrEngine
 import dev.npn.core.ocr.OcrLanguages
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfBoxAndroidEngine
+import dev.npn.core.util.AndroidLog
 import dev.npn.core.watch.JvmWatchedFolder
 import dev.npn.core.watch.SafWatchedFolder
 import dev.npn.core.watch.WatchedFolder
@@ -67,6 +68,7 @@ fun createAppEnvironment(context: Context): AppEnvironment {
                     OcrLanguages.effective(settings.settings.first().ocrLanguage, Locale.getDefault().language)
                 },
                 trashRetentionDays = { settings.settings.first().trashRetentionDays },
+                log = AndroidLog,
                 installationId = settings.settings.first().installationId,
                 storagePathRule = {
                     val snapshot = settings.settings.first()

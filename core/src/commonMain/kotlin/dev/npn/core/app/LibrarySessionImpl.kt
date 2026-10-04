@@ -55,6 +55,7 @@ import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.RuleApplier
+import dev.npn.core.util.NpnLog
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.PdfXmpIO
@@ -963,6 +964,8 @@ class SessionDeps(
     val scope: CoroutineScope,
     val ocrLanguage: suspend () -> String,
     val trashRetentionDays: suspend () -> Int,
+    /** Where the session reports what fails in the background, with no caller to tell. */
+    val log: NpnLog,
     val storagePathRule: suspend () -> StoragePathRule? = { null },
     val autoMatchRulesJson: suspend () -> String = { "[]" },
     val persistAutoMatchRulesJson: suspend (String) -> Unit = {},
