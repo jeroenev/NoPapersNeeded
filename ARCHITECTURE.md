@@ -88,9 +88,11 @@ background OCR).
 
 ### `desktopApp` — `dev.npn.desktop`
 
-Desktop entrypoint (`Main.kt`) and packaging: deb, rpm, AppImage and uber-jar on Linux, a
-Flatpak bundle (manifest in `desktopApp/flatpak/`), and `.msi`/`.exe` installers on Windows.
-Hot Reload via `mise hot`.
+Desktop entrypoint (`Main.kt`) and packaging. One instance runs per user: `SingleInstance` holds a
+lock file in the app data directory, and a second launch only says so and exits. Closing the window
+closes the library session (bounded by a timeout) before the process exits. Packaging: deb, rpm,
+AppImage and uber-jar on Linux, a Flatpak bundle (manifest in `desktopApp/flatpak/`), and
+`.msi`/`.exe` installers on Windows. Hot Reload via `mise hot`.
 
 ## Data flow
 

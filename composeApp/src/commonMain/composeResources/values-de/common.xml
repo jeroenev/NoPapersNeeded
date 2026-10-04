@@ -153,5 +153,6 @@
     <string name="common_settings_use_saf_help">Veralteter Modus: Ordner über die Dokumentauswahl von Android öffnen statt direkt im Gerätespeicher. Langsamer, ohne Änderungsbenachrichtigungen, und von Sync-Tools hinzugefügte Dateien werden eventuell nicht bemerkt. Gilt ab der nächsten Ordnerwahl.</string>
     <string name="common_settings_library_saf_note">Diese Bibliothek wird über das Storage Access Framework geöffnet.</string>
     <string name="common_settings_storage_access_missing">Der Zugriff auf den Gerätespeicher ist nicht erlaubt. Dateien anderer Apps, etwa von Syncthing, sind nicht sichtbar.</string>
+    <string name="common_already_running">No Papers Needed ist bereits geöffnet. Wechsle zu diesem Fenster, um weiterzuarbeiten.</string>
 
 </resources>

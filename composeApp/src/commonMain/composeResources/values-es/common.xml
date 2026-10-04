@@ -153,5 +153,6 @@
     <string name="common_settings_use_saf_help">Modo heredado: abre las carpetas mediante el selector de documentos de Android en lugar de directamente en el almacenamiento del dispositivo. Es más lento, no avisa de los cambios y los archivos añadidos por herramientas de sincronización pueden pasar desapercibidos. Se aplica la próxima vez que elijas una carpeta.</string>
     <string name="common_settings_library_saf_note">Esta biblioteca se abre mediante Storage Access Framework.</string>
     <string name="common_settings_storage_access_missing">No se permite el acceso al almacenamiento del dispositivo. Los archivos añadidos por otras aplicaciones, como Syncthing, no serán visibles.</string>
+    <string name="common_already_running">No Papers Needed ya está abierto. Cambia a su ventana para continuar.</string>
 
 </resources>

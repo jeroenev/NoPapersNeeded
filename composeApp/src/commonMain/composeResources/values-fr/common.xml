@@ -154,5 +154,6 @@
     <string name="common_settings_use_saf_help">Ancien mode : ouvre les dossiers via le sélecteur de documents d’Android plutôt que directement sur le stockage de l’appareil. Plus lent, sans notification de changement ; les fichiers ajoutés par des outils de synchronisation peuvent passer inaperçus. S’applique au prochain choix de dossier.</string>
     <string name="common_settings_library_saf_note">Cette bibliothèque est ouverte via le Storage Access Framework.</string>
     <string name="common_settings_storage_access_missing">L’accès au stockage de l’appareil n’est pas autorisé. Les fichiers ajoutés par d’autres applications, comme Syncthing, ne seront pas visibles.</string>
+    <string name="common_already_running">No Papers Needed est déjà ouvert. Passez à sa fenêtre pour continuer.</string>
 
 </resources>

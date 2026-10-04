@@ -154,5 +154,6 @@
     <string name="common_settings_use_saf_help">Modo legado: abre as pastas pelo seletor de documentos do Android em vez de diretamente no armazenamento do dispositivo. É mais lento, não avisa sobre alterações, e arquivos adicionados por ferramentas de sincronização podem passar despercebidos. Vale a partir da próxima vez que você escolher uma pasta.</string>
     <string name="common_settings_library_saf_note">Esta biblioteca é aberta pelo Storage Access Framework.</string>
     <string name="common_settings_storage_access_missing">O acesso ao armazenamento do dispositivo não está permitido. Arquivos adicionados por outros apps, como o Syncthing, não ficarão visíveis.</string>
+    <string name="common_already_running">O No Papers Needed já está aberto. Mude para a janela dele para continuar.</string>
 
 </resources>

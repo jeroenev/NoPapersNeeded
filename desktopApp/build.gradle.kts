@@ -28,6 +28,12 @@ dependencies {
     implementation(compose.desktop.currentOs)
     implementation(libs.compose.components.resources)
     implementation(libs.kotlinx.coroutines.swing)
+
+    testImplementation(kotlin("test"))
+}
+
+tasks.test {
+    useJUnit()
 }
 
 kotlin {
