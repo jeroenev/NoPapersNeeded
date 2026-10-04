@@ -42,7 +42,9 @@ class FoldTransactionTest {
         for (sql in statements) {
             when {
                 sql.startsWith("BEGIN") -> depth++
-                sql.startsWith("END TRANSACTION") || sql.startsWith("ROLLBACK") -> depth--
+                // The log may have been cleared inside a transaction Room's invalidation tracker
+                // had open, leaving its END without a BEGIN.
+                sql.startsWith("END TRANSACTION") || sql.startsWith("ROLLBACK") -> depth = maxOf(0, depth - 1)
                 depth == 0 && isWrite(sql) && PROJECTION_TABLES.any { it in sql } -> outside += sql
             }
         }
