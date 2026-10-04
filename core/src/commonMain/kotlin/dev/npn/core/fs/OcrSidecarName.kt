@@ -23,7 +23,10 @@ data class OcrSidecarName(
     /** Whether [hash] is as long as a document's SHA-256, so it can key a document. */
     val hasDocumentHash: Boolean get() = hash.length == NpnPaths.SHA256_HEX_LENGTH
 
-    /** A writer key's parts: the device that wrote it, the engine (null in a legacy key), and the re-run stamp (0 for a first run). */
+    /**
+     * A writer key's parts: the device that wrote it, the engine (null in a legacy key), and the
+     * re-run stamp (0 for a first run).
+     */
     data class Writer(
         val deviceId: String,
         val engine: String?,

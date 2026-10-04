@@ -427,19 +427,27 @@ class SafLibraryFileSystem(
                 resolver.openInputStream(docUri(source.docId))
                     ?: throw IOException("Cannot read source for move: $fromRelPath")
             }
-        val renamed =
-            try {
-                renameExact(stagingUri, toName, toRelPath, discardMisnamed = true)
-            } catch (e: Exception) {
-                deleteQuietly(stagingUri)
-                throw IOException("Move publish failed: $fromRelPath -> $toRelPath", e)
-            }
+        val renamed = publishMovedCopy(stagingUri, toName, fromRelPath, toRelPath)
         if (resolveEntry(toRelPath)?.docId != DocumentsContract.getDocumentId(renamed)) {
             deleteQuietly(renamed)
             throw IOException("Move target collided: $toRelPath")
         }
         DocumentsContract.deleteDocument(resolver, docUri(source.docId))
     }
+
+    /** Rename a move's verified [staging] copy to [toName]; on failure the copy goes, the source stays. */
+    private fun publishMovedCopy(
+        staging: Uri,
+        toName: String,
+        fromRelPath: String,
+        toRelPath: String,
+    ): Uri =
+        try {
+            renameExact(staging, toName, toRelPath, discardMisnamed = true)
+        } catch (e: Exception) {
+            deleteQuietly(staging)
+            throw IOException("Move publish failed: $fromRelPath -> $toRelPath", e)
+        }
 
     /**
      * Create [name] in [parentId] ([createExact]) and stream [openInput] into it, removing the file
