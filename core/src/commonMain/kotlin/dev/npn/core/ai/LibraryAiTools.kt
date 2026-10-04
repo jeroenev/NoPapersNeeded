@@ -12,6 +12,7 @@ import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TagDao
+import dev.npn.core.db.isLive
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineId
@@ -156,8 +157,6 @@ object LibraryAiTools {
     /** FTS snippets mark matches with control chars \u0001/\u0002; the model needs plain text. */
     internal fun stripSnippetMarkers(snippet: String): String = snippet.replace("\u0001", "").replace("\u0002", "")
 
-    private fun DocumentEntity.isLive(): Boolean = !trashed && !deleted && !missing
-
     /** The file name: a document column, searchable like a field but not a registry entry. */
     const val FILE_NAME_FIELD = "fileName"
 
@@ -242,7 +241,7 @@ object LibraryAiTools {
                     .asSequence()
                     .mapNotNull { hit ->
                         docs[hit.docId]
-                            ?.takeIf { it.isLive() }
+                            ?.takeIf { it.isLive }
                             ?.let { docLine(it, hit.snippet) }
                     }.take(MAX_SEARCH_RESULTS)
                     .toList()
@@ -450,7 +449,7 @@ object LibraryAiTools {
             val docs = documentDao.getByDocIds(matches.keys.toList()).associateBy { it.docId }
             return matches
                 .asSequence()
-                .mapNotNull { (docId, kv) -> docs[docId]?.takeIf { it.isLive() }?.let { docLine(it, field = kv) } }
+                .mapNotNull { (docId, kv) -> docs[docId]?.takeIf { it.isLive }?.let { docLine(it, field = kv) } }
                 .take(MAX_LISTED_DOCS)
                 .toList()
         }

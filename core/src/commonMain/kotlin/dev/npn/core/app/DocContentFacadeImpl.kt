@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.index.RelinkService
 import dev.npn.core.pdf.PdfEngine
@@ -97,7 +98,7 @@ class DocContentFacadeImpl internal constructor(
 
     private suspend fun bake(docId: String): BakeOutcome {
         val doc =
-            documentDao.getByDocId(docId)?.takeUnless { it.trashed || it.deleted || it.missing }
+            documentDao.getByDocId(docId)?.takeIf { it.isLive }
                 ?: return BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
         return runCatchingCancellable {
             // Rewritten bytes whose relink is then refused would orphan the metadata on the old hash.

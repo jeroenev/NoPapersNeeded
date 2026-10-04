@@ -4,6 +4,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.KeyValueDao
 import dev.npn.core.db.KeyValueEntity
 import dev.npn.core.db.PathMeta
+import dev.npn.core.db.isLive
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
@@ -40,7 +41,7 @@ internal class ExternalDocumentMoves(
         val observable =
             rows.filter { row ->
                 val intended = state.effectiveProp(row.docId, SystemProperty.STORAGE_PATH)
-                !row.missing && !row.deleted && !row.trashed && (intended == null || intended == row.relPath)
+                row.isLive && (intended == null || intended == row.relPath)
             }
         if (observable.isEmpty()) return
         val stored = kv.getAll(observable.map { key(it.docId) })

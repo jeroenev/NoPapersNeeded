@@ -2,6 +2,7 @@ package dev.npn.core.pathrules
 
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.fieldTypes
+import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 
@@ -30,7 +31,7 @@ class StoragePathRuleApplicator(
         if (!rule.enabled || rule.template.isBlank()) return false
 
         val doc = documentDao.getByDocId(docId) ?: return false
-        if (doc.trashed || doc.deleted || doc.missing) return false
+        if (!doc.isLive) return false
 
         val tags = db.tagDao().tagsForDocument(docId)
         val context =

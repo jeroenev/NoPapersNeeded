@@ -9,6 +9,7 @@ import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.TagDao
+import dev.npn.core.db.isLive
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.OcrSidecarFiles
@@ -146,7 +147,7 @@ class OcrPipeline(
             ocrQueueDao.delete(docId)
             return
         }
-        if (doc.missing || doc.deleted || doc.trashed) {
+        if (!doc.isLive) {
             // No file to read. Unqueued as never processed, so the rescan that brings it back
             // queues it again.
             ocrQueueDao.delete(docId)
@@ -474,7 +475,7 @@ class OcrPipeline(
         doc: DocumentEntity,
         stored: List<OcrVersions.Version>,
     ) {
-        if (doc.trashed || doc.deleted || doc.missing) return
+        if (!doc.isLive) return
         if (!canImprove(doc, stored)) return
         val entry = ocrQueueDao.getByDocId(doc.docId)
         if (entry != null && (entry.queueState != QueueState.DONE || retry.givesUp(entry.attempts))) return

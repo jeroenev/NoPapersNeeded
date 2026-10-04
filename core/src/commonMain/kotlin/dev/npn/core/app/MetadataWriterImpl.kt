@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.isLive
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -312,7 +313,7 @@ class MetadataWriterImpl(
         destination: (DocumentEntity) -> String?,
     ) {
         val doc = documentDao.getByDocId(docId) ?: return
-        if (doc.trashed || doc.deleted || doc.missing) return
+        if (!doc.isLive) return
         val target = destination(doc) ?: return
         if (NpnPaths.normalize(target) == NpnPaths.normalize(doc.relPath)) return
         require(DocumentPaths.isDocumentPath(target)) { "Invalid document path: $target" }

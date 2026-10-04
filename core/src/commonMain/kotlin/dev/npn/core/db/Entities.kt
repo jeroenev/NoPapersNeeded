@@ -89,6 +89,9 @@ data class DocumentEntity(
     val ocrSource: String? = null,
 )
 
+/** Whether the library shows this document: not trashed, not deleted, and on disk ([LIVE_DOCUMENT]). */
+val DocumentEntity.isLive: Boolean get() = !trashed && !deleted && !missing
+
 @Entity(tableName = "tags")
 data class TagEntity(
     @PrimaryKey val name: String,

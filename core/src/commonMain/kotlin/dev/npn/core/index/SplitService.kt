@@ -3,6 +3,7 @@ package dev.npn.core.index
 import dev.npn.core.app.SplitFailure
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.pdf.PdfEngine
@@ -51,7 +52,7 @@ class SplitService(
         segments: List<IntRange>,
     ): Result {
         val doc =
-            documentDao.getByDocId(docId)?.takeUnless { it.trashed || it.deleted || it.missing }
+            documentDao.getByDocId(docId)?.takeIf { it.isLive }
                 ?: return Result.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
         if (segments.size < 2) return Result.Failed(SplitFailure.INVALID_PARTS)
         return runCatchingCancellable { splitLoaded(doc, segments) }.getOrElse {

@@ -10,6 +10,7 @@ import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.db.DocumentDao
+import dev.npn.core.db.isLive
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
@@ -164,7 +165,7 @@ class AiAutoEnricher(
      */
     private suspend fun isEnrichable(docId: String): Boolean {
         val doc = documentDao.getByDocId(docId) ?: return false
-        return !doc.trashed && !doc.deleted && !doc.missing && queueDao.enrichedAt(docId) == null
+        return doc.isLive && queueDao.enrichedAt(docId) == null
     }
 
     /** Bump attempts and push the retry out by the backoff, recording why for diagnostics. */
