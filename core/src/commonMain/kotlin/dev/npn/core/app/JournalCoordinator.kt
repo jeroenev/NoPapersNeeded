@@ -375,6 +375,14 @@ class JournalCoordinator internal constructor(
     suspend fun checkWritable() = locked { ensureWritable() }
 
     /**
+     * Run [block] under the single-writer mutex: for a change to which file holds which hash that
+     * does not go through the journal, an import placing its file and row. That serializes it
+     * against other imports and against every rescan, whose listing and row writes it would
+     * otherwise interleave with.
+     */
+    suspend fun <T> serialized(block: suspend () -> T): T = locked { block() }
+
+    /**
      * Apply an immediate, optimistic DB mutation for [lifecycleDocs] and commit [ops] atomically
      * under the single-writer mutex.
      *

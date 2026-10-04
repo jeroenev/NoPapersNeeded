@@ -726,6 +726,7 @@ class LibrarySessionImpl private constructor(
                     ocrQueueDao = db.ocrQueueDao(),
                     clock = deps.clock,
                     ruleProvider = deps.storagePathRule,
+                    serialize = { coordinator.serialized(it) },
                 )
             val maintenance = MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
             val relinkService = RelinkService(coordinator)

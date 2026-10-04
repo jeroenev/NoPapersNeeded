@@ -11,6 +11,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runCurrent
@@ -53,6 +54,28 @@ class SessionSmokeTest {
 
                 val second = rig.session.importPdfBytes(bytes, "imported-again.pdf")
                 second.shouldBeInstanceOf<ImportOutcome.Duplicate>()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** One canonical path per hash, however many imports of the same bytes race each other. */
+    @Test
+    fun concurrentImportsOfTheSameBytesImportItOnce() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val bytes = PdfFixtures.embeddedTextPdf("imported from two places at once")
+                val outcomes =
+                    withContext(Dispatchers.Default) {
+                        (1..6).map { async { rig.session.importPdfBytes(bytes, "same.pdf") } }.awaitAll()
+                    }
+
+                outcomes.filterIsInstance<ImportOutcome.Imported>() shouldHaveSize 1
+                outcomes.filterIsInstance<ImportOutcome.Duplicate>() shouldHaveSize 5
+                rig.fs
+                    .listAllIndexable()
+                    .filter { !it.isDirectory } shouldHaveSize 1
             } finally {
                 rig.close()
             }

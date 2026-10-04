@@ -40,6 +40,12 @@ class EmptyImportException : IllegalArgumentException("The file is empty")
  * Because [LibraryFileSystem.sha256] hashes a library-relative path (there is no stream-hash of an
  * [ExternalSource]), imports stage into [NpnPaths.TMP_DIR] first, hash there, dedup-check, then
  * move into place or delete. The staging file is cleaned on both success and failure.
+ *
+ * The dedup check, the move into place and the row write run as one step through [serialize],
+ * which the session points at the journal coordinator's lock. Without it two imports of the same
+ * bytes both pass the check and place two files for one hash, and a rescan listing the library
+ * between the move and the row write inserts a row of its own that the import then overwrites
+ * (or that overwrites the import's).
  */
 @OptIn(ExperimentalUuidApi::class)
 class ImportService(
@@ -48,6 +54,7 @@ class ImportService(
     private val ocrQueueDao: OcrQueueDao,
     private val clock: EpochClock = SystemEpochClock,
     private val ruleProvider: suspend () -> StoragePathRule? = { null },
+    private val serialize: suspend (suspend () -> ImportResult) -> ImportResult = { it() },
 ) {
     suspend fun importPdf(
         source: ExternalSource,
@@ -85,7 +92,15 @@ class ImportService(
         // An empty file is never a document; its hash would claim the empty-content identity.
         if (fs.stat(tmpPath)?.size == 0L) throw EmptyImportException()
         val hash = fs.sha256(tmpPath)
+        return serialize { place(tmpPath, hash, suggestedName, toDir) }
+    }
 
+    private suspend fun place(
+        tmpPath: String,
+        hash: String,
+        suggestedName: String,
+        toDir: String,
+    ): ImportResult {
         // Dedup: known, non-deleted hash -> duplicate.
         val existing = documentDao.getByDocId(hash)
         if (existing != null && !existing.deleted) {
