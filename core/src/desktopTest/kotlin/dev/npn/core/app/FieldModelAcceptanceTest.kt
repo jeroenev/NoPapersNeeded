@@ -91,16 +91,9 @@ class FieldModelAcceptanceTest {
                 rig.db.ftsDao().searchDocIds("4210") shouldContain a
 
                 // Storage-path template: the generic placeholder reads the same map.
-                StoragePathTemplate
-                    .expand(
-                        "{field:amount}/{title}.pdf",
-                        StoragePathContext(
-                            fields = mapOf("amount" to "4210", "title" to "A"),
-                            tags = emptyList(),
-                            originalFileName = "a.pdf",
-                            fieldTypes = rig.db.fieldDefDao().fieldTypes(),
-                        ),
-                    ).pathOrNull shouldBe "4210/A.pdf"
+                val values = mapOf("amount" to "4210", "title" to "A")
+                val context = StoragePathContext(values, emptyList(), "a.pdf", rig.db.fieldDefDao().fieldTypes())
+                StoragePathTemplate.expand("{field:amount}/{title}.pdf", context).pathOrNull shouldBe "4210/A.pdf"
 
                 // The assistant's field list names it, with its type and count.
                 val listed =
