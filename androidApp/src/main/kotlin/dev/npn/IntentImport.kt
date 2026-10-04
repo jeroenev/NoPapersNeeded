@@ -53,11 +53,12 @@ object IntentImport {
         var duplicates = 0
         var failed = 0
 
-        fun record(outcome: ImportOutcome) {
+        /** Count [outcome]; null is an import that threw. */
+        fun record(outcome: ImportOutcome?) {
             when (outcome) {
                 is ImportOutcome.Imported -> imported++
                 is ImportOutcome.Duplicate -> duplicates++
-                is ImportOutcome.Failed -> failed++
+                is ImportOutcome.Failed, null -> failed++
             }
         }
     }
@@ -109,21 +110,22 @@ object IntentImport {
             val tally = Tally()
             var total = 0
 
+            // An import reports what went wrong with the file as an outcome; it throws only when
+            // the session closed under it, which still counts against this file.
             for (uri in pdfUris) {
                 total++
-                val outcome =
+                tally.record(
                     runCatchingCancellable {
-                        session.ingest.importPdf(
-                            ExternalSource(uri),
-                            displayName(resolver, uri) ?: FALLBACK_SHARED_PDF,
-                        )
-                    }.getOrNull()
-                if (outcome == null) tally.failed++ else tally.record(outcome)
+                        session.ingest.importPdf(ExternalSource(uri), displayName(resolver, uri) ?: FALLBACK_SHARED_PDF)
+                    }.getOrNull(),
+                )
             }
 
             if (imageBytes.isNotEmpty()) {
                 total++
-                tally.record(session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF))
+                tally.record(
+                    runCatchingCancellable { session.ingest.importImagesAsPdf(imageBytes, FALLBACK_SCAN_PDF) }.getOrNull(),
+                )
             }
 
             Result(tally.imported, tally.duplicates, tally.failed, total)

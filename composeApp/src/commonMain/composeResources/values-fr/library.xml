@@ -131,4 +131,5 @@
         <item quantity="one">Limité à %1$d document</item>
         <item quantity="other">Limité à %1$d documents</item>
     </plurals>
+    <string name="library_import_failed">Impossible d’importer les fichiers : %1$s</string>
 </resources>

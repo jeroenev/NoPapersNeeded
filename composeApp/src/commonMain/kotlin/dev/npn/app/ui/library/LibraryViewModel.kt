@@ -10,7 +10,6 @@ import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.completeActiveSearchToken
-import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.queue.QueueCounts
@@ -18,6 +17,7 @@ import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.FieldRegistry
+import dev.npn.core.app.ImportFailure
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.LibraryFilter
@@ -59,6 +59,10 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_import_failure_copy
+import no_papers_needed.composeapp.generated.resources.common_import_failure_empty
+import no_papers_needed.composeapp.generated.resources.common_import_failure_images
+import no_papers_needed.composeapp.generated.resources.library_import_failed
 import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.library_undo
 import kotlin.uuid.ExperimentalUuidApi
@@ -476,22 +480,20 @@ class LibraryViewModel(
     }
 
     /** Import PDFs from external sources, tallying the per-source outcome into a message. */
-    fun import(sources: List<Pair<ExternalSource, String>>) {
-        viewModelScope.launch {
+    fun import(sources: List<Pair<ExternalSource, String>>) =
+        launchReporting({ reason -> uiText(Res.string.library_import_failed, reason) }) {
             var imported = 0
             var duplicate = 0
             var failed = 0
             sources.forEach { (src, name) ->
-                val outcome = runCatchingCancellable { ingest.importPdf(src, name) }.getOrNull()
-                when (outcome) {
+                when (ingest.importPdf(src, name)) {
                     is ImportOutcome.Imported -> imported++
                     is ImportOutcome.Duplicate -> duplicate++
-                    is ImportOutcome.Failed, null -> failed++
+                    is ImportOutcome.Failed -> failed++
                 }
             }
             message(ImportSummary(imported, duplicate, failed).asUiText())
         }
-    }
 
     /** Import a scanned PDF (raw bytes from the platform scanner) through the staging import path. */
     fun importScannedPdf(bytes: ByteArray) {
@@ -519,20 +521,14 @@ class LibraryViewModel(
         reportScanImport { ingest.importPdfBytes(bytes, name) }
     }
 
-    private suspend fun reportScanImport(import: suspend () -> ImportOutcome) {
-        val msg =
-            runCatchingCancellable { import() }.fold(
-                onSuccess = ::scanOutcomeMessage,
-                onFailure = { uiText(UiTextKey.SCAN_IMPORT_FAILED, it.reasonText()) },
-            )
-        message(msg)
-    }
+    private suspend fun reportScanImport(import: suspend () -> ImportOutcome) =
+        reporting({ reason -> uiText(UiTextKey.SCAN_IMPORT_FAILED, reason) }) { message(scanOutcomeMessage(import())) }
 
     private fun scanOutcomeMessage(outcome: ImportOutcome): UiText =
         when (outcome) {
             is ImportOutcome.Imported -> uiText(UiTextKey.SCAN_IMPORTED)
             is ImportOutcome.Duplicate -> uiText(UiTextKey.SCAN_ALREADY_IN_LIBRARY)
-            is ImportOutcome.Failed -> uiText(UiTextKey.SCAN_IMPORT_FAILED, outcome.message)
+            is ImportOutcome.Failed -> uiText(UiTextKey.SCAN_IMPORT_FAILED, outcome.reason.text())
         }
 
     // Names are trimmed here so the trimming rule lives in one place rather than in each dialog.
@@ -570,3 +566,11 @@ class LibraryViewModel(
 
 @OptIn(ExperimentalUuidApi::class)
 private fun randomId(): String = Uuid.random().toString()
+
+/** Why an import added nothing, as the reason clause of a "… failed: %1$s" message. */
+private fun ImportFailure.text(): UiText =
+    when (this) {
+        ImportFailure.EMPTY_FILE -> uiText(Res.string.common_import_failure_empty)
+        ImportFailure.UNREADABLE_IMAGES -> uiText(Res.string.common_import_failure_images)
+        ImportFailure.COPY_FAILED -> uiText(Res.string.common_import_failure_copy)
+    }

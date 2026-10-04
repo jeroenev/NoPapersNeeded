@@ -156,4 +156,7 @@
     <string name="common_settings_storage_access_missing">L’accès au stockage de l’appareil n’est pas autorisé. Les fichiers ajoutés par d’autres applications, comme Syncthing, ne seront pas visibles.</string>
     <string name="common_already_running">No Papers Needed est déjà ouvert. Passez à sa fenêtre pour continuer.</string>
 
+    <string name="common_import_failure_empty">le fichier est vide</string>
+    <string name="common_import_failure_images">impossible de créer un PDF à partir des images</string>
+    <string name="common_import_failure_copy">le fichier n’a pas pu être copié dans la bibliothèque</string>
 </resources>

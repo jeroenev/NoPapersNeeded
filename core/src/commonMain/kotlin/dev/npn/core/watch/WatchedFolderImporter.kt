@@ -5,7 +5,6 @@ import dev.npn.core.app.IngestFacade
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.util.NpnLog
-import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
@@ -63,9 +62,11 @@ class WatchedFolderImporter(
             val key = "${file.id}|${file.size}|${file.mtimeMillis}"
             if (shouldSkip(key, file, now)) continue
 
+            // Only a closed session throws; that counts as a failed attempt like any other.
             val outcome =
                 runCatchingCancellable { ingest.importPdf(file.source, file.name) }
-                    .getOrElse { ImportOutcome.Failed(it.reason()) }
+                    .onFailure { log.warn("Watched folder import of ${file.name} failed", it) }
+                    .getOrNull()
             when (outcome) {
                 is ImportOutcome.Imported -> {
                     imported++
@@ -77,10 +78,10 @@ class WatchedFolderImporter(
                     consume(file, key)
                 }
 
-                is ImportOutcome.Failed -> {
+                is ImportOutcome.Failed, null -> {
                     failed++
                     attempts[key] = (attempts[key] ?: 0) + 1
-                    log.warn("Watched folder import of ${file.name} failed: ${outcome.message}")
+                    if (outcome != null) log.warn("Watched folder import of ${file.name} failed: ${outcome.reason}")
                 }
             }
         }

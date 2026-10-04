@@ -56,7 +56,6 @@ import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.RuleApplier
 import dev.npn.core.util.NpnLog
-import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
@@ -232,32 +231,42 @@ class LibrarySessionImpl private constructor(
     override suspend fun importPdf(
         source: ExternalSource,
         suggestedName: String,
-    ): ImportOutcome =
-        owned { importing { map(importService.importPdf(source, suggestedName)).also { afterImport(it) } } }
+    ): ImportOutcome = owned { importing(suggestedName) { importService.importPdf(source, suggestedName) } }
 
     override suspend fun importPdfBytes(
         bytes: ByteArray,
         suggestedName: String,
-    ): ImportOutcome =
-        owned { importing { map(importService.importBytes(bytes, suggestedName)).also { afterImport(it) } } }
-
-    private inline fun importing(block: () -> ImportOutcome): ImportOutcome =
-        try {
-            block()
-        } catch (e: EmptyImportException) {
-            ImportOutcome.Failed(e.message ?: "empty file")
-        }
+    ): ImportOutcome = owned { importing(suggestedName) { importService.importBytes(bytes, suggestedName) } }
 
     override suspend fun importImagesAsPdf(
         images: List<ByteArray>,
         suggestedName: String,
     ): ImportOutcome =
         owned {
-            runCatchingCancellable {
-                val pdf = deps.pdfEngine.imagesToPdf(images)
-                importing { map(importService.importBytes(pdf, suggestedName)).also { afterImport(it) } }
-            }.getOrElse { ImportOutcome.Failed(it.reason()) }
+            val pdf =
+                runCatchingCancellable { deps.pdfEngine.imagesToPdf(images) }.getOrElse {
+                    log.warn("Making a PDF of ${images.size} images failed", it)
+                    return@owned ImportOutcome.Failed(ImportFailure.UNREADABLE_IMAGES)
+                }
+            importing(suggestedName) { importService.importBytes(pdf, suggestedName) }
         }
+
+    /** Run one import, turning what can go wrong with the file into an [ImportFailure]. */
+    private inline fun importing(
+        name: String,
+        import: () -> ImportResult,
+    ): ImportOutcome =
+        runCatchingCancellable(import).fold(
+            onSuccess = { map(it).also(::afterImport) },
+            onFailure = { failure ->
+                if (failure is EmptyImportException) {
+                    ImportOutcome.Failed(ImportFailure.EMPTY_FILE)
+                } else {
+                    log.warn("Importing $name failed", failure)
+                    ImportOutcome.Failed(ImportFailure.COPY_FAILED)
+                }
+            },
+        )
 
     override suspend fun resolveDuplicate(
         docId: String,

@@ -184,7 +184,7 @@ private fun importLogLine(
     when (outcome) {
         is ImportOutcome.Imported -> "imported $name -> ${outcome.relPath}"
         is ImportOutcome.Duplicate -> "duplicate $name (already ${outcome.existingPath})"
-        is ImportOutcome.Failed -> "failed $name: ${outcome.message}"
+        is ImportOutcome.Failed -> "failed $name: ${outcome.reason}"
     }
 
 /** Convert a dropped file reference (a `file:` URI or a plain path) to a [Path]. */

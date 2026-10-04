@@ -4,6 +4,7 @@ import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.library.ImportSummary
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
+import dev.npn.core.app.ImportFailure
 import dev.npn.core.app.ImportOutcome
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
@@ -216,6 +217,20 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.importScannedPdf(byteArrayOf(1))
             advanceUntilIdle()
             messages shouldBe listOf("Scan import failed: disk full")
+        }
+
+    @Test
+    fun importScannedPdfRefusedNamesTheReason() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    ingest.importOutcomes = listOf(ImportOutcome.Failed(ImportFailure.EMPTY_FILE))
+                }
+            val model = vm(session = session)
+            val messages = collectMessages(model)
+            model.importScannedPdf(byteArrayOf(1))
+            advanceUntilIdle()
+            messages shouldBe listOf("Scan import failed: the file is empty")
         }
 
     @Test

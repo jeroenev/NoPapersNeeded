@@ -4,7 +4,12 @@ import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
 import kotlinx.coroutines.flow.Flow
 
-/** Getting documents into the library: imports, rescans, and their progress/reporting. */
+/**
+ * Getting documents into the library: imports, rescans, and their progress/reporting.
+ *
+ * An import that cannot add the file returns [ImportOutcome.Failed]; it throws only when the session
+ * is closed.
+ */
 interface IngestFacade {
     val scanProgress: Flow<ScanProgressUi?> // null when idle
 
@@ -45,7 +50,20 @@ sealed interface ImportOutcome {
         val existingPath: String,
     ) : ImportOutcome
 
+    /** The file did not become a document; see [reason]. */
     data class Failed(
-        val message: String,
+        val reason: ImportFailure,
     ) : ImportOutcome
+}
+
+/** Why an import added nothing. The underlying cause, if any, is in the session log. */
+enum class ImportFailure {
+    /** The file has no bytes, so it has no document identity. */
+    EMPTY_FILE,
+
+    /** The images could not be made into a PDF. */
+    UNREADABLE_IMAGES,
+
+    /** The file could not be copied into the library: unreadable, gone, or the library refused it. */
+    COPY_FAILED,
 }

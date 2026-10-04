@@ -157,4 +157,7 @@
     <string name="common_settings_storage_access_missing">Access to device storage is not allowed. Files added by other apps, such as Syncthing, will not be visible.</string>
     <string name="common_already_running">No Papers Needed is already open. Switch to its window to carry on.</string>
 
+    <string name="common_import_failure_empty">the file is empty</string>
+    <string name="common_import_failure_images">the images could not be made into a PDF</string>
+    <string name="common_import_failure_copy">the file could not be copied into the library</string>
 </resources>

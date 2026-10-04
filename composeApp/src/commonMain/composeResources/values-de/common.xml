@@ -155,4 +155,7 @@
     <string name="common_settings_storage_access_missing">Der Zugriff auf den Gerätespeicher ist nicht erlaubt. Dateien anderer Apps, etwa von Syncthing, sind nicht sichtbar.</string>
     <string name="common_already_running">No Papers Needed ist bereits geöffnet. Wechsle zu diesem Fenster, um weiterzuarbeiten.</string>
 
+    <string name="common_import_failure_empty">die Datei ist leer</string>
+    <string name="common_import_failure_images">aus den Bildern konnte kein PDF erstellt werden</string>
+    <string name="common_import_failure_copy">die Datei konnte nicht in die Bibliothek kopiert werden</string>
 </resources>

@@ -131,4 +131,5 @@
         <item quantity="one">Beperkt tot %1$d document</item>
         <item quantity="other">Beperkt tot %1$d documenten</item>
     </plurals>
+    <string name="library_import_failed">De bestanden konden niet worden geïmporteerd: %1$s</string>
 </resources>

@@ -156,4 +156,7 @@
     <string name="common_settings_storage_access_missing">Toegang tot de opslag van dit apparaat is niet toegestaan. Bestanden die andere apps zoals Syncthing toevoegen, zijn niet zichtbaar.</string>
     <string name="common_already_running">No Papers Needed is al geopend. Ga naar dat venster om verder te werken.</string>
 
+    <string name="common_import_failure_empty">het bestand is leeg</string>
+    <string name="common_import_failure_images">van de afbeeldingen kon geen pdf worden gemaakt</string>
+    <string name="common_import_failure_copy">het bestand kon niet naar de bibliotheek worden gekopieerd</string>
 </resources>
