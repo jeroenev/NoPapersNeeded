@@ -98,7 +98,7 @@ class LibrarySettingsTest {
                     // Matching reads the journal, not the cache.
                     deps.fs.writeBytesOnce("inv.pdf", PdfFixtures.embeddedTextPdf("invoice"))
                     session.rescan()
-                    session.drainOcr()
+                    session.work.drainOcr()
                     val id = deps.fs.sha256("inv.pdf")
                     session.documents
                         .observeDoc(id)

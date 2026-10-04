@@ -3,19 +3,14 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiChat
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiFacadeImpl
-import dev.npn.core.ai.AiOcrEngine
 import dev.npn.core.ai.AiSuggest
-import dev.npn.core.ai.RoomChatHistoryProvider
 import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.DeviceDatabase
-import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.fieldTypes
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
-import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationUnavailableException
 import dev.npn.core.fs.debounced
@@ -24,37 +19,19 @@ import dev.npn.core.index.EmptyImportException
 import dev.npn.core.index.ImportResult
 import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
-import dev.npn.core.index.MaintenanceService
-import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
-import dev.npn.core.index.SplitService
 import dev.npn.core.index.WriteSettle
-import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.EpochClock
-import dev.npn.core.journal.HlcWatermarkAllocator
-import dev.npn.core.journal.PendingOp
-import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
-import dev.npn.core.model.FieldKeys
-import dev.npn.core.model.SystemProperty
-import dev.npn.core.ocr.OcrConfig
 import dev.npn.core.ocr.OcrEngine
-import dev.npn.core.ocr.OcrEngineSelector
-import dev.npn.core.ocr.OcrPipeline
-import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfEngine
-import dev.npn.core.pdf.RenderGate
-import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.rules.RuleApplier
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
-import dev.npn.core.work.QueueDrainer
-import dev.npn.core.work.drainedQueue
-import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.PdfXmpIO
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -74,6 +51,10 @@ import kotlinx.coroutines.sync.withLock
  * Everything wired for one opened library folder. Constructed by [openSession] (a suspend factory
  * that settles the device identity and runs the initial fold), then [start]ed.
  *
+ * The session itself is the library's lifecycle and its ingest: imports, rescans, the folder watch
+ * and the periodic reconcile. Every other facet is its own object, wired by [openSession] from the
+ * builders in `SessionWiring.kt`.
+ *
  * Everything the session runs — background loops, queue drains, caller-driven operations — belongs
  * to one [SessionLifetime] under [SessionDeps.scope], so [close] stops all of it at once, for good.
  */
@@ -82,40 +63,36 @@ class LibrarySessionImpl private constructor(
     private val deps: SessionDeps,
     private val lifetime: SessionLifetime,
     private val coordinator: JournalCoordinator,
-    private val indexer: Indexer,
-    private val importService: ImportService,
+    indexer: Indexer,
+    library: Library,
     private val scanReports: MutableStateFlow<ScanReport?>,
-    override val maintenance: MaintenanceFacade,
-    override val reviewConfig: ReviewConfigFacade,
     private val ocrFacade: OcrFacadeImpl,
-    private val ocrWorker: QueueDrainer,
-    workQueueReader: WorkQueueReader,
-    private val enrichWorker: QueueDrainer,
+    override val maintenance: MaintenanceFacade,
     override val aiEditQueue: AiEditQueueFacade,
-    private val editWorker: QueueDrainer,
-    override val documents: DocumentRepository,
-    override val tags: TagRepository,
-    override val savedViews: SavedViewRepository,
-    override val rules: AutoMatchRuleRepositoryImpl,
-    override val storagePath: StoragePathFacade,
-    override val fieldRegistry: FieldRegistry,
-    private val writer: MetadataWriterImpl,
-    override val content: DocContentFacade,
+    private val queues: SessionWork,
     private val aiFacade: AiFacadeImpl,
 ) : LibrarySession,
-    IngestFacade,
-    WorkFacade {
+    IngestFacade {
     private val fs get() = deps.fs
     private val db get() = deps.db
-    private val deviceDb get() = deps.deviceDb
     private val log get() = deps.log
+    private val importService = library.imports
+    private val writer = library.writer
 
-    // The session implements every facet itself; the facet properties only narrow the type a
-    // consumer sees. [MetadataWriterImpl] likewise backs all three write facets, and
-    // [AiFacadeImpl] backs both AI facets.
+    override val documents: DocumentRepository = library.documents
+    override val tags: TagRepository = library.tags
+    override val savedViews: SavedViewRepository = library.savedViews
+    override val rules: AutoMatchRuleRepositoryImpl = library.rules
+    override val storagePath: StoragePathFacade = library.storagePath
+    override val fieldRegistry: FieldRegistry = library.fieldRegistry
+    override val content: DocContentFacade = library.content
+    override val reviewConfig: ReviewConfigFacade = library.reviewConfig
+
+    // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
+    // [MetadataWriterImpl] backs all three write facets, and [AiFacadeImpl] both AI facets.
     override val ingest: IngestFacade get() = this
     override val ocr: OcrFacade get() = ocrFacade
-    override val work: WorkFacade get() = this
+    override val work: WorkFacade get() = queues
     override val meta: MetadataWriter get() = writer
     override val tagAdmin: TagAdmin get() = writer
     override val docLifecycle: DocLifecycle get() = writer
@@ -128,10 +105,6 @@ class LibrarySessionImpl private constructor(
         indexer.scanState.map { p ->
             p?.let { ScanProgressUi(it.phase.name, it.hashed, it.total) }
         }
-
-    override val queue: Flow<List<QueuedWork>> = workQueueReader.queue
-
-    override val editRuns: Flow<List<QueuedEditRun>> = workQueueReader.editRuns
 
     private var started = false
 
@@ -218,23 +191,6 @@ class LibrarySessionImpl private constructor(
         trashOps().purgeOlderThan(cutoff, coordinator.journalTrashTimes() + rows)
     }
 
-    // The drains go through the session's own drainers rather than running on the caller's
-    // coroutine, so closing the session cancels them (see QueueDrainer.drainAndAwait).
-    override suspend fun drainOcr() {
-        lifetime.checkOpen()
-        ocrWorker.drainAndAwait()
-    }
-
-    override suspend fun drainEnrichment() {
-        lifetime.checkOpen()
-        enrichWorker.drainAndAwait()
-    }
-
-    override suspend fun drainEditRuns() {
-        lifetime.checkOpen()
-        editWorker.drainAndAwait()
-    }
-
     override fun start() {
         lifetime.checkOpen()
         if (started) return
@@ -254,8 +210,7 @@ class LibrarySessionImpl private constructor(
         //
         // These kicks resume whatever survived the last run: a killed process, an endpoint that
         // was down, a run left half-suggested. Each costs a single query when its queue is empty.
-        enrichWorker.kick()
-        editWorker.kick()
+        queues.kickAll()
 
         // Metadata paths are routed separately so journal sync never scans or hashes PDFs.
         scope.launch {
@@ -299,9 +254,7 @@ class LibrarySessionImpl private constructor(
                 // OCR retries, enrichment rows and edit runs become due by the passage of time,
                 // which no Room flow can observe; this tick is what actually retries a backed-off
                 // one.
-                ocrFacade.kick()
-                enrichWorker.kick()
-                editWorker.kick()
+                queues.kickAll()
             }
         }
     }
@@ -374,9 +327,7 @@ class LibrarySessionImpl private constructor(
 
     private suspend fun doWatchTriggeredRescan() {
         rescan()
-        ocrFacade.kick()
-        enrichWorker.kick()
-        editWorker.kick()
+        queues.kickAll()
         // Respect the configured retention at call time.
         val days =
             log.runLogged("Reading the trash retention") { deps.trashRetentionDays() }
@@ -415,12 +366,6 @@ class LibrarySessionImpl private constructor(
         private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
 
         /**
-         * The `kv` keys an index from before [DeviceDatabase] kept for this device. The v1 writer's
-         * bookkeeping moves too, so the index sheds it; [DeviceIdentity] then drops it.
-         */
-        private val DEVICE_KEYS = listOf(DeviceIdentity.KEY_DEVICE_ID) + DeviceIdentity.LEGACY_JOURNAL_KEYS
-
-        /**
          * Boot a session over [deps]: move device state an older index still holds into the device
          * database, settle the device id ([DeviceIdentity]: a fresh one for a restored or cloned
          * installation), wire the journal engine, repositories, pipelines, then do the initial fold
@@ -431,274 +376,62 @@ class LibrarySessionImpl private constructor(
          * this installation in the library publishes through the same primitive, so the first open
          * finds out.
          */
-        @Suppress("LongMethod")
         suspend fun openSession(deps: SessionDeps): LibrarySessionImpl {
-            val db = deps.db
-            val deviceDb = deps.deviceDb
-            val fs = deps.fs
             val lifetime = SessionLifetime(deps.scope)
-
             // Before anything reads the device id: an index from before device.db holds it.
-            LegacyIndexTables.moveDeviceState(db, deviceDb, DEVICE_KEYS, RoomChatHistoryProvider.KEY_PREFIX)
-
-            val indexer = Indexer(fs, db, deps.clock, deps.log)
-
+            moveDeviceState(deps)
+            val indexer = Indexer(deps.fs, deps.db, deps.clock, deps.log)
             val coordinator = createCoordinator(deps, indexer)
-            val effectiveDeviceId =
-                DeviceIdentity(deviceDb.keyValueDao(), fs, deps.installationId, deps.log).resolve()
+            val deviceId = DeviceIdentity(deps.deviceDb.keyValueDao(), deps.fs, deps.installationId, deps.log).resolve()
+            foldJournal(deps, coordinator)
 
-            coordinator.refreshState()
-            coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) })
-            // Once per library: what this device kept as settings before they became library data.
-            // A failure leaves it for the next open rather than refusing this one.
-            deps.log.runLogged("Adopting this device's library settings") {
-                coordinator.adoptSettings(deps.legacyLibrarySettings().journalSettings())
-            }
-
-            val storagePath = JournalStoragePath(coordinator) { lifetime.owned(it) }
-            val pathRuleApplicator =
-                StoragePathRuleApplicator(fs, db, storagePath::rule) { docId, path ->
-                    coordinator.commitAndApply(listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, path)))
-                }
-            val importService =
-                ImportService(
-                    fs = fs,
-                    documentDao = db.documentDao(),
-                    ocrQueueDao = deviceDb.ocrQueueDao(),
-                    clock = deps.clock,
-                    ruleProvider = storagePath::rule,
-                    fieldTypes = { db.fieldDefDao().fieldTypes() },
-                    serialize = { coordinator.serialized(it) },
-                    restore = { docId, relPath -> coordinator.restoreReturned(docId, relPath) },
-                )
-            val maintenance = MaintenanceService(fs, db.documentDao(), db.duplicateDao(), importService)
-            val relinkService = RelinkService(coordinator)
-            val splitService = SplitService(fs, deps.pdfEngine, importService, db.documentDao(), deps.log)
-
+            val relink = RelinkService(coordinator)
+            val library = buildLibrary(deps, lifetime, coordinator, relink)
             // Built before the OCR pipeline because it is also the pipeline's AI engine: one
             // facade, so the vision calls share the cached endpoint client with chat and edits.
             val ai =
                 AiFacadeImpl(
-                    db,
-                    chats = deviceDb.keyValueDao(),
+                    deps.db,
+                    chats = deps.deviceDb.keyValueDao(),
                     ownWrite = { lifetime.owned(it) },
                     configProvider = deps.aiConfig,
                 )
-            val ocrEngines =
-                OcrEngineSelector(
-                    local = deps.ocrEngine,
-                    ai = AiOcrEngine(ai),
-                    aiAuto = deps.unattendedAi::autoOcr,
-                )
-            // Single shared gate so thumbnail + page rendering share one bounded concurrency
-            // budget and a first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
-            val renderGate = RenderGate()
-            val thumbnailService =
-                ThumbnailService(
-                    engine = deps.pdfEngine,
-                    fs = fs,
-                    store = deps.thumbnailStore,
-                    thumbnailDao = db.thumbnailDao(),
-                    documentDao = db.documentDao(),
-                    renderGate = renderGate,
-                )
-            val bakeService = BakeService(fs, deps.xmpIO, deps.log)
-
-            val documents = DocumentRepositoryImpl(db)
-            val fieldRegistry = FieldRegistryImpl(db, coordinator)
-            val tags = TagRepositoryImpl(db.tagDao())
-            val savedViews = SavedViewRepositoryImpl(coordinator) { lifetime.owned(it) }
-            deps.log.runLogged("Moving saved views into the journal") { savedViews.adoptIndexViews(db) }
-            val content =
-                DocContentFacadeImpl(
-                    lifetime,
-                    db,
-                    fs,
-                    deps.pdfEngine,
-                    thumbnailService,
-                    bakeService,
-                    coordinator,
-                    relinkService,
-                    renderGate,
-                    deps.log,
-                )
-
-            lateinit var rules: AutoMatchRuleRepositoryImpl
-            val ruleApplier =
-                RuleApplier(
-                    rules = { rules.current() },
-                    ftsDao = db.ftsDao(),
-                    documentDao = db.documentDao(),
-                    coordinator = coordinator,
-                    onMetadataApplied = pathRuleApplicator::applyFor,
-                )
-            rules =
-                AutoMatchRuleRepositoryImpl(db.autoMatchRuleDao(), ruleApplier, coordinator, deps.log) {
-                    lifetime.owned(it)
-                }
-            rules.mirror()
-            val meta =
-                MetadataWriterImpl(
-                    coordinator,
-                    db,
-                    fs,
-                    TrashOps(fs),
-                    pathRuleApplicator,
-                    deps.log,
-                    applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
-                )
-            val enrichment =
-                drainedQueue(lifetime.scope, "AI enrichment queue", deps.log, build = { onEnqueued ->
-                    AiAutoEnricher(
-                        documentDao = db.documentDao(),
-                        queueDao = deviceDb.aiEnrichQueueDao(),
-                        ai = ai,
-                        meta = meta,
-                        fieldRegistry = fieldRegistry,
-                        policy = deps.unattendedAi,
-                        clock = deps.clock,
-                        onEnqueued = onEnqueued,
-                    )
-                }) { it.processNext() }
+            val enrichment = buildEnrichment(deps, lifetime, library, ai)
+            val edits = buildEditQueue(deps, lifetime, library, ai)
             // The pipeline's stale-file hook asks the session for a follow-up rescan; the session is
             // built last, and the hook only runs on a drain.
             lateinit var session: LibrarySessionImpl
-            val ocrPipeline =
-                OcrPipeline(
-                    fs = fs,
-                    sidecars = OcrSidecarFiles(fs),
-                    pdfEngine = deps.pdfEngine,
-                    engines = ocrEngines,
-                    documentDao = db.documentDao(),
-                    ftsDao = db.ftsDao(),
-                    ocrQueueDao = deviceDb.ocrQueueDao(),
-                    tagDao = db.tagDao(),
-                    fieldDao = db.documentFieldDao(),
-                    deviceId = effectiveDeviceId,
-                    config = OcrConfig(lang = deps.ocrLanguage()),
-                    clock = deps.clock,
-                    // Deterministic local rules run on any newly indexed text, including a re-index.
-                    onTextIndexed = { docId, text -> ruleApplier.applyToDoc(docId, text) },
-                    // The paid pass runs only on text this device just produced. It fires after the
-                    // rules above, so rule-applied tags and fields are part of the context the model
-                    // sees. Only the *intent* is recorded here: this runs on the OCR queue-drain
-                    // thread, where a network call would stall OCR of every remaining document.
+            val ocr =
+                buildOcr(
+                    deps,
+                    lifetime,
+                    deviceId,
+                    library,
+                    ai,
+                    // Only the *intent* is recorded here: this runs on the OCR queue-drain thread,
+                    // where a network call would stall OCR of every remaining document.
                     onOcrProduced = { docId -> enrichment.queue.enqueue(docId) },
                     // The file no longer matches its hash: rescan once it has settled.
                     onStaleFile = { session.scheduleSettleRescan(WriteSettle.QUIET_MILLIS) },
                 )
-            val ocrWorker = QueueDrainer(lifetime.scope, "OCR queue", deps.log) { ocrPipeline.processNext() }
-            val ocr =
-                OcrFacadeImpl(
-                    lifetime = lifetime,
-                    documentDao = db.documentDao(),
-                    queue = deviceDb.ocrQueueDao(),
-                    pipeline = ocrPipeline,
-                    engines = ocrEngines,
-                    writer = meta,
-                    content = content,
-                    worker = ocrWorker,
-                    clock = deps.clock,
-                )
-            val edits =
-                drainedQueue(lifetime.scope, "AI edit queue", deps.log, build = { onEnqueued ->
-                    AiEditQueue(
-                        dao = deviceDb.aiEditJobDao(),
-                        documents = documents,
-                        content = content,
-                        meta = meta,
-                        ai = ai,
-                        fieldRegistry = fieldRegistry,
-                        readConfig = deps.aiConfig,
-                        clock = deps.clock,
-                        onEnqueued = onEnqueued,
-                        ownWrite = { lifetime.owned(it) },
-                    )
-                }) { it.processNext() }
-
             val scanReports = MutableStateFlow<ScanReport?>(null)
-            session = LibrarySessionImpl(
-                deviceId = effectiveDeviceId,
-                deps = deps,
-                lifetime = lifetime,
-                coordinator = coordinator,
-                indexer = indexer,
-                importService = importService,
-                scanReports = scanReports,
-                maintenance =
-                    MaintenanceFacadeImpl(
-                        lifetime = lifetime,
-                        db = db,
-                        maintenance = maintenance,
-                        relink = relinkService,
-                        splitter = splitService,
-                        writer = meta,
-                        ocr = ocr,
-                        scanReports = scanReports,
-                        log = deps.log,
-                    ),
-                reviewConfig = JournalReviewConfig(coordinator, db.documentDao()) { lifetime.owned(it) },
-                ocrFacade = ocr,
-                ocrWorker = ocrWorker,
-                workQueueReader =
-                    WorkQueueReader(
-                        db.documentDao(),
-                        deviceDb.ocrQueueDao(),
-                        deviceDb.aiEnrichQueueDao(),
-                        deviceDb.aiEditJobDao(),
-                        ocrPipeline.inFlight,
-                    ),
-                enrichWorker = enrichment.worker,
-                aiEditQueue = edits.queue,
-                editWorker = edits.worker,
-                documents = documents,
-                tags = tags,
-                savedViews = savedViews,
-                rules = rules,
-                storagePath = storagePath,
-                fieldRegistry = fieldRegistry,
-                writer = meta,
-                content = content,
-                aiFacade = ai,
-            )
+            session =
+                LibrarySessionImpl(
+                    deviceId = deviceId,
+                    deps = deps,
+                    lifetime = lifetime,
+                    coordinator = coordinator,
+                    indexer = indexer,
+                    library = library,
+                    scanReports = scanReports,
+                    ocrFacade = ocr,
+                    maintenance = buildMaintenance(deps, lifetime, library, relink, ocr, scanReports),
+                    aiEditQueue = edits.queue,
+                    queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits.worker),
+                    aiFacade = ai,
+                )
             return session
         }
-
-        /**
-         * The journal writer: storage-v2 content-addressed objects are the only format this build
-         * writes (v1 segments are still read). A filesystem that does not report verified
-         * publication is refused here rather than written in a weaker format.
-         */
-        private suspend fun createObjectWriter(deps: SessionDeps): ContentAddressedJournalWriter {
-            val state = deps.db.metadataProjectionDao().state()
-            val writer =
-                ContentAddressedJournalWriter(
-                    fs = deps.fs,
-                    installationId = deps.installationId,
-                    allocator =
-                        HlcWatermarkAllocator(
-                            clock = deps.clock,
-                            initialPhysicalMillis = state?.allocatorPhysical ?: 0L,
-                            initialCounter = state?.allocatorCounter ?: 0,
-                        ),
-                )
-            if (!writer.supported) {
-                throw VerifiedPublicationUnavailableException("This storage cannot publish journal objects safely")
-            }
-            return writer
-        }
-
-        private suspend fun createCoordinator(
-            deps: SessionDeps,
-            indexer: Indexer,
-        ): JournalCoordinator =
-            JournalCoordinator(
-                writer = createObjectWriter(deps),
-                indexer = indexer,
-                accumulator = MetadataAccumulator(deps.fs, deps.db, deps.installationId),
-                compactor = SnapshotCompactor(deps.fs, deps.installationId),
-                clock = deps.clock,
-            )
     }
 }
 
@@ -744,3 +477,21 @@ class SessionDeps(
         deviceDb.close()
     }
 }
+
+/**
+ * The library's metadata layer over its journal: the repositories and writers the session hands
+ * out as facets, the auto-match rules OCR runs, and the import path.
+ */
+internal class Library(
+    val documents: DocumentRepository,
+    val tags: TagRepository,
+    val savedViews: SavedViewRepository,
+    val fieldRegistry: FieldRegistry,
+    val storagePath: StoragePathFacade,
+    val rules: AutoMatchRuleRepositoryImpl,
+    val ruleApplier: RuleApplier,
+    val writer: MetadataWriterImpl,
+    val reviewConfig: ReviewConfigFacade,
+    val content: DocContentFacade,
+    val imports: ImportService,
+)

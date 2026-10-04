@@ -38,13 +38,13 @@ class AiOcrPinSyncTest {
                 val (second, db) = rig.secondSession(backgroundScope, ocr = local, aiConfig = { endpoint })
                 secondDb = db
                 second.rescan()
-                second.drainOcr()
+                second.work.drainOcr()
                 local.calls shouldBe 1
 
                 // Device A pins the document to the AI engine; B ingests that event.
                 rig.session.ocr.setOcrEngine(docId, OcrEngines.AI)
                 second.rescan()
-                second.drainOcr()
+                second.work.drainOcr()
 
                 gateway.requestedPaths.shouldBeEmpty()
                 val doc = db.documentDao().getByDocId(docId).shouldNotBeNull()
@@ -53,7 +53,7 @@ class AiOcrPinSyncTest {
 
                 // The endpoint is live: asked for on B itself, the run does reach it.
                 second.ocr.ocrWithAi(docId)
-                second.drainOcr()
+                second.work.drainOcr()
                 gateway.requestedPaths.shouldNotBeEmpty()
 
                 second.close()
