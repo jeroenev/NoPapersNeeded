@@ -23,7 +23,8 @@ design, build/packaging/release details, and the library folder layout.
   desktop runtime. Bytecode stays at `jvm-target` 17, with `-Xjdk-release` on desktop
   compilations, because Android shares it and minSdk 30 lacks newer library APIs. Raising
   `jdk` never raises the target; raising the target is a separate, Android-driven decision.
-- `buildSrc` — build logic. Convention plugins read the catalog: `npn.toolchain` (the JDK and
+- `buildSrc` — build logic: every task class the build scripts register (packaging, `BuildInfo`,
+  `checkLocalization`), and convention plugins that read the catalog: `npn.toolchain` (the JDK and
   bytecode target, applied by every module) and `npn.kmp-module` (the `desktop` and Android
   library targets and their SDK levels, for `core`, `core-testing` and `composeApp`). Kotlin and
   the Android Gradle plugin are on buildSrc's classpath, so modules apply them by id, never with

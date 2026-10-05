@@ -1,8 +1,5 @@
 import org.gradle.jvm.toolchain.JavaLanguageVersion
-import org.gradle.process.ExecOperations
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import java.io.File
-import javax.inject.Inject
 
 plugins {
     id("org.jetbrains.kotlin.jvm")
@@ -115,6 +112,10 @@ compose.desktop {
     }
 }
 
+// createDistributable's output: the jpackage app image (bundled runtime and launcher) that every
+// Linux package below repackages.
+val distributableAppImage = layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName")
+
 // --- Linux .deb and .rpm packaging ---------------------------------------
 // jpackage builds the installed .desktop entry from a template, and its built-in one has
 // no StartupWMClass, so the shell cannot match the running window to the installed entry
@@ -127,48 +128,6 @@ compose.desktop {
 // plugin produces - the same approach the AppImage task below already uses. Nothing is
 // post-processed: jpackage generates the entry from our template. The .rpm needs
 // `rpmbuild` on the host (the `rpm` package on Debian/Ubuntu).
-
-// jpackage picks overrides out of the resource dir by file name: "<app name>.desktop" for
-// the menu entry template (caps tokens are substituted by jpackage) and "<app name>.png"
-// for its icon. Packaging from an app image does not reuse the icon inside it, so the
-// icon has to be here too or the entry falls back to the default Java coffee cup.
-abstract class PrepareJPackageResourcesTask : DefaultTask() {
-    @get:Input
-    abstract val appName: Property<String>
-
-    @get:Input
-    abstract val displayName: Property<String>
-
-    @get:Input
-    abstract val wmClass: Property<String>
-
-    @get:InputFile
-    abstract val iconFile: RegularFileProperty
-
-    @get:OutputDirectory
-    abstract val outDir: DirectoryProperty
-
-    @TaskAction
-    fun prepare() {
-        val dir = outDir.get().asFile
-        dir.mkdirs()
-        File(dir, "${appName.get()}.desktop").writeText(
-            """
-            [Desktop Entry]
-            Name=${displayName.get()}
-            Comment=APPLICATION_DESCRIPTION
-            Exec=APPLICATION_LAUNCHER
-            Icon=APPLICATION_ICON
-            Terminal=false
-            Type=Application
-            Categories=DEPLOY_BUNDLE_CATEGORY
-            DESKTOP_MIMES
-            StartupWMClass=${wmClass.get()}
-            """.trimIndent() + "\n",
-        )
-        iconFile.get().asFile.copyTo(File(dir, "${appName.get()}.png"), overwrite = true)
-    }
-}
 
 val jpackageResourceDir = layout.buildDirectory.dir("jpackage-resources")
 
@@ -183,88 +142,13 @@ val prepareJPackageResources =
         outDir.set(jpackageResourceDir)
     }
 
-abstract class PackageLinuxInstallerTask
-    @Inject
-    constructor(
-        private val execOps: ExecOperations,
-    ) : DefaultTask() {
-        /** jpackage `--type`: `deb` or `rpm`. */
-        @get:Input
-        abstract val packageType: Property<String>
-
-        @get:InputDirectory
-        abstract val appImageSrc: DirectoryProperty
-
-        @get:InputDirectory
-        abstract val resourceDir: DirectoryProperty
-
-        @get:InputFile
-        abstract val licenseFile: RegularFileProperty
-
-        @get:Input
-        abstract val jpackageTool: Property<String>
-
-        @get:Input
-        abstract val appName: Property<String>
-
-        @get:Input
-        abstract val appVersion: Property<String>
-
-        @get:Input
-        abstract val appDescription: Property<String>
-
-        @get:Input
-        abstract val menuGroup: Property<String>
-
-        @get:OutputDirectory
-        abstract val destinationDir: DirectoryProperty
-
-        @TaskAction
-        fun build() {
-            val src = appImageSrc.get().asFile
-            require(src.isDirectory) { "jpackage app-image not found at $src" }
-            val dest = destinationDir.get().asFile
-            dest.mkdirs()
-
-            execOps
-                .exec {
-                    executable = jpackageTool.get()
-                    args =
-                        listOf(
-                            "--type",
-                            packageType.get(),
-                            // Packages the already-built app image, which carries the bundled
-                            // runtime, the launcher and the icon.
-                            "--app-image",
-                            src.absolutePath,
-                            "--name",
-                            appName.get(),
-                            "--app-version",
-                            appVersion.get(),
-                            "--description",
-                            appDescription.get(),
-                            "--license-file",
-                            licenseFile.get().asFile.absolutePath,
-                            "--linux-shortcut",
-                            "--linux-menu-group",
-                            menuGroup.get(),
-                            "--resource-dir",
-                            resourceDir.get().asFile.absolutePath,
-                            "--dest",
-                            dest.absolutePath,
-                        )
-                }.assertNormalExitValue()
-            logger.lifecycle("The distribution is written to ${dest.absolutePath}")
-        }
-    }
-
 fun PackageLinuxInstallerTask.packageAs(type: String) {
     group = "compose desktop"
     description = "Builds a Linux .$type from the jpackage app-image output."
     dependsOn("createDistributable", prepareJPackageResources)
 
     packageType.set(type)
-    appImageSrc.set(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName"))
+    appImageSrc.set(distributableAppImage)
     resourceDir.set(jpackageResourceDir)
     licenseFile.set(rootProject.layout.projectDirectory.file("LICENSE"))
     jpackageTool.set(
@@ -289,167 +173,21 @@ tasks.register<PackageLinuxInstallerTask>("packageRpm") { packageAs("rpm") }
 // On Windows the plugin still owns that task and produces the .msi/.exe.
 
 // --- AppImage packaging ---------------------------------------------------
-// jpackage (used by the Compose plugin) cannot emit AppImage, so this task wraps
-// its app-image output with appimagetool. appimagetool is downloaded into build/
-// (needs network) and run with --appimage-extract-and-run, so no host FUSE is
-// needed to build. The resulting AppImage still needs FUSE (or that same flag) to
-// run on the end-user machine.
-//
-// A tagged release, pinned by hash: the release job runs this binary, so it must be the bytes
-// that were reviewed, never whatever the rolling "continuous" release holds that day. To bump it,
-// take the SHA-256 GitHub lists for the asset on the release page.
+// appimagetool wraps the app image; it is downloaded into build/ (needs network). It is a tagged
+// release, pinned by hash: the release job runs this binary, so it must be the bytes that were
+// reviewed, never whatever the rolling "continuous" release holds that day. To bump it, take the
+// SHA-256 GitHub lists for the asset on the release page.
 val appImageArch = "x86_64"
 val appImageToolVersion = "1.9.1"
 val appImageToolUrl =
     "https://github.com/AppImage/appimagetool/releases/download/$appImageToolVersion/appimagetool-$appImageArch.AppImage"
 val appImageToolSha256 = "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
 
-abstract class DownloadAppImageToolTask : DefaultTask() {
-    @get:Input
-    abstract val url: Property<String>
-
-    @get:Input
-    abstract val sha256: Property<String>
-
-    @get:OutputFile
-    abstract val outFile: RegularFileProperty
-
-    @TaskAction
-    fun download() {
-        val tool = VerifiedDownload.fetch(url.get(), sha256.get(), outFile.get().asFile) { logger.lifecycle(it) }
-        tool.setExecutable(true)
-    }
-}
-
 val downloadAppImageTool =
     tasks.register<DownloadAppImageToolTask>("downloadAppImageTool") {
         url.set(appImageToolUrl)
         sha256.set(appImageToolSha256)
         outFile.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
-    }
-
-abstract class PackageAppImageTask
-    @Inject
-    constructor(
-        private val execOps: ExecOperations,
-    ) : DefaultTask() {
-        @get:InputDirectory
-        abstract val appImageSrc: DirectoryProperty
-
-        @get:InputFile
-        abstract val appImageTool: RegularFileProperty
-
-        @get:InputFile
-        abstract val iconFile: RegularFileProperty
-
-        @get:Input
-        abstract val appName: Property<String>
-
-        @get:Input
-        abstract val displayName: Property<String>
-
-        @get:Input
-        abstract val wmClass: Property<String>
-
-        @get:Input
-        abstract val arch: Property<String>
-
-        /** AppImage update information; appimagetool embeds it and writes the matching .zsync. */
-        @get:Input
-        abstract val updateInfo: Property<String>
-
-        @get:Internal
-        abstract val appDir: DirectoryProperty
-
-        @get:OutputFile
-        abstract val outFile: RegularFileProperty
-
-        @TaskAction
-        fun build() {
-            val name = appName.get()
-            val src = appImageSrc.get().asFile
-            require(src.isDirectory) { "jpackage app-image not found at $src" }
-
-            val dir = appDir.get().asFile
-            dir.deleteRecursively()
-            dir.mkdirs()
-
-            // Copy the self-contained app-image (bundled JRE + launcher) into AppDir/usr.
-            // Kotlin's copyRecursively does not preserve the executable bit, so restore it
-            // afterwards on the launcher and every ELF/.so under the runtime.
-            val usrDir = File(dir, "usr")
-            src.copyRecursively(usrDir, overwrite = true)
-
-            val launcherFile = File(dir, "usr/bin/$name")
-            require(launcherFile.exists()) { "launcher not found at usr/bin/$name inside app-image" }
-            val launcher = "usr/bin/$name"
-
-            // Restore executable permission for the launcher and bundled native binaries.
-            usrDir.walkTopDown().forEach { f ->
-                if (!f.isFile) return@forEach
-                val underBin = f.parentFile?.name == "bin"
-                val isNative =
-                    f.extension.equals("so", ignoreCase = true) ||
-                        f.name.contains(".so.")
-                if (underBin || isNative) {
-                    f.setExecutable(true, false)
-                }
-            }
-
-            // AppRun -> the bundled launcher.
-            val appRun = File(dir, "AppRun")
-            appRun.writeText(
-                """
-                #!/bin/sh
-                HERE="${'$'}(dirname "${'$'}(readlink -f "${'$'}0")")"
-                exec "${'$'}HERE/$launcher" "${'$'}@"
-                """.trimIndent() + "\n",
-            )
-            appRun.setExecutable(true)
-
-            // Minimal .desktop entry (required by appimagetool). StartupWMClass lets the
-            // shell match the running window to this entry and show the app icon in the
-            // taskbar; see npnWmClass above.
-            File(dir, "$name.desktop").writeText(
-                """
-                [Desktop Entry]
-                Type=Application
-                Name=${displayName.get()}
-                Exec=$name
-                Icon=$name
-                Categories=Office;Utility;
-                Terminal=false
-                StartupWMClass=${wmClass.get()}
-                """.trimIndent() + "\n",
-            )
-
-            // Icon: the .desktop entry above points at "$name", which appimagetool resolves
-            // to this PNG at the AppDir root. Same file jpackage uses for the .deb.
-            iconFile.get().asFile.copyTo(File(dir, "$name.png"), overwrite = true)
-
-            val out = outFile.get().asFile
-            out.parentFile.mkdirs()
-
-            logger.lifecycle("Running appimagetool -> ${out.absolutePath}")
-            execOps
-                .exec {
-                    executable = appImageTool.get().asFile.absolutePath
-                    // --appimage-extract-and-run avoids needing host FUSE at build time.
-                    args =
-                        listOf(
-                            "--appimage-extract-and-run",
-                            "--updateinformation",
-                            updateInfo.get(),
-                            dir.absolutePath,
-                            out.absolutePath,
-                        )
-                    environment("ARCH", arch.get())
-                    // appimagetool writes the .zsync into its working directory.
-                    workingDir = out.parentFile
-                }.assertNormalExitValue()
-            logger.lifecycle("AppImage written: ${out.absolutePath}")
-            require(File(out.path + ".zsync").exists()) { "appimagetool wrote no .zsync next to ${out.name}" }
-        }
     }
 
 val packageAppImage =
@@ -465,7 +203,7 @@ val packageAppImage =
         // AppImageUpdate (and launchers such as Gear Lever) fetch the .zsync of the latest GitHub
         // release, so the release has to upload it next to the AppImage.
         updateInfo.set("gh-releases-zsync|jeroenev|NoPapersNeeded|latest|$npnAppName-*-$appImageArch.AppImage.zsync")
-        appImageSrc.set(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName"))
+        appImageSrc.set(distributableAppImage)
         appImageTool.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
         iconFile.set(npnIconPng)
         appDir.set(layout.buildDirectory.dir("appimage/AppDir"))
@@ -479,11 +217,6 @@ val packageAppImage =
 // installer (upstream publishes no Windows binaries; this is the build its docs point to), plus
 // the fast models of every language the app UI is translated into. Compose copies the "windows"
 // folder of the app resources into the app image, where AppEnvironment.desktop.kt finds it.
-//
-// Extracting the NSIS installer needs 7-Zip (on PATH, or its default install location; GitHub's
-// Windows runners have it). The installer's DLLs carry ~100 MB of debug info, stripped when a
-// binutils `strip` is around (the runners' MinGW has one); without it the build still works, the
-// installer is just larger.
 val tesseractWindowsInstallerUrl =
     "https://github.com/UB-Mannheim/tesseract/releases/download/v5.4.0.20240606/tesseract-ocr-w64-setup-5.4.0.20240606.exe"
 val tesseractWindowsInstallerSha256 = "c885fff6998e0608ba4bb8ab51436e1c6775c2bafc2559a19b423e18678b60c9"
@@ -534,99 +267,6 @@ val tessdataFastModels =
         "por" to "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb",
     )
 
-abstract class PrepareWindowsTesseractTask
-    @Inject
-    constructor(
-        private val execOps: ExecOperations,
-    ) : DefaultTask() {
-        @get:Input
-        abstract val installerUrl: Property<String>
-
-        @get:Input
-        abstract val installerSha256: Property<String>
-
-        /** File names to take from the installer. */
-        @get:Input
-        abstract val files: ListProperty<String>
-
-        @get:Input
-        abstract val modelBaseUrl: Property<String>
-
-        /** Tesseract language code to the SHA-256 of its model. */
-        @get:Input
-        abstract val models: MapProperty<String, String>
-
-        /** Verified downloads, kept across runs so a rebuild does not fetch them again. */
-        @get:Internal
-        abstract val downloadDir: DirectoryProperty
-
-        @get:OutputDirectory
-        abstract val outDir: DirectoryProperty
-
-        @TaskAction
-        fun prepare() {
-            val downloads = downloadDir.get().asFile.apply { mkdirs() }
-            val installerName = installerUrl.get().substringAfterLast('/')
-            val installer = fetch(installerUrl.get(), installerSha256.get(), File(downloads, installerName))
-
-            val root = outDir.get().asFile
-            root.deleteRecursively()
-            val home = File(root, "windows/tesseract").apply { mkdirs() }
-            // NSIS installers are 7-Zip archives; `e` takes just the named files, flattened.
-            execOps
-                .exec {
-                    executable = sevenZip()
-                    args = listOf("e", "-y", "-o${home.absolutePath}", installer.absolutePath) + files.get()
-                }.assertNormalExitValue()
-            files.get().forEach { require(File(home, it).isFile) { "$it is not in $installerName" } }
-            stripDebugInfo(home)
-
-            val tessdata = File(home, "tessdata").apply { mkdirs() }
-            models.get().forEach { (lang, sha256) ->
-                val model =
-                    fetch("${modelBaseUrl.get()}/$lang.traineddata", sha256, File(downloads, "$lang.traineddata"))
-                model.copyTo(File(tessdata, model.name), overwrite = true)
-            }
-        }
-
-        private fun fetch(
-            url: String,
-            sha256: String,
-            target: File,
-        ): File = VerifiedDownload.fetch(url, sha256, target) { logger.lifecycle(it) }
-
-        private fun sevenZip(): String =
-            (onPath("7z.exe", "7z", "7zz") ?: File("C:/Program Files/7-Zip/7z.exe").takeIf { it.isFile })
-                ?.absolutePath
-                ?: throw GradleException("Bundling Tesseract needs 7-Zip (7z) on PATH to unpack its installer")
-
-        private fun stripDebugInfo(dir: File) {
-            val strip =
-                onPath("strip.exe", "strip")
-                    ?: listOf("C:/mingw64/bin/strip.exe", "C:/msys64/mingw64/bin/strip.exe")
-                        .map(::File)
-                        .firstOrNull { it.isFile }
-            if (strip == null) {
-                logger.warn("No `strip` found: bundling Tesseract with its debug info (~100 MB more)")
-                return
-            }
-            execOps
-                .exec {
-                    executable = strip.absolutePath
-                    args = listOf("--strip-debug") + files.get().map { File(dir, it).absolutePath }
-                }.assertNormalExitValue()
-        }
-
-        private fun onPath(vararg names: String): File? =
-            System
-                .getenv("PATH")
-                .orEmpty()
-                .split(File.pathSeparator)
-                .filter { it.isNotBlank() }
-                .flatMap { dir -> names.map { File(dir, it) } }
-                .firstOrNull { it.isFile && it.canExecute() }
-    }
-
 val prepareWindowsTesseract =
     tasks.register<PrepareWindowsTesseractTask>("prepareWindowsTesseract") {
         group = "compose desktop"
@@ -654,38 +294,6 @@ if (isWindowsHost) {
 val npnFlatpakId = "io.github.jeroenev.NoPapersNeeded"
 val linuxBundleName = "$npnAppName-$npnAppVersion-linux-x86_64"
 
-// Fills in the metainfo's release version and date. The date is the built commit's, which keeps
-// the tarball reproducible.
-abstract class RenderMetainfoTask : DefaultTask() {
-    @get:InputFile
-    abstract val template: RegularFileProperty
-
-    @get:Input
-    abstract val version: Property<String>
-
-    @get:Input
-    abstract val releaseDate: Property<String>
-
-    @get:OutputFile
-    abstract val outFile: RegularFileProperty
-
-    @TaskAction
-    fun render() {
-        val text =
-            template
-                .get()
-                .asFile
-                .readText()
-                .replace("@VERSION@", version.get())
-                .replace("@DATE@", releaseDate.get())
-        outFile
-            .get()
-            .asFile
-            .apply { parentFile.mkdirs() }
-            .writeText(text)
-    }
-}
-
 val renderMetainfo =
     tasks.register<RenderMetainfoTask>("renderMetainfo") {
         template.set(layout.projectDirectory.file("flatpak/$npnFlatpakId.metainfo.xml"))
@@ -707,7 +315,7 @@ val stageLinuxBundle =
         into(layout.buildDirectory.dir("linux-bundle/stage"))
         // jlink leaves the runtime's legal notices read-only, so the copy cannot overwrite them.
         doFirst { (this as Sync).destinationDir.deleteRecursively() }
-        from(layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName")) { into("app") }
+        from(distributableAppImage) { into("app") }
         from("flatpak/$npnFlatpakId.desktop") { into("share") }
         from(renderMetainfo) { into("share") }
         val iconName = "$npnFlatpakId.png"
