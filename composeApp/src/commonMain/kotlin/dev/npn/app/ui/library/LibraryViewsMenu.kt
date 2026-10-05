@@ -45,9 +45,8 @@ import no_papers_needed.composeapp.generated.resources.library_views
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Top-bar entry point for view presets, replacing the old navigation drawer: all documents,
- * the review queue (with a badge while it needs clearing), and saved views with their manage
- * actions. Lives in the library top bar so it is equally reachable with rail and bottom-bar
+ * Top-bar entry point for view presets: all documents, the review queue (with a badge while it
+ * needs clearing), and saved views with their manage actions. Lives in the library top bar so it is equally reachable with rail and bottom-bar
  * navigation.
  */
 @Composable

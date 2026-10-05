@@ -272,8 +272,7 @@ fun PageViewer(
 /**
  * What the viewer shows when there is no page to page through: a spinner while the count resolves,
  * a message for a document with no pages, and a retry for a count that could not be read (a corrupt
- * or unreadable file). The prior viewer keyed a single spinner off `count <= 0`, so a failure span
- * forever; separating the states is the fix for that infinite spinner.
+ * or unreadable file). Kept apart so a count that failed never spins forever.
  */
 @Composable
 private fun PageCountPlaceholder(
@@ -319,8 +318,8 @@ private const val WHEEL_PAN_STEP = 60f
 
 /**
  * A single page in the pager. Renders the cached bitmap (loading it if absent), applies the
- * transform via a top-left-origin graphics layer (so [ViewerTransform] math is exact), and wires up
- * pinch + double-tap on the current page only.
+ * transform through a graphics layer scaled about the page's centre (as [ViewerTransform]'s math
+ * assumes), and wires up pinch + double-tap on the current page only.
  */
 @Composable
 private fun PageSlide(

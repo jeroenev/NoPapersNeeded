@@ -343,7 +343,7 @@ private fun FieldFilterRow(
 /**
  * Below which the two from/to fields stack. A single filter row needs enough width for two labelled
  * fields side by side; narrower than this they read better one above the other, and inline error
- * text under an invalid numeric field no longer squeezes its sibling.
+ * text under an invalid numeric field does not squeeze its sibling.
  */
 private val BoundsStackBelow = 360.dp
 
@@ -499,8 +499,8 @@ private fun TagChoices(
                 )
             }
         }
-        // The group as a whole no longer scrolls, so a truncated list points at the search box
-        // rather than silently dropping the overflow.
+        // The group does not scroll, so a truncated list points at the search box rather than
+        // silently dropping the overflow.
         if (ordered.size > shown.size) {
             Text(
                 stringResource(Res.string.ux_refine_tag_search),

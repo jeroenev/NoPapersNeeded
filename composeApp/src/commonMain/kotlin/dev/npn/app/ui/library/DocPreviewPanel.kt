@@ -41,8 +41,8 @@ import org.jetbrains.compose.resources.stringResource
  * Side-panel document view on wide layouts, with everything the compact full-screen version has:
  * the shared [DocumentView] (the page viewer as the leading **Preview** tab, the metadata tabs,
  * fully editable) under a header with the document actions (share/export, rename, re-run OCR,
- * split, bake, trash). Wide layouts never navigate to the full-screen detail route — this panel is
- * the document view there.
+ * split, bake, trash). Opening a document on a wide layout shows it here; the header's expand
+ * button ([onExpand]) opens the full-screen detail route.
  *
  * The panel hosts the document's viewmodel in a store scoped to the previewed document, so
  * switching documents (or closing the panel) disposes the previous view model instead of piling

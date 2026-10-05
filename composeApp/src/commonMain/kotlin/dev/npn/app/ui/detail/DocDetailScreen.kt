@@ -41,9 +41,9 @@ import no_papers_needed.composeapp.generated.resources.detail_previous_document
 import org.jetbrains.compose.resources.stringResource
 
 /**
- * Full-screen document view used on compact layouts (phones, narrow windows): the shared
- * [DocumentView] under a top bar that pages through the library's browse order. Wide layouts never
- * navigate here — the library's side panel carries the same content there.
+ * Full-screen document view: the shared [DocumentView] under a top bar that pages through the
+ * library's browse order. Compact layouts (phones, narrow windows) open documents here; wide ones
+ * show them in the library's side panel and come here only through its expand button.
  */
 @Composable
 fun DocDetailScreen(

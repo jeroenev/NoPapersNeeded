@@ -67,10 +67,9 @@ fun LibraryFilter.matchIncludedTags(matchAll: Boolean): LibraryFilter {
  * One removable filter chip: what facet it stands for, so the display layer can render a localized
  * label and know how to clear it, without re-encoding the filter's shape.
  *
- * Each variant carries only the data the label needs. Removal is NOT a closure here — the pure
- * [ActiveFilterChip.remove] does the clearing so the "which field does this chip clear" rule is asserted
- * in tests rather than buried in a composable's `buildList`. The display side matches on the
- * variant purely to pick a `stringResource`.
+ * Each variant carries only the data the label needs. Removal is not a closure here: the pure
+ * [removeChip] does the clearing, so the "which field does this chip clear" rule is asserted in
+ * tests. The display side matches on the variant purely to pick a `stringResource`.
  */
 sealed interface ActiveFilterChip {
     /**
@@ -79,8 +78,8 @@ sealed interface ActiveFilterChip {
      *
      * Carries only the [count], because the ids themselves are not something a label can say and
      * removal clears the whole set anyway. Unlike every other facet this one cannot be re-created
-     * from the filter sheet, so without a chip it is an invisible restriction the user cannot
-     * undo — which is exactly the bug this variant exists to prevent.
+     * from the filter sheet, so without a chip it would be an invisible restriction the user
+     * cannot undo.
      */
     data class DocIds(
         val count: Int,
@@ -161,9 +160,7 @@ fun LibraryFilter.activeChips(): List<ActiveFilterChip> =
  * Clear the single facet [chip] stands for from [filter] and return the updated filter.
  *
  * The inverse of [activeChips]: for a tag chip it removes just that tag from just its bucket (so a
- * NOT-tag chip never touches the AND list), and for a single-value facet it nulls that field. This
- * is the assertable "removing this chip clears exactly this" rule that used to live as per-chip
- * closures inside the composable.
+ * NOT-tag chip never touches the AND list), and for a single-value facet it nulls that field.
  */
 fun LibraryFilter.removeChip(chip: ActiveFilterChip): LibraryFilter =
     when (chip) {

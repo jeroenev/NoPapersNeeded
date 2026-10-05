@@ -322,8 +322,8 @@ class DocDetailViewModel(
 
     /**
      * What the panel shows before the first combined emission. [ReviewMode.DEFAULT] matches the
-     * initial value of the review-mode flow, so the seeded badge is exactly what the previous
-     * `item.effectiveReviewed(reviewMode)` at the call site produced on its first frame.
+     * initial value of the review-mode flow, so the seeded reviewed badge does not flicker when
+     * that emission arrives.
      */
     private fun seedState(item: DocListItem?): MetadataUiState =
         MetadataUiState(

@@ -6,8 +6,8 @@ import androidx.compose.ui.geometry.Size
 /**
  * Zoom + pan state for a single page, expressed in the container's coordinate space. [offset] is the
  * translation applied to the page *after* it has been fit-scaled into the container and scaled by
- * [zoom]; the origin is the top-left of the container (matching `transformOrigin = TopLeft` in the
- * viewer's graphicsLayer, which makes the math below exact).
+ * [zoom] about its centre (the viewer's graphicsLayer uses `TransformOrigin(0.5f, 0.5f)`, which the
+ * math below assumes); at a zero offset the page sits centred in the container.
  *
  * All operations are pure so the gesture-critical bits (centroid anchoring, pan clamping) are unit
  * testable in plain JVM tests without a Compose runtime.
@@ -98,9 +98,9 @@ fun clampPan(
  * clamp the resulting pan to keep the page inside [container]. This is the standard "zoom toward the
  * gesture focus" update: the container point under the centroid stays put as the scale changes.
  *
- * With `transformOrigin = TopLeft`, a point p in container space maps from content space c as
- * `p = c*zoom + offset + center`, where `center` recenters the fitted page. Holding the content
- * point under [centroid] fixed across the zoom change gives the offset update below.
+ * With the scale applied about the page's centre, a content point c (measured from that centre)
+ * lands at `p = center + c*zoom + offset`, where `center` is the container's centre. Holding the
+ * content point under [centroid] fixed across the zoom change gives the offset update below.
  */
 fun ViewerTransform.applyGesture(
     zoomChange: Float,
