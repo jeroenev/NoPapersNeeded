@@ -233,9 +233,11 @@ and `.exe` installers (via WiX, downloaded automatically at build time, so netwo
 access is needed) and uses `icon.ico`; that Windows path has not been built and
 verified yet. They bundle Tesseract: `prepareWindowsTesseract` takes `tesseract.exe` and the
 DLLs it links from the pinned UB Mannheim installer, which needs 7-Zip on `PATH` to unpack,
-and adds the `tessdata_fast` models the Flatpak ships. A binutils `strip` (MinGW's, on the
-GitHub runners) removes ~100 MB of debug info from those DLLs. The Windows workflows run the
-bundled `tesseract --list-langs` after packaging, so a missing DLL fails the build.
+and adds the `tessdata_fast` models the Flatpak ships. Those models are listed once, in
+`desktopApp/tessdata-fast.txt`; a desktopApp test checks the Flatpak manifest against it. A
+binutils `strip` (MinGW's, on the GitHub runners) removes ~100 MB of debug info from those DLLs.
+The Windows workflows run the bundled `tesseract --list-langs` after packaging, so a missing DLL
+fails the build.
 
 Desktop, build a Linux AppImage:
 

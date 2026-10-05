@@ -67,8 +67,9 @@ modules:
         sha256: 9218e62793116d42a9f6d14cd9348518b27f382096eea3d0f2d1a24616bb5884
 
   # Fast models for the languages the app UI is translated into, the ones the OCR language setting
-  # is most likely set to; found through TESSDATA_PREFIX in finish-args. Windows builds bundle the
-  # same set (prepareWindowsTesseract in desktopApp/build.gradle.kts).
+  # is most likely set to; found through TESSDATA_PREFIX in finish-args. They are the models in
+  # desktopApp/tessdata-fast.txt, which Windows builds bundle too; a desktopApp test fails when
+  # these sources and that list differ.
   - name: tessdata
     buildsystem: simple
     build-commands:

@@ -267,17 +267,17 @@ val tesseractWindowsFiles =
         "zlib1.dll",
     )
 
-// tessdata_fast models, same release as the Flatpak manifest's: one per UI language.
+// The tessdata_fast models a Windows build bundles, one per UI language: tessdata-fast.txt.
 val tessdataFastBaseUrl = "https://github.com/tesseract-ocr/tessdata_fast/raw/4.1.0"
-val tessdataFastModels =
-    mapOf(
-        "eng" to "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
-        "nld" to "ced0e5e046a84c908a6aa7accbef9a232c4a5d9a8276691b81c6ee64d02963f6",
-        "deu" to "19d219bbb6672c869d20a9636c6816a81eb9a71796cb93ebe0cb1530e2cdb22d",
-        "fra" to "ced037562e8c80c13122dece28dd477d399af80911a28791a66a63ac1e3445ca",
-        "spa" to "6f2e04d02774a18f01bed44b1111f2cd7f3ba7ac9dc4373cd3f898a40ea6b464",
-        "por" to "c4932b937207a9514b7514d518b931a99938c02a28a5a5a553f8599ed58b7deb",
-    )
+val tessdataFastModelList = layout.projectDirectory.file("tessdata-fast.txt")
+val tessdataFastModels = providers.fileContents(tessdataFastModelList).asText.map(TessdataModels::parse)
+
+// BundledTessdataTest holds the Flatpak manifest's models and OcrLanguages.BUNDLED to that same
+// list. It reads the files from the project directory, its working directory.
+tasks.test {
+    inputs.files(tessdataFastModelList, "flatpak/io.github.jeroenev.NoPapersNeeded.yml")
+    systemProperty("npn.tessdataFastBaseUrl", tessdataFastBaseUrl)
+}
 
 val prepareWindowsTesseract =
     tasks.register<PrepareWindowsTesseractTask>("prepareWindowsTesseract") {

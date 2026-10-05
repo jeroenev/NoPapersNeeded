@@ -12,7 +12,8 @@ object OcrLanguages {
 
     /**
      * Models for the languages the app UI is translated into, in picker order. Windows builds and
-     * the Flatpak bundle exactly these; other Linux installs have whichever the user installed.
+     * the Flatpak bundle exactly these (desktopApp/tessdata-fast.txt, which a desktopApp test holds
+     * this list to); other Linux installs have whichever the user installed.
      */
     val BUNDLED: List<String> = listOf(ENGLISH, "nld", "deu", "fra", "spa", "por")
 
