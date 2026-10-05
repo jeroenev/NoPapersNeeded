@@ -25,6 +25,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.OpenFailure
 import dev.npn.app.platform.defaultLibraryLocation
 import dev.npn.app.platform.supportsLibraryFolderCreation
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.TextInputDialog
 import no_papers_needed.composeapp.generated.resources.Res
@@ -167,10 +168,8 @@ private fun LibraryChoices(
             ) {
                 Text(stringResource(Res.string.common_onboarding_use_recommended))
             }
-            Text(
+            HelpText(
                 text = stringResource(Res.string.common_onboarding_recommended_help, recommended),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 textAlign = TextAlign.Center,
             )
         }

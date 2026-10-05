@@ -9,6 +9,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
@@ -84,7 +85,7 @@ private fun InboxWorkflowToggle(
         checked = current == ReviewMode.INBOX_WORKFLOW,
         onCheckedChange = { checked -> if (checked) showMigration = true else onUntaggedOnly() },
     )
-    SettingsHelpText(stringResource(Res.string.common_settings_syncs_across_devices))
+    HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
 
     if (showMigration) {
         ReviewMigrationDialog(

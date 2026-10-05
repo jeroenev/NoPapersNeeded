@@ -42,6 +42,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TopBarAction
@@ -464,11 +465,7 @@ private fun MissingList(
                     )
                     val candidates = relinkByOld[doc.docId].orEmpty()
                     if (candidates.isEmpty()) {
-                        Text(
-                            stringResource(Res.string.common_trash_no_relink_candidates),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
+                        HelpText(stringResource(Res.string.common_trash_no_relink_candidates))
                     } else {
                         candidates.sortedByDescending { it.score }.forEach { c ->
                             Row(

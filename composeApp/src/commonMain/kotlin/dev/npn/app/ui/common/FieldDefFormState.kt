@@ -227,9 +227,7 @@ private fun TypeDropdown(
             Text(fieldTypeLabel(current))
             Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
         }
-        note?.let {
-            Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-        }
+        note?.let { HelpText(it) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             FieldType.entries.forEach { option ->
                 DropdownMenuItem(

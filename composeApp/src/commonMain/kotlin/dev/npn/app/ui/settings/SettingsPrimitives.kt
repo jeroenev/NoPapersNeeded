@@ -26,6 +26,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.HelpText
 
 // The building blocks every settings pane is made of. Before these existed each pane hand-rolled
 // the same `Row` + weighted label column + trailing `Switch` (five times) and the same
@@ -64,20 +65,6 @@ internal fun SettingsSubheading(title: String) {
     )
 }
 
-/** Secondary explanatory copy under a control. */
-@Composable
-internal fun SettingsHelpText(
-    help: String,
-    modifier: Modifier = Modifier,
-) {
-    Text(
-        text = help,
-        style = MaterialTheme.typography.bodySmall,
-        color = MaterialTheme.colorScheme.onSurfaceVariant,
-        modifier = modifier,
-    )
-}
-
 /** A labelled toggle with optional help copy underneath. */
 @Composable
 internal fun SettingsSwitchRow(
@@ -101,7 +88,7 @@ internal fun SettingsSwitchRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(text = title, style = MaterialTheme.typography.bodyLarge)
-            if (help != null) SettingsHelpText(help)
+            if (help != null) HelpText(help)
         }
         Switch(checked = checked, enabled = enabled, onCheckedChange = null)
     }
@@ -152,6 +139,6 @@ internal fun SettingsActionRow(
 ) {
     Column(modifier, verticalArrangement = Arrangement.spacedBy(GroupSpacing)) {
         OutlinedButton(onClick = onClick) { Text(text = label) }
-        if (help != null) SettingsHelpText(help)
+        if (help != null) HelpText(help)
     }
 }

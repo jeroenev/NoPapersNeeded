@@ -7,6 +7,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import dev.npn.app.platform.supportsSafStorage
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.LibraryLocations
@@ -57,12 +58,12 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
         if (safLibrary) {
-            SettingsHelpText(stringResource(Res.string.common_settings_library_saf_note))
+            HelpText(stringResource(Res.string.common_settings_library_saf_note))
         }
         // A direct library whose grant was revoked still opens what the app itself wrote, but not
         // what Syncthing wrote next to it: say so where the user looks for the library.
         if (location != null && !safLibrary && !storage.usable) {
-            SettingsHelpText(stringResource(Res.string.common_settings_storage_access_missing))
+            HelpText(stringResource(Res.string.common_settings_storage_access_missing))
             SettingsActionRow(
                 label = stringResource(Res.string.common_storage_access_grant),
                 onClick = storage.request,
@@ -139,7 +140,7 @@ private fun StoragePathRuleEditor(
         isError = evaluation.error != null,
         modifier = Modifier.fillMaxWidth(),
     )
-    SettingsHelpText(stringResource(Res.string.common_settings_storage_variables, STORAGE_PATH_VARIABLES))
+    HelpText(stringResource(Res.string.common_settings_storage_variables, STORAGE_PATH_VARIABLES))
 }
 
 /** The fictional document the template preview is rendered against. */

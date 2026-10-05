@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.ai.AiCheck
@@ -136,7 +137,7 @@ private fun AiEndpointSettings(
         optionLabel = { it.displayName },
         onSelect = vm::setAiProvider,
     )
-    SettingsHelpText(stringResource(Res.string.common_settings_ai_provider_help))
+    HelpText(stringResource(Res.string.common_settings_ai_provider_help))
     if (state.aiProvider.editableBaseUrl) {
         AiBaseUrlField(
             provider = state.aiProvider,
@@ -176,7 +177,7 @@ private fun AiBehaviourSettings(
         current = state.aiReasoningEdit,
         onSelect = { level -> vm.edit { it.copy(aiReasoningEdit = level) } },
     )
-    SettingsHelpText(stringResource(Res.string.common_settings_reasoning_help))
+    HelpText(stringResource(Res.string.common_settings_reasoning_help))
     AiTagCapDefaults(
         maxTagsPerDoc = state.aiMaxTagsPerDoc,
         onSetMaxTagsPerDoc = { value -> vm.edit { it.copy(aiMaxTagsPerDoc = value) } },
@@ -206,7 +207,7 @@ private fun AiBehaviourSettings(
         checked = state.aiOcrAuto,
         onCheckedChange = { on -> vm.edit { it.copy(aiOcrAuto = on) } },
     )
-    SettingsHelpText(stringResource(Res.string.common_settings_ai_request_help))
+    HelpText(stringResource(Res.string.common_settings_ai_request_help))
 }
 
 /**
@@ -248,7 +249,7 @@ private fun AiSelfTestSection(
                 color = MaterialTheme.colorScheme.error,
             )
         }
-        SettingsHelpText(stringResource(Res.string.common_settings_ai_test_help))
+        HelpText(stringResource(Res.string.common_settings_ai_test_help))
     }
 }
 
@@ -273,7 +274,7 @@ private fun AiCheckRow(outcome: AiCheckOutcome) {
         )
         Column(Modifier.weight(1f)) {
             Text(text = stringResource(checkLabel(outcome.check)), style = MaterialTheme.typography.bodyMedium)
-            SettingsHelpText(
+            HelpText(
                 buildString {
                     append(stringResource(checkStatusLabel(outcome.status)))
                     outcome.detail?.let { append(" — $it") }

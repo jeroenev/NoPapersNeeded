@@ -175,10 +175,8 @@ private fun TagInputSuggestions(
             }
         }
     } else if (input.isNotBlank()) {
-        Text(
+        HelpText(
             stringResource(Res.string.common_create_tag_hint, input.trim()),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
             modifier = Modifier.padding(horizontal = 4.dp),
         )
     }

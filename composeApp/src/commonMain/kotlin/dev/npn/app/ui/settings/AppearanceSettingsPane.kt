@@ -1,6 +1,7 @@
 package dev.npn.app.ui.settings
 
 import androidx.compose.runtime.Composable
+import dev.npn.app.ui.common.HelpText
 import dev.npn.core.app.ViewType
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_default_view
@@ -38,7 +39,7 @@ internal fun AppearanceSettingsPane(context: SettingsPaneContext) {
             optionLabel = { viewTypeLabel(it) },
             onSelect = { v -> context.vm.edit { it.copy(defaultViewType = v) } },
         )
-        SettingsHelpText(stringResource(Res.string.common_settings_grid_size_help))
+        HelpText(stringResource(Res.string.common_settings_grid_size_help))
         SettingsSwitchRow(
             title = stringResource(Res.string.common_settings_landscape_columns),
             help = stringResource(Res.string.common_settings_landscape_columns_help),
@@ -54,7 +55,7 @@ internal fun AppearanceSettingsPane(context: SettingsPaneContext) {
             optionLabel = { appLanguageLabel(it) },
             onSelect = { lang -> context.vm.edit { it.copy(appLanguage = lang) } },
         )
-        SettingsHelpText(stringResource(Res.string.common_settings_language_help))
+        HelpText(stringResource(Res.string.common_settings_language_help))
     }
 }
 

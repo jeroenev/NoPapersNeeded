@@ -38,6 +38,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.FieldDefForm
 import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.FieldEditor
+import dev.npn.app.ui.common.HelpText
 import dev.npn.core.app.Doc
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -49,7 +50,6 @@ import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.common_save
 import no_papers_needed.composeapp.generated.resources.detail_add_field
 import no_papers_needed.composeapp.generated.resources.detail_add_to_fields
-import no_papers_needed.composeapp.generated.resources.detail_fields
 import no_papers_needed.composeapp.generated.resources.detail_new_field
 import no_papers_needed.composeapp.generated.resources.detail_orphan_fields
 import no_papers_needed.composeapp.generated.resources.detail_remove_field
@@ -89,11 +89,7 @@ internal fun FieldsSection(
                     onRemove = { actions.removeField(def.key) }.takeIf { !def.showByDefault },
                 )
                 if (def.key == FieldKeys.TITLE) {
-                    Text(
-                        stringResource(Res.string.detail_title_hint),
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    HelpText(stringResource(Res.string.detail_title_hint))
                 }
             }
         }

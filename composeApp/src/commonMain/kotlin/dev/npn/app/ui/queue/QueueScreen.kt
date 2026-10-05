@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.EmptyState
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.StatusBadge
 import dev.npn.app.ui.common.TechnicalDetails
@@ -150,10 +151,8 @@ private fun QueueList(
             }
         }
         item {
-            Text(
+            HelpText(
                 stringResource(Res.string.queue_help),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
             )
         }

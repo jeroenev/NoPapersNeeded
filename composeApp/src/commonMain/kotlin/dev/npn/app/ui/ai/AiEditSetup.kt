@@ -33,6 +33,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.NumericField
 import dev.npn.core.app.AiTagging
@@ -276,19 +277,11 @@ private fun FieldSection(
     vm: AiEditViewModel,
 ) {
     SetupSection(stringResource(Res.string.ai_edit_fields)) {
-        Text(
-            stringResource(Res.string.ai_edit_fields_help),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        HelpText(stringResource(Res.string.ai_edit_fields_help))
         // The registry is the one part of this form that arrives asynchronously, and an empty list
         // reads exactly like a library with no fields, so say which one it is.
         if (!ui.registryLoaded) {
-            Text(
-                stringResource(Res.string.ai_edit_fields_loading),
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            HelpText(stringResource(Res.string.ai_edit_fields_loading))
             return@SetupSection
         }
         val labels = ui.fields.associate { it.key to it.label }
@@ -407,11 +400,7 @@ private fun RunPlacementOption(
                     color = MaterialTheme.colorScheme.primary,
                 )
             }
-            Text(
-                help,
-                style = MaterialTheme.typography.bodySmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-            )
+            HelpText(help)
         }
     }
 }
@@ -439,11 +428,7 @@ private fun AdvancedSection(
             )
         }
         if (!expanded) return@Column
-        Text(
-            stringResource(Res.string.ai_edit_advanced_help),
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        HelpText(stringResource(Res.string.ai_edit_advanced_help))
         if (ui.includeTags) {
             NumericField(
                 value = ui.maxTags,

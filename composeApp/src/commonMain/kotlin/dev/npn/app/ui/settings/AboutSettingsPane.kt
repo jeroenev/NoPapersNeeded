@@ -5,6 +5,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import dev.npn.app.BuildInfo
 import dev.npn.app.platform.checksForUpdates
+import dev.npn.app.ui.common.HelpText
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help
@@ -25,7 +26,7 @@ internal fun AboutSettingsPane(context: SettingsPaneContext) {
                 ),
             style = MaterialTheme.typography.bodyMedium,
         )
-        SettingsHelpText(stringResource(Res.string.common_settings_about_help))
+        HelpText(stringResource(Res.string.common_settings_about_help))
         // Inside Flatpak the package manager updates the app, so there is nothing to switch.
         if (checksForUpdates()) {
             SettingsSwitchRow(

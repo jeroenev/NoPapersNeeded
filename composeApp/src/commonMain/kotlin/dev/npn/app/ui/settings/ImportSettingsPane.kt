@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.platform.FolderAccess
 import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.persistDirectoryAccess
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalAppLocale
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.core.ocr.OcrLanguages
@@ -87,7 +88,7 @@ internal fun ImportSettingsPane(context: SettingsPaneContext) {
                 onChange = { value -> context.vm.edit { it.copy(ocrLanguage = value) } },
             )
         } else {
-            SettingsHelpText(stringResource(Res.string.common_settings_ocr_android_help))
+            HelpText(stringResource(Res.string.common_settings_ocr_android_help))
         }
     }
 
@@ -126,7 +127,7 @@ private fun WatchedFolderSettings(
                     }
             if (location != null) onSetFolder(location)
         }
-    SettingsHelpText(stringResource(Res.string.common_settings_watched_folder_help))
+    HelpText(stringResource(Res.string.common_settings_watched_folder_help))
     Text(
         text = watchedFolder ?: stringResource(Res.string.common_settings_no_watched_folder),
         style = MaterialTheme.typography.bodyMedium,
@@ -199,7 +200,7 @@ private fun OcrLanguageSettings(
             )
         }
     }
-    SettingsHelpText(stringResource(Res.string.common_settings_ocr_languages_help))
+    HelpText(stringResource(Res.string.common_settings_ocr_languages_help))
     if (!automatic) {
         var other by remember { mutableStateOf("") }
         val add = {
@@ -221,7 +222,7 @@ private fun OcrLanguageSettings(
                 Text(text = stringResource(Res.string.common_settings_ocr_add_language))
             }
         }
-        SettingsHelpText(
+        HelpText(
             stringResource(Res.string.common_settings_ocr_other_language_help, OTHER_OCR_LANGUAGE_EXAMPLES),
         )
     }

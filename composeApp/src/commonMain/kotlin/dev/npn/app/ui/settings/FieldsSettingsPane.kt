@@ -37,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.FieldDefForm
 import dev.npn.app.ui.common.FieldDefFormState
+import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.fieldTypeLabel
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -80,7 +81,7 @@ internal fun FieldsSettingsPane(
     var adding by remember { mutableStateOf(false) }
     var deleting by remember { mutableStateOf<FieldDef?>(null) }
 
-    SettingsHelpText(stringResource(Res.string.common_settings_document_fields_help))
+    HelpText(stringResource(Res.string.common_settings_document_fields_help))
     fields.forEachIndexed { index, def ->
         key(def.key) {
             FieldRow(
@@ -98,7 +99,7 @@ internal fun FieldsSettingsPane(
         Icon(Icons.Filled.Add, contentDescription = null)
         Text(stringResource(Res.string.detail_add_field), modifier = Modifier.padding(start = 8.dp))
     }
-    SettingsHelpText(stringResource(Res.string.common_settings_syncs_across_devices))
+    HelpText(stringResource(Res.string.common_settings_syncs_across_devices))
 
     if (adding) {
         FieldDefDialog(

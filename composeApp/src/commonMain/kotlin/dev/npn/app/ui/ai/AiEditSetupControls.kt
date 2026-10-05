@@ -35,6 +35,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.HelpText
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.EditScope
 import no_papers_needed.composeapp.generated.resources.Res
@@ -129,13 +130,7 @@ internal fun SwitchRow(
     ) {
         Column(Modifier.weight(1f)) {
             Text(label, style = MaterialTheme.typography.bodyLarge)
-            help?.let {
-                Text(
-                    it,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
-            }
+            help?.let { HelpText(it) }
         }
         // Null callback: the whole row is the toggle, so the switch must not be a second target.
         Switch(checked = checked, onCheckedChange = null)

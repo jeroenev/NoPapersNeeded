@@ -23,6 +23,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.HelpText
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_task_change
 import no_papers_needed.composeapp.generated.resources.ai_edit_task_clean_tags
@@ -108,11 +109,7 @@ private fun TaskCard(
             )
             Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(stringResource(task.label), style = MaterialTheme.typography.titleSmall)
-                Text(
-                    stringResource(task.help),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                HelpText(stringResource(task.help))
             }
         }
     }
