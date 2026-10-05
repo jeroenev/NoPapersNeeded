@@ -78,12 +78,13 @@ class HlcWatermarkAllocator(
         val wall = clock.nowMillis()
         val capped = minOf(remote.physicalMillis, wall + CLAMP_MS)
         val nextPhysical = maxOf(wall, physicalMillis, capped)
-        counter = when {
-            nextPhysical == physicalMillis && nextPhysical == capped -> maxOf(counter, remote.counter) + 1
-            nextPhysical == physicalMillis -> counter + 1
-            nextPhysical == capped -> remote.counter + 1
-            else -> 0
-        }
+        counter =
+            when {
+                nextPhysical == physicalMillis && nextPhysical == capped -> maxOf(counter, remote.counter) + 1
+                nextPhysical == physicalMillis -> counter + 1
+                nextPhysical == capped -> remote.counter + 1
+                else -> 0
+            }
         physicalMillis = nextPhysical
     }
 

@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class HlcTest {
-
     @Test
     fun total_order_physical_then_counter_then_device() {
         val a = Hlc(100, 0, "z")
