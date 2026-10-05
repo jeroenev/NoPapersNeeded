@@ -1,20 +1,14 @@
 package dev.npn.app.ui.ai
 
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.selection.toggleable
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material3.Checkbox
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -30,18 +24,15 @@ import dev.npn.app.ui.common.SettingsSection
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.EditScope
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.ai_collapse
 import no_papers_needed.composeapp.generated.resources.ai_edit_field_mode_all
 import no_papers_needed.composeapp.generated.resources.ai_edit_field_mode_unfilled
 import no_papers_needed.composeapp.generated.resources.ai_edit_scope_count_batch
-import no_papers_needed.composeapp.generated.resources.ai_expand
 import no_papers_needed.composeapp.generated.resources.common_document_count
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 // The building blocks the AI-edit setup form is assembled from. They live apart from the form
-// itself so the page reads as "which sections exist" rather than "how a row is laid out", and so
-// the two review screens can reuse the expander without importing the whole setup.
+// itself so the page reads as "which sections exist" rather than "how a row is laid out".
 
 /** The two field modes in the order a picker should offer them: the safe one first. */
 private val FieldModes = listOf(AiFieldMode.UNFILLED, AiFieldMode.ALL)
@@ -63,39 +54,6 @@ internal fun SetupColumn(
     modifier: Modifier,
     content: @Composable ColumnScope.() -> Unit,
 ) = Column(modifier, verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
-
-/**
- * A row that expands or collapses what follows it.
- *
- * Deliberately a click, not a selection: an expander was previously built on `selectable`, which
- * announces the row as "selected" to a screen reader — a state this row does not have. The icon
- * carries the action's name, and the row itself is a button.
- */
-@Composable
-internal fun ExpanderRow(
-    expanded: Boolean,
-    onToggle: () -> Unit,
-    modifier: Modifier = Modifier,
-    enabled: Boolean = true,
-    showIcon: Boolean = true,
-    label: @Composable RowScope.() -> Unit,
-) {
-    Row(
-        modifier
-            .fillMaxWidth()
-            .clickable(enabled = enabled, role = Role.Button, onClick = onToggle),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        label()
-        if (showIcon) {
-            Icon(
-                if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                contentDescription =
-                    stringResource(if (expanded) Res.string.ai_collapse else Res.string.ai_expand),
-            )
-        }
-    }
-}
 
 /** One radio choice whose whole row is the target; the button itself is decoration. */
 @Composable

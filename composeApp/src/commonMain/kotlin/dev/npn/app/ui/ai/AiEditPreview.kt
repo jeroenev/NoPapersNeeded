@@ -17,6 +17,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DocThumbnail
+import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import no_papers_needed.composeapp.generated.resources.Res

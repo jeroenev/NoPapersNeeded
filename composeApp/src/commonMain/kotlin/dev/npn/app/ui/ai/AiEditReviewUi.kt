@@ -48,6 +48,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
+import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.core.app.ApplyResult

@@ -3,8 +3,6 @@
 package dev.npn.app.ui.ai
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -32,8 +30,6 @@ import androidx.compose.material.icons.outlined.Add
 import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.Delete
 import androidx.compose.material.icons.outlined.Description
-import androidx.compose.material.icons.outlined.ExpandLess
-import androidx.compose.material.icons.outlined.ExpandMore
 import androidx.compose.material.icons.outlined.History
 import androidx.compose.material.icons.outlined.Info
 import androidx.compose.material.icons.outlined.Search
@@ -75,7 +71,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.ExpandIcon
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.expander
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
@@ -89,10 +87,8 @@ import no_papers_needed.composeapp.generated.resources.ai_ask_documents
 import no_papers_needed.composeapp.generated.resources.ai_assistant_title
 import no_papers_needed.composeapp.generated.resources.ai_chat_history
 import no_papers_needed.composeapp.generated.resources.ai_clear_conversation
-import no_papers_needed.composeapp.generated.resources.ai_collapse
 import no_papers_needed.composeapp.generated.resources.ai_configure_in_settings
 import no_papers_needed.composeapp.generated.resources.ai_delete_chat
-import no_papers_needed.composeapp.generated.resources.ai_expand
 import no_papers_needed.composeapp.generated.resources.ai_new_chat
 import no_papers_needed.composeapp.generated.resources.ai_no_output
 import no_papers_needed.composeapp.generated.resources.ai_open_all_documents
@@ -416,7 +412,7 @@ private fun ToolRow(item: TranscriptItem.ToolUse) {
             modifier =
                 Modifier
                     .fillMaxWidth()
-                    .clickable(enabled = !item.running) { expanded = !expanded }
+                    .expander(expanded, enabled = !item.running) { expanded = !expanded }
                     .padding(vertical = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -436,12 +432,8 @@ private fun ToolRow(item: TranscriptItem.ToolUse) {
             if (item.running) {
                 CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
             } else {
-                Icon(
-                    if (expanded) Icons.Outlined.ExpandLess else Icons.Outlined.ExpandMore,
-                    contentDescription =
-                        stringResource(
-                            if (expanded) Res.string.ai_collapse else Res.string.ai_expand,
-                        ),
+                ExpandIcon(
+                    expanded,
                     modifier = Modifier.size(18.dp),
                     tint = MaterialTheme.colorScheme.onSurfaceVariant,
                 )

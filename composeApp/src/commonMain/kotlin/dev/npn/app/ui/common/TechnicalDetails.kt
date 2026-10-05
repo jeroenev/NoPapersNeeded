@@ -11,8 +11,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.semantics.collapse
-import androidx.compose.ui.semantics.expand
 import androidx.compose.ui.semantics.semantics
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_hide_technical_details
@@ -28,24 +26,11 @@ fun TechnicalDetails(
     if (details.isNullOrBlank()) return
     var expanded by rememberSaveable { mutableStateOf(false) }
     Column(modifier) {
-        // The label already flips between "Show"/"Hide"; the expand/collapse semantics action lets
-        // assistive tech announce and drive the disclosure state rather than reading a plain button.
+        // The label already flips between "Show"/"Hide"; the disclosure semantics let assistive
+        // tech announce and drive the state rather than reading a plain button.
         TextButton(
             onClick = { expanded = !expanded },
-            modifier =
-                Modifier.semantics {
-                    if (expanded) {
-                        collapse {
-                            expanded = false
-                            true
-                        }
-                    } else {
-                        expand {
-                            expanded = true
-                            true
-                        }
-                    }
-                },
+            modifier = Modifier.disclosure(expanded) { expanded = !expanded },
         ) {
             Text(
                 stringResource(
