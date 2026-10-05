@@ -3,7 +3,6 @@
   <ManuallySuppressedIssues/>
   <CurrentIssues>
     <ID>AbstractClassCanBeInterface:JournalOp.kt:JournalOp$JournalOp</ID>
-    <ID>AbstractClassCanBeInterface:SegmentWriter.kt:ForkCheck$ForkCheck</ID>
     <ID>CyclomaticComplexMethod:FoldedState.kt:FoldedState$fun apply</ID>
     <ID>EmptyWhileBlock:DocumentFilterTest.kt:DocumentFilterTest${}</ID>
     <ID>IgnoredReturnValue:AiEditRunTest.kt:AiEditRunScopeTest$docsFor(key(scope = EditScope.ALL))</ID>
@@ -28,8 +27,6 @@
     <ID>InjectDispatcher:SettingsRepositoryImpl.kt:SettingsRepositoryImpl$IO</ID>
     <ID>LoopWithTooManyJumpStatements:Indexer.kt:Indexer$for</ID>
     <ID>LoopWithTooManyJumpStatements:OcrPipeline.kt:OcrPipeline$for</ID>
-    <ID>MapGetWithNotNullAssertionOperator:AdaptersTest.kt:AdaptersTest$byDevice["devA"]!!</ID>
-    <ID>MapGetWithNotNullAssertionOperator:AdaptersTest.kt:AdaptersTest$byDevice["devB"]!!</ID>
     <ID>MapGetWithNotNullAssertionOperator:NpnDatabaseTest.kt:NpnDatabaseTest$counts["empty"]!!</ID>
     <ID>MapGetWithNotNullAssertionOperator:NpnDatabaseTest.kt:NpnDatabaseTest$counts["invoice"]!!</ID>
     <ID>MatchingDeclarationName:ExternalSource.desktop.kt:ExternalSource</ID>
@@ -41,8 +38,6 @@
     <ID>TooGenericExceptionThrown:OcrPipelineTest.kt:ThrowingOcrEngine$throw RuntimeException("boom")</ID>
     <ID>TooManyFunctions:DocumentDao.kt:DocumentDao</ID>
     <ID>TooManyFunctions:NpnDatabaseTest.kt:NpnDatabaseTest</ID>
-    <ID>UnsafeCallOnNullableType:AdaptersTest.kt:AdaptersTest$byDevice["devA"]!!</ID>
-    <ID>UnsafeCallOnNullableType:AdaptersTest.kt:AdaptersTest$byDevice["devB"]!!</ID>
     <ID>UnsafeCallOnNullableType:AiAutoEnricherRig.kt:Rig$db.documentDao().getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:AiOcrPipelineTest.kt:AiOcrPipelineTest$db.documentDao().getByDocId(docId)!!</ID>
     <ID>UnsafeCallOnNullableType:CompactionReconcileTest.kt:CompactionReconcileTest$db.documentDao().rowAtPath("a.pdf")!!</ID>
@@ -105,13 +100,11 @@
     <ID>UnsafeCallOnNullableType:ThumbnailServiceTest.kt:ThumbnailServiceTest$store.lastPng!!</ID>
     <ID>UnsafeCallOnNullableType:TrashLifecycleTest.kt:TrashLifecycleTest$rig.db .documentDao() .getByDocId(id)!!</ID>
     <ID>UnsafeCallOnNullableType:TrashLifecycleTest.kt:TrashLifecycleTest$rig.db.documentDao().getByDocId(id)!!</ID>
-    <ID>UseCheckOrError:InMemorySegmentStore.kt:InMemorySegmentStore$throw IllegalStateException("No such segment: ${ref.deviceId}/${ref.fileName}")</ID>
     <ID>UseOrEmpty:AiEditQueueTest.kt:title?.let { mapOf(FieldKeys.TITLE to it) } ?: emptyMap()</ID>
     <ID>UseOrEmpty:AiText.kt:AiText$(this[key] as? JsonArray) ?.mapNotNull { (it as? JsonPrimitive)?.takeIf { p -&gt; p.isString }?.contentOrNull } ?.map { it.trim() } ?.filter { it.isNotEmpty() } ?: emptyList()</ID>
     <ID>UseOrEmpty:AutoMatchRuleEntity.kt:tags?.split(',')?.map { it.trim() }?.filter { it.isNotEmpty() } ?: emptyList()</ID>
     <ID>UseOrEmpty:StoragePathTemplate.kt:StoragePathTemplate$value ?: ""</ID>
     <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(supersedes != null) { "Snapshot manifest supersedes must be an array" }</ID>
     <ID>UseRequireNotNull:SnapshotFormat.kt:SnapshotCodec$require(version != null) { "Snapshot manifest version must be an integer" }</ID>
-    <ID>VarCouldBeVal:HlcTest.kt:HlcTest$var now = 1000L</ID>
   </CurrentIssues>
 </SmellBaseline>
