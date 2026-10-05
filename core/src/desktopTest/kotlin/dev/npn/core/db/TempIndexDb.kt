@@ -10,7 +10,7 @@ import java.nio.file.Files
  */
 class TempIndexDb(
     prefix: String = "npn-test-db",
-    private val openIndex: (File) -> NpnDatabase = { npnDatabase(it) },
+    openIndex: (File) -> NpnDatabase = { npnDatabase(it) },
 ) : AutoCloseable {
     val dir: File = Files.createTempDirectory(prefix).toFile()
 

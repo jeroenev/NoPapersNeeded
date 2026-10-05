@@ -523,7 +523,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     documents.documents.value = listOf(listItem("d1"), listItem("d2"))
                 }
             val model = vm(session = session)
-            val emitted = collecting(model.documents.map { it?.items?.size ?: 0 })
+            collecting(model.documents)
             advanceUntilIdle()
             model.documents.value
                 ?.items
