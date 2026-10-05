@@ -329,7 +329,7 @@ private fun SettingsCategoryRow(
 }
 
 /**
- * Hosts one category's controls. Panes emit a run of [SettingsGroup]s and nothing else; the
+ * Hosts one category's controls. Panes emit a run of [SettingsSection]s and nothing else; the
  * scrolling, padding, and inter-group spacing all live here so no pane has to reproduce them.
  */
 @Composable

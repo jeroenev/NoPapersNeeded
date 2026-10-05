@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import dev.npn.app.BuildInfo
 import dev.npn.app.platform.checksForUpdates
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
@@ -17,7 +18,7 @@ import org.jetbrains.compose.resources.stringResource
 
 @Composable
 internal fun AboutSettingsPane(context: SettingsPaneContext) {
-    SettingsGroup(title = null) {
+    SettingsSection(title = null) {
         Text(
             text =
                 stringResource(

@@ -31,9 +31,8 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
-import androidx.compose.ui.semantics.heading
-import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.SettingsSection
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.EditScope
 import no_papers_needed.composeapp.generated.resources.Res
@@ -53,24 +52,17 @@ import org.jetbrains.compose.resources.stringResource
 /** The two field modes in the order a picker should offer them: the safe one first. */
 private val FieldModes = listOf(AiFieldMode.UNFILLED, AiFieldMode.ALL)
 
-/** Header + stacked full-width controls; the shared shape of every setup group. */
+/** One group of the setup form: a [SettingsSection] with the denser form's smaller heading. */
 @Composable
 internal fun SetupSection(
     title: String,
     content: @Composable ColumnScope.() -> Unit,
-) {
-    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-        Text(
-            title,
-            style = MaterialTheme.typography.titleSmall,
-            color = MaterialTheme.colorScheme.primary,
-            // Marks each group title as a heading so a screen reader can jump section to section
-            // down a long form instead of walking every control.
-            modifier = Modifier.semantics { heading() },
-        )
-        content()
-    }
-}
+) = SettingsSection(
+    title = title,
+    modifier = Modifier.fillMaxWidth(),
+    headingStyle = MaterialTheme.typography.titleSmall,
+    content = content,
+)
 
 @Composable
 internal fun SetupColumn(

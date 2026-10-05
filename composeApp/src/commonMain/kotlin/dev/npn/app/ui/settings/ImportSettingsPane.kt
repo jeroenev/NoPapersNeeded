@@ -32,6 +32,7 @@ import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.persistDirectoryAccess
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalAppLocale
+import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.core.ocr.OcrLanguages
@@ -72,7 +73,7 @@ private const val OTHER_OCR_LANGUAGE_EXAMPLES = "ita, pol"
  */
 @Composable
 internal fun ImportSettingsPane(context: SettingsPaneContext) {
-    SettingsGroup(title = stringResource(Res.string.common_settings_watched_folder)) {
+    SettingsSection(title = stringResource(Res.string.common_settings_watched_folder)) {
         WatchedFolderSettings(
             watchedFolder = context.state.watchedFolder,
             useSaf = context.state.useSafStorage,
@@ -82,7 +83,7 @@ internal fun ImportSettingsPane(context: SettingsPaneContext) {
         )
     }
 
-    SettingsGroup(title = stringResource(Res.string.common_settings_ocr)) {
+    SettingsSection(title = stringResource(Res.string.common_settings_ocr)) {
         if (ocrHasLanguageSetting()) {
             OcrLanguageSettings(
                 setting = context.state.ocrLanguage,
@@ -93,7 +94,7 @@ internal fun ImportSettingsPane(context: SettingsPaneContext) {
         }
     }
 
-    SettingsGroup(title = stringResource(Res.string.common_settings_auto_matching)) {
+    SettingsSection(title = stringResource(Res.string.common_settings_auto_matching)) {
         SettingsActionRow(
             label = stringResource(Res.string.common_settings_auto_matching_rules),
             onClick = context.onAutoMatchRules,

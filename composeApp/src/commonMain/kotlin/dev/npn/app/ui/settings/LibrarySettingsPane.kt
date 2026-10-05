@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
@@ -52,7 +53,7 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
     val location = context.state.libraryLocation
     val safLibrary = location != null && LibraryLocations.isContentUri(location)
     val storage = rememberStorageAccess()
-    SettingsGroup(title = null) {
+    SettingsSection(title = null) {
         Text(
             text = location ?: stringResource(Res.string.common_settings_no_library),
             style = MaterialTheme.typography.bodyMedium,
@@ -76,7 +77,7 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
         )
     }
 
-    SettingsGroup(title = stringResource(Res.string.common_settings_storage)) {
+    SettingsSection(title = stringResource(Res.string.common_settings_storage)) {
         StoragePathRuleEditor(
             template = context.state.storagePathTemplate,
             enabled = context.state.storagePathEnabled,
@@ -94,7 +95,7 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
     // Android only: the Storage Access Framework stays available for folders that have no path
     // (cloud document providers). It changes what the next folder choice persists, nothing else.
     if (supportsSafStorage()) {
-        SettingsGroup(title = stringResource(Res.string.common_settings_advanced)) {
+        SettingsSection(title = stringResource(Res.string.common_settings_advanced)) {
             SwitchRow(
                 label = stringResource(Res.string.common_settings_use_saf),
                 help = stringResource(Res.string.common_settings_use_saf_help),

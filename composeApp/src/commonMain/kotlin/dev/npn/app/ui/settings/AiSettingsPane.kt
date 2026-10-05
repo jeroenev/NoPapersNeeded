@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
+import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.ai.AiCheck
@@ -106,7 +107,7 @@ private val CheckIconSize = 20.dp
 internal fun AiSettingsPane(context: SettingsPaneContext) {
     val vm = context.vm
     val state = context.state
-    SettingsGroup(title = null) {
+    SettingsSection(title = null) {
         SwitchRow(
             label = stringResource(Res.string.common_settings_enable_ai),
             help = stringResource(Res.string.common_settings_ai_help),

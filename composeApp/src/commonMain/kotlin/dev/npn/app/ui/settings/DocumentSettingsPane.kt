@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
+import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
@@ -38,7 +39,7 @@ private const val TRASH_RETENTION_MAX_DIGITS = 4
  */
 @Composable
 internal fun DocumentSettingsPane(context: SettingsPaneContext) {
-    SettingsGroup(title = stringResource(Res.string.common_settings_document_fields)) {
+    SettingsSection(title = stringResource(Res.string.common_settings_document_fields)) {
         FieldsSettingsPane(
             fields = context.fields,
             usage = context.fieldUsage,
@@ -48,7 +49,7 @@ internal fun DocumentSettingsPane(context: SettingsPaneContext) {
         )
     }
 
-    SettingsGroup(title = stringResource(Res.string.common_settings_review_workflow)) {
+    SettingsSection(title = stringResource(Res.string.common_settings_review_workflow)) {
         InboxWorkflowToggle(
             current = context.reviewMode,
             onUntaggedOnly = context.vm::setUntaggedOnlyMode,
@@ -56,7 +57,7 @@ internal fun DocumentSettingsPane(context: SettingsPaneContext) {
         )
     }
 
-    SettingsGroup(title = stringResource(Res.string.common_settings_trash)) {
+    SettingsSection(title = stringResource(Res.string.common_settings_trash)) {
         NumericField(
             value = context.state.trashRetentionDays,
             onValueChange = { days -> context.vm.edit { it.copy(trashRetentionDays = days) } },

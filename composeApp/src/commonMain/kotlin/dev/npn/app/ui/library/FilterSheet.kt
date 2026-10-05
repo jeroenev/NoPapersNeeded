@@ -48,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DatePickerField
+import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.invalidNumberText
 import dev.npn.app.ui.common.rememberFieldLocale
@@ -527,11 +528,7 @@ private fun TagChoices(
 
 @Composable
 private fun SectionLabel(text: String) {
-    Text(
-        text = text,
-        style = MaterialTheme.typography.labelLarge,
-        color = MaterialTheme.colorScheme.primary,
-    )
+    SectionHeading(text, style = MaterialTheme.typography.labelLarge)
 }
 
 /**
@@ -547,11 +544,7 @@ private fun FilterFieldRow(
         Modifier.fillMaxWidth(),
         verticalArrangement = Arrangement.spacedBy(4.dp),
     ) {
-        Text(
-            text = label,
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.primary,
-        )
+        SectionLabel(label)
         selector()
     }
 }

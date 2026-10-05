@@ -2,6 +2,7 @@ package dev.npn.app.ui.settings
 
 import androidx.compose.runtime.Composable
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.core.app.ViewType
 import no_papers_needed.composeapp.generated.resources.Res
@@ -29,7 +30,7 @@ private val APP_LANGUAGES: List<String?> = listOf(null, "en", "nl", "de", "fr", 
 /** Device-local presentation: how the library renders by default, and in which language. */
 @Composable
 internal fun AppearanceSettingsPane(context: SettingsPaneContext) {
-    SettingsGroup(title = stringResource(Res.string.common_settings_views)) {
+    SettingsSection(title = stringResource(Res.string.common_settings_views)) {
         SettingsDropdown(
             buttonLabel =
                 stringResource(
@@ -49,7 +50,7 @@ internal fun AppearanceSettingsPane(context: SettingsPaneContext) {
         )
     }
 
-    SettingsGroup(title = stringResource(Res.string.common_settings_language)) {
+    SettingsSection(title = stringResource(Res.string.common_settings_language)) {
         SettingsDropdown(
             buttonLabel = appLanguageLabel(context.state.appLanguage),
             options = APP_LANGUAGES,
