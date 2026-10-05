@@ -5,6 +5,7 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
+import dev.npn.app.ui.library.reviewMarkerIsAuthoritative
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
@@ -456,7 +457,7 @@ class AiEditViewModel(
                 runCatchingCancellable { reviewConfig.reviewMode.first() }
                     .onFailure(::reportSetupFailure)
                     .getOrDefault(ReviewMode.DEFAULT)
-            _ui.update { it.copy(reviewQueueAvailable = mode == ReviewMode.INBOX_WORKFLOW) }
+            _ui.update { it.copy(reviewQueueAvailable = mode.reviewMarkerIsAuthoritative) }
         }
         // Saved views double as AI-edit scopes, so keep the list live and preselect the first one.
         viewModelScope.launch {

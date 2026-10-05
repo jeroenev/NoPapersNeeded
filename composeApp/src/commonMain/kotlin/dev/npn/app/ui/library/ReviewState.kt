@@ -6,12 +6,13 @@ import dev.npn.core.model.ReviewMode
 /**
  * Whether the stored `reviewed` marker is authoritative in this review mode.
  *
- * The single source of the rule that used to be spelled out as `mode == INBOX_WORKFLOW` at three
- * separate call sites. In [ReviewMode.INBOX_WORKFLOW] the user maintains an explicit reviewed flag,
- * so the stored marker is real and the UI both shows a reviewed badge and offers a reviewed filter.
- * In [ReviewMode.UNTAGGED_ONLY] review state is derived from tags (reviewed == tagged) and the
- * stored marker is stale, so both the badge and the filter are hidden — surfacing a stale flag
- * would lie to the user. Callers that need the derived value use [DocListItem.effectiveReviewed].
+ * The one place the rule is spelled out; every screen asks this instead of comparing the mode. In
+ * [ReviewMode.INBOX_WORKFLOW] the user maintains an explicit reviewed flag, so the stored marker is
+ * real: the UI shows a reviewed badge, offers a reviewed filter and the mark-reviewed actions, and
+ * counts the review queue. In [ReviewMode.UNTAGGED_ONLY] review state is derived from tags
+ * (reviewed == tagged) and the stored marker is stale, so all of those are hidden — surfacing a
+ * stale flag would lie to the user. Callers that need the derived value use
+ * [DocListItem.effectiveReviewed].
  *
  * Deliberately an exhaustive `when` rather than an `== INBOX_WORKFLOW` comparison: a new
  * [ReviewMode] must fail to compile here and be given an explicit answer, instead of silently

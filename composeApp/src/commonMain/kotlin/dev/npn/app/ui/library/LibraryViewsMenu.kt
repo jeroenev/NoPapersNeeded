@@ -64,7 +64,7 @@ internal fun LibraryViewsMenuButton(
     onTogglePinSavedView: (SavedView) -> Unit,
 ) {
     var open by remember { mutableStateOf(false) }
-    val inbox = reviewMode == ReviewMode.INBOX_WORKFLOW
+    val inbox = reviewMode.reviewMarkerIsAuthoritative
     Box {
         TooltipIconButton(
             icon = Icons.Outlined.Bookmarks,

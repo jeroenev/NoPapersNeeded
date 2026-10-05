@@ -548,7 +548,7 @@ private fun LibraryContent(
             // only appears when there is something to review, so a cleared inbox does not leave a
             // permanent "0" in the way. The chip's selected state mirrors whether the INBOX_WORKFLOW
             // preset (unreviewedOrUntagged) is the active filter, so it reads as a filter, not a count.
-            if (reviewMode == ReviewMode.INBOX_WORKFLOW && !ui.selectionMode && reviewCount > 0) {
+            if (reviewMode.reviewMarkerIsAuthoritative && !ui.selectionMode && reviewCount > 0) {
                 val reviewFilterActive = ui.filter.unreviewedOrUntagged
                 FilterChip(
                     selected = reviewFilterActive,
@@ -887,7 +887,7 @@ private fun SelectionTopBar(
             add(selectAll)
             if (!wide) add(removeTag)
             if (!wide) aiEdit?.let { add(it) }
-            if (reviewMode == ReviewMode.INBOX_WORKFLOW) {
+            if (reviewMode.reviewMarkerIsAuthoritative) {
                 add(
                     TopBarAction(
                         icon = Icons.Filled.CheckCircle,

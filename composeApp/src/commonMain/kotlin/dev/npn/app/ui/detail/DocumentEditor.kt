@@ -35,8 +35,8 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TechnicalDetails
+import dev.npn.app.ui.library.reviewMarkerIsAuthoritative
 import dev.npn.core.model.FieldType
-import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_saved
 import no_papers_needed.composeapp.generated.resources.detail_saving
@@ -118,7 +118,7 @@ internal fun DocumentEditor(
             onSave = { store.save(docId) },
             onDiscard = { store.discard(docId) },
             onReviewed =
-                onReviewed?.takeIf { state.document.reviewMode == ReviewMode.INBOX_WORKFLOW }?.let { next ->
+                onReviewed?.takeIf { state.document.reviewMode.reviewMarkerIsAuthoritative }?.let { next ->
                     { store.save(docId, reviewed = true, onSaved = next) }
                 },
             hasNext = hasNext,

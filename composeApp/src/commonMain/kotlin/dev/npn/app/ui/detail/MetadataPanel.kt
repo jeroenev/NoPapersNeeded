@@ -70,6 +70,7 @@ import dev.npn.app.ui.common.TagSuggestionLabel
 import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.app.ui.common.formatEpochDate
+import dev.npn.app.ui.library.reviewMarkerIsAuthoritative
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
@@ -311,7 +312,7 @@ private fun ReviewStatusSection(
     reviewed: Boolean,
     onSetReviewed: (Boolean) -> Unit,
 ) {
-    if (reviewMode != ReviewMode.INBOX_WORKFLOW) return
+    if (!reviewMode.reviewMarkerIsAuthoritative) return
     Row(
         Modifier.fillMaxWidth(),
         horizontalArrangement = Arrangement.SpaceBetween,
