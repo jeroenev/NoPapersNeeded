@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.CallMerge
 import androidx.compose.material.icons.automirrored.filled.DriveFileMove
 import androidx.compose.material.icons.automirrored.filled.Help
 import androidx.compose.material.icons.automirrored.filled.Label
@@ -16,10 +17,13 @@ import androidx.compose.material.icons.automirrored.filled.LabelOff
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteForever
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.RestoreFromTrash
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.TextFields
+import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material3.Button
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
@@ -29,6 +33,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.formatEpochDateTime
+import dev.npn.app.ui.common.resolve
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_retry
 import no_papers_needed.composeapp.generated.resources.common_unknown_error
@@ -111,6 +116,9 @@ private fun HistoryEventKind.icon() =
     when (this) {
         HistoryEventKind.TAG_ADD -> Icons.AutoMirrored.Filled.Label
         HistoryEventKind.TAG_REMOVE -> Icons.AutoMirrored.Filled.LabelOff
+        HistoryEventKind.TAG_RENAME -> Icons.Filled.Edit
+        HistoryEventKind.TAG_MERGE -> Icons.AutoMirrored.Filled.CallMerge
+        HistoryEventKind.TAG_STYLE -> Icons.Filled.Palette
         HistoryEventKind.PROP_REVIEWED -> Icons.Filled.CheckCircle
         HistoryEventKind.PROP_OCR_ENGINE -> Icons.Filled.Settings
         HistoryEventKind.PROP_STORAGE_PATH -> Icons.AutoMirrored.Filled.DriveFileMove
@@ -120,5 +128,6 @@ private fun HistoryEventKind.icon() =
         HistoryEventKind.RESTORE -> Icons.Filled.RestoreFromTrash
         HistoryEventKind.DELETE -> Icons.Filled.DeleteForever
         HistoryEventKind.RELINK -> Icons.Filled.Link
+        HistoryEventKind.SETTING -> Icons.Filled.Tune
         HistoryEventKind.UNKNOWN -> Icons.AutoMirrored.Filled.Help
     }

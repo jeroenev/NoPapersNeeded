@@ -1,10 +1,32 @@
 package dev.npn.app.ui.detail
 
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.detail_history_document_deleted
+import no_papers_needed.composeapp.generated.resources.detail_history_document_relinked
+import no_papers_needed.composeapp.generated.resources.detail_history_document_restored
+import no_papers_needed.composeapp.generated.resources.detail_history_document_trashed
+import no_papers_needed.composeapp.generated.resources.detail_history_field_removed
+import no_papers_needed.composeapp.generated.resources.detail_history_field_set
+import no_papers_needed.composeapp.generated.resources.detail_history_marked_needs_review
+import no_papers_needed.composeapp.generated.resources.detail_history_marked_reviewed
+import no_papers_needed.composeapp.generated.resources.detail_history_ocr_engine_cleared
+import no_papers_needed.composeapp.generated.resources.detail_history_ocr_engine_pinned
+import no_papers_needed.composeapp.generated.resources.detail_history_review_state_changed
+import no_papers_needed.composeapp.generated.resources.detail_history_setting_changed
+import no_papers_needed.composeapp.generated.resources.detail_history_tag_added
+import no_papers_needed.composeapp.generated.resources.detail_history_tag_merged
+import no_papers_needed.composeapp.generated.resources.detail_history_tag_removed
+import no_papers_needed.composeapp.generated.resources.detail_history_tag_renamed
+import no_papers_needed.composeapp.generated.resources.detail_history_tag_styled
+import no_papers_needed.composeapp.generated.resources.detail_history_undecodable
+import no_papers_needed.composeapp.generated.resources.detail_history_unknown_event
 import kotlin.test.Test
 
 class HistoryMapperTest {
@@ -41,22 +63,22 @@ class HistoryMapperTest {
 
         items.map { it.description } shouldContainExactly
             listOf(
-                history(HistoryTextKey.TAG_ADDED, "invoice"),
-                history(HistoryTextKey.TAG_REMOVED, "draft"),
-                history(HistoryTextKey.FIELD_SET, "Title", "New title"),
-                history(HistoryTextKey.FIELD_SET, "Notes", "Remember this"),
-                history(HistoryTextKey.FIELD_SET, "Correspondent", "Acme"),
-                history(HistoryTextKey.FIELD_SET, "Document type", "Invoice"),
-                history(HistoryTextKey.FIELD_SET, "Document date", "2026-07-20"),
-                history(HistoryTextKey.MARKED_REVIEWED),
-                history(HistoryTextKey.OCR_ENGINE_PINNED, "tesseract"),
-                history(HistoryTextKey.FIELD_SET, "amount", "42"),
-                history(HistoryTextKey.FIELD_REMOVED, "amount"),
-                history(HistoryTextKey.DOCUMENT_TRASHED, "orig.pdf"),
-                history(HistoryTextKey.DOCUMENT_RESTORED),
-                history(HistoryTextKey.DOCUMENT_DELETED),
-                history(HistoryTextKey.DOCUMENT_RELINKED, "bbbbbbbb..."),
-                history(HistoryTextKey.UNKNOWN_EVENT, "future-op"),
+                uiText(Res.string.detail_history_tag_added, "invoice"),
+                uiText(Res.string.detail_history_tag_removed, "draft"),
+                uiText(Res.string.detail_history_field_set, "Title", "New title"),
+                uiText(Res.string.detail_history_field_set, "Notes", "Remember this"),
+                uiText(Res.string.detail_history_field_set, "Correspondent", "Acme"),
+                uiText(Res.string.detail_history_field_set, "Document type", "Invoice"),
+                uiText(Res.string.detail_history_field_set, "Document date", "2026-07-20"),
+                uiText(Res.string.detail_history_marked_reviewed),
+                uiText(Res.string.detail_history_ocr_engine_pinned, "tesseract"),
+                uiText(Res.string.detail_history_field_set, "amount", "42"),
+                uiText(Res.string.detail_history_field_removed, "amount"),
+                uiText(Res.string.detail_history_document_trashed, "orig.pdf"),
+                uiText(Res.string.detail_history_document_restored),
+                uiText(Res.string.detail_history_document_deleted),
+                uiText(Res.string.detail_history_document_relinked, "bbbbbbbb..."),
+                uiText(Res.string.detail_history_unknown_event, "future-op"),
             )
         items.map { it.kind } shouldContainExactly
             listOf(
@@ -89,8 +111,8 @@ class HistoryMapperTest {
         val items = HistoryMapper.toHistoryItems(records)
         items.map { it.description } shouldContainExactly
             listOf(
-                history(HistoryTextKey.TAG_ADDED, "second"),
-                history(HistoryTextKey.TAG_ADDED, "first"),
+                uiText(Res.string.detail_history_tag_added, "second"),
+                uiText(Res.string.detail_history_tag_added, "first"),
             )
         items.map { it.timeMillis } shouldContainExactly listOf(200L, 100L)
     }
@@ -107,10 +129,37 @@ class HistoryMapperTest {
         val items = HistoryMapper.toHistoryItems(entries.map { record(it) })
         items.map { it.description } shouldContainExactly
             listOf(
-                history(HistoryTextKey.FIELD_REMOVED, FieldKeys.TITLE),
-                history(HistoryTextKey.MARKED_NEEDS_REVIEW),
-                history(HistoryTextKey.OCR_ENGINE_CLEARED),
-                history(HistoryTextKey.REVIEW_STATE_CHANGED, "maybe"),
+                uiText(Res.string.detail_history_field_removed, FieldKeys.TITLE),
+                uiText(Res.string.detail_history_marked_needs_review),
+                uiText(Res.string.detail_history_ocr_engine_cleared),
+                uiText(Res.string.detail_history_review_state_changed, "maybe"),
+            )
+    }
+
+    @Test
+    fun tagRenamesMergesAndStylesAreNotUnknownEvents() {
+        val entries =
+            listOf(
+                HistoryEntry.TagRenamed("inv", "invoice"),
+                HistoryEntry.TagMerged("bill", "invoice"),
+                HistoryEntry.TagStyled("invoice"),
+                HistoryEntry.SettingChanged("reviewMode"),
+            )
+        val items = HistoryMapper.toHistoryItems(entries.map { record(it) })
+
+        items.map { it.description } shouldContainExactly
+            listOf(
+                uiText(Res.string.detail_history_tag_renamed, "inv", "invoice"),
+                uiText(Res.string.detail_history_tag_merged, "bill", "invoice"),
+                uiText(Res.string.detail_history_tag_styled, "invoice"),
+                uiText(Res.string.detail_history_setting_changed, "reviewMode"),
+            )
+        items.map { it.kind } shouldContainExactly
+            listOf(
+                HistoryEventKind.TAG_RENAME,
+                HistoryEventKind.TAG_MERGE,
+                HistoryEventKind.TAG_STYLE,
+                HistoryEventKind.SETTING,
             )
     }
 
@@ -119,19 +168,14 @@ class HistoryMapperTest {
         val item = HistoryMapper.toHistoryItems(listOf(record(HistoryEntry.Undecodable("future-op")))).single()
 
         item.kind shouldBe HistoryEventKind.UNKNOWN
-        item.description shouldBe history(HistoryTextKey.UNDECODABLE, "future-op")
+        item.description shouldBe uiText(Res.string.detail_history_undecodable, "future-op")
     }
-
-    private fun history(
-        key: HistoryTextKey,
-        vararg arguments: String,
-    ) = HistoryDescription(key, arguments.toList())
 
     @Test
     fun clipsLongFieldValues() {
         val long = "x".repeat(200)
         val items = HistoryMapper.toHistoryItems(listOf(record(HistoryEntry.FieldSet(FieldKeys.NOTES, long))))
-        val shown = items.single().description.arguments[1]
+        val shown = (items.single().description as UiText.Res).args[1] as String
         shown.length shouldBe 80
         shown.endsWith("\u2026") shouldBe true
     }

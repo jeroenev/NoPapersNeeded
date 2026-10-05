@@ -4,6 +4,7 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.listItem
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
 import dev.npn.core.model.FieldKeys
@@ -13,6 +14,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.detail_history_field_set
+import no_papers_needed.composeapp.generated.resources.detail_history_tag_added
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -40,8 +44,8 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
 
             (model.metadata.value.history as HistoryUiState.Loaded).items.map { it.description } shouldContainExactly
                 listOf(
-                    HistoryDescription(HistoryTextKey.TAG_ADDED, listOf("invoice")),
-                    HistoryDescription(HistoryTextKey.FIELD_SET, listOf("Title", "X")),
+                    uiText(Res.string.detail_history_tag_added, "invoice"),
+                    uiText(Res.string.detail_history_field_set, "Title", "X"),
                 )
             job.cancel()
         }
