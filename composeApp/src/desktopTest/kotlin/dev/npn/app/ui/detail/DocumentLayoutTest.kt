@@ -193,7 +193,7 @@ class DocumentLayoutTest {
                                     ),
                                 writes = NoWrites,
                                 preview = { Text("PDF preview", modifier = it) },
-                                onReviewed = {},
+                                onReviewNext = {},
                                 hasNext = true,
                             )
                         }

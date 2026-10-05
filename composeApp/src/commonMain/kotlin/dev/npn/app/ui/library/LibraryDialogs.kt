@@ -24,7 +24,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_apply
 import no_papers_needed.composeapp.generated.resources.common_cancel
 import no_papers_needed.composeapp.generated.resources.library_tag
 import org.jetbrains.compose.resources.stringResource
@@ -34,7 +33,7 @@ import org.jetbrains.compose.resources.stringResource
 fun TagPickerDialog(
     title: String,
     allTagNames: List<String>,
-    confirmLabel: String? = null,
+    confirmLabel: String,
     onConfirm: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -78,7 +77,7 @@ fun TagPickerDialog(
             TextButton(
                 enabled = text.isNotBlank(),
                 onClick = { onConfirm(text.trim()) },
-            ) { Text(confirmLabel ?: stringResource(Res.string.common_apply)) }
+            ) { Text(confirmLabel) }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) { Text(stringResource(Res.string.common_cancel)) }

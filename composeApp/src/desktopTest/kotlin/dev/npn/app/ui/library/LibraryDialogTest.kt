@@ -121,6 +121,8 @@ class LibraryDialogTest {
                             fields = FieldFilterOptions(),
                             reviewMode = ReviewMode.DEFAULT,
                             onApply = {},
+                            onDismiss = {},
+                            fillHeight = false,
                         )
                     }
                 }

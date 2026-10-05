@@ -48,6 +48,7 @@ class PageViewerTest {
                                 pageCount = PageCountState.Ready(3),
                                 render = { _, _ -> null },
                                 onPageChange = { pageIndex = it },
+                                onRetryPageCount = {},
                             )
                         }
                     }

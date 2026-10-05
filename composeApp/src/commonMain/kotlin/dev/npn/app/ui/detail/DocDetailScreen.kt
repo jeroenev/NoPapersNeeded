@@ -128,7 +128,7 @@ fun DocDetailScreen(
                         DocumentEditor(
                             state = metadata,
                             writes = vm,
-                            onReviewed = { goNextDoc?.invoke() ?: onBack() },
+                            onReviewNext = { goNextDoc?.invoke() ?: onBack() },
                             hasNext = goNextDoc != null,
                             preview = { m ->
                                 PageViewer(

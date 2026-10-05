@@ -91,8 +91,8 @@ fun PageViewer(
     pageCount: PageCountState,
     render: suspend (pageIndex: Int, maxDim: Int) -> ByteArray?,
     onPageChange: (Int) -> Unit,
+    onRetryPageCount: () -> Unit,
     modifier: Modifier = Modifier,
-    onRetryPageCount: () -> Unit = {},
 ) {
     val ready = pageCount as? PageCountState.Ready
     if (ready == null) {

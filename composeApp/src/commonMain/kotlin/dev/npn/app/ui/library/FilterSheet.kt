@@ -112,6 +112,7 @@ fun FilterSheet(
             reviewMode = reviewMode,
             onApply = onApply,
             onDismiss = onDismiss,
+            fillHeight = false,
             modifier = Modifier.fillMaxWidth(),
         )
     }
@@ -124,8 +125,9 @@ fun FilterPanel(
     fields: FieldFilterOptions,
     reviewMode: ReviewMode,
     onApply: (LibraryFilter) -> Unit,
-    onDismiss: (() -> Unit)? = null,
-    fillHeight: Boolean = false,
+    onDismiss: () -> Unit,
+    /** Fill the height it is given (the side panel), rather than wrap its content (the sheet). */
+    fillHeight: Boolean,
     modifier: Modifier = Modifier,
 ) {
     var draft by rememberSaveable(filter, stateSaver = LibraryFilterSaver) { mutableStateOf(filter) }
@@ -185,11 +187,11 @@ private val LibraryFilterSaver =
         restore = { NpnJson.Persisted.decodeFromString(it) },
     )
 
-/** Title row of the filter panel: the "Filters" heading, the clear-all button and optional close. */
+/** Title row of the filter panel: the "Filters" heading, the clear-all button and close. */
 @Composable
 private fun FilterPanelHeader(
     onClearAll: () -> Unit,
-    onDismiss: (() -> Unit)?,
+    onDismiss: () -> Unit,
 ) {
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -199,10 +201,8 @@ private fun FilterPanelHeader(
         Text(stringResource(Res.string.library_filters), style = MaterialTheme.typography.titleLarge)
         Row(verticalAlignment = Alignment.CenterVertically) {
             TextButton(onClick = onClearAll) { Text(stringResource(Res.string.library_clear_all)) }
-            onDismiss?.let {
-                IconButton(onClick = it) {
-                    Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.common_cancel))
-                }
+            IconButton(onClick = onDismiss) {
+                Icon(Icons.Filled.Close, contentDescription = stringResource(Res.string.common_cancel))
             }
         }
     }

@@ -145,7 +145,7 @@ private fun PreviewBody(
         DocumentEditor(
             state = metadata,
             writes = vm,
-            onReviewed = onReviewed,
+            onReviewNext = onReviewed,
             hasNext = hasNext,
             preview = { m ->
                 // Keyed on the document: the viewer's remembered state (page-bitmap cache, pager

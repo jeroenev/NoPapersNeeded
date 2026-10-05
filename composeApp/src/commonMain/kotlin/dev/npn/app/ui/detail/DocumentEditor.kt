@@ -62,9 +62,13 @@ internal fun DocumentEditor(
     state: MetadataUiState,
     writes: DocumentWrites,
     preview: @Composable (Modifier) -> Unit,
+    /**
+     * Where the save bar's "mark reviewed" button goes once the document is saved as reviewed: the
+     * next document, or away when [hasNext] is false. Offered only where the reviewed marker is real.
+     */
+    onReviewNext: () -> Unit,
+    hasNext: Boolean,
     modifier: Modifier = Modifier,
-    onReviewed: (() -> Unit)? = null,
-    hasNext: Boolean = false,
 ) {
     val item = state.document.item
     if (item == null) {
@@ -102,9 +106,11 @@ internal fun DocumentEditor(
             draft = draft,
             onSave = { store.save(docId) },
             onDiscard = { store.discard(docId) },
-            onReviewed =
-                onReviewed?.takeIf { state.document.reviewMode.reviewMarkerIsAuthoritative }?.let { next ->
-                    { store.save(docId, reviewed = true, onSaved = next) }
+            onReview =
+                if (state.document.reviewMode.reviewMarkerIsAuthoritative) {
+                    { store.save(docId, reviewed = true, onSaved = onReviewNext) }
+                } else {
+                    null
                 },
             hasNext = hasNext,
         )
@@ -148,7 +154,7 @@ private fun EditorSaveBar(
     draft: DocumentDraft,
     onSave: () -> Unit,
     onDiscard: () -> Unit,
-    onReviewed: (() -> Unit)?,
+    onReview: (() -> Unit)?,
     hasNext: Boolean,
 ) {
     var confirmDiscard by remember { mutableStateOf(false) }
@@ -192,7 +198,7 @@ private fun EditorSaveBar(
                     Text(stringResource(Res.string.ux_discard_short))
                 }
             }
-            onReviewed?.let {
+            onReview?.let {
                 Button(onClick = it, enabled = !draft.saving && draft.writable) {
                     Text(stringResource(if (hasNext) Res.string.ux_review_next else Res.string.ux_review_finish))
                 }
