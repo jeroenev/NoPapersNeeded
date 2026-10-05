@@ -11,9 +11,8 @@ import dev.npn.core.journal.JournalPaths
 
 /**
  * Decides whether a metadata source set is safe to fold, and owns the grace-window bookkeeping a
- * deletion needs when it arrives before the snapshot that justifies it. Split from
- * [MetadataAccumulator] to keep that class focused on ingestion; the compaction side lives in
- * [SnapshotSupport] for the same reason.
+ * deletion needs when it arrives before the snapshot that justifies it. [MetadataAccumulator] does
+ * the ingestion, and [SnapshotSupport] the compaction side.
  *
  * Every check reports a failure REASON rather than failing outright. Latching that reason into the
  * projection state (and so blocking writes) stays with [MetadataAccumulator], which owns the DB

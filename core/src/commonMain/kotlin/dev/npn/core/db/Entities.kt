@@ -231,13 +231,11 @@ data class DuplicateEntity(
  * `OcrPipeline.maybeQueueUpgrade` reads to decide whether a better engine is worth re-queueing,
  * and `failed` is the attempt cap being spent.
  *
- * There is no `running`, for the same reason [AiEnrichQueueEntity] has no state column at all —
- * learned the harder way here. The drain is single-flight in-process
- * ([dev.npn.core.work.QueueDrainer]), so the only thing that could write `running` was the pass
- * that was running, and the only thing that could clear it was that same pass surviving to the
- * end. It often did not: a killed process or a cancelled drain left the row marked running with
- * nobody left to tidy up, and a running row is one `OcrQueueDao.nextPending` never returns again.
- * The document became invisible to the drain permanently while still reading as busy to the user.
+ * There is no `running`, for the same reason [AiEnrichQueueEntity] has no state column at all. The
+ * drain is single-flight in-process ([dev.npn.core.work.QueueDrainer]), so only the running pass
+ * could write `running`, and only that pass surviving to the end could clear it. A killed process
+ * or a cancelled drain would leave a row marked running that `OcrQueueDao.nextPending` never
+ * returns again: invisible to the drain for good, while it reads as busy to the user.
  *
  * So a row stays `pending` while it is being worked on, and an interrupted pass leaves it exactly
  * as it found it — owed, and taken by the next drain. Who is being worked on right now is
@@ -476,7 +474,7 @@ data class MetadataTransactionActorEntity(
  * object (or older snapshot) whose content hash is [supersededHash]. Rows are keyed by the pair so
  * two concurrent snapshots superseding the same object are both idempotently recorded. A missing
  * previously-applied source is tolerated iff its content hash appears here for an applied snapshot
- * (see MetadataAccumulator.validatePublishedObjects).
+ * (see `SourceSetValidator.unexplainedSourceLoss`).
  */
 @Entity(
     tableName = "metadata_superseded",

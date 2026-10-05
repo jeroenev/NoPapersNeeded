@@ -97,7 +97,6 @@ class SnapshotCompactor(
         val manifest = SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, supersedes)
         val bytes = SnapshotCodec.encodeSnapshot(manifest, events)
         val hash = sha256Bytes(bytes)
-        // Never let a snapshot supersede itself (its own hash cannot be an input, but guard anyway).
         val canonicalPath = stageAndPublishVerifiedObject(fs, installationId, hash, bytes, snapshot = true)
         return PublishedSnapshot(canonicalPath, hash, supersedes, events)
     }

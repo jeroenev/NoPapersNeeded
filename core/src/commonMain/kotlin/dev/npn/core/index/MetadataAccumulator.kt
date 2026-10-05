@@ -73,8 +73,7 @@ sealed interface OpenReconciliation {
      * recorded, which is all the write clock needs to be seeded with.
      *
      * The [FoldedState] deliberately stays unmaterialized: only writes and rescans need it, and
-     * paying for it here is what made opening a library scale with a library's entire edit
-     * history rather than with its current contents.
+     * building it costs time in proportion to the library's whole edit history.
      */
     data class ProjectionCurrent(
         val maxHlc: Hlc,
@@ -293,8 +292,7 @@ class MetadataAccumulator(
      * Reuse needs three things to hold together: the projection was left in the ready terminal
      * state (so no earlier pass died half-applied), its version matches this build, and the
      * fingerprint it recorded for its source set still matches the set now on disk. A null stored
-     * fingerprint — a row written before this optimization existed, or one that never reached
-     * ready — always refolds, so the first open after an upgrade pays once and later opens do not.
+     * fingerprint (a projection that never reached ready) always refolds.
      */
     suspend fun reconcileOnOpen(): OpenReconciliation {
         val stored = dao.state()
@@ -503,10 +501,9 @@ class MetadataAccumulator(
          *
          * BUMP THIS whenever a change alters what a fold produces from the same events — a new or
          * differently-derived column in `Indexer.applyFold`, a changed OR-set/LWW rule, a fix to
-         * how an op projects. It is no longer optional: [reconcileOnOpen] reuses a stored
-         * projection whenever the source set is unchanged, so without a bump an existing install
-         * keeps serving rows built by the OLD fold and never notices. (Before that reuse existed
-         * every launch reprojected, and such changes healed themselves on the next open.)
+         * how an op projects. [reconcileOnOpen] reuses a stored projection whenever the source set
+         * is unchanged, so without a bump an existing install keeps serving rows built by the OLD
+         * fold and never notices.
          *
          * Not needed for changes that only affect ingestion/validation, or for Room schema changes
          * that already drop the affected tables.

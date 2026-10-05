@@ -411,7 +411,7 @@ class ReconcilePerfTest {
             coordinator.reconcileMetadata()
 
             // Deleting a previously-applied v1 source with no validated replacement must latch the
-            // write-block via validatePublishedObjects (unchanged behaviour under the new path).
+            // write-block (SourceSetValidator.unexplainedSourceLoss).
             Files.delete(libRoot.resolve(segment))
             clock.advance()
             assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }

@@ -135,11 +135,8 @@ class Indexer(
             val hashes = HashMap<String, String>() // relPath -> sha256
             val progressMutex = Mutex()
             var hashedCount = 0
-            // A fixed pool of workers pulling from a shared queue. Chunking the input instead
-            // would size the CHUNKS at HASH_CONCURRENCY and launch one coroutine per chunk —
-            // a thousand files to hash meant 250 coroutines all hopping to Dispatchers.IO,
-            // which is unbounded read concurrency against the storage provider rather than
-            // the intended cap. A queue also balances the work, which matters because file
+            // A fixed pool of HASH_CONCURRENCY workers pulling from a shared queue: that caps
+            // read concurrency against the storage provider, and balances the work, since file
             // sizes (and so hash costs) vary by orders of magnitude.
             coroutineScope {
                 val pending = Channel<FileMeta>(Channel.UNLIMITED)
@@ -289,9 +286,8 @@ class Indexer(
     ): Reconciliation {
         val recon = Reconciliation()
         val existingByPath = HashMap<String, DocumentEntity>()
-        // One bulk read (chunked under SQLite's bind limit) rather than a query per document:
-        // this runs over the whole projection on every rescan, so a per-row read here was an
-        // N+1 across the entire library.
+        // One bulk read (chunked under SQLite's bind limit), not a query per document: this runs
+        // over the whole projection on every rescan.
         for (row in documentDao.getByDocIds(dbProjection.map { it.docId })) {
             recon.existingByDocId[row.docId] = row
             existingByPath[row.relPath] = row
@@ -387,8 +383,7 @@ class Indexer(
         val nowMissing = ArrayList<DocumentEntity>()
         for (pm in dbProjection) {
             // [Reconciliation.existingByDocId] is kept current for every row the reconcile pass
-            // upserted, so it already holds the post-reconcile row. Re-reading each one from the
-            // DB here was a second N+1 over the whole library for no extra information.
+            // upserted, so it already holds the post-reconcile row; no need to re-read it.
             val current = existingByDocId[pm.docId] ?: continue
             if (current.deleted || current.trashed) continue
             if (current.relPath !in diskPaths) {

@@ -13,9 +13,8 @@ import androidx.room3.Transaction
 @Dao
 interface FtsDao {
     /**
-     * FTS5 MATCH search returning a highlighted snippet. `snippet()` is an FTS5 auxiliary
-     * function; Room's compile-time query verification does not know it, so this uses
-     * @Query with a subquery form Room can still parse. The docId is column 0.
+     * FTS5 MATCH search, best match first, with a snippet from whichever column matched (`-1`);
+     * `char(1)` and `char(2)` mark where each hit starts and ends.
      */
     @Query(
         "SELECT docId, snippet(fts_documents, -1, char(1), char(2), '...', 16) AS snippet " +
@@ -25,8 +24,8 @@ interface FtsDao {
 
     /**
      * Indexed rows containing a token with the requested prefix, used to derive autocomplete.
-     * Return only bounded content/field fragments: selecting complete OCR bodies and long-text
-     * fields made Android copy and tokenize several potentially huge values on every keystroke.
+     * Only bounded content/field fragments come back: whole OCR bodies and long-text fields would
+     * be copied and tokenized on every keystroke.
      */
     @Query(
         "SELECT docId, fileName, " +
