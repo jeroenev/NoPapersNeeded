@@ -8,9 +8,7 @@ import kotlin.test.assertFailsWith
 
 class NpnPathsTest {
     @Test
-    fun journalAndOcrPaths() {
-        NpnPaths.journalDeviceDir("dev1") shouldBe ".npn/journal/dev1"
-        NpnPaths.journalSegmentPath("dev1", "0001.jsonl") shouldBe ".npn/journal/dev1/0001.jsonl"
+    fun ocrPaths() {
         OcrSidecarName("abc123", "dev1").path shouldBe ".npn/ocr/abc123.dev1.json"
     }
 
@@ -49,8 +47,7 @@ class NpnPathsTest {
         NpnPaths.journalPath(canonical) shouldBe NpnPaths.JournalPath.ObjectV2(hash, canonical = true)
         NpnPaths.journalPath(".npn/journal/objects-v3-ab/$hash.jsonl") shouldBe
             NpnPaths.JournalPath.UnsupportedObjectStore(3)
-        NpnPaths.journalPath(".npn/journal/dev1/0001.jsonl") shouldBe
-            NpnPaths.JournalPath.Legacy("dev1", "0001.jsonl")
+        NpnPaths.journalPath(".npn/journal/dev1/0001.jsonl") shouldBe NpnPaths.JournalPath.Legacy
     }
 
     @Test
@@ -90,18 +87,14 @@ class NpnPathsTest {
 
     @Test
     fun isOwnDeviceWrite() {
-        // Own journal dir + segments: self-echo, must be filtered.
-        NpnPaths.isOwnDeviceWrite(".npn/journal/dev1", "dev1").shouldBeTrue()
-        NpnPaths.isOwnDeviceWrite(".npn/journal/dev1/0001.jsonl", "dev1").shouldBeTrue()
         // Own OCR sidecar: self-echo. Both legacy and engine-qualified forms.
         NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev1.json", "dev1").shouldBeTrue()
         NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev1.tesseract.json", "dev1").shouldBeTrue()
-        // Another device's journal/sidecar (arriving via sync) must keep triggering a refresh.
-        NpnPaths.isOwnDeviceWrite(".npn/journal/dev2/0001.jsonl", "dev1").shouldBeFalse()
+        // Another device's sidecar (arriving via sync) must keep triggering a refresh.
         NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev2.json", "dev1").shouldBeFalse()
         NpnPaths.isOwnDeviceWrite(".npn/ocr/abc123.dev2.tesseract.json", "dev1").shouldBeFalse()
-        // A device id that prefixes another must not match the longer one's dir.
-        NpnPaths.isOwnDeviceWrite(".npn/journal/dev12/0001.jsonl", "dev1").shouldBeFalse()
+        // This build writes no v1 segments, so one under this device's id came from elsewhere.
+        NpnPaths.isOwnDeviceWrite(".npn/journal/dev1/0001.jsonl", "dev1").shouldBeFalse()
         // Document-area and trash paths are never self-writes.
         NpnPaths.isOwnDeviceWrite("inbox/x.pdf", "dev1").shouldBeFalse()
         NpnPaths.isOwnDeviceWrite(".npn/trash/x__deadbeef.pdf", "dev1").shouldBeFalse()
@@ -208,6 +201,6 @@ class NpnPathsTest {
         // classified as "not ours", not kill the loop.
         NpnPaths.isInternal("../.npn/x").shouldBeFalse()
         NpnPaths.isHidden("a\\.b").shouldBeFalse()
-        NpnPaths.isOwnDeviceWrite("../.npn/journal/dev1/0.jsonl", "dev1").shouldBeFalse()
+        NpnPaths.isOwnDeviceWrite("../.npn/ocr/abc123.dev1.json", "dev1").shouldBeFalse()
     }
 }

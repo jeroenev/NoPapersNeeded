@@ -62,7 +62,8 @@ class ReviewMigrationTest {
         fs
             .listAllUnder(NpnPaths.JOURNAL_DIR)
             .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
-            .flatMap { JournalCodec.decode(fs.readBytes(it.relPath).decodeToString()) }
+            .flatMap { fs.readBytes(it.relPath).decodeToString().lines() }
+            .mapNotNull(JournalCodec::decodeLineOrNull)
             .filter { (it.op as? JournalOp.PropSet)?.key == SystemProperty.REVIEWED }
             .map { it.doc }
 

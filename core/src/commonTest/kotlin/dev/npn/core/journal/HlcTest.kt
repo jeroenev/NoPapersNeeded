@@ -26,10 +26,9 @@ class HlcTest {
 
     @Test
     fun next_monotonic_when_wall_stalls() {
-        var now = 1000L
-        val clock = HlcClock("dev", { now })
-        val first = clock.next()
-        val second = clock.next() // same wall time -> counter bumps
+        val allocator = HlcWatermarkAllocator({ 1000L })
+        val first = allocator.next("dev")
+        val second = allocator.next("dev") // same wall time -> counter bumps
         assertEquals(first.physicalMillis, second.physicalMillis)
         assertEquals(first.counter + 1, second.counter)
         assertTrue(second > first)
@@ -38,10 +37,10 @@ class HlcTest {
     @Test
     fun next_uses_wall_when_it_advances() {
         var now = 1000L
-        val clock = HlcClock("dev", { now })
-        clock.next()
+        val allocator = HlcWatermarkAllocator({ now })
+        allocator.next("dev")
         now = 2000L
-        val second = clock.next()
+        val second = allocator.next("dev")
         assertEquals(2000L, second.physicalMillis)
         assertEquals(0, second.counter)
     }
@@ -49,47 +48,43 @@ class HlcTest {
     @Test
     fun next_does_not_rewind_on_backwards_wall_clock() {
         var now = 5000L
-        val clock = HlcClock("dev", { now })
-        val first = clock.next()
+        val allocator = HlcWatermarkAllocator({ now })
+        val first = allocator.next("dev")
         now = 1000L // clock went backwards
-        val second = clock.next()
+        val second = allocator.next("dev")
         assertEquals(first.physicalMillis, second.physicalMillis)
         assertTrue(second > first)
     }
 
     @Test
     fun observe_merges_remote_ahead() {
-        var now = 1000L
-        val clock = HlcClock("local", { now })
-        clock.next()
+        val allocator = HlcWatermarkAllocator({ 1000L })
+        allocator.next("local")
         val remote = Hlc(3000, 5, "remote")
-        val merged = clock.observe(remote)
-        assertEquals(3000L, merged.physicalMillis)
-        assertTrue(merged.counter > 5, "counter must advance beyond remote at same physical")
-        assertEquals("local", merged.deviceId)
-        assertTrue(merged > remote)
+        allocator.observe(remote)
+        assertEquals(3000L, allocator.physicalMillis)
+        assertTrue(allocator.counter > 5, "counter must advance beyond remote at same physical")
+        assertTrue(allocator.next("local") > remote)
     }
 
     @Test
     fun observe_clamps_absurd_remote_future() {
         val now = 1_000_000L
-        val clock = HlcClock("local", { now })
-        val absurd = Hlc(now + HlcClock.CLAMP_MS * 10, 0, "bad")
-        val merged = clock.observe(absurd)
+        val allocator = HlcWatermarkAllocator({ now })
+        allocator.observe(Hlc(now + HlcWatermarkAllocator.CLAMP_MS * 10, 0, "bad"))
         assertTrue(
-            merged.physicalMillis <= now + HlcClock.CLAMP_MS + 1,
-            "remote clamped to local wall + CLAMP_MS, was ${merged.physicalMillis}",
+            allocator.physicalMillis <= now + HlcWatermarkAllocator.CLAMP_MS + 1,
+            "remote clamped to local wall + CLAMP_MS, was ${allocator.physicalMillis}",
         )
     }
 
     @Test
     fun observe_uses_local_wall_when_remote_behind() {
         val now = 10_000L
-        val clock = HlcClock("local", { now })
-        val remote = Hlc(500, 0, "remote")
-        val merged = clock.observe(remote)
-        assertEquals(now, merged.physicalMillis)
-        assertEquals(0, merged.counter)
+        val allocator = HlcWatermarkAllocator({ now })
+        allocator.observe(Hlc(500, 0, "remote"))
+        assertEquals(now, allocator.physicalMillis)
+        assertEquals(0, allocator.counter)
     }
 
     @Test

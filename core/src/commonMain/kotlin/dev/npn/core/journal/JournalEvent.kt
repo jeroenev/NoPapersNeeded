@@ -10,8 +10,9 @@ import kotlinx.serialization.Serializable
  * {"v":1,"seq":123,"hlc":{"t":..,"c":..,"d":".."},"dev":"..","doc":"<sha256 or null>","op":"tag-add","p":{...}}
  * ```
  *
- * - [seq] is per-device, monotonically increasing across all segments, never reused.
- * - [dev] is the authoring device id. It always equals `hlc.deviceId`.
+ * - [dev] is the authoring actor: a fresh id per storage-v2 transaction, or a v1 segment's device
+ *   id. It always equals `hlc.deviceId`.
+ * - [seq] is per actor, increasing, never reused.
  * - [doc] is the SHA-256 document id, or null for library-wide ops (tag-rename/merge/style).
  * - The dot of this event is `Dot(dev, seq)`.
  */

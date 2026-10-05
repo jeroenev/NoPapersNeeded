@@ -13,7 +13,7 @@ import java.io.File
 import kotlin.test.Test
 
 /**
- * Regression tests for HLC clock seeding ([dev.npn.core.journal.SegmentWriter.observeHlc]).
+ * Regression tests for HLC clock seeding ([dev.npn.core.journal.ContentAddressedJournalWriter.observeHlc]).
  *
  * The clock starts at zero on every session open and used to be driven by the raw wall clock
  * only. Whenever the wall clock was behind HLCs already in the journal (restart after a clock

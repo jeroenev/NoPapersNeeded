@@ -413,9 +413,9 @@ data class AiEditJobDocEntity(
 )
 
 /**
- * Small key/value state. In [DeviceDatabase]: the journal device id, the v1 writer's last sequence
- * and known segments, and the assistant's chats. In the index: where each document was last seen,
- * observations a rebuild makes again.
+ * Small key/value state. In [DeviceDatabase]: the journal device id, the installation it belongs
+ * to, and the assistant's chats. In the index: where each document was last seen, observations a
+ * rebuild makes again.
  */
 @Entity(tableName = "kv")
 data class KeyValueEntity(

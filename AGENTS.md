@@ -97,11 +97,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Library folder is the source of truth; SQLite/Room index is a disposable, rebuildable
   cache stored outside the library folder and never synced. Its builders fall back to a
   destructive migration, and a dropped index rebuilds from the folder on the next open.
-- What only this device knows, which nothing could rebuild (journal device id and v1 writer
-  state, OCR and AI enrichment queues, queued AI edit runs, enrichment marks, assistant
-  chats), lives in `device.db` (`DeviceDatabase`) beside the index: never synced, never
-  dropped, real migrations only. Library data (settings, saved views, rules) belongs in the
-  journal, not in either database.
+- What only this device knows, which nothing could rebuild (journal device id, OCR and AI
+  enrichment queues, queued AI edit runs, enrichment marks, assistant chats), lives in
+  `device.db` (`DeviceDatabase`) beside the index: never synced, never dropped, real migrations
+  only. Library data (settings, saved views, rules) belongs in the journal, not in either
+  database.
 - PDFs are immutable after import (rename/move only). Sole exception: explicit
   bake-in-place, which records a `relink` journal event for the new hash.
 - All app-written files in `.npn/` are write-once. Journal transactions are content-addressed

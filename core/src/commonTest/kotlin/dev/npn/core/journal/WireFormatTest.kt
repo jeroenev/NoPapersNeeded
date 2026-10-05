@@ -127,16 +127,12 @@ class WireFormatTest {
     }
 
     @Test
-    fun unknown_op_skipped_during_decode_but_kept_as_line() {
+    fun unknown_op_parses_as_unknown_and_garbage_as_nothing() {
         val good = JournalCodec.encode(event(sha, JournalOp.TagAdd("t")))
         val unknown = """{"v":1,"seq":6,"hlc":{"t":1,"c":0,"d":"x"},"dev":"x","doc":null,"op":"future-op","p":{}}"""
-        val garbage = "not json at all"
-        val content = "$good\n$unknown\n$garbage\n"
-        val decoded = JournalCodec.decode(content)
-        // good + unknown parse (unknown as Unknown), garbage skipped
-        assertEquals(2, decoded.size)
-        assertTrue(decoded[0].op is JournalOp.TagAdd)
-        assertTrue(decoded[1].op is JournalOp.Unknown)
+        assertTrue(JournalCodec.decodeLineOrNull(good)!!.op is JournalOp.TagAdd)
+        assertTrue(JournalCodec.decodeLineOrNull(unknown)!!.op is JournalOp.Unknown)
+        assertNull(JournalCodec.decodeLineOrNull("not json at all"))
     }
 
     @Test
@@ -178,9 +174,8 @@ class WireFormatTest {
     }
 
     @Test
-    fun blank_lines_skipped() {
-        val good = JournalCodec.encode(event(sha, JournalOp.TagAdd("t")))
-        assertEquals(1, JournalCodec.decode("\n\n$good\n\n").size)
+    fun blank_lines_decode_as_nothing() {
+        assertNull(JournalCodec.decodeLineOrNull(""))
         assertNull(JournalCodec.decodeLineOrNull("   "))
     }
 }

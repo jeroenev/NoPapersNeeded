@@ -76,7 +76,7 @@ class HlcWatermarkAllocator(
      */
     fun observe(remote: Hlc) {
         val wall = clock.nowMillis()
-        val capped = minOf(remote.physicalMillis, wall + HlcClock.CLAMP_MS)
+        val capped = minOf(remote.physicalMillis, wall + CLAMP_MS)
         val nextPhysical = maxOf(wall, physicalMillis, capped)
         counter = when {
             nextPhysical == physicalMillis && nextPhysical == capped -> maxOf(counter, remote.counter) + 1
@@ -94,35 +94,6 @@ class HlcWatermarkAllocator(
         counter = if (nextPhysical == physicalMillis) counter + 1 else 0
         physicalMillis = nextPhysical
         return Hlc(physicalMillis, counter, actor)
-    }
-}
-
-/**
- * Generates monotonic HLCs for a single device and merges remote ones. A thin, single-actor
- * facade over [HlcWatermarkAllocator]: [deviceId] is the fixed actor and [last] exposes the
- * watermark as a full [Hlc] for the receive-rule guard in `SegmentWriter`.
- *
- * Not thread-safe; callers serialize access (single writer per device).
- */
-class HlcClock(
-    val deviceId: String,
-    epochClock: EpochClock = SystemEpochClock,
-) {
-    private val allocator = HlcWatermarkAllocator(epochClock)
-
-    val last: Hlc get() = Hlc(allocator.physicalMillis, allocator.counter, deviceId)
-
-    /** Produce the next local HLC, monotonically greater than every previously produced or observed one. */
-    fun next(): Hlc = allocator.next(deviceId)
-
-    /**
-     * Merge a remote HLC into the local clock (standard HLC receive rule) and return the
-     * new local HLC to stamp on the received-and-locally-reacted event. Also advances [last]
-     * so subsequent [next] calls stay ahead of anything observed.
-     */
-    fun observe(remote: Hlc): Hlc {
-        allocator.observe(remote)
-        return last
     }
 
     companion object {

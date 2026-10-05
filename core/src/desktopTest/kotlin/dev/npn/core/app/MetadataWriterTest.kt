@@ -599,7 +599,7 @@ class MetadataWriterTest {
 
                 // A remote v1 device drops a legacy segment containing a tag we will later rewrite away.
                 val remoteDevice = "remote-v1-device"
-                val legacyPath = NpnPaths.journalSegmentPath(remoteDevice, "0001.jsonl")
+                val legacyPath = "${NpnPaths.JOURNAL_DIR}/$remoteDevice/0001.jsonl"
                 val original =
                     JournalEvent(
                         version = JournalEventVersions.V1,

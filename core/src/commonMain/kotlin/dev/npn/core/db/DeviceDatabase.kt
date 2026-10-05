@@ -11,8 +11,8 @@ import androidx.room3.RoomDatabaseConstructor
  * synced, and, unlike the index, is never dropped: every schema change ships a real migration, and
  * the builders have no destructive fallback.
  *
- * - `kv`: the journal device id, the legacy v1 writer's last sequence and known segments, and the
- *   assistant's chat sessions and conversations ([KeyValueDao]);
+ * - `kv`: the journal device id and the installation it belongs to, and the assistant's chat
+ *   sessions and conversations ([KeyValueDao]);
  * - queued AI edit runs ([AiEditJobDao]), the only copy of suggestions already paid for;
  * - the automatic AI enrichment queue, and which documents it already enriched here
  *   ([AiEnrichQueueDao]);

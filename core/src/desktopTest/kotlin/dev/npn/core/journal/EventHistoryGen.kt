@@ -7,10 +7,10 @@ import kotlin.random.Random
  * Generates causally-plausible random event histories across several simulated devices.
  *
  * Simulation model:
- * - Each device has its own [HlcClock] and per-device monotonic seq.
+ * - Each device has its own [HlcWatermarkAllocator] and per-device monotonic seq.
  * - Devices interleave in a random order. When a device produces an event it may first
  *   "receive" a random prefix of the other devices' already-produced events, merging their
- *   HLCs via [HlcClock.observe], which keeps HLCs causally sensible.
+ *   HLCs via [HlcWatermarkAllocator.observe], which keeps HLCs causally sensible.
  * - tag-remove only lists dots that already exist at generation time (observed-remove), so
  *   removes never reference future adds.
  *
@@ -24,7 +24,7 @@ class EventHistoryGen(
 ) {
     private val rng = Random(seed)
     private val devices = (0 until deviceCount).map { "dev$it" }
-    private val clocks = devices.associateWith { HlcClock(it, VirtualClock(rng)) }
+    private val clocks = devices.associateWith { HlcWatermarkAllocator(VirtualClock(rng)) }
     private val seqs = HashMap<String, Long>().apply { devices.forEach { this[it] = 0L } }
 
     private val docs =
@@ -63,7 +63,7 @@ class EventHistoryGen(
         val clock = clocks.getValue(dev)
         val seq = seqs.getValue(dev) + 1
         seqs[dev] = seq
-        val hlc = clock.next()
+        val hlc = clock.next(dev)
         val doc = docs[rng.nextInt(docs.size)]
         val choice = rng.nextInt(100)
         val op: JournalOp =

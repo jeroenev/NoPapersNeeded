@@ -143,7 +143,7 @@ expect class ExternalSource
  *
  * Design invariants:
  * - The library is a plain folder of immutable PDFs plus a `.npn/` metadata directory.
- * - The app only ever creates new, write-once files (journal segments, OCR sidecars) and
+ * - The app only ever creates new, write-once files (journal objects, OCR sidecars) and
  *   moves/renames PDFs. It never appends to or rewrites an existing file through this API
  *   (the explicit bake-in-place action is handled elsewhere, later).
  * - All paths are library-relative, '/'-separated, no leading slash.

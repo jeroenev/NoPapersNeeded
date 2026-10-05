@@ -1,6 +1,5 @@
 package dev.npn.core.fs
 
-import dev.npn.core.index.FsSegmentStore
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -25,44 +24,6 @@ class AdaptersTest {
     fun teardown() {
         root.toFile().deleteRecursively()
     }
-
-    @Test
-    fun segmentStoreWriteOnceAndListingGroupedByDevice() =
-        runTest {
-            val store = FsSegmentStore(fs)
-            store.writeJournalFileOnce("devA", "0001.jsonl", "{\"seq\":1}")
-            store.writeJournalFileOnce("devA", "0002.jsonl", "{\"seq\":2}")
-            store.writeJournalFileOnce("devB", "0001.jsonl", "{\"seq\":1}")
-
-            val listing = store.listJournalFiles()
-            listing.shouldContainExactlyInAnyOrder(
-                "devA" to "0001.jsonl",
-                "devA" to "0002.jsonl",
-                "devB" to "0001.jsonl",
-            )
-
-            val byDevice = listing.groupBy { it.first }
-            byDevice["devA"]!! shouldHaveSize 2
-            byDevice["devB"]!! shouldHaveSize 1
-
-            store.readJournalFile("devA", "0002.jsonl") shouldBe "{\"seq\":2}"
-
-            store.deleteJournalFile("devA", "0001.jsonl")
-            store.listJournalFiles().shouldContainExactlyInAnyOrder(
-                "devA" to "0002.jsonl",
-                "devB" to "0001.jsonl",
-            )
-        }
-
-    @Test
-    fun segmentStoreWriteOnceRejectsDuplicate() =
-        runTest {
-            val store = FsSegmentStore(fs)
-            store.writeJournalFileOnce("devA", "0001.jsonl", "a")
-            kotlin.test.assertFailsWith<IllegalStateException> {
-                store.writeJournalFileOnce("devA", "0001.jsonl", "b")
-            }
-        }
 
     @Test
     fun ocrSidecarRoundtripAndListForHash() =

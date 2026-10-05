@@ -1,7 +1,5 @@
 package dev.npn.core.fs
 
-import dev.npn.core.index.FsSegmentStore
-import dev.npn.core.journal.SegmentRef
 import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
@@ -63,17 +61,6 @@ class JvmLibraryFileSystemNoReplaceTest {
             }
         winners.size shouldBe 1
         runBlocking { fs.readBytes(path).decodeToString() } shouldBe payload(winners.single())
-    }
-
-    @Test
-    fun concurrentSegmentWritersNeverReplaceThePublishedSegment() {
-        val store = FsSegmentStore(fs)
-        val winners =
-            raceWriters(WRITERS) { i ->
-                store.writeSegment("device1", "000001.jsonl", payload(i))
-            }
-        winners.size shouldBe 1
-        runBlocking { store.readSegment(SegmentRef("device1", "000001.jsonl")) } shouldBe payload(winners.single())
     }
 
     @Test

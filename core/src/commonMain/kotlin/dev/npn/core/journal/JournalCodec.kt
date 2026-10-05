@@ -10,12 +10,11 @@ import kotlinx.serialization.json.jsonObject
 import kotlinx.serialization.json.jsonPrimitive
 
 /**
- * Reads and writes the JSON-lines segment format: one [JournalEvent] per line.
+ * Reads and writes the JSON-lines journal format: one [JournalEvent] per line.
  *
- * Reading is tolerant: blank lines are skipped, and a line that fails to parse (corrupt or
- * a future event shape we cannot handle) is skipped rather than aborting the whole segment.
- * Unknown *ops* still parse into [JournalOp.Unknown] via the serializer; this line-level
- * skip only catches structurally-broken lines.
+ * [decodeLineOrNull] is tolerant: a blank line, or one that fails to parse (corrupt or a future
+ * event shape we cannot handle), gives null. Unknown *ops* still parse into [JournalOp.Unknown] via
+ * the serializer; the null only catches structurally-broken lines.
  */
 object JournalCodec {
     /**
@@ -42,10 +41,6 @@ object JournalCodec {
             null
         }
     }
-
-    /** Parse a whole segment body, skipping blank/unparseable lines. */
-    fun decode(content: String): List<JournalEvent> =
-        content.lineSequence().mapNotNull { decodeLineOrNull(it) }.toList()
 }
 
 class UnsupportedEventVersionException(

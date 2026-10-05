@@ -54,10 +54,8 @@ object NpnPaths {
     const val SNAPSHOT_V2 = 2
 
     sealed interface JournalPath {
-        data class Legacy(
-            val deviceId: String,
-            val fileName: String,
-        ) : JournalPath
+        /** A v1 segment, `.npn/journal/<deviceId>/<seq>.jsonl`: still read, never written. */
+        data object Legacy : JournalPath
 
         data class ObjectV2(
             val expectedHash: String,
@@ -86,15 +84,6 @@ object NpnPaths {
     const val MARKER_SYNCTHING = ".sync-conflict-"
     const val MARKER_CONFLICTED_COPY = " (conflicted copy"
     const val MARKER_CASE_CONFLICT = " (Case Conflict"
-
-    /** `.npn/journal/<deviceId>` */
-    fun journalDeviceDir(deviceId: String): String = "$JOURNAL_DIR/$deviceId"
-
-    /** `.npn/journal/<deviceId>/<fileName>` */
-    fun journalSegmentPath(
-        deviceId: String,
-        fileName: String,
-    ): String = "${journalDeviceDir(deviceId)}/$fileName"
 
     fun journalObjectPath(
         hash: String,
@@ -130,7 +119,7 @@ object NpnPaths {
         return when {
             snapshotBucket != null -> classifyBucketFile(snapshotBucket, name, SNAPSHOT_V2, snapshot = true)
             bucket != null -> classifyBucketFile(bucket, name, STORAGE_V2, snapshot = false)
-            dir.isNotEmpty() && legacySegmentPattern.matches(name) -> JournalPath.Legacy(dir, name)
+            dir.isNotEmpty() && legacySegmentPattern.matches(name) -> JournalPath.Legacy
             else -> JournalPath.Unknown
         }
     }
@@ -310,20 +299,16 @@ object NpnPaths {
     }
 
     /**
-     * True when [relPath] is an internal file that [deviceId] wrote itself: its own journal
-     * directory/segments or its own OCR sidecars. The desktop watcher uses this to drop
-     * self-echo events — the writing code paths already refold/index synchronously, so reacting
-     * to our own `.npn/` writes would turn every metadata edit into a redundant full rescan.
-     * Other devices' journal segments and sidecars (arriving via file sync) are NOT self-writes
-     * and must keep triggering a refresh.
+     * True when [relPath] is an OCR sidecar that [deviceId] wrote itself. The desktop watcher uses
+     * this to drop self-echo events — the writing code paths already index synchronously, so
+     * reacting to our own sidecars would turn every OCR run into a redundant pass. Other devices'
+     * sidecars (arriving via file sync) are NOT self-writes and must keep triggering a refresh.
      */
     fun isOwnDeviceWrite(
         relPath: String,
         deviceId: String,
     ): Boolean {
         val norm = joinSegments(relPath)
-        val ownJournal = journalDeviceDir(deviceId)
-        if (norm == ownJournal || norm.startsWith("$ownJournal/")) return true
         if (!norm.startsWith("$OCR_DIR/")) return false
         val sidecar = OcrSidecarName.parse(fileName(norm)) ?: return false
         return OcrSidecarName.isWrittenBy(sidecar.writerKey, deviceId)

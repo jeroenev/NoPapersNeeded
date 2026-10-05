@@ -167,7 +167,7 @@ class LegacySegments(
             ops.map {
                 JournalEvent(JournalEventVersions.CANONICAL, ++seq, hlc.next(deviceId), deviceId, it.doc, it.op)
             }
-        val path = NpnPaths.journalSegmentPath(deviceId, first.toString().padStart(SEQ_WIDTH, '0') + ".jsonl")
+        val path = "${NpnPaths.JOURNAL_DIR}/$deviceId/${first.toString().padStart(SEQ_WIDTH, '0')}.jsonl"
         fs.writeBytesOnce(path, JournalCodec.encodeLines(events).encodeToByteArray())
         return path
     }
