@@ -112,7 +112,7 @@ class TesseractCliEngineTest {
     fun bundledTessdataDirReachesTheProcess() =
         runTest {
             // A shell script stands in for the binary, so this needs a POSIX shell.
-            if (System.getProperty("os.name").startsWith("Windows")) return@runTest
+            assumeTrue(hasPosixShell())
             val dir = Files.createTempDirectory("npn-tess")
             val fake =
                 dir.resolve("tesseract").toFile().apply {
@@ -131,7 +131,7 @@ class TesseractCliEngineTest {
     @Test
     fun languagesWithoutAnInstalledModelAreSkipped() =
         runTest {
-            if (System.getProperty("os.name").startsWith("Windows")) return@runTest
+            assumeTrue(hasPosixShell())
             val dir = Files.createTempDirectory("npn-tess")
             // Has English and Dutch; otherwise echoes the `-l` value it was run with
             // (`tesseract <input> stdout -l <lang>`).
@@ -162,7 +162,7 @@ class TesseractCliEngineTest {
     @Test
     fun aModelInstalledWhileRunningIsPickedUp() =
         runTest {
-            if (System.getProperty("os.name").startsWith("Windows")) return@runTest
+            assumeTrue(hasPosixShell())
             val dir = Files.createTempDirectory("npn-tess")
             // `--list-langs` reads the installed models from a file the test changes mid-run.
             val models = dir.resolve("models").toFile().apply { writeText("eng\n") }
@@ -197,6 +197,9 @@ class TesseractCliEngineTest {
     }
 
     private fun isLinux() = System.getProperty("os.name").startsWith("Linux")
+
+    /** The fakes are shell scripts, which Windows cannot run as a binary. */
+    private fun hasPosixShell() = !System.getProperty("os.name").startsWith("Windows")
 
     /** Blocks until the fake has written its pid: the process is up and sleeping. */
     private fun awaitStarted(pidFile: File) {

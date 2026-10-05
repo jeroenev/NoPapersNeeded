@@ -6,6 +6,7 @@ import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
+import org.junit.Assume.assumeTrue
 import java.io.ByteArrayOutputStream
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
@@ -95,7 +96,7 @@ class PdfBoxXmpIOTest {
     @Test
     fun exiftoolInteropIfAvailable() =
         runTest {
-            val exiftool = findOnPath("exiftool") ?: return@runTest // skip gracefully
+            val exiftool = onPathOrSkip("exiftool")
             val data = xmp(tags = listOf("exiftooltag"), title = "Exif Title")
             val xmp = XmpSerializer.serialize(data)
             val baked = io.writeBaked(fixturePdf(), xmp, data.tags, data.title)
@@ -114,6 +115,13 @@ class PdfBoxXmpIOTest {
                 tmp.delete()
             }
         }
+
+    /** [name]'s path on the PATH; the test is skipped, not passed, when it is not installed. */
+    private fun onPathOrSkip(name: String): String {
+        val found = findOnPath(name)
+        assumeTrue("$name is not on the PATH", found != null)
+        return checkNotNull(found)
+    }
 
     private fun findOnPath(name: String): String? {
         val path = System.getenv("PATH") ?: return null
