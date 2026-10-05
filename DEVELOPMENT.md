@@ -113,9 +113,8 @@ below if you prefer to run them directly.
 | `mise build` | `./gradlew build` |
 | `mise clean` | `./gradlew clean` |
 
-Formatting is enforced incrementally with Spotless and ktlint. Run
-`./gradlew spotlessCheck` to check it or `./gradlew spotlessApply` to format
-Kotlin and Gradle Kotlin scripts.
+Formatting is enforced with Spotless and ktlint on every Kotlin source and Gradle Kotlin
+script. Run `./gradlew spotlessCheck` to check it or `./gradlew spotlessApply` to format.
 Localization parity and XML placeholders for every `values-<language>` translation,
 and obvious hardcoded strings in shared Compose UI, are checked with
 `./gradlew checkLocalization` (its own tests: `./gradlew :buildSrc:test`). The task

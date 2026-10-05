@@ -15,17 +15,15 @@ plugins {
     alias(libs.plugins.spotless)
 }
 
+// Every Kotlin file in the repository. Sources live under each module's src/, so the file walk never
+// enters a build directory another task may be writing to.
 spotless {
-    ratchetFrom("740ce4b2b71b44e202742dea883feb6d10a4c797")
-
     kotlin {
-        target("**/*.kt")
-        targetExclude("**/build/**")
+        target("*/src/**/*.kt")
         ktlint(libs.versions.ktlint.get())
     }
     kotlinGradle {
-        target("*.gradle.kts", "**/*.gradle.kts")
-        targetExclude("**/build/**")
+        target("*.gradle.kts", "*/*.gradle.kts", "*/src/**/*.gradle.kts")
         ktlint(libs.versions.ktlint.get())
     }
 }
