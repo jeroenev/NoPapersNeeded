@@ -101,9 +101,11 @@ run = "./gradlew :core:desktopTest"
 description = "Run the core and shared UI desktop tests"
 run = "./gradlew :core:desktopTest :composeApp:desktopTest"
 
+# allTests runs every multiplatform module's suites on both targets; the desktop shell and the
+# build logic have plain JVM test tasks of their own.
 [tasks.test-all]
-description = "Run all module tests"
-run = "./gradlew allTests :core:desktopTest"
+description = "Run every test suite: both targets, the desktop shell and the build logic"
+run = "./gradlew allTests :desktopApp:test :buildSrc:test"
 
 [tasks.check]
 description = "Run all checks (tests + lint) across every module"

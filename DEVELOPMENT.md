@@ -107,7 +107,7 @@ below if you prefer to run them directly.
 | `mise icons` | Re-renders the desktop icon bitmaps from `design/branding/icon.svg` |
 | `mise test` | `./gradlew :core:desktopTest` |
 | `mise test-fast` | Core and shared UI desktop tests |
-| `mise test-all` | `./gradlew allTests :core:desktopTest` |
+| `mise test-all` | `./gradlew allTests :desktopApp:test :buildSrc:test` |
 | `mise check` | `./gradlew check` |
 | `mise hooks-install` | Enable the version-controlled Git hooks |
 | `mise build` | `./gradlew build` |
