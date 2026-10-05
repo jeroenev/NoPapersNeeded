@@ -1,4 +1,5 @@
-// Kotlin and the Android Gradle plugin come from buildSrc, which the convention plugins need them in.
+// Kotlin and the Android Gradle plugin are not declared here: buildSrc's convention plugins put them
+// on every build script's classpath.
 plugins {
     alias(libs.plugins.androidxBaselineProfile) apply false
     alias(libs.plugins.composeCompiler) apply false
