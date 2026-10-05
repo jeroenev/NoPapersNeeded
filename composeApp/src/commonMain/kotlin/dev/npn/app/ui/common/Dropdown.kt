@@ -66,7 +66,7 @@ fun <T> Dropdown(
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    label = { Text(searchLabel.orEmpty()) },
+                    label = { Text(searchLabel) },
                     singleLine = true,
                     modifier = Modifier.width(280.dp).padding(horizontal = 12.dp, vertical = 4.dp),
                 )

@@ -327,12 +327,13 @@ private fun TagDialogHost(
 
         is TagDialog.Style -> {
             val single = dialog.names.singleOrNull()
+            val count = dialog.names.size
             TagFormDialog(
                 title =
                     if (single != null) {
                         stringResource(Res.string.common_tags_style_title)
                     } else {
-                        pluralStringResource(Res.plurals.common_tags_color_many_title, dialog.names.size, dialog.names.size)
+                        pluralStringResource(Res.plurals.common_tags_color_many_title, count, count)
                     },
                 initialName = single.orEmpty(),
                 initialColor = single?.let { name -> tags.firstOrNull { it.name == name }?.color },
