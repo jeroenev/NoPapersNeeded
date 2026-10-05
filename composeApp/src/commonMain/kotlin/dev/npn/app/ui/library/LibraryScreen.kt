@@ -410,7 +410,7 @@ private fun LibraryContent(
                     onAddTag = onAddTag,
                     onRemoveTag = onRemoveTag,
                     onAiEdit = aiEditSelection,
-                    onSetReviewed = vm::bulkSetReviewed,
+                    onReviewedChange = vm::bulkSetReviewed,
                     onRequestTrash = onRequestTrash,
                 )
             } else {
@@ -752,7 +752,7 @@ private fun SelectionTopBar(
     onAddTag: () -> Unit,
     onRemoveTag: () -> Unit,
     onAiEdit: (() -> Unit)?,
-    onSetReviewed: (Boolean) -> Unit,
+    onReviewedChange: (Boolean) -> Unit,
     onRequestTrash: () -> Unit,
 ) {
     val addTag = TopBarAction(Icons.Filled.NewLabel, stringResource(Res.string.common_add_tag), onAddTag)
@@ -789,14 +789,14 @@ private fun SelectionTopBar(
                     TopBarAction(
                         icon = Icons.Filled.CheckCircle,
                         label = stringResource(Res.string.library_mark_reviewed),
-                        onClick = { onSetReviewed(true) },
+                        onClick = { onReviewedChange(true) },
                     ),
                 )
                 add(
                     TopBarAction(
                         icon = Icons.Filled.RadioButtonUnchecked,
                         label = stringResource(Res.string.library_mark_needs_review),
-                        onClick = { onSetReviewed(false) },
+                        onClick = { onReviewedChange(false) },
                     ),
                 )
             }

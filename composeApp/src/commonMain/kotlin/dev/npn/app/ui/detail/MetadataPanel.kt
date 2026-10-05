@@ -271,7 +271,7 @@ private fun DetailsTab(
 private fun ReviewStatusSection(
     reviewMode: ReviewMode,
     reviewed: Boolean,
-    onSetReviewed: (Boolean) -> Unit,
+    onReviewedChange: (Boolean) -> Unit,
 ) {
     if (!reviewMode.reviewMarkerIsAuthoritative) return
     Row(
@@ -281,7 +281,7 @@ private fun ReviewStatusSection(
     ) {
         ReviewedBadge(reviewed)
         // Writes straight through (it also commits the draft), so it follows the save bar's rules.
-        OutlinedButton(onClick = { onSetReviewed(!reviewed) }, enabled = !LocalDocumentWriteBlocked.current) {
+        OutlinedButton(onClick = { onReviewedChange(!reviewed) }, enabled = !LocalDocumentWriteBlocked.current) {
             Text(
                 stringResource(
                     if (reviewed) Res.string.detail_mark_needs_review else Res.string.detail_mark_reviewed,
