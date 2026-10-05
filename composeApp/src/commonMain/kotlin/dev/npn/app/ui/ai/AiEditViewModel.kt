@@ -10,6 +10,7 @@ import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiFieldConfig
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.AiEditRun
+import dev.npn.core.app.AiEditRunImpl
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
@@ -360,6 +361,16 @@ class AiEditViewModel(
     private val settings: SettingsRepository,
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
     selection: List<String> = emptyList(),
+    /** The run this page drives, over the same [selection]. */
+    private val edit: AiEditRun =
+        AiEditRunImpl(
+            session.documents,
+            session.meta,
+            session.content,
+            session.aiSuggest,
+            session.fieldRegistry,
+            selection,
+        ),
 ) : ReviewViewModel(),
     AiEditSetupActions {
     private val editQueue = session.aiEditQueue
@@ -375,9 +386,6 @@ class AiEditViewModel(
             ),
         )
     val ui: StateFlow<AiEditUiState> = _ui.asStateFlow()
-
-    private val edit =
-        AiEditRun(session.documents, session.meta, session.content, session.aiSuggest, fieldRegistry, selection)
 
     init {
         // Seed the field options from the registry the first time it arrives: every aiEnabled field

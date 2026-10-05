@@ -173,8 +173,57 @@ sealed interface ApplyOutcome {
  * [processed] marks every reviewed document (including no-suggestion ones) at review time, not on
  * apply, so deselecting or skipping a document never sends it back through the model. A run handed
  * to the background ([remainingDocs] + [markHandedOff]) counts the same way.
+ *
+ * An interface so the screen driving it can be tested against a scripted run; [AiEditRunImpl] is
+ * the one implementation.
  */
-class AiEditRun(
+interface AiEditRun {
+    /** Documents already reviewed in this run; excluded from every later batch. */
+    val processed: StateFlow<Set<String>>
+
+    /**
+     * Documents in scope, live. The library selection travels as the filter's ids, and an empty one
+     * selects nothing; a saved view contributes its own sort, everything else uses the default sort.
+     */
+    fun docsFor(key: ScopeKey): Flow<List<DocListItem>>
+
+    /** Whether the scope still has unprocessed docs (drives the "Next batch" affordance). */
+    suspend fun moreRemain(key: ScopeKey): Boolean
+
+    /**
+     * Every document of the scope this run has not reviewed yet — the batch cap deliberately not
+     * applied. This is what a run handed to the background covers: the point of queueing is that
+     * nobody is waiting on the answer, so splitting it into review-sized batches would only make
+     * the user come back for the rest.
+     */
+    suspend fun remainingDocs(key: ScopeKey): List<DocListItem>
+
+    /**
+     * Mark [docIds] reviewed by something other than this run's own batches — a background run
+     * that took them — so the preview and any later batch skip documents already spent.
+     */
+    fun markHandedOff(docIds: List<String>)
+
+    /**
+     * Suggest edits for the next batch of the scope; see the class docs for concurrency, ordering
+     * and failure semantics. [onProgress] fires once before the first request and then as each
+     * document completes.
+     */
+    suspend fun suggestNextBatch(
+        key: ScopeKey,
+        request: AiEditRequest,
+        onProgress: (EditProgress) -> Unit,
+    ): BatchResult
+
+    /** Write the selected suggestions of [docs]; see the class docs for partial-failure semantics. */
+    suspend fun apply(
+        key: ScopeKey,
+        docs: List<ReviewDoc>,
+    ): ApplyOutcome
+}
+
+/** The [AiEditRun] over a library's facets. */
+class AiEditRunImpl(
     private val documents: DocumentRepository,
     private val meta: MetadataWriter,
     content: DocContentFacade,
@@ -182,7 +231,7 @@ class AiEditRun(
     fieldRegistry: FieldRegistry,
     /** Documents handed over from the library's selection mode; empty when opened standalone. */
     private val selection: List<String> = emptyList(),
-) {
+) : AiEditRun {
     /** The current batch's Review→journal step; each batch gets its own, so counts never carry over. */
     private var reviewApply = ReviewApply(meta)
 
@@ -191,15 +240,10 @@ class AiEditRun(
 
     private val runner = SuggestionRunner(ai)
 
-    /** Documents already reviewed in this run; excluded from every later batch. */
     private val _processed = MutableStateFlow(emptySet<String>())
-    val processed: StateFlow<Set<String>> = _processed.asStateFlow()
+    override val processed: StateFlow<Set<String>> = _processed.asStateFlow()
 
-    /**
-     * Documents in scope, live. The library selection travels as the filter's ids, and an empty one
-     * selects nothing; a saved view contributes its own sort, everything else uses the default [SORT].
-     */
-    fun docsFor(key: ScopeKey): Flow<List<DocListItem>> =
+    override fun docsFor(key: ScopeKey): Flow<List<DocListItem>> =
         when (key.scope) {
             EditScope.SELECTION -> {
                 if (selection.isEmpty()) {
@@ -237,32 +281,16 @@ class AiEditRun(
             }
         }
 
-    /** Whether the scope still has unprocessed docs (drives the "Next batch" affordance). */
-    suspend fun moreRemain(key: ScopeKey): Boolean = nextBatchDocs(key).isNotEmpty()
+    override suspend fun moreRemain(key: ScopeKey): Boolean = nextBatchDocs(key).isNotEmpty()
 
-    /**
-     * Every document of the scope this run has not reviewed yet — the batch cap deliberately not
-     * applied. This is what a run handed to the background covers: the point of queueing is that
-     * nobody is waiting on the answer, so splitting it into review-sized batches would only make
-     * the user come back for the rest.
-     */
-    suspend fun remainingDocs(key: ScopeKey): List<DocListItem> =
+    override suspend fun remainingDocs(key: ScopeKey): List<DocListItem> =
         docsFor(key).first().filterNot { it.doc.docId in _processed.value }
 
-    /**
-     * Mark [docIds] reviewed by something other than this run's own batches — a background run
-     * that took them — so the preview and any later batch skip documents already spent.
-     */
-    fun markHandedOff(docIds: List<String>) {
+    override fun markHandedOff(docIds: List<String>) {
         _processed.update { it + docIds }
     }
 
-    /**
-     * Suggest edits for the next batch of the scope; see class docs for concurrency, ordering and
-     * failure semantics. [onProgress] fires once before the first request and then as each
-     * document completes.
-     */
-    suspend fun suggestNextBatch(
+    override suspend fun suggestNextBatch(
         key: ScopeKey,
         request: AiEditRequest,
         onProgress: (EditProgress) -> Unit,
@@ -299,8 +327,7 @@ class AiEditRun(
         return BatchResult.Review(withSuggestions, empty, failures, total)
     }
 
-    /** Write the selected suggestions of [docs]; see class docs for partial-failure semantics. */
-    suspend fun apply(
+    override suspend fun apply(
         key: ScopeKey,
         docs: List<ReviewDoc>,
     ): ApplyOutcome =

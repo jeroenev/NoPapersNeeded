@@ -41,7 +41,7 @@ private class Harness(
     val content = FakeDocContentFacade()
     val ai = FakeAiSuggest()
     val fieldRegistry = FakeFieldRegistry()
-    val run = AiEditRun(documents, meta, content, ai, fieldRegistry, selection)
+    val run = AiEditRunImpl(documents, meta, content, ai, fieldRegistry, selection)
 }
 
 private val REQUEST = AiEditRequest()
