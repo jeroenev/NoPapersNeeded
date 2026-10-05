@@ -311,8 +311,8 @@ class JournalCoordinator internal constructor(
     /**
      * Compact old, stable storage-v2 objects into one supersession snapshot, then delete the
      * superseded files. Runs under the single-writer mutex so the snapshot write and deletions are
-     * serialized against every other journal write. A no-op when compaction is unsupported, writes
-     * are blocked, or the threshold/stability gate is not met. That gate is decided from the source
+     * serialized against every other journal write. A no-op without a [compactor], while writes are
+     * blocked, or when the threshold/stability gate is not met. That gate is decided from the source
      * table alone, so the usual tick reads no event and no file; only the objects a plan picks are
      * checked on disk and have their events loaded.
      *
@@ -326,7 +326,7 @@ class JournalCoordinator internal constructor(
         locked {
             val activeCompactor = compactor ?: return@locked null
             val support = checkNotNull(snapshots) { "A coordinator that compacts needs its SnapshotSupport" }
-            if (!activeCompactor.supported || writeBlockReason != null) return@locked null
+            if (writeBlockReason != null) return@locked null
             val (objects, snapshots) = support.compactionSources()
             val chosen =
                 activeCompactor.plan(
