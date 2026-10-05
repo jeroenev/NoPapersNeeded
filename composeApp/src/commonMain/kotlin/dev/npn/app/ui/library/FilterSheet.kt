@@ -30,7 +30,6 @@ import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -49,6 +48,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DatePickerField
+import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.invalidNumberText
 import dev.npn.app.ui.common.rememberFieldLocale
 import dev.npn.app.ui.common.rememberFieldText
@@ -256,17 +256,11 @@ private fun FilterFields(
         }
     }
 
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(stringResource(Res.string.library_untagged_only))
-        Switch(
-            checked = draft.untaggedOnly,
-            onCheckedChange = { onDraftChange(draft.copy(untaggedOnly = it)) },
-        )
-    }
+    SwitchRow(
+        label = stringResource(Res.string.library_untagged_only),
+        checked = draft.untaggedOnly,
+        onCheckedChange = { onDraftChange(draft.copy(untaggedOnly = it)) },
+    )
 }
 
 /**

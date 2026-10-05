@@ -31,6 +31,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
+import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.ai.AiCheck
 import dev.npn.core.ai.AiCheckOutcome
@@ -106,8 +107,8 @@ internal fun AiSettingsPane(context: SettingsPaneContext) {
     val vm = context.vm
     val state = context.state
     SettingsGroup(title = null) {
-        SettingsSwitchRow(
-            title = stringResource(Res.string.common_settings_enable_ai),
+        SwitchRow(
+            label = stringResource(Res.string.common_settings_enable_ai),
             help = stringResource(Res.string.common_settings_ai_help),
             checked = state.aiEnabled,
             onCheckedChange = { on -> vm.edit { it.copy(aiEnabled = on) } },
@@ -187,8 +188,8 @@ private fun AiBehaviourSettings(
     // The unattended post-OCR enrichment switch. It lives here (and is therefore only reachable
     // once AI is on) because it spends the same endpoint; the help text spells out that it writes
     // without a review step, which is what separates it from the AI tagging page.
-    SettingsSwitchRow(
-        title = stringResource(Res.string.common_settings_ai_auto_on_ocr),
+    SwitchRow(
+        label = stringResource(Res.string.common_settings_ai_auto_on_ocr),
         help = stringResource(Res.string.common_settings_ai_auto_on_ocr_help),
         checked = state.aiAutoOnOcr,
         onCheckedChange = { on -> vm.edit { it.copy(aiAutoOnOcr = on) } },
@@ -197,8 +198,8 @@ private fun AiBehaviourSettings(
     // spend the endpoint unattended, but this one is charged per PAGE rather than per document, and
     // it also re-transcribes documents a local engine already did — so the help text leads with the
     // cost, and "OCR with AI" on a single document stays available whether this is on or off.
-    SettingsSwitchRow(
-        title = stringResource(Res.string.common_settings_ai_ocr_auto),
+    SwitchRow(
+        label = stringResource(Res.string.common_settings_ai_ocr_auto),
         help =
             stringResource(
                 Res.string.common_settings_ai_ocr_auto_help,

@@ -36,6 +36,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.NumericField
+import dev.npn.app.ui.common.SwitchRow
 import dev.npn.core.app.AiTagging
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.EditScope

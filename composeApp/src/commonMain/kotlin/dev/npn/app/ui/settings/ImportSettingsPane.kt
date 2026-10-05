@@ -32,6 +32,7 @@ import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.persistDirectoryAccess
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalAppLocale
+import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.core.ocr.OcrLanguages
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
@@ -145,8 +146,8 @@ private fun WatchedFolderSettings(
     }
     // Only meaningful once a folder is watched: with no source folder there is nothing to remove.
     if (watchedFolder != null) {
-        SettingsSwitchRow(
-            title = stringResource(Res.string.common_settings_remove_after_import),
+        SwitchRow(
+            label = stringResource(Res.string.common_settings_remove_after_import),
             help = stringResource(Res.string.common_settings_remove_after_import_help),
             checked = deleteAfterImport,
             onCheckedChange = onSetDeleteAfterImport,
@@ -166,8 +167,8 @@ private fun OcrLanguageSettings(
 ) {
     val automatic = setting == null
     val selected = setting?.let(OcrLanguages::parse) ?: OcrLanguages.forAppLanguage(LocalAppLocale.current)
-    SettingsSwitchRow(
-        title = stringResource(Res.string.common_settings_ocr_match_app_language),
+    SwitchRow(
+        label = stringResource(Res.string.common_settings_ocr_match_app_language),
         help = stringResource(Res.string.common_settings_ocr_match_app_language_help),
         checked = automatic,
         // Switching off starts from what automatic used, so nothing changes until a chip is tapped.

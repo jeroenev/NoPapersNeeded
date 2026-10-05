@@ -6,6 +6,7 @@ import androidx.compose.runtime.Composable
 import dev.npn.app.BuildInfo
 import dev.npn.app.platform.checksForUpdates
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.SwitchRow
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help
@@ -29,8 +30,8 @@ internal fun AboutSettingsPane(context: SettingsPaneContext) {
         HelpText(stringResource(Res.string.common_settings_about_help))
         // Inside Flatpak the package manager updates the app, so there is nothing to switch.
         if (checksForUpdates()) {
-            SettingsSwitchRow(
-                title = stringResource(Res.string.common_settings_update_check),
+            SwitchRow(
+                label = stringResource(Res.string.common_settings_update_check),
                 help = stringResource(Res.string.common_settings_update_check_help),
                 checked = context.state.updateCheckEnabled,
                 onCheckedChange = { on -> context.vm.edit { it.copy(updateCheckEnabled = on) } },

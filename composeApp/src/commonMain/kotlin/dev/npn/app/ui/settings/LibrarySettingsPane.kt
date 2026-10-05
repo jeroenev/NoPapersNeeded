@@ -8,6 +8,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import dev.npn.app.platform.supportsSafStorage
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.app.ui.common.resolve
 import dev.npn.core.app.LibraryLocations
@@ -94,8 +95,8 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
     // (cloud document providers). It changes what the next folder choice persists, nothing else.
     if (supportsSafStorage()) {
         SettingsGroup(title = stringResource(Res.string.common_settings_advanced)) {
-            SettingsSwitchRow(
-                title = stringResource(Res.string.common_settings_use_saf),
+            SwitchRow(
+                label = stringResource(Res.string.common_settings_use_saf),
                 help = stringResource(Res.string.common_settings_use_saf_help),
                 checked = context.state.useSafStorage,
                 onCheckedChange = { on -> context.vm.edit { it.copy(useSafStorage = on) } },
@@ -119,8 +120,8 @@ private fun StoragePathRuleEditor(
     onEnabledChange: (Boolean) -> Unit,
 ) {
     val evaluation = evaluateStoragePath(template, sampleStoragePathContext(fieldTypes))
-    SettingsSwitchRow(
-        title = stringResource(Res.string.common_settings_storage_organize_paths),
+    SwitchRow(
+        label = stringResource(Res.string.common_settings_storage_organize_paths),
         help = stringResource(Res.string.common_settings_storage_organize_help),
         checked = enabled,
         enabled = evaluation.error == null,

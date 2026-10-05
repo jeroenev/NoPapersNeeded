@@ -21,7 +21,6 @@ import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.RadioButton
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -35,7 +34,6 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.common.HelpText
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.EditScope
 import no_papers_needed.composeapp.generated.resources.Res
@@ -110,30 +108,6 @@ internal fun ExpanderRow(
                     stringResource(if (expanded) Res.string.ai_collapse else Res.string.ai_expand),
             )
         }
-    }
-}
-
-/** Label (+ optional help) on the left, a yes/no [Switch] on the right. */
-@Composable
-internal fun SwitchRow(
-    label: String,
-    help: String?,
-    checked: Boolean,
-    onCheckedChange: (Boolean) -> Unit,
-) {
-    Row(
-        Modifier
-            .fillMaxWidth()
-            .toggleable(value = checked, role = Role.Switch, onValueChange = onCheckedChange),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        Column(Modifier.weight(1f)) {
-            Text(label, style = MaterialTheme.typography.bodyLarge)
-            help?.let { HelpText(it) }
-        }
-        // Null callback: the whole row is the toggle, so the switch must not be a second target.
-        Switch(checked = checked, onCheckedChange = null)
     }
 }
 

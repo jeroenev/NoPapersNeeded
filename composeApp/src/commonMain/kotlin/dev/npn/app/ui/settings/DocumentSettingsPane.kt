@@ -11,6 +11,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
+import dev.npn.app.ui.common.SwitchRow
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_cancel
@@ -79,8 +80,8 @@ private fun InboxWorkflowToggle(
 ) {
     var showMigration by remember { mutableStateOf(false) }
 
-    SettingsSwitchRow(
-        title = stringResource(Res.string.common_settings_enable_inbox),
+    SwitchRow(
+        label = stringResource(Res.string.common_settings_enable_inbox),
         help = stringResource(Res.string.common_settings_inbox_help),
         checked = current == ReviewMode.INBOX_WORKFLOW,
         onCheckedChange = { checked -> if (checked) showMigration = true else onUntaggedOnly() },

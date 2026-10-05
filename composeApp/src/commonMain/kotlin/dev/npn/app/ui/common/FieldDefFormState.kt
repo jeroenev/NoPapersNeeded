@@ -3,7 +3,6 @@ package dev.npn.app.ui.common
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowDropDown
@@ -14,14 +13,12 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.core.model.FieldDef
@@ -143,28 +140,16 @@ fun FieldDefForm(
             singleLine = true,
             modifier = Modifier.fillMaxWidth(),
         )
-        SwitchRow(stringResource(Res.string.detail_field_show_by_default), state.showByDefault) {
-            onChange(state.copy(showByDefault = it))
-        }
-        SwitchRow(stringResource(Res.string.detail_field_ai_enabled), state.aiEnabled) {
-            onChange(state.copy(aiEnabled = it))
-        }
-    }
-}
-
-@Composable
-private fun SwitchRow(
-    title: String,
-    checked: Boolean,
-    onChange: (Boolean) -> Unit,
-) {
-    Row(
-        Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(title, modifier = Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = onChange)
+        SwitchRow(
+            label = stringResource(Res.string.detail_field_show_by_default),
+            checked = state.showByDefault,
+            onCheckedChange = { onChange(state.copy(showByDefault = it)) },
+        )
+        SwitchRow(
+            label = stringResource(Res.string.detail_field_ai_enabled),
+            checked = state.aiEnabled,
+            onCheckedChange = { onChange(state.copy(aiEnabled = it)) },
+        )
     }
 }
 
