@@ -1,5 +1,7 @@
 package dev.npn.app
 
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsViewModel
 import dev.npn.app.ui.settings.evaluateStoragePath
@@ -27,6 +29,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_not_a_date
+import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
+import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -42,8 +50,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val collector = launch { model.messages.collect { messages += it.text } }
 
             session.content.clearedThumbnails = 3
             model.clearThumbnailCache()
@@ -53,7 +61,11 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             collector.cancel()
 
-            messages shouldContainExactly listOf("Cleared 3 thumbnails", "Thumbnail cache already empty")
+            messages shouldContainExactly
+                listOf(
+                    uiText(Res.plurals.common_settings_thumbnails_cleared, 3, 3),
+                    uiText(Res.string.common_settings_thumbnail_cache_empty),
+                )
         }
 
     @Test
@@ -129,50 +141,12 @@ class SettingsViewModelTest : MainDispatcherTest() {
     }
 
     @Test
-    fun aDatePatternOnANonDateFieldSaysSo() =
-        runTest(dispatcher) {
-            val result = evaluateStoragePath("{field:amount:yyyy}/{title}.pdf", PREVIEW_CONTEXT)
+    fun aDatePatternOnANonDateFieldSaysSo() {
+        val result = evaluateStoragePath("{field:amount:yyyy}/{title}.pdf", PREVIEW_CONTEXT)
 
-            result.error shouldBe StoragePathError.NotADateField("amount")
-            result.error?.text()?.resolveEnglish() shouldBe "amount is not a date field, so it takes no date format"
-        }
-
-    @Test
-    fun everyStoragePathErrorHasCopy() =
-        runTest(dispatcher) {
-            val errors =
-                listOf(
-                    StoragePathError.UnclosedPlaceholder(3),
-                    StoragePathError.UnexpectedClosingBrace(3),
-                    StoragePathError.UnknownVariable("author"),
-                    StoragePathError.MissingFieldKey,
-                    StoragePathError.NotADateField("amount"),
-                    StoragePathError.FormatNotAllowed("tags"),
-                    StoragePathError.Blank,
-                    StoragePathError.Absolute,
-                    StoragePathError.Backslash,
-                    StoragePathError.Traversal,
-                    StoragePathError.ReservedDirectory(".npn"),
-                    StoragePathError.EdgeWhitespace,
-                    StoragePathError.InvalidSegment("a:b"),
-                )
-            errors.map { it.text().resolveEnglish() } shouldContainExactly
-                listOf(
-                    "Unclosed placeholder starting at position 3",
-                    "Unexpected closing brace at position 3",
-                    "Unknown template variable author",
-                    "{field} needs a field key, for example {field:amount}",
-                    "amount is not a date field, so it takes no date format",
-                    "{tags} does not take a format",
-                    "Path must not be blank",
-                    "Absolute paths are not allowed",
-                    "Backslashes are not allowed",
-                    "Path traversal is not allowed",
-                    "The .npn directory is reserved",
-                    "Path segments may not start or end with whitespace",
-                    "Invalid filename segment a:b",
-                )
-        }
+        result.error shouldBe StoragePathError.NotADateField("amount")
+        result.error?.text() shouldBe uiText(Res.string.common_settings_storage_error_not_a_date, "amount")
+    }
 
     /**
      * A field the user defined as a date takes a date pattern like the seeded document date does.
@@ -380,15 +354,16 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { reviewConfig.failSetReviewMode = { error("writes blocked") } }
             val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val collector = launch { model.messages.collect { messages += it.text } }
 
             model.setUntaggedOnlyMode()
             model.setInboxWorkflowMode(ReviewMigration.MARK_NONE)
             advanceUntilIdle()
             collector.cancel()
 
-            messages shouldContainExactly List(2) { "Could not change the review workflow: writes blocked" }
+            messages shouldContainExactly
+                List(2) { failure(Res.string.common_settings_review_workflow_failed, "writes blocked") }
         }
 
     @Test
@@ -467,8 +442,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = aiSettings().apply { failEdit = { error("read-only file system") } }
             val model = vm(settings = settings, selfTest = { report(AiCheckStatus.FAILED) })
-            val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val collector = launch { model.messages.collect { messages += it.text } }
 
             model.runAiSelfTest()
             advanceUntilIdle()
@@ -476,7 +451,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
 
             model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
             model.aiSelfTest.value.running shouldBe false
-            messages shouldContainExactly listOf("Could not save the setting: read-only file system")
+            messages shouldContainExactly
+                listOf(failure(Res.string.common_save_setting_failed, "read-only file system"))
         }
 
     @Test

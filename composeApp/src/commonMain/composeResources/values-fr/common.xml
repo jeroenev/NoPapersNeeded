@@ -25,7 +25,6 @@
     <string name="common_view_grid">Grille</string>
     <string name="common_unknown_error">erreur inconnue</string>
     <string name="common_could_not_open_library">Impossible d’ouvrir la bibliothèque.</string>
-    <string name="common_could_not_queue_edit_run">Impossible de mettre la modification IA en file : %1$s</string>
 
     <string name="common_opening_library">Ouverture de la bibliothèque…</string>
     <string name="common_open_library_title">Impossible d’ouvrir votre bibliothèque</string>
@@ -48,15 +47,8 @@
     <string name="common_scan_already_in_library">Numérisation déjà dans la bibliothèque</string>
     <string name="common_scan_import_failed">Échec de l’import de la numérisation : %1$s</string>
     <string name="common_scan_capture_failed">Échec de la numérisation. Vérifiez l’accès à l’appareil photo et réessayez.</string>
-    <string name="common_tagging_done_empty">Aucun document à étiqueter</string>
     <string name="common_join_items">%1$s, %2$s</string>
-    <string name="common_tagging_apply_summary">Appliquer %1$s à %2$s</string>
-    <string name="common_tagging_done_summary">Appliqué : %1$s à %2$s</string>
 
-    <plurals name="common_could_not_suggest_tags_partial">
-        <item quantity="one">Impossible d’obtenir des suggestions pour %1$d document sur %2$d</item>
-        <item quantity="other">Impossible d’obtenir des suggestions pour %1$d des %2$d documents</item>
-    </plurals>
     <plurals name="common_imported_count">
         <item quantity="one">%1$d importé</item>
         <item quantity="other">%1$d importés</item>
@@ -76,10 +68,6 @@
     <plurals name="common_suggestion_count">
         <item quantity="one">%1$d suggestion</item>
         <item quantity="other">%1$d suggestions</item>
-    </plurals>
-    <plurals name="common_tagging_scope_count_batch">
-        <item quantity="one">%1$d document : les %2$d premiers sont traités dans ce lot</item>
-        <item quantity="other">%1$d documents : les %2$d premiers sont traités dans ce lot</item>
     </plurals>
 
     <string name="common_choose_date">Choisir une date</string>

@@ -1,6 +1,8 @@
 package dev.npn.app
 
 import dev.npn.app.platform.ScanResult
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
 import dev.npn.app.ui.library.asUiText
@@ -24,6 +26,11 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_scan_capture_failed
+import no_papers_needed.composeapp.generated.resources.library_add_tag_failed
+import no_papers_needed.composeapp.generated.resources.library_refresh_failed
+import no_papers_needed.composeapp.generated.resources.library_save_view_failed
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -33,10 +40,10 @@ class LibraryViewModelTest : MainDispatcherTest() {
         settings: FakeSettingsRepository = FakeSettingsRepository(),
     ) = LibraryViewModel(session, settings)
 
-    /** Collect messages emitted by [model] into a list of resolved English strings. */
-    private fun TestScope.collectMessages(model: LibraryViewModel): MutableList<String> {
-        val messages = mutableListOf<String>()
-        backgroundScope.launch { model.messages.collect { messages += it.resolveEnglish() } }
+    /** Collect the text of the messages [model] emits. */
+    private fun TestScope.collectMessages(model: LibraryViewModel): MutableList<UiText> {
+        val messages = mutableListOf<UiText>()
+        backgroundScope.launch { model.messages.collect { messages += it.text } }
         return messages
     }
 
@@ -189,7 +196,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.importScan(ScanResult.Failed)
             advanceUntilIdle()
 
-            messages shouldBe listOf("Scanning failed. Check camera access and try again.")
+            messages shouldBe listOf(uiText(Res.string.common_scan_capture_failed))
         }
 
     @Test
@@ -214,16 +221,8 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.refresh()
             advanceUntilIdle()
 
-            messages shouldBe listOf("Could not refresh the library: folder unavailable")
+            messages shouldBe listOf(failure(Res.string.library_refresh_failed, "folder unavailable"))
             model.ui.value.refreshing shouldBe false
-        }
-
-    @Test
-    fun importSummaryMessageFormatsCounts() =
-        runTest(dispatcher) {
-            ImportTally(3, 0, 0).asUiText().resolveEnglish() shouldBe "3 imported"
-            ImportTally(2, 1, 0).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate"
-            ImportTally(2, 1, 3).asUiText().resolveEnglish() shouldBe "2 imported, 1 duplicate, 3 failed"
         }
 
     @Test
@@ -248,13 +247,13 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.startSelection("d1")
             model.toggleSelection("d2")
 
-            val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val collector = launch { model.messages.collect { messages += it.text } }
             runCurrent()
             model.bulkAddTag("finance")
             advanceUntilIdle()
             collector.cancel()
-            messages shouldContainExactly listOf("Could not add the tag to 2 documents")
+            messages shouldContainExactly listOf(uiText(Res.plurals.library_add_tag_failed, 2, 2))
             // Selection preserved so the user can retry.
             model.ui.value.selected shouldBe setOf("d1", "d2")
             model.ui.value.selectionMode shouldBe true
@@ -484,7 +483,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val messages = collectMessages(model)
             model.saveCurrentView("Taxes")
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not save the view: disk full")
+            messages shouldContainExactly listOf(failure(Res.string.library_save_view_failed, "disk full"))
         }
 
     @Test

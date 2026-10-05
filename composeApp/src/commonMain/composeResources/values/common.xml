@@ -26,7 +26,6 @@
     <string name="common_view_grid">Grid</string>
     <string name="common_unknown_error">unknown error</string>
     <string name="common_could_not_open_library">Could not open the library.</string>
-    <string name="common_could_not_queue_edit_run">Could not queue the AI edit: %1$s</string>
 
     <string name="common_opening_library">Opening library...</string>
     <string name="common_open_library_title">Could not open your library</string>
@@ -49,15 +48,8 @@
     <string name="common_scan_already_in_library">Scan already in library</string>
     <string name="common_scan_import_failed">Scan import failed: %1$s</string>
     <string name="common_scan_capture_failed">Scanning failed. Check camera access and try again.</string>
-    <string name="common_tagging_done_empty">No documents to tag</string>
     <string name="common_join_items">%1$s, %2$s</string>
-    <string name="common_tagging_apply_summary">Apply %1$s across %2$s</string>
-    <string name="common_tagging_done_summary">Applied %1$s across %2$s</string>
 
-    <plurals name="common_could_not_suggest_tags_partial">
-        <item quantity="one">Could not get suggestions for %1$d of %2$d document</item>
-        <item quantity="other">Could not get suggestions for %1$d of %2$d documents</item>
-    </plurals>
     <plurals name="common_imported_count">
         <item quantity="one">%1$d imported</item>
         <item quantity="other">%1$d imported</item>
@@ -77,10 +69,6 @@
     <plurals name="common_suggestion_count">
         <item quantity="one">%1$d suggestion</item>
         <item quantity="other">%1$d suggestions</item>
-    </plurals>
-    <plurals name="common_tagging_scope_count_batch">
-        <item quantity="one">%1$d document - the first %2$d run in this batch</item>
-        <item quantity="other">%1$d documents - the first %2$d run in this batch</item>
     </plurals>
 
     <string name="common_choose_date">Choose date</string>

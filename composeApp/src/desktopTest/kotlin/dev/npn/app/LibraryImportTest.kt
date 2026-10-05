@@ -31,7 +31,7 @@ class LibraryImportTest : MainDispatcherTest() {
                 }
             val model = LibraryViewModel(session, FakeSettingsRepository())
             val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val collector = launch { model.messages.collect { messages += it.english() } }
 
             model.import(sources)
             advanceUntilIdle()
@@ -46,7 +46,7 @@ class LibraryImportTest : MainDispatcherTest() {
             val session = FakeLibrarySession().apply { ingest.failImport = { error("Library session is closed") } }
             val model = LibraryViewModel(session, FakeSettingsRepository())
             val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val collector = launch { model.messages.collect { messages += it.english() } }
 
             model.import(sources)
             advanceUntilIdle()

@@ -23,7 +23,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
-import dev.npn.app.ui.common.resolve
 import dev.npn.core.ai.AiEditRequest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_blocked_loading
@@ -148,7 +147,7 @@ private fun summaryLine(
     ui: AiEditUiState,
     plan: RunPlan,
 ): String {
-    val scope = scopeCountText(plan.documents, ui.batchSize).resolve()
+    val scope = scopeCount(plan.documents, ui.batchSize)
     // Before a task is chosen the state still carries the defaults, but the user has not asked for
     // them, so listing them here would describe a run nobody configured.
     if (ui.task == null) return scope

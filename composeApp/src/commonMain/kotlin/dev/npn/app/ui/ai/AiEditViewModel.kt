@@ -3,7 +3,6 @@ package dev.npn.app.ui.ai
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
@@ -43,7 +42,9 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_queue_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_setup_load_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_failed
 
 /**
  * The documents the next batch would process ([batch]) out of [total] still in scope.
@@ -557,7 +558,7 @@ class AiEditViewModel(
                 edit.markHandedOff(docIds)
                 _ui.update { it.copy(phase = EditPhase.Queued(docIds.size)) }
             }.onFailure { cause ->
-                message(uiText(UiTextKey.COULD_NOT_QUEUE_EDIT_RUN, cause.message.orEmpty()))
+                message(uiText(Res.string.ai_edit_queue_failed, cause.reasonText()))
                 _ui.update { it.copy(phase = EditPhase.Idle) }
             }
     }
@@ -642,11 +643,7 @@ class AiEditViewModel(
             is BatchResult.Review -> {
                 if (result.failures > 0) {
                     message(
-                        uiText(
-                            UiTextKey.COULD_NOT_SUGGEST_TAGS_PARTIAL,
-                            result.failures,
-                            result.total,
-                        ),
+                        uiText(Res.plurals.ai_edit_suggest_failed, result.total, result.failures, result.total),
                     )
                 }
                 _ui.update { it.copy(phase = EditPhase.Review(result.docs, result.emptyDocs)) }

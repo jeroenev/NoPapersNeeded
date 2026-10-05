@@ -41,8 +41,8 @@ class SnackbarMessagesTest {
             var undone = 0
             val undo =
                 UiMessage(
-                    UiText.Dynamic("Moved 2 documents to trash"),
-                    UiMessage.Action(UiText.Dynamic("Undo")) { undone++ },
+                    UiText.Raw("Moved 2 documents to trash"),
+                    UiMessage.Action(UiText.Raw("Undo")) { undone++ },
                 )
             withScene(flowOf(undo, undo), snackbar) { scene ->
                 snackbar.currentSnackbarData
@@ -63,7 +63,7 @@ class SnackbarMessagesTest {
             }
         }
 
-    private fun text(value: String) = UiMessage(UiText.Dynamic(value))
+    private fun text(value: String) = UiMessage(UiText.Raw(value))
 
     private fun SnackbarHostState.shownMessage(): String? = currentSnackbarData?.visuals?.message
 

@@ -6,7 +6,9 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.doc
-import dev.npn.app.resolveEnglish
+import dev.npn.app.failure
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFieldMode
@@ -39,6 +41,12 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_queue_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_setup_load_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_failed
 import kotlin.test.Test
 
 /**
@@ -316,11 +324,11 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
                         )
                 }
             val model = vm(session)
-            val messages = mutableListOf<String>()
+            val messages = mutableListOf<UiText>()
             val jobs =
                 listOf(
                     launch { model.ui.collect {} },
-                    launch { model.messages.collect { messages += it.resolveEnglish() } },
+                    launch { model.messages.collect { messages += it.text } },
                 )
             advanceUntilIdle()
             model.start()
@@ -332,7 +340,7 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             messages shouldHaveSize 1
-            messages.single() shouldBe "Could not update the tags of 1 of 2 documents"
+            messages.single() shouldBe uiText(Res.plurals.ai_edit_apply_tags_failed, 2, 1, 2)
             // b was written; a kept for retry in a Review phase.
             session.meta.addedTags shouldContainExactly listOf(listOf("b") to "t2")
             val review =
@@ -357,11 +365,11 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
                     meta.failApplyEditsForDocs = setOf("a")
                 }
             val model = vm(session)
-            val messages = mutableListOf<String>()
+            val messages = mutableListOf<UiText>()
             val jobs =
                 listOf(
                     launch { model.ui.collect {} },
-                    launch { model.messages.collect { messages += it.resolveEnglish() } },
+                    launch { model.messages.collect { messages += it.text } },
                 )
             advanceUntilIdle()
             model.start()
@@ -370,7 +378,7 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
             model.apply()
             advanceUntilIdle()
 
-            messages shouldContainExactly listOf("Could not save the details of 1 of 2 documents")
+            messages shouldContainExactly listOf(uiText(Res.plurals.ai_edit_apply_fields_failed, 2, 1, 2))
             jobs.forEach { it.cancel() }
         }
 
@@ -409,17 +417,17 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
                     aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = vm(session)
-            val messages = mutableListOf<String>()
+            val messages = mutableListOf<UiText>()
             val jobs =
                 listOf(
                     launch { model.ui.collect {} },
-                    launch { model.messages.collect { messages += it.resolveEnglish() } },
+                    launch { model.messages.collect { messages += it.text } },
                 )
             advanceUntilIdle()
             model.start()
             advanceUntilIdle()
 
-            messages shouldContainExactly listOf("Could not get suggestions for 1 of 2 documents")
+            messages shouldContainExactly listOf(uiText(Res.plurals.ai_edit_suggest_failed, 2, 1, 2))
             val review =
                 model.ui.value.phase
                     .shouldBeInstanceOf<EditPhase.Review>()
@@ -1225,8 +1233,8 @@ class AiEditBackgroundTest : MainDispatcherTest() {
             session.aiEditQueue.enqueueFailure = IllegalStateException("disk full")
             val model = vm(session, background = true)
             val job = launch { model.ui.collect {} }
-            val messages = mutableListOf<String>()
-            val messageJob = launch { model.messages.collect { messages += it.text.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val messageJob = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.setScope(EditScope.ALL)
 
@@ -1234,7 +1242,7 @@ class AiEditBackgroundTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.ui.value.phase shouldBe EditPhase.Idle
-            messages.single() shouldBe "Could not queue the AI edit: disk full"
+            messages.single() shouldBe failure(Res.string.ai_edit_queue_failed, "disk full")
             job.cancel()
             messageJob.cancel()
         }
@@ -1583,12 +1591,12 @@ class AiEditSetupFailureTest : MainDispatcherTest() {
                 FakeLibrarySession().apply { savedViews.failObserve = IllegalStateException("database locked") }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
-            val messages = mutableListOf<String>()
-            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val messageJob = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
 
             model.ui.value.savedViews shouldBe emptyList()
-            messages shouldContainExactly listOf("Some AI edit options could not be loaded: database locked")
+            messages shouldContainExactly listOf(failure(Res.string.ai_edit_setup_load_failed, "database locked"))
             job.cancel()
             messageJob.cancel()
         }

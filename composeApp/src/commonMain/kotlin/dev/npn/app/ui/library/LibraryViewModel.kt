@@ -5,7 +5,6 @@ import dev.npn.app.platform.ScanResult
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.aiConfigured
@@ -50,11 +49,18 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_duplicate_count
+import no_papers_needed.composeapp.generated.resources.common_failed_count
 import no_papers_needed.composeapp.generated.resources.common_import_failure_copy
 import no_papers_needed.composeapp.generated.resources.common_import_failure_empty
 import no_papers_needed.composeapp.generated.resources.common_import_failure_images
+import no_papers_needed.composeapp.generated.resources.common_imported_count
+import no_papers_needed.composeapp.generated.resources.common_join_items
 import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
+import no_papers_needed.composeapp.generated.resources.common_scan_already_in_library
+import no_papers_needed.composeapp.generated.resources.common_scan_capture_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_import_failed
+import no_papers_needed.composeapp.generated.resources.common_scan_imported
 import no_papers_needed.composeapp.generated.resources.library_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.library_delete_view_failed
 import no_papers_needed.composeapp.generated.resources.library_import_failed
@@ -69,8 +75,13 @@ import org.jetbrains.compose.resources.PluralStringResource
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-/** An import batch's tally as the snackbar reports it. */
-fun ImportTally.asUiText(): UiText = uiText(UiTextKey.IMPORT_SUMMARY, imported, duplicates, failed)
+/** An import batch's tally as the snackbar reports it: "3 imported, 1 duplicate", leaving out what is 0. */
+fun ImportTally.asUiText(): UiText =
+    listOfNotNull(
+        uiText(Res.plurals.common_imported_count, imported, imported),
+        duplicates.takeIf { it > 0 }?.let { uiText(Res.plurals.common_duplicate_count, it, it) },
+        failed.takeIf { it > 0 }?.let { uiText(Res.plurals.common_failed_count, it, it) },
+    ).reduce { summary, part -> uiText(Res.string.common_join_items, summary, part) }
 
 /** The filter and sort a result set was queried with. */
 data class LibraryQuery(
@@ -485,7 +496,7 @@ class LibraryViewModel(
             }
 
             ScanResult.Failed -> {
-                message(uiText(UiTextKey.SCAN_CAPTURE_FAILED))
+                message(uiText(Res.string.common_scan_capture_failed))
             }
 
             ScanResult.Cancelled -> {
@@ -496,9 +507,9 @@ class LibraryViewModel(
 
     private fun scanOutcomeMessage(outcome: ImportOutcome): UiText =
         when (outcome) {
-            is ImportOutcome.Imported -> uiText(UiTextKey.SCAN_IMPORTED)
-            is ImportOutcome.Duplicate -> uiText(UiTextKey.SCAN_ALREADY_IN_LIBRARY)
-            is ImportOutcome.Failed -> uiText(UiTextKey.SCAN_IMPORT_FAILED, outcome.reason.text())
+            is ImportOutcome.Imported -> uiText(Res.string.common_scan_imported)
+            is ImportOutcome.Duplicate -> uiText(Res.string.common_scan_already_in_library)
+            is ImportOutcome.Failed -> uiText(Res.string.common_scan_import_failed, outcome.reason.text())
         }
 
     // Names are trimmed here so the trimming rule lives in one place rather than in each dialog.

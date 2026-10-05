@@ -1,5 +1,7 @@
 package dev.npn.app
 
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.tags.TagManagementViewModel
 import dev.npn.app.ui.tags.buildTree
 import dev.npn.core.app.TagInfo
@@ -10,6 +12,9 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_tags_delete_failed
+import no_papers_needed.composeapp.generated.resources.common_tags_rename_failed
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -136,8 +141,8 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { tagAdmin.failTagAdmin = { error("segment write failed") } }
             val model = vm(session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.delete("gone")
             model.rename("old", "new")
@@ -146,8 +151,8 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             session.tagAdmin.renamedTags shouldBe emptyList()
             messages shouldContainExactly
                 listOf(
-                    "Could not delete the tag: segment write failed",
-                    "Could not rename the tag: segment write failed",
+                    failure(Res.string.common_tags_delete_failed, "segment write failed"),
+                    failure(Res.string.common_tags_rename_failed, "segment write failed"),
                 )
             job.cancel()
         }

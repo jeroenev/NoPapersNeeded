@@ -4,7 +4,9 @@ import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.aiConfiguredSettings
-import dev.npn.app.resolveEnglish
+import dev.npn.app.failure
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiChatEvent
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
@@ -19,6 +21,10 @@ import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_chat_delete_failed
+import no_papers_needed.composeapp.generated.resources.common_ai_assistant_empty_answer
+import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unreachable
 import kotlin.test.Test
 
 /**
@@ -62,14 +68,14 @@ class AiChatViewModelTest : MainDispatcherTest() {
                 }
             val model = vm(session)
             val job = launch { model.ui.collect {} }
-            val messages = mutableListOf<String>()
-            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val messageJob = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
 
             model.deleteSession(saved.id)
             advanceUntilIdle()
 
-            messages shouldContainExactly listOf("Could not delete the chat: store locked")
+            messages shouldContainExactly listOf(failure(Res.string.ai_chat_delete_failed, "store locked"))
             job.cancel()
             messageJob.cancel()
         }
@@ -201,11 +207,11 @@ class AiChatViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { aiChat.failAsk = { error("connection refused") } }
             val model = vm(session)
-            val messages = mutableListOf<String>()
+            val messages = mutableListOf<UiText>()
             val jobs =
                 listOf(
                     launch { model.ui.collect {} },
-                    launch { model.messages.collect { messages += it.resolveEnglish() } },
+                    launch { model.messages.collect { messages += it.text } },
                 )
             advanceUntilIdle()
 
@@ -216,7 +222,8 @@ class AiChatViewModelTest : MainDispatcherTest() {
             items shouldHaveSize 1
             items[0].shouldBeInstanceOf<TranscriptItem.UserTurn>()
             model.ui.value.busy shouldBe false
-            messages shouldContainExactly listOf("Could not reach the AI assistant: connection refused")
+            messages shouldContainExactly
+                listOf(failure(Res.string.common_ai_assistant_unreachable, "connection refused"))
             jobs.forEach { it.cancel() }
         }
 
@@ -236,11 +243,11 @@ class AiChatViewModelTest : MainDispatcherTest() {
                     aiChat.failAskAfter = 1
                 }
             val model = vm(session)
-            val messages = mutableListOf<String>()
+            val messages = mutableListOf<UiText>()
             val jobs =
                 listOf(
                     launch { model.ui.collect {} },
-                    launch { model.messages.collect { messages += it.resolveEnglish() } },
+                    launch { model.messages.collect { messages += it.text } },
                 )
             advanceUntilIdle()
 
@@ -254,7 +261,8 @@ class AiChatViewModelTest : MainDispatcherTest() {
             assistant.text shouldBe "partial"
             assistant.streaming shouldBe false
             model.ui.value.busy shouldBe false
-            messages shouldContainExactly listOf("Could not reach the AI assistant: stream interrupted")
+            messages shouldContainExactly
+                listOf(failure(Res.string.common_ai_assistant_unreachable, "stream interrupted"))
             jobs.forEach { it.cancel() }
         }
 
@@ -268,11 +276,11 @@ class AiChatViewModelTest : MainDispatcherTest() {
                     aiChat.askScripts = listOf(listOf(AiChatEvent.Done("")))
                 }
             val model = vm(session)
-            val messages = mutableListOf<String>()
+            val messages = mutableListOf<UiText>()
             val jobs =
                 listOf(
                     launch { model.ui.collect {} },
-                    launch { model.messages.collect { messages += it.resolveEnglish() } },
+                    launch { model.messages.collect { messages += it.text } },
                 )
             advanceUntilIdle()
 
@@ -280,7 +288,7 @@ class AiChatViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.ui.value.busy shouldBe false
-            messages shouldContainExactly listOf("The assistant returned an empty answer.")
+            messages shouldContainExactly listOf(uiText(Res.string.common_ai_assistant_empty_answer))
             jobs.forEach { it.cancel() }
         }
 

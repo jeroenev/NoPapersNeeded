@@ -164,4 +164,16 @@
         <item quantity="one">Kon de suggesties niet toepassen op %1$d van %2$d document</item>
         <item quantity="other">Kon de suggesties niet toepassen op %1$d van de %2$d documenten</item>
     </plurals>
+    <plurals name="ai_edit_scope_count_batch">
+        <item quantity="one">%1$d document - de eerste %2$d worden in deze batch uitgevoerd</item>
+        <item quantity="other">%1$d documenten - de eerste %2$d worden in deze batch uitgevoerd</item>
+    </plurals>
+    <string name="ai_edit_apply_summary">%1$s toepassen op %2$s</string>
+    <string name="ai_edit_done_summary">%1$s toegepast op %2$s</string>
+    <string name="ai_edit_done_empty">Er zijn geen documenten gewijzigd</string>
+    <plurals name="ai_edit_suggest_failed">
+        <item quantity="one">Kon geen suggesties ophalen voor %1$d van de %2$d documenten</item>
+        <item quantity="other">Kon geen suggesties ophalen voor %1$d van de %2$d documenten</item>
+    </plurals>
+    <string name="ai_edit_queue_failed">De AI-bewerking kon niet in de wachtrij worden gezet: %1$s</string>
 </resources>

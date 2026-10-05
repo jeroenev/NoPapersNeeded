@@ -4,7 +4,9 @@ package dev.npn.app.ui.ai
 
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
-import dev.npn.app.resolveEnglish
+import dev.npn.app.failure
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.EditRunReview
@@ -19,6 +21,10 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
 import kotlin.test.Test
 
 private fun reviewDoc(
@@ -103,12 +109,12 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
                 FakeLibrarySession().apply { aiEditQueue.openFailure = IllegalStateException("database locked") }
             val model = AiEditReviewViewModel(session, "job")
             val job = launch { model.phase.collect {} }
-            val messages = mutableListOf<String>()
-            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val messageJob = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
 
             model.phase.value shouldBe QueuedReviewPhase.Unavailable
-            messages shouldContainExactly listOf("Could not open the AI edit: database locked")
+            messages shouldContainExactly listOf(failure(Res.string.ai_edit_review_open_failed, "database locked"))
             job.cancel()
             messageJob.cancel()
         }
@@ -119,15 +125,15 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val review = ScriptedReview(discardFailure = IllegalStateException("disk full"))
             val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
-            val messages = mutableListOf<String>()
-            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val messageJob = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
 
             model.skip()
             advanceUntilIdle()
 
             model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
-            messages shouldContainExactly listOf("Could not discard the AI edit: disk full")
+            messages shouldContainExactly listOf(failure(Res.string.ai_edit_review_discard_failed, "disk full"))
             job.cancel()
             messageJob.cancel()
         }
@@ -178,8 +184,8 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
                 )
             val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
-            val messages = mutableListOf<String>()
-            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val messageJob = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
 
             model.apply()
@@ -188,7 +194,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val phase = model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
             phase.docs.map { it.docId } shouldContainExactly listOf("b")
             // Only b's title is still owed, so it is the details that failed, not a tag.
-            messages shouldContainExactly listOf("Could not save the details of 1 of 2 documents")
+            messages shouldContainExactly listOf(uiText(Res.plurals.ai_edit_apply_fields_failed, 2, 1, 2))
             job.cancel()
             messageJob.cancel()
         }

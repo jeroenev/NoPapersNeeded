@@ -1,5 +1,7 @@
 package dev.npn.app
 
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.HistoryUiState
 import dev.npn.core.ai.AiEditSuggestion
@@ -27,6 +29,15 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_no_ai_metadata_suggestions
+import no_papers_needed.composeapp.generated.resources.common_no_ai_tag_suggestions
+import no_papers_needed.composeapp.generated.resources.common_save_field_failed
+import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
+import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
+import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
+import no_papers_needed.composeapp.generated.resources.detail_suggest_details_failed
+import no_papers_needed.composeapp.generated.resources.detail_suggest_tags_failed
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -115,12 +126,12 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { meta.failBatchOps = { error("journal write failed") } }
             val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.addTag("finance")
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not add the tag: journal write failed")
+            messages shouldContainExactly listOf(failure(Res.string.detail_add_tag_failed, "journal write failed"))
             job.cancel()
         }
 
@@ -129,12 +140,12 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { meta.failSetField = { error("io") } }
             val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.setField("amount", "42")
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not save the field: io")
+            messages shouldContainExactly listOf(failure(Res.string.common_save_field_failed, "io"))
             job.cancel()
         }
 
@@ -180,14 +191,14 @@ class DocDetailViewModelTest : MainDispatcherTest() {
                     ocr.failAiOcrOffer = { error("index busy") }
                 }
             val model = DocDetailViewModel("doc-1", session, aiConfiguredSettings())
-            val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val collector = launch { model.messages.collect { messages += it.text } }
             val panel = launch { model.metadata.collect {} }
             advanceUntilIdle()
             panel.cancel()
             collector.cancel()
 
-            messages shouldContainExactly List(2) { "Could not load this document’s OCR details: index busy" }
+            messages shouldContainExactly List(2) { failure(Res.string.detail_ocr_details_failed, "index busy") }
             model.ui.value.aiOcr shouldBe AiOcrOffer.Unavailable
         }
 
@@ -235,13 +246,13 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { ocr.failSetOcrEngine = { error("reindex failed") } }
             val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.setOcrEngine("mlkit")
             advanceUntilIdle()
             session.ocr.ocrEngineSets shouldBe emptyList()
-            messages shouldContainExactly listOf("Could not change the OCR engine: reindex failed")
+            messages shouldContainExactly listOf(failure(Res.string.detail_ocr_engine_failed, "reindex failed"))
             job.cancel()
         }
 
@@ -395,12 +406,12 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { aiSuggest.edit = AiEditSuggestion.EMPTY }
             val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.suggestAiTags()
             advanceUntilIdle()
-            messages shouldContainExactly listOf("No suggestions - document may not be OCRed yet")
+            messages shouldContainExactly listOf(uiText(Res.string.common_no_ai_tag_suggestions))
             model.metadata.value.ai.tags.suggestions shouldBe emptyList()
             model.metadata.value.ai.tags.suggesting shouldBe false
             job.cancel()
@@ -411,12 +422,12 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { aiSuggest.failSuggestEdits = { error("network down") } }
             val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.suggestAiTags()
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not suggest tags: network down")
+            messages shouldContainExactly listOf(failure(Res.string.detail_suggest_tags_failed, "network down"))
             model.metadata.value.ai.tags.suggestions shouldBe emptyList()
             model.metadata.value.ai.tags.suggesting shouldBe false
             job.cancel()
@@ -521,12 +532,12 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession() // fake defaults to AiEditSuggestion.EMPTY
             val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.suggestAiMetadata()
             advanceUntilIdle()
-            messages shouldContainExactly listOf("No suggestions - document may not be OCRed yet")
+            messages shouldContainExactly listOf(uiText(Res.string.common_no_ai_metadata_suggestions))
             model.metadata.value.ai.metadata.suggesting shouldBe false
             job.cancel()
         }
@@ -536,12 +547,12 @@ class DocDetailViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { aiSuggest.failSuggestEdits = { error("network down") } }
             val model = vm(session = session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.suggestAiMetadata()
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not suggest details: network down")
+            messages shouldContainExactly listOf(failure(Res.string.detail_suggest_details_failed, "network down"))
             model.metadata.value.ai.metadata.suggestion shouldBe FieldSuggestion.EMPTY
             model.metadata.value.ai.metadata.suggesting shouldBe false
             job.cancel()

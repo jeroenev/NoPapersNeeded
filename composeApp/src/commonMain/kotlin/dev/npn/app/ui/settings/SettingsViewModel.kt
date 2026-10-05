@@ -3,7 +3,6 @@ package dev.npn.app.ui.settings
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText

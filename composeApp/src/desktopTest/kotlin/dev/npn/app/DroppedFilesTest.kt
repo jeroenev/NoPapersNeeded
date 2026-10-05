@@ -63,7 +63,7 @@ class DroppedFilesTest : MainDispatcherTest() {
         action: () -> Unit,
     ): List<String> {
         val messages = mutableListOf<String>()
-        val collector = launch { vm.messages.collect { messages += it.resolveEnglish() } }
+        val collector = launch { vm.messages.collect { messages += it.english() } }
         action()
         advanceUntilIdle()
         collector.cancel()

@@ -16,7 +16,7 @@ import kotlin.test.Test
 @OptIn(ExperimentalCoroutinesApi::class)
 class MessagesViewModelTest : MainDispatcherTest() {
     private class Messages : MessagesViewModel() {
-        fun say(vararg texts: String) = texts.forEach { message(UiText.Dynamic(it)) }
+        fun say(vararg texts: String) = texts.forEach { message(UiText.Raw(it)) }
 
         fun fail() = launchReporting(Res.string.common_save_setting_failed) { error("disk full") }
     }
@@ -25,15 +25,15 @@ class MessagesViewModelTest : MainDispatcherTest() {
     fun messagesSentTogetherAreAllDeliveredInOrder() =
         runTest(dispatcher) {
             val model = Messages()
-            val shown = mutableListOf<String>()
-            val collector = launch { model.messages.collect { shown += it.resolveEnglish() } }
+            val shown = mutableListOf<UiText>()
+            val collector = launch { model.messages.collect { shown += it.text } }
             runCurrent()
 
             model.say("first", "second")
             advanceUntilIdle()
             collector.cancel()
 
-            shown shouldContainExactly listOf("first", "second")
+            shown shouldContainExactly listOf(UiText.Raw("first"), UiText.Raw("second"))
         }
 
     @Test
@@ -44,11 +44,12 @@ class MessagesViewModelTest : MainDispatcherTest() {
             model.fail()
             advanceUntilIdle()
 
-            val shown = mutableListOf<String>()
-            val collector = launch { model.messages.collect { shown += it.resolveEnglish() } }
+            val shown = mutableListOf<UiText>()
+            val collector = launch { model.messages.collect { shown += it.text } }
             advanceUntilIdle()
             collector.cancel()
 
-            shown shouldContainExactly listOf("while away", "Could not save the setting: disk full")
+            shown shouldContainExactly
+                listOf(UiText.Raw("while away"), failure(Res.string.common_save_setting_failed, "disk full"))
         }
 }

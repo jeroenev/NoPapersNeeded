@@ -149,9 +149,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Background work nobody awaits reports failures through `NpnLog` (`SessionDeps.log`) with
   `log.runLogged("what") { … }`, never `println` or a silent `runCatching`.
 - A viewmodel reports to the user through `MessagesViewModel`: `message(text, action)`, and every
-  write through `launchReporting` (or `reporting` inside a coroutine it launched). Never raise a
-  snackbar from a composable. New text is `UiText.Res`/`UiText.Plural` over a whole-sentence
-  resource in all six locales.
+  write through `launchReporting(failed)` (or `reporting` inside a coroutine it launched), where
+  `failed` is the whole failure sentence with the reason as `%1$s`. Never raise a snackbar from a
+  composable. New text is `UiText.Res`/`UiText.Plural` over a whole-sentence resource in all six
+  locales, never a sentence stitched from fragments; `UiText.Raw` is only for untranslated text
+  such as a file name or an exception's message. Viewmodel tests assert on the `UiText` itself.
 - Facets follow the contract in ARCHITECTURE.md: main-safe, expected failures as a typed outcome
   with an error enum (mapped to a string resource in `composeApp`, never English from `core`),
   throws only for bugs and misuse.

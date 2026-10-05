@@ -3,7 +3,6 @@ package dev.npn.app.ui.detail
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.queryTerms
@@ -50,6 +49,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_no_ai_metadata_suggestions
+import no_papers_needed.composeapp.generated.resources.common_no_ai_tag_suggestions
 import no_papers_needed.composeapp.generated.resources.common_rerun_ocr_failed
 import no_papers_needed.composeapp.generated.resources.common_save_field_failed
 import no_papers_needed.composeapp.generated.resources.detail_add_field_failed
@@ -420,7 +421,7 @@ class DocDetailViewModel(
             runCatchingCancellable { ai.suggestEdits(docId, AiEditRequest(tags = true)).addTags }.fold(
                 onSuccess = { suggestions ->
                     if (suggestions.isEmpty()) {
-                        message(uiText(UiTextKey.NO_AI_TAG_SUGGESTIONS))
+                        message(uiText(Res.string.common_no_ai_tag_suggestions))
                     }
                     aiTags.update { it.copy(suggesting = false, suggestions = suggestions) }
                 },
@@ -473,7 +474,7 @@ class DocDetailViewModel(
             runCatchingCancellable { ai.suggestEdits(docId, request).metadata }.fold(
                 onSuccess = { suggestion ->
                     if (suggestion.isEmpty) {
-                        message(uiText(UiTextKey.NO_AI_METADATA_SUGGESTIONS))
+                        message(uiText(Res.string.common_no_ai_metadata_suggestions))
                     }
                     aiMetadata.value = AiMetadataState(suggesting = false, suggestion = suggestion)
                 },

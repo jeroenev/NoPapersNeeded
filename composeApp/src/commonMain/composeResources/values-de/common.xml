@@ -25,7 +25,6 @@
     <string name="common_view_grid">Raster</string>
     <string name="common_unknown_error">unbekannter Fehler</string>
     <string name="common_could_not_open_library">Die Bibliothek konnte nicht geöffnet werden.</string>
-    <string name="common_could_not_queue_edit_run">KI-Bearbeitung konnte nicht eingereiht werden: %1$s</string>
 
     <string name="common_opening_library">Bibliothek wird geöffnet...</string>
     <string name="common_open_library_title">Deine Bibliothek konnte nicht geöffnet werden</string>
@@ -48,15 +47,8 @@
     <string name="common_scan_already_in_library">Scan ist bereits in der Bibliothek</string>
     <string name="common_scan_import_failed">Scan-Import fehlgeschlagen: %1$s</string>
     <string name="common_scan_capture_failed">Scannen fehlgeschlagen. Prüfe den Kamerazugriff und versuche es erneut.</string>
-    <string name="common_tagging_done_empty">Keine Dokumente zum Taggen</string>
     <string name="common_join_items">%1$s, %2$s</string>
-    <string name="common_tagging_apply_summary">%1$s auf %2$s anwenden</string>
-    <string name="common_tagging_done_summary">%1$s auf %2$s angewendet</string>
 
-    <plurals name="common_could_not_suggest_tags_partial">
-        <item quantity="one">Vorschläge für %1$d von %2$d Dokument konnten nicht abgerufen werden</item>
-        <item quantity="other">Vorschläge für %1$d von %2$d Dokumenten konnten nicht abgerufen werden</item>
-    </plurals>
     <plurals name="common_imported_count">
         <item quantity="one">%1$d importiert</item>
         <item quantity="other">%1$d importiert</item>
@@ -76,10 +68,6 @@
     <plurals name="common_suggestion_count">
         <item quantity="one">%1$d Vorschlag</item>
         <item quantity="other">%1$d Vorschläge</item>
-    </plurals>
-    <plurals name="common_tagging_scope_count_batch">
-        <item quantity="one">%1$d Dokument - die ersten %2$d laufen in diesem Stapel</item>
-        <item quantity="other">%1$d Dokumente - die ersten %2$d laufen in diesem Stapel</item>
     </plurals>
 
     <string name="common_choose_date">Datum wählen</string>

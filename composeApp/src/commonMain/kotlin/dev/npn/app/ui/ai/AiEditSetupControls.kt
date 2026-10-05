@@ -35,16 +35,16 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
-import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.UiTextKey
-import dev.npn.app.ui.common.uiText
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.app.EditScope
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_collapse
 import no_papers_needed.composeapp.generated.resources.ai_edit_field_mode_all
 import no_papers_needed.composeapp.generated.resources.ai_edit_field_mode_unfilled
+import no_papers_needed.composeapp.generated.resources.ai_edit_scope_count_batch
 import no_papers_needed.composeapp.generated.resources.ai_expand
+import no_papers_needed.composeapp.generated.resources.common_document_count
+import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
 // The building blocks the AI-edit setup form is assembled from. They live apart from the form
@@ -230,12 +230,13 @@ private fun fieldModeLabel(mode: AiFieldMode): String =
     )
 
 /** "N documents" or, when the scope outgrows one run, "N documents, first M this batch". */
-internal fun scopeCountText(
+@Composable
+internal fun scopeCount(
     count: Int,
     batchSize: Int,
-): UiText =
+): String =
     if (count > batchSize) {
-        uiText(UiTextKey.TAGGING_SCOPE_COUNT_BATCH, count, batchSize)
+        pluralStringResource(Res.plurals.ai_edit_scope_count_batch, count, count, batchSize)
     } else {
-        uiText(UiTextKey.TAGGING_SCOPE_COUNT, count)
+        pluralStringResource(Res.plurals.common_document_count, count, count)
     }

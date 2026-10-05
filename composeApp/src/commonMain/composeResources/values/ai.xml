@@ -164,4 +164,16 @@
         <item quantity="one">Could not apply the suggestions to %1$d of %2$d document</item>
         <item quantity="other">Could not apply the suggestions to %1$d of %2$d documents</item>
     </plurals>
+    <plurals name="ai_edit_scope_count_batch">
+        <item quantity="one">%1$d document - the first %2$d run in this batch</item>
+        <item quantity="other">%1$d documents - the first %2$d run in this batch</item>
+    </plurals>
+    <string name="ai_edit_apply_summary">Apply %1$s across %2$s</string>
+    <string name="ai_edit_done_summary">Applied %1$s across %2$s</string>
+    <string name="ai_edit_done_empty">No documents were changed</string>
+    <plurals name="ai_edit_suggest_failed">
+        <item quantity="one">Could not get suggestions for %1$d of %2$d document</item>
+        <item quantity="other">Could not get suggestions for %1$d of %2$d documents</item>
+    </plurals>
+    <string name="ai_edit_queue_failed">Could not queue the AI edit: %1$s</string>
 </resources>

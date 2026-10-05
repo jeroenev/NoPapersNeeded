@@ -164,4 +164,16 @@
         <item quantity="one">Não foi possível aplicar as sugestões a %1$d de %2$d documento</item>
         <item quantity="other">Não foi possível aplicar as sugestões a %1$d de %2$d documentos</item>
     </plurals>
+    <plurals name="ai_edit_scope_count_batch">
+        <item quantity="one">%1$d documento – só os primeiros %2$d neste lote</item>
+        <item quantity="other">%1$d documentos – só os primeiros %2$d neste lote</item>
+    </plurals>
+    <string name="ai_edit_apply_summary">Aplicar %1$s em %2$s</string>
+    <string name="ai_edit_done_summary">Aplicado: %1$s em %2$s</string>
+    <string name="ai_edit_done_empty">Nenhum documento foi alterado</string>
+    <plurals name="ai_edit_suggest_failed">
+        <item quantity="one">Não foi possível obter sugestões para %1$d de %2$d documento</item>
+        <item quantity="other">Não foi possível obter sugestões para %1$d de %2$d documentos</item>
+    </plurals>
+    <string name="ai_edit_queue_failed">Não foi possível adicionar a edição com IA à fila: %1$s</string>
 </resources>

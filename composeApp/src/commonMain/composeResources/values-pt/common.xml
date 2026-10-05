@@ -25,7 +25,6 @@
     <string name="common_view_grid">Grade</string>
     <string name="common_unknown_error">erro desconhecido</string>
     <string name="common_could_not_open_library">Não foi possível abrir a biblioteca.</string>
-    <string name="common_could_not_queue_edit_run">Não foi possível adicionar a edição com IA à fila: %1$s</string>
 
     <string name="common_opening_library">Abrindo biblioteca...</string>
     <string name="common_open_library_title">Não foi possível abrir sua biblioteca</string>
@@ -48,15 +47,8 @@
     <string name="common_scan_already_in_library">Digitalização já está na biblioteca</string>
     <string name="common_scan_import_failed">Falha ao importar a digitalização: %1$s</string>
     <string name="common_scan_capture_failed">Falha na digitalização. Verifique o acesso à câmera e tente de novo.</string>
-    <string name="common_tagging_done_empty">Nenhum documento para etiquetar</string>
     <string name="common_join_items">%1$s, %2$s</string>
-    <string name="common_tagging_apply_summary">Aplicar %1$s em %2$s</string>
-    <string name="common_tagging_done_summary">Aplicado: %1$s em %2$s</string>
 
-    <plurals name="common_could_not_suggest_tags_partial">
-        <item quantity="one">Não foi possível obter sugestões para %1$d de %2$d documento</item>
-        <item quantity="other">Não foi possível obter sugestões para %1$d de %2$d documentos</item>
-    </plurals>
     <plurals name="common_imported_count">
         <item quantity="one">%1$d importado</item>
         <item quantity="other">%1$d importados</item>
@@ -76,10 +68,6 @@
     <plurals name="common_suggestion_count">
         <item quantity="one">%1$d sugestão</item>
         <item quantity="other">%1$d sugestões</item>
-    </plurals>
-    <plurals name="common_tagging_scope_count_batch">
-        <item quantity="one">%1$d documento – só os primeiros %2$d neste lote</item>
-        <item quantity="other">%1$d documentos – só os primeiros %2$d neste lote</item>
     </plurals>
 
     <string name="common_choose_date">Escolher data</string>

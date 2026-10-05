@@ -1,6 +1,8 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.UiMessage
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.LibraryViewModel
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -11,6 +13,11 @@ import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
+import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
+import no_papers_needed.composeapp.generated.resources.library_trash_failed
+import no_papers_needed.composeapp.generated.resources.library_undo
 import kotlin.test.Test
 
 /** Bulk trash from the library selection, and the Undo message that takes it back. */
@@ -19,10 +26,10 @@ class LibraryTrashTest : MainDispatcherTest() {
     private fun vm(session: FakeLibrarySession = FakeLibrarySession()) =
         LibraryViewModel(session, FakeSettingsRepository())
 
-    /** Collect messages emitted by [model] into a list of resolved English strings. */
-    private fun TestScope.collectMessages(model: LibraryViewModel): MutableList<String> {
-        val messages = mutableListOf<String>()
-        backgroundScope.launch { model.messages.collect { messages += it.resolveEnglish() } }
+    /** Collect the text of the messages [model] emits. */
+    private fun TestScope.collectMessages(model: LibraryViewModel): MutableList<UiText> {
+        val messages = mutableListOf<UiText>()
+        backgroundScope.launch { model.messages.collect { messages += it.text } }
         return messages
     }
 
@@ -55,10 +62,8 @@ class LibraryTrashTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             val undo = messages.single()
-            undo.resolveEnglish() shouldBe "Moved 2 documents to trash"
-            undo.action
-                ?.label
-                ?.resolveEnglish() shouldBe "Undo"
+            undo.text shouldBe uiText(Res.plurals.library_moved_to_trash, 2, 2)
+            undo.action?.label shouldBe uiText(Res.string.library_undo)
             undo.action?.onPerform?.invoke()
             advanceUntilIdle()
             session.docLifecycle.restoredDocs shouldContainExactly listOf("d1", "d2")
@@ -120,7 +125,7 @@ class LibraryTrashTest : MainDispatcherTest() {
             val messages = collectMessages(model)
             model.undoTrash(listOf("d1", "d2"))
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not restore 2 of 2 documents")
+            messages shouldContainExactly listOf(uiText(Res.plurals.common_restore_documents_failed, 2, 2, 2))
         }
 
     @Test
@@ -132,15 +137,18 @@ class LibraryTrashTest : MainDispatcherTest() {
             model.toggleSelection("d2")
             model.toggleSelection("d3")
 
-            val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val collector = launch { model.messages.collect { messages += it.text } }
             runCurrent()
             model.bulkTrash()
             advanceUntilIdle()
             collector.cancel()
             // Both messages show, in order: the failure, then the Undo for what did move.
             messages shouldContainExactly
-                listOf("Could not move 1 of 3 documents to the trash", "Moved 2 documents to trash")
+                listOf(
+                    uiText(Res.plurals.library_trash_failed, 3, 1, 3),
+                    uiText(Res.plurals.library_moved_to_trash, 2, 2),
+                )
             // d1 and d3 succeeded; only d2 kept selected for retry.
             session.docLifecycle.trashedDocs shouldContainExactlyInAnyOrder listOf("d1", "d3")
             model.ui.value.selected shouldBe setOf("d2")

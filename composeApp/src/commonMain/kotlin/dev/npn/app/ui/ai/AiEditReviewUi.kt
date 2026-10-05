@@ -50,15 +50,13 @@ import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.DocThumbnail
 import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagSuggestionLabel
-import dev.npn.app.ui.common.UiTextKey
-import dev.npn.app.ui.common.resolve
-import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.ApplyResult
 import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.ReviewDoc
 import dev.npn.core.app.ReviewField
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_add_tag
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_summary
 import no_papers_needed.composeapp.generated.resources.ai_edit_attention
 import no_papers_needed.composeapp.generated.resources.ai_edit_change_settings
 import no_papers_needed.composeapp.generated.resources.ai_edit_clear_selection
@@ -66,6 +64,8 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_discard_run
 import no_papers_needed.composeapp.generated.resources.ai_edit_discard_run_message
 import no_papers_needed.composeapp.generated.resources.ai_edit_discard_run_title
 import no_papers_needed.composeapp.generated.resources.ai_edit_done
+import no_papers_needed.composeapp.generated.resources.ai_edit_done_empty
+import no_papers_needed.composeapp.generated.resources.ai_edit_done_summary
 import no_papers_needed.composeapp.generated.resources.ai_edit_next_batch
 import no_papers_needed.composeapp.generated.resources.ai_edit_no_suggestions
 import no_papers_needed.composeapp.generated.resources.ai_edit_open_document
@@ -77,6 +77,8 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_skip
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggestions_selected
 import no_papers_needed.composeapp.generated.resources.common_apply
 import no_papers_needed.composeapp.generated.resources.common_cancel
+import no_papers_needed.composeapp.generated.resources.common_document_count
+import no_papers_needed.composeapp.generated.resources.common_suggestion_count
 import org.jetbrains.compose.resources.pluralStringResource
 import org.jetbrains.compose.resources.stringResource
 
@@ -363,7 +365,11 @@ private fun ApplyBar(
             verticalArrangement = Arrangement.spacedBy(8.dp),
         ) {
             Text(
-                uiText(UiTextKey.TAGGING_APPLY_SUMMARY, selectedSuggestions, docCount).resolve(),
+                stringResource(
+                    Res.string.ai_edit_apply_summary,
+                    pluralStringResource(Res.plurals.common_suggestion_count, selectedSuggestions, selectedSuggestions),
+                    pluralStringResource(Res.plurals.common_document_count, docCount, docCount),
+                ),
                 Modifier.align(Alignment.CenterVertically),
             )
             // Escape hatch: leave Review without writing (also the only way forward when nothing
@@ -442,9 +448,13 @@ internal fun DonePhase(
 @Composable
 private fun doneSummary(result: ApplyResult): String =
     if (result.docsChanged == 0) {
-        uiText(UiTextKey.TAGGING_DONE_EMPTY).resolve()
+        stringResource(Res.string.ai_edit_done_empty)
     } else {
-        uiText(UiTextKey.TAGGING_DONE_SUMMARY, result.applied, result.docsChanged).resolve()
+        stringResource(
+            Res.string.ai_edit_done_summary,
+            pluralStringResource(Res.plurals.common_suggestion_count, result.applied, result.applied),
+            pluralStringResource(Res.plurals.common_document_count, result.docsChanged, result.docsChanged),
+        )
     }
 
 @Composable

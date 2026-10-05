@@ -53,7 +53,7 @@ class LibraryScanTest : MainDispatcherTest() {
             }
         val model = LibraryViewModel(session, FakeSettingsRepository())
         val messages = mutableListOf<String>()
-        val collector = launch { model.messages.collect { messages += it.resolveEnglish() } }
+        val collector = launch { model.messages.collect { messages += it.english() } }
 
         model.importScan(ScanResult.Scanned(scanned))
         advanceUntilIdle()

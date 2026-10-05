@@ -1,5 +1,7 @@
 package dev.npn.app
 
+import dev.npn.app.ui.common.UiText
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.trash.TrashViewModel
 import dev.npn.core.index.RelinkCandidate
 import io.kotest.matchers.collections.shouldContainExactly
@@ -8,6 +10,8 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_trash_restore_failed
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -79,13 +83,14 @@ class TrashViewModelTest : MainDispatcherTest() {
                         { error("file exists at original path") }
                 }
             val model = vm(session)
-            val messages = mutableListOf<String>()
-            val job = launch { model.messages.collect { messages += it.resolveEnglish() } }
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
             model.restore("d1")
             advanceUntilIdle()
             session.docLifecycle.restoredDocs shouldBe emptyList()
-            messages shouldContainExactly listOf("Could not restore the document: file exists at original path")
+            messages shouldContainExactly
+                listOf(failure(Res.string.common_trash_restore_failed, "file exists at original path"))
             job.cancel()
         }
 }

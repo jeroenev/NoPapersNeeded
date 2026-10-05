@@ -2,7 +2,6 @@ package dev.npn.app.ui.ai
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
@@ -24,6 +23,8 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_chat_clear_failed
 import no_papers_needed.composeapp.generated.resources.ai_chat_delete_failed
 import no_papers_needed.composeapp.generated.resources.ai_chat_new_failed
+import no_papers_needed.composeapp.generated.resources.common_ai_assistant_empty_answer
+import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unreachable
 
 /**
  * Chat UI state. [configured] is null until the initial config probe completes, then true/false so
@@ -133,7 +134,7 @@ class AiChatViewModel(
                     .onFailure { e ->
                         finishStreaming()
                         _ui.update { it.copy(busy = false) }
-                        message(uiText(UiTextKey.AI_ASSISTANT_UNREACHABLE, e.reasonText()))
+                        message(uiText(Res.string.common_ai_assistant_unreachable, e.reasonText()))
                     }
             }
     }
@@ -217,7 +218,7 @@ class AiChatViewModel(
                 // leave no trace at all — the finished empty bubble is skipped by the screen — so
                 // surface it. The check runs against the post-Done transcript.
                 if (event.fullText.isBlank() && !_ui.value.transcript.hasVisibleContent) {
-                    message(uiText(UiTextKey.AI_ASSISTANT_EMPTY_ANSWER))
+                    message(uiText(Res.string.common_ai_assistant_empty_answer))
                 }
             }
         }
