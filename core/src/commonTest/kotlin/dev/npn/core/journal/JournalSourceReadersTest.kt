@@ -1,6 +1,5 @@
 package dev.npn.core.journal
 
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import kotlin.test.Test
 import kotlin.test.assertEquals
@@ -21,7 +20,7 @@ class JournalSourceReadersTest {
             op = JournalOp.TagAdd("invoice"),
         )
 
-    private fun objectPath(bytes: ByteArray): String = NpnPaths.journalObjectPath(sha256Bytes(bytes))
+    private fun objectPath(bytes: ByteArray): String = JournalPaths.objectPath(sha256Bytes(bytes))
 
     @Test
     fun legacy_accepts_missing_version_and_reports_malformed_lines() {
@@ -47,7 +46,7 @@ class JournalSourceReadersTest {
     @Test
     fun v2_rejects_hash_mismatch_and_unknown_event_version() {
         val valid = JournalCodec.encode(event()).encodeToByteArray()
-        val wrongPath = NpnPaths.journalObjectPath("0".repeat(64))
+        val wrongPath = JournalPaths.objectPath("0".repeat(64))
         assertIs<JournalSourceRead.Retryable>(StorageV2Reader.read(wrongPath, valid))
 
         val future = JournalCodec.encode(event()).replaceFirst("\"v\":1", "\"v\":99").encodeToByteArray()

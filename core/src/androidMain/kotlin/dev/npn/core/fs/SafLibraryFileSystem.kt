@@ -288,9 +288,10 @@ class SafLibraryFileSystem(
      *   mismatched object is treated as retryable/skippable rather than a hard failure.
      *
      * Failure handling: on any rename failure the staging file is left in place (it is classified
-     * as [NpnPaths.JournalPath.Staging] and ignored by readers, then GC'd by the accumulator) and a
-     * retryable [VerifiedPublicationFailedException] is thrown, so a wrongly-named file is
-     * never installed in the published objects directory. If the canonical object already exists
+     * as [dev.npn.core.journal.JournalPath.Staging] and ignored by readers, then GC'd by the
+     * accumulator) and a retryable [VerifiedPublicationFailedException] is thrown, so a
+     * wrongly-named file is never installed in the published objects directory. If the canonical
+     * object already exists
      * (same hash ⇒ same content), the staging file is deleted and the call succeeds.
      */
     override suspend fun publishVerifiedObjectOnce(

@@ -3,6 +3,8 @@ package dev.npn.core.app
 import dev.npn.core.db.toFieldDef
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.IndexRig
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -35,7 +37,7 @@ class FieldSeedUpgradeTest {
     private suspend fun journalObjects(): Int =
         rig.fs
             .listAllUnder(NpnPaths.JOURNAL_DIR)
-            .count { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+            .count { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
 
     @Test
     fun aLibrarySeededEarlierGetsTheNewSeedOnceAndKeepsWhatItsUsersChanged() =

@@ -7,6 +7,8 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.DeviceIdentity
 import dev.npn.core.index.MutableClock
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.ThumbnailStore
@@ -82,7 +84,7 @@ class AppSessionRig private constructor(
     suspend fun journalObjectCount(): Int =
         fs
             .listAllUnder(NpnPaths.JOURNAL_DIR)
-            .count { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+            .count { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
 
     /** Device databases of the [secondSession]s, closed with this rig. */
     private val otherDeviceDbs = ArrayList<DeviceDatabase>()

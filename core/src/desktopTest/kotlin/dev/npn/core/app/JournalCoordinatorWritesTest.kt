@@ -9,6 +9,8 @@ import dev.npn.core.index.IndexRig
 import dev.npn.core.index.Indexer
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -85,8 +87,8 @@ class JournalCoordinatorWritesTest {
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(DOC, "second"))).shouldBeTrue()
 
             val journal = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR).filter { !it.isDirectory }
-            journal.filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 } shouldHaveSize 1
-            journal.filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.Legacy }.shouldBeEmpty()
+            journal.filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 } shouldHaveSize 1
+            journal.filter { JournalPaths.classify(it.relPath) is JournalPath.Legacy }.shouldBeEmpty()
         }
 
     /** There is no older format to fall back to: a filesystem that cannot publish fails the write. */
@@ -117,7 +119,7 @@ class JournalCoordinatorWritesTest {
 
             rig.fs
                 .listAllUnder(NpnPaths.JOURNAL_DIR)
-                .filter { !it.isDirectory && NpnPaths.journalPath(it.relPath) !is NpnPaths.JournalPath.Staging }
+                .filter { !it.isDirectory && JournalPaths.classify(it.relPath) !is JournalPath.Staging }
                 .shouldBeEmpty()
         }
 
@@ -136,7 +138,7 @@ class JournalCoordinatorWritesTest {
             coordinator.commitAndRescan(listOf(PendingOp.docRestore(doc)))
 
             val journal = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR).filter { !it.isDirectory }
-            journal.forEach { NpnPaths.journalPath(it.relPath).shouldBeInstanceOf<NpnPaths.JournalPath.ObjectV2>() }
+            journal.forEach { JournalPaths.classify(it.relPath).shouldBeInstanceOf<JournalPath.ObjectV2>() }
             journal shouldHaveSize 4
         }
 

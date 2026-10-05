@@ -1,6 +1,5 @@
 package dev.npn.core.journal
 
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 
 data class JournalDiagnostic(
@@ -74,9 +73,9 @@ object StorageV2Reader {
         bytes: ByteArray,
         contentHash: String = sha256Bytes(bytes),
     ): JournalSourceRead {
-        val path = NpnPaths.journalPath(relPath)
+        val path = JournalPaths.classify(relPath)
         val objectPath =
-            path as? NpnPaths.JournalPath.ObjectV2
+            path as? JournalPath.ObjectV2
                 ?: return JournalSourceRead.Unsupported("Not a supported storage-v2 object path: $relPath")
         if (contentHash != objectPath.expectedHash) {
             return JournalSourceRead.Retryable("Object hash does not match its path")

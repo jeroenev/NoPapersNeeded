@@ -6,6 +6,8 @@ import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 
 /**
  * Decides whether a metadata source set is safe to fold, and owns the grace-window bookkeeping a
@@ -33,17 +35,17 @@ class SourceSetValidator(
 
     /** A reason to reject the whole entry set on store-version grounds, or null when it is sound. */
     fun unsupportedStorage(entries: List<FileMeta>): String? {
-        val supportedStoreVersions = setOf(NpnPaths.STORAGE_V2, NpnPaths.SNAPSHOT_V2)
+        val supportedStoreVersions = setOf(JournalPaths.STORAGE_V2, JournalPaths.SNAPSHOT_V2)
         val unsupported =
             entries
                 .asSequence()
-                .mapNotNull { NpnPaths.objectStoreVersion(it.relPath) }
+                .mapNotNull { JournalPaths.objectStoreVersion(it.relPath) }
                 .firstOrNull { it !in supportedStoreVersions }
         if (unsupported != null) return "Unsupported metadata object store version $unsupported"
         val invalidObject =
             entries.firstOrNull { entry ->
-                !entry.isDirectory && NpnPaths.objectStoreVersion(entry.relPath) in supportedStoreVersions &&
-                    NpnPaths.journalPath(entry.relPath) is NpnPaths.JournalPath.Unknown
+                !entry.isDirectory && JournalPaths.objectStoreVersion(entry.relPath) in supportedStoreVersions &&
+                    JournalPaths.classify(entry.relPath) is JournalPath.Unknown
             }
         return invalidObject?.let { "Invalid metadata object path: ${it.relPath}" }
     }

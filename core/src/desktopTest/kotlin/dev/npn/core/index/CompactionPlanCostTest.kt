@@ -9,10 +9,11 @@ import dev.npn.core.db.isFullTableScan
 import dev.npn.core.db.queryPlan
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SnapshotCompactor
 import io.kotest.matchers.collections.shouldBeEmpty
@@ -125,7 +126,7 @@ class CompactionPlanCostTest {
             db.queryPlan(joins.single()).filter { isFullTableScan(it, "metadata_events") }.shouldBeEmpty()
             fs
                 .calls("stat")
-                .count { NpnPaths.journalPath(it.substringAfter(' ')) is NpnPaths.JournalPath.ObjectV2 } shouldBe 6
+                .count { JournalPaths.classify(it.substringAfter(' ')) is JournalPath.ObjectV2 } shouldBe 6
             db.metadataProjectionDao().state()?.migrationState shouldBe ProjectionStatus.READY
             db
                 .metadataProjectionDao()

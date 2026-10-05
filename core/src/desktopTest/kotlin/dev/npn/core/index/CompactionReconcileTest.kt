@@ -9,6 +9,8 @@ import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.journal.SnapshotCompactor
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -95,12 +97,12 @@ class CompactionReconcileTest {
         accumulator.markReady(state.maxHlc)
     }
 
-    private suspend fun objects(): List<NpnPaths.JournalPath> =
-        fs.listAllUnder(NpnPaths.JOURNAL_DIR).map { NpnPaths.journalPath(it.relPath) }
+    private suspend fun objects(): List<JournalPath> =
+        fs.listAllUnder(NpnPaths.JOURNAL_DIR).map { JournalPaths.classify(it.relPath) }
 
-    private suspend fun v2Count() = objects().count { it is NpnPaths.JournalPath.ObjectV2 }
+    private suspend fun v2Count() = objects().count { it is JournalPath.ObjectV2 }
 
-    private suspend fun snapCount() = objects().count { it is NpnPaths.JournalPath.SnapshotV2 }
+    private suspend fun snapCount() = objects().count { it is JournalPath.SnapshotV2 }
 
     @Test
     fun compactionPublishesSnapshotDeletesSupersededAndKeepsProjection() =
@@ -155,7 +157,7 @@ class CompactionReconcileTest {
             val v2Files =
                 fs
                     .listAllUnder(NpnPaths.JOURNAL_DIR)
-                    .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+                    .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
             val stash = Files.createTempDirectory("npn-stash")
             val moved =
                 v2Files.map { file ->
@@ -199,7 +201,7 @@ class CompactionReconcileTest {
             val leftover =
                 fs
                     .listAllUnder(NpnPaths.JOURNAL_DIR)
-                    .first { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+                    .first { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
             val kept = Files.createTempDirectory("npn-leftover").resolve(leftover.name)
             Files.copy(libRoot.resolve(leftover.relPath), kept, StandardCopyOption.COPY_ATTRIBUTES)
             coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
@@ -232,7 +234,7 @@ class CompactionReconcileTest {
             val victim =
                 fs
                     .listAllUnder(NpnPaths.JOURNAL_DIR)
-                    .first { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+                    .first { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
             Files.delete(libRoot.resolve(victim.relPath))
 
             // Tolerated for the grace window, then escalates to a hard block.

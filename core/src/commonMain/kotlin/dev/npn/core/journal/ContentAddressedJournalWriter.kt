@@ -1,7 +1,6 @@
 package dev.npn.core.journal
 
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.VerifiedPublicationCapability
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.runCatchingCancellable
@@ -72,8 +71,8 @@ internal suspend fun stageAndPublishVerifiedObject(
     bytes: ByteArray,
     snapshot: Boolean,
 ): String {
-    val canonicalPath = NpnPaths.journalObjectPath(hash, snapshot = snapshot)
-    val stagingPath = NpnPaths.journalStagingPath(hash, installationId, Uuid.random().toString(), snapshot = snapshot)
+    val canonicalPath = JournalPaths.objectPath(hash, snapshot = snapshot)
+    val stagingPath = JournalPaths.stagingPath(hash, installationId, Uuid.random().toString(), snapshot = snapshot)
     fs.writeBytesOnce(stagingPath, bytes)
     var published = false
     try {

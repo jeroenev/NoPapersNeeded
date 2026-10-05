@@ -1,6 +1,5 @@
 package dev.npn.core.journal
 
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.SHA256_HEX
 import dev.npn.core.fs.sha256Bytes
 import kotlinx.serialization.json.JsonArray
@@ -16,7 +15,7 @@ import kotlinx.serialization.json.jsonPrimitive
  *
  * A snapshot is a content-addressed JSONL object (same publish flow as a v2 object) living in a
  * DISTINCT bucket namespace (`objects-snap-v2-xx`) so that pre-snapshot readers classify it as
- * [NpnPaths.JournalPath.Unknown] and ignore it, rather than trying to fold it (they would reject
+ * [JournalPath.Unknown] and ignore it, rather than trying to fold it (they would reject
  * multi-actor events) or treating it as an unsupported object store (which would block writes).
  *
  * Line layout:
@@ -95,9 +94,9 @@ object SnapshotV2Reader {
         bytes: ByteArray,
         contentHash: String = sha256Bytes(bytes),
     ): JournalSourceRead {
-        val path = NpnPaths.journalPath(relPath)
+        val path = JournalPaths.classify(relPath)
         val snapshotPath =
-            path as? NpnPaths.JournalPath.SnapshotV2
+            path as? JournalPath.SnapshotV2
                 ?: return JournalSourceRead.Unsupported("Not a supported snapshot object path: $relPath")
         if (contentHash != snapshotPath.expectedHash) {
             return JournalSourceRead.Retryable("Snapshot hash does not match its path")

@@ -20,6 +20,8 @@ import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.PublishedTransaction
 import dev.npn.core.journal.SnapshotV2Reader
@@ -119,8 +121,8 @@ class MetadataAccumulator(
      * hash-verified by [StorageV2Reader]. Null when the file is gone or already applied unchanged.
      */
     suspend fun readObject(relPath: String): StagedSource? {
-        val path = NpnPaths.journalPath(relPath)
-        require(path is NpnPaths.JournalPath.ObjectV2) { "Not a storage-v2 object: $relPath" }
+        val path = JournalPaths.classify(relPath)
+        require(path is JournalPath.ObjectV2) { "Not a storage-v2 object: $relPath" }
         val meta = fs.stat(relPath) ?: return null
         return stage(meta, path)
     }
@@ -136,7 +138,7 @@ class MetadataAccumulator(
      */
     private suspend fun stage(
         meta: FileMeta,
-        path: NpnPaths.JournalPath,
+        path: JournalPath,
     ): StagedSource? {
         val existing = dao.source(meta.relPath)
         val applied = existing?.status == SourceStatus.APPLIED
@@ -379,7 +381,7 @@ class MetadataAccumulator(
         val cutoff = clock.nowMillis() - STAGING_MAX_AGE_MS
         entries
             .asSequence()
-            .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.Staging }
+            .filter { JournalPaths.classify(it.relPath) is JournalPath.Staging }
             .filter { it.name.contains(marker) }
             .filter { it.mtimeMillis in 1 until cutoff }
             .forEach { runCatchingCancellable { fs.delete(it.relPath) } }
@@ -401,8 +403,8 @@ class MetadataAccumulator(
         val batch = IngestBatch()
         val sources =
             files.sortedBy { it.relPath }.filter { meta ->
-                val path = NpnPaths.journalPath(meta.relPath)
-                path !is NpnPaths.JournalPath.Staging && path !is NpnPaths.JournalPath.Unknown
+                val path = JournalPaths.classify(meta.relPath)
+                path !is JournalPath.Staging && path !is JournalPath.Unknown
             }
         for (meta in sources) ingestFile(meta, batch)
         return batch
@@ -412,8 +414,8 @@ class MetadataAccumulator(
         meta: FileMeta,
         batch: IngestBatch,
     ) {
-        val path = NpnPaths.journalPath(meta.relPath)
-        if (path is NpnPaths.JournalPath.UnsupportedObjectStore) {
+        val path = JournalPaths.classify(meta.relPath)
+        if (path is JournalPath.UnsupportedObjectStore) {
             fail("Unsupported metadata object store version ${path.version}")
         }
         val staged = stage(meta, path) ?: return
@@ -525,10 +527,10 @@ private fun unseen(
 }
 
 /** What kind of source a journal file classified as [path] is. */
-private fun kindOf(path: NpnPaths.JournalPath): SourceKind =
+private fun kindOf(path: JournalPath): SourceKind =
     when (path) {
-        is NpnPaths.JournalPath.SnapshotV2 -> SourceKind.SNAPSHOT
-        is NpnPaths.JournalPath.ObjectV2 -> SourceKind.OBJECT
+        is JournalPath.SnapshotV2 -> SourceKind.SNAPSHOT
+        is JournalPath.ObjectV2 -> SourceKind.OBJECT
         else -> SourceKind.LEGACY_SEGMENT
     }
 
@@ -541,13 +543,13 @@ private fun diagnosticOf(read: JournalSourceRead.Accepted): String? =
 /** Read a source whose bytes the accumulator loaded and hashed; the v2 readers take that hash. */
 private fun readSource(
     relPath: String,
-    path: NpnPaths.JournalPath,
+    path: JournalPath,
     bytes: ByteArray,
     contentHash: String,
 ): JournalSourceRead =
     when (path) {
-        is NpnPaths.JournalPath.SnapshotV2 -> SnapshotV2Reader.read(relPath, bytes, contentHash)
-        is NpnPaths.JournalPath.ObjectV2 -> StorageV2Reader.read(relPath, bytes, contentHash)
+        is JournalPath.SnapshotV2 -> SnapshotV2Reader.read(relPath, bytes, contentHash)
+        is JournalPath.ObjectV2 -> StorageV2Reader.read(relPath, bytes, contentHash)
         else -> StorageV1Reader.read(bytes)
     }
 

@@ -40,37 +40,6 @@ class NpnPathsTest {
     }
 
     @Test
-    fun classifiesVersionedJournalPathsWithoutTreatingObjectsAsLegacy() {
-        val hash = "ab" + "0".repeat(62)
-        val canonical = NpnPaths.journalObjectPath(hash)
-        canonical shouldBe ".npn/journal/objects-v2-ab/$hash.jsonl"
-        NpnPaths.journalPath(canonical) shouldBe NpnPaths.JournalPath.ObjectV2(hash, canonical = true)
-        NpnPaths.journalPath(".npn/journal/objects-v3-ab/$hash.jsonl") shouldBe
-            NpnPaths.JournalPath.UnsupportedObjectStore(3)
-        NpnPaths.journalPath(".npn/journal/dev1/0001.jsonl") shouldBe NpnPaths.JournalPath.Legacy
-    }
-
-    @Test
-    fun classifiesSnapshotBucketDistinctlyFromObjectsAndIsOldReaderSafe() {
-        val hash = "cd" + "0".repeat(62)
-        val snap = NpnPaths.journalObjectPath(hash, snapshot = true)
-        snap shouldBe ".npn/journal/objects-snap-v2-cd/$hash.jsonl"
-        NpnPaths.journalPath(snap) shouldBe NpnPaths.JournalPath.SnapshotV2(hash, canonical = true)
-        // A distinct object-store version is surfaced (blocks writes) rather than silently ignored.
-        NpnPaths.journalPath(".npn/journal/objects-snap-v3-cd/$hash.jsonl") shouldBe
-            NpnPaths.JournalPath.UnsupportedObjectStore(3)
-        // objectStoreVersion recognizes both regular and snapshot buckets.
-        NpnPaths.objectStoreVersion(snap) shouldBe NpnPaths.SNAPSHOT_V2
-    }
-
-    @Test
-    fun recoversDigestFromRecognizedConflictCopyOnly() {
-        val hash = "ab" + "0".repeat(62)
-        NpnPaths.recoverObjectHash("$hash (conflicted copy laptop).jsonl") shouldBe hash
-        NpnPaths.recoverObjectHash("prefix-$hash.jsonl") shouldBe null
-    }
-
-    @Test
     fun trashPathKeepsExtensionAndHashPrefix() {
         NpnPaths.trashPath("Invoice.pdf", "deadbeefcafebabe0000") shouldBe ".npn/trash/Invoice__deadbeef.pdf"
         NpnPaths.trashPath("noext", "deadbeefcafebabe0000") shouldBe ".npn/trash/noext__deadbeef"

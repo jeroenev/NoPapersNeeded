@@ -3,6 +3,8 @@ package dev.npn.core.app
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.debounced
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.buffer
@@ -54,23 +56,23 @@ internal fun watchAction(
 ): WatchAction {
     val rel = event.relPath ?: return WatchAction.Rescan
     if (NpnPaths.isOwnDeviceWrite(rel, deviceId)) return WatchAction.Ignore
-    return when (NpnPaths.journalPath(rel)) {
-        is NpnPaths.JournalPath.ObjectV2 -> {
+    return when (JournalPaths.classify(rel)) {
+        is JournalPath.ObjectV2 -> {
             WatchAction.IngestObject(rel)
         }
 
-        NpnPaths.JournalPath.Staging -> {
+        JournalPath.Staging -> {
             WatchAction.Ignore
         }
 
-        is NpnPaths.JournalPath.SnapshotV2,
-        is NpnPaths.JournalPath.Legacy,
-        is NpnPaths.JournalPath.UnsupportedObjectStore,
+        is JournalPath.SnapshotV2,
+        JournalPath.Legacy,
+        is JournalPath.UnsupportedObjectStore,
         -> {
             WatchAction.ReconcileJournal
         }
 
-        NpnPaths.JournalPath.Unknown -> {
+        JournalPath.Unknown -> {
             when {
                 rel == NpnPaths.JOURNAL_DIR || rel.startsWith("${NpnPaths.JOURNAL_DIR}/") -> {
                     WatchAction.ReconcileJournal

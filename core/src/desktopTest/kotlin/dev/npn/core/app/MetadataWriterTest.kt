@@ -9,6 +9,8 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.JournalOp
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.JournalSourceRead
 import dev.npn.core.journal.StorageV2Reader
 import dev.npn.core.model.FieldKeys
@@ -412,7 +414,7 @@ class MetadataWriterTest {
                 val objects =
                     rig.fs
                         .listAllUnder(NpnPaths.JOURNAL_DIR)
-                        .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+                        .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
                 // Two user transactions plus the one-time field-registry seed written on open.
                 objects.size shouldBe 3
                 objects.forEach { objectFile ->
@@ -484,7 +486,7 @@ class MetadataWriterTest {
                 val objects =
                     rig.fs
                         .listAllUnder(NpnPaths.JOURNAL_DIR)
-                        .filter { NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2 }
+                        .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
                 val candidates =
                     objects.map { file ->
                         val bytes = rig.fs.readBytes(file.relPath)
@@ -526,7 +528,7 @@ class MetadataWriterTest {
                 val id = rig.docId("a.pdf")
                 rig.session.meta.addTag(listOf(id), "preserved")
                 val partial = "{".encodeToByteArray()
-                val path = NpnPaths.journalObjectPath(sha256Bytes(partial))
+                val path = JournalPaths.objectPath(sha256Bytes(partial))
                 rig.fs.writeBytesOnce(path, partial)
 
                 assertFailsWith<MetadataWriteBlocked> { rig.session.rescan() }
@@ -566,7 +568,7 @@ class MetadataWriterTest {
                         .listAllUnder(NpnPaths.JOURNAL_DIR)
                         .single {
                             it.relPath !in beforeTag &&
-                                NpnPaths.journalPath(it.relPath) is NpnPaths.JournalPath.ObjectV2
+                                JournalPaths.classify(it.relPath) is JournalPath.ObjectV2
                         }
                 val conflictName = "${canonical.name.removeSuffix(".jsonl")} (conflicted copy laptop).jsonl"
                 val conflictPath = canonical.relPath.substringBeforeLast('/') + "/" + conflictName

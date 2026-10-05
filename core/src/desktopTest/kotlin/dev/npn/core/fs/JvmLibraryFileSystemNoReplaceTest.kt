@@ -1,5 +1,6 @@
 package dev.npn.core.fs
 
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.Dispatchers
@@ -85,8 +86,8 @@ class JvmLibraryFileSystemNoReplaceTest {
     fun concurrentVerifiedPublicationsNeverReplaceTheCanonicalObject() {
         val bytes = "complete transaction".encodeToByteArray()
         val hash = sha256Bytes(bytes)
-        val canonical = NpnPaths.journalObjectPath(hash)
-        val stagings = (0 until WRITERS).map { i -> NpnPaths.journalStagingPath(hash, "installation", "s$i") }
+        val canonical = JournalPaths.objectPath(hash)
+        val stagings = (0 until WRITERS).map { i -> JournalPaths.stagingPath(hash, "installation", "s$i") }
         runBlocking { stagings.forEach { fs.writeBytesOnce(it, bytes) } }
         val published = AtomicInteger()
         val counting =

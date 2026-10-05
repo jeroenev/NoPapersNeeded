@@ -1,5 +1,6 @@
 package dev.npn.core.fs
 
+import dev.npn.core.journal.JournalPaths
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -155,14 +156,14 @@ class JvmLibraryFileSystemTest {
         runTest {
             val bytes = "complete transaction".encodeToByteArray()
             val hash = sha256Bytes(bytes)
-            val canonical = NpnPaths.journalObjectPath(hash)
-            val staging = NpnPaths.journalStagingPath(hash, "installation", "one")
+            val canonical = JournalPaths.objectPath(hash)
+            val staging = JournalPaths.stagingPath(hash, "installation", "one")
             fs.writeBytesOnce(staging, bytes)
             fs.publishVerifiedObjectOnce(staging, canonical, hash)
             fs.exists(staging).shouldBeFalse()
             fs.readBytes(canonical).contentEquals(bytes).shouldBeTrue()
 
-            val retry = NpnPaths.journalStagingPath(hash, "installation", "two")
+            val retry = JournalPaths.stagingPath(hash, "installation", "two")
             fs.writeBytesOnce(retry, bytes)
             fs.publishVerifiedObjectOnce(retry, canonical, hash)
             fs.exists(retry).shouldBeFalse()
@@ -170,9 +171,9 @@ class JvmLibraryFileSystemTest {
 
             val other = "other".encodeToByteArray()
             val otherHash = sha256Bytes(other)
-            val corruptTarget = NpnPaths.journalObjectPath(otherHash)
+            val corruptTarget = JournalPaths.objectPath(otherHash)
             fs.writeBytesOnce(corruptTarget, "corrupt".encodeToByteArray())
-            val otherStaging = NpnPaths.journalStagingPath(otherHash, "installation", "three")
+            val otherStaging = JournalPaths.stagingPath(otherHash, "installation", "three")
             fs.writeBytesOnce(otherStaging, other)
             assertFailsWith<IllegalStateException> {
                 fs.publishVerifiedObjectOnce(otherStaging, corruptTarget, otherHash)

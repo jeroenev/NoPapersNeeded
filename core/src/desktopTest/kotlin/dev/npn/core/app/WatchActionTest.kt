@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.OcrSidecarName
+import dev.npn.core.journal.JournalPaths
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.delay
@@ -19,14 +20,14 @@ class WatchActionTest {
 
     @Test
     fun aPublishedJournalObjectIsIngestedOnItsOwn() {
-        val path = NpnPaths.journalObjectPath(hash)
+        val path = JournalPaths.objectPath(hash)
 
         action(path) shouldBe WatchAction.IngestObject(path)
     }
 
     @Test
     fun journalChangesTheSingleObjectPathCannotTakeRefoldTheJournal() {
-        action(NpnPaths.journalObjectPath(hash, snapshot = true)) shouldBe WatchAction.ReconcileJournal
+        action(JournalPaths.objectPath(hash, snapshot = true)) shouldBe WatchAction.ReconcileJournal
         action("${NpnPaths.JOURNAL_DIR}/other-device/0001.jsonl") shouldBe WatchAction.ReconcileJournal
         action("${NpnPaths.JOURNAL_DIR}/objects-v9-ab/$hash.jsonl") shouldBe WatchAction.ReconcileJournal
         action("${NpnPaths.JOURNAL_DIR}/something-new") shouldBe WatchAction.ReconcileJournal
@@ -35,7 +36,7 @@ class WatchActionTest {
 
     @Test
     fun aWriteInProgressOrOurOwnEchoIsIgnored() {
-        action(NpnPaths.journalStagingPath(hash, "installation", "nonce")) shouldBe WatchAction.Ignore
+        action(JournalPaths.stagingPath(hash, "installation", "nonce")) shouldBe WatchAction.Ignore
         action(OcrSidecarName(hash, OcrSidecarName.writerKey(DEVICE, "mlkit")).path) shouldBe WatchAction.Ignore
     }
 
@@ -63,7 +64,7 @@ class WatchActionTest {
     @Test
     fun snapshotsSettleIntoOneReconcileWhileObjectsPassStraightThrough() =
         runTest {
-            val obj = WatchAction.IngestObject(NpnPaths.journalObjectPath(hash))
+            val obj = WatchAction.IngestObject(JournalPaths.objectPath(hash))
             val out =
                 flow {
                     repeat(5) {
