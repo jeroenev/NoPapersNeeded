@@ -9,7 +9,7 @@ import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.DeviceDatabase
-import dev.npn.core.db.deviceDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.index.MutableClock
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.testing.FakeAiSuggest
@@ -34,8 +34,6 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.Test
 
 /**
@@ -43,9 +41,9 @@ import kotlin.test.Test
  * model, the writes and the document text.
  */
 private class QueueRig(
-    val db: DeviceDatabase,
-    private val dbDir: File,
-) {
+    private val dbs: TempIndexDb,
+) : AutoCloseable {
+    val db: DeviceDatabase = dbs.deviceDb
     val documents = FakeDocumentRepository()
     val meta = FakeMetadataWriter(batchedFieldsOnly = true)
     val content = FakeDocContentFacade()
@@ -108,10 +106,7 @@ private class QueueRig(
         }
     }
 
-    fun close() {
-        db.close()
-        dbDir.deleteRecursively()
-    }
+    override fun close() = dbs.close()
 }
 
 /** Longer than the backoff ceiling and the endpoint cooldown, so one step clears both. */
@@ -121,13 +116,7 @@ private const val OUTAGE_STEP_MS = 25L * 60L * 60L * 1000L
 private const val DRAIN_ROUNDS = AiEditQueue.MAX_JOB_ATTEMPTS + AiEditQueue.MAX_DOC_ATTEMPTS + 2
 
 private suspend fun TestScope.withQueue(block: suspend (QueueRig) -> Unit) {
-    val dbDir = Files.createTempDirectory("npn-edit-queue-db").toFile()
-    val rig = QueueRig(deviceDatabase(File(dbDir, "device.db")), dbDir)
-    try {
-        block(rig)
-    } finally {
-        rig.close()
-    }
+    QueueRig(TempIndexDb("npn-edit-queue-db")).use { block(it) }
 }
 
 private fun suggestion(

@@ -5,7 +5,7 @@ import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.SourceFingerprint
 import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
@@ -14,10 +14,7 @@ import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -25,20 +22,11 @@ import kotlin.test.Test
  * decode/ordering, and the contract surface exposed to the UI layer.
  */
 class DocumentRepositoryHistoryTest {
-    private lateinit var dbDir: File
-    private lateinit var db: dev.npn.core.db.NpnDatabase
-
-    @BeforeTest
-    fun setup() {
-        dbDir = Files.createTempDirectory("npn-history-test").toFile()
-        db = npnDatabase(File(dbDir, "index.db"))
-    }
+    private val temp = TempIndexDb("npn-history-test")
+    private val db = temp.db
 
     @AfterTest
-    fun teardown() {
-        db.close()
-        dbDir.deleteRecursively()
-    }
+    fun teardown() = temp.close()
 
     @Test
     fun historyReturnsOnlyTargetDocumentEventsOrderedByHlc() =

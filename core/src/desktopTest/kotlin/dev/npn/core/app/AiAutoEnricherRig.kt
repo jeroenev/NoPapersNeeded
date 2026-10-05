@@ -8,8 +8,7 @@ import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.deviceDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.index.MutableClock
 import dev.npn.core.testing.FakeAiSuggest
 import dev.npn.core.testing.FakeFieldRegistry
@@ -18,8 +17,6 @@ import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueDrainer
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.test.TestScope
-import java.io.File
-import java.nio.file.Files
 
 // Shared fixtures for the AiAutoEnricher suites: AiAutoEnricherTest covers what a pass writes,
 // AiAutoEnricherRetryTest covers when it runs again.
@@ -39,11 +36,11 @@ internal val ACTIVE =
  * and stamps in the other) + fakes for AI and writes.
  */
 internal class Rig(
-    val db: NpnDatabase,
-    val deviceDb: DeviceDatabase,
-    val dbDir: File,
+    private val dbs: TempIndexDb,
     private val scope: CoroutineScope,
-) {
+) : AutoCloseable {
+    val db: NpnDatabase = dbs.db
+    val deviceDb: DeviceDatabase = dbs.deviceDb
     val ai = FakeAiSuggest()
     val meta = FakeMetadataWriter(batchedFieldsOnly = true)
     val fieldRegistry = FakeFieldRegistry()
@@ -124,20 +121,9 @@ internal class Rig(
 
     suspend fun row(docId: String): AiEnrichQueueEntity? = deviceDb.aiEnrichQueueDao().getByDocId(docId)
 
-    fun close() {
-        db.close()
-        deviceDb.close()
-        dbDir.deleteRecursively()
-    }
+    override fun close() = dbs.close()
 }
 
 internal suspend fun TestScope.withRig(block: suspend (Rig) -> Unit) {
-    val dbDir = Files.createTempDirectory("npn-enrich-db").toFile()
-    val rig =
-        Rig(npnDatabase(File(dbDir, "index.db")), deviceDatabase(File(dbDir, "device.db")), dbDir, backgroundScope)
-    try {
-        block(rig)
-    } finally {
-        rig.close()
-    }
+    Rig(TempIndexDb("npn-enrich-db"), backgroundScope).use { block(it) }
 }

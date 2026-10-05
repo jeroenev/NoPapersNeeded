@@ -4,42 +4,25 @@ import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
-import dev.npn.core.db.DeviceDatabase
-import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.deviceDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFails
 
 class AiChatSessionTest {
-    private lateinit var dbDir: File
-    private lateinit var db: NpnDatabase
-    private lateinit var device: DeviceDatabase
+    private val temp = TempIndexDb("npn-chat-session-test")
+    private val db = temp.db
+    private val device = temp.deviceDb
     private val chats get() = device.keyValueDao()
 
-    @BeforeTest
-    fun setup() {
-        dbDir = Files.createTempDirectory("npn-chat-session-test").toFile()
-        db = npnDatabase(File(dbDir, "index.db"))
-        device = deviceDatabase(File(dbDir, "device.db"))
-    }
-
     @AfterTest
-    fun teardown() {
-        db.close()
-        device.close()
-        dbDir.deleteRecursively()
-    }
+    fun teardown() = temp.close()
 
     @Test
     fun chatSessionsListOnlyConversationsAndNeverWrite() =

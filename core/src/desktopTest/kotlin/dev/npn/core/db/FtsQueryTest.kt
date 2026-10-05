@@ -4,16 +4,14 @@ import dev.npn.core.index.FtsRows
 import io.kotest.matchers.ints.shouldBeLessThan
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
-import java.nio.file.Files
 import kotlin.test.Test
 
 class FtsQueryTest {
     @Test
     fun prefixSuggestionRowsDoNotReturnWholeDocumentText() =
         runTest {
-            val dir = Files.createTempDirectory("npn-fts-query-test").toFile()
-            val db = npnDatabase(dir.resolve("index.db"))
-            try {
+            TempIndexDb("npn-fts-query-test").use { temp ->
+                val db = temp.db
                 val largeText = "invoice " + "payload ".repeat(20_000)
                 db.ftsDao().upsertContent(
                     FtsRows.row("doc", "invoice.pdf", emptyList(), mapOf("notes" to largeText), largeText),
@@ -23,9 +21,6 @@ class FtsQueryTest {
 
                 row.content.orEmpty().length shouldBeLessThan 1_000
                 row.fields.orEmpty().length shouldBeLessThan 1_000
-            } finally {
-                db.close()
-                dir.deleteRecursively()
             }
         }
 

@@ -2,8 +2,7 @@ package dev.npn.core.pdf
 
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
-import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.PathExternalIo
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -12,7 +11,6 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import kotlinx.coroutines.test.runTest
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -21,23 +19,20 @@ import kotlin.test.Test
 
 class ThumbnailServiceTest {
     private lateinit var libRoot: Path
-    private lateinit var dbDir: File
     private lateinit var fs: JvmLibraryFileSystem
-    private lateinit var db: NpnDatabase
+    private val temp = TempIndexDb("npn-thumb-db")
+    private val db = temp.db
 
     @BeforeTest
     fun setup() {
         libRoot = Files.createTempDirectory("npn-thumb-lib")
-        dbDir = Files.createTempDirectory("npn-thumb-db").toFile()
         fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
-        db = npnDatabase(File(dbDir, "index.db"))
     }
 
     @AfterTest
     fun teardown() {
-        db.close()
         libRoot.toFile().deleteRecursively()
-        dbDir.deleteRecursively()
+        temp.close()
     }
 
     @Test

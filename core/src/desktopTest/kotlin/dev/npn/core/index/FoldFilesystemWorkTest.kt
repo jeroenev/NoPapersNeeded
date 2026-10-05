@@ -1,8 +1,8 @@
 package dev.npn.core.index
 
 import dev.npn.core.app.JournalCoordinator
-import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.StatementLog
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.recordingDatabase
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.JvmLibraryFileSystem
@@ -15,7 +15,6 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -30,9 +29,9 @@ import kotlin.test.Test
 class FoldFilesystemWorkTest {
     private val log = StatementLog()
     private lateinit var libRoot: Path
-    private lateinit var dbDir: File
     private lateinit var fs: WatchedFileSystem
-    private lateinit var db: NpnDatabase
+    private val temp = TempIndexDb("npn-fold-fs-db") { recordingDatabase(it, log) }
+    private val db = temp.db
     private val clock = MutableClock(1_000L)
     private lateinit var indexer: Indexer
     private lateinit var accumulator: MetadataAccumulator
@@ -41,9 +40,7 @@ class FoldFilesystemWorkTest {
     @BeforeTest
     fun setup() {
         libRoot = Files.createTempDirectory("npn-fold-fs-lib")
-        dbDir = Files.createTempDirectory("npn-fold-fs-db").toFile()
         fs = WatchedFileSystem(JvmLibraryFileSystem(libRoot, PathExternalIo))
-        db = recordingDatabase(File(dbDir, "index.db"), log)
         fs.db = db
         indexer = Indexer(fs, db, clock)
         accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
@@ -53,9 +50,8 @@ class FoldFilesystemWorkTest {
 
     @AfterTest
     fun teardown() {
-        db.close()
         libRoot.toFile().deleteRecursively()
-        dbDir.deleteRecursively()
+        temp.close()
     }
 
     private fun writePdfs(count: Int) {

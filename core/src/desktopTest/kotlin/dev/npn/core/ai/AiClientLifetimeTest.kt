@@ -1,15 +1,12 @@
 package dev.npn.core.ai
 
-import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.util.runCatchingCancellable
 import io.kotest.matchers.shouldBe
 import io.ktor.client.HttpClient
 import io.ktor.client.plugins.api.createClientPlugin
 import io.ktor.http.URLParserException
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -17,14 +14,11 @@ import kotlin.test.assertFailsWith
 
 /** Every HTTP client the AI layer makes is released, including when a runtime never comes to be. */
 class AiClientLifetimeTest {
-    private val dir: File = Files.createTempDirectory("npn-ai-clients").toFile()
-    private val db: NpnDatabase = npnDatabase(File(dir, "index.db"))
+    private val temp = TempIndexDb("npn-ai-clients")
+    private val db = temp.db
 
     @AfterTest
-    fun tearDown() {
-        db.close()
-        dir.deleteRecursively()
-    }
+    fun tearDown() = temp.close()
 
     /** A client whose plugin counts the clients carrying it that have been closed, derived ones too. */
     private fun probedClient(closed: AtomicInteger): HttpClient =

@@ -10,10 +10,7 @@ import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -23,8 +20,8 @@ import kotlin.test.assertFailsWith
  * @Fts5 entity works with BundledSQLiteDriver on JVM.
  */
 class NpnDatabaseTest {
-    private lateinit var dbDir: File
-    private lateinit var db: NpnDatabase
+    private val temp = TempIndexDb("npn-db-test")
+    private val db = temp.db
 
     private fun doc(
         id: String,
@@ -52,17 +49,8 @@ class NpnDatabaseTest {
         missing = missing,
     )
 
-    @BeforeTest
-    fun setup() {
-        dbDir = Files.createTempDirectory("npn-db-test").toFile()
-        db = npnDatabase(File(dbDir, "index.db"))
-    }
-
     @AfterTest
-    fun teardown() {
-        db.close()
-        dbDir.deleteRecursively()
-    }
+    fun teardown() = temp.close()
 
     @Test
     fun documentUpsertAndLookup() =

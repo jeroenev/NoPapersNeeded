@@ -5,6 +5,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.deviceDatabase
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
@@ -25,12 +26,12 @@ import java.nio.file.Path
  */
 internal class OcrPipelineRig {
     val libRoot: Path = Files.createTempDirectory("npn-ocr-lib")
-    private val dbDir: File = Files.createTempDirectory("npn-ocr-db").toFile()
+    private val dbs = TempIndexDb("npn-ocr-db")
     val fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
-    val db: NpnDatabase = npnDatabase(File(dbDir, "index.db"))
+    val db: NpnDatabase = dbs.db
 
     /** This device's OCR queue and page cache live here, apart from the index. */
-    val deviceDb: DeviceDatabase = deviceDatabase(File(dbDir, "device.db"))
+    val deviceDb: DeviceDatabase = dbs.deviceDb
 
     fun pipeline(
         deviceId: String,
@@ -68,10 +69,10 @@ internal class OcrPipelineRig {
      * A second, independent index over the same library folder — how another device sees a library
      * whose sidecars are already there, or this one after its index was rebuilt. Caller closes it.
      */
-    fun openSecondIndex(name: String = "indexB.db"): NpnDatabase = npnDatabase(File(dbDir, name))
+    fun openSecondIndex(name: String = "indexB.db"): NpnDatabase = npnDatabase(File(dbs.dir, name))
 
     /** Another device's own state, for a pipeline over [openSecondIndex] as that device. Caller closes it. */
-    fun openSecondDevice(name: String = "deviceB.db"): DeviceDatabase = deviceDatabase(File(dbDir, name))
+    fun openSecondDevice(name: String = "deviceB.db"): DeviceDatabase = deviceDatabase(File(dbs.dir, name))
 
     /** Write [bytes] into the library and index it as an OCR-pending document. */
     suspend fun stageDoc(
@@ -114,10 +115,8 @@ internal class OcrPipelineRig {
     }
 
     fun close() {
-        db.close()
-        deviceDb.close()
+        dbs.close()
         libRoot.toFile().deleteRecursively()
-        dbDir.deleteRecursively()
     }
 }
 

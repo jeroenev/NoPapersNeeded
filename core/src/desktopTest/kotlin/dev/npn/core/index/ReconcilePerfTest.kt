@@ -1,9 +1,8 @@
 package dev.npn.core.index
 
 import dev.npn.core.app.JournalCoordinator
-import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.ProjectionStatus
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.FsEvent
@@ -27,7 +26,6 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import kotlin.test.AfterTest
@@ -101,10 +99,10 @@ private class CountingFileSystem(
  */
 class ReconcilePerfTest {
     private lateinit var libRoot: Path
-    private lateinit var dbDir: File
     private lateinit var delegate: JvmLibraryFileSystem
     private lateinit var fs: CountingFileSystem
-    private lateinit var db: NpnDatabase
+    private val temp = TempIndexDb("npn-reconcile-db")
+    private val db = temp.db
     private lateinit var clock: MutableClock
     private lateinit var indexer: Indexer
     private lateinit var accumulator: MetadataAccumulator
@@ -112,10 +110,8 @@ class ReconcilePerfTest {
     @BeforeTest
     fun setup() {
         libRoot = Files.createTempDirectory("npn-reconcile-lib")
-        dbDir = Files.createTempDirectory("npn-reconcile-db").toFile()
         delegate = JvmLibraryFileSystem(libRoot, PathExternalIo)
         fs = CountingFileSystem(delegate)
-        db = npnDatabase(File(dbDir, "index.db"))
         clock = MutableClock(1_000L)
         indexer = Indexer(fs, db, clock)
         accumulator = MetadataAccumulator(fs, db, installationId = "test-installation")
@@ -123,9 +119,8 @@ class ReconcilePerfTest {
 
     @AfterTest
     fun teardown() {
-        db.close()
         libRoot.toFile().deleteRecursively()
-        dbDir.deleteRecursively()
+        temp.close()
     }
 
     private fun writePdf(

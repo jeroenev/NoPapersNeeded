@@ -7,28 +7,22 @@ import ai.koog.prompt.message.Message
 import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
-import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
 /** What system prompt a chat turn is asked under, whatever the conversation began with. */
 class KoogChatSystemPromptTest {
-    private val dbDir: File = Files.createTempDirectory("npn-koog-system-prompt").toFile()
-    private val db: NpnDatabase = npnDatabase(File(dbDir, "index.db"))
+    private val temp = TempIndexDb("npn-koog-system-prompt")
+    private val db = temp.db
 
     @AfterTest
-    fun teardown() {
-        db.close()
-        dbDir.deleteRecursively()
-    }
+    fun teardown() = temp.close()
 
     private val model =
         LLModel(

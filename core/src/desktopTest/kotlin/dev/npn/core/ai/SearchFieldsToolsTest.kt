@@ -2,18 +2,14 @@ package dev.npn.core.ai
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DocumentFieldEntity
-import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -22,8 +18,8 @@ import kotlin.test.Test
  * Room + bundled-SQLite index.
  */
 class SearchFieldsToolsTest {
-    private lateinit var dbDir: File
-    private lateinit var db: NpnDatabase
+    private val temp = TempIndexDb("npn-ai-fields-test")
+    private val db = temp.db
 
     private fun doc(
         id: String,
@@ -53,17 +49,8 @@ class SearchFieldsToolsTest {
         missing = missing,
     )
 
-    @BeforeTest
-    fun setup() {
-        dbDir = Files.createTempDirectory("npn-ai-fields-test").toFile()
-        db = npnDatabase(File(dbDir, "index.db"))
-    }
-
     @AfterTest
-    fun teardown() {
-        db.close()
-        dbDir.deleteRecursively()
-    }
+    fun teardown() = temp.close()
 
     /** The seed field registry (title, correspondent, docType, docDate, notes) every tool reads. */
     private val registry = FieldKeys.seedDefinitions()

@@ -1,16 +1,12 @@
 package dev.npn.core.ai
 
 import dev.npn.core.db.DocumentEntity
-import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /**
@@ -22,8 +18,8 @@ import kotlin.test.Test
  * so behaves differently on purpose — most visibly by staying out of "any" searches.
  */
 class OcrEngineFieldToolsTest {
-    private lateinit var dbDir: File
-    private lateinit var db: NpnDatabase
+    private val temp = TempIndexDb("npn-ai-ocr-field-test")
+    private val db = temp.db
 
     /** Pinned by hand to the AI engine. */
     private val aiDoc = "a".repeat(64)
@@ -34,17 +30,8 @@ class OcrEngineFieldToolsTest {
     /** Imported but never OCRed, so search has no text for it at all. */
     private val unreadDoc = "c".repeat(64)
 
-    @BeforeTest
-    fun setup() {
-        dbDir = Files.createTempDirectory("npn-ai-ocr-field-test").toFile()
-        db = npnDatabase(File(dbDir, "index.db"))
-    }
-
     @AfterTest
-    fun teardown() {
-        db.close()
-        dbDir.deleteRecursively()
-    }
+    fun teardown() = temp.close()
 
     private fun doc(
         id: String,

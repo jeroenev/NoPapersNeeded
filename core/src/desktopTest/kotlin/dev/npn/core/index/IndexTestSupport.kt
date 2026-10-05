@@ -6,7 +6,7 @@ import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.StatementLog
-import dev.npn.core.db.deviceDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.fieldTypes
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.db.recordingDatabase
@@ -22,7 +22,6 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
 import dev.npn.core.journal.JournalEventVersions
 import dev.npn.core.journal.PendingOp
-import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 
@@ -33,12 +32,13 @@ import java.nio.file.Path
  */
 class IndexRig private constructor(
     val libRoot: Path,
-    val dbDir: File,
+    private val dbs: TempIndexDb,
     val fs: JvmLibraryFileSystem,
-    val db: NpnDatabase,
-    val deviceDb: DeviceDatabase,
     val clock: MutableClock,
 ) {
+    val db: NpnDatabase = dbs.db
+    val deviceDb: DeviceDatabase = dbs.deviceDb
+
     val indexer = Indexer(fs, db, clock)
 
     /** Real persisted accumulator: reads the same journal objects the writers publish. */
@@ -129,21 +129,19 @@ class IndexRig private constructor(
     }
 
     fun close() {
-        db.close()
-        deviceDb.close()
+        dbs.close()
         libRoot.toFile().deleteRecursively()
-        dbDir.deleteRecursively()
     }
 
     companion object {
         /** A fresh rig; with [statements], every SQL statement the index database runs is logged there. */
         fun create(statements: StatementLog? = null): IndexRig {
             val libRoot = Files.createTempDirectory("npn-index-lib")
-            val dbDir = Files.createTempDirectory("npn-index-db").toFile()
-            val fs = JvmLibraryFileSystem(libRoot, PathExternalIo)
-            val dbFile = File(dbDir, "index.db")
-            val db = if (statements == null) npnDatabase(dbFile) else recordingDatabase(dbFile, statements)
-            return IndexRig(libRoot, dbDir, fs, db, deviceDatabase(File(dbDir, "device.db")), MutableClock(1_000L))
+            val dbs =
+                TempIndexDb("npn-index-db") { file ->
+                    if (statements == null) npnDatabase(file) else recordingDatabase(file, statements)
+                }
+            return IndexRig(libRoot, dbs, JvmLibraryFileSystem(libRoot, PathExternalIo), MutableClock(1_000L))
         }
     }
 }

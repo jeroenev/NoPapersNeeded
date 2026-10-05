@@ -2,7 +2,7 @@ package dev.npn.core.ai
 
 import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.app.toAiConfig
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
@@ -14,8 +14,6 @@ import java.awt.Color
 import java.awt.Font
 import java.awt.image.BufferedImage
 import java.io.ByteArrayOutputStream
-import java.io.File
-import java.nio.file.Files
 import javax.imageio.ImageIO
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -156,13 +154,8 @@ class LiveEndpointProbeTest {
         config: AiConfig,
         block: (AiFacadeImpl) -> Unit,
     ) {
-        val dir = Files.createTempDirectory("npn-live-probe").toFile()
-        val db = npnDatabase(File(dir, "index.db"))
-        try {
-            block(AiFacadeImpl(db, db.keyValueDao()) { config })
-        } finally {
-            db.close()
-            dir.deleteRecursively()
+        TempIndexDb("npn-live-probe").use { temp ->
+            block(AiFacadeImpl(temp.db, temp.db.keyValueDao()) { config })
         }
     }
 

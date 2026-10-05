@@ -8,25 +8,20 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
-import dev.npn.core.db.deviceDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 
 /** A real index database wired to the reader under test; the two suites below share it. */
 internal open class WorkQueueReaderFixture {
-    private lateinit var dbDir: File
-    protected lateinit var db: NpnDatabase
-    protected lateinit var deviceDb: DeviceDatabase
-    protected lateinit var reader: WorkQueueReader
+    private val temp = TempIndexDb("npn-queue-test")
+    protected val db: NpnDatabase = temp.db
+    protected val deviceDb: DeviceDatabase = temp.deviceDb
 
     /** Stands in for the live pipeline's `inFlight`; tests set it to name the document being run. */
     protected val ocrInFlight = MutableStateFlow<String?>(null)
@@ -34,28 +29,18 @@ internal open class WorkQueueReaderFixture {
     /** Stands in for the live edit queue's `inFlight`; tests set it to name the run being suggested. */
     protected val editInFlight = MutableStateFlow<String?>(null)
 
-    @BeforeTest
-    fun setup() {
-        dbDir = Files.createTempDirectory("npn-queue-test").toFile()
-        db = npnDatabase(File(dbDir, "index.db"))
-        deviceDb = deviceDatabase(File(dbDir, "device.db"))
-        reader =
-            WorkQueueReader(
-                db.documentDao(),
-                deviceDb.ocrQueueDao(),
-                deviceDb.aiEnrichQueueDao(),
-                deviceDb.aiEditJobDao(),
-                ocrInFlight,
-                editInFlight,
-            )
-    }
+    protected val reader =
+        WorkQueueReader(
+            db.documentDao(),
+            deviceDb.ocrQueueDao(),
+            deviceDb.aiEnrichQueueDao(),
+            deviceDb.aiEditJobDao(),
+            ocrInFlight,
+            editInFlight,
+        )
 
     @AfterTest
-    fun teardown() {
-        db.close()
-        deviceDb.close()
-        dbDir.deleteRecursively()
-    }
+    fun teardown() = temp.close()
 }
 
 /**

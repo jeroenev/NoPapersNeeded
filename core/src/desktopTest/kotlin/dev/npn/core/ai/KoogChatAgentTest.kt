@@ -9,8 +9,7 @@ import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
 import ai.koog.prompt.streaming.StreamFrame
-import dev.npn.core.db.NpnDatabase
-import dev.npn.core.db.npnDatabase
+import dev.npn.core.db.TempIndexDb
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -20,10 +19,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.asFlow
 import kotlinx.coroutines.test.runTest
-import java.io.File
-import java.nio.file.Files
 import kotlin.test.AfterTest
-import kotlin.test.BeforeTest
 import kotlin.test.Test
 import kotlin.test.assertFails
 
@@ -34,20 +30,11 @@ import kotlin.test.assertFails
  * assembles — not about any endpoint.
  */
 class KoogChatAgentTest {
-    private lateinit var dbDir: File
-    private lateinit var db: NpnDatabase
-
-    @BeforeTest
-    fun setup() {
-        dbDir = Files.createTempDirectory("npn-koog-chat-test").toFile()
-        db = npnDatabase(File(dbDir, "index.db"))
-    }
+    private val temp = TempIndexDb("npn-koog-chat-test")
+    private val db = temp.db
 
     @AfterTest
-    fun teardown() {
-        db.close()
-        dbDir.deleteRecursively()
-    }
+    fun teardown() = temp.close()
 
     private val model =
         LLModel(
