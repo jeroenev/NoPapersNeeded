@@ -31,7 +31,7 @@ internal fun AppearanceSettingsPane(context: SettingsPaneContext) {
             selected =
                 stringResource(
                     Res.string.common_settings_default_view,
-                    viewTypeLabel(context.state.defaultViewType),
+                    viewTypeLabel(context.state.snapshot.defaultViewType),
                 ),
             options = ViewType.entries,
             optionLabel = { viewTypeLabel(it) },
@@ -41,14 +41,14 @@ internal fun AppearanceSettingsPane(context: SettingsPaneContext) {
         SwitchRow(
             label = stringResource(Res.string.common_settings_landscape_columns),
             help = stringResource(Res.string.common_settings_landscape_columns_help),
-            checked = context.state.landscapeListColumns,
+            checked = context.state.snapshot.landscapeListColumns,
             onCheckedChange = { on -> context.vm.edit { it.copy(landscapeListColumns = on) } },
         )
     }
 
     SettingsSection(title = stringResource(Res.string.common_settings_language)) {
         Dropdown(
-            selected = appLanguageName(context.state.appLanguage),
+            selected = appLanguageName(context.state.snapshot.appLanguage),
             options = APP_LANGUAGES,
             optionLabel = { appLanguageName(it) },
             onSelect = { lang -> context.vm.edit { it.copy(appLanguage = lang) } },

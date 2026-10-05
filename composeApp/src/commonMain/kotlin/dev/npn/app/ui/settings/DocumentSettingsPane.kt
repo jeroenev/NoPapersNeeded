@@ -59,7 +59,7 @@ internal fun DocumentSettingsPane(context: SettingsPaneContext) {
 
     SettingsSection(title = stringResource(Res.string.common_settings_trash)) {
         NumericField(
-            value = context.state.trashRetentionDays,
+            value = context.state.snapshot.trashRetentionDays,
             onValueChange = { days -> context.vm.edit { it.copy(trashRetentionDays = days) } },
             range = TRASH_RETENTION_RANGE,
             label = stringResource(Res.string.common_settings_trash_retention_days),

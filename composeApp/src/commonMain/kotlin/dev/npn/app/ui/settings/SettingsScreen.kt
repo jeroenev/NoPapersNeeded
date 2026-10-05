@@ -107,7 +107,7 @@ fun SettingsScreen(
     var draftToResume by remember { mutableStateOf<String?>(null) }
     val pickLibrary =
         rememberLibraryFolderPicker(
-            useSaf = state.useSafStorage,
+            useSaf = state.snapshot.useSafStorage,
             onPicked = onOpenLibrary,
             onUnusable = vm::folderNotOnDevice,
         )

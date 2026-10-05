@@ -99,15 +99,16 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val model = vm(settings = settings, session = session)
             val job = launch { model.state.collect {} }
             advanceUntilIdle()
-            val s = model.state.value
+            val state = model.state.value
+            val s = state.snapshot
             s.libraryLocation shouldBe "/home/lib"
             s.appLanguage shouldBe "nl"
             s.ocrLanguage shouldBe "nld"
             s.trashRetentionDays shouldBe 14
             s.defaultViewType shouldBe ViewType.GRID
             s.landscapeListColumns shouldBe true
-            s.storagePathTemplate shouldBe "{doc_date:yyyy}/{title}.pdf"
-            s.storagePathEnabled shouldBe true
+            state.storagePathTemplate shouldBe "{doc_date:yyyy}/{title}.pdf"
+            state.storagePathEnabled shouldBe true
             s.aiEnabled shouldBe true
             s.aiProvider shouldBe AiProvider.OLLAMA
             s.aiBaseUrl shouldBe "http://localhost:11434"
@@ -127,10 +128,10 @@ class SettingsViewModelTest : MainDispatcherTest() {
             val model = vm(settings = settings)
             val job = launch { model.state.collect {} }
             advanceUntilIdle()
-            model.state.value.ocrLanguage shouldBe null
+            model.state.value.snapshot.ocrLanguage shouldBe null
             settings.updateSettings { it.copy(ocrLanguage = "fra") }
             advanceUntilIdle()
-            model.state.value.ocrLanguage shouldBe "fra"
+            model.state.value.snapshot.ocrLanguage shouldBe "fra"
             job.cancel()
         }
 
@@ -261,10 +262,10 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.edit { it.copy(appLanguage = "nl") }
             advanceUntilIdle()
-            model.state.value.appLanguage shouldBe "nl"
+            model.state.value.snapshot.appLanguage shouldBe "nl"
             model.edit { it.copy(appLanguage = null) }
             advanceUntilIdle()
-            model.state.value.appLanguage shouldBe null
+            model.state.value.snapshot.appLanguage shouldBe null
             settings.settingsFlow.value?.appLanguage shouldBe null
             job.cancel()
         }

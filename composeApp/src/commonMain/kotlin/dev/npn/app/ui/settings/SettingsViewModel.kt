@@ -16,8 +16,6 @@ import dev.npn.core.app.AiTagging
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SettingsSnapshot
-import dev.npn.core.app.TrashSettings
-import dev.npn.core.app.ViewType
 import dev.npn.core.app.toAiConfig
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -55,35 +53,19 @@ private const val DEFAULT_STORAGE_PATH_TEMPLATE = "{doc_date:yyyy}/{title}.pdf"
 /** How long typing in the storage-path template must pause before the template is saved. */
 private const val TEMPLATE_SAVE_DELAY_MS = 800L
 
+/**
+ * What the settings screen shows: this device's settings as saved ([snapshot]; the defaults until
+ * they load), and the library's storage-path rule, whose template shows an unsaved edit first.
+ */
 data class SettingsUiState(
-    val libraryLocation: String? = null,
-    val appLanguage: String? = null,
-    /** Null follows the app language; see [dev.npn.core.ocr.OcrLanguages]. */
-    val ocrLanguage: String? = null,
-    val trashRetentionDays: Int = TrashSettings.DEFAULT_TRASH_RETENTION_DAYS,
-    val defaultViewType: ViewType = ViewType.GRID,
-    val landscapeListColumns: Boolean = false,
-    val watchedFolder: String? = null,
-    val watchedFolderDeleteAfterImport: Boolean = false,
-    val useSafStorage: Boolean = false,
+    val snapshot: SettingsSnapshot = SettingsSnapshot(installationId = ""),
     /** The library's template, synced through its journal; an unsaved edit shows here first. */
     val storagePathTemplate: String = DEFAULT_STORAGE_PATH_TEMPLATE,
     val storagePathEnabled: Boolean = false,
-    val aiEnabled: Boolean = false,
-    val aiProvider: AiProvider = AiProvider.OPENAI,
-    val aiBaseUrl: String = "",
-    val aiApiKey: String = "",
-    val aiModel: String = "",
-    val aiReasoningAssistant: AiReasoningLevel = AiReasoningLevel.DEFAULT,
-    val aiReasoningEdit: AiReasoningLevel = AiReasoningLevel.LOW,
-    val aiMaxTagsPerDoc: Int = AiTagging.DEFAULT_TAGS_PER_DOC,
-    val aiMaxNewTagsPerDoc: Int = AiTagging.DEFAULT_NEW_TAGS_PER_DOC,
-    val aiAutoOnOcr: Boolean = false,
-    val aiOcrAuto: Boolean = false,
+) {
     /** Whether the endpoint is complete enough to call — what gates the self-test button. */
-    val aiConfigured: Boolean = false,
-    val updateCheckEnabled: Boolean = true,
-)
+    val aiConfigured: Boolean get() = snapshot.toAiConfig().configured
+}
 
 /**
  * Transient state of the AI self-test: [report] is the last run's verdicts (null until one has
@@ -143,30 +125,9 @@ class SettingsViewModel(
     val state: StateFlow<SettingsUiState> =
         combine(settings.settings, storagePath.storagePath, templateDraft) { snapshot, path, draft ->
             SettingsUiState(
-                libraryLocation = snapshot.libraryLocation,
-                appLanguage = snapshot.appLanguage,
-                ocrLanguage = snapshot.ocrLanguage,
-                trashRetentionDays = snapshot.trashRetentionDays,
-                defaultViewType = snapshot.defaultViewType,
-                landscapeListColumns = snapshot.landscapeListColumns,
-                watchedFolder = snapshot.watchedFolder,
-                watchedFolderDeleteAfterImport = snapshot.watchedFolderDeleteAfterImport,
-                useSafStorage = snapshot.useSafStorage,
+                snapshot = snapshot,
                 storagePathTemplate = draft ?: path.template ?: DEFAULT_STORAGE_PATH_TEMPLATE,
                 storagePathEnabled = path.enabled,
-                aiEnabled = snapshot.aiEnabled,
-                aiProvider = snapshot.aiProvider,
-                aiBaseUrl = snapshot.aiBaseUrl,
-                aiApiKey = snapshot.aiApiKey,
-                aiModel = snapshot.aiModel,
-                aiReasoningAssistant = snapshot.aiReasoningAssistant,
-                aiReasoningEdit = snapshot.aiReasoningEdit,
-                aiMaxTagsPerDoc = snapshot.aiMaxTagsPerDoc,
-                aiMaxNewTagsPerDoc = snapshot.aiMaxNewTagsPerDoc,
-                aiAutoOnOcr = snapshot.aiAutoOnOcr,
-                aiOcrAuto = snapshot.aiOcrAuto,
-                aiConfigured = snapshot.toAiConfig().configured,
-                updateCheckEnabled = snapshot.updateCheckEnabled,
             )
         }.stateIn(viewModelScope, WhileSubscribedTimeout, SettingsUiState())
 

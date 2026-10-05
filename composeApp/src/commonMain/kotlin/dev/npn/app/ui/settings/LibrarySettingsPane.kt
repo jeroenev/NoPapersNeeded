@@ -50,7 +50,7 @@ private const val STORAGE_PATH_VARIABLES =
  */
 @Composable
 internal fun LibrarySettingsPane(context: SettingsPaneContext) {
-    val location = context.state.libraryLocation
+    val location = context.state.snapshot.libraryLocation
     val safLibrary = location != null && LibraryLocations.isContentUri(location)
     val storage = rememberStorageAccess()
     SettingsSection(title = null) {
@@ -99,7 +99,7 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
             SwitchRow(
                 label = stringResource(Res.string.common_settings_use_saf),
                 help = stringResource(Res.string.common_settings_use_saf_help),
-                checked = context.state.useSafStorage,
+                checked = context.state.snapshot.useSafStorage,
                 onCheckedChange = { on -> context.vm.edit { it.copy(useSafStorage = on) } },
             )
         }

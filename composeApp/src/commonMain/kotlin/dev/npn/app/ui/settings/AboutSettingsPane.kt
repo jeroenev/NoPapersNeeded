@@ -34,7 +34,7 @@ internal fun AboutSettingsPane(context: SettingsPaneContext) {
             SwitchRow(
                 label = stringResource(Res.string.common_settings_update_check),
                 help = stringResource(Res.string.common_settings_update_check_help),
-                checked = context.state.updateCheckEnabled,
+                checked = context.state.snapshot.updateCheckEnabled,
                 onCheckedChange = { on -> context.vm.edit { it.copy(updateCheckEnabled = on) } },
             )
         }

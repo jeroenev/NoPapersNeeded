@@ -112,10 +112,10 @@ internal fun AiSettingsPane(context: SettingsPaneContext) {
         SwitchRow(
             label = stringResource(Res.string.common_settings_enable_ai),
             help = stringResource(Res.string.common_settings_ai_help),
-            checked = state.aiEnabled,
+            checked = state.snapshot.aiEnabled,
             onCheckedChange = { on -> vm.edit { it.copy(aiEnabled = on) } },
         )
-        if (state.aiEnabled) {
+        if (state.snapshot.aiEnabled) {
             AiEndpointSettings(state = state, models = context.aiModels, vm = vm)
             AiBehaviourSettings(state = state, vm = vm)
             // Last, because it is a verdict on everything above it.
@@ -134,30 +134,30 @@ private fun AiEndpointSettings(
     // setAiProvider stays a named method (it clears the stale model list), unlike the plain
     // field edits below.
     Dropdown(
-        selected = stringResource(Res.string.common_settings_ai_provider, state.aiProvider.displayName),
+        selected = stringResource(Res.string.common_settings_ai_provider, state.snapshot.aiProvider.displayName),
         options = AiProvider.entries,
         // Provider names are product names, so displayName is deliberately not localized.
         optionLabel = { it.displayName },
         onSelect = vm::setAiProvider,
     )
     HelpText(stringResource(Res.string.common_settings_ai_provider_help))
-    if (state.aiProvider.editableBaseUrl) {
+    if (state.snapshot.aiProvider.editableBaseUrl) {
         AiBaseUrlField(
-            provider = state.aiProvider,
-            baseUrl = state.aiBaseUrl,
+            provider = state.snapshot.aiProvider,
+            baseUrl = state.snapshot.aiBaseUrl,
             onSetBaseUrl = { url -> vm.edit { it.copy(aiBaseUrl = url) } },
         )
     }
-    if (state.aiProvider != AiProvider.OLLAMA) {
+    if (state.snapshot.aiProvider != AiProvider.OLLAMA) {
         AiApiKeyField(
-            provider = state.aiProvider,
-            apiKey = state.aiApiKey,
+            provider = state.snapshot.aiProvider,
+            apiKey = state.snapshot.aiApiKey,
             onSetApiKey = { key -> vm.edit { it.copy(aiApiKey = key) } },
         )
     }
     AiModelField(
-        provider = state.aiProvider,
-        model = state.aiModel,
+        provider = state.snapshot.aiProvider,
+        model = state.snapshot.aiModel,
         models = models,
         onSetModel = { model -> vm.edit { it.copy(aiModel = model) } },
         onLoadModels = vm::loadAiModels,
@@ -172,19 +172,19 @@ private fun AiBehaviourSettings(
 ) {
     AiReasoningDropdown(
         label = { level -> stringResource(Res.string.common_settings_reasoning_assistant, level) },
-        current = state.aiReasoningAssistant,
+        current = state.snapshot.aiReasoningAssistant,
         onSelect = { level -> vm.edit { it.copy(aiReasoningAssistant = level) } },
     )
     AiReasoningDropdown(
         label = { level -> stringResource(Res.string.common_settings_reasoning_edit, level) },
-        current = state.aiReasoningEdit,
+        current = state.snapshot.aiReasoningEdit,
         onSelect = { level -> vm.edit { it.copy(aiReasoningEdit = level) } },
     )
     HelpText(stringResource(Res.string.common_settings_reasoning_help))
     AiTagCapDefaults(
-        maxTagsPerDoc = state.aiMaxTagsPerDoc,
+        maxTagsPerDoc = state.snapshot.aiMaxTagsPerDoc,
         onSetMaxTagsPerDoc = { value -> vm.edit { it.copy(aiMaxTagsPerDoc = value) } },
-        maxNewTagsPerDoc = state.aiMaxNewTagsPerDoc,
+        maxNewTagsPerDoc = state.snapshot.aiMaxNewTagsPerDoc,
         onSetMaxNewTagsPerDoc = { value -> vm.edit { it.copy(aiMaxNewTagsPerDoc = value) } },
     )
     // The unattended post-OCR enrichment switch. It lives here (and is therefore only reachable
@@ -193,7 +193,7 @@ private fun AiBehaviourSettings(
     SwitchRow(
         label = stringResource(Res.string.common_settings_ai_auto_on_ocr),
         help = stringResource(Res.string.common_settings_ai_auto_on_ocr_help),
-        checked = state.aiAutoOnOcr,
+        checked = state.snapshot.aiAutoOnOcr,
         onCheckedChange = { on -> vm.edit { it.copy(aiAutoOnOcr = on) } },
     )
     // Making the vision model the default OCR engine. Kept next to the switch above because both
@@ -207,7 +207,7 @@ private fun AiBehaviourSettings(
                 Res.string.common_settings_ai_ocr_auto_help,
                 OcrEngineSelector.DEFAULT_LARGE_DOCUMENT_PAGES,
             ),
-        checked = state.aiOcrAuto,
+        checked = state.snapshot.aiOcrAuto,
         onCheckedChange = { on -> vm.edit { it.copy(aiOcrAuto = on) } },
     )
     HelpText(stringResource(Res.string.common_settings_ai_request_help))

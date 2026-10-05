@@ -70,9 +70,9 @@ private const val OTHER_OCR_LANGUAGE_EXAMPLES = "ita, pol"
 internal fun ImportSettingsPane(context: SettingsPaneContext) {
     SettingsSection(title = stringResource(Res.string.common_settings_watched_folder)) {
         WatchedFolderSettings(
-            watchedFolder = context.state.watchedFolder,
-            useSaf = context.state.useSafStorage,
-            deleteAfterImport = context.state.watchedFolderDeleteAfterImport,
+            watchedFolder = context.state.snapshot.watchedFolder,
+            useSaf = context.state.snapshot.useSafStorage,
+            deleteAfterImport = context.state.snapshot.watchedFolderDeleteAfterImport,
             onSetFolder = { folder -> context.vm.edit { it.copy(watchedFolder = folder) } },
             onSetDeleteAfterImport = { on -> context.vm.edit { it.copy(watchedFolderDeleteAfterImport = on) } },
         )
@@ -81,7 +81,7 @@ internal fun ImportSettingsPane(context: SettingsPaneContext) {
     SettingsSection(title = stringResource(Res.string.common_settings_ocr)) {
         if (ocrHasLanguageSetting()) {
             OcrLanguageSettings(
-                setting = context.state.ocrLanguage,
+                setting = context.state.snapshot.ocrLanguage,
                 onChange = { value -> context.vm.edit { it.copy(ocrLanguage = value) } },
             )
         } else {
