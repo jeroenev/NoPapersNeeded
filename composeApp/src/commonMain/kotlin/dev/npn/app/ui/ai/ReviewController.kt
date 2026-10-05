@@ -1,5 +1,6 @@
 package dev.npn.app.ui.ai
 
+import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.core.app.ReviewChip
 import dev.npn.core.app.ReviewDoc
 
@@ -8,7 +9,7 @@ import dev.npn.core.app.ReviewDoc
  * must not be worded as if it did not: the interactive run keeps its scope and can suggest a next
  * batch, while a queued run is the only copy of an answer already paid for and is destroyed.
  */
-internal enum class ReviewExit {
+enum class ReviewExit {
     /** Interactive run: this batch is skipped, its documents stay reviewed, the scope remains. */
     SKIP_BATCH,
 
@@ -17,29 +18,79 @@ internal enum class ReviewExit {
 }
 
 /**
- * Everything the user can do to a Review batch, bundled so the batch renders identically wherever
- * it appears: the interactive AI-edit run and a queued run opened from the processing queue drive
- * the same widgets and must not grow separate ones.
+ * Everything the user can do to a Review batch. Both AI-edit viewmodels implement it, the
+ * interactive run and a queued run opened from the processing queue, so the batch renders and
+ * behaves identically wherever it appears.
  */
-internal data class ReviewActions(
-    val onToggleChip: (String, String) -> Unit,
-    val onToggleField: (docId: String, key: String) -> Unit,
-    val onSetDoc: (String, Boolean) -> Unit,
-    val onSetAll: (Boolean) -> Unit,
-    val onSelectRecommended: () -> Unit,
-    val onApply: () -> Unit,
-    val onExit: () -> Unit,
-    val onOpenDoc: (String) -> Unit,
-    val exit: ReviewExit,
-)
+interface ReviewController {
+    /** What [leaveReview] does to the suggestions. */
+    val reviewExit: ReviewExit
+
+    /** Tag additions and removals never share a tag, so one toggle covers both lists. */
+    fun toggleChip(
+        docId: String,
+        tag: String,
+    )
+
+    fun toggleField(
+        docId: String,
+        key: String,
+    )
+
+    /** Select or deselect every suggestion of one document. */
+    fun setDocSelection(
+        docId: String,
+        selected: Boolean,
+    )
+
+    /** Select or deselect every suggestion of every document. */
+    fun setAllSelection(selected: Boolean)
+
+    /** Reset the batch to the domain's pre-select policy; see [selectRecommended]. */
+    fun selectRecommended()
+
+    /** Write the selected suggestions. */
+    fun apply()
+
+    /** Leave the Review without writing anything; see [reviewExit]. */
+    fun leaveReview()
+}
+
+/**
+ * The selection half of [ReviewController], written once for both AI-edit viewmodels over the
+ * batch that [updateReview] reaches.
+ */
+abstract class ReviewViewModel :
+    MessagesViewModel(),
+    ReviewController {
+    /** Apply [transform] to the batch under review; a no-op while there is none. */
+    protected abstract fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>)
+
+    final override fun toggleChip(
+        docId: String,
+        tag: String,
+    ) = updateReview { it.toggleChip(docId, tag) }
+
+    final override fun toggleField(
+        docId: String,
+        key: String,
+    ) = updateReview { it.toggleField(docId, key) }
+
+    final override fun setDocSelection(
+        docId: String,
+        selected: Boolean,
+    ) = updateReview { it.setDocSelection(docId, selected) }
+
+    final override fun setAllSelection(selected: Boolean) = updateReview { it.setAllSelected(selected) }
+
+    final override fun selectRecommended() = updateReview { it.selectRecommended() }
+}
 
 /**
  * Selection toggling over a Review batch, as pure list transforms.
  *
  * Which suggestions a run *starts* selected is domain policy and lives in core; which ones the user
- * then ticks is presentation state, and both AI-edit viewmodels drive exactly the same widgets over
- * it. Keeping the transforms here rather than in either viewmodel is what stops the two from
- * drifting into subtly different rules for the same checkbox.
+ * then ticks is presentation state, the same for both AI-edit viewmodels ([ReviewViewModel]).
  */
 internal fun List<ReviewDoc>.toggleChip(
     docId: String,

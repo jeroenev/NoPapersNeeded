@@ -1,7 +1,6 @@
 package dev.npn.app.ui.ai
 
 import androidx.lifecycle.viewModelScope
-import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
@@ -300,7 +299,7 @@ class AiEditViewModel(
     private val settings: SettingsRepository,
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
     selection: List<String> = emptyList(),
-) : MessagesViewModel() {
+) : ReviewViewModel() {
     private val editQueue = session.aiEditQueue
     private val fieldRegistry = session.fieldRegistry
     private val reviewConfig = session.reviewConfig
@@ -570,42 +569,18 @@ class AiEditViewModel(
         _ui.update { it.copy(phase = EditPhase.Idle) }
     }
 
-    /**
-     * Toggle whether a doc's tag chip is selected for Apply (Review phase only). Tag additions and
-     * removals never share a tag, so one toggle covers both lists.
-     */
-    fun toggleChip(
-        docId: String,
-        tag: String,
-    ) = updateReview { it.toggleChip(docId, tag) }
+    /** Leaving a Review skips the batch: its documents count as reviewed, the scope remains. */
+    override val reviewExit = ReviewExit.SKIP_BATCH
 
-    /** Toggle whether a doc's suggested field value is selected for Apply (Review phase only). */
-    fun toggleField(
-        docId: String,
-        key: String,
-    ) = updateReview { it.toggleField(docId, key) }
-
-    /** Select or deselect every suggestion of one document (Review phase only; no-op otherwise). */
-    fun setDocSelection(
-        docId: String,
-        selected: Boolean,
-    ) = updateReview { it.setDocSelection(docId, selected) }
-
-    /** Select or deselect every suggestion of every document (Review phase only; no-op otherwise). */
-    fun setAllSelection(selected: Boolean) = updateReview { it.setAllSelected(selected) }
-
-    /** Reset the batch to the pre-select policy; see [List.selectRecommended]. */
-    fun selectRecommended() = updateReview { it.selectRecommended() }
-
-    /** Apply a selection transform to the current Review batch; a no-op in every other phase. */
-    private fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
+    /** The Review phase's batch; a no-op in every other phase. */
+    override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
         _ui.update { state ->
             val review = state.phase as? EditPhase.Review ?: return@update state
             state.copy(phase = review.copy(docs = transform(review.docs)))
         }
 
     /** Write the selected suggestions; see [AiEditRun] for partial-failure semantics. */
-    fun apply() {
+    override fun apply() {
         val review = _ui.value.phase as? EditPhase.Review ?: return
         if (run?.isActive == true) return
         run = viewModelScope.launch { applySelections(review) }
@@ -668,7 +643,7 @@ class AiEditViewModel(
      * Leave Review without writing anything: jump straight to Done with zero counts and the
      * correct moreRemain (reviewed docs are already processed, so they are excluded).
      */
-    fun skipReview() {
+    override fun leaveReview() {
         if (_ui.value.phase !is EditPhase.Review) return
         if (run?.isActive == true) return
         run =

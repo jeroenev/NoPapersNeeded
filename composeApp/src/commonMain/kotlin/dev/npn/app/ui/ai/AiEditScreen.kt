@@ -72,21 +72,6 @@ fun AiEditScreen(
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
-    val actions =
-        remember(vm) {
-            ReviewActions(
-                onToggleChip = vm::toggleChip,
-                onToggleField = vm::toggleField,
-                onSetDoc = vm::setDocSelection,
-                onSetAll = vm::setAllSelection,
-                onSelectRecommended = vm::selectRecommended,
-                onApply = vm::apply,
-                onExit = vm::skipReview,
-                onOpenDoc = onOpenDoc,
-                exit = ReviewExit.SKIP_BATCH,
-            )
-        }
-
     // Leaving mid-flight throws away answers that were already paid for, so Back asks first in
     // exactly the phases where that is true: the top-bar arrow, the system gesture and, on
     // desktop, Esc (which the window routes to the same back dispatcher).
@@ -99,8 +84,38 @@ fun AiEditScreen(
         topBar = { BackTopBar(title = stringResource(Res.string.ai_edit_title), onBack = requestBack) },
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
+        // The one step of the flow that is currently on screen; see [EditPhase].
         Column(Modifier.fillMaxSize().padding(padding)) {
-            EditPhaseContent(ui, vm, session, actions, onOpenQueue, onBack)
+            when (val phase = ui.phase) {
+                is EditPhase.Idle -> {
+                    AiEditSetup(ui, vm, session.content)
+                }
+
+                is EditPhase.Suggesting -> {
+                    SuggestingPhase(phase.progress, vm::cancel)
+                }
+
+                is EditPhase.Review -> {
+                    ReviewBatch(phase.docs, phase.emptyDocs, session.content, review = vm, onOpenDoc = onOpenDoc)
+                }
+
+                is EditPhase.Applying -> {
+                    CenteredProgress(stringResource(Res.string.ai_edit_applying))
+                }
+
+                is EditPhase.Queued -> {
+                    QueuedPhase(phase.documents, onOpenQueue, onBack)
+                }
+
+                is EditPhase.Done -> {
+                    DonePhase(
+                        result = phase.result,
+                        onNextBatch = vm::nextBatch,
+                        onBack = onBack,
+                        onReconfigure = vm::reconfigure,
+                    )
+                }
+            }
         }
     }
     if (confirmingLeave) {
@@ -133,48 +148,6 @@ internal fun LeaveGuard(
         isBackEnabled = guarding,
         onBackCompleted = onBack,
     )
-}
-
-/** The one step of the flow that is currently on screen; see [EditPhase]. */
-@Composable
-private fun EditPhaseContent(
-    ui: AiEditUiState,
-    vm: AiEditViewModel,
-    session: LibrarySession,
-    actions: ReviewActions,
-    onOpenQueue: () -> Unit,
-    onBack: () -> Unit,
-) {
-    when (val phase = ui.phase) {
-        is EditPhase.Idle -> {
-            AiEditSetup(ui, vm, session.content)
-        }
-
-        is EditPhase.Suggesting -> {
-            SuggestingPhase(phase.progress, vm::cancel)
-        }
-
-        is EditPhase.Review -> {
-            ReviewBatch(phase.docs, phase.emptyDocs, session.content, actions)
-        }
-
-        is EditPhase.Applying -> {
-            CenteredProgress(stringResource(Res.string.ai_edit_applying))
-        }
-
-        is EditPhase.Queued -> {
-            QueuedPhase(phase.documents, onOpenQueue, onBack)
-        }
-
-        is EditPhase.Done -> {
-            DonePhase(
-                result = phase.result,
-                onNextBatch = vm::nextBatch,
-                onBack = onBack,
-                onReconfigure = vm::reconfigure,
-            )
-        }
-    }
 }
 
 /**

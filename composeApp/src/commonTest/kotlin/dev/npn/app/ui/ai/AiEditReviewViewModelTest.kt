@@ -129,7 +129,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val messageJob = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
 
-            model.skip()
+            model.leaveReview()
             advanceUntilIdle()
 
             model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
@@ -223,7 +223,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val job = launch { model.phase.collect {} }
             advanceUntilIdle()
 
-            model.skip()
+            model.leaveReview()
             advanceUntilIdle()
 
             review.discarded shouldBe true

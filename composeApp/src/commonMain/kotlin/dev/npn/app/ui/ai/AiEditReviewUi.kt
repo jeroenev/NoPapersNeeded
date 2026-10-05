@@ -89,14 +89,15 @@ private val ReviewThumbnailSize = 56.dp
 /**
  * One batch of suggestions awaiting confirmation: per-document chips and field rows, the
  * select-all header, the documents the model had nothing for, and the apply bar. Nothing is
- * written until [ReviewActions.onApply].
+ * written until [ReviewController.apply]. [onOpenDoc] shows a document's pages.
  */
 @Composable
 internal fun ReviewBatch(
     docs: List<ReviewDoc>,
     emptyDocs: List<ReviewDoc>,
     content: DocContentFacade,
-    actions: ReviewActions,
+    review: ReviewController,
+    onOpenDoc: (String) -> Unit,
 ) {
     val selected =
         docs.sumOf { doc ->
@@ -113,15 +114,15 @@ internal fun ReviewBatch(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { BatchSelectionHeader(selected, total, docs.sumOf { it.needsAttention }, actions) }
+            item { BatchSelectionHeader(selected, total, docs.sumOf { it.needsAttention }, review) }
             items(docs, key = { it.docId }) { doc ->
-                ReviewRow(doc, content, actions)
+                ReviewRow(doc, content, review, onOpenDoc)
             }
             if (emptyDocs.isNotEmpty()) {
                 item { NoSuggestionsSection(emptyDocs) }
             }
         }
-        ApplyBar(selected, docsWithSelection, actions)
+        ApplyBar(selected, docsWithSelection, review)
     }
 }
 
@@ -137,7 +138,7 @@ private fun BatchSelectionHeader(
     selected: Int,
     total: Int,
     attention: Int,
-    actions: ReviewActions,
+    review: ReviewController,
 ) {
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         Text(
@@ -153,13 +154,13 @@ private fun BatchSelectionHeader(
             )
         }
         FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-            TextButton(onClick = actions.onSelectRecommended) {
+            TextButton(onClick = review::selectRecommended) {
                 Text(stringResource(Res.string.ai_edit_select_recommended))
             }
-            TextButton(onClick = { actions.onSetAll(true) }) {
+            TextButton(onClick = { review.setAllSelection(true) }) {
                 Text(stringResource(Res.string.ai_edit_select_all))
             }
-            TextButton(onClick = { actions.onSetAll(false) }) {
+            TextButton(onClick = { review.setAllSelection(false) }) {
                 Text(stringResource(Res.string.ai_edit_clear_selection))
             }
         }
@@ -170,7 +171,8 @@ private fun BatchSelectionHeader(
 private fun ReviewRow(
     doc: ReviewDoc,
     content: DocContentFacade,
-    actions: ReviewActions,
+    review: ReviewController,
+    onOpenDoc: (String) -> Unit,
 ) {
     val allSelected =
         doc.chips.all { it.selected } && doc.removals.all { it.selected } && doc.fields.all { it.selected }
@@ -190,7 +192,7 @@ private fun ReviewRow(
                 // The snippet is two lines of OCR text, which is not enough to judge a date or a
                 // correspondent against. This is the way to the page itself; the review survives
                 // the trip, because the screen stays on the back stack.
-                IconButton(onClick = { actions.onOpenDoc(doc.docId) }) {
+                IconButton(onClick = { onOpenDoc(doc.docId) }) {
                     Icon(
                         Icons.AutoMirrored.Filled.OpenInNew,
                         contentDescription = stringResource(Res.string.ai_edit_open_document),
@@ -207,19 +209,19 @@ private fun ReviewRow(
                 )
             }
             if (doc.chips.isNotEmpty()) {
-                AddChipsRow(doc, actions.onToggleChip)
+                AddChipsRow(doc, review::toggleChip)
             }
             if (doc.removals.isNotEmpty()) {
-                RemovalChipsRow(doc, actions.onToggleChip)
+                RemovalChipsRow(doc, review::toggleChip)
             }
             doc.fields.forEach { field ->
-                ReviewFieldRow(field, onToggle = { actions.onToggleField(doc.docId, field.key) })
+                ReviewFieldRow(field, onToggle = { review.toggleField(doc.docId, field.key) })
             }
         }
         TriStateCheckbox(
             state = toggleState,
             // On/Indeterminate → clear; Off → select all.
-            onClick = { actions.onSetDoc(doc.docId, !allSelected) },
+            onClick = { review.setDocSelection(doc.docId, !allSelected) },
         )
     }
 }
@@ -356,7 +358,7 @@ private fun NoSuggestionsSection(docs: List<ReviewDoc>) {
 private fun ApplyBar(
     selectedSuggestions: Int,
     docCount: Int,
-    actions: ReviewActions,
+    review: ReviewController,
 ) {
     var confirmingDiscard by remember { mutableStateOf(false) }
     Surface(tonalElevation = 3.dp) {
@@ -378,22 +380,22 @@ private fun ApplyBar(
             // that costs differs per flow, so both the label and the confirmation do too.
             OutlinedButton(
                 onClick = {
-                    when (actions.exit) {
-                        ReviewExit.SKIP_BATCH -> actions.onExit()
+                    when (review.reviewExit) {
+                        ReviewExit.SKIP_BATCH -> review.leaveReview()
                         ReviewExit.DISCARD_RUN -> confirmingDiscard = true
                     }
                 },
             ) {
                 Text(
                     stringResource(
-                        when (actions.exit) {
+                        when (review.reviewExit) {
                             ReviewExit.SKIP_BATCH -> Res.string.ai_edit_skip
                             ReviewExit.DISCARD_RUN -> Res.string.ai_edit_discard_run
                         },
                     ),
                 )
             }
-            Button(onClick = actions.onApply, enabled = selectedSuggestions > 0) {
+            Button(onClick = review::apply, enabled = selectedSuggestions > 0) {
                 Text(stringResource(Res.string.common_apply))
             }
         }
@@ -407,7 +409,7 @@ private fun ApplyBar(
             destructive = true,
             onConfirm = {
                 confirmingDiscard = false
-                actions.onExit()
+                review.leaveReview()
             },
             onDismiss = { confirmingDiscard = false },
         )

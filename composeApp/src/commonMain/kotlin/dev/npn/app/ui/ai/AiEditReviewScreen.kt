@@ -43,23 +43,6 @@ fun AiEditReviewScreen(
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
-    val actions =
-        remember(vm) {
-            ReviewActions(
-                onToggleChip = vm::toggleChip,
-                onToggleField = vm::toggleField,
-                onSetDoc = vm::setDocSelection,
-                onSetAll = vm::setAllSelection,
-                onSelectRecommended = vm::selectRecommended,
-                onApply = vm::apply,
-                onExit = vm::skip,
-                onOpenDoc = onOpenDoc,
-                // This flow's exit destroys the only copy of an answer already paid for, so it is
-                // labelled and confirmed as the destructive action it is.
-                exit = ReviewExit.DISCARD_RUN,
-            )
-        }
-
     Scaffold(
         topBar = { BackTopBar(title = stringResource(Res.string.ai_edit_queued_review_title), onBack = onBack) },
         snackbarHost = { SnackbarHost(snackbar) },
@@ -79,7 +62,7 @@ fun AiEditReviewScreen(
                 }
 
                 is QueuedReviewPhase.Review -> {
-                    ReviewBatch(current.docs, current.emptyDocs, session.content, actions)
+                    ReviewBatch(current.docs, current.emptyDocs, session.content, review = vm, onOpenDoc = onOpenDoc)
                 }
 
                 QueuedReviewPhase.Applying -> {

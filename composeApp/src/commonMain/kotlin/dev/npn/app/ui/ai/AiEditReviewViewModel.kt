@@ -1,7 +1,6 @@
 package dev.npn.app.ui.ai
 
 import androidx.lifecycle.viewModelScope
-import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.ApplyOutcome
@@ -61,13 +60,13 @@ sealed interface QueuedReviewPhase {
  * ([dev.npn.core.app.ReviewApply] and [toggleChip] and friends).
  *
  * The run is dropped from the queue exactly when it stops being reviewable: a fully applied
- * [apply], or [skip]. Leaving the screen any other way keeps it, so a half-finished review costs
+ * [apply], or [leaveReview]. Leaving the screen any other way keeps it, so a half-finished review costs
  * nothing.
  */
 class AiEditReviewViewModel(
     session: LibrarySession,
     private val jobId: String,
-) : MessagesViewModel() {
+) : ReviewViewModel() {
     private val queue = session.aiEditQueue
 
     private val _phase = MutableStateFlow<QueuedReviewPhase>(QueuedReviewPhase.Loading)
@@ -91,34 +90,17 @@ class AiEditReviewViewModel(
         }
     }
 
-    fun toggleChip(
-        docId: String,
-        tag: String,
-    ) = updateReview { it.toggleChip(docId, tag) }
+    /** Leaving destroys the only copy of an answer already paid for, so it is a discard. */
+    override val reviewExit = ReviewExit.DISCARD_RUN
 
-    fun toggleField(
-        docId: String,
-        key: String,
-    ) = updateReview { it.toggleField(docId, key) }
-
-    fun setDocSelection(
-        docId: String,
-        selected: Boolean,
-    ) = updateReview { it.setDocSelection(docId, selected) }
-
-    fun setAllSelection(selected: Boolean) = updateReview { it.setAllSelected(selected) }
-
-    /** Reset the batch to the pre-select policy; see [List.selectRecommended]. */
-    fun selectRecommended() = updateReview { it.selectRecommended() }
-
-    private fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
+    override fun updateReview(transform: (List<ReviewDoc>) -> List<ReviewDoc>) =
         _phase.update { phase ->
             val current = phase as? QueuedReviewPhase.Review ?: return@update phase
             current.copy(docs = transform(current.docs))
         }
 
     /** Write the selected suggestions; a fully applied run leaves the queue. */
-    fun apply() {
+    override fun apply() {
         val current = _phase.value as? QueuedReviewPhase.Review ?: return
         val opened = review ?: return
         if (run?.isActive == true) return
@@ -131,7 +113,7 @@ class AiEditReviewViewModel(
      * batch — there is no later batch here to carry the suggestions into. A discard that fails
      * says so and stays on Review, since the run is still queued.
      */
-    fun skip() {
+    override fun leaveReview() {
         val opened = review ?: return
         if (run?.isActive == true) return
         run =

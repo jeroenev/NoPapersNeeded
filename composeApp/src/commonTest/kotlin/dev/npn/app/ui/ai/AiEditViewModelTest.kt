@@ -1065,7 +1065,7 @@ class AiEditBatchWorkflowTest : MainDispatcherTest() {
             model.ui.value.phase
                 .shouldBeInstanceOf<EditPhase.Review>()
 
-            model.skipReview()
+            model.leaveReview()
             advanceUntilIdle()
 
             session.meta.addedTags shouldBe emptyList()
