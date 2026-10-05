@@ -46,11 +46,8 @@ run = "adb uninstall $ANDROID_APP_ID"
 
 # --- Android wireless ------------------------------------------------------
 
-# `mise pair` walks through one-time adb Wi-Fi pairing (file task).
-# `mise connect <ip:port>` reconnects an already-paired device.
-[tasks.connect]
-description = "Reconnect an already-paired device over Wi-Fi (usage: mise connect 192.168.x.x:PORT)"
-run = 'adb connect "$1"'
+# `mise pair` walks through one-time adb Wi-Fi pairing, and `mise connect <ip:port>` reconnects
+# an already-paired device (file tasks in .mise/tasks/).
 
 [tasks.devices]
 description = "List connected/paired adb devices"
