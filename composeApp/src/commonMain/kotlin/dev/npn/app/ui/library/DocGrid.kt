@@ -34,6 +34,7 @@ import dev.npn.app.ui.common.ScrollbarWidth
 import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.ctrlScrollZoom
 import dev.npn.app.ui.common.pinchToZoom
+import dev.npn.core.app.DocListItem
 import dev.npn.core.app.GridSizing
 import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.flow.debounce
@@ -83,17 +84,11 @@ internal fun gridWidthForColumns(
 @Composable
 internal fun DocGrid(
     results: DocumentResults,
-    content: dev.npn.core.app.DocContentFacade,
-    tagColors: TagColors,
-    reviewMode: dev.npn.core.model.ReviewMode,
-    ui: LibraryUiState,
+    wiring: DocItemWiring,
+    selectionMode: Boolean,
+    selected: Set<String>,
     columnWidth: Int,
     onColumnWidthChange: (Int) -> Unit,
-    onOpen: (String) -> Unit,
-    onToggleSelect: (String) -> Unit,
-    onStartSelection: (String) -> Unit,
-    contextActionsFor: ((String) -> DocContextMenuActions)? = null,
-    previewOnClick: Boolean = false,
 ) {
     // Live cell width; re-seeded when the persisted value changes (e.g. after a commit).
     var width by remember { mutableStateOf(columnWidth.toFloat()) }
@@ -168,17 +163,11 @@ internal fun DocGrid(
             ScrollToTopOnNewResults(results.query, gridState)
             DocGridCards(
                 docs = results.items,
-                content = content,
-                tagColors = tagColors,
-                reviewMode = reviewMode,
-                ui = ui,
+                wiring = wiring,
+                selectionMode = selectionMode,
+                selected = selected,
                 cellWidth = width.roundToInt(),
                 state = gridState,
-                onOpen = onOpen,
-                onToggleSelect = onToggleSelect,
-                onStartSelection = onStartSelection,
-                contextActionsFor = contextActionsFor,
-                previewOnClick = previewOnClick,
             )
 
             VerticalScrollbar(gridState)
@@ -203,18 +192,12 @@ internal fun DocGrid(
  */
 @Composable
 private fun DocGridCards(
-    docs: List<dev.npn.core.app.DocListItem>,
-    content: dev.npn.core.app.DocContentFacade,
-    tagColors: TagColors,
-    reviewMode: dev.npn.core.model.ReviewMode,
-    ui: LibraryUiState,
+    docs: List<DocListItem>,
+    wiring: DocItemWiring,
+    selectionMode: Boolean,
+    selected: Set<String>,
     cellWidth: Int,
     state: LazyGridState,
-    onOpen: (String) -> Unit,
-    onToggleSelect: (String) -> Unit,
-    onStartSelection: (String) -> Unit,
-    contextActionsFor: ((String) -> DocContextMenuActions)? = null,
-    previewOnClick: Boolean = false,
 ) {
     LazyVerticalGrid(
         columns = GridCells.Adaptive(cellWidth.dp),
@@ -227,30 +210,7 @@ private fun DocGridCards(
         verticalArrangement = Arrangement.spacedBy(GRID_SPACING_DP.dp),
     ) {
         items(docs, key = { it.doc.docId }) { item ->
-            // Memoized per item so each card receives the same callback/action instances across
-            // recompositions and stays skippable while the grid scrolls.
-            val id = item.doc.docId
-            val selectionMode = ui.selectionMode
-            val onClick =
-                remember(id, selectionMode, onToggleSelect, onOpen) {
-                    { if (selectionMode) onToggleSelect(id) else onOpen(id) }
-                }
-            val onLongClick = remember(id, onStartSelection) { { onStartSelection(id) } }
-            val onToggle = remember(id, onToggleSelect) { { onToggleSelect(id) } }
-            val contextActions = remember(id, contextActionsFor) { contextActionsFor?.invoke(id) }
-            DocGridCard(
-                item = item,
-                content = content,
-                tagColors = tagColors,
-                reviewMode = reviewMode,
-                selectionMode = selectionMode,
-                selected = id in ui.selected,
-                onClick = onClick,
-                onLongClick = onLongClick,
-                onToggleSelect = onToggle,
-                contextActions = contextActions,
-                previewOnClick = previewOnClick,
-            )
+            DocGridCard(item, wiring, selectionMode, selected = item.doc.docId in selected)
         }
     }
 }

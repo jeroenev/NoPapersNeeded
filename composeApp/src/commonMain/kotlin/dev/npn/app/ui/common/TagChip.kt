@@ -16,6 +16,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import dev.npn.core.app.TagInfo
 
 /** Parse a hex color string like "#RRGGBB" or "#AARRGGBB". Returns null on failure. */
 fun parseHexColor(hex: String?): Color? {
@@ -32,6 +33,9 @@ fun parseHexColor(hex: String?): Color? {
         }
     }.getOrNull()
 }
+
+/** Each tag's colour by name, the lookup [TagChip] callers and the tag editor read. */
+fun List<TagInfo>.colorsByName(): Map<String, String?> = associate { it.name to it.color }
 
 @Composable
 fun TagChip(

@@ -12,11 +12,13 @@ import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SortField
+import dev.npn.core.app.TagInfo
 import dev.npn.core.app.ViewType
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -286,6 +288,22 @@ class LibraryViewModelTest : MainDispatcherTest() {
             settings.edit { it.copy(aiEnabled = false) }
             runCurrent()
             model.aiConfigured.value shouldBe false
+        }
+
+    /** The chips on the documents take their colours from the library's tags, and follow a change. */
+    @Test
+    fun tagColorsFollowTheLibrarysTags() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.tags.tags.value = listOf(TagInfo("finance", "#ff0000", null, 3))
+            val model = vm(session = session)
+            backgroundScope.launch { model.tagColors.collect {} }
+            runCurrent()
+            model.tagColors.value shouldContainExactly mapOf("finance" to "#ff0000")
+
+            session.tags.tags.value = listOf(TagInfo("finance", "#00ff00", null, 3), TagInfo("draft", null, null, 1))
+            runCurrent()
+            model.tagColors.value shouldContainExactly mapOf("finance" to "#00ff00", "draft" to null)
         }
 
     @Test

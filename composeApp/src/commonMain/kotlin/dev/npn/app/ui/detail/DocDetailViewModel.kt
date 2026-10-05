@@ -5,6 +5,7 @@ import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.aiConfigured
+import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.queryTerms
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.textFieldValues
@@ -216,7 +217,7 @@ class DocDetailViewModel(
     private val tagColors: StateFlow<Map<String, String?>> =
         session.tags
             .observeTags()
-            .map { tags -> tags.associate { it.name to it.color } }
+            .map { it.colorsByName() }
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
     /** Keys documents carry without a definition, offered when the user defines a new field. */

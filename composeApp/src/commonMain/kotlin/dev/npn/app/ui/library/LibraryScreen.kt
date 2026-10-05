@@ -101,6 +101,7 @@ import dev.npn.app.ui.common.VerticalScrollbar
 import dev.npn.app.ui.common.isLandscape
 import dev.npn.app.ui.queue.QueueCounts
 import dev.npn.core.app.DocContentFacade
+import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SortField
@@ -320,7 +321,7 @@ private fun LibraryContent(
     val ui by vm.ui.collectAsStateWithLifecycle()
     // Read once, not delegated: the empty and loading branches below smart-cast it.
     val results = vm.documents.collectAsStateWithLifecycle().value
-    val tags by vm.tags.collectAsStateWithLifecycle()
+    val tagColors by vm.tagColors.collectAsStateWithLifecycle()
     val reviewMode by vm.reviewMode.collectAsStateWithLifecycle()
     val reviewCount by vm.needsReviewCount.collectAsStateWithLifecycle()
     val savedViews by vm.savedViews.collectAsStateWithLifecycle()
@@ -334,7 +335,6 @@ private fun LibraryContent(
     val suggestions by vm.suggestions.collectAsStateWithLifecycle()
     val gridColumnWidth by vm.gridColumnWidth.collectAsStateWithLifecycle()
     val landscapeListColumns by vm.landscapeListColumns.collectAsStateWithLifecycle()
-    val tagColors = remember(tags) { TagColors(tags.associate { it.name to it.color }) }
     val allDocIds = remember(results) { results?.items.orEmpty().map { it.doc.docId } }
 
     val importPicker =
@@ -367,33 +367,30 @@ private fun LibraryContent(
     val searchFocus = remember { FocusRequester() }
     val contentFocus = remember { FocusRequester() }
     var searchFocused by remember { mutableStateOf(false) }
-    // Right-click context menu actions. Tag/trash actions operate on the current selection, so the
-    // clicked document is pulled into it first (replacing the selection when it was not part of it).
-    // The factory is remembered (reading the live selection through State) so the per-item actions
-    // it produces can be memoized too instead of invalidating every list item each recomposition.
+    // The right-click menu's tag and trash actions act on the selection, so they first pull the
+    // clicked document into it (replacing the selection when it was not part of it). Remembered,
+    // reading the live selection through State, so a selection change leaves every item's wiring
+    // as it was.
     val selectedNow by rememberUpdatedState(ui.selected)
-    val contextActionsFor: (String) -> DocContextMenuActions =
-        remember(vm, onOpenDoc, onAddTag, onRemoveTag, onRequestTrash) {
-            { docId ->
-                val ensureInSelection = {
+    val wiring =
+        remember(content, tagColors, reviewMode, wide, onOpenDoc, onAddTag, onRemoveTag, onRequestTrash) {
+            fun onSelection(action: () -> Unit): (String) -> Unit =
+                { docId ->
                     if (docId !in selectedNow) vm.startSelection(docId)
+                    action()
                 }
-                DocContextMenuActions(
-                    onOpen = { onOpenDoc(docId) },
-                    onAddTag = {
-                        ensureInSelection()
-                        onAddTag()
-                    },
-                    onRemoveTag = {
-                        ensureInSelection()
-                        onRemoveTag()
-                    },
-                    onTrash = {
-                        ensureInSelection()
-                        onRequestTrash()
-                    },
-                )
-            }
+            DocItemWiring(
+                content = content,
+                tagColors = tagColors,
+                reviewMode = reviewMode,
+                previewOnClick = wide,
+                onOpen = onOpenDoc,
+                onToggleSelect = vm::toggleSelection,
+                onStartSelection = vm::startSelection,
+                onAddTag = onSelection(onAddTag),
+                onRemoveTag = onSelection(onRemoveTag),
+                onTrash = onSelection(onRequestTrash),
+            )
         }
     // Give the shortcut host focus on entry; key events only reach it once something is focused.
     // Wait for the first frame so the requester node is attached to the focus owner before asking
@@ -577,33 +574,21 @@ private fun LibraryContent(
                         ViewType.GRID -> {
                             DocGrid(
                                 results = results,
-                                content = content,
-                                tagColors = tagColors,
-                                reviewMode = reviewMode,
-                                ui = ui,
+                                wiring = wiring,
+                                selectionMode = ui.selectionMode,
+                                selected = ui.selected,
                                 columnWidth = gridColumnWidth,
                                 onColumnWidthChange = vm::setGridColumnWidth,
-                                onOpen = onOpenDoc,
-                                onToggleSelect = vm::toggleSelection,
-                                onStartSelection = vm::startSelection,
-                                contextActionsFor = contextActionsFor,
-                                previewOnClick = wide,
                             )
                         }
 
                         ViewType.LIST -> {
                             DocList(
                                 results = results,
-                                content = content,
-                                tagColors = tagColors,
-                                reviewMode = reviewMode,
-                                ui = ui,
+                                wiring = wiring,
+                                selectionMode = ui.selectionMode,
+                                selected = ui.selected,
                                 landscapeColumns = landscapeListColumns,
-                                onOpen = onOpenDoc,
-                                onToggleSelect = vm::toggleSelection,
-                                onStartSelection = vm::startSelection,
-                                contextActionsFor = contextActionsFor,
-                                previewOnClick = wide,
                             )
                         }
                     }
@@ -616,42 +601,13 @@ private fun LibraryContent(
 @Composable
 private fun DocList(
     results: DocumentResults,
-    content: dev.npn.core.app.DocContentFacade,
-    tagColors: TagColors,
-    reviewMode: ReviewMode,
-    ui: LibraryUiState,
+    wiring: DocItemWiring,
+    selectionMode: Boolean,
+    selected: Set<String>,
     landscapeColumns: Boolean,
-    onOpen: (String) -> Unit,
-    onToggleSelect: (String) -> Unit,
-    onStartSelection: (String) -> Unit,
-    contextActionsFor: ((String) -> DocContextMenuActions)? = null,
-    previewOnClick: Boolean = false,
 ) {
-    val row: @Composable (dev.npn.core.app.DocListItem) -> Unit = { item ->
-        // Memoized per item (this runs in the item's composition scope) so each row receives the
-        // same callback/action instances across recompositions and stays skippable while scrolling.
-        val id = item.doc.docId
-        val selectionMode = ui.selectionMode
-        val onClick =
-            remember(id, selectionMode, onToggleSelect, onOpen) {
-                { if (selectionMode) onToggleSelect(id) else onOpen(id) }
-            }
-        val onLongClick = remember(id, onStartSelection) { { onStartSelection(id) } }
-        val onToggle = remember(id, onToggleSelect) { { onToggleSelect(id) } }
-        val contextActions = remember(id, contextActionsFor) { contextActionsFor?.invoke(id) }
-        DocListRow(
-            item = item,
-            content = content,
-            tagColors = tagColors,
-            reviewMode = reviewMode,
-            selectionMode = selectionMode,
-            selected = id in ui.selected,
-            onClick = onClick,
-            onLongClick = onLongClick,
-            onToggleSelect = onToggle,
-            contextActions = contextActions,
-            previewOnClick = previewOnClick,
-        )
+    val row: @Composable (DocListItem) -> Unit = { item ->
+        DocListRow(item, wiring, selectionMode, selected = item.doc.docId in selected)
     }
 
     // Multi-column list when the option is on and the content area is landscape; otherwise the

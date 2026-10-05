@@ -8,6 +8,7 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.activeSearchToken
 import dev.npn.app.ui.common.aiConfigured
+import dev.npn.app.ui.common.colorsByName
 import dev.npn.app.ui.common.completeActiveSearchToken
 import dev.npn.app.ui.common.textFieldValues
 import dev.npn.app.ui.common.uiText
@@ -225,6 +226,12 @@ class LibraryViewModel(
         session.tags
             .observeTags()
             .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+
+    /** Each tag's colour by name, for the tag chips on the documents. */
+    val tagColors: StateFlow<Map<String, String?>> =
+        tags
+            .map { it.colorsByName() }
+            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
     /** The filter sheet's field rows: the registry plus each text field's values. */
     val fieldFilters: StateFlow<FieldFilterOptions> =

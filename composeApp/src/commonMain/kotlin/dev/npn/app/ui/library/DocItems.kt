@@ -34,7 +34,6 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -102,39 +101,39 @@ private fun Modifier.ctrlClickToggle(onToggleSelect: () -> Unit): Modifier {
 }
 
 /**
- * Tag-name → color lookup for the document items, wrapped so Compose treats it as a stable
- * parameter (a bare `Map` is not stability-inferred, which would make every list/grid item
- * non-skippable while scrolling).
+ * How the library wires each document item, in the list and the grid alike: what an item shows
+ * besides its own row (thumbnails from [content], tag colours, the review badge) and where its
+ * clicks and its right-click menu go, each action taking the item's id. [LibraryContent] makes one
+ * per screen state, so every item gets the same instance and skips while the list scrolls.
+ *
+ * The menu's tag and trash actions act on the whole selection; the screen pulls the clicked
+ * document into it first.
  */
-@Immutable
-data class TagColors(
-    private val colors: Map<String, String?>,
-) {
-    operator fun get(name: String): String? = colors[name]
-}
-
-/**
- * Actions of the desktop right-click context menu of a document item. Select/deselect is not in
- * here because the item already receives it; the rest routes back to the library screen (dialogs,
- * trash confirmation), acting on the whole selection after making sure the clicked document is
- * part of it.
- */
-@Immutable
-data class DocContextMenuActions(
-    val onOpen: () -> Unit,
-    val onAddTag: () -> Unit,
-    val onRemoveTag: () -> Unit,
-    val onTrash: () -> Unit,
+internal class DocItemWiring(
+    val content: DocContentFacade,
+    val tagColors: Map<String, String?>,
+    val reviewMode: ReviewMode,
+    /**
+     * Whether a click that does not select previews the document (wide layouts) rather than opening
+     * it (compact layouts). Only the accessibility click label differs; the click goes to [onOpen].
+     */
+    val previewOnClick: Boolean,
+    val onOpen: (String) -> Unit,
+    val onToggleSelect: (String) -> Unit,
+    val onStartSelection: (String) -> Unit,
+    val onAddTag: (String) -> Unit,
+    val onRemoveTag: (String) -> Unit,
+    val onTrash: (String) -> Unit,
 )
 
 /** The right-click context menu of a document item, anchored at the press position. */
 @Composable
 private fun DocContextMenu(
     at: Offset?,
+    docId: String,
     selected: Boolean,
+    wiring: DocItemWiring,
     onDismiss: () -> Unit,
-    onToggleSelect: () -> Unit,
-    actions: DocContextMenuActions,
 ) {
     val position = at ?: return
     // Zero-size anchor at the press position; the menu opens right at the pointer.
@@ -145,7 +144,7 @@ private fun DocContextMenu(
                 leadingIcon = { Icon(Icons.Filled.OpenInNew, contentDescription = null) },
                 onClick = {
                     onDismiss()
-                    actions.onOpen()
+                    wiring.onOpen(docId)
                 },
             )
             DropdownMenuItem(
@@ -164,7 +163,7 @@ private fun DocContextMenu(
                 },
                 onClick = {
                     onDismiss()
-                    onToggleSelect()
+                    wiring.onToggleSelect(docId)
                 },
             )
             DropdownMenuItem(
@@ -172,7 +171,7 @@ private fun DocContextMenu(
                 leadingIcon = { Icon(Icons.Filled.NewLabel, contentDescription = null) },
                 onClick = {
                     onDismiss()
-                    actions.onAddTag()
+                    wiring.onAddTag(docId)
                 },
             )
             DropdownMenuItem(
@@ -180,7 +179,7 @@ private fun DocContextMenu(
                 leadingIcon = { Icon(Icons.Filled.LabelOff, contentDescription = null) },
                 onClick = {
                     onDismiss()
-                    actions.onRemoveTag()
+                    wiring.onRemoveTag(docId)
                 },
             )
             DropdownMenuItem(
@@ -188,7 +187,7 @@ private fun DocContextMenu(
                 leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
                 onClick = {
                     onDismiss()
-                    actions.onTrash()
+                    wiring.onTrash(docId)
                 },
             )
         }
@@ -212,31 +211,24 @@ private fun HoverSelectCheckbox(
 }
 
 /**
- * Shared selection scaffolding for a single document item, in list or grid form.
- *
- * Owns the gesture contract every item shares — hover tracking, ctrl-click toggle, secondary-click
- * context menu, and click/long-click — so the two item shapes cannot drift apart. [itemContent]
- * receives the modifier carrying those gestures and must apply it to its own root, plus the current
- * hover state for the select checkbox.
+ * The one wiring of a document item, in list or grid form: hover tracking, ctrl-click toggle, the
+ * secondary-click context menu, and click/long-click, all from [wiring], so the two item shapes
+ * cannot drift apart. [itemContent] receives the modifier carrying those gestures and must apply it
+ * to its own root, plus the current hover state for the select checkbox.
  */
 @Composable
 private fun SelectableDocItem(
+    docId: String,
+    wiring: DocItemWiring,
     selectionMode: Boolean,
     selected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onToggleSelect: () -> Unit,
-    contextActions: DocContextMenuActions?,
-    // Whether a non-selecting click previews the document (wide layouts) rather than opening it
-    // (compact layouts). Only the accessibility click label differs; the click action is [onClick].
-    previewOnClick: Boolean = false,
     itemContent: @Composable (itemModifier: Modifier, hovered: Boolean) -> Unit,
 ) {
     val hoverInteraction = remember { MutableInteractionSource() }
     val hovered by hoverInteraction.collectIsHoveredAsState()
     var menuAt by remember { mutableStateOf<Offset?>(null) }
     val openLabel =
-        stringResource(if (previewOnClick) Res.string.library_preview else Res.string.library_open)
+        stringResource(if (wiring.previewOnClick) Res.string.library_preview else Res.string.library_open)
     val selectionLabel =
         stringResource(if (selected) Res.string.library_deselect else Res.string.library_select)
     Box {
@@ -244,72 +236,56 @@ private fun SelectableDocItem(
             Modifier
                 .fillMaxWidth()
                 .hoverable(hoverInteraction)
-                .ctrlClickToggle(onToggleSelect)
-                .onSecondaryClick { if (contextActions != null) menuAt = it }
+                .ctrlClickToggle { wiring.onToggleSelect(docId) }
+                .onSecondaryClick { menuAt = it }
                 .semantics { this.selected = selected }
                 .combinedClickable(
                     onClickLabel = if (selectionMode) selectionLabel else openLabel,
                     role = Role.Button,
                     onLongClickLabel = selectionLabel,
-                    onClick = onClick,
-                    onLongClick = onLongClick,
+                    onClick = { if (selectionMode) wiring.onToggleSelect(docId) else wiring.onOpen(docId) },
+                    onLongClick = { wiring.onStartSelection(docId) },
                 ),
             hovered,
         )
-        contextActions?.let { actions ->
-            DocContextMenu(
-                at = menuAt,
-                selected = selected,
-                onDismiss = { menuAt = null },
-                onToggleSelect = onToggleSelect,
-                actions = actions,
-            )
-        }
+        DocContextMenu(
+            at = menuAt,
+            docId = docId,
+            selected = selected,
+            wiring = wiring,
+            onDismiss = { menuAt = null },
+        )
     }
 }
 
 @Composable
-fun DocListRow(
+internal fun DocListRow(
     item: DocListItem,
-    content: DocContentFacade,
-    tagColors: TagColors,
-    reviewMode: ReviewMode,
+    wiring: DocItemWiring,
     selectionMode: Boolean,
     selected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onToggleSelect: () -> Unit,
-    contextActions: DocContextMenuActions? = null,
-    previewOnClick: Boolean = false,
 ) {
-    SelectableDocItem(
-        selectionMode = selectionMode,
-        selected = selected,
-        onClick = onClick,
-        onLongClick = onLongClick,
-        onToggleSelect = onToggleSelect,
-        contextActions = contextActions,
-        previewOnClick = previewOnClick,
-    ) { itemModifier, hovered ->
+    val docId = item.doc.docId
+    SelectableDocItem(docId, wiring, selectionMode, selected) { itemModifier, hovered ->
         Row(
             modifier = itemModifier.padding(horizontal = 16.dp, vertical = 10.dp),
             verticalAlignment = Alignment.Top,
             horizontalArrangement = Arrangement.spacedBy(12.dp),
         ) {
             Box(contentAlignment = Alignment.Center) {
-                DocThumbnail(docId = item.doc.docId, content = content, size = 48.dp)
+                DocThumbnail(docId = docId, content = wiring.content, size = 48.dp)
                 // Also shown during selection mode: keeping it in the thumbnail spot avoids
                 // shifting the row content when a leading checkbox would be inserted.
                 HoverSelectCheckbox(
                     visible = hovered || selectionMode,
                     selected = selected,
-                    onToggleSelect = onToggleSelect,
+                    onToggleSelect = { wiring.onToggleSelect(docId) },
                 )
             }
             DocListRowDetails(
                 item = item,
-                tagColors = tagColors,
-                reviewMode = reviewMode,
+                tagColors = wiring.tagColors,
+                reviewMode = wiring.reviewMode,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -320,7 +296,7 @@ fun DocListRow(
 @Composable
 private fun DocListRowDetails(
     item: DocListItem,
-    tagColors: TagColors,
+    tagColors: Map<String, String?>,
     reviewMode: ReviewMode,
     modifier: Modifier = Modifier,
 ) {
@@ -373,34 +349,20 @@ private fun DocListRowDetails(
 }
 
 @Composable
-fun DocGridCard(
+internal fun DocGridCard(
     item: DocListItem,
-    content: DocContentFacade,
-    tagColors: TagColors,
-    reviewMode: ReviewMode,
+    wiring: DocItemWiring,
     selectionMode: Boolean,
     selected: Boolean,
-    onClick: () -> Unit,
-    onLongClick: () -> Unit,
-    onToggleSelect: () -> Unit,
-    contextActions: DocContextMenuActions? = null,
-    previewOnClick: Boolean = false,
 ) {
-    SelectableDocItem(
-        selectionMode = selectionMode,
-        selected = selected,
-        onClick = onClick,
-        onLongClick = onLongClick,
-        onToggleSelect = onToggleSelect,
-        contextActions = contextActions,
-        previewOnClick = previewOnClick,
-    ) { itemModifier, hovered ->
+    val docId = item.doc.docId
+    SelectableDocItem(docId, wiring, selectionMode, selected) { itemModifier, hovered ->
         Card(modifier = itemModifier) {
             Column(Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
                 Box {
                     DocThumbnail(
-                        docId = item.doc.docId,
-                        content = content,
+                        docId = docId,
+                        content = wiring.content,
                         size = 120.dp,
                         modifier = Modifier.fillMaxWidth().aspectRatio(0.75f),
                     )
@@ -409,14 +371,14 @@ fun DocGridCard(
                     HoverSelectCheckbox(
                         visible = hovered || selectionMode,
                         selected = selected,
-                        onToggleSelect = onToggleSelect,
+                        onToggleSelect = { wiring.onToggleSelect(docId) },
                         modifier = Modifier.align(Alignment.TopEnd),
                     )
                 }
                 // The only card badge: review status, and only where the marker is real (inbox
                 // workflow). Deliberately minimal — no snippet/date/size on the card.
-                if (reviewMode.reviewMarkerIsAuthoritative) {
-                    ReviewedBadge(item.effectiveReviewed(reviewMode))
+                if (wiring.reviewMode.reviewMarkerIsAuthoritative) {
+                    ReviewedBadge(item.effectiveReviewed(wiring.reviewMode))
                 }
                 Text(
                     text = item.doc.displayTitle,
@@ -426,7 +388,7 @@ fun DocGridCard(
                 )
                 if (item.tags.isNotEmpty()) {
                     FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                        item.tags.take(MAX_GRID_TAGS).forEach { t -> TagChip(name = t, color = tagColors[t]) }
+                        item.tags.take(MAX_GRID_TAGS).forEach { t -> TagChip(name = t, color = wiring.tagColors[t]) }
                         TagOverflow(item.tags.size - MAX_GRID_TAGS)
                     }
                 }
