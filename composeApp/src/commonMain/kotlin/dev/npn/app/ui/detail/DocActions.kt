@@ -14,7 +14,6 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.platform.sharePdfBytes
 import dev.npn.app.platform.supportsSharing
 import dev.npn.app.ui.common.ConfirmDialog
@@ -56,43 +55,70 @@ import org.jetbrains.compose.resources.stringResource
 private enum class DocActionDialog { RENAME, TRASH, BAKE, SPLIT, AI_OCR }
 
 /**
+ * What the document actions do, all at once rather than through the document's draft.
+ * [DocDetailViewModel] implements it; results are its messages.
+ */
+interface DocumentActions {
+    fun rename(newFileName: String)
+
+    fun reOcr()
+
+    /** Re-read the text with the AI (vision) engine; a long document is confirmed first. */
+    fun ocrWithAi()
+
+    /** Split into one document per [segments] entry; [onDone] runs once the original is in the trash. */
+    fun split(
+        segments: List<IntRange>,
+        onDone: () -> Unit,
+    )
+
+    /** Rewrite the library file with the document's metadata. */
+    fun bakeInPlace()
+
+    /** Write a copy carrying the document's metadata through [write] (a file the user picked). */
+    fun exportBakedCopy(write: suspend (ByteArray) -> Unit)
+
+    /** Hand a copy carrying the document's metadata to the platform's share sheet through [share]. */
+    fun shareBakedCopy(share: suspend (ByteArray) -> Unit)
+
+    /** Move the document to the trash; [onDone] runs once it is there. */
+    fun trash(onDone: () -> Unit)
+}
+
+/**
  * Shared document actions: a share/export button for a baked copy plus an overflow menu with
  * rename, re-run OCR, split, bake-in-place and trash. Used by the detail screen's top bar and by
  * the library's side-panel preview header, so both surfaces offer the same operations. Owns the
- * confirmation dialogs; results are [vm]'s messages, shown by the host's snackbar.
+ * confirmation dialogs; [state] says which actions are busy or offered.
  *
- * [onGone] runs after the document left the library (trashed, or split into new documents) so the
- * host can close itself.
+ * [onClose] runs after the document left the library (trashed, or split into new documents) so the
+ * host can close itself. A [compact] bar keeps every action in the overflow menu.
  */
 @Composable
 fun DocActions(
     item: DocListItem,
-    vm: DocDetailViewModel,
-    onGone: () -> Unit,
-    compact: Boolean = true,
+    state: DetailUiState,
+    actions: DocumentActions,
+    onClose: () -> Unit,
+    compact: Boolean,
 ) {
-    val ui by vm.ui.collectAsStateWithLifecycle()
     var dialog by remember { mutableStateOf<DocActionDialog?>(null) }
 
     ShareOrExportButton(
         exportName = exportName(item),
-        onExport = { file -> vm.exportBakedCopy { bytes -> file.write(bytes) } },
-        onShare = { fileName -> vm.shareBakedCopy { bytes -> sharePdfBytes(fileName, bytes) } },
+        onExport = { file -> actions.exportBakedCopy { bytes -> file.write(bytes) } },
+        onShare = { fileName -> actions.shareBakedCopy { bytes -> sharePdfBytes(fileName, bytes) } },
     )
     DocActionsMenu(
         compact = compact,
-        reindexing = ui.reindexing,
-        splitting = ui.splitting,
-        baking = ui.baking,
-        canSplit = ui.pageCount.count > 1,
-        aiOcr = ui.aiOcr,
+        state = state,
         onRename = { dialog = DocActionDialog.RENAME },
-        onReOcr = vm::reOcr,
+        onReOcr = actions::reOcr,
         // A long document is offered like any other, but its cost is worth a sentence first: the
         // model is billed per page, and the page count is the one thing the user cannot see from
         // a menu item.
         onAiOcr = {
-            if (ui.aiOcr is AiOcrOffer.Large) dialog = DocActionDialog.AI_OCR else vm.ocrWithAi()
+            if (state.aiOcr is AiOcrOffer.Large) dialog = DocActionDialog.AI_OCR else actions.ocrWithAi()
         },
         onSplit = { dialog = DocActionDialog.SPLIT },
         onBakeInPlace = { dialog = DocActionDialog.BAKE },
@@ -100,14 +126,14 @@ fun DocActions(
     )
     DocActionDialogs(
         dialog = dialog,
-        pageCount = ui.pageCount.count,
-        aiOcr = ui.aiOcr,
-        onRename = vm::rename,
-        onTrash = { vm.trash(onGone) },
-        onAiOcr = vm::ocrWithAi,
+        pageCount = state.pageCount.count,
+        aiOcr = state.aiOcr,
+        onRename = actions::rename,
+        onTrash = { actions.trash(onClose) },
+        onAiOcr = actions::ocrWithAi,
         // The original is trashed on success; the host should leave/close.
-        onSplit = { segments -> vm.split(segments, onGone) },
-        onBake = vm::bakeInPlace,
+        onSplit = { segments -> actions.split(segments, onClose) },
+        onBake = actions::bakeInPlace,
         onDismiss = { dialog = null },
     )
 }
@@ -144,11 +170,7 @@ private fun ShareOrExportButton(
 @Composable
 private fun DocActionsMenu(
     compact: Boolean,
-    reindexing: Boolean,
-    splitting: Boolean,
-    baking: Boolean,
-    canSplit: Boolean,
-    aiOcr: AiOcrOffer,
+    state: DetailUiState,
     onRename: () -> Unit,
     onReOcr: () -> Unit,
     onAiOcr: () -> Unit,
@@ -156,6 +178,8 @@ private fun DocActionsMenu(
     onBakeInPlace: () -> Unit,
     onTrash: () -> Unit,
 ) {
+    val reindexing = state.reindexing
+    val aiOcr = state.aiOcr
     val rename =
         TopBarAction(Icons.Filled.Edit, stringResource(Res.string.detail_rename_file), onRename)
     val reOcr =
@@ -168,16 +192,20 @@ private fun DocActionsMenu(
     val split =
         TopBarAction(
             icon = Icons.Filled.ContentCut,
-            label = stringResource(if (splitting) Res.string.detail_splitting else Res.string.detail_split_document),
+            label =
+                stringResource(if (state.splitting) Res.string.detail_splitting else Res.string.detail_split_document),
             onClick = onSplit,
-            enabled = canSplit && !splitting,
+            enabled = state.pageCount.count > 1 && !state.splitting,
         )
     val bake =
         TopBarAction(
             icon = Icons.Filled.PictureAsPdf,
-            label = stringResource(if (baking) Res.string.detail_baking else Res.string.detail_bake_metadata_in_place),
+            label =
+                stringResource(
+                    if (state.baking) Res.string.detail_baking else Res.string.detail_bake_metadata_in_place,
+                ),
             onClick = onBakeInPlace,
-            enabled = !baking,
+            enabled = !state.baking,
         )
     // Hidden only without an endpoint: there the action can do nothing but explain itself, and this
     // menu is not where AI gets introduced. Length never hides or disables it — a long document is

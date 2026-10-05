@@ -17,8 +17,6 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.DisposableEffect
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -26,17 +24,11 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.ViewModelStore
 import androidx.lifecycle.ViewModelStoreOwner
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
-import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.LocalWindowWidthClass
-import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.WindowWidthClass
-import dev.npn.app.ui.detail.DocActions
-import dev.npn.app.ui.detail.DocDetailViewModel
-import dev.npn.app.ui.detail.DocumentEditor
-import dev.npn.app.ui.detail.PageViewer
+import dev.npn.app.ui.detail.DocumentView
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
@@ -47,12 +39,12 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Side-panel document view on wide layouts, with everything the compact full-screen version has:
- * the full multi-page [PageViewer] (swipe/keys, zoom) as the leading **Preview** tab, the shared
- * [MetadataPanel] tabs (Details / Text / History, fully editable), and the document actions
- * (share/export, rename, re-run OCR, split, bake, trash) in the header. Wide layouts never
- * navigate to the full-screen detail route — this panel is the document view there.
+ * the shared [DocumentView] (the page viewer as the leading **Preview** tab, the metadata tabs,
+ * fully editable) under a header with the document actions (share/export, rename, re-run OCR,
+ * split, bake, trash). Wide layouts never navigate to the full-screen detail route — this panel is
+ * the document view there.
  *
- * The panel hosts its own [DocDetailViewModel] in a store scoped to the previewed document, so
+ * The panel hosts the document's viewmodel in a store scoped to the previewed document, so
  * switching documents (or closing the panel) disposes the previous view model instead of piling
  * them up in the library screen's store.
  */
@@ -64,7 +56,7 @@ internal fun DocPreviewPanel(
     snackbar: SnackbarHostState,
     onClose: () -> Unit,
     onExpand: () -> Unit,
-    onReviewed: () -> Unit,
+    onReviewNext: () -> Unit,
     hasNext: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -73,16 +65,41 @@ internal fun DocPreviewPanel(
         // the document view inside lays out as it would on a compact window, one tab at a time.
         CompositionLocalProvider(LocalWindowWidthClass provides WindowWidthClass.COMPACT) {
             ScopedToDoc(docId = item.doc.docId) {
-                PreviewBody(
-                    item = item,
+                DocumentView(
+                    docId = item.doc.docId,
                     session = session,
                     settings = settings,
                     snackbar = snackbar,
+                    // Trash and split take the document out of the result set; close the panel.
                     onClose = onClose,
-                    onExpand = onExpand,
-                    onReviewed = onReviewed,
+                    onReviewNext = onReviewNext,
                     hasNext = hasNext,
-                )
+                    // Seeded with the row the library list already loaded: the viewmodel is rebuilt
+                    // for every document the user selects (see ScopedToDoc), so without the seed the
+                    // panel would blank for one index query on every switch.
+                    initialItem = item,
+                ) { _, actions, editor ->
+                    // This panel is a sibling of the library's Scaffold, so nothing applies the
+                    // bottom system-bar inset for it: without this the pinned save/discard/review
+                    // row would draw under the Android navigation bar on wide edge-to-edge layouts.
+                    // The inset is zero on desktop.
+                    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
+                        PreviewHeader(
+                            title = item.doc.displayTitle,
+                            actions = {
+                                TooltipIconButton(
+                                    Icons.Filled.OpenInFull,
+                                    stringResource(Res.string.ux_expand_document),
+                                    onExpand,
+                                )
+                                actions(true)
+                            },
+                            onClose = onClose,
+                        )
+                        HorizontalDivider()
+                        editor(Modifier.fillMaxWidth().weight(1f))
+                    }
+                }
             }
         }
     }
@@ -108,68 +125,8 @@ private fun ScopedToDoc(
 }
 
 @Composable
-private fun PreviewBody(
-    item: DocListItem,
-    session: LibrarySession,
-    settings: SettingsRepository,
-    snackbar: SnackbarHostState,
-    onClose: () -> Unit,
-    onExpand: () -> Unit,
-    onReviewed: () -> Unit,
-    hasNext: Boolean,
-) {
-    val docId = item.doc.docId
-    // Seeded with the row the library list already loaded: this viewmodel is rebuilt for every
-    // document the user selects (see ScopedToDoc), so without the seed the panel would blank for
-    // one index query on every switch.
-    val vm: DocDetailViewModel = viewModel { DocDetailViewModel(docId, session, settings, initialItem = item) }
-    SnackbarMessages(vm.messages, snackbar)
-
-    val ui by vm.ui.collectAsStateWithLifecycle()
-    val metadata by vm.metadata.collectAsStateWithLifecycle()
-
-    // This panel is a sibling of the library's Scaffold, so nothing applies the bottom system-bar
-    // inset for it: without this the pinned save/discard/review row would draw under the Android
-    // navigation bar on wide edge-to-edge layouts. The inset is zero on desktop.
-    Column(Modifier.fillMaxSize().navigationBarsPadding()) {
-        PreviewHeader(
-            item = item,
-            actions = {
-                // Trash/split remove the document from the result set; close the panel with them.
-                TooltipIconButton(Icons.Filled.OpenInFull, stringResource(Res.string.ux_expand_document), onExpand)
-                DocActions(item = item, vm = vm, onGone = onClose)
-            },
-            onClose = onClose,
-        )
-        HorizontalDivider()
-        DocumentEditor(
-            state = metadata,
-            writes = vm,
-            onReviewNext = onReviewed,
-            hasNext = hasNext,
-            preview = { m ->
-                // Keyed on the document: the viewer's remembered state (page-bitmap cache, pager
-                // position, zoom) must not survive a document switch, or it would briefly show
-                // the previous document's rendered pages.
-                key(docId) {
-                    PageViewer(
-                        pageIndex = ui.pageIndex,
-                        pageCount = ui.pageCount,
-                        render = { p, maxDim -> vm.renderPage(p, maxDim) },
-                        onPageChange = vm::goToPage,
-                        onRetryPageCount = vm::retryPageCount,
-                        modifier = m,
-                    )
-                }
-            },
-            modifier = Modifier.fillMaxWidth().weight(1f),
-        )
-    }
-}
-
-@Composable
 private fun PreviewHeader(
-    item: DocListItem,
+    title: String,
     actions: @Composable () -> Unit,
     onClose: () -> Unit,
 ) {
@@ -178,7 +135,7 @@ private fun PreviewHeader(
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(
-            item.doc.displayTitle,
+            title,
             style = MaterialTheme.typography.titleMedium,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,

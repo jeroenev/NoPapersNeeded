@@ -96,7 +96,8 @@ internal fun DocumentEditor(
     Column(modifier.imePadding().saveKeys { if (draft.dirty) store.save(docId) }) {
         CompositionLocalProvider(LocalDocumentWriteBlocked provides (draft.saving || !draft.writable)) {
             MetadataPanel(
-                state = state.copy(document = state.document.copy(item = edited)),
+                state = state,
+                item = edited,
                 actions = actions,
                 previewTab = preview,
                 modifier = Modifier.fillMaxSize().weight(1f),

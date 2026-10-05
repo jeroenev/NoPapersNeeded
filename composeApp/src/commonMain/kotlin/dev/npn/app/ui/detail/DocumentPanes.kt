@@ -28,6 +28,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.semantics.setProgress
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.LocalWindowWidthClass
+import dev.npn.core.app.DocListItem
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ux_resize_panes
 import org.jetbrains.compose.resources.stringResource
@@ -42,25 +43,26 @@ private val DividerWidth = 48.dp
 private const val KEY_STEP = 0.05f
 
 /**
- * The page preview and the metadata tabs side by side on a wide window, or the preview as the first
- * tab on a compact one. The library's side panel counts as compact
- * (see [dev.npn.app.ui.library.DocPreviewPanel]).
+ * The page preview and the metadata tabs of [item], the document as its draft shows it: side by
+ * side on a wide window, or the preview as the first tab on a compact one. The library's side panel
+ * counts as compact (see [dev.npn.app.ui.library.DocPreviewPanel]).
  */
 @Composable
 fun MetadataPanel(
     state: MetadataUiState,
+    item: DocListItem,
     actions: MetadataActions,
-    previewTab: (@Composable (Modifier) -> Unit)? = null,
+    previewTab: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Box(modifier) {
-        if (LocalWindowWidthClass.current.isWide && previewTab != null) {
+        if (LocalWindowWidthClass.current.isWide) {
             DocumentPanes(
                 preview = previewTab,
-                details = { MetadataTabs(state, actions, modifier = it) },
+                details = { MetadataTabs(state, item, actions, previewTab = null, modifier = it) },
             )
         } else {
-            MetadataTabs(state, actions, previewTab, Modifier.fillMaxSize())
+            MetadataTabs(state, item, actions, previewTab, Modifier.fillMaxSize())
         }
     }
 }

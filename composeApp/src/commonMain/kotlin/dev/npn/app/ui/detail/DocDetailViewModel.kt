@@ -146,8 +146,8 @@ data class AiMetadataState(
  * Everything the metadata panel renders is assembled into the single [metadata] state; the flows
  * behind it are private, so a panel that needs a new value gets it from there rather than from a
  * new public flow wired through two call sites. The panel's immediate writes are the
- * [DocumentWrites] it implements; field values and the review flag go through the document's draft
- * ([DocumentDrafts]), never through here.
+ * [DocumentWrites] it implements, and the document actions its [DocumentActions]; field values and
+ * the review flag go through the document's draft ([DocumentDrafts]), never through here.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailViewModel(
@@ -164,7 +164,8 @@ class DocDetailViewModel(
      */
     initialItem: DocListItem? = null,
 ) : MessagesViewModel(),
-    DocumentWrites {
+    DocumentWrites,
+    DocumentActions {
     private val documents = session.documents
     private val meta = session.meta
     private val tagAdmin = session.tagAdmin
@@ -520,16 +521,16 @@ class DocDetailViewModel(
     ) = launchReporting(failed) { metadataMutex.withLock { block() } }
 
     /** On failure [onDone] is not invoked (the screen stays put) and the error is surfaced. */
-    fun trash(onDone: () -> Unit) =
+    override fun trash(onDone: () -> Unit) =
         launchReporting(Res.string.detail_trash_failed) {
             docLifecycle.trashDoc(docId)
             onDone()
         }
 
-    fun rename(newFileName: String) =
+    override fun rename(newFileName: String) =
         launchReporting(Res.string.detail_rename_failed) { docLifecycle.renameFile(docId, newFileName) }
 
-    fun reOcr() =
+    override fun reOcr() =
         launchReporting(Res.string.common_rerun_ocr_failed) {
             _ui.update { it.copy(reindexing = true) }
             try {
@@ -549,7 +550,7 @@ class DocDetailViewModel(
      * about a long document is the caller's job, not this one's. A request refused for want of an
      * endpoint (it went away after the action was offered) says so rather than doing nothing.
      */
-    fun ocrWithAi() =
+    override fun ocrWithAi() =
         launchReporting(Res.string.detail_ai_ocr_failed) {
             _ui.update { it.copy(reindexing = true) }
             val outcome =
@@ -569,7 +570,7 @@ class DocDetailViewModel(
      * Split into one document per [segments] entry. On success the original is trashed by the
      * session and [onDone] runs, so the screen can leave; a failure is reported as a message.
      */
-    fun split(
+    override fun split(
         segments: List<IntRange>,
         onDone: () -> Unit,
     ) = launchReporting(Res.string.detail_split_failed) {
@@ -587,7 +588,7 @@ class DocDetailViewModel(
     }
 
     /** Rewrite the library file with this document's metadata, and say how that went. */
-    fun bakeInPlace() =
+    override fun bakeInPlace() =
         launchReporting(Res.string.detail_bake_failed) {
             _ui.update { it.copy(baking = true) }
             val outcome =
@@ -605,7 +606,7 @@ class DocDetailViewModel(
         }
 
     /** Write a copy carrying this document's metadata through [write] (a file the user picked). */
-    fun exportBakedCopy(write: suspend (ByteArray) -> Unit) =
+    override fun exportBakedCopy(write: suspend (ByteArray) -> Unit) =
         deliverBakedCopy(
             write,
             delivered = Res.string.detail_exported_baked_copy,
@@ -613,7 +614,7 @@ class DocDetailViewModel(
         )
 
     /** Hand a copy carrying this document's metadata to the platform's share sheet through [share]. */
-    fun shareBakedCopy(share: suspend (ByteArray) -> Unit) =
+    override fun shareBakedCopy(share: suspend (ByteArray) -> Unit) =
         deliverBakedCopy(
             share,
             delivered = Res.string.detail_shared_baked_copy,

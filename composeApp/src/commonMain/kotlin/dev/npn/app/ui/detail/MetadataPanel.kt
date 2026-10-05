@@ -3,7 +3,6 @@
 package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -15,15 +14,11 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.outlined.AutoAwesome
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
@@ -31,16 +26,13 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
-import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.PrimaryScrollableTabRow
 import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -55,8 +47,6 @@ import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.EmptyState
-import dev.npn.app.ui.common.IsoDatePickerDialog
-import dev.npn.app.ui.common.MAX_INLINE_SUGGESTIONS
 import dev.npn.app.ui.common.ReviewedBadge
 import dev.npn.app.ui.common.SuggestedFieldValue
 import dev.npn.app.ui.common.TagEditor
@@ -66,10 +56,9 @@ import dev.npn.app.ui.common.enumNameSaver
 import dev.npn.app.ui.common.formatEpochDate
 import dev.npn.app.ui.library.reviewMarkerIsAuthoritative
 import dev.npn.core.ai.TagSuggestion
-import dev.npn.core.model.FieldKeys
+import dev.npn.core.app.DocListItem
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_choose_date
 import no_papers_needed.composeapp.generated.resources.detail_added
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_all
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_suggestion
@@ -77,7 +66,6 @@ import no_papers_needed.composeapp.generated.resources.detail_dismiss_tag
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable_hint
 import no_papers_needed.composeapp.generated.resources.detail_file
-import no_papers_needed.composeapp.generated.resources.detail_iso_date_template
 import no_papers_needed.composeapp.generated.resources.detail_location
 import no_papers_needed.composeapp.generated.resources.detail_mark_needs_review
 import no_papers_needed.composeapp.generated.resources.detail_mark_reviewed
@@ -92,9 +80,7 @@ import no_papers_needed.composeapp.generated.resources.detail_tab_history
 import no_papers_needed.composeapp.generated.resources.detail_tab_preview
 import no_papers_needed.composeapp.generated.resources.detail_tab_text
 import no_papers_needed.composeapp.generated.resources.detail_tags
-import no_papers_needed.composeapp.generated.resources.detail_title_hint
 import no_papers_needed.composeapp.generated.resources.detail_use_suggestion
-import no_papers_needed.composeapp.generated.resources.ux_show_suggestions
 import no_papers_needed.composeapp.generated.resources.ux_tags_saved
 import org.jetbrains.compose.resources.stringResource
 
@@ -103,31 +89,21 @@ import org.jetbrains.compose.resources.stringResource
  * fields, tags, and file/OCR facts), **Text** (the extracted OCR/embedded full text), and
  * **History** (immutable journal timeline). Text fields offer existing values as suggestions.
  *
- * Everything shown comes from [state] (assembled by `DocDetailViewModel.metadata`) and everything
- * it can do from [actions] (provided by [DocumentEditor], which routes field edits into the draft),
- * so the two call sites — the detail screen and the library's side panel — differ only in the last
- * two parameters.
+ * Everything shown comes from [state] (assembled by `DocDetailViewModel.metadata`) and [item],
+ * the document as its draft shows it, and everything it can do from [actions] (provided by
+ * [DocumentEditor], which routes field edits into the draft).
  *
- * When [previewTab] is provided (the library's side-panel preview), it is prepended as an extra
- * **Preview** tab and selected initially; the detail screen omits it since the page viewer sits
- * next to the panel there.
+ * When [previewTab] is provided (a compact window, where the page viewer cannot sit beside the
+ * tabs), it is prepended as an extra **Preview** tab and selected initially.
  */
 @Composable
 internal fun MetadataTabs(
     state: MetadataUiState,
+    item: DocListItem,
     actions: MetadataActions,
-    previewTab: (@Composable (Modifier) -> Unit)? = null,
+    previewTab: (@Composable (Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
 ) {
-    // The document is gone — trashed or deleted on another replica while the panel was open, or
-    // never loaded at all. Say so rather than leaving the surface empty; the detail screen catches
-    // this first and shows its own scaffold (with a way back), so in practice this is the library's
-    // side panel reacting to a document disappearing under it.
-    val item = state.document.item
-    if (item == null) {
-        DocumentUnavailable(modifier)
-        return
-    }
     val tabs =
         remember(previewTab != null) {
             if (previewTab != null) PanelTab.entries.toList() else PanelTab.entries.filter { it != PanelTab.PREVIEW }
@@ -177,6 +153,7 @@ internal fun MetadataTabs(
             PanelTab.DETAILS -> {
                 DetailsTab(
                     state = state,
+                    item = item,
                     actions = actions,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
@@ -204,15 +181,15 @@ internal fun MetadataTabs(
     }
 }
 
+/** What stands in for a document that is gone: trashed, or deleted on another replica while open. */
 @Composable
 internal fun DocumentUnavailable(modifier: Modifier = Modifier) {
-    Box(modifier.fillMaxWidth()) {
-        EmptyState(
-            icon = Icons.Filled.Delete,
-            title = stringResource(Res.string.detail_document_unavailable),
-            subtitle = stringResource(Res.string.detail_document_unavailable_hint),
-        )
-    }
+    EmptyState(
+        icon = Icons.Filled.Delete,
+        title = stringResource(Res.string.detail_document_unavailable),
+        modifier = modifier,
+        subtitle = stringResource(Res.string.detail_document_unavailable_hint),
+    )
 }
 
 private enum class PanelTab { PREVIEW, DETAILS, TEXT, HISTORY }
@@ -220,10 +197,10 @@ private enum class PanelTab { PREVIEW, DETAILS, TEXT, HISTORY }
 @Composable
 private fun DetailsTab(
     state: MetadataUiState,
+    item: DocListItem,
     actions: MetadataActions,
     modifier: Modifier = Modifier,
 ) {
-    val item = state.document.item ?: return
     val doc = item.doc
     val vocabulary = state.vocabulary
 

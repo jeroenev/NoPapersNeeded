@@ -130,7 +130,6 @@ import no_papers_needed.composeapp.generated.resources.library_import_pdf
 import no_papers_needed.composeapp.generated.resources.library_mark_needs_review
 import no_papers_needed.composeapp.generated.resources.library_mark_reviewed
 import no_papers_needed.composeapp.generated.resources.library_more_actions
-import no_papers_needed.composeapp.generated.resources.library_move_to_trash_question
 import no_papers_needed.composeapp.generated.resources.library_no_documents_subtitle
 import no_papers_needed.composeapp.generated.resources.library_no_documents_title
 import no_papers_needed.composeapp.generated.resources.library_no_matches_subtitle
@@ -153,7 +152,6 @@ import no_papers_needed.composeapp.generated.resources.library_sort_size
 import no_papers_needed.composeapp.generated.resources.library_switch_to_grid
 import no_papers_needed.composeapp.generated.resources.library_switch_to_list
 import no_papers_needed.composeapp.generated.resources.library_trash
-import no_papers_needed.composeapp.generated.resources.library_trash_documents
 import no_papers_needed.composeapp.generated.resources.queue_ai_pending
 import no_papers_needed.composeapp.generated.resources.ux_review_count
 import org.jetbrains.compose.resources.pluralStringResource
@@ -275,7 +273,7 @@ fun LibraryScreen(
                         snackbar = snackbar,
                         onClose = { previewDocId = null },
                         onExpand = { openDoc(previewItem.doc.docId) },
-                        onReviewed = { if (previewDocId == previewItem.doc.docId) previewDocId = nextId },
+                        onReviewNext = { if (previewDocId == previewItem.doc.docId) previewDocId = nextId },
                         hasNext = nextId != null,
                         modifier = panel,
                     )

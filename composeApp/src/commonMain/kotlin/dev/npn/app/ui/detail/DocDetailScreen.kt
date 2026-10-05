@@ -1,34 +1,26 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package dev.npn.app.ui.detail
 
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.consumeWindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowLeft
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
-import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.CircularProgressIndicator
-import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
@@ -36,30 +28,22 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.DesktopBridge
-import dev.npn.app.ui.common.EmptyState
-import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TooltipIconButton
-import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.SettingsRepository
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.detail_document
 import no_papers_needed.composeapp.generated.resources.detail_document_position
-import no_papers_needed.composeapp.generated.resources.detail_document_unavailable
-import no_papers_needed.composeapp.generated.resources.detail_document_unavailable_hint
 import no_papers_needed.composeapp.generated.resources.detail_next_document
 import no_papers_needed.composeapp.generated.resources.detail_previous_document
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * Full-screen document view used on compact layouts (phones, narrow windows): the shared
- * [MetadataPanel] with the page viewer as its leading **Preview** tab, so the viewer and the
- * metadata live in one tabbed surface. Wide layouts never navigate here — the library's side
- * panel carries the same content there.
+ * [DocumentView] under a top bar that pages through the library's browse order. Wide layouts never
+ * navigate here — the library's side panel carries the same content there.
  */
 @Composable
 fun DocDetailScreen(
@@ -71,81 +55,56 @@ fun DocDetailScreen(
     onNavigateToDoc: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val searchQuery = browse.searchQuery
-    val vm: DocDetailViewModel =
-        viewModel(key = "detail-$docId-${searchQuery.orEmpty()}") {
-            DocDetailViewModel(docId, session, settings, searchQuery)
-        }
-    val ui by vm.ui.collectAsStateWithLifecycle()
-    val metadata by vm.metadata.collectAsStateWithLifecycle()
-
     val snackbar = remember { SnackbarHostState() }
-    SnackbarMessages(vm.messages, snackbar)
-
-    // Focus the viewer on entry (and when switching docs) so its keyboard shortcuts work on desktop.
-    // Re-run when the document finishes loading so the request happens after the viewer node is
-    // attached; wait one frame so it is registered with the focus owner before asking.
+    // The viewer takes focus once the document is in, so its keyboard shortcuts work on desktop.
     val viewerFocus = remember { FocusRequester() }
-    LaunchedEffect(docId, metadata.document.item != null) {
-        if (metadata.document.item != null) {
-            withFrameNanos { }
-            runCatching { viewerFocus.requestFocus() }
-        }
-    }
 
     // Doc-to-doc paging within the browse order the library handed us.
-    val prevDocId = browse.neighbour(docId, -1)
-    val nextDocId = browse.neighbour(docId, 1)
     val browsePosition = browse.positionOf(docId)
-    val goPrevDoc: (() -> Unit)? = prevDocId?.let { { onNavigateToDoc(it) } }
-    val goNextDoc: (() -> Unit)? = nextDocId?.let { { onNavigateToDoc(it) } }
+    val goPrevDoc: (() -> Unit)? = browse.neighbour(docId, -1)?.let { { onNavigateToDoc(it) } }
+    val goNextDoc: (() -> Unit)? = browse.neighbour(docId, 1)?.let { { onNavigateToDoc(it) } }
 
-    // Loading and missing are distinct: a null item before the first observeDoc emission is still
-    // loading, and must not flash the "unavailable" surface. Only a confirmed absence does.
-    Box(modifier) {
-        when (val loadState = metadata.document.loadState) {
+    DocumentView(
+        docId = docId,
+        session = session,
+        settings = settings,
+        snackbar = snackbar,
+        onClose = onBack,
+        onReviewNext = { goNextDoc?.invoke() ?: onBack() },
+        hasNext = goNextDoc != null,
+        modifier = modifier,
+        viewerModifier = Modifier.focusRequester(viewerFocus).focusable(),
+        searchQuery = browse.searchQuery,
+    ) { loadState, actions, editor ->
+        // Loading and missing are distinct: a null item before the first observeDoc emission is
+        // still loading, and must not flash the "unavailable" surface. Only a confirmed absence does.
+        when (loadState) {
             is DocLoadState.Loading -> {
-                LoadingDocScaffold(onBack)
+                DocPlaceholderScaffold(onBack) { padding ->
+                    Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator()
+                    }
+                }
             }
 
             is DocLoadState.Missing -> {
-                UnavailableDocScaffold(onBack)
+                DocPlaceholderScaffold(onBack) { padding -> DocumentUnavailable(Modifier.padding(padding)) }
             }
 
             is DocLoadState.Present -> {
-                val current = loadState.item
+                val title = loadState.item.doc.displayTitle
                 // Reflect the open document in the native window title (desktop); inert elsewhere.
-                LaunchedEffect(current.doc.displayTitle) {
-                    DesktopBridge.windowTitle.value = current.doc.displayTitle
+                LaunchedEffect(title) { DesktopBridge.windowTitle.value = title }
+                // Wait one frame so the viewer is registered with the focus owner before asking.
+                LaunchedEffect(Unit) {
+                    withFrameNanos { }
+                    runCatching { viewerFocus.requestFocus() }
                 }
                 LoadedDocScreen(
-                    current = current,
+                    title = title,
                     snackbar = snackbar,
-                    topBarActions = { compact ->
-                        DocActions(item = current, vm = vm, onGone = onBack, compact = compact)
-                    },
-                    editor = { editorModifier ->
-                        DocumentEditor(
-                            state = metadata,
-                            writes = vm,
-                            onReviewNext = { goNextDoc?.invoke() ?: onBack() },
-                            hasNext = goNextDoc != null,
-                            preview = { m ->
-                                PageViewer(
-                                    pageIndex = ui.pageIndex,
-                                    pageCount = ui.pageCount,
-                                    render = { p, maxDim -> vm.renderPage(p, maxDim) },
-                                    onPageChange = vm::goToPage,
-                                    onRetryPageCount = vm::retryPageCount,
-                                    modifier =
-                                        m
-                                            .focusRequester(viewerFocus)
-                                            .focusable(),
-                                )
-                            },
-                            modifier = editorModifier,
-                        )
-                    },
+                    topBarActions = actions,
+                    editor = editor,
                     browsePosition = browsePosition,
                     goPrevDoc = goPrevDoc,
                     goNextDoc = goNextDoc,
@@ -163,7 +122,7 @@ fun DocDetailScreen(
  */
 @Composable
 private fun LoadedDocScreen(
-    current: DocListItem,
+    title: String,
     snackbar: SnackbarHostState,
     /** The document actions for the top bar, given whether the bar is compact. */
     topBarActions: @Composable (compact: Boolean) -> Unit,
@@ -174,29 +133,26 @@ private fun LoadedDocScreen(
     goNextDoc: (() -> Unit)?,
     onBack: () -> Unit,
 ) {
-    // Whether there is more than one document to page through; the prev/next controls only show
-    // when there is somewhere to go.
-    val canBrowse = browsePosition != null && browsePosition.second > 1
+    // The prev/next controls and the "3 of 41" position only show when there is somewhere to go.
+    val position = browsePosition?.takeIf { it.second > 1 }
     BoxWithConstraints(Modifier.fillMaxSize()) {
         // On a narrow bar the title, position, prev/next and the share + overflow actions crowd
         // each other; below the breakpoint the prev/next controls move out of the top bar and into
         // a floating pill over the content, leaving the bar just the title and document actions.
         val compact = maxWidth < CompactTopBarBreakpoint
-        val showNavInTopBar = canBrowse && !compact
         Scaffold(
             modifier = Modifier.docPagingKeys(goPrevDoc, goNextDoc),
             topBar = {
                 Column {
-                    DetailTopBar(
-                        title = current.doc.displayTitle,
-                        browsePosition = browsePosition,
-                        onPrevDoc = goPrevDoc.takeIf { showNavInTopBar },
-                        onNextDoc = goNextDoc.takeIf { showNavInTopBar },
-                        showNav = showNavInTopBar,
+                    BackTopBar(
+                        title = title,
                         onBack = onBack,
-                        actions = { topBarActions(compact) },
-                    )
-                    browsePosition?.takeIf { canBrowse && compact }?.let { position ->
+                        subtitle = position?.let { positionText(it) },
+                    ) {
+                        if (position != null && !compact) DocumentNav(goPrevDoc, goNextDoc)
+                        topBarActions(compact)
+                    }
+                    if (position != null && compact) {
                         DocumentNavPill(
                             browsePosition = position,
                             onPrevDoc = goPrevDoc,
@@ -218,6 +174,38 @@ private fun LoadedDocScreen(
 /** Below this width the detail top bar drops prev/next to avoid crowding; see [DocumentNavPill]. */
 private val CompactTopBarBreakpoint = 480.dp
 
+/** "3 of 41": where the document sits in the browse order. */
+@Composable
+private fun positionText(browsePosition: Pair<Int, Int>): String =
+    stringResource(Res.string.detail_document_position, browsePosition.first, browsePosition.second)
+
+/**
+ * Previous/next document within the browse order, each disabled at its end, with the "3 of 41"
+ * [position] between them when given.
+ */
+@Composable
+private fun DocumentNav(
+    onPrevDoc: (() -> Unit)?,
+    onNextDoc: (() -> Unit)?,
+    position: Pair<Int, Int>? = null,
+) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
+        TooltipIconButton(
+            icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
+            label = stringResource(Res.string.detail_previous_document),
+            onClick = { onPrevDoc?.invoke() },
+            enabled = onPrevDoc != null,
+        )
+        position?.let { Text(positionText(it), style = MaterialTheme.typography.labelLarge) }
+        TooltipIconButton(
+            icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
+            label = stringResource(Res.string.detail_next_document),
+            onClick = { onNextDoc?.invoke() },
+            enabled = onNextDoc != null,
+        )
+    }
+}
+
 /**
  * Prev/next document control below the compact top bar, carrying the same "3 of 41" position as the
  * wide top bar. Keeping it in the scaffold's top area avoids obscuring the panel tabs or fields.
@@ -234,133 +222,18 @@ private fun DocumentNavPill(
         shape = MaterialTheme.shapes.large,
         tonalElevation = 3.dp,
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            TooltipIconButton(
-                icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                label = stringResource(Res.string.detail_previous_document),
-                onClick = { onPrevDoc?.invoke() },
-                enabled = onPrevDoc != null,
-            )
-            Text(
-                stringResource(
-                    Res.string.detail_document_position,
-                    browsePosition.first,
-                    browsePosition.second,
-                ),
-                style = MaterialTheme.typography.labelLarge,
-            )
-            TooltipIconButton(
-                icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                label = stringResource(Res.string.detail_next_document),
-                onClick = { onNextDoc?.invoke() },
-                enabled = onNextDoc != null,
-            )
-        }
+        DocumentNav(onPrevDoc, onNextDoc, browsePosition)
     }
 }
 
+/** The screen before the document loads or once it is gone: a back bar over [content]. */
 @Composable
-private fun LoadingDocScaffold(onBack: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(Res.string.detail_document)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(Res.string.common_back),
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-            CircularProgressIndicator()
-        }
-    }
-}
-
-@Composable
-private fun UnavailableDocScaffold(onBack: () -> Unit) {
-    Scaffold(
-        topBar = {
-            TopAppBar(
-                title = { Text(stringResource(Res.string.detail_document)) },
-                navigationIcon = {
-                    IconButton(onClick = onBack) {
-                        Icon(
-                            Icons.AutoMirrored.Filled.ArrowBack,
-                            contentDescription = stringResource(Res.string.common_back),
-                        )
-                    }
-                },
-            )
-        },
-    ) { padding ->
-        EmptyState(
-            icon = Icons.Filled.Delete,
-            title = stringResource(Res.string.detail_document_unavailable),
-            modifier = Modifier.padding(padding),
-            subtitle = stringResource(Res.string.detail_document_unavailable_hint),
-        )
-    }
-}
-
-@Composable
-private fun DetailTopBar(
-    title: String,
-    browsePosition: Pair<Int, Int>?,
-    onPrevDoc: (() -> Unit)?,
-    onNextDoc: (() -> Unit)?,
-    showNav: Boolean,
+private fun DocPlaceholderScaffold(
     onBack: () -> Unit,
-    actions: @Composable () -> Unit,
+    content: @Composable (PaddingValues) -> Unit,
 ) {
-    TopAppBar(
-        title = {
-            Column {
-                Text(title, maxLines = 1, overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
-                if (browsePosition != null && browsePosition.second > 1) {
-                    Text(
-                        stringResource(
-                            Res.string.detail_document_position,
-                            browsePosition.first,
-                            browsePosition.second,
-                        ),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            }
-        },
-        navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(Res.string.common_back),
-                )
-            }
-        },
-        actions = {
-            // Prev/next document within the browse order; on compact widths these move to the
-            // floating DocumentNavPill instead, so the narrow bar is not crowded.
-            if (showNav) {
-                TooltipIconButton(
-                    icon = Icons.AutoMirrored.Filled.KeyboardArrowLeft,
-                    label = stringResource(Res.string.detail_previous_document),
-                    onClick = { onPrevDoc?.invoke() },
-                    enabled = onPrevDoc != null,
-                )
-                TooltipIconButton(
-                    icon = Icons.AutoMirrored.Filled.KeyboardArrowRight,
-                    label = stringResource(Res.string.detail_next_document),
-                    onClick = { onNextDoc?.invoke() },
-                    enabled = onNextDoc != null,
-                )
-            }
-            actions()
-        },
+    Scaffold(
+        topBar = { BackTopBar(title = stringResource(Res.string.detail_document), onBack = onBack) },
+        content = content,
     )
 }

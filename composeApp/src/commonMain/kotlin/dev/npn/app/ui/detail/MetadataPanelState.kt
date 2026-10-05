@@ -7,9 +7,9 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 
 /**
- * Everything [MetadataPanel] renders, in four groups assembled by
- * [DocDetailViewModel.metadata]. The panel takes this one value plus [MetadataActions]; only the
- * genuinely per-call-site pieces (the optional preview tab and the modifier) stay parameters.
+ * Everything [MetadataPanel] renders, in four groups assembled by [DocDetailViewModel.metadata].
+ * [DocumentEditor] hands the panel this value, the document with its draft laid over
+ * [DocumentSection.item], and the [MetadataActions].
  *
  * The note is not a group of its own: it is one of the document's own values, so it travels with
  * the rest of them in [DocumentSection.item] and picks up the same draft overlay.
@@ -24,10 +24,10 @@ data class MetadataUiState(
 
 /**
  * The document itself plus the library-wide settings that decide how it is shown. [item] is null
- * until the document row arrives (and stays null for a document that is gone), which is the
- * panel's cue to render nothing. [loadState] disambiguates that null: still-loading vs confirmed
- * missing, so a screen can wait rather than flash "unavailable". [reviewed] is already resolved
- * against [reviewMode], so no call site repeats that derivation.
+ * until the document row arrives (and stays null for a document that is gone), which the editor
+ * shows as unavailable. [loadState] disambiguates that null: still-loading vs confirmed missing, so
+ * a screen can wait rather than flash "unavailable". [reviewed] is already resolved against
+ * [reviewMode], so no call site repeats that derivation.
  */
 @Immutable
 data class DocumentSection(
