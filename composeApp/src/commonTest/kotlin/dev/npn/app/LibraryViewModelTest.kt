@@ -254,7 +254,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.bulkAddTag("finance")
             advanceUntilIdle()
             collector.cancel()
-            messages shouldContainExactly listOf("Could not add tag 2 documents")
+            messages shouldContainExactly listOf("Could not add the tag to 2 documents")
             // Selection preserved so the user can retry.
             model.ui.value.selected shouldBe setOf("d1", "d2")
             model.ui.value.selectionMode shouldBe true
@@ -484,7 +484,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val messages = collectMessages(model)
             model.saveCurrentView("Taxes")
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not update: disk full")
+            messages shouldContainExactly listOf("Could not save the view: disk full")
         }
 
     @Test

@@ -85,7 +85,7 @@ class TrashViewModelTest : MainDispatcherTest() {
             model.restore("d1")
             advanceUntilIdle()
             session.docLifecycle.restoredDocs shouldBe emptyList()
-            messages shouldContainExactly listOf("Could not restore document: file exists at original path")
+            messages shouldContainExactly listOf("Could not restore the document: file exists at original path")
             job.cancel()
         }
 }

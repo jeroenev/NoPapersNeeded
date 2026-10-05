@@ -152,4 +152,16 @@
     <string name="ai_edit_review_open_failed">De AI-bewerking kon niet worden geopend: %1$s</string>
     <string name="ai_edit_review_discard_failed">De AI-bewerking kon niet worden verworpen: %1$s</string>
     <string name="ai_edit_setup_load_failed">Sommige opties voor de AI-bewerking konden niet worden geladen: %1$s</string>
+    <plurals name="ai_edit_apply_tags_failed">
+        <item quantity="one">Kon de tags van %1$d van %2$d document niet bijwerken</item>
+        <item quantity="other">Kon de tags van %1$d van de %2$d documenten niet bijwerken</item>
+    </plurals>
+    <plurals name="ai_edit_apply_fields_failed">
+        <item quantity="one">Kon de details van %1$d van %2$d document niet opslaan</item>
+        <item quantity="other">Kon de details van %1$d van de %2$d documenten niet opslaan</item>
+    </plurals>
+    <plurals name="ai_edit_apply_failed">
+        <item quantity="one">Kon de suggesties niet toepassen op %1$d van %2$d document</item>
+        <item quantity="other">Kon de suggesties niet toepassen op %1$d van de %2$d documenten</item>
+    </plurals>
 </resources>

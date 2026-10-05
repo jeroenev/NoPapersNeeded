@@ -120,7 +120,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.addTag("finance")
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not add tag: journal write failed")
+            messages shouldContainExactly listOf("Could not add the tag: journal write failed")
             job.cancel()
         }
 
@@ -134,7 +134,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.setField("amount", "42")
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not save field: io")
+            messages shouldContainExactly listOf("Could not save the field: io")
             job.cancel()
         }
 
@@ -241,7 +241,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.setOcrEngine("mlkit")
             advanceUntilIdle()
             session.ocr.ocrEngineSets shouldBe emptyList()
-            messages shouldContainExactly listOf("Could not change OCR engine: reindex failed")
+            messages shouldContainExactly listOf("Could not change the OCR engine: reindex failed")
             job.cancel()
         }
 

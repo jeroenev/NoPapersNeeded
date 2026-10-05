@@ -2,7 +2,6 @@ package dev.npn.app.ui.detail
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
@@ -51,6 +50,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_rerun_ocr_failed
+import no_papers_needed.composeapp.generated.resources.common_save_field_failed
+import no_papers_needed.composeapp.generated.resources.detail_add_field_failed
+import no_papers_needed.composeapp.generated.resources.detail_add_tag_failed
+import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_failed
 import no_papers_needed.composeapp.generated.resources.detail_ai_ocr_no_endpoint
 import no_papers_needed.composeapp.generated.resources.detail_bake_failed
 import no_papers_needed.composeapp.generated.resources.detail_bake_failed_not_saved
@@ -58,9 +62,13 @@ import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unavai
 import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unsupported
 import no_papers_needed.composeapp.generated.resources.detail_baked_in_place
 import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_copy
+import no_papers_needed.composeapp.generated.resources.detail_create_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_export_failed
 import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
+import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
+import no_papers_needed.composeapp.generated.resources.detail_remove_tag_failed
+import no_papers_needed.composeapp.generated.resources.detail_rename_failed
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_split_failed
@@ -68,6 +76,9 @@ import no_papers_needed.composeapp.generated.resources.detail_split_failed_inval
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_not_completed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
+import no_papers_needed.composeapp.generated.resources.detail_suggest_details_failed
+import no_papers_needed.composeapp.generated.resources.detail_suggest_tags_failed
+import no_papers_needed.composeapp.generated.resources.detail_trash_failed
 import org.jetbrains.compose.resources.StringResource
 
 /**
@@ -380,18 +391,22 @@ class DocDetailViewModel(
             onFailure = { error -> HistoryUiState.Error(error.message.orEmpty()) },
         )
 
-    override fun addTag(tag: String) = launchMetadata(UiAction.ADD_TAG) { meta.addTag(listOf(docId), tag) }
+    override fun addTag(tag: String) =
+        launchMetadata(Res.string.detail_add_tag_failed) { meta.addTag(listOf(docId), tag) }
 
     /** Create a brand-new tag on this doc, optionally with a color chosen inline in the editor. */
     override fun addTagWithStyle(
         tag: String,
         color: String?,
-    ) = launchMetadata(UiAction.CREATE_TAG) {
+    ) = launchMetadata(Res.string.detail_create_tag_failed) {
         meta.addTag(listOf(docId), tag)
         if (color != null) tagAdmin.setTagStyle(tag, color, null)
     }
 
-    override fun removeTag(tag: String) = launchMetadata(UiAction.REMOVE_TAG) { meta.removeTag(listOf(docId), tag) }
+    override fun removeTag(tag: String) =
+        launchMetadata(Res.string.detail_remove_tag_failed) {
+            meta.removeTag(listOf(docId), tag)
+        }
 
     /**
      * Ask the AI endpoint for new-tag suggestions from this doc's indexed text. No-op while a
@@ -410,7 +425,7 @@ class DocDetailViewModel(
                     aiTags.update { it.copy(suggesting = false, suggestions = suggestions) }
                 },
                 onFailure = { error ->
-                    message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_TAGS, error.reasonText()))
+                    message(uiText(Res.string.detail_suggest_tags_failed, error.reasonText()))
                     aiTags.update { it.copy(suggesting = false, suggestions = emptyList()) }
                 },
             )
@@ -419,7 +434,7 @@ class DocDetailViewModel(
 
     /** Accept a suggestion: add it as a real tag (normal journal path) and drop it from the list. */
     override fun acceptAiTag(tag: String) =
-        launchMetadata(UiAction.ADD_TAG) {
+        launchMetadata(Res.string.detail_add_tag_failed) {
             meta.addTag(listOf(docId), tag)
             dismissAiTag(tag)
         }
@@ -463,7 +478,7 @@ class DocDetailViewModel(
                     aiMetadata.value = AiMetadataState(suggesting = false, suggestion = suggestion)
                 },
                 onFailure = { error ->
-                    message(uiText(UiTextKey.COULD_NOT_ACTION, UiAction.SUGGEST_METADATA, error.reasonText()))
+                    message(uiText(Res.string.detail_suggest_details_failed, error.reasonText()))
                     aiMetadata.value = AiMetadataState()
                 },
             )
@@ -483,7 +498,7 @@ class DocDetailViewModel(
     fun setField(
         key: String,
         value: String?,
-    ) = launchMetadata(UiAction.SAVE_FIELD) { meta.setField(docId, key, value) }
+    ) = launchMetadata(Res.string.common_save_field_failed) { meta.setField(docId, key, value) }
 
     /**
      * Register [def] and, when [value] is non-blank, set it on this document. The definition goes
@@ -492,28 +507,28 @@ class DocDetailViewModel(
     override fun defineField(
         def: FieldDef,
         value: String?,
-    ) = launchMetadata(UiAction.DEFINE_FIELD) {
+    ) = launchMetadata(Res.string.detail_add_field_failed) {
         fieldRegistry.upsert(def)
         if (!value.isNullOrBlank()) meta.setField(docId, def.key, value)
     }
 
     private fun launchMetadata(
-        action: UiAction,
+        failed: StringResource,
         block: suspend () -> Unit,
-    ) = launchReporting(action) { metadataMutex.withLock { block() } }
+    ) = launchReporting(failed) { metadataMutex.withLock { block() } }
 
     /** On failure [onDone] is not invoked (the screen stays put) and the error is surfaced. */
     fun trash(onDone: () -> Unit) =
-        launchReporting(UiAction.MOVE_TO_TRASH) {
+        launchReporting(Res.string.detail_trash_failed) {
             docLifecycle.trashDoc(docId)
             onDone()
         }
 
     fun rename(newFileName: String) =
-        launchReporting(UiAction.RENAME_FILE) { docLifecycle.renameFile(docId, newFileName) }
+        launchReporting(Res.string.detail_rename_failed) { docLifecycle.renameFile(docId, newFileName) }
 
     fun reOcr() =
-        launchReporting(UiAction.RERUN_OCR) {
+        launchReporting(Res.string.common_rerun_ocr_failed) {
             _ui.update { it.copy(reindexing = true) }
             try {
                 ocr.reOcr(docId)
@@ -533,7 +548,7 @@ class DocDetailViewModel(
      * endpoint (it went away after the action was offered) says so rather than doing nothing.
      */
     fun ocrWithAi() =
-        launchReporting(UiAction.AI_OCR) {
+        launchReporting(Res.string.detail_ai_ocr_failed) {
             _ui.update { it.copy(reindexing = true) }
             val outcome =
                 try {
@@ -546,7 +561,7 @@ class DocDetailViewModel(
 
     /** Pin [engine] as the searchable OCR version (null = automatic best-engine selection). */
     override fun setOcrEngine(engine: String?) =
-        launchReporting(UiAction.CHANGE_OCR_ENGINE) { ocr.setOcrEngine(docId, engine) }
+        launchReporting(Res.string.detail_ocr_engine_failed) { ocr.setOcrEngine(docId, engine) }
 
     /**
      * Split into one document per [segments] entry. On success the original is trashed by the
@@ -555,7 +570,7 @@ class DocDetailViewModel(
     fun split(
         segments: List<IntRange>,
         onDone: () -> Unit,
-    ) = launchReporting({ reason -> uiText(Res.string.detail_split_failed, reason) }) {
+    ) = launchReporting(Res.string.detail_split_failed) {
         _ui.update { it.copy(splitting = true) }
         val outcome =
             try {
@@ -571,7 +586,7 @@ class DocDetailViewModel(
 
     /** Rewrite the library file with this document's metadata, and say how that went. */
     fun bakeInPlace() =
-        launchReporting({ reason -> uiText(Res.string.detail_bake_failed, reason) }) {
+        launchReporting(Res.string.detail_bake_failed) {
             _ui.update { it.copy(baking = true) }
             val outcome =
                 try {
@@ -607,7 +622,7 @@ class DocDetailViewModel(
         deliver: suspend (ByteArray) -> Unit,
         delivered: StringResource,
         failed: StringResource,
-    ) = launchReporting({ reason -> uiText(failed, reason) }) {
+    ) = launchReporting(failed) {
         val bytes = content.bakedCopyBytes(docId)
         if (bytes == null) {
             message(uiText(Res.string.detail_could_not_bake_copy))

@@ -151,4 +151,8 @@
     <string name="common_settings_mark_all_reviewed">Alle als geprüft markieren</string>
     <string name="common_settings_mark_tagged_reviewed">Dokumente mit Tags als geprüft markieren</string>
     <string name="common_settings_mark_none_reviewed">Keine markieren (alle zu prüfen)</string>
+    <string name="common_settings_remove_field_failed">Das Feld konnte nicht entfernt werden: %1$s</string>
+    <string name="common_settings_move_field_failed">Das Feld konnte nicht verschoben werden: %1$s</string>
+    <string name="common_settings_clear_thumbnails_failed">Der Vorschaubild-Cache konnte nicht geleert werden: %1$s</string>
+    <string name="common_settings_review_workflow_failed">Der Prüf-Workflow konnte nicht geändert werden: %1$s</string>
 </resources>

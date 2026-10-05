@@ -178,8 +178,8 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
                 )
             val model = AiEditReviewViewModel(sessionWith(review), "job")
             val job = launch { model.phase.collect {} }
-            val messages = mutableListOf<Unit>()
-            val messageJob = launch { model.messages.collect { messages += Unit } }
+            val messages = mutableListOf<String>()
+            val messageJob = launch { model.messages.collect { messages += it.resolveEnglish() } }
             advanceUntilIdle()
 
             model.apply()
@@ -187,7 +187,8 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
 
             val phase = model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
             phase.docs.map { it.docId } shouldContainExactly listOf("b")
-            messages.size shouldBe 1
+            // Only b's title is still owed, so it is the details that failed, not a tag.
+            messages shouldContainExactly listOf("Could not save the details of 1 of 2 documents")
             job.cancel()
             messageJob.cancel()
         }

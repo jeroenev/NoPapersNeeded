@@ -134,4 +134,22 @@
     </plurals>
     <string name="library_import_failed">Impossible d’importer les fichiers : %1$s</string>
     <string name="library_drop_needs_library">Ouvrez d’abord une bibliothèque, puis déposez à nouveau les fichiers.</string>
+    <plurals name="library_add_tag_failed">
+        <item quantity="one">Impossible d’ajouter l’étiquette à %1$d document</item>
+        <item quantity="other">Impossible d’ajouter l’étiquette à %1$d documents</item>
+    </plurals>
+    <plurals name="library_remove_tag_failed">
+        <item quantity="one">Impossible de retirer l’étiquette de %1$d document</item>
+        <item quantity="other">Impossible de retirer l’étiquette de %1$d documents</item>
+    </plurals>
+    <plurals name="library_review_failed">
+        <item quantity="one">Impossible de modifier l’état de vérification de %1$d document</item>
+        <item quantity="other">Impossible de modifier l’état de vérification de %1$d documents</item>
+    </plurals>
+    <plurals name="library_trash_failed">
+        <item quantity="one">Impossible de mettre %1$d document sur %2$d à la corbeille</item>
+        <item quantity="other">Impossible de mettre %1$d des %2$d documents à la corbeille</item>
+    </plurals>
+    <string name="library_save_view_failed">Impossible d’enregistrer la vue : %1$s</string>
+    <string name="library_delete_view_failed">Impossible de supprimer la vue : %1$s</string>
 </resources>

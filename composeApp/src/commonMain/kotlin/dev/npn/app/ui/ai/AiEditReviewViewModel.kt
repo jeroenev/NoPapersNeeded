@@ -2,8 +2,6 @@ package dev.npn.app.ui.ai
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiAction
-import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.reasonText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.ApplyOutcome
@@ -138,7 +136,7 @@ class AiEditReviewViewModel(
         if (run?.isActive == true) return
         run =
             viewModelScope.launch {
-                reporting({ reason -> uiText(Res.string.ai_edit_review_discard_failed, reason) }) {
+                reporting(Res.string.ai_edit_review_discard_failed) {
                     opened.discard()
                     _phase.value = QueuedReviewPhase.Done(ApplyResult(0, 0, moreRemain = false))
                 }
@@ -160,14 +158,7 @@ class AiEditReviewViewModel(
             }
 
             is ApplyOutcome.Retry -> {
-                message(
-                    uiText(
-                        UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS,
-                        UiAction.TAG,
-                        outcome.failedDocs,
-                        outcome.total,
-                    ),
-                )
+                message(outcome.failureText())
                 _phase.value = current.copy(docs = outcome.remaining)
             }
         }

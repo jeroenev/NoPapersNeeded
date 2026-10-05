@@ -163,4 +163,14 @@
     <string name="detail_bake_failed_unsupported">Das Original-PDF konnte nicht aktualisiert werden: Dieses PDF kann die Tags und Details nicht aufnehmen. Es blieb unverändert.</string>
     <string name="detail_bake_failed_not_saved">Das aktualisierte PDF konnte nicht in der Bibliothek gespeichert werden.</string>
     <string name="detail_ai_ocr_no_endpoint">Richte in den Einstellungen einen KI-Assistenten ein, um damit Text zu lesen.</string>
+    <string name="detail_add_tag_failed">Der Tag konnte nicht hinzugefügt werden: %1$s</string>
+    <string name="detail_create_tag_failed">Der Tag konnte nicht erstellt werden: %1$s</string>
+    <string name="detail_remove_tag_failed">Der Tag konnte nicht entfernt werden: %1$s</string>
+    <string name="detail_suggest_tags_failed">Es konnten keine Tags vorgeschlagen werden: %1$s</string>
+    <string name="detail_suggest_details_failed">Es konnten keine Details vorgeschlagen werden: %1$s</string>
+    <string name="detail_add_field_failed">Das Feld konnte nicht hinzugefügt werden: %1$s</string>
+    <string name="detail_trash_failed">Das Dokument konnte nicht in den Papierkorb verschoben werden: %1$s</string>
+    <string name="detail_rename_failed">Die Datei konnte nicht umbenannt werden: %1$s</string>
+    <string name="detail_ai_ocr_failed">Der Text konnte nicht mit dem Assistenten gelesen werden: %1$s</string>
+    <string name="detail_ocr_engine_failed">Die OCR-Engine konnte nicht geändert werden: %1$s</string>
 </resources>

@@ -152,4 +152,16 @@
     <string name="ai_edit_review_open_failed">No se pudo abrir la edición con IA: %1$s</string>
     <string name="ai_edit_review_discard_failed">No se pudo descartar la edición con IA: %1$s</string>
     <string name="ai_edit_setup_load_failed">No se pudieron cargar algunas opciones de la edición con IA: %1$s</string>
+    <plurals name="ai_edit_apply_tags_failed">
+        <item quantity="one">No se pudieron actualizar las etiquetas de %1$d de %2$d documento</item>
+        <item quantity="other">No se pudieron actualizar las etiquetas de %1$d de %2$d documentos</item>
+    </plurals>
+    <plurals name="ai_edit_apply_fields_failed">
+        <item quantity="one">No se pudieron guardar los detalles de %1$d de %2$d documento</item>
+        <item quantity="other">No se pudieron guardar los detalles de %1$d de %2$d documentos</item>
+    </plurals>
+    <plurals name="ai_edit_apply_failed">
+        <item quantity="one">No se pudieron aplicar las sugerencias a %1$d de %2$d documento</item>
+        <item quantity="other">No se pudieron aplicar las sugerencias a %1$d de %2$d documentos</item>
+    </plurals>
 </resources>

@@ -3,7 +3,6 @@ package dev.npn.app.ui.library
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.platform.ScanResult
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiMessage
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
@@ -54,10 +53,19 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_import_failure_copy
 import no_papers_needed.composeapp.generated.resources.common_import_failure_empty
 import no_papers_needed.composeapp.generated.resources.common_import_failure_images
+import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
+import no_papers_needed.composeapp.generated.resources.common_scan_import_failed
+import no_papers_needed.composeapp.generated.resources.library_add_tag_failed
+import no_papers_needed.composeapp.generated.resources.library_delete_view_failed
 import no_papers_needed.composeapp.generated.resources.library_import_failed
 import no_papers_needed.composeapp.generated.resources.library_moved_to_trash
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
+import no_papers_needed.composeapp.generated.resources.library_remove_tag_failed
+import no_papers_needed.composeapp.generated.resources.library_review_failed
+import no_papers_needed.composeapp.generated.resources.library_save_view_failed
+import no_papers_needed.composeapp.generated.resources.library_trash_failed
 import no_papers_needed.composeapp.generated.resources.library_undo
+import org.jetbrains.compose.resources.PluralStringResource
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -364,7 +372,7 @@ class LibraryViewModel(
 
     /** Rescan the library folder (pull to refresh); a rescan that fails says so. */
     fun refresh() =
-        launchReporting({ reason -> uiText(Res.string.library_refresh_failed, reason) }) {
+        launchReporting(Res.string.library_refresh_failed) {
             _ui.update { it.copy(refreshing = true) }
             try {
                 ingest.rescan()
@@ -375,9 +383,9 @@ class LibraryViewModel(
 
     // Tag/reviewed writes are a single batched write call. Trash has its own per-document path
     // below because successful moves must be retained for Undo when another move fails.
-    fun bulkAddTag(tag: String) = runOnSelection(UiAction.ADD_TAG) { meta.addTag(it, tag) }
+    fun bulkAddTag(tag: String) = runOnSelection(Res.plurals.library_add_tag_failed) { meta.addTag(it, tag) }
 
-    fun bulkRemoveTag(tag: String) = runOnSelection(UiAction.REMOVE_TAG) { meta.removeTag(it, tag) }
+    fun bulkRemoveTag(tag: String) = runOnSelection(Res.plurals.library_remove_tag_failed) { meta.removeTag(it, tag) }
 
     /**
      * Tag names carried by at least one of the current selection, sorted. The remove-tag picker
@@ -396,7 +404,10 @@ class LibraryViewModel(
             .sorted()
     }
 
-    fun bulkSetReviewed(reviewed: Boolean) = runOnSelection(UiAction.UPDATE) { meta.setReviewed(it, reviewed) }
+    fun bulkSetReviewed(reviewed: Boolean) =
+        runOnSelection(Res.plurals.library_review_failed) {
+            meta.setReviewed(it, reviewed)
+        }
 
     /**
      * Move the current selection to the trash, one document at a time so a single failure does not
@@ -414,7 +425,7 @@ class LibraryViewModel(
                 clearSelection()
             } else {
                 _ui.update { it.copy(selected = failed.toSet(), selectionMode = true) }
-                message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, UiAction.TRASH, failed.size, ids.size))
+                message(uiText(Res.plurals.library_trash_failed, ids.size, failed.size, ids.size))
             }
             if (trashed.isNotEmpty()) {
                 message(
@@ -431,7 +442,7 @@ class LibraryViewModel(
         viewModelScope.launch {
             val failed = ids.count { runCatchingCancellable { docLifecycle.restoreDoc(it) }.isFailure }
             if (failed > 0) {
-                message(uiText(UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS, UiAction.RESTORE_DOCUMENT, failed, ids.size))
+                message(uiText(Res.plurals.common_restore_documents_failed, ids.size, failed, ids.size))
             }
         }
     }
@@ -439,11 +450,12 @@ class LibraryViewModel(
     /**
      * Run a bulk op over the current selection.
      *
-     * [block] receives all selected ids as one batched call. On failure, surface a message and keep
-     * the whole selection so the user can retry. On success the selection is cleared.
+     * [block] receives all selected ids as one batched call. On failure, surface [failed] for the
+     * selection's size and keep the whole selection so the user can retry. On success the selection
+     * is cleared.
      */
     private fun runOnSelection(
-        action: UiAction,
+        failed: PluralStringResource,
         block: suspend (List<String>) -> Unit,
     ) {
         val ids = _ui.value.selected.toList()
@@ -452,14 +464,14 @@ class LibraryViewModel(
             if (runCatchingCancellable { block(ids) }.isSuccess) {
                 clearSelection()
             } else {
-                message(uiText(UiTextKey.COULD_NOT_DOCUMENTS, action, ids.size))
+                message(uiText(failed, ids.size, ids.size))
             }
         }
     }
 
     /** Import PDFs from external sources, tallying the per-source outcome into a message. */
     fun import(sources: List<Pair<ExternalSource, String>>) =
-        launchReporting({ reason -> uiText(Res.string.library_import_failed, reason) }) {
+        launchReporting(Res.string.library_import_failed) {
             message(ingest.importAll(sources).asUiText())
         }
 
@@ -467,7 +479,7 @@ class LibraryViewModel(
     fun importScan(result: ScanResult) {
         when (result) {
             is ScanResult.Scanned -> {
-                launchReporting({ reason -> uiText(UiTextKey.SCAN_IMPORT_FAILED, reason) }) {
+                launchReporting(Res.string.common_scan_import_failed) {
                     message(scanOutcomeMessage(ingest.importPdf(result.pdf.source, result.pdf.suggestedName)))
                 }
             }
@@ -493,20 +505,25 @@ class LibraryViewModel(
 
     /** Capture the live filter/sort/view UI state as a new [SavedView] named [name] and persist it. */
     fun saveCurrentView(name: String) =
-        launchReporting(UiAction.UPDATE) { savedViewRepository.save(newSavedView(_ui.value, name.trim())) }
+        launchReporting(Res.string.library_save_view_failed) {
+            savedViewRepository.save(newSavedView(_ui.value, name.trim()))
+        }
 
     /** Persist [view] under a new, whitespace-trimmed [name]. */
     fun renameSavedView(
         view: SavedView,
         name: String,
-    ) = launchReporting(UiAction.UPDATE) { savedViewRepository.save(view.copy(name = name.trim())) }
+    ) = launchReporting(Res.string.library_save_view_failed) { savedViewRepository.save(view.copy(name = name.trim())) }
 
     /** Flip the pinned state of [view] and persist it. */
     fun toggleSavedViewPin(view: SavedView) =
-        launchReporting(UiAction.UPDATE) { savedViewRepository.save(view.copy(pinned = !view.pinned)) }
+        launchReporting(Res.string.library_save_view_failed) {
+            savedViewRepository.save(view.copy(pinned = !view.pinned))
+        }
 
     /** Delete [view] by id. */
-    fun deleteSavedView(view: SavedView) = launchReporting(UiAction.UPDATE) { savedViewRepository.delete(view.id) }
+    fun deleteSavedView(view: SavedView) =
+        launchReporting(Res.string.library_delete_view_failed) { savedViewRepository.delete(view.id) }
 
     /** Capture the given [ui] (filter/sort/view) as a new [SavedView] named [name]. */
     private fun newSavedView(

@@ -332,7 +332,7 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             messages shouldHaveSize 1
-            messages.single() shouldBe "Could not tag 1 of 2 documents"
+            messages.single() shouldBe "Could not update the tags of 1 of 2 documents"
             // b was written; a kept for retry in a Review phase.
             session.meta.addedTags shouldContainExactly listOf(listOf("b") to "t2")
             val review =
@@ -344,6 +344,33 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
                 .chips
                 .single()
                 .selected shouldBe true
+            jobs.forEach { it.cancel() }
+        }
+
+    @Test
+    fun aFailedFieldWriteIsReportedAsTheDetailsItWrote() =
+        runTest(dispatcher) {
+            val session =
+                FakeLibrarySession().apply {
+                    documents.documents.value = listOf(item("a"), item("b"))
+                    aiSuggest.edit = edit(metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "New title")))
+                    meta.failApplyEditsForDocs = setOf("a")
+                }
+            val model = vm(session)
+            val messages = mutableListOf<String>()
+            val jobs =
+                listOf(
+                    launch { model.ui.collect {} },
+                    launch { model.messages.collect { messages += it.resolveEnglish() } },
+                )
+            advanceUntilIdle()
+            model.start()
+            advanceUntilIdle()
+
+            model.apply()
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf("Could not save the details of 1 of 2 documents")
             jobs.forEach { it.cancel() }
         }
 

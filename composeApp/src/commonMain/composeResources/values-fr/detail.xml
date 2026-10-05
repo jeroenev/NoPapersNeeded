@@ -163,4 +163,14 @@
     <string name="detail_bake_failed_unsupported">Impossible de mettre à jour le PDF d’origine : ce PDF ne peut pas contenir les étiquettes et les informations. Il est resté inchangé.</string>
     <string name="detail_bake_failed_not_saved">Impossible d’enregistrer le PDF mis à jour dans la bibliothèque.</string>
     <string name="detail_ai_ocr_no_endpoint">Configurez un assistant IA dans les Paramètres pour lire le texte avec lui.</string>
+    <string name="detail_add_tag_failed">Impossible d’ajouter l’étiquette : %1$s</string>
+    <string name="detail_create_tag_failed">Impossible de créer l’étiquette : %1$s</string>
+    <string name="detail_remove_tag_failed">Impossible de retirer l’étiquette : %1$s</string>
+    <string name="detail_suggest_tags_failed">Impossible de suggérer des étiquettes : %1$s</string>
+    <string name="detail_suggest_details_failed">Impossible de suggérer des informations : %1$s</string>
+    <string name="detail_add_field_failed">Impossible d’ajouter le champ : %1$s</string>
+    <string name="detail_trash_failed">Impossible de mettre le document à la corbeille : %1$s</string>
+    <string name="detail_rename_failed">Impossible de renommer le fichier : %1$s</string>
+    <string name="detail_ai_ocr_failed">Impossible de lire le texte avec l’assistant : %1$s</string>
+    <string name="detail_ocr_engine_failed">Impossible de changer de moteur OCR : %1$s</string>
 </resources>

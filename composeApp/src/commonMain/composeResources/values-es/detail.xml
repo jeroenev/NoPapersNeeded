@@ -163,4 +163,14 @@
     <string name="detail_bake_failed_unsupported">No se pudo actualizar el PDF original: este PDF no puede contener las etiquetas y los detalles. No se ha modificado.</string>
     <string name="detail_bake_failed_not_saved">No se pudo guardar el PDF actualizado en la biblioteca.</string>
     <string name="detail_ai_ocr_no_endpoint">Configura un asistente de IA en Ajustes para leer el texto con él.</string>
+    <string name="detail_add_tag_failed">No se pudo añadir la etiqueta: %1$s</string>
+    <string name="detail_create_tag_failed">No se pudo crear la etiqueta: %1$s</string>
+    <string name="detail_remove_tag_failed">No se pudo quitar la etiqueta: %1$s</string>
+    <string name="detail_suggest_tags_failed">No se pudieron sugerir etiquetas: %1$s</string>
+    <string name="detail_suggest_details_failed">No se pudieron sugerir detalles: %1$s</string>
+    <string name="detail_add_field_failed">No se pudo añadir el campo: %1$s</string>
+    <string name="detail_trash_failed">No se pudo mover el documento a la papelera: %1$s</string>
+    <string name="detail_rename_failed">No se pudo renombrar el archivo: %1$s</string>
+    <string name="detail_ai_ocr_failed">No se pudo leer el texto con el asistente: %1$s</string>
+    <string name="detail_ocr_engine_failed">No se pudo cambiar el motor de OCR: %1$s</string>
 </resources>

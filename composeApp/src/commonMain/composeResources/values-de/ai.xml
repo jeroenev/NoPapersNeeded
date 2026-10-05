@@ -152,4 +152,16 @@
     <string name="ai_edit_review_open_failed">Die KI-Bearbeitung konnte nicht geöffnet werden: %1$s</string>
     <string name="ai_edit_review_discard_failed">Die KI-Bearbeitung konnte nicht verworfen werden: %1$s</string>
     <string name="ai_edit_setup_load_failed">Einige Optionen der KI-Bearbeitung konnten nicht geladen werden: %1$s</string>
+    <plurals name="ai_edit_apply_tags_failed">
+        <item quantity="one">Bei %1$d von %2$d Dokument konnten die Tags nicht aktualisiert werden</item>
+        <item quantity="other">Bei %1$d von %2$d Dokumenten konnten die Tags nicht aktualisiert werden</item>
+    </plurals>
+    <plurals name="ai_edit_apply_fields_failed">
+        <item quantity="one">Bei %1$d von %2$d Dokument konnten die Details nicht gespeichert werden</item>
+        <item quantity="other">Bei %1$d von %2$d Dokumenten konnten die Details nicht gespeichert werden</item>
+    </plurals>
+    <plurals name="ai_edit_apply_failed">
+        <item quantity="one">Bei %1$d von %2$d Dokument konnten die Vorschläge nicht übernommen werden</item>
+        <item quantity="other">Bei %1$d von %2$d Dokumenten konnten die Vorschläge nicht übernommen werden</item>
+    </plurals>
 </resources>

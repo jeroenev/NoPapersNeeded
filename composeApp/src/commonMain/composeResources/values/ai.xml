@@ -152,4 +152,16 @@
     <string name="ai_edit_review_open_failed">Could not open the AI edit: %1$s</string>
     <string name="ai_edit_review_discard_failed">Could not discard the AI edit: %1$s</string>
     <string name="ai_edit_setup_load_failed">Some AI edit options could not be loaded: %1$s</string>
+    <plurals name="ai_edit_apply_tags_failed">
+        <item quantity="one">Could not update the tags of %1$d of %2$d document</item>
+        <item quantity="other">Could not update the tags of %1$d of %2$d documents</item>
+    </plurals>
+    <plurals name="ai_edit_apply_fields_failed">
+        <item quantity="one">Could not save the details of %1$d of %2$d document</item>
+        <item quantity="other">Could not save the details of %1$d of %2$d documents</item>
+    </plurals>
+    <plurals name="ai_edit_apply_failed">
+        <item quantity="one">Could not apply the suggestions to %1$d of %2$d document</item>
+        <item quantity="other">Could not apply the suggestions to %1$d of %2$d documents</item>
+    </plurals>
 </resources>

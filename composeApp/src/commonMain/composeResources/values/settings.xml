@@ -158,4 +158,8 @@
     <string name="common_settings_mark_all_reviewed">Mark all as reviewed</string>
     <string name="common_settings_mark_tagged_reviewed">Mark tagged documents as reviewed</string>
     <string name="common_settings_mark_none_reviewed">Don&apos;t mark any (all need review)</string>
+    <string name="common_settings_remove_field_failed">Could not remove the field: %1$s</string>
+    <string name="common_settings_move_field_failed">Could not move the field: %1$s</string>
+    <string name="common_settings_clear_thumbnails_failed">Could not clear the thumbnail cache: %1$s</string>
+    <string name="common_settings_review_workflow_failed">Could not change the review workflow: %1$s</string>
 </resources>

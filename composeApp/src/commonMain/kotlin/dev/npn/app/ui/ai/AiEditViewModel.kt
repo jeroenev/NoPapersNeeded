@@ -2,7 +2,7 @@ package dev.npn.app.ui.ai
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiAction
+import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.reasonText
@@ -40,6 +40,9 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_setup_load_failed
 
 /**
@@ -690,16 +693,25 @@ class AiEditViewModel(
             }
 
             is ApplyOutcome.Retry -> {
-                message(
-                    uiText(
-                        UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS,
-                        UiAction.TAG,
-                        outcome.failedDocs,
-                        outcome.total,
-                    ),
-                )
+                message(outcome.failureText())
                 _ui.update { it.copy(phase = EditPhase.Review(outcome.remaining, review.emptyDocs)) }
             }
         }
     }
+}
+
+/**
+ * What an Apply that only partly landed could not write, as one sentence: the tags, the details,
+ * or both. A Retry's documents keep selected exactly the items still owed, so they say which.
+ */
+internal fun ApplyOutcome.Retry.failureText(): UiText {
+    val tags = remaining.any { doc -> doc.chips.any { it.selected } || doc.removals.any { it.selected } }
+    val fields = remaining.any { doc -> doc.fields.any { it.selected } }
+    val sentence =
+        when {
+            !fields -> Res.plurals.ai_edit_apply_tags_failed
+            !tags -> Res.plurals.ai_edit_apply_fields_failed
+            else -> Res.plurals.ai_edit_apply_failed
+        }
+    return uiText(sentence, total, failedDocs, total)
 }

@@ -1,7 +1,6 @@
 package dev.npn.app
 
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiText
 import io.kotest.matchers.collections.shouldContainExactly
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -9,6 +8,8 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import kotlin.test.Test
 
 /** The one message path every screen's viewmodel reports through. */
@@ -17,7 +18,7 @@ class MessagesViewModelTest : MainDispatcherTest() {
     private class Messages : MessagesViewModel() {
         fun say(vararg texts: String) = texts.forEach { message(UiText.Dynamic(it)) }
 
-        fun fail() = launchReporting(UiAction.UPDATE) { error("disk full") }
+        fun fail() = launchReporting(Res.string.common_save_setting_failed) { error("disk full") }
     }
 
     @Test
@@ -48,6 +49,6 @@ class MessagesViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             collector.cancel()
 
-            shown shouldContainExactly listOf("while away", "Could not update: disk full")
+            shown shouldContainExactly listOf("while away", "Could not save the setting: disk full")
         }
 }

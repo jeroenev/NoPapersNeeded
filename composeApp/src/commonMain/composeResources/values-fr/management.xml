@@ -88,4 +88,21 @@
     <string name="common_trash_no_relink_candidates">Aucun fichier correspondant trouvé. Relancez une analyse quand le fichier sera revenu.</string>
     <string name="common_trash_match_reason">Correspondance (%1$s)</string>
     <string name="common_trash_relink">Relier</string>
+    <string name="common_tags_rename_failed">Impossible de renommer l’étiquette : %1$s</string>
+    <string name="common_tags_merge_failed">Impossible de fusionner les étiquettes : %1$s</string>
+    <string name="common_tags_delete_failed">Impossible de supprimer l’étiquette : %1$s</string>
+    <string name="common_tags_delete_all_failed">Impossible de supprimer les étiquettes : %1$s</string>
+    <string name="common_tags_style_failed">Impossible de mettre à jour le style de l’étiquette : %1$s</string>
+    <string name="common_tags_color_all_failed">Impossible de changer la couleur des étiquettes : %1$s</string>
+    <string name="common_trash_restore_failed">Impossible de restaurer le document : %1$s</string>
+    <string name="common_trash_delete_failed">Impossible de supprimer le document : %1$s</string>
+    <plurals name="common_trash_delete_all_failed">
+        <item quantity="one">Impossible de supprimer %1$d document sur %2$d</item>
+        <item quantity="other">Impossible de supprimer %1$d des %2$d documents</item>
+    </plurals>
+    <string name="common_trash_remove_duplicate_failed">Impossible de retirer le doublon : %1$s</string>
+    <string name="common_trash_relink_failed">Impossible de relier le document : %1$s</string>
+    <string name="common_rules_save_failed">Impossible d’enregistrer la règle : %1$s</string>
+    <string name="common_rules_delete_failed">Impossible de supprimer la règle : %1$s</string>
+    <string name="common_rules_update_failed">Impossible de mettre à jour la règle : %1$s</string>
 </resources>

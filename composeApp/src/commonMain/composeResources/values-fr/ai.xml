@@ -152,4 +152,16 @@
     <string name="ai_edit_review_open_failed">Impossible d’ouvrir la modification IA : %1$s</string>
     <string name="ai_edit_review_discard_failed">Impossible d’abandonner la modification IA : %1$s</string>
     <string name="ai_edit_setup_load_failed">Certaines options de la modification IA n’ont pas pu être chargées : %1$s</string>
+    <plurals name="ai_edit_apply_tags_failed">
+        <item quantity="one">Impossible de mettre à jour les étiquettes de %1$d document sur %2$d</item>
+        <item quantity="other">Impossible de mettre à jour les étiquettes de %1$d des %2$d documents</item>
+    </plurals>
+    <plurals name="ai_edit_apply_fields_failed">
+        <item quantity="one">Impossible d’enregistrer les informations de %1$d document sur %2$d</item>
+        <item quantity="other">Impossible d’enregistrer les informations de %1$d des %2$d documents</item>
+    </plurals>
+    <plurals name="ai_edit_apply_failed">
+        <item quantity="one">Impossible d’appliquer les suggestions à %1$d document sur %2$d</item>
+        <item quantity="other">Impossible d’appliquer les suggestions à %1$d des %2$d documents</item>
+    </plurals>
 </resources>

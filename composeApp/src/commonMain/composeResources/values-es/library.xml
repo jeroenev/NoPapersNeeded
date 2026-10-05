@@ -134,4 +134,22 @@
     </plurals>
     <string name="library_import_failed">No se pudieron importar los archivos: %1$s</string>
     <string name="library_drop_needs_library">Abre primero una biblioteca y luego vuelve a soltar los archivos.</string>
+    <plurals name="library_add_tag_failed">
+        <item quantity="one">No se pudo añadir la etiqueta a %1$d documento</item>
+        <item quantity="other">No se pudo añadir la etiqueta a %1$d documentos</item>
+    </plurals>
+    <plurals name="library_remove_tag_failed">
+        <item quantity="one">No se pudo quitar la etiqueta de %1$d documento</item>
+        <item quantity="other">No se pudo quitar la etiqueta de %1$d documentos</item>
+    </plurals>
+    <plurals name="library_review_failed">
+        <item quantity="one">No se pudo cambiar el estado de revisión de %1$d documento</item>
+        <item quantity="other">No se pudo cambiar el estado de revisión de %1$d documentos</item>
+    </plurals>
+    <plurals name="library_trash_failed">
+        <item quantity="one">Error al mover %1$d de %2$d documento a la papelera</item>
+        <item quantity="other">Error al mover %1$d de %2$d documentos a la papelera</item>
+    </plurals>
+    <string name="library_save_view_failed">No se pudo guardar la vista: %1$s</string>
+    <string name="library_delete_view_failed">No se pudo eliminar la vista: %1$s</string>
 </resources>

@@ -151,4 +151,8 @@
     <string name="common_settings_mark_all_reviewed">Tout marquer comme vérifié</string>
     <string name="common_settings_mark_tagged_reviewed">Marquer les documents étiquetés comme vérifiés</string>
     <string name="common_settings_mark_none_reviewed">Ne rien marquer (tout est à vérifier)</string>
+    <string name="common_settings_remove_field_failed">Impossible de retirer le champ : %1$s</string>
+    <string name="common_settings_move_field_failed">Impossible de déplacer le champ : %1$s</string>
+    <string name="common_settings_clear_thumbnails_failed">Impossible de vider le cache des miniatures : %1$s</string>
+    <string name="common_settings_review_workflow_failed">Impossible de modifier le processus de vérification : %1$s</string>
 </resources>

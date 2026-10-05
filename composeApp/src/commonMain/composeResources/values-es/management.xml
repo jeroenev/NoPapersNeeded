@@ -88,4 +88,21 @@
     <string name="common_trash_no_relink_candidates">No se encontraron candidatos para revincular. Vuelve a analizar cuando el archivo regrese.</string>
     <string name="common_trash_match_reason">Coincidencia (%1$s)</string>
     <string name="common_trash_relink">Revincular</string>
+    <string name="common_tags_rename_failed">No se pudo renombrar la etiqueta: %1$s</string>
+    <string name="common_tags_merge_failed">No se pudieron combinar las etiquetas: %1$s</string>
+    <string name="common_tags_delete_failed">No se pudo eliminar la etiqueta: %1$s</string>
+    <string name="common_tags_delete_all_failed">No se pudieron eliminar las etiquetas: %1$s</string>
+    <string name="common_tags_style_failed">No se pudo actualizar el estilo de la etiqueta: %1$s</string>
+    <string name="common_tags_color_all_failed">No se pudo cambiar el color de las etiquetas: %1$s</string>
+    <string name="common_trash_restore_failed">No se pudo restaurar el documento: %1$s</string>
+    <string name="common_trash_delete_failed">No se pudo eliminar el documento: %1$s</string>
+    <plurals name="common_trash_delete_all_failed">
+        <item quantity="one">Error al eliminar %1$d de %2$d documento</item>
+        <item quantity="other">Error al eliminar %1$d de %2$d documentos</item>
+    </plurals>
+    <string name="common_trash_remove_duplicate_failed">No se pudo quitar el duplicado: %1$s</string>
+    <string name="common_trash_relink_failed">No se pudo revincular el documento: %1$s</string>
+    <string name="common_rules_save_failed">No se pudo guardar la regla: %1$s</string>
+    <string name="common_rules_delete_failed">No se pudo eliminar la regla: %1$s</string>
+    <string name="common_rules_update_failed">No se pudo actualizar la regla: %1$s</string>
 </resources>

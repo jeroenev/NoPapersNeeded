@@ -168,4 +168,14 @@
     <string name="detail_bake_failed_unsupported">Could not update the original PDF: this PDF cannot carry the tags and details. It was left unchanged.</string>
     <string name="detail_bake_failed_not_saved">Could not save the updated PDF to the library.</string>
     <string name="detail_ai_ocr_no_endpoint">Set up an AI assistant in Settings to read text with it.</string>
+    <string name="detail_add_tag_failed">Could not add the tag: %1$s</string>
+    <string name="detail_create_tag_failed">Could not create the tag: %1$s</string>
+    <string name="detail_remove_tag_failed">Could not remove the tag: %1$s</string>
+    <string name="detail_suggest_tags_failed">Could not suggest tags: %1$s</string>
+    <string name="detail_suggest_details_failed">Could not suggest details: %1$s</string>
+    <string name="detail_add_field_failed">Could not add the field: %1$s</string>
+    <string name="detail_trash_failed">Could not move the document to the trash: %1$s</string>
+    <string name="detail_rename_failed">Could not rename the file: %1$s</string>
+    <string name="detail_ai_ocr_failed">Could not read the text with the assistant: %1$s</string>
+    <string name="detail_ocr_engine_failed">Could not change the OCR engine: %1$s</string>
 </resources>

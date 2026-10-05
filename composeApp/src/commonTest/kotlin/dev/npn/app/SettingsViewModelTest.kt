@@ -388,7 +388,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             collector.cancel()
 
-            messages shouldContainExactly listOf("Could not update: writes blocked", "Could not update: writes blocked")
+            messages shouldContainExactly List(2) { "Could not change the review workflow: writes blocked" }
         }
 
     @Test
@@ -476,7 +476,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
 
             model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
             model.aiSelfTest.value.running shouldBe false
-            messages shouldContainExactly listOf("Could not update: read-only file system")
+            messages shouldContainExactly listOf("Could not save the setting: read-only file system")
         }
 
     @Test

@@ -7,6 +7,7 @@ import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
+import org.jetbrains.compose.resources.StringResource
 
 /**
  * Base for view models that surface one-shot user-facing messages, shown by [SnackbarMessages].
@@ -34,29 +35,23 @@ abstract class MessagesViewModel : ViewModel() {
         channel.trySend(UiMessage(text, action))
     }
 
-    /** Run a fire-and-forget write in [viewModelScope]; a failure reads "Could not [action]: …". */
-    protected fun launchReporting(
-        action: UiAction,
-        block: suspend () -> Unit,
-    ) = launchReporting({ reason -> uiText(UiTextKey.COULD_NOT_ACTION, action, reason) }, block)
-
     /**
-     * Run a fire-and-forget write in [viewModelScope]; on failure send [failure] of the failure's
-     * reason, a whole sentence such as "Could not split the document: %1$s". Cancellation is
-     * rethrown so it is not misreported as a failure.
+     * Run a fire-and-forget write in [viewModelScope]; on failure send [failed], a whole sentence
+     * with the failure's reason as `%1$s`, such as "Could not split the document: %1$s".
+     * Cancellation is rethrown so it is not misreported as a failure.
      */
     protected fun launchReporting(
-        failure: (reason: UiText) -> UiText,
+        failed: StringResource,
         block: suspend () -> Unit,
     ) {
-        viewModelScope.launch { reporting(failure, block) }
+        viewModelScope.launch { reporting(failed, block) }
     }
 
     /** [launchReporting]'s failure handling, for a write inside a coroutine the caller launched. */
     protected suspend fun reporting(
-        failure: (reason: UiText) -> UiText,
+        failed: StringResource,
         block: suspend () -> Unit,
     ) {
-        runCatchingCancellable { block() }.onFailure { message(failure(it.reasonText())) }
+        runCatchingCancellable { block() }.onFailure { message(uiText(failed, it.reasonText())) }
     }
 }

@@ -26,6 +26,9 @@ class FakeMetadataWriter : MetadataWriter {
     /** removeTag throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
     var failRemoveTagForDocs: Set<String> = emptySet()
 
+    /** applyEdits throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
+    var failApplyEditsForDocs: Set<String> = emptySet()
+
     /** If set, setField throws. */
     var failSetField: (() -> Nothing)? = null
 
@@ -79,6 +82,7 @@ class FakeMetadataWriter : MetadataWriter {
         fields: Map<String, String?>,
     ) {
         failBatchOps?.invoke()
+        if (docIds.any { it in failApplyEditsForDocs }) error("applyEdits failed for $docIds")
         batchedEdits += Triple(docIds, addTags, fields)
     }
 }

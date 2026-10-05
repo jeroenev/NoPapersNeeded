@@ -40,7 +40,6 @@
     <string name="common_onboarding_sync">Synchronisiere den gesamten Bibliotheksordner mit einem Tool wie Syncthing und öffne diesen Ordner auf jedem Gerät. Die Synchronisierung übernimmt das gewählte Tool.</string>
     <string name="common_choose_library_folder">Bestehende Bibliothek öffnen</string>
 
-    <string name="common_could_not_action">%1$s fehlgeschlagen: %2$s</string>
     <string name="common_no_ai_tag_suggestions">Keine Vorschläge – das Dokument hat vielleicht noch keine OCR</string>
     <string name="common_no_ai_metadata_suggestions">Keine Vorschläge – das Dokument hat vielleicht noch keine OCR</string>
     <string name="common_ai_assistant_unreachable">Der KI-Assistent war nicht erreichbar: %1$s</string>
@@ -54,42 +53,6 @@
     <string name="common_tagging_apply_summary">%1$s auf %2$s anwenden</string>
     <string name="common_tagging_done_summary">%1$s auf %2$s angewendet</string>
 
-    <string name="common_action_add_tag">Tag hinzufügen</string>
-    <string name="common_action_remove_tag">Tag entfernen</string>
-    <string name="common_action_save_field">Feld speichern</string>
-    <string name="common_action_remove_field">Feld entfernen</string>
-    <string name="common_action_define_field">Feld definieren</string>
-    <string name="common_action_move_to_trash">In den Papierkorb verschieben</string>
-    <string name="common_action_rename_file">Datei umbenennen</string>
-    <string name="common_action_rerun_ocr">OCR erneut ausführen</string>
-    <string name="common_action_ai_ocr">Text mit dem Assistenten lesen</string>
-    <string name="common_action_change_ocr_engine">OCR-Engine ändern</string>
-    <string name="common_action_create_tag">Tag erstellen</string>
-    <string name="common_action_rename_tag">Tag umbenennen</string>
-    <string name="common_action_merge_tags">Tags zusammenführen</string>
-    <string name="common_action_delete_tag">Tag löschen</string>
-    <string name="common_action_update_tag_style">Tag-Stil aktualisieren</string>
-    <string name="common_action_restore_document">Dokument wiederherstellen</string>
-    <string name="common_action_delete_document">Dokument löschen</string>
-    <string name="common_action_remove_duplicate">Duplikat entfernen</string>
-    <string name="common_action_relink_document">Dokument neu verknüpfen</string>
-    <string name="common_action_save_rule">Regel speichern</string>
-    <string name="common_action_delete_rule">Regel löschen</string>
-    <string name="common_action_update_rule">Regel aktualisieren</string>
-    <string name="common_action_update">Aktualisieren</string>
-    <string name="common_action_trash">In den Papierkorb verschieben</string>
-    <string name="common_action_suggest_tags">Tags vorschlagen</string>
-    <string name="common_action_suggest_metadata">Details vorschlagen</string>
-    <string name="common_action_tag">Taggen</string>
-
-    <plurals name="common_could_not_documents">
-        <item quantity="one">%1$s fehlgeschlagen: %2$d Dokument</item>
-        <item quantity="other">%1$s fehlgeschlagen: %2$d Dokumente</item>
-    </plurals>
-    <plurals name="common_could_not_partial_documents">
-        <item quantity="one">%1$s fehlgeschlagen: %2$d von %3$d Dokument</item>
-        <item quantity="other">%1$s fehlgeschlagen: %2$d von %3$d Dokumenten</item>
-    </plurals>
     <plurals name="common_could_not_suggest_tags_partial">
         <item quantity="one">Vorschläge für %1$d von %2$d Dokument konnten nicht abgerufen werden</item>
         <item quantity="other">Vorschläge für %1$d von %2$d Dokumenten konnten nicht abgerufen werden</item>
@@ -161,4 +124,11 @@
     <string name="common_import_failure_empty">die Datei ist leer</string>
     <string name="common_import_failure_images">aus den Bildern konnte kein PDF erstellt werden</string>
     <string name="common_import_failure_copy">die Datei konnte nicht in die Bibliothek kopiert werden</string>
+    <string name="common_rerun_ocr_failed">OCR konnte nicht erneut ausgeführt werden: %1$s</string>
+    <string name="common_save_field_failed">Das Feld konnte nicht gespeichert werden: %1$s</string>
+    <string name="common_save_setting_failed">Die Einstellung konnte nicht gespeichert werden: %1$s</string>
+    <plurals name="common_restore_documents_failed">
+        <item quantity="one">Bei %1$d von %2$d Dokument ist die Wiederherstellung fehlgeschlagen</item>
+        <item quantity="other">Bei %1$d von %2$d Dokumenten ist die Wiederherstellung fehlgeschlagen</item>
+    </plurals>
 </resources>

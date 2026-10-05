@@ -161,7 +161,7 @@ class AiChatViewModel(
             )
         }
         _ui.value.currentSessionId?.let { sessionId ->
-            launchReporting({ reason -> uiText(Res.string.ai_chat_clear_failed, reason) }) {
+            launchReporting(Res.string.ai_chat_clear_failed) {
                 ai.clearChatSession(sessionId)
             }
         }
@@ -177,7 +177,7 @@ class AiChatViewModel(
     /** Create and select a new empty conversation. */
     fun newSession() {
         if (_ui.value.busy) return
-        launchReporting({ reason -> uiText(Res.string.ai_chat_new_failed, reason) }) {
+        launchReporting(Res.string.ai_chat_new_failed) {
             val session = ai.createChatSession()
             val savedSessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(_ui.value.sessions)
             _ui.update {
@@ -193,7 +193,7 @@ class AiChatViewModel(
     /** Delete a conversation and select the newest remaining one. */
     fun deleteSession(sessionId: String) {
         if (_ui.value.busy) return
-        launchReporting({ reason -> uiText(Res.string.ai_chat_delete_failed, reason) }) {
+        launchReporting(Res.string.ai_chat_delete_failed) {
             ai.deleteChatSession(sessionId)
             val remaining = runCatchingCancellable { ai.chatSessions() }.getOrDefault(emptyList())
             if (sessionId != _ui.value.currentSessionId) {

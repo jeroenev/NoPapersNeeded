@@ -146,8 +146,8 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             session.tagAdmin.renamedTags shouldBe emptyList()
             messages shouldContainExactly
                 listOf(
-                    "Could not delete tag: segment write failed",
-                    "Could not rename tag: segment write failed",
+                    "Could not delete the tag: segment write failed",
+                    "Could not rename the tag: segment write failed",
                 )
             job.cancel()
         }

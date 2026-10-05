@@ -134,4 +134,22 @@
     </plurals>
     <string name="library_import_failed">Could not import the files: %1$s</string>
     <string name="library_drop_needs_library">Open a library first, then drop the files again.</string>
+    <plurals name="library_add_tag_failed">
+        <item quantity="one">Could not add the tag to %1$d document</item>
+        <item quantity="other">Could not add the tag to %1$d documents</item>
+    </plurals>
+    <plurals name="library_remove_tag_failed">
+        <item quantity="one">Could not remove the tag from %1$d document</item>
+        <item quantity="other">Could not remove the tag from %1$d documents</item>
+    </plurals>
+    <plurals name="library_review_failed">
+        <item quantity="one">Could not change the review state of %1$d document</item>
+        <item quantity="other">Could not change the review state of %1$d documents</item>
+    </plurals>
+    <plurals name="library_trash_failed">
+        <item quantity="one">Could not move %1$d of %2$d document to the trash</item>
+        <item quantity="other">Could not move %1$d of %2$d documents to the trash</item>
+    </plurals>
+    <string name="library_save_view_failed">Could not save the view: %1$s</string>
+    <string name="library_delete_view_failed">Could not delete the view: %1$s</string>
 </resources>

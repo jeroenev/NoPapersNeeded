@@ -2,7 +2,6 @@ package dev.npn.app.ui.settings
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.UiTextKey
 import dev.npn.app.ui.common.WhileSubscribedTimeout
@@ -43,6 +42,12 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
+import no_papers_needed.composeapp.generated.resources.common_save_field_failed
+import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnails_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_move_field_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_remove_field_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 
@@ -191,18 +196,18 @@ class SettingsViewModel(
     val fieldUsage: StateFlow<Map<String, Int>> =
         fieldRegistry.usageCounts().stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
-    fun saveField(def: FieldDef) = launchReporting(UiAction.DEFINE_FIELD) { fieldRegistry.upsert(def) }
+    fun saveField(def: FieldDef) = launchReporting(Res.string.common_save_field_failed) { fieldRegistry.upsert(def) }
 
     fun removeField(
         key: String,
         clearValues: Boolean,
-    ) = launchReporting(UiAction.REMOVE_FIELD) { fieldRegistry.remove(key, clearValues) }
+    ) = launchReporting(Res.string.common_settings_remove_field_failed) { fieldRegistry.remove(key, clearValues) }
 
     /** Swap [key] with its neighbour in registry order; a move past either end is a no-op. */
     fun moveField(
         key: String,
         delta: Int,
-    ) = launchReporting(UiAction.UPDATE) {
+    ) = launchReporting(Res.string.common_settings_move_field_failed) {
         val keys = fieldRegistry.current().map { it.key }.toMutableList()
         val from = keys.indexOf(key)
         val to = from + delta
@@ -217,7 +222,7 @@ class SettingsViewModel(
      * and a failed write is reported via the inherited [messages] snackbar.
      */
     fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
-        launchReporting(UiAction.UPDATE) { settings.edit(transform) }
+        launchReporting(Res.string.common_save_setting_failed) { settings.edit(transform) }
 
     /**
      * Edit the library's storage-path template. Each saved value is a journal event every replica
@@ -239,14 +244,14 @@ class SettingsViewModel(
     }
 
     private suspend fun saveTemplate(template: String) {
-        reporting({ reason -> uiText(UiTextKey.COULD_NOT_ACTION, UiAction.UPDATE, reason) }) {
+        reporting(Res.string.common_save_setting_failed) {
             storagePath.setStoragePathTemplate(template)
         }
         templateDraft.compareAndSet(template, null)
     }
 
     fun setStoragePathEnabled(enabled: Boolean) =
-        launchReporting(UiAction.UPDATE) {
+        launchReporting(Res.string.common_save_setting_failed) {
             if (enabled) {
                 // Arm the template the screen shows, saved or not: a draft still waiting for its
                 // pause, or the default a library without a template is shown. Read here rather than
@@ -267,7 +272,7 @@ class SettingsViewModel(
      * URL, which the settings screen hides for fixed-URL providers so nobody could clear it there.
      */
     fun setAiProvider(provider: AiProvider) =
-        launchReporting(UiAction.UPDATE) {
+        launchReporting(Res.string.common_save_setting_failed) {
             aiModelsJob?.cancel()
             _aiModels.value = AiModelListState()
             settings.edit { if (it.aiProvider == provider) it else it.copy(aiProvider = provider, aiBaseUrl = "") }
@@ -317,7 +322,7 @@ class SettingsViewModel(
     /** Switch AI page reading off; true once it is, false (and reported) when the write failed. */
     private suspend fun turnOffAiOcr(): Boolean {
         var done = false
-        reporting({ reason -> uiText(UiTextKey.COULD_NOT_ACTION, UiAction.UPDATE, reason) }) {
+        reporting(Res.string.common_save_setting_failed) {
             settings.edit { it.copy(aiOcrAuto = false) }
             done = true
         }
@@ -326,7 +331,7 @@ class SettingsViewModel(
 
     /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
     fun clearThumbnailCache() =
-        launchReporting(UiAction.UPDATE) {
+        launchReporting(Res.string.common_settings_clear_thumbnails_failed) {
             val cleared = content.clearThumbnailCache()
             message(
                 if (cleared > 0) {
@@ -342,7 +347,9 @@ class SettingsViewModel(
 
     /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */
     fun setUntaggedOnlyMode() =
-        launchReporting(UiAction.UPDATE) { reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY) }
+        launchReporting(Res.string.common_settings_review_workflow_failed) {
+            reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY)
+        }
 
     /**
      * Switch to INBOX_WORKFLOW, running the chosen one-shot migration of the reviewed marker.
@@ -350,7 +357,7 @@ class SettingsViewModel(
      * the mode flips.
      */
     fun setInboxWorkflowMode(migration: ReviewMigration) =
-        launchReporting(UiAction.UPDATE) {
+        launchReporting(Res.string.common_settings_review_workflow_failed) {
             when (migration) {
                 ReviewMigration.MARK_ALL -> reviewConfig.markReviewedForMigration(onlyTagged = false)
                 ReviewMigration.MARK_TAGGED -> reviewConfig.markReviewedForMigration(onlyTagged = true)

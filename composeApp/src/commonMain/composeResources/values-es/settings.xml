@@ -151,4 +151,8 @@
     <string name="common_settings_mark_all_reviewed">Marcar todos como revisados</string>
     <string name="common_settings_mark_tagged_reviewed">Marcar los documentos con etiquetas como revisados</string>
     <string name="common_settings_mark_none_reviewed">No marcar ninguno (todos por revisar)</string>
+    <string name="common_settings_remove_field_failed">No se pudo quitar el campo: %1$s</string>
+    <string name="common_settings_move_field_failed">No se pudo mover el campo: %1$s</string>
+    <string name="common_settings_clear_thumbnails_failed">No se pudo borrar la caché de miniaturas: %1$s</string>
+    <string name="common_settings_review_workflow_failed">No se pudo cambiar el flujo de revisión: %1$s</string>
 </resources>

@@ -48,7 +48,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
             model.trash { done = true }
             advanceUntilIdle()
             done shouldBe false
-            messages shouldContainExactly listOf("Could not move to trash: trash failed for doc-1")
+            messages shouldContainExactly listOf("Could not move the document to the trash: trash failed for doc-1")
             job.cancel()
         }
 
@@ -140,7 +140,8 @@ class DocDetailActionsTest : MainDispatcherTest() {
             advanceUntilIdle()
             session.ocr.aiOcrIds shouldBe emptyList()
             model.ui.value.reindexing shouldBe false
-            messages shouldContainExactly listOf("Could not read text with the assistant: Library session is closed")
+            messages shouldContainExactly
+                listOf("Could not read the text with the assistant: Library session is closed")
             job.cancel()
         }
 

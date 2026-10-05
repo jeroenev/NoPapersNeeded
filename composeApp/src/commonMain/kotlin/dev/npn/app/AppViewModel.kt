@@ -6,7 +6,6 @@ import dev.npn.app.di.LibraryUnavailableException
 import dev.npn.app.di.OpenFailureReason
 import dev.npn.app.platform.createLibraryFolder
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.app.ui.common.aiConfigured
 import dev.npn.app.ui.common.clearThumbCache
@@ -32,6 +31,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.library_drop_needs_library
 import no_papers_needed.composeapp.generated.resources.library_import_failed
 
@@ -182,7 +182,9 @@ class AppViewModel(
         createLibrary(location.substringBeforeLast('/'), location.substringAfterLast('/'))
 
     fun setUseSafStorage(enabled: Boolean) =
-        launchReporting(UiAction.UPDATE) { env.settings.edit { it.copy(useSafStorage = enabled) } }
+        launchReporting(Res.string.common_save_setting_failed) {
+            env.settings.edit { it.copy(useSafStorage = enabled) }
+        }
 
     /** The user has read why a switch to another library failed. */
     fun dismissFailure() = phase.update { if (it is Phase.Ready) Phase.Ready() else it }
@@ -197,7 +199,7 @@ class AppViewModel(
             message(uiText(Res.string.library_drop_needs_library))
             return
         }
-        launchReporting({ reason -> uiText(Res.string.library_import_failed, reason) }) {
+        launchReporting(Res.string.library_import_failed) {
             message(session.ingest.importAll(files).asUiText())
         }
     }

@@ -2,38 +2,8 @@ package dev.npn.app.ui.common
 
 import androidx.compose.runtime.Composable
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.common_action_add_tag
-import no_papers_needed.composeapp.generated.resources.common_action_ai_ocr
-import no_papers_needed.composeapp.generated.resources.common_action_change_ocr_engine
-import no_papers_needed.composeapp.generated.resources.common_action_create_tag
-import no_papers_needed.composeapp.generated.resources.common_action_define_field
-import no_papers_needed.composeapp.generated.resources.common_action_delete_document
-import no_papers_needed.composeapp.generated.resources.common_action_delete_rule
-import no_papers_needed.composeapp.generated.resources.common_action_delete_tag
-import no_papers_needed.composeapp.generated.resources.common_action_merge_tags
-import no_papers_needed.composeapp.generated.resources.common_action_move_to_trash
-import no_papers_needed.composeapp.generated.resources.common_action_relink_document
-import no_papers_needed.composeapp.generated.resources.common_action_remove_duplicate
-import no_papers_needed.composeapp.generated.resources.common_action_remove_field
-import no_papers_needed.composeapp.generated.resources.common_action_remove_tag
-import no_papers_needed.composeapp.generated.resources.common_action_rename_file
-import no_papers_needed.composeapp.generated.resources.common_action_rename_tag
-import no_papers_needed.composeapp.generated.resources.common_action_rerun_ocr
-import no_papers_needed.composeapp.generated.resources.common_action_restore_document
-import no_papers_needed.composeapp.generated.resources.common_action_save_field
-import no_papers_needed.composeapp.generated.resources.common_action_save_rule
-import no_papers_needed.composeapp.generated.resources.common_action_suggest_metadata
-import no_papers_needed.composeapp.generated.resources.common_action_suggest_tags
-import no_papers_needed.composeapp.generated.resources.common_action_tag
-import no_papers_needed.composeapp.generated.resources.common_action_trash
-import no_papers_needed.composeapp.generated.resources.common_action_update
-import no_papers_needed.composeapp.generated.resources.common_action_update_rule
-import no_papers_needed.composeapp.generated.resources.common_action_update_tag_style
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_empty_answer
 import no_papers_needed.composeapp.generated.resources.common_ai_assistant_unreachable
-import no_papers_needed.composeapp.generated.resources.common_could_not_action
-import no_papers_needed.composeapp.generated.resources.common_could_not_documents
-import no_papers_needed.composeapp.generated.resources.common_could_not_partial_documents
 import no_papers_needed.composeapp.generated.resources.common_could_not_queue_edit_run
 import no_papers_needed.composeapp.generated.resources.common_could_not_suggest_tags_partial
 import no_papers_needed.composeapp.generated.resources.common_document_count
@@ -104,9 +74,6 @@ data class UiMessage(
 /** Stable identifiers for messages crossing the ViewModel/UI boundary. */
 enum class UiTextKey {
     UNKNOWN_ERROR,
-    COULD_NOT_ACTION,
-    COULD_NOT_DOCUMENTS,
-    COULD_NOT_PARTIAL_DOCUMENTS,
     COULD_NOT_SUGGEST_TAGS_PARTIAL,
     COULD_NOT_QUEUE_EDIT_RUN,
     NO_AI_TAG_SUGGESTIONS,
@@ -123,37 +90,6 @@ enum class UiTextKey {
     TAGGING_APPLY_SUMMARY,
     TAGGING_DONE_SUMMARY,
     TAGGING_DONE_EMPTY,
-}
-
-/** Typed action used by the generic write-failure message. */
-enum class UiAction {
-    ADD_TAG,
-    REMOVE_TAG,
-    SAVE_FIELD,
-    REMOVE_FIELD,
-    DEFINE_FIELD,
-    MOVE_TO_TRASH,
-    RENAME_FILE,
-    RERUN_OCR,
-    AI_OCR,
-    CHANGE_OCR_ENGINE,
-    CREATE_TAG,
-    RENAME_TAG,
-    MERGE_TAGS,
-    DELETE_TAG,
-    UPDATE_TAG_STYLE,
-    RESTORE_DOCUMENT,
-    DELETE_DOCUMENT,
-    REMOVE_DUPLICATE,
-    RELINK_DOCUMENT,
-    SAVE_RULE,
-    DELETE_RULE,
-    UPDATE_RULE,
-    UPDATE,
-    TRASH,
-    SUGGEST_TAGS,
-    SUGGEST_METADATA,
-    TAG,
 }
 
 fun uiText(
@@ -226,13 +162,6 @@ private fun UiTextKey.spec(args: List<Any?>): TextSpec =
     when (this) {
         UiTextKey.UNKNOWN_ERROR -> {
             TextSpec.Str(Res.string.common_unknown_error)
-        }
-
-        UiTextKey.COULD_NOT_ACTION,
-        UiTextKey.COULD_NOT_DOCUMENTS,
-        UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS,
-        -> {
-            writeFailureSpec(args)
         }
 
         UiTextKey.COULD_NOT_SUGGEST_TAGS_PARTIAL -> {
@@ -314,37 +243,6 @@ private fun UiTextKey.spec(args: List<Any?>): TextSpec =
         }
     }
 
-/** The three keys that report a failed write, all of which lead with a [UiAction]. */
-private fun UiTextKey.writeFailureSpec(args: List<Any?>): TextSpec =
-    when (this) {
-        UiTextKey.COULD_NOT_ACTION -> {
-            TextSpec.Str(
-                Res.string.common_could_not_action,
-                listOf(args.actionAt(0), args[1].argumentSpec()),
-            )
-        }
-
-        UiTextKey.COULD_NOT_DOCUMENTS -> {
-            TextSpec.Plural(
-                Res.plurals.common_could_not_documents,
-                args.intAt(1),
-                listOf(args.actionAt(0), args.intAt(1)),
-            )
-        }
-
-        UiTextKey.COULD_NOT_PARTIAL_DOCUMENTS -> {
-            TextSpec.Plural(
-                Res.plurals.common_could_not_partial_documents,
-                args.intAt(2),
-                listOf(args.actionAt(0), args.intAt(1), args.intAt(2)),
-            )
-        }
-
-        else -> {
-            error("Not a write-failure text key: $this")
-        }
-    }
-
 private fun importSummarySpec(args: List<Any?>): TextSpec =
     TextSpec.Join(
         buildList {
@@ -369,8 +267,6 @@ private fun suggestionCountSpec(count: Int): TextSpec =
 
 private fun List<Any?>.intAt(index: Int): Int = this[index] as Int
 
-private fun List<Any?>.actionAt(index: Int): TextSpec = TextSpec.Str((this[index] as UiAction).stringResource)
-
 /** Message arguments may be nested [UiText]s; anything else is passed to the formatter as-is. */
 private fun Any?.argumentSpec(): Any? =
     when (this) {
@@ -378,38 +274,6 @@ private fun Any?.argumentSpec(): Any? =
         null -> ""
         else -> this
     }
-
-private val UiAction.stringResource: StringResource
-    get() =
-        when (this) {
-            UiAction.ADD_TAG -> Res.string.common_action_add_tag
-            UiAction.REMOVE_TAG -> Res.string.common_action_remove_tag
-            UiAction.SAVE_FIELD -> Res.string.common_action_save_field
-            UiAction.REMOVE_FIELD -> Res.string.common_action_remove_field
-            UiAction.DEFINE_FIELD -> Res.string.common_action_define_field
-            UiAction.MOVE_TO_TRASH -> Res.string.common_action_move_to_trash
-            UiAction.RENAME_FILE -> Res.string.common_action_rename_file
-            UiAction.RERUN_OCR -> Res.string.common_action_rerun_ocr
-            UiAction.AI_OCR -> Res.string.common_action_ai_ocr
-            UiAction.CHANGE_OCR_ENGINE -> Res.string.common_action_change_ocr_engine
-            UiAction.CREATE_TAG -> Res.string.common_action_create_tag
-            UiAction.RENAME_TAG -> Res.string.common_action_rename_tag
-            UiAction.MERGE_TAGS -> Res.string.common_action_merge_tags
-            UiAction.DELETE_TAG -> Res.string.common_action_delete_tag
-            UiAction.UPDATE_TAG_STYLE -> Res.string.common_action_update_tag_style
-            UiAction.RESTORE_DOCUMENT -> Res.string.common_action_restore_document
-            UiAction.DELETE_DOCUMENT -> Res.string.common_action_delete_document
-            UiAction.REMOVE_DUPLICATE -> Res.string.common_action_remove_duplicate
-            UiAction.RELINK_DOCUMENT -> Res.string.common_action_relink_document
-            UiAction.SAVE_RULE -> Res.string.common_action_save_rule
-            UiAction.DELETE_RULE -> Res.string.common_action_delete_rule
-            UiAction.UPDATE_RULE -> Res.string.common_action_update_rule
-            UiAction.UPDATE -> Res.string.common_action_update
-            UiAction.TRASH -> Res.string.common_action_trash
-            UiAction.SUGGEST_TAGS -> Res.string.common_action_suggest_tags
-            UiAction.SUGGEST_METADATA -> Res.string.common_action_suggest_metadata
-            UiAction.TAG -> Res.string.common_action_tag
-        }
 
 /** Resolve text with the active Compose resource locale at the UI boundary. */
 @Composable

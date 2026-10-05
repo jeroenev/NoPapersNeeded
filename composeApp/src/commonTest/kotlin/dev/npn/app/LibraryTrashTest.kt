@@ -120,7 +120,7 @@ class LibraryTrashTest : MainDispatcherTest() {
             val messages = collectMessages(model)
             model.undoTrash(listOf("d1", "d2"))
             advanceUntilIdle()
-            messages shouldContainExactly listOf("Could not restore document 2 of 2 documents")
+            messages shouldContainExactly listOf("Could not restore 2 of 2 documents")
         }
 
     @Test
@@ -139,7 +139,8 @@ class LibraryTrashTest : MainDispatcherTest() {
             advanceUntilIdle()
             collector.cancel()
             // Both messages show, in order: the failure, then the Undo for what did move.
-            messages shouldContainExactly listOf("Could not trash 1 of 3 documents", "Moved 2 documents to trash")
+            messages shouldContainExactly
+                listOf("Could not move 1 of 3 documents to the trash", "Moved 2 documents to trash")
             // d1 and d3 succeeded; only d2 kept selected for retry.
             session.docLifecycle.trashedDocs shouldContainExactlyInAnyOrder listOf("d1", "d3")
             model.ui.value.selected shouldBe setOf("d2")

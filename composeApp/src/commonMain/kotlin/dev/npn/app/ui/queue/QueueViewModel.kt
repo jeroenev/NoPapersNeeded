@@ -2,7 +2,6 @@ package dev.npn.app.ui.queue
 
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.ui.common.MessagesViewModel
-import dev.npn.app.ui.common.UiAction
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.QueuedEditRun
@@ -14,6 +13,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_rerun_ocr_failed
 
 /**
  * The processing queue: what the OCR and AI-enrichment passes still owe ([items]), and the AI edit
@@ -49,7 +50,7 @@ class QueueViewModel(
     }
 
     /** Reset a terminal OCR failure to pending and kick its worker through the normal OCR seam. */
-    fun retry(docId: String) = launchReporting(UiAction.RERUN_OCR) { ocr.reOcr(docId) }
+    fun retry(docId: String) = launchReporting(Res.string.common_rerun_ocr_failed) { ocr.reOcr(docId) }
 }
 
 /** How much outstanding work each pass is carrying. */

@@ -151,4 +151,8 @@
     <string name="common_settings_mark_all_reviewed">Alles als beoordeeld markeren</string>
     <string name="common_settings_mark_tagged_reviewed">Documenten met tags als beoordeeld markeren</string>
     <string name="common_settings_mark_none_reviewed">Niets markeren (alles moet worden beoordeeld)</string>
+    <string name="common_settings_remove_field_failed">Het veld kon niet worden verwijderd: %1$s</string>
+    <string name="common_settings_move_field_failed">Het veld kon niet worden verplaatst: %1$s</string>
+    <string name="common_settings_clear_thumbnails_failed">De miniaturencache kon niet worden gewist: %1$s</string>
+    <string name="common_settings_review_workflow_failed">De beoordelingsworkflow kon niet worden gewijzigd: %1$s</string>
 </resources>
