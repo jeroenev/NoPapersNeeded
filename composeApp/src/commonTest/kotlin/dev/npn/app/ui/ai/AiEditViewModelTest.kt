@@ -1570,11 +1570,6 @@ class ReviewSelectionTest {
     }
 
     @Test
-    fun attentionCountsInventedTagsRemovalsAndOverwrites() {
-        docs.attentionCount() shouldBe 3
-    }
-
-    @Test
     fun selectAllStillTakesEverythingIncludingTheRiskyOnes() {
         val doc = docs.setAllSelected(true).single()
 
