@@ -33,6 +33,17 @@ git fetch --quiet --tags origin main
     die "main is not in sync with origin/main; push (and let CI pass) or pull first"
 ! git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null || die "tag $tag already exists"
 
+# ...and only once CI has passed on it: release.yml builds the tag without rerunning the tests.
+command -v gh >/dev/null || die "needs the GitHub CLI (gh) to check CI on main"
+head=$(git rev-parse --short HEAD)
+runs=$(gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --json status,conclusion \
+    --jq '.[] | "\(.status) \(.conclusion)"')
+if ! grep -qx "completed success" <<<"$runs"; then
+    [ -n "$runs" ] || die "CI has not run on $head (a docs-only commit skips it); start it with: gh workflow run ci.yml --ref main"
+    ! grep -qv "^completed" <<<"$runs" || die "CI is still running on $head; wait for it with: gh run watch"
+    die "CI did not pass on $head; fix main first"
+fi
+
 current=$(sed -n 's/^npn\.version=//p' "$props")
 [ -n "$current" ] || die "npn.version not found in $props"
 [ "$version" != "$current" ] && [ "$(printf '%s\n%s\n' "$current" "$version" | sort -V | tail -n1)" = "$version" ] ||
