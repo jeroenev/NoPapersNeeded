@@ -90,10 +90,20 @@
     <string name="common_trash_relink">Opnieuw koppelen</string>
     <string name="common_tags_rename_failed">De tag kon niet worden hernoemd: %1$s</string>
     <string name="common_tags_merge_failed">De tags konden niet worden samengevoegd: %1$s</string>
+    <plurals name="common_tags_merge_some_failed">
+        <item quantity="one">Kon %1$d van %2$d tag niet samenvoegen</item>
+        <item quantity="other">Kon %1$d van de %2$d tags niet samenvoegen</item>
+    </plurals>
     <string name="common_tags_delete_failed">De tag kon niet worden verwijderd: %1$s</string>
-    <string name="common_tags_delete_all_failed">De tags konden niet worden verwijderd: %1$s</string>
+    <plurals name="common_tags_delete_some_failed">
+        <item quantity="one">Kon %1$d van %2$d tag niet verwijderen</item>
+        <item quantity="other">Kon %1$d van de %2$d tags niet verwijderen</item>
+    </plurals>
     <string name="common_tags_style_failed">De tagstijl kon niet worden bijgewerkt: %1$s</string>
-    <string name="common_tags_color_all_failed">De kleur van de tags kon niet worden gewijzigd: %1$s</string>
+    <plurals name="common_tags_color_some_failed">
+        <item quantity="one">Kon de kleur van %1$d van %2$d tag niet wijzigen</item>
+        <item quantity="other">Kon de kleur van %1$d van de %2$d tags niet wijzigen</item>
+    </plurals>
     <string name="common_trash_restore_failed">Het document kon niet worden hersteld: %1$s</string>
     <string name="common_trash_delete_failed">Het document kon niet worden verwijderd: %1$s</string>
     <plurals name="common_trash_delete_all_failed">

@@ -90,10 +90,20 @@
     <string name="common_trash_relink">Neu verknüpfen</string>
     <string name="common_tags_rename_failed">Der Tag konnte nicht umbenannt werden: %1$s</string>
     <string name="common_tags_merge_failed">Die Tags konnten nicht zusammengeführt werden: %1$s</string>
+    <plurals name="common_tags_merge_some_failed">
+        <item quantity="one">Bei %1$d von %2$d Tag ist das Zusammenführen fehlgeschlagen</item>
+        <item quantity="other">Bei %1$d von %2$d Tags ist das Zusammenführen fehlgeschlagen</item>
+    </plurals>
     <string name="common_tags_delete_failed">Der Tag konnte nicht gelöscht werden: %1$s</string>
-    <string name="common_tags_delete_all_failed">Die Tags konnten nicht gelöscht werden: %1$s</string>
+    <plurals name="common_tags_delete_some_failed">
+        <item quantity="one">Bei %1$d von %2$d Tag ist das Löschen fehlgeschlagen</item>
+        <item quantity="other">Bei %1$d von %2$d Tags ist das Löschen fehlgeschlagen</item>
+    </plurals>
     <string name="common_tags_style_failed">Der Tag-Stil konnte nicht aktualisiert werden: %1$s</string>
-    <string name="common_tags_color_all_failed">Die Farbe der Tags konnte nicht geändert werden: %1$s</string>
+    <plurals name="common_tags_color_some_failed">
+        <item quantity="one">Bei %1$d von %2$d Tag konnte die Farbe nicht geändert werden</item>
+        <item quantity="other">Bei %1$d von %2$d Tags konnte die Farbe nicht geändert werden</item>
+    </plurals>
     <string name="common_trash_restore_failed">Das Dokument konnte nicht wiederhergestellt werden: %1$s</string>
     <string name="common_trash_delete_failed">Das Dokument konnte nicht gelöscht werden: %1$s</string>
     <plurals name="common_trash_delete_all_failed">

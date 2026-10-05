@@ -90,10 +90,20 @@
     <string name="common_trash_relink">Relier</string>
     <string name="common_tags_rename_failed">Impossible de renommer l’étiquette : %1$s</string>
     <string name="common_tags_merge_failed">Impossible de fusionner les étiquettes : %1$s</string>
+    <plurals name="common_tags_merge_some_failed">
+        <item quantity="one">Impossible de fusionner %1$d étiquette sur %2$d</item>
+        <item quantity="other">Impossible de fusionner %1$d des %2$d étiquettes</item>
+    </plurals>
     <string name="common_tags_delete_failed">Impossible de supprimer l’étiquette : %1$s</string>
-    <string name="common_tags_delete_all_failed">Impossible de supprimer les étiquettes : %1$s</string>
+    <plurals name="common_tags_delete_some_failed">
+        <item quantity="one">Impossible de supprimer %1$d étiquette sur %2$d</item>
+        <item quantity="other">Impossible de supprimer %1$d des %2$d étiquettes</item>
+    </plurals>
     <string name="common_tags_style_failed">Impossible de mettre à jour le style de l’étiquette : %1$s</string>
-    <string name="common_tags_color_all_failed">Impossible de changer la couleur des étiquettes : %1$s</string>
+    <plurals name="common_tags_color_some_failed">
+        <item quantity="one">Impossible de changer la couleur de %1$d étiquette sur %2$d</item>
+        <item quantity="other">Impossible de changer la couleur de %1$d des %2$d étiquettes</item>
+    </plurals>
     <string name="common_trash_restore_failed">Impossible de restaurer le document : %1$s</string>
     <string name="common_trash_delete_failed">Impossible de supprimer le document : %1$s</string>
     <plurals name="common_trash_delete_all_failed">

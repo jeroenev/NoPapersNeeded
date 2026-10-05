@@ -44,7 +44,6 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -120,25 +119,25 @@ private class TagSelection {
 }
 
 /**
- * Actions of a card's overflow/context menu, bundled to keep signatures readable. The single
- * variants target one tag; the selected variants apply to the whole current selection.
+ * The one dialog the tags screen has open, or none. Every action but rename names a list of tags: a
+ * card's own menu one, the selection all of it.
  */
-@Immutable
-private data class TagCardActions(
-    val onRename: (String) -> Unit,
-    val onMerge: (String) -> Unit,
-    val onDelete: (String) -> Unit,
-    val onStyle: (String, String?) -> Unit,
-    val onMergeSelected: () -> Unit,
-    val onStyleSelected: () -> Unit,
-    val onDeleteSelected: () -> Unit,
-)
+private sealed interface TagDialog {
+    data class Rename(
+        val name: String,
+    ) : TagDialog
 
-/** Which tags each bulk dialog currently targets; null while the dialog is closed. */
-private class TagBulkDialogState {
-    var merge by mutableStateOf<List<String>?>(null)
-    var style by mutableStateOf<List<String>?>(null)
-    var delete by mutableStateOf<List<String>?>(null)
+    data class Merge(
+        val names: List<String>,
+    ) : TagDialog
+
+    data class Style(
+        val names: List<String>,
+    ) : TagDialog
+
+    data class Delete(
+        val names: List<String>,
+    ) : TagDialog
 }
 
 @Composable
@@ -146,16 +145,9 @@ fun TagManagementScreen(session: LibrarySession) {
     val vm: TagManagementViewModel = viewModel { TagManagementViewModel(session) }
     val tags by vm.tags.collectAsStateWithLifecycle()
     val tree = remember(tags) { buildTree(tags) }
-    val flatNames = remember(tags) { tags.map { it.name } }
 
-    var renameTarget by remember { mutableStateOf<String?>(null) }
-    var mergeTarget by remember { mutableStateOf<String?>(null) }
-    var deleteTarget by remember { mutableStateOf<String?>(null) }
-    var styleTarget by remember { mutableStateOf<Pair<String, String?>?>(null) }
+    var dialog by remember { mutableStateOf<TagDialog?>(null) }
     val selection = remember { TagSelection() }
-    val bulk = remember { TagBulkDialogState() }
-    // Tags can disappear underneath a selection (another device, auto-pruning after edits).
-    val currentSelection = { selection.selected.intersect(flatNames.toSet()).toList() }
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
@@ -164,99 +156,20 @@ fun TagManagementScreen(session: LibrarySession) {
         tree = tree,
         isEmpty = tags.isEmpty(),
         snackbar = snackbar,
-        actions =
-            TagCardActions(
-                onRename = { renameTarget = it },
-                onMerge = { mergeTarget = it },
-                onDelete = { deleteTarget = it },
-                onStyle = { name, color -> styleTarget = name to color },
-                onMergeSelected = { bulk.merge = currentSelection() },
-                onStyleSelected = { bulk.style = currentSelection() },
-                onDeleteSelected = { bulk.delete = currentSelection() },
-            ),
         selection = selection,
+        onOpen = { dialog = it },
     )
-
-    TagEditDialogs(
-        renameTarget = renameTarget,
-        styleTarget = styleTarget,
-        onRename = { from, to ->
-            vm.rename(from, to)
-            renameTarget = null
-        },
-        onDismissRename = { renameTarget = null },
-        onSetStyle = { name, color ->
-            vm.setStyle(name, color, null)
-            styleTarget = null
-        },
-        onDismissStyle = { styleTarget = null },
-    )
-    TagMergeDeleteDialogs(
-        mergeTarget = mergeTarget,
-        deleteTarget = deleteTarget,
-        tagNames = flatNames,
-        onMerge = { from, into ->
-            vm.merge(from, into)
-            mergeTarget = null
-        },
-        onDismissMerge = { mergeTarget = null },
-        onDelete = { name ->
-            vm.delete(name)
-            deleteTarget = null
-        },
-        onDismissDelete = { deleteTarget = null },
-    )
-    TagBulkDialogs(state = bulk, vm = vm, onDone = selection::clear)
-}
-
-/** Dialogs of the bulk (multi-select) actions: merge into a chosen primary, color, delete. */
-@Composable
-private fun TagBulkDialogs(
-    state: TagBulkDialogState,
-    vm: TagManagementViewModel,
-    onDone: () -> Unit,
-) {
-    state.merge?.let { names ->
-        TagPickDialog(
-            title = pluralStringResource(Res.plurals.common_tags_merge_many_title, names.size, names.size),
-            message = stringResource(Res.string.common_tags_merge_keep_message),
-            options = names,
-            confirmLabel = stringResource(Res.string.common_tags_merge),
-            onConfirm = { primary ->
-                vm.mergeAll(names, primary)
-                state.merge = null
-                onDone()
+    dialog?.let { open ->
+        TagDialogHost(
+            dialog = open,
+            tags = tags,
+            writes = vm,
+            onClose = { dialog = null },
+            // A confirmed action ends the selection it was taken on.
+            onDone = {
+                dialog = null
+                selection.clear()
             },
-            onDismiss = { state.merge = null },
-        )
-    }
-    state.style?.let { names ->
-        TagFormDialog(
-            title = pluralStringResource(Res.plurals.common_tags_color_many_title, names.size, names.size),
-            initialName = "",
-            initialColor = null,
-            confirmLabel = stringResource(Res.string.common_save),
-            showNameField = false,
-            onConfirm = { _, color ->
-                vm.setStyleAll(names, color)
-                state.style = null
-                onDone()
-            },
-            onDismiss = { state.style = null },
-        )
-    }
-    state.delete?.let { names ->
-        ConfirmDialog(
-            title = pluralStringResource(Res.plurals.common_tags_delete_many_title, names.size, names.size),
-            message = pluralStringResource(Res.plurals.common_tags_delete_many_message, names.size, names.size),
-            confirmLabel = stringResource(Res.string.common_delete),
-            destructive = true,
-            onConfirm = {
-                vm.deleteAll(names)
-                state.delete = null
-                onDone()
-            },
-            onDismiss = { state.delete = null },
         )
     }
 }
@@ -266,22 +179,22 @@ private fun TagListScaffold(
     tree: List<TagNode>,
     isEmpty: Boolean,
     snackbar: SnackbarHostState,
-    actions: TagCardActions,
     selection: TagSelection,
+    onOpen: (TagDialog) -> Unit,
 ) {
     val flatTree = remember(tree) { flatten(tree) }
+    // Tags can disappear underneath a selection (another device, auto-pruning after edits).
+    val selected = flatTree.mapNotNull { node -> node.info?.name?.takeIf { it in selection.selected } }
     Scaffold(
         topBar = {
             if (selection.active) {
                 TagSelectionTopBar(
-                    count = selection.selected.size,
+                    selected = selected,
                     onClose = selection::clear,
                     onSelectAll = {
                         selection.selected = flatTree.mapNotNull { it.info?.name }.toSet()
                     },
-                    onMergeSelected = actions.onMergeSelected,
-                    onStyleSelected = actions.onStyleSelected,
-                    onDeleteSelected = actions.onDeleteSelected,
+                    onOpen = onOpen,
                 )
             } else {
                 TopAppBar(
@@ -301,7 +214,7 @@ private fun TagListScaffold(
         } else {
             // Compact cards in an adaptive grid: several tags per row on wide layouts instead of
             // one full-width row each. The namespace hierarchy shows as a muted parent-path line
-            // on each card (grid cells cannot carry the old indentation).
+            // on each card (grid cells cannot carry indentation).
             LazyVerticalGrid(
                 columns = GridCells.Adaptive(minSize = TagCardMinWidth),
                 modifier = Modifier.fillMaxSize().padding(padding),
@@ -310,20 +223,23 @@ private fun TagListScaffold(
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
                 items(flatTree, key = { it.path }) { node ->
+                    val isSelected = node.path in selection.selected
                     TagCard(
                         node = node,
-                        actions = actions,
                         selectionMode = selection.active,
-                        selected = node.path in selection.selected,
-                        selectedCount = selection.selected.size,
+                        selected = isSelected,
+                        // With several tags selected, this card among them, its menu acts on the
+                        // whole selection; otherwise on this tag alone.
+                        targets = if (isSelected && selected.size > 1) selected else listOf(node.path),
                         onToggleSelect = { selection.toggle(node.path) },
                         // Opening a menu on an unselected card replaces the selection with that
                         // card, so the menu never silently acts on off-screen tags.
-                        onEnsureSelected = {
-                            if (selection.active && node.info != null && node.path !in selection.selected) {
+                        onPrepareMenu = {
+                            if (selection.active && node.info != null && !isSelected) {
                                 selection.selected = setOf(node.path)
                             }
                         },
+                        onOpen = onOpen,
                     )
                 }
             }
@@ -331,18 +247,16 @@ private fun TagListScaffold(
     }
 }
 
-/** Contextual top bar while tags are selected: count, select all, bulk color/merge/delete. */
+/** Contextual top bar while tags are selected: count, select all, and color, merge or delete them. */
 @Composable
 private fun TagSelectionTopBar(
-    count: Int,
+    selected: List<String>,
     onClose: () -> Unit,
     onSelectAll: () -> Unit,
-    onMergeSelected: () -> Unit,
-    onStyleSelected: () -> Unit,
-    onDeleteSelected: () -> Unit,
+    onOpen: (TagDialog) -> Unit,
 ) {
     TopAppBar(
-        title = { Text(pluralStringResource(Res.plurals.library_selected_count, count, count)) },
+        title = { Text(pluralStringResource(Res.plurals.library_selected_count, selected.size, selected.size)) },
         navigationIcon = {
             IconButton(onClick = onClose) {
                 Icon(Icons.Filled.Clear, contentDescription = stringResource(Res.string.common_cancel))
@@ -357,91 +271,139 @@ private fun TagSelectionTopBar(
             TooltipIconButton(
                 icon = Icons.Filled.Palette,
                 label = stringResource(Res.string.common_tags_color_style),
-                onClick = onStyleSelected,
+                onClick = { onOpen(TagDialog.Style(selected)) },
             )
             TooltipIconButton(
                 icon = Icons.AutoMirrored.Filled.CallMerge,
                 label = stringResource(Res.string.common_tags_merge),
-                onClick = onMergeSelected,
+                onClick = { onOpen(TagDialog.Merge(selected)) },
                 // Merging needs at least a pair.
-                enabled = count >= 2,
+                enabled = selected.size >= 2,
             )
             TooltipIconButton(
                 icon = Icons.Filled.Delete,
                 label = stringResource(Res.string.common_delete),
-                onClick = onDeleteSelected,
+                onClick = { onOpen(TagDialog.Delete(selected)) },
             )
         },
     )
 }
 
+/**
+ * The open [dialog], writing through [writes] once confirmed. A dialog about one tag names it; one
+ * about several counts them.
+ */
 @Composable
-private fun TagEditDialogs(
-    renameTarget: String?,
-    styleTarget: Pair<String, String?>?,
-    onRename: (String, String) -> Unit,
-    onDismissRename: () -> Unit,
-    onSetStyle: (String, String?) -> Unit,
-    onDismissStyle: () -> Unit,
+private fun TagDialogHost(
+    dialog: TagDialog,
+    tags: List<TagInfo>,
+    writes: TagWrites,
+    onClose: () -> Unit,
+    onDone: () -> Unit,
 ) {
-    renameTarget?.let { from ->
-        TextInputDialog(
-            title = stringResource(Res.string.common_tags_rename_title),
-            label = stringResource(Res.string.common_tags_new_name),
-            initial = from,
-            confirmLabel = stringResource(Res.string.common_rename),
-            // Block confirming until the name is non-blank and actually changed.
-            confirmEnabled = { it.isNotBlank() && it.trim() != from },
-            onConfirm = { to ->
-                onRename(from, to)
-            },
-            onDismiss = onDismissRename,
-        )
-    }
+    when (dialog) {
+        is TagDialog.Rename -> {
+            TextInputDialog(
+                title = stringResource(Res.string.common_tags_rename_title),
+                label = stringResource(Res.string.common_tags_new_name),
+                initial = dialog.name,
+                confirmLabel = stringResource(Res.string.common_rename),
+                // Block confirming until the name is non-blank and actually changed.
+                confirmEnabled = { it.isNotBlank() && it.trim() != dialog.name },
+                onConfirm = { to ->
+                    writes.rename(dialog.name, to)
+                    onDone()
+                },
+                onDismiss = onClose,
+            )
+        }
 
-    styleTarget?.let { (name, color) ->
-        TagFormDialog(
-            title = stringResource(Res.string.common_tags_style_title),
-            initialName = name,
-            initialColor = color,
-            confirmLabel = stringResource(Res.string.common_save),
-            nameEditable = false,
-            onConfirm = { _, newColor -> onSetStyle(name, newColor) },
-            onDismiss = onDismissStyle,
-        )
+        is TagDialog.Merge -> {
+            MergeDialog(dialog.names, tags, onClose) { into ->
+                writes.merge(dialog.names, into)
+                onDone()
+            }
+        }
+
+        is TagDialog.Style -> {
+            val single = dialog.names.singleOrNull()
+            TagFormDialog(
+                title =
+                    if (single != null) {
+                        stringResource(Res.string.common_tags_style_title)
+                    } else {
+                        pluralStringResource(Res.plurals.common_tags_color_many_title, dialog.names.size, dialog.names.size)
+                    },
+                initialName = single.orEmpty(),
+                initialColor = single?.let { name -> tags.firstOrNull { it.name == name }?.color },
+                confirmLabel = stringResource(Res.string.common_save),
+                onConfirm = { _, color ->
+                    writes.setStyle(dialog.names, color, null)
+                    onDone()
+                },
+                onDismiss = onClose,
+                nameEditable = false,
+                // One color for many tags has no single name to show.
+                showNameField = single != null,
+            )
+        }
+
+        is TagDialog.Delete -> {
+            val single = dialog.names.singleOrNull()
+            val count = dialog.names.size
+            ConfirmDialog(
+                title =
+                    if (single != null) {
+                        stringResource(Res.string.common_tags_delete_title)
+                    } else {
+                        pluralStringResource(Res.plurals.common_tags_delete_many_title, count, count)
+                    },
+                message =
+                    if (single != null) {
+                        stringResource(Res.string.common_tags_delete_message, single)
+                    } else {
+                        pluralStringResource(Res.plurals.common_tags_delete_many_message, count, count)
+                    },
+                confirmLabel = stringResource(Res.string.common_delete),
+                destructive = true,
+                onConfirm = {
+                    writes.delete(dialog.names)
+                    onDone()
+                },
+                onDismiss = onClose,
+            )
+        }
     }
 }
 
+/**
+ * Merging one tag picks which other tag takes its documents; merging several picks which of them
+ * is kept.
+ */
 @Composable
-private fun TagMergeDeleteDialogs(
-    mergeTarget: String?,
-    deleteTarget: String?,
-    tagNames: List<String>,
-    onMerge: (String, String) -> Unit,
-    onDismissMerge: () -> Unit,
-    onDelete: (String) -> Unit,
-    onDismissDelete: () -> Unit,
+private fun MergeDialog(
+    names: List<String>,
+    tags: List<TagInfo>,
+    onDismiss: () -> Unit,
+    onMerge: (into: String) -> Unit,
 ) {
-    mergeTarget?.let { from ->
+    val single = names.singleOrNull()
+    if (single != null) {
         TagPickDialog(
-            title = stringResource(Res.string.common_tags_merge_title, from),
-            options = tagNames.filter { it != from },
+            title = stringResource(Res.string.common_tags_merge_title, single),
+            options = tags.map { it.name }.filter { it != single },
             confirmLabel = stringResource(Res.string.common_tags_merge),
-            onConfirm = { into -> onMerge(from, into) },
-            onDismiss = onDismissMerge,
+            onConfirm = onMerge,
+            onDismiss = onDismiss,
         )
-    }
-
-    deleteTarget?.let { name ->
-        ConfirmDialog(
-            title = stringResource(Res.string.common_tags_delete_title),
-            message = stringResource(Res.string.common_tags_delete_message, name),
-            confirmLabel = stringResource(Res.string.common_delete),
-            destructive = true,
-            onConfirm = {
-                onDelete(name)
-            },
-            onDismiss = onDismissDelete,
+    } else {
+        TagPickDialog(
+            title = pluralStringResource(Res.plurals.common_tags_merge_many_title, names.size, names.size),
+            options = names,
+            confirmLabel = stringResource(Res.string.common_tags_merge),
+            onConfirm = onMerge,
+            onDismiss = onDismiss,
+            message = stringResource(Res.string.common_tags_merge_keep_message),
         )
     }
 }
@@ -452,13 +414,14 @@ private val TagCardMinWidth = 240.dp
 @Composable
 private fun TagCard(
     node: TagNode,
-    actions: TagCardActions,
     selectionMode: Boolean,
     selected: Boolean,
-    selectedCount: Int,
+    /** The tags this card's menu acts on: this one, or the selection it is part of. */
+    targets: List<String>,
     onToggleSelect: () -> Unit,
     /** Pulls this card into the selection before a menu opens on it (see call site). */
-    onEnsureSelected: () -> Unit,
+    onPrepareMenu: () -> Unit,
+    onOpen: (TagDialog) -> Unit,
 ) {
     var menu by remember { mutableStateOf(false) }
     val selectable = node.info != null
@@ -471,7 +434,7 @@ private fun TagCard(
             .fillMaxWidth()
             .hoverable(hoverInteraction)
             .onSecondaryClick {
-                onEnsureSelected()
+                onPrepareMenu()
                 menu = true
             }.semantics { if (selectable) this.selected = selected }
             .combinedClickable(
@@ -484,7 +447,7 @@ private fun TagCard(
                     if (selectionMode && selectable) {
                         onToggleSelect()
                     } else {
-                        onEnsureSelected()
+                        onPrepareMenu()
                         menu = true
                     }
                 },
@@ -508,15 +471,12 @@ private fun TagCard(
             TagCardMenu(
                 expanded = menu,
                 onExpand = {
-                    onEnsureSelected()
+                    onPrepareMenu()
                     menu = true
                 },
                 onDismiss = { menu = false },
-                node = node,
-                actions = actions,
-                // With several tags selected (and this card among them) the menu acts on the
-                // whole selection; otherwise it targets just this tag.
-                bulkCount = selectedCount.takeIf { selectionMode && selected && it > 1 },
+                targets = targets,
+                onOpen = onOpen,
             )
         }
     }
@@ -562,101 +522,77 @@ private fun TagCardLabel(
     }
 }
 
+/**
+ * A card's actions. On one tag: rename, merge into another, color and delete. On several: merge,
+ * color and delete them all, the labels carrying the count so the scope is clear.
+ */
 @Composable
 private fun TagCardMenu(
     expanded: Boolean,
     onExpand: () -> Unit,
     onDismiss: () -> Unit,
-    node: TagNode,
-    actions: TagCardActions,
-    /** Number of selected tags the menu applies to, or null for single-tag mode. */
-    bulkCount: Int?,
+    targets: List<String>,
+    onOpen: (TagDialog) -> Unit,
 ) {
+    val single = targets.singleOrNull()
+    val count = targets.size
+    val choose = { dialog: TagDialog ->
+        onDismiss()
+        onOpen(dialog)
+    }
     Box {
         IconButton(onClick = onExpand) {
             Icon(Icons.Filled.MoreVert, contentDescription = stringResource(Res.string.common_tags_actions))
         }
         DropdownMenu(expanded = expanded, onDismissRequest = onDismiss) {
-            if (bulkCount != null) {
-                BulkMenuItems(count = bulkCount, actions = actions, onDismiss = onDismiss)
-            } else {
-                SingleMenuItems(node = node, actions = actions, onDismiss = onDismiss)
+            if (single != null) {
+                DropdownMenuItem(
+                    text = { Text(stringResource(Res.string.common_rename)) },
+                    leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
+                    onClick = { choose(TagDialog.Rename(single)) },
+                )
             }
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (single != null) {
+                            stringResource(Res.string.common_tags_merge_into)
+                        } else {
+                            pluralStringResource(Res.plurals.common_tags_merge_many_title, count, count)
+                        },
+                    )
+                },
+                leadingIcon = { Icon(Icons.AutoMirrored.Filled.CallMerge, contentDescription = null) },
+                onClick = { choose(TagDialog.Merge(targets)) },
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (single != null) {
+                            stringResource(Res.string.common_tags_color_style)
+                        } else {
+                            pluralStringResource(Res.plurals.common_tags_color_many_title, count, count)
+                        },
+                    )
+                },
+                leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
+                onClick = { choose(TagDialog.Style(targets)) },
+            )
+            DropdownMenuItem(
+                text = {
+                    Text(
+                        if (single != null) {
+                            stringResource(Res.string.common_delete)
+                        } else {
+                            pluralStringResource(Res.plurals.common_tags_delete_many_title, count, count)
+                        },
+                    )
+                },
+                leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
+                onClick = { choose(TagDialog.Delete(targets)) },
+            )
         }
     }
-}
-
-@Composable
-private fun SingleMenuItems(
-    node: TagNode,
-    actions: TagCardActions,
-    onDismiss: () -> Unit,
-) {
-    DropdownMenuItem(
-        text = { Text(stringResource(Res.string.common_rename)) },
-        leadingIcon = { Icon(Icons.Filled.Edit, contentDescription = null) },
-        onClick = {
-            onDismiss()
-            actions.onRename(node.path)
-        },
-    )
-    DropdownMenuItem(
-        text = { Text(stringResource(Res.string.common_tags_merge_into)) },
-        leadingIcon = { Icon(Icons.AutoMirrored.Filled.CallMerge, contentDescription = null) },
-        onClick = {
-            onDismiss()
-            actions.onMerge(node.path)
-        },
-    )
-    DropdownMenuItem(
-        text = { Text(stringResource(Res.string.common_tags_color_style)) },
-        leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
-        onClick = {
-            onDismiss()
-            actions.onStyle(node.path, node.info?.color)
-        },
-    )
-    DropdownMenuItem(
-        text = { Text(stringResource(Res.string.common_delete)) },
-        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-        onClick = {
-            onDismiss()
-            actions.onDelete(node.path)
-        },
-    )
-}
-
-/** Menu items while several tags are selected; labels carry the count to make the scope clear. */
-@Composable
-private fun BulkMenuItems(
-    count: Int,
-    actions: TagCardActions,
-    onDismiss: () -> Unit,
-) {
-    DropdownMenuItem(
-        text = { Text(pluralStringResource(Res.plurals.common_tags_merge_many_title, count, count)) },
-        leadingIcon = { Icon(Icons.AutoMirrored.Filled.CallMerge, contentDescription = null) },
-        onClick = {
-            onDismiss()
-            actions.onMergeSelected()
-        },
-    )
-    DropdownMenuItem(
-        text = { Text(pluralStringResource(Res.plurals.common_tags_color_many_title, count, count)) },
-        leadingIcon = { Icon(Icons.Filled.Palette, contentDescription = null) },
-        onClick = {
-            onDismiss()
-            actions.onStyleSelected()
-        },
-    )
-    DropdownMenuItem(
-        text = { Text(pluralStringResource(Res.plurals.common_tags_delete_many_title, count, count)) },
-        leadingIcon = { Icon(Icons.Filled.Delete, contentDescription = null) },
-        onClick = {
-            onDismiss()
-            actions.onDeleteSelected()
-        },
-    )
 }
 
 /** Build the namespace tree from the flat tag list. */

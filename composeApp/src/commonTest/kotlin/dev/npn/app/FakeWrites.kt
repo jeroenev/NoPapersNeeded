@@ -97,11 +97,19 @@ class FakeTagAdmin : TagAdmin {
     /** If set, every op on this facet throws. */
     var failTagAdmin: (() -> Nothing)? = null
 
+    /** Ops on these tags (a merge by its source) throw, for per-tag partial-failure testing. */
+    var failTags: Set<String> = emptySet()
+
+    private fun failFor(tag: String) {
+        failTagAdmin?.invoke()
+        if (tag in failTags) error("cannot write tag $tag")
+    }
+
     override suspend fun renameTag(
         from: String,
         to: String,
     ) {
-        failTagAdmin?.invoke()
+        failFor(from)
         renamedTags += from to to
     }
 
@@ -109,12 +117,12 @@ class FakeTagAdmin : TagAdmin {
         from: String,
         to: String,
     ) {
-        failTagAdmin?.invoke()
+        failFor(from)
         mergedTags += from to to
     }
 
     override suspend fun deleteTag(name: String) {
-        failTagAdmin?.invoke()
+        failFor(name)
         deletedTags += name
     }
 
@@ -123,7 +131,7 @@ class FakeTagAdmin : TagAdmin {
         color: String?,
         icon: String?,
     ) {
-        failTagAdmin?.invoke()
+        failFor(tag)
         tagStyles += Triple(tag, color, icon)
     }
 }

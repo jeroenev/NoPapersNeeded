@@ -13,7 +13,10 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_tags_color_some_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_delete_failed
+import no_papers_needed.composeapp.generated.resources.common_tags_delete_some_failed
+import no_papers_needed.composeapp.generated.resources.common_tags_merge_some_failed
 import no_papers_needed.composeapp.generated.resources.common_tags_rename_failed
 import kotlin.test.Test
 
@@ -82,7 +85,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session)
-            model.mergeAll(listOf("finance", "invoices", "bills"), into = "finance")
+            model.merge(listOf("finance", "invoices", "bills"), into = "finance")
             advanceUntilIdle()
             session.tagAdmin.mergedTags shouldContainExactly
                 listOf("invoices" to "finance", "bills" to "finance")
@@ -93,7 +96,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session)
-            model.setStyleAll(listOf("finance", "travel"), "#abc")
+            model.setStyle(listOf("finance", "travel"), "#abc", null)
             advanceUntilIdle()
             session.tagAdmin.tagStyles shouldContainExactly
                 listOf(
@@ -107,7 +110,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session)
-            model.deleteAll(listOf("finance", "travel"))
+            model.delete(listOf("finance", "travel"))
             advanceUntilIdle()
             session.tagAdmin.deletedTags shouldContainExactly listOf("finance", "travel")
         }
@@ -118,8 +121,8 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             val session = FakeLibrarySession()
             val model = vm(session)
             model.rename("old", " new ")
-            model.merge("src", " dest ")
-            model.delete("gone")
+            model.merge(listOf("src"), " dest ")
+            model.delete(listOf("gone"))
             advanceUntilIdle()
             session.tagAdmin.renamedTags shouldContainExactly listOf("old" to "new")
             session.tagAdmin.mergedTags shouldContainExactly listOf("src" to "dest")
@@ -131,9 +134,33 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session)
-            model.setStyle("finance", "#abc", "star")
+            model.setStyle(listOf("finance"), "#abc", "star")
             advanceUntilIdle()
             session.tagAdmin.tagStyles shouldContainExactly listOf(Triple("finance", "#abc", "star"))
+        }
+
+    @Test
+    fun bulkTagActionsContinuePastAFailedTagAndCountIt() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { tagAdmin.failTags = setOf("invoices") }
+            val model = vm(session)
+            val messages = mutableListOf<UiText>()
+            val job = launch { model.messages.collect { messages += it.text } }
+            advanceUntilIdle()
+            model.delete(listOf("finance", "invoices", "travel"))
+            model.merge(listOf("finance", "invoices", "bills"), into = "finance")
+            model.setStyle(listOf("invoices", "travel"), "#abc", null)
+            advanceUntilIdle()
+            session.tagAdmin.deletedTags shouldContainExactly listOf("finance", "travel")
+            session.tagAdmin.mergedTags shouldContainExactly listOf("bills" to "finance")
+            session.tagAdmin.tagStyles shouldContainExactly listOf(Triple("travel", "#abc", null))
+            messages shouldContainExactly
+                listOf(
+                    uiText(Res.plurals.common_tags_delete_some_failed, 3, 1, 3),
+                    uiText(Res.plurals.common_tags_merge_some_failed, 2, 1, 2),
+                    uiText(Res.plurals.common_tags_color_some_failed, 2, 1, 2),
+                )
+            job.cancel()
         }
 
     @Test
@@ -144,7 +171,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             val messages = mutableListOf<UiText>()
             val job = launch { model.messages.collect { messages += it.text } }
             advanceUntilIdle()
-            model.delete("gone")
+            model.delete(listOf("gone"))
             model.rename("old", "new")
             advanceUntilIdle()
             session.tagAdmin.deletedTags shouldBe emptyList()
