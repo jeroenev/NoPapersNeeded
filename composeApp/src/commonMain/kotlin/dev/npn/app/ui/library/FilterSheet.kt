@@ -16,10 +16,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.HorizontalDivider
@@ -48,6 +45,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DatePickerField
+import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.SwitchRow
 import dev.npn.app.ui.common.invalidNumberText
@@ -242,10 +240,10 @@ private fun FilterFields(
     // review state is derived from tags (reviewed == tagged) and the marker is stale.
     if (reviewMode.reviewMarkerIsAuthoritative) {
         FilterFieldRow(stringResource(Res.string.library_reviewed_filter)) {
-            EnumDropdown(
-                current = ReviewFilter.from(draft.reviewed),
+            Dropdown(
+                selected = reviewFilterLabel(ReviewFilter.from(draft.reviewed)),
                 options = ReviewFilter.entries,
-                label = ::reviewFilterLabel,
+                optionLabel = ::reviewFilterLabel,
                 onSelect = { onDraftChange(draft.copy(reviewed = it.value)) },
             )
         }
@@ -279,10 +277,10 @@ private fun FieldFilterRow(
     when (def.type) {
         FieldType.TEXT -> {
             FilterFieldRow(def.label) {
-                EnumDropdown(
-                    current = optionalFilterValue(draft.fieldEquals[def.key]),
+                Dropdown(
+                    selected = optionalFilterLabel(optionalFilterValue(draft.fieldEquals[def.key])),
                     options = optionalFilterOptions(values),
-                    label = ::optionalFilterLabel,
+                    optionLabel = ::optionalFilterLabel,
                     onSelect = { onDraftChange(draft.withFieldEquals(def.key, it.valueOrNull())) },
                     searchLabel = stringResource(Res.string.library_search_field, def.label),
                     searchText = { if (it is OptionalFilterValue.Value) it.value else "" },
@@ -546,57 +544,6 @@ private fun FilterFieldRow(
     ) {
         SectionLabel(label)
         selector()
-    }
-}
-
-@Composable
-private fun <T> EnumDropdown(
-    current: T,
-    options: List<T>,
-    label: @Composable (T) -> String,
-    onSelect: (T) -> Unit,
-    searchLabel: String? = null,
-    searchText: (T) -> String = { it.toString() },
-) {
-    var expanded by remember { mutableStateOf(false) }
-    var searchQuery by remember { mutableStateOf("") }
-    // Only long lists (e.g. correspondents/doc types) get the in-menu search box; the small
-    // reviewed dropdown stays clean.
-    val searchable = searchLabel != null && options.size > 8
-    LaunchedEffect(expanded) {
-        if (expanded) searchQuery = ""
-    }
-    Column {
-        OutlinedButton(onClick = { expanded = true }) {
-            Text(label(current))
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            if (searchable) {
-                OutlinedTextField(
-                    value = searchQuery,
-                    onValueChange = { searchQuery = it },
-                    label = { Text(searchLabel) },
-                    singleLine = true,
-                    modifier = Modifier.width(280.dp).padding(horizontal = 12.dp, vertical = 4.dp),
-                )
-            }
-            val shown =
-                if (searchable) {
-                    options.filter { searchText(it).contains(searchQuery.trim(), ignoreCase = true) }
-                } else {
-                    options
-                }
-            shown.forEach { opt ->
-                DropdownMenuItem(
-                    text = { Text(label(opt)) },
-                    onClick = {
-                        onSelect(opt)
-                        expanded = false
-                    },
-                )
-            }
-        }
     }
 }
 

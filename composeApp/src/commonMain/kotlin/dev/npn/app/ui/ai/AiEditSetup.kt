@@ -13,12 +13,10 @@ import androidx.compose.foundation.selection.selectable
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
@@ -33,6 +31,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.NumericField
@@ -221,25 +220,14 @@ private fun SavedViewPicker(
     ui: AiEditUiState,
     vm: AiEditViewModel,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     val current = ui.savedViews.firstOrNull { it.id == ui.savedViewId }
-    Column(Modifier.padding(start = 48.dp)) {
-        OutlinedButton(onClick = { expanded = true }) {
-            Text(current?.name ?: stringResource(Res.string.ai_edit_saved_view_choose))
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            ui.savedViews.forEach { view ->
-                DropdownMenuItem(
-                    text = { Text(view.name) },
-                    onClick = {
-                        vm.setSavedView(view.id)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
+    Dropdown(
+        selected = current?.name ?: stringResource(Res.string.ai_edit_saved_view_choose),
+        options = ui.savedViews,
+        optionLabel = { it.name },
+        onSelect = { vm.setSavedView(it.id) },
+        modifier = Modifier.padding(start = 48.dp),
+    )
 }
 
 /** Tag additions and tag removals; the caps they belong to live under Advanced. */

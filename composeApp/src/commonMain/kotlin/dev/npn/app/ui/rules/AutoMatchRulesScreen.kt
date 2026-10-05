@@ -20,15 +20,12 @@ import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -48,6 +45,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.npn.app.ui.common.ConfirmDialog
+import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.EmptyState
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.LibrarySession
@@ -445,12 +443,12 @@ private fun FieldDropdown(
     fields: List<FieldDef>,
     onSelect: (RuleField) -> Unit,
 ) {
-    SimpleDropdown(
-        label = stringResource(Res.string.common_rules_match_field),
-        current = fieldLabel(current, fields),
+    Dropdown(
+        selected = fieldLabel(current, fields),
         options = listOf(RuleField.Content, RuleField.FileName) + fields.map { RuleField.Field(it.key) },
-        labelOf = { fieldLabel(it, fields) },
+        optionLabel = { fieldLabel(it, fields) },
         onSelect = onSelect,
+        label = stringResource(Res.string.common_rules_match_field),
     )
 }
 
@@ -459,41 +457,13 @@ private fun AlgorithmDropdown(
     current: MatchAlgorithm,
     onSelect: (MatchAlgorithm) -> Unit,
 ) {
-    SimpleDropdown(
-        label = stringResource(Res.string.common_rules_algorithm),
-        current = algorithmLabel(current),
+    Dropdown(
+        selected = algorithmLabel(current),
         options = MatchAlgorithm.entries,
-        labelOf = ::algorithmLabel,
+        optionLabel = ::algorithmLabel,
         onSelect = onSelect,
+        label = stringResource(Res.string.common_rules_algorithm),
     )
-}
-
-@Composable
-private fun <T> SimpleDropdown(
-    label: String,
-    current: String,
-    options: List<T>,
-    labelOf: @Composable (T) -> String,
-    onSelect: (T) -> Unit,
-) {
-    var expanded by remember { mutableStateOf(false) }
-    Column {
-        Text(label, style = MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick = { expanded = true }) {
-            Text(current)
-        }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            options.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(labelOf(option)) },
-                    onClick = {
-                        onSelect(option)
-                        expanded = false
-                    },
-                )
-            }
-        }
-    }
 }
 
 @Composable

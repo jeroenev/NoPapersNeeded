@@ -29,6 +29,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
+import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.NumericField
 import dev.npn.app.ui.common.SettingsSection
@@ -132,8 +133,8 @@ private fun AiEndpointSettings(
 ) {
     // setAiProvider stays a named method (it clears the stale model list), unlike the plain
     // field edits below.
-    SettingsDropdown(
-        buttonLabel = stringResource(Res.string.common_settings_ai_provider, state.aiProvider.displayName),
+    Dropdown(
+        selected = stringResource(Res.string.common_settings_ai_provider, state.aiProvider.displayName),
         options = AiProvider.entries,
         // Provider names are product names, so displayName is deliberately not localized.
         optionLabel = { it.displayName },
@@ -458,8 +459,8 @@ private fun AiReasoningDropdown(
     current: AiReasoningLevel,
     onSelect: (AiReasoningLevel) -> Unit,
 ) {
-    SettingsDropdown(
-        buttonLabel = label(reasoningLevelLabel(current)),
+    Dropdown(
+        selected = label(reasoningLevelLabel(current)),
         options = AiReasoningLevel.entries,
         optionLabel = { reasoningLevelLabel(it) },
         onSelect = onSelect,

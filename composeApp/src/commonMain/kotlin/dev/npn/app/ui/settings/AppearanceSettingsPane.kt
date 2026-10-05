@@ -1,6 +1,7 @@
 package dev.npn.app.ui.settings
 
 import androidx.compose.runtime.Composable
+import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
@@ -31,8 +32,8 @@ private val APP_LANGUAGES: List<String?> = listOf(null, "en", "nl", "de", "fr", 
 @Composable
 internal fun AppearanceSettingsPane(context: SettingsPaneContext) {
     SettingsSection(title = stringResource(Res.string.common_settings_views)) {
-        SettingsDropdown(
-            buttonLabel =
+        Dropdown(
+            selected =
                 stringResource(
                     Res.string.common_settings_default_view,
                     viewTypeLabel(context.state.defaultViewType),
@@ -51,8 +52,8 @@ internal fun AppearanceSettingsPane(context: SettingsPaneContext) {
     }
 
     SettingsSection(title = stringResource(Res.string.common_settings_language)) {
-        SettingsDropdown(
-            buttonLabel = appLanguageLabel(context.state.appLanguage),
+        Dropdown(
+            selected = appLanguageLabel(context.state.appLanguage),
             options = APP_LANGUAGES,
             optionLabel = { appLanguageLabel(it) },
             onSelect = { lang -> context.vm.edit { it.copy(appLanguage = lang) } },

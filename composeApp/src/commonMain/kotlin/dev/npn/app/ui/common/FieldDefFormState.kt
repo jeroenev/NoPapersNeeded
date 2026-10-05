@@ -10,8 +10,6 @@ import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -205,24 +203,15 @@ private fun TypeDropdown(
     note: String?,
     onSelect: (FieldType) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
     Column {
-        Text(stringResource(Res.string.detail_field_type), style = MaterialTheme.typography.bodySmall)
-        OutlinedButton(onClick = { expanded = true }, enabled = enabled) {
-            Text(fieldTypeLabel(current))
-            Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-        }
+        Dropdown(
+            selected = fieldTypeLabel(current),
+            options = FieldType.entries,
+            optionLabel = { fieldTypeLabel(it) },
+            onSelect = onSelect,
+            label = stringResource(Res.string.detail_field_type),
+            enabled = enabled,
+        )
         note?.let { HelpText(it) }
-        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
-            FieldType.entries.forEach { option ->
-                DropdownMenuItem(
-                    text = { Text(fieldTypeLabel(option)) },
-                    onClick = {
-                        expanded = false
-                        onSelect(option)
-                    },
-                )
-            }
-        }
     }
 }
