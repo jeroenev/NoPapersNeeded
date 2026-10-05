@@ -20,11 +20,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.semantics.ProgressBarRangeInfo
 import androidx.compose.ui.semantics.contentDescription
@@ -42,6 +37,9 @@ private val PaneMinWidth = 320.dp
 
 /** Width of the draggable divider between the two panes; excluded from the area the panes share. */
 private val DividerWidth = 48.dp
+
+/** How far one arrow key moves the divider, as a fraction of the width the panes share. */
+private const val KEY_STEP = 0.05f
 
 /**
  * The page preview and the metadata tabs side by side on a wide window, or the preview as the first
@@ -98,27 +96,10 @@ private fun DocumentPanes(
                             fraction = clamp(it)
                             true
                         }
-                    }.onKeyEvent {
-                        if (it.type != KeyEventType.KeyDown) {
-                            false
-                        } else {
-                            when (it.key) {
-                                Key.DirectionLeft -> {
-                                    fraction = clamp(effective - 0.05f)
-                                    true
-                                }
-
-                                Key.DirectionRight -> {
-                                    fraction = clamp(effective + 0.05f)
-                                    true
-                                }
-
-                                else -> {
-                                    false
-                                }
-                            }
-                        }
-                    }.focusable()
+                    }.paneResizeKeys(
+                        onShrink = { fraction = clamp(effective - KEY_STEP) },
+                        onGrow = { fraction = clamp(effective + KEY_STEP) },
+                    ).focusable()
                     .draggable(
                         state =
                             rememberDraggableState { delta ->

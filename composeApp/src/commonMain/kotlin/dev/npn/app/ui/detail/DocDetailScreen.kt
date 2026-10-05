@@ -35,12 +35,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -220,34 +214,6 @@ private fun LoadedDocScreen(
         }
     }
 }
-
-/** Ctrl+Left/Right walks to the prev/next document (desktop); a no-op when there is nowhere to go. */
-private fun Modifier.docPagingKeys(
-    goPrevDoc: (() -> Unit)?,
-    goNextDoc: (() -> Unit)?,
-): Modifier =
-    onKeyEvent { event ->
-        if (event.type != KeyEventType.KeyDown || !event.isCtrlPressed) return@onKeyEvent false
-        when (event.key) {
-            Key.DirectionLeft -> {
-                goPrevDoc?.let {
-                    it()
-                    true
-                } ?: false
-            }
-
-            Key.DirectionRight -> {
-                goNextDoc?.let {
-                    it()
-                    true
-                } ?: false
-            }
-
-            else -> {
-                false
-            }
-        }
-    }
 
 /** Below this width the detail top bar drops prev/next to avoid crowding; see [DocumentNavPill]. */
 private val CompactTopBarBreakpoint = 480.dp

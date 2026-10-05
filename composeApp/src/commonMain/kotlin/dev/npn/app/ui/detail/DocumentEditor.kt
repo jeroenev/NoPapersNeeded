@@ -23,12 +23,6 @@ import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -95,16 +89,7 @@ internal fun DocumentEditor(
     val persisted = rememberUpdatedState(item.doc.fields)
     val types = rememberUpdatedState(state.document.fieldDefs.associate { it.key to it.type })
     val actions = remember(writes, store, docId) { DraftedActions(writes, store, docId, persisted, types) }
-    Column(
-        modifier.imePadding().onPreviewKeyEvent { event ->
-            if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.S) {
-                if (draft.dirty) store.save(docId)
-                true
-            } else {
-                false
-            }
-        },
-    ) {
+    Column(modifier.imePadding().saveKeys { if (draft.dirty) store.save(docId) }) {
         CompositionLocalProvider(LocalDocumentWriteBlocked provides (draft.saving || !draft.writable)) {
             MetadataPanel(
                 state = state.copy(document = state.document.copy(item = edited)),

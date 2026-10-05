@@ -48,12 +48,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.contentDescription
@@ -150,15 +144,9 @@ internal fun MetadataTabs(
     val findFocus = remember { FocusRequester() }
     var findRequestCounter by remember { mutableStateOf(0) }
     Column(
-        modifier.onKeyEvent { event ->
-            // Ctrl+F jumps to the Text tab and focuses the find field (desktop).
-            if (event.type == KeyEventType.KeyDown && event.isCtrlPressed && event.key == Key.F) {
-                savedTab = PanelTab.TEXT
-                findRequestCounter++
-                true
-            } else {
-                false
-            }
+        modifier.findKeys {
+            savedTab = PanelTab.TEXT
+            findRequestCounter++
         },
     ) {
         PrimaryScrollableTabRow(selectedTabIndex = tabs.indexOf(tab), edgePadding = 0.dp) {

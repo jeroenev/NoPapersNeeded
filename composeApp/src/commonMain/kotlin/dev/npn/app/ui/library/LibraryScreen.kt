@@ -78,13 +78,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEvent
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.isCtrlPressed
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
@@ -304,53 +297,6 @@ fun LibraryScreen(
 }
 
 /**
- * Desktop keyboard shortcuts for the library screen. Returns true when the event was handled.
- *
- * This is the thin Compose adapter: it gates on key-down + search-not-focused, translates the
- * Compose [KeyEvent] into a pure [LibraryKeyPress], and dispatches the [LibraryShortcut] the pure
- * [libraryShortcutFor] decides on. The shortcut semantics themselves (which keys map to what, and
- * Escape's two-branch behaviour) are asserted in tests against [libraryShortcutFor], not here.
- */
-private fun handleLibraryKeyEvent(
-    event: KeyEvent,
-    searchFocused: Boolean,
-    searchFocus: FocusRequester,
-    selectionMode: Boolean,
-    onImport: () -> Unit,
-    onSelectAll: () -> Unit,
-    onRequestTrash: () -> Unit,
-    onClearSelection: () -> Unit,
-    onClearQuery: () -> Unit,
-): Boolean {
-    if (event.type != KeyEventType.KeyDown || searchFocused) return false
-    val libraryKey = event.toLibraryKey() ?: return false
-    val shortcut =
-        libraryShortcutFor(LibraryKeyPress(libraryKey, event.isCtrlPressed), selectionMode)
-            ?: return false
-    when (shortcut) {
-        LibraryShortcut.FOCUS_SEARCH -> searchFocus.requestFocus()
-        LibraryShortcut.IMPORT -> onImport()
-        LibraryShortcut.SELECT_ALL -> onSelectAll()
-        LibraryShortcut.REQUEST_TRASH -> onRequestTrash()
-        LibraryShortcut.CLEAR_SELECTION -> onClearSelection()
-        LibraryShortcut.CLEAR_QUERY -> onClearQuery()
-    }
-    return true
-}
-
-/** Map a Compose [Key] to the pure [LibraryKey] the shortcut map understands, or null. */
-private fun KeyEvent.toLibraryKey(): LibraryKey? =
-    when (key) {
-        Key.F -> LibraryKey.F
-        Key.O -> LibraryKey.O
-        Key.A -> LibraryKey.A
-        Key.Slash -> LibraryKey.SLASH
-        Key.Delete -> LibraryKey.DELETE
-        Key.Escape -> LibraryKey.ESCAPE
-        else -> null
-    }
-
-/**
  * The library list with its bars, search, chips and banners. Collects what it shows from [vm]
  * itself; the screen hands over only what the list cannot know: the layout width, the snackbar it
  * shares with the preview panel, where navigation goes, and [onDialog] for the dialogs the screen
@@ -519,19 +465,16 @@ private fun LibraryContent(
                 .padding(padding)
                 .focusRequester(contentFocus)
                 .focusable()
-                .onKeyEvent { event ->
-                    handleLibraryKeyEvent(
-                        event = event,
-                        searchFocused = searchFocused,
-                        searchFocus = searchFocus,
-                        selectionMode = ui.selectionMode,
-                        onImport = onImport,
-                        onSelectAll = { if (allDocIds.isNotEmpty()) vm.selectAll(allDocIds) },
-                        onRequestTrash = onRequestTrash,
-                        onClearSelection = vm::clearSelection,
-                        onClearQuery = { vm.onQueryChange("") },
-                    )
-                },
+                .libraryKeys(
+                    searchFocused = searchFocused,
+                    selectionMode = ui.selectionMode,
+                    onFocusSearch = searchFocus::requestFocus,
+                    onImport = onImport,
+                    onSelectAll = { if (allDocIds.isNotEmpty()) vm.selectAll(allDocIds) },
+                    onRequestTrash = onRequestTrash,
+                    onClearSelection = vm::clearSelection,
+                    onClearQuery = { vm.onQueryChange("") },
+                ),
         ) {
             SearchField(
                 value = queryText,
