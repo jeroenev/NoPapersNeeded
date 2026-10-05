@@ -11,13 +11,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.npn.app.platform.ocrHasLanguageSetting
+import dev.npn.app.platform.supportsSafStorage
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_settings_about
 import no_papers_needed.composeapp.generated.resources.common_settings_about_help
+import no_papers_needed.composeapp.generated.resources.common_settings_advanced
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_assistant
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_auto_on_ocr
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_ocr_auto
+import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_provider_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ai_test
 import no_papers_needed.composeapp.generated.resources.common_settings_api_key
@@ -28,12 +32,14 @@ import no_papers_needed.composeapp.generated.resources.common_settings_category_
 import no_papers_needed.composeapp.generated.resources.common_settings_change_library
 import no_papers_needed.composeapp.generated.resources.common_settings_choose_folder
 import no_papers_needed.composeapp.generated.resources.common_settings_clear_thumbnail_cache
+import no_papers_needed.composeapp.generated.resources.common_settings_default_view
 import no_papers_needed.composeapp.generated.resources.common_settings_document_fields
 import no_papers_needed.composeapp.generated.resources.common_settings_enable_ai
 import no_papers_needed.composeapp.generated.resources.common_settings_enable_inbox
 import no_papers_needed.composeapp.generated.resources.common_settings_grid_size_help
 import no_papers_needed.composeapp.generated.resources.common_settings_landscape_columns
 import no_papers_needed.composeapp.generated.resources.common_settings_language
+import no_papers_needed.composeapp.generated.resources.common_settings_language_system
 import no_papers_needed.composeapp.generated.resources.common_settings_library
 import no_papers_needed.composeapp.generated.resources.common_settings_load_models
 import no_papers_needed.composeapp.generated.resources.common_settings_max_new_tags
@@ -41,9 +47,15 @@ import no_papers_needed.composeapp.generated.resources.common_settings_max_sugge
 import no_papers_needed.composeapp.generated.resources.common_settings_model
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr_match_app_language
+import no_papers_needed.composeapp.generated.resources.common_settings_ocr_other_language
+import no_papers_needed.composeapp.generated.resources.common_settings_reasoning_assistant
+import no_papers_needed.composeapp.generated.resources.common_settings_reasoning_edit
 import no_papers_needed.composeapp.generated.resources.common_settings_reasoning_help
 import no_papers_needed.composeapp.generated.resources.common_settings_remove_after_import
+import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow
 import no_papers_needed.composeapp.generated.resources.common_settings_server_url
+import no_papers_needed.composeapp.generated.resources.common_settings_stop_watching
+import no_papers_needed.composeapp.generated.resources.common_settings_storage
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_organize_paths
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_path_template
 import no_papers_needed.composeapp.generated.resources.common_settings_trash
@@ -105,7 +117,9 @@ internal interface SettingsPaneActions : SettingsActions {
  *
  * [keywords] are the labels of the individual settings the pane contains. They exist so search can
  * answer "where do I change the thumbnail cache?" without every setting needing its own registry
- * entry. They deliberately reuse the controls' resource keys rather than adding translated copies.
+ * entry. They deliberately reuse the controls' resource keys rather than adding translated copies;
+ * a label with a value in it ("Default view: %1$s") is searched by its name. Every label a pane
+ * shows must be among them, which `SettingsSearchCoverageTest` checks by rendering the panes.
  */
 @Immutable
 internal class SettingsCategory(
@@ -128,12 +142,15 @@ internal val SettingsCategories: List<SettingsCategory> =
             title = Res.string.common_settings_library,
             icon = Icons.Outlined.FolderOpen,
             keywords =
-                listOf(
+                listOfNotNull(
                     Res.string.common_settings_change_library,
+                    Res.string.common_settings_storage,
                     Res.string.common_settings_storage_organize_paths,
                     Res.string.common_settings_storage_path_template,
                     Res.string.common_settings_clear_thumbnail_cache,
-                    Res.string.common_settings_use_saf,
+                    // Only Android offers the Storage Access Framework.
+                    Res.string.common_settings_advanced.takeIf { supportsSafStorage() },
+                    Res.string.common_settings_use_saf.takeIf { supportsSafStorage() },
                 ),
             content = { state, actions -> LibrarySettingsPane(state, actions) },
         ),
@@ -145,10 +162,12 @@ internal val SettingsCategories: List<SettingsCategory> =
                 listOfNotNull(
                     Res.string.common_settings_watched_folder,
                     Res.string.common_settings_choose_folder,
+                    Res.string.common_settings_stop_watching,
                     Res.string.common_settings_remove_after_import,
                     Res.string.common_settings_ocr,
-                    // Only desktop shows the OCR language switch; Android's OCR takes no language.
+                    // Only desktop shows the OCR language settings; Android's OCR takes no language.
                     Res.string.common_settings_ocr_match_app_language.takeIf { ocrHasLanguageSetting() },
+                    Res.string.common_settings_ocr_other_language.takeIf { ocrHasLanguageSetting() },
                     Res.string.common_settings_auto_matching_rules,
                 ),
             content = { state, actions -> ImportSettingsPane(state, actions) },
@@ -161,6 +180,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                 listOf(
                     Res.string.common_settings_document_fields,
                     Res.string.detail_add_field,
+                    Res.string.common_settings_review_workflow,
                     Res.string.common_settings_enable_inbox,
                     Res.string.common_settings_trash,
                     Res.string.common_settings_trash_retention_days,
@@ -174,15 +194,19 @@ internal val SettingsCategories: List<SettingsCategory> =
             keywords =
                 listOf(
                     Res.string.common_settings_enable_ai,
+                    Res.string.common_settings_ai_provider,
                     Res.string.common_settings_ai_provider_help,
                     Res.string.common_settings_server_url,
                     Res.string.common_settings_api_key,
                     Res.string.common_settings_model,
                     Res.string.common_settings_load_models,
+                    Res.string.common_settings_reasoning_assistant,
+                    Res.string.common_settings_reasoning_edit,
                     Res.string.common_settings_reasoning_help,
                     Res.string.common_settings_max_suggested_tags,
                     Res.string.common_settings_max_new_tags,
                     Res.string.common_settings_ai_auto_on_ocr,
+                    Res.string.common_settings_ai_ocr_auto,
                     Res.string.common_settings_ai_test,
                 ),
             content = { state, actions -> AiSettingsPane(state, actions) },
@@ -194,9 +218,11 @@ internal val SettingsCategories: List<SettingsCategory> =
             keywords =
                 listOf(
                     Res.string.common_settings_views,
+                    Res.string.common_settings_default_view,
                     Res.string.common_settings_grid_size_help,
                     Res.string.common_settings_landscape_columns,
                     Res.string.common_settings_language,
+                    Res.string.common_settings_language_system,
                 ),
             content = { state, actions -> AppearanceSettingsPane(state, actions) },
         ),
@@ -238,6 +264,11 @@ internal fun settingsCategoryLabels(): List<SettingsCategoryLabels> =
         SettingsCategoryLabels(
             category = category,
             title = stringResource(category.title),
-            keywords = category.keywords.map { stringResource(it) },
+            keywords = category.keywords.map { searchableLabel(stringResource(it)) },
         )
     }
+
+/** A label's name as search matches it: without the value a label like "Default view: %1$s" holds. */
+internal fun searchableLabel(label: String): String = label.replace(PLACEHOLDER, "").trim().trimEnd(':').trim()
+
+private val PLACEHOLDER = Regex("""%\d+\$[sd]""")

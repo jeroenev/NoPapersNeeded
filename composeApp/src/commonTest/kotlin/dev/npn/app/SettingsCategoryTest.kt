@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.app.ui.settings.SettingsCategories
 import dev.npn.app.ui.settings.SettingsCategoryId
 import dev.npn.app.ui.settings.SettingsCategoryLabels
+import dev.npn.app.ui.settings.searchableLabel
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
@@ -69,6 +70,13 @@ class SettingsCategoryTest {
         val entry = labels("Library", "Clear thumbnail cache")
         entry.matches("bluetooth") shouldBe false
         entry.matchedKeyword("bluetooth").shouldBeNull()
+    }
+
+    @Test
+    fun aLabelWithAValueInItIsSearchedByItsName() {
+        searchableLabel("Default view: %1${'$'}s") shouldBe "Default view"
+        searchableLabel("Vue par défaut : %1${'$'}s") shouldBe "Vue par défaut"
+        searchableLabel("Clear thumbnail cache") shouldBe "Clear thumbnail cache"
     }
 
     @Test
