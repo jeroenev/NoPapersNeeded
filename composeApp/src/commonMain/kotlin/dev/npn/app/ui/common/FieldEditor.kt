@@ -187,9 +187,8 @@ private fun LongTextField(
 }
 
 /**
- * Numbers are typed the way the locale writes them and stored canonically. The field shows the
- * canonical value back in locale form, so `1.5` stored reads `1,5` under a comma locale, and a
- * partial or off-type entry is shown exactly as typed with the error underneath.
+ * Numbers are typed the way the locale writes them and stored canonically ([NumberInput]). An
+ * entry the type refuses is committed as typed, so the draft can flag it and block the save.
  */
 @Composable
 private fun NumberField(
@@ -199,27 +198,19 @@ private fun NumberField(
     modifier: Modifier,
     onCommit: (String) -> Unit,
 ) {
-    val shown = remember(canonical, locale) { FieldValues.display(def.type, canonical, locale) }
-    var text by rememberFieldText(shown)
-    val invalid = text.isNotBlank() && FieldValues.canonicalize(def.type, text, locale) is FieldParse.Invalid
-    val error = if (invalid) invalidNumberText(def.type) else null
-    OutlinedTextField(
-        value = text,
-        onValueChange = { typed ->
-            text = typed
+    NumberInputField(
+        input = rememberNumberInput(def, canonical, locale),
+        label = def.label,
+        onInput = { parsed ->
             onCommit(
-                when (val parsed = FieldValues.canonicalize(def.type, typed, locale)) {
+                when (parsed) {
                     is FieldParse.Ok -> parsed.canonical.orEmpty()
                     is FieldParse.Invalid -> parsed.raw
                 },
             )
         },
-        isError = invalid,
-        label = { Text(def.label) },
-        supportingText = (error ?: def.hint)?.let { { Text(it) } },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        singleLine = true,
-        modifier = modifier.fillMaxWidth(),
+        modifier = modifier,
+        hint = def.hint,
     )
 }
 
@@ -280,16 +271,15 @@ fun fieldTypeLabel(type: FieldType): String =
 
 /** What an entry that does not parse as a number of [type] is told, for the editor and the filter sheet. */
 @Composable
-internal fun invalidNumberText(type: FieldType): String =
-    stringResource(
-        if (type ==
-            FieldType.DECIMAL
-        ) {
+internal fun invalidNumberText(type: FieldType): String {
+    val text =
+        if (type == FieldType.DECIMAL) {
             Res.string.common_field_invalid_decimal
         } else {
             Res.string.common_field_invalid_number
-        },
-    )
+        }
+    return stringResource(text)
+}
 
 private const val LONG_TEXT_MIN_LINES = 4
 private const val LONG_TEXT_MAX_LINES = 10

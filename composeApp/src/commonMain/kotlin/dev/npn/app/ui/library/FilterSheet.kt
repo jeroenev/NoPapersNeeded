@@ -13,7 +13,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -37,26 +36,25 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.Saver
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.DatePickerField
 import dev.npn.app.ui.common.Dropdown
+import dev.npn.app.ui.common.NumberInputField
 import dev.npn.app.ui.common.SectionHeading
 import dev.npn.app.ui.common.SwitchRow
-import dev.npn.app.ui.common.invalidNumberText
 import dev.npn.app.ui.common.rememberFieldLocale
-import dev.npn.app.ui.common.rememberFieldText
+import dev.npn.app.ui.common.rememberNumberInput
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.TagInfo
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
-import dev.npn.core.model.FieldValues
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.util.NpnJson
 import kotlinx.serialization.encodeToString
@@ -386,31 +384,19 @@ private fun NumberBound(
     label: String,
     onCommit: (String?) -> Unit,
     onValidity: (Boolean) -> Unit,
-    modifier: Modifier,
+    modifier: Modifier = Modifier,
 ) {
-    val locale = rememberFieldLocale()
-    var text by rememberFieldText(value?.let { FieldValues.display(def.type, it, locale) }.orEmpty())
-    val invalid = text.isNotBlank() && FieldValues.canonicalize(def.type, text, locale) is FieldParse.Invalid
+    val input = rememberNumberInput(def, value, rememberFieldLocale())
     // Report validity on entry and whenever it changes, and clear the invalid flag when this field
     // leaves the composition (the row was removed) so a stale error never blocks Apply.
-    LaunchedEffect(invalid) { onValidity(!invalid) }
-    DisposableEffect(Unit) { onDispose { onValidity(true) } }
-    val error = if (invalid) invalidNumberText(def.type) else null
-    OutlinedTextField(
-        value = text,
-        onValueChange = { typed ->
-            text = typed
-            when (val parsed = FieldValues.canonicalize(def.type, typed, locale)) {
-                is FieldParse.Ok -> onCommit(parsed.canonical)
-                is FieldParse.Invalid -> Unit
-            }
-        },
-        label = { Text(label) },
-        isError = invalid,
-        supportingText = error?.let { { Text(it) } },
-        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
-        singleLine = true,
-        modifier = modifier.fillMaxWidth(),
+    val reportValidity by rememberUpdatedState(onValidity)
+    LaunchedEffect(input.invalid) { reportValidity(!input.invalid) }
+    DisposableEffect(Unit) { onDispose { reportValidity(true) } }
+    NumberInputField(
+        input = input,
+        label = label,
+        onInput = { parsed -> if (parsed is FieldParse.Ok) onCommit(parsed.canonical) },
+        modifier = modifier,
     )
 }
 
