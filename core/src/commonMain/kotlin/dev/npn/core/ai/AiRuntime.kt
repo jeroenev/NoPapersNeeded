@@ -133,10 +133,8 @@ internal class AiRuntime(
          * keeps one id across turns.
          *
          * Requests without one (one-shot edit suggestions, the settings model list) share the
-         * per-client [fallbackSessionId]. That sharing is deliberate rather than a shortcut:
-         * those runs are not conversations, and they send a batch-constant system prompt (see
-         * `AiPrompts.editSystem`), so keeping a whole batch on one id helps the
-         * gateway's prefix caching instead of fragmenting it.
+         * per-client [fallbackSessionId]: they send a batch-constant system prompt (see
+         * `AiPrompts.editSystem`), so one id per batch helps the gateway's prefix caching.
          *
          * Derived with `HttpClient.config {}`, so it keeps every plugin the receiver already has
          * and shares its engine; the receiver stays the one that owns that engine.
@@ -156,24 +154,14 @@ internal class AiRuntime(
 
         /**
          * Whether this model must be called through OpenAI's Responses API rather than
-         * `chat/completions`.
+         * `chat/completions`. The OpenCode Go gateway serves its OpenAI-family models only on the
+         * Responses API and every other model only on chat/completions, and answers HTTP 500 on the
+         * wrong one (models.dev encodes the same split for `opencode-go`).
          *
-         * The OpenCode Go gateway does not serve one API for everything: it routes the OpenAI-family
-         * models to the native OpenAI SDK (Responses API) and everything else to an
-         * OpenAI-compatible chat/completions backend. Calling the wrong one is not a graceful
-         * degradation — the gateway answers HTTP 500 (verified live: `gpt-5.6-luna` 500s on
-         * chat/completions and answers on `/v1/responses`; `kimi-k2.6`, `glm-5.1`, `hy3` do the
-         * exact opposite). The same split is what models.dev encodes for the `opencode-go` provider,
-         * where only the `gpt-*` entries carry `provider.npm = "@ai-sdk/openai"`.
-         *
-         * Deliberately scoped to [AiProvider.OPENCODE_GO]. [AiProvider.OPENAI] serves both APIs for
-         * these ids, so there is no bug to fix there and switching would be an unverified change to
-         * a working path; [AiProvider.CUSTOM] points at self-hosted servers (llama.cpp, LiteLLM)
-         * that implement chat/completions and often *name* their model `gpt-...`, so the same
-         * inference would break them.
-         *
-         * A model id is free text, so this is a heuristic, not a lookup. It errs towards
-         * chat/completions: an unrecognised id keeps today's behaviour.
+         * Only for [AiProvider.OPENCODE_GO]: [AiProvider.OPENAI] serves both APIs, and
+         * [AiProvider.CUSTOM] servers implement chat/completions while often naming a model
+         * `gpt-...`. A model id is free text, so this is a heuristic that falls back to
+         * chat/completions for an id it does not recognise.
          */
         internal fun usesResponsesApi(
             provider: AiProvider,
@@ -196,21 +184,14 @@ internal class AiRuntime(
             reasoningParams(config.provider, config.model, config.reasoningEdit, toolLoop = false) ?: LLMParams()
 
         /**
-         * Params for one page transcription ([AiFacadeImpl.ocrEngine]).
+         * Params for one page transcription ([AiFacadeImpl.ocrEngine]). Not [suggestionParams]:
+         * reasoning buys nothing on a verbatim transcription, would be paid per page, and on
+         * Anthropic takes most of `max_tokens`, truncating a dense page into a write-once sidecar.
          *
-         * Deliberately not [suggestionParams]. That maps [AiConfig.reasoningEdit], and neither
-         * half of it suits OCR: reasoning buys nothing on a verbatim transcription, and it would
-         * be charged once per PAGE here rather than once per document. On Anthropic it is worse
-         * than pointless — [anthropicReasoningParams] hands most of `max_tokens` to the thinking
-         * budget, so a dense page can be truncated mid-transcription into a write-once sidecar.
-         *
-         * Only Anthropic gets an override, because only Anthropic needs one: Koog's client falls
-         * back to a flat 2048 `max_tokens`, which a dense page can exceed. The other providers
-         * keep their endpoint defaults rather than an explicit "no reasoning" label, because
-         * those labels are themselves a failure mode (see [reasoningParams]: `reasoning_effort:
-         * none` errors on older OpenAI-shaped models, and a zero Google thinking budget errors on
-         * the Pro models). An unwanted thought on a transcription call is a smaller problem than
-         * a page that cannot be read at all.
+         * Only Anthropic gets an override (thinking off, a `max_tokens` above Koog's 2048 default).
+         * The others keep their endpoint defaults, because an explicit "no reasoning" label errors
+         * on some models (see [reasoningParams]), and a page that cannot be read at all is worse
+         * than an unwanted thought.
          */
         fun ocrParams(config: AiConfig): LLMParams =
             when (config.provider) {

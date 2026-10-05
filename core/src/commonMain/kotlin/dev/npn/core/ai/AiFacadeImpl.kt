@@ -215,12 +215,9 @@ class AiFacadeImpl(
      * engine, for scans a local engine reads badly (handwriting, tables, poor contrast, scripts the
      * bundled models do not cover). The OCR pipeline ranks and selects it like any other engine, so
      * its sidecar (`.npn/ocr/<hash>.<device>.ai.json`) is a normal OCR version that other replicas
-     * adopt without an endpoint of their own; and it shares this facade's cached client.
-     *
-     * A different bargain from [suggestEdits], not just a different prompt: suggestions cost one
-     * call per document off already-extracted text, this costs one call per *page* and produces the
-     * text everything else reads. That is why nothing starts it unattended without
-     * [UnattendedAiPolicy] (see `OcrEngineSelector`).
+     * adopt without an endpoint of their own; and it shares this facade's cached client. It costs
+     * one call per *page*, so nothing starts it unattended without [UnattendedAiPolicy] (see
+     * `OcrEngineSelector`).
      *
      * [OcrEngine.recognizePng] returns the page's text, or `""` for a page the model reports as
      * carrying none; `lang` is a hint only, since the model reads whatever the page is written in.

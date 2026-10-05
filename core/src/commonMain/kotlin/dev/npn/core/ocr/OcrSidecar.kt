@@ -5,8 +5,8 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * OCR sidecar payload serialized to `.npn/ocr/<sha256>.<deviceId>.json`, single-writer and
- * write-once. Compact by design (text only). Field names are the exact wire keys.
+ * OCR sidecar payload, serialized to the file [dev.npn.core.fs.OcrSidecarName] names, single-writer
+ * and write-once. Compact by design (text only). Field names are the exact wire keys.
  *
  * Example:
  * {"v":1,"doc":"<sha256>","dev":"<deviceId>","engine":"embedded",
@@ -17,7 +17,7 @@ data class OcrSidecar(
     @SerialName("v") val v: Int = 1,
     @SerialName("doc") val doc: String,
     @SerialName("dev") val dev: String,
-    /** embedded | mlkit | tesseract | mixed */
+    /** An [OcrEngineId.column]; older builds also wrote `mixed`, which ranks as unknown. */
     @SerialName("engine") val engine: String,
     @SerialName("lang") val lang: String,
     @SerialName("createdAt") val createdAt: Long,

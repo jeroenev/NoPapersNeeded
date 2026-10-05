@@ -77,9 +77,9 @@ data class AiEditRequest(
     companion object {
         /**
          * The most fields one run may ask about. Past this the reply contract outweighs the
-         * document text (P11), so the cap is a hard backstop everywhere a request is built — the
-         * interactive screen refuses to start, and the unattended enricher sends only the first
-         * [MAX_FIELDS_PER_RUN] in registry order rather than all of them.
+         * document text, so the cap holds everywhere a request is built: the interactive screen
+         * refuses to start, and the unattended enricher sends only the first [MAX_FIELDS_PER_RUN]
+         * in registry order.
          */
         const val MAX_FIELDS_PER_RUN = 10
     }

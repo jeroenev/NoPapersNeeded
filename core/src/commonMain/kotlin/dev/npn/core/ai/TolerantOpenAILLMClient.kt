@@ -19,29 +19,19 @@ import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.jsonObject
 
 /**
- * [OpenAILLMClient] that tolerates non-standard trailing SSE chunks emitted by some
- * OpenAI-compatible gateways (e.g. `opencode.ai/zen/go`), which append cost/usage frames like
- * `{"choices":[],"x-opencode-type":"inference-cost","cost":"..."}` before and after
- * `data: [DONE]`. Those chunks are missing the `id`/`created`/`model`/`object` fields that Koog's
- * strict `OpenAIChatCompletionStreamResponse` serializer requires, so the stock
- * [OpenAILLMClient.decodeStreamingResponse] throws `MissingFieldException`. Because that decode
- * happens per-chunk inside the SSE loop (see `AbstractOpenAILLMClient.executeStreaming`), the
- * exception aborts the whole stream AFTER the real text/tool-call frames were emitted but BEFORE
- * Koog flushes its terminal `End` frame — silently discarding the turn's tool calls.
+ * [OpenAILLMClient] that tolerates the non-standard SSE chunks some OpenAI-compatible gateways
+ * (e.g. `opencode.ai/zen/go`) send around `data: [DONE]`, such as
+ * `{"choices":[],"x-opencode-type":"inference-cost","cost":"..."}`. They lack the fields Koog's
+ * strict `OpenAIChatCompletionStreamResponse` requires, and the stock
+ * [OpenAILLMClient.decodeStreamingResponse] throws on them inside the SSE loop: after the turn's
+ * text and tool calls were emitted but before Koog's terminal `End` frame, so the tool calls are
+ * silently lost.
  *
- * Seam: in Koog 1.1.1, `OpenAILLMClient` is a non-final `public` class and
- * `decodeStreamingResponse(data: String): OpenAIChatCompletionStreamResponse` is `protected`
- * (declared abstract on `AbstractOpenAILLMClient`, overridden concretely here). This override is
- * the cleanest seam (no reflection, no flow-wrapping hacks). Koog's `getJson()` is module-internal
- * so unusable here; a plain lenient [Json] is enough for the pre-decode `choices` inspection (we
- * only read one array field). Everything used here is Koog multiplatform API, so this compiles for
- * both the desktop and android targets.
- *
- * Strategy: a chunk carrying no usable `choices` cannot produce any [ai.koog.prompt.streaming.StreamFrame]
- * (Koog's `processStreamingResponse` uses `choices.firstOrNull()` and skips the chunk when it is
- * empty), so instead of decoding it strictly we short-circuit and return a benign, well-formed
- * empty-choices response. As a belt-and-braces fallback we also swallow a strict-decode failure the
- * same way, so any other malformed-but-choiceless chunk cannot abort the stream either.
+ * A chunk with no `choices` cannot produce a [ai.koog.prompt.streaming.StreamFrame] (Koog skips
+ * it), so it decodes to a well-formed empty-choices response instead, and so does any chunk that
+ * fails the strict decode. The override uses only Koog's multiplatform API (`decodeStreamingResponse`
+ * is `protected` in Koog 1.1.1); Koog's own `Json` is module-internal, so a lenient one reads the
+ * `choices` field.
  */
 internal class TolerantOpenAILLMClient(
     apiKey: String,
@@ -55,16 +45,11 @@ internal class TolerantOpenAILLMClient(
      * The same tolerance for the Responses API, where the gateway appends its trailer as an SSE
      * `event: ping` carrying a cost (`{"type":"ping","cost":"0"}`) AFTER `response.completed`.
      *
-     * The [decodeStreamingResponse] seam above does not reach it: Koog 1.1.1 decodes Responses
-     * events in a `private` `executeResponsesStreaming`, against a `protected final` `json` and a
-     * closed `OpenAIStreamEvent` polymorphic scope with no unknown-event fallback (unchanged in
-     * 1.2.0), so there is nothing to override per-chunk. What *is* overridable is the whole flow.
-     *
-     * Once Koog has emitted its terminal [StreamFrame.End] the turn is complete — every text delta
-     * and tool call has already been handed to the caller (verified against a captured gateway
-     * stream in `ZenGoResponsesStreamTest`), so a failure to parse whatever the gateway says next
-     * describes nothing the caller still needs. Before End, a failure is real and still propagates:
-     * a truncated turn must not be mistaken for a finished one.
+     * Koog 1.1.1 decodes Responses events privately, with no unknown-event fallback, so only the
+     * whole flow can be overridden. Once Koog has emitted its terminal [StreamFrame.End], every
+     * text delta and tool call has reached the caller (`ZenGoResponsesStreamTest` checks this
+     * against a captured gateway stream), so a parse failure after it is dropped. Before End a
+     * failure still propagates: a truncated turn must not pass for a finished one.
      */
     override fun executeStreaming(
         prompt: Prompt,

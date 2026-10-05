@@ -9,16 +9,11 @@ package dev.npn.core.ai
  * that decision, so neither reads its toggle straight off [AiConfig].
  *
  * The answer is the user's own [AiConfig.ocrAuto] / [AiConfig.autoOnOcr] toggles, and only while
- * the endpoint is configured — an unconfigured endpoint spends nothing, whatever the toggles say.
+ * the endpoint is configured. A run the user asked for (a queued edit run, "OCR with AI" on one
+ * document) does not consult it on the device it was asked on; a replica that syncs the resulting
+ * engine pin was asked nothing, so there it is unattended work like any other.
  *
- * Deliberately *only* the unattended question. Whether the endpoint can be called at all
- * ([AiConfig.configured]) gates every AI feature and is asked separately; a user-requested run
- * (a queued edit run, "OCR with AI" on one document) is a decision someone made and does not
- * consult this policy — on the device it was made on. Another replica that syncs the resulting
- * engine pin was asked nothing, so for it that document is unattended work like any other.
- *
- * Both answers are read per call, never captured, so flipping a setting takes effect on the
- * next document.
+ * Both answers are read per call, so flipping a setting takes effect on the next document.
  */
 class UnattendedAiPolicy(
     private val readConfig: suspend () -> AiConfig,
