@@ -538,7 +538,7 @@ private fun LibraryContent(
                 onValueChange = vm::onQueryChange,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
                 suggestions = suggestions,
-                onSuggestionSelected = vm::acceptSuggestion,
+                onPickSuggestion = vm::acceptSuggestion,
                 focusRequester = searchFocus,
                 onFocusChange = { searchFocused = it },
             )

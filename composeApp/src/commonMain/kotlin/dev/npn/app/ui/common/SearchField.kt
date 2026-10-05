@@ -1,16 +1,12 @@
 package dev.npn.app.ui.common
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
 import androidx.compose.material.icons.filled.Search
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -23,19 +19,17 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
-import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
-import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
-import androidx.compose.ui.semantics.selected
-import androidx.compose.ui.semantics.semantics
-import androidx.compose.ui.window.PopupProperties
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_clear_search
 import no_papers_needed.composeapp.generated.resources.common_search_documents
 import org.jetbrains.compose.resources.stringResource
 
+/**
+ * The library search box. Its [suggestions] come ready-made from the caller (the library works
+ * them out from the index as the query settles), so unlike [SuggestField] it filters nothing
+ * itself, and it reopens its menu whenever new ones arrive while it has focus. The menu and its
+ * keyboard handling are [SuggestField]'s.
+ */
 @Composable
 fun SearchField(
     value: String,
@@ -43,26 +37,27 @@ fun SearchField(
     modifier: Modifier = Modifier,
     placeholder: String? = null,
     suggestions: List<String> = emptyList(),
-    onSuggestionSelected: ((String) -> Unit)? = null,
+    onPickSuggestion: ((String) -> Unit)? = null,
     focusRequester: FocusRequester? = null,
     onFocusChange: ((Boolean) -> Unit)? = null,
 ) {
-    var expanded by remember { mutableStateOf(false) }
+    val menu = remember { SuggestionMenu() }
     var focused by remember { mutableStateOf(false) }
-    var selectedIndex by remember { mutableStateOf(0) }
-    val hasSuggestions = suggestions.isNotEmpty() && onSuggestionSelected != null
+    val hasSuggestions = suggestions.isNotEmpty() && onPickSuggestion != null
     LaunchedEffect(suggestions, focused) {
-        if (focused && hasSuggestions) {
-            selectedIndex = 0
-            expanded = true
-        }
+        if (focused && hasSuggestions) menu.reopen(true)
+    }
+    val shown = menu.open && focused && hasSuggestions
+    val pick: (String) -> Unit = { suggestion ->
+        menu.open = false
+        onPickSuggestion?.invoke(suggestion)
     }
     Box(modifier = modifier.fillMaxWidth()) {
         OutlinedTextField(
             value = value,
             onValueChange = {
                 onValueChange(it)
-                expanded = it.isNotBlank() && hasSuggestions
+                menu.open = it.isNotBlank() && hasSuggestions
             },
             modifier =
                 Modifier
@@ -71,32 +66,7 @@ fun SearchField(
                     .onFocusChanged {
                         focused = it.isFocused
                         onFocusChange?.invoke(it.isFocused)
-                    }.onPreviewKeyEvent { event ->
-                        if (!expanded || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
-                        when (event.key) {
-                            Key.DirectionDown -> {
-                                selectedIndex = (selectedIndex + 1).coerceAtMost(suggestions.lastIndex)
-                            }
-
-                            Key.DirectionUp -> {
-                                selectedIndex = (selectedIndex - 1).coerceAtLeast(0)
-                            }
-
-                            Key.Enter -> {
-                                suggestions.getOrNull(selectedIndex)?.let { onSuggestionSelected?.invoke(it) }
-                                expanded = false
-                            }
-
-                            Key.Escape -> {
-                                expanded = false
-                            }
-
-                            else -> {
-                                return@onPreviewKeyEvent false
-                            }
-                        }
-                        true
-                    },
+                    }.suggestionKeys(menu, shown, suggestions, pick),
             singleLine = true,
             placeholder = { Text(placeholder ?: stringResource(Res.string.common_search_documents)) },
             leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null) },
@@ -112,48 +82,12 @@ fun SearchField(
             },
         )
         if (hasSuggestions) {
-            SearchSuggestions(
+            SuggestionDropdown(
+                expanded = shown,
                 suggestions = suggestions,
-                selectedIndex = selectedIndex,
-                expanded = expanded && focused,
-                onDismiss = { expanded = false },
-                onSelect = {
-                    expanded = false
-                    onSuggestionSelected(it)
-                },
-            )
-        }
-    }
-}
-
-/** Search completions with a visible and semantic active row for keyboard navigation. */
-@Composable
-private fun SearchSuggestions(
-    suggestions: List<String>,
-    selectedIndex: Int,
-    expanded: Boolean,
-    onDismiss: () -> Unit,
-    onSelect: (String) -> Unit,
-) {
-    DropdownMenu(
-        expanded = expanded,
-        onDismissRequest = onDismiss,
-        properties = PopupProperties(focusable = false),
-    ) {
-        suggestions.forEachIndexed { index, suggestion ->
-            val active = index == selectedIndex
-            DropdownMenuItem(
-                text = { Text(suggestion) },
-                modifier =
-                    Modifier
-                        .then(
-                            if (active) {
-                                Modifier.background(MaterialTheme.colorScheme.primaryContainer)
-                            } else {
-                                Modifier
-                            },
-                        ).semantics { selected = active },
-                onClick = { onSelect(suggestion) },
+                active = menu.active,
+                onDismiss = { menu.open = false },
+                onPick = pick,
             )
         }
     }

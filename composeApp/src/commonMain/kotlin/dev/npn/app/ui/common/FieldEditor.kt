@@ -1,15 +1,11 @@
 package dev.npn.app.ui.common
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.CalendarToday
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
@@ -24,7 +20,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.window.PopupProperties
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldLocale
 import dev.npn.core.model.FieldParse
@@ -41,7 +36,6 @@ import no_papers_needed.composeapp.generated.resources.common_field_type_long_te
 import no_papers_needed.composeapp.generated.resources.common_field_type_number
 import no_papers_needed.composeapp.generated.resources.common_field_type_text
 import no_papers_needed.composeapp.generated.resources.detail_iso_date_template
-import no_papers_needed.composeapp.generated.resources.ux_show_suggestions
 import org.jetbrains.compose.resources.stringResource
 
 /** The [FieldLocale] for the app language in effect, for number entry and display. */
@@ -75,7 +69,7 @@ fun FieldEditor(
 ) {
     when (def.type) {
         FieldType.TEXT -> {
-            SuggestField(def.label, value.orEmpty(), suggestions, def.hint, placeholder, modifier, onCommit)
+            TextValueField(def.label, value.orEmpty(), suggestions, def.hint, placeholder, modifier, onCommit)
         }
 
         FieldType.LONG_TEXT -> {
@@ -141,8 +135,9 @@ fun CommitTextField(
     )
 }
 
+/** A text value with the values other documents hold on offer. Keystrokes stay local; see [rememberFieldText]. */
 @Composable
-private fun SuggestField(
+private fun TextValueField(
     label: String,
     initial: String,
     suggestions: List<String>,
@@ -152,60 +147,18 @@ private fun SuggestField(
     onCommit: (String) -> Unit,
 ) {
     var text by rememberFieldText(initial)
-    var expanded by remember { mutableStateOf(false) }
-    val filtered = remember(text, suggestions) { suggestionsFor(text, suggestions) }
-    Box(modifier) {
-        OutlinedTextField(
-            value = text,
-            onValueChange = {
-                text = it
-                onCommit(it)
-                // Match against the value just typed: [filtered] still describes the previous one.
-                expanded = it.isNotBlank() && suggestionsFor(it, suggestions).isNotEmpty()
-            },
-            label = { Text(label) },
-            placeholder = placeholder?.let { { Text(it, maxLines = 1) } },
-            supportingText = hint?.let { { Text(it) } },
-            singleLine = true,
-            trailingIcon = {
-                if (suggestions.isNotEmpty()) {
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(
-                            Icons.Filled.ArrowDropDown,
-                            contentDescription = stringResource(Res.string.ux_show_suggestions),
-                        )
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        DropdownMenu(
-            expanded = expanded && filtered.isNotEmpty(),
-            onDismissRequest = { expanded = false },
-            properties = PopupProperties(focusable = false),
-        ) {
-            filtered.forEach { s ->
-                DropdownMenuItem(
-                    text = { Text(s) },
-                    onClick = {
-                        expanded = false
-                        text = s
-                        onCommit(s)
-                    },
-                )
-            }
-        }
-    }
-}
-
-/** Existing values worth offering for [text]; an exact match offers nothing (it is already typed). */
-private fun suggestionsFor(
-    text: String,
-    suggestions: List<String>,
-): List<String> {
-    val query = text.trim()
-    if (query.isEmpty()) return suggestions.take(MAX_INLINE_SUGGESTIONS)
-    return suggestions.filter { it.contains(query, ignoreCase = true) && it != query }.take(MAX_INLINE_SUGGESTIONS)
+    SuggestField(
+        value = text,
+        onValueChange = {
+            text = it
+            onCommit(it)
+        },
+        suggestions = suggestions,
+        label = label,
+        modifier = modifier,
+        placeholder = placeholder,
+        supportingText = hint,
+    )
 }
 
 @Composable

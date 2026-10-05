@@ -3,17 +3,12 @@
 package dev.npn.app.ui.common
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
@@ -21,9 +16,6 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.InputChip
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -47,8 +39,8 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Inline tag editor: current tags as removable chips plus an add field with autocomplete over
- * [allTagNames]. Tag paths are dot-separated hierarchical namespaces (e.g. "finance.invoices");
- * suggestions match anywhere in the path, case-insensitive.
+ * [allTagNames] ([SuggestField]). Tag paths are dot-separated hierarchical namespaces (e.g.
+ * "finance.invoices"); suggestions match anywhere in the path, case-insensitive.
  *
  * Tags are created here, on the document, simply by typing a new name. When [onAddWithStyle] is
  * provided, a brand-new name additionally offers a "create with color" path so the style can be
@@ -69,17 +61,9 @@ fun TagEditor(
     var styleFor by rememberSaveable { mutableStateOf<String?>(null) }
     val addTagLabel = stringResource(Res.string.common_add_tag)
 
-    val suggestions =
-        remember(input, allTagNames, tags) {
-            val q = input.trim()
-            if (q.isEmpty()) {
-                emptyList()
-            } else {
-                allTagNames
-                    .filter { it !in tags && it.contains(q, ignoreCase = true) }
-                    .take(MAX_INLINE_SUGGESTIONS)
-            }
-        }
+    val candidates = remember(allTagNames, tags) { allTagNames.filter { it !in tags } }
+    val trimmed = input.trim()
+    val brandNew = trimmed.isNotEmpty() && trimmed !in allTagNames
 
     Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(8.dp)) {
         if (tags.isNotEmpty()) {
@@ -98,33 +82,37 @@ fun TagEditor(
             }
         }
 
-        OutlinedTextField(
+        SuggestField(
             value = input,
             onValueChange = { input = it },
-            label = { Text(addTagLabel) },
-            singleLine = true,
-            modifier = Modifier.fillMaxWidth(),
-            trailingIcon = {
-                if (input.isNotBlank()) {
-                    IconButton(onClick = {
-                        onAdd(input.trim())
-                        input = ""
-                    }) { Icon(Icons.Filled.Add, contentDescription = addTagLabel) }
-                }
-            },
-        )
-
-        TagInputSuggestions(
-            input = input,
-            suggestions = suggestions,
+            suggestions = candidates,
+            label = addTagLabel,
             onPick = { name ->
                 onAdd(name)
                 input = ""
             },
+            showSuggestionsButton = false,
+            trailingIcon =
+                if (input.isNotBlank()) {
+                    {
+                        IconButton(onClick = {
+                            onAdd(trimmed)
+                            input = ""
+                        }) { Icon(Icons.Filled.Add, contentDescription = addTagLabel) }
+                    }
+                } else {
+                    null
+                },
         )
 
-        val trimmed = input.trim()
-        if (onAddWithStyle != null && trimmed.isNotEmpty() && trimmed !in allTagNames) {
+        // A name nothing matches is created by adding it; say so, and offer the colour path.
+        if (brandNew && suggestionsFor(input, candidates).isEmpty()) {
+            HelpText(
+                stringResource(Res.string.common_create_tag_hint, trimmed),
+                modifier = Modifier.padding(horizontal = 4.dp),
+            )
+        }
+        if (onAddWithStyle != null && brandNew) {
             TextButton(onClick = { styleFor = trimmed }) {
                 Text(stringResource(Res.string.common_create_tag_with_color, trimmed))
             }
@@ -143,41 +131,6 @@ fun TagEditor(
                 input = ""
             },
             onDismiss = { styleFor = null },
-        )
-    }
-}
-
-/** Autocomplete list under the add field, or the create hint while the name is brand-new. */
-@Composable
-private fun TagInputSuggestions(
-    input: String,
-    suggestions: List<String>,
-    onPick: (String) -> Unit,
-) {
-    if (suggestions.isNotEmpty()) {
-        Surface(
-            tonalElevation = 2.dp,
-            shape = MaterialTheme.shapes.small,
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            LazyColumn(Modifier.heightIn(max = 160.dp)) {
-                items(suggestions, key = { it }) { name ->
-                    Text(
-                        text = name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier =
-                            Modifier
-                                .fillMaxWidth()
-                                .clickable { onPick(name) }
-                                .padding(horizontal = 12.dp, vertical = 10.dp),
-                    )
-                }
-            }
-        }
-    } else if (input.isNotBlank()) {
-        HelpText(
-            stringResource(Res.string.common_create_tag_hint, input.trim()),
-            modifier = Modifier.padding(horizontal = 4.dp),
         )
     }
 }

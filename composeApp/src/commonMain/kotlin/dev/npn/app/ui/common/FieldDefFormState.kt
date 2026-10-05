@@ -1,21 +1,12 @@
 package dev.npn.app.ui.common
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowDropDown
-import androidx.compose.material3.DropdownMenu
-import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
@@ -159,41 +150,15 @@ private fun KeyField(
     suggestions: List<String>,
     onChange: (String) -> Unit,
 ) {
-    var expanded by remember { mutableStateOf(false) }
-    val matching = suggestions.filter { key.isBlank() || it.contains(key, ignoreCase = true) }
-    Box {
-        OutlinedTextField(
-            value = key,
-            onValueChange = {
-                onChange(it)
-                expanded = matching.isNotEmpty()
-            },
-            label = { Text(stringResource(Res.string.detail_field_key)) },
-            enabled = enabled,
-            isError = taken,
-            supportingText = if (taken) ({ Text(stringResource(Res.string.detail_field_key_taken)) }) else null,
-            singleLine = true,
-            trailingIcon = {
-                if (enabled && suggestions.isNotEmpty()) {
-                    IconButton(onClick = { expanded = !expanded }) {
-                        Icon(Icons.Filled.ArrowDropDown, contentDescription = null)
-                    }
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-        )
-        DropdownMenu(expanded = expanded && matching.isNotEmpty(), onDismissRequest = { expanded = false }) {
-            matching.forEach { suggestion ->
-                DropdownMenuItem(
-                    text = { Text(suggestion) },
-                    onClick = {
-                        expanded = false
-                        onChange(suggestion)
-                    },
-                )
-            }
-        }
-    }
+    SuggestField(
+        value = key,
+        onValueChange = onChange,
+        suggestions = suggestions,
+        label = stringResource(Res.string.detail_field_key),
+        enabled = enabled,
+        isError = taken,
+        supportingText = if (taken) stringResource(Res.string.detail_field_key_taken) else null,
+    )
 }
 
 @Composable
