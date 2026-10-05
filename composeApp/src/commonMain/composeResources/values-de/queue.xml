@@ -11,6 +11,7 @@
     <string name="queue_edit_run_progress">Vorschläge für %1$d von %2$d Dokumenten</string>
     <string name="queue_edit_run_review">Prüfen</string>
     <string name="queue_edit_run_discard">Verwerfen</string>
+    <string name="queue_edit_run_discard_failed">KI-Bearbeitung konnte nicht verworfen werden: %1$s</string>
 
     <plurals name="queue_edit_run_documents">
         <item quantity="one">KI-Bearbeitung von %1$d Dokument</item>

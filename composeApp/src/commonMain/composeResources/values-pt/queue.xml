@@ -14,6 +14,7 @@
     <string name="queue_edit_run_progress">%1$d de %2$d documentos com sugestões</string>
     <string name="queue_edit_run_review">Revisar</string>
     <string name="queue_edit_run_discard">Descartar</string>
+    <string name="queue_edit_run_discard_failed">Não foi possível descartar a edição com IA: %1$s</string>
 
     <plurals name="queue_edit_run_documents">
         <item quantity="one">Edição com IA de %1$d documento</item>

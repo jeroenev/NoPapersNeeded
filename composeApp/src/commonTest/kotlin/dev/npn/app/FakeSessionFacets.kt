@@ -259,7 +259,11 @@ class FakeAiEditQueue : AiEditQueueFacade {
         return reviews[jobId]
     }
 
+    /** Thrown by [discardEditRun] when set. */
+    var discardFailure: Throwable? = null
+
     override suspend fun discardEditRun(jobId: String) {
+        discardFailure?.let { throw it }
         discarded += jobId
     }
 }

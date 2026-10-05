@@ -14,6 +14,7 @@
     <string name="queue_edit_run_progress">%1$d of %2$d documents suggested</string>
     <string name="queue_edit_run_review">Review</string>
     <string name="queue_edit_run_discard">Discard</string>
+    <string name="queue_edit_run_discard_failed">Could not discard the AI edit: %1$s</string>
 
     <plurals name="queue_edit_run_documents">
         <item quantity="one">AI edit of %1$d document</item>

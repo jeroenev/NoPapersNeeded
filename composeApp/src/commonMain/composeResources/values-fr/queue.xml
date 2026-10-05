@@ -11,6 +11,7 @@
     <string name="queue_edit_run_progress">%1$d sur %2$d documents traités</string>
     <string name="queue_edit_run_review">Vérifier</string>
     <string name="queue_edit_run_discard">Abandonner</string>
+    <string name="queue_edit_run_discard_failed">Impossible d’abandonner la modification IA : %1$s</string>
 
     <plurals name="queue_edit_run_documents">
         <item quantity="one">Modification IA de %1$d document</item>

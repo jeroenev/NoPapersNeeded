@@ -11,6 +11,7 @@
     <string name="queue_edit_run_progress">%1$d van %2$d documenten voorgesteld</string>
     <string name="queue_edit_run_review">Nakijken</string>
     <string name="queue_edit_run_discard">Weggooien</string>
+    <string name="queue_edit_run_discard_failed">De AI-bewerking kon niet worden weggegooid: %1$s</string>
 
     <plurals name="queue_edit_run_documents">
         <item quantity="one">AI-bewerking van %1$d document</item>
