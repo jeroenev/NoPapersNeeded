@@ -10,7 +10,6 @@
     <string name="library_sort">Ordenar</string>
     <string name="library_sort_name">Nome</string>
     <string name="library_sort_added">Adicionado</string>
-    <string name="library_sort_doc_date">Data do documento</string>
     <string name="library_sort_size">Tamanho</string>
     <string name="library_sort_ascending">Crescente</string>
     <string name="library_sort_descending">Decrescente</string>

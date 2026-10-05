@@ -9,7 +9,6 @@
     <string name="common_retry">Wiederholen</string>
     <string name="common_number_out_of_range">Gib eine Zahl von %1$d bis %2$d ein</string>
     <string name="common_save">Speichern</string>
-    <string name="common_try_again">Erneut versuchen</string>
     <string name="common_show_technical_details">Technische Details anzeigen</string>
     <string name="common_hide_technical_details">Technische Details ausblenden</string>
     <string name="common_search_documents">Dokumente durchsuchen</string>

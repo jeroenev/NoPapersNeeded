@@ -62,7 +62,6 @@
     <string name="ai_edit_remove_tags_label">Quitar</string>
     <string name="ai_edit_add_tag">Añadir etiqueta</string>
     <string name="ai_edit_remove_tag">Quitar etiqueta</string>
-    <string name="ai_edit_options">Opciones</string>
     <string name="ai_edit_advanced">Opciones avanzadas</string>
     <string name="ai_edit_advanced_help">Límites por ejecución. Los valores predeterminados vienen de Ajustes.</string>
     <string name="ai_edit_tags_per_document">Etiquetas por documento</string>

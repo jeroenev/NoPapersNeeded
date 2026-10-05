@@ -62,7 +62,6 @@
     <string name="ai_edit_remove_tags_label">Remove</string>
     <string name="ai_edit_add_tag">Add tag</string>
     <string name="ai_edit_remove_tag">Remove tag</string>
-    <string name="ai_edit_options">Options</string>
     <string name="ai_edit_advanced">Advanced options</string>
     <string name="ai_edit_advanced_help">Per-run limits. The defaults come from Settings.</string>
     <string name="ai_edit_tags_per_document">Tags per document</string>

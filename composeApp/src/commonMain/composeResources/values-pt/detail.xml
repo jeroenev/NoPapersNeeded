@@ -21,7 +21,6 @@
     <string name="detail_document_position">%1$d de %2$d</string>
     <string name="detail_previous_document">Documento anterior</string>
     <string name="detail_next_document">Próximo documento</string>
-    <string name="detail_mark_unreviewed">Marcar como não revisado</string>
     <string name="detail_mark_reviewed">Marcar como revisado</string>
     <string name="detail_export_baked_copy">Exportar PDF com etiquetas e detalhes</string>
     <string name="detail_share_baked_copy">Compartilhar PDF com etiquetas e detalhes</string>
@@ -43,14 +42,9 @@
     <string name="detail_tab_text">Texto</string>
     <string name="detail_tab_history">Histórico</string>
     <string name="detail_mark_needs_review">Marcar para revisão</string>
-    <string name="detail_title">Título</string>
-    <string name="detail_note">Nota</string>
     <string name="detail_unsaved_changes">Alterações não salvas</string>
     <string name="detail_saving">Salvando...</string>
     <string name="detail_saved">Salvo</string>
-    <string name="detail_correspondent">Correspondente</string>
-    <string name="detail_document_type">Tipo de documento</string>
-    <string name="detail_document_date">Data do documento (aaaa-MM-dd)</string>
     <string name="detail_tags">Etiquetas</string>
     <string name="detail_file">Arquivo</string>
     <string name="detail_location">Local</string>
@@ -62,7 +56,6 @@
     <string name="detail_suggest_metadata">Sugerir detalhes</string>
     <string name="detail_suggesting_tags">Sugerindo etiquetas…</string>
     <string name="detail_suggesting_metadata">Sugerindo detalhes…</string>
-    <string name="detail_document_date_plain">Data do documento</string>
     <string name="detail_use_suggestion">Usar sugestão para %1$s</string>
     <string name="detail_dismiss_suggestion">Dispensar sugestão para %1$s</string>
     <string name="detail_dismiss_all">Dispensar tudo</string>
@@ -73,10 +66,8 @@
     <string name="detail_search_text_engine">Origem do texto para a busca</string>
     <string name="detail_automatic_engine">Automática (a melhor disponível)</string>
     <string name="detail_engine_source">%1$s · %2$s</string>
-    <string name="detail_fields">Campos</string>
     <string name="detail_remove_field">Remover campo %1$s</string>
     <string name="detail_new_field">Novo campo</string>
-    <string name="detail_value">Valor</string>
     <string name="detail_add_field">Adicionar campo</string>
     <string name="detail_orphan_fields">Fora da lista de campos</string>
     <string name="detail_add_to_fields">Adicionar aos campos</string>

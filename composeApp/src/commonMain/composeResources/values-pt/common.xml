@@ -9,7 +9,6 @@
     <string name="common_retry">Tentar de novo</string>
     <string name="common_number_out_of_range">Digite um número de %1$d a %2$d</string>
     <string name="common_save">Salvar</string>
-    <string name="common_try_again">Tentar de novo</string>
     <string name="common_show_technical_details">Mostrar detalhes técnicos</string>
     <string name="common_hide_technical_details">Ocultar detalhes técnicos</string>
     <string name="common_search_documents">Buscar documentos</string>

@@ -21,7 +21,6 @@
     <string name="detail_document_position">%1$d van %2$d</string>
     <string name="detail_previous_document">Vorig document</string>
     <string name="detail_next_document">Volgend document</string>
-    <string name="detail_mark_unreviewed">Als niet beoordeeld markeren</string>
     <string name="detail_mark_reviewed">Als beoordeeld markeren</string>
     <string name="detail_export_baked_copy">Pdf met tags en details exporteren</string>
     <string name="detail_share_baked_copy">Pdf met tags en details delen</string>
@@ -43,14 +42,9 @@
     <string name="detail_tab_text">Tekst</string>
     <string name="detail_tab_history">Geschiedenis</string>
     <string name="detail_mark_needs_review">Markeren als te beoordelen</string>
-    <string name="detail_title">Titel</string>
-    <string name="detail_note">Notitie</string>
     <string name="detail_unsaved_changes">Niet-opgeslagen wijzigingen</string>
     <string name="detail_saving">Opslaan...</string>
     <string name="detail_saved">Opgeslagen</string>
-    <string name="detail_correspondent">Correspondent</string>
-    <string name="detail_document_type">Documenttype</string>
-    <string name="detail_document_date">Documentdatum (yyyy-MM-dd)</string>
     <string name="detail_tags">Tags</string>
     <string name="detail_file">Bestand</string>
     <string name="detail_location">Locatie</string>
@@ -62,7 +56,6 @@
     <string name="detail_suggest_metadata">Details voorstellen</string>
     <string name="detail_suggesting_tags">Tags voorstellen…</string>
     <string name="detail_suggesting_metadata">Details voorstellen…</string>
-    <string name="detail_document_date_plain">Documentdatum</string>
     <string name="detail_use_suggestion">Voorgestelde %1$s gebruiken</string>
     <string name="detail_dismiss_suggestion">Voorgestelde %1$s negeren</string>
     <string name="detail_dismiss_all">Alles negeren</string>
@@ -73,10 +66,8 @@
     <string name="detail_search_text_engine">Tekstbron voor zoeken</string>
     <string name="detail_automatic_engine">Automatisch (beste beschikbaar)</string>
     <string name="detail_engine_source">%1$s · %2$s</string>
-    <string name="detail_fields">Velden</string>
     <string name="detail_remove_field">Veld %1$s verwijderen</string>
     <string name="detail_new_field">Nieuw veld</string>
-    <string name="detail_value">Waarde</string>
     <string name="detail_add_field">Veld toevoegen</string>
     <string name="detail_orphan_fields">Niet in de veldenlijst</string>
     <string name="detail_add_to_fields">Aan velden toevoegen</string>

@@ -80,8 +80,6 @@ import no_papers_needed.composeapp.generated.resources.detail_added
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_all
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_suggestion
 import no_papers_needed.composeapp.generated.resources.detail_dismiss_tag
-import no_papers_needed.composeapp.generated.resources.detail_document_date
-import no_papers_needed.composeapp.generated.resources.detail_document_type
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable
 import no_papers_needed.composeapp.generated.resources.detail_document_unavailable_hint
 import no_papers_needed.composeapp.generated.resources.detail_file
@@ -89,7 +87,6 @@ import no_papers_needed.composeapp.generated.resources.detail_iso_date_template
 import no_papers_needed.composeapp.generated.resources.detail_location
 import no_papers_needed.composeapp.generated.resources.detail_mark_needs_review
 import no_papers_needed.composeapp.generated.resources.detail_mark_reviewed
-import no_papers_needed.composeapp.generated.resources.detail_note
 import no_papers_needed.composeapp.generated.resources.detail_ocr
 import no_papers_needed.composeapp.generated.resources.detail_pages
 import no_papers_needed.composeapp.generated.resources.detail_suggest_metadata
@@ -101,7 +98,6 @@ import no_papers_needed.composeapp.generated.resources.detail_tab_history
 import no_papers_needed.composeapp.generated.resources.detail_tab_preview
 import no_papers_needed.composeapp.generated.resources.detail_tab_text
 import no_papers_needed.composeapp.generated.resources.detail_tags
-import no_papers_needed.composeapp.generated.resources.detail_title
 import no_papers_needed.composeapp.generated.resources.detail_title_hint
 import no_papers_needed.composeapp.generated.resources.detail_use_suggestion
 import no_papers_needed.composeapp.generated.resources.ux_show_suggestions

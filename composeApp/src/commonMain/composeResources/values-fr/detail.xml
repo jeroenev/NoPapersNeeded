@@ -21,7 +21,6 @@
     <string name="detail_document_position">%1$d sur %2$d</string>
     <string name="detail_previous_document">Document précédent</string>
     <string name="detail_next_document">Document suivant</string>
-    <string name="detail_mark_unreviewed">Marquer comme non vérifié</string>
     <string name="detail_mark_reviewed">Marquer comme vérifié</string>
     <string name="detail_export_baked_copy">Exporter avec étiquettes et infos</string>
     <string name="detail_share_baked_copy">Partager avec étiquettes et infos</string>
@@ -43,14 +42,9 @@
     <string name="detail_tab_text">Texte</string>
     <string name="detail_tab_history">Historique</string>
     <string name="detail_mark_needs_review">Marquer comme à vérifier</string>
-    <string name="detail_title">Titre</string>
-    <string name="detail_note">Note</string>
     <string name="detail_unsaved_changes">Modifications non enregistrées</string>
     <string name="detail_saving">Enregistrement…</string>
     <string name="detail_saved">Enregistré</string>
-    <string name="detail_correspondent">Correspondant</string>
-    <string name="detail_document_type">Type de document</string>
-    <string name="detail_document_date">Date du document (aaaa-MM-jj)</string>
     <string name="detail_tags">Étiquettes</string>
     <string name="detail_file">Fichier</string>
     <string name="detail_location">Emplacement</string>
@@ -62,7 +56,6 @@
     <string name="detail_suggest_metadata">Suggérer des informations</string>
     <string name="detail_suggesting_tags">Recherche d’étiquettes…</string>
     <string name="detail_suggesting_metadata">Recherche d’informations…</string>
-    <string name="detail_document_date_plain">Date du document</string>
     <string name="detail_use_suggestion">Utiliser la suggestion : %1$s</string>
     <string name="detail_dismiss_suggestion">Ignorer la suggestion : %1$s</string>
     <string name="detail_dismiss_all">Tout ignorer</string>
@@ -73,10 +66,8 @@
     <string name="detail_search_text_engine">Source du texte pour la recherche</string>
     <string name="detail_automatic_engine">Automatique (la meilleure disponible)</string>
     <string name="detail_engine_source">%1$s · %2$s</string>
-    <string name="detail_fields">Champs</string>
     <string name="detail_remove_field">Retirer le champ %1$s</string>
     <string name="detail_new_field">Nouveau champ</string>
-    <string name="detail_value">Valeur</string>
     <string name="detail_add_field">Ajouter un champ</string>
     <string name="detail_orphan_fields">Absents de la liste des champs</string>
     <string name="detail_add_to_fields">Ajouter aux champs</string>

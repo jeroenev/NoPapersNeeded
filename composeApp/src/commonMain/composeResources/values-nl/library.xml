@@ -10,7 +10,6 @@
     <string name="library_sort">Sorteren</string>
     <string name="library_sort_name">Naam</string>
     <string name="library_sort_added">Toegevoegd</string>
-    <string name="library_sort_doc_date">Documentdatum</string>
     <string name="library_sort_size">Grootte</string>
     <string name="library_sort_ascending">Oplopend</string>
     <string name="library_sort_descending">Aflopend</string>

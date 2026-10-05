@@ -62,7 +62,6 @@
     <string name="ai_edit_remove_tags_label">Entfernen</string>
     <string name="ai_edit_add_tag">Tag hinzufügen</string>
     <string name="ai_edit_remove_tag">Tag entfernen</string>
-    <string name="ai_edit_options">Optionen</string>
     <string name="ai_edit_advanced">Erweiterte Optionen</string>
     <string name="ai_edit_advanced_help">Limits pro Durchlauf. Die Standardwerte stammen aus den Einstellungen.</string>
     <string name="ai_edit_tags_per_document">Tags pro Dokument</string>

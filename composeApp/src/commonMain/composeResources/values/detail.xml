@@ -21,7 +21,6 @@
     <string name="detail_document_position">%1$d of %2$d</string>
     <string name="detail_previous_document">Previous document</string>
     <string name="detail_next_document">Next document</string>
-    <string name="detail_mark_unreviewed">Mark unreviewed</string>
     <string name="detail_mark_reviewed">Mark reviewed</string>
     <string name="detail_export_baked_copy">Export PDF with tags and details</string>
     <string name="detail_share_baked_copy">Share PDF with tags and details</string>
@@ -43,14 +42,9 @@
     <string name="detail_tab_text">Text</string>
     <string name="detail_tab_history">History</string>
     <string name="detail_mark_needs_review">Mark needs review</string>
-    <string name="detail_title">Title</string>
-    <string name="detail_note">Note</string>
     <string name="detail_unsaved_changes">Unsaved changes</string>
     <string name="detail_saving">Saving...</string>
     <string name="detail_saved">Saved</string>
-    <string name="detail_correspondent">Correspondent</string>
-    <string name="detail_document_type">Document type</string>
-    <string name="detail_document_date">Document date (yyyy-MM-dd)</string>
     <string name="detail_iso_date_template" translatable="false">yyyy-MM-dd</string>
     <string name="detail_tags">Tags</string>
     <string name="detail_file">File</string>
@@ -63,7 +57,6 @@
     <string name="detail_suggest_metadata">Suggest details</string>
     <string name="detail_suggesting_tags">Suggesting tags…</string>
     <string name="detail_suggesting_metadata">Suggesting details…</string>
-    <string name="detail_document_date_plain">Document date</string>
     <string name="detail_use_suggestion">Use suggested %1$s</string>
     <string name="detail_dismiss_suggestion">Dismiss suggested %1$s</string>
     <string name="detail_dismiss_all">Dismiss all</string>
@@ -75,10 +68,8 @@
     <string name="detail_search_text_engine">Text source for search</string>
     <string name="detail_automatic_engine">Automatic (best available)</string>
     <string name="detail_engine_source">%1$s · %2$s</string>
-    <string name="detail_fields">Fields</string>
     <string name="detail_remove_field">Remove field %1$s</string>
     <string name="detail_new_field">New field</string>
-    <string name="detail_value">Value</string>
     <string name="detail_add_field">Add field</string>
     <string name="detail_orphan_fields">Not in the field list</string>
     <string name="detail_add_to_fields">Add to fields</string>

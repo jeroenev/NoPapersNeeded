@@ -9,7 +9,6 @@
     <string name="common_retry">Opnieuw proberen</string>
     <string name="common_number_out_of_range">Voer een getal van %1$d tot %2$d in</string>
     <string name="common_save">Opslaan</string>
-    <string name="common_try_again">Probeer opnieuw</string>
     <string name="common_show_technical_details">Technische details tonen</string>
     <string name="common_hide_technical_details">Technische details verbergen</string>
     <string name="common_search_documents">Documenten zoeken</string>
