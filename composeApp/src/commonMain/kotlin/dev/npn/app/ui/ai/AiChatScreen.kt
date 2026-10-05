@@ -1,5 +1,3 @@
-@file:OptIn(ExperimentalMaterial3Api::class)
-
 package dev.npn.app.ui.ai
 
 import androidx.compose.animation.AnimatedVisibility
@@ -20,7 +18,6 @@ import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.automirrored.outlined.Label
@@ -37,7 +34,6 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
-import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
@@ -48,7 +44,6 @@ import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -71,8 +66,10 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.BackTopBar
 import dev.npn.app.ui.common.ExpandIcon
 import dev.npn.app.ui.common.SnackbarMessages
+import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.expander
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
@@ -102,7 +99,6 @@ import no_papers_needed.composeapp.generated.resources.ai_tool_searched_document
 import no_papers_needed.composeapp.generated.resources.ai_tool_searched_file_names
 import no_papers_needed.composeapp.generated.resources.ai_unknown_value
 import no_papers_needed.composeapp.generated.resources.ai_unspecified_document
-import no_papers_needed.composeapp.generated.resources.common_back
 import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import org.jetbrains.compose.resources.stringResource
 
@@ -149,18 +145,21 @@ fun AiChatScreen(
         snackbarHost = { SnackbarHost(snackbar) },
         topBar = {
             AiChatTopBar(
+                title = chatTitle(ui.currentSessionId, historySessions),
                 clearEnabled = items.isNotEmpty() && !ui.busy,
                 newSessionEnabled = !ui.busy,
-                sessions = historySessions,
-                currentSessionId = ui.currentSessionId,
                 onBack = onBack,
                 onClear = vm::clear,
-                onAiEdit = onAiEdit,
-                showAiEdit = showAiEdit,
-                onSession = vm::switchSession,
                 onNewSession = vm::newSession,
-                onDeleteSession = vm::deleteSession,
-            )
+                onAiEdit = onAiEdit.takeIf { showAiEdit },
+            ) {
+                ChatHistoryMenu(
+                    sessions = historySessions,
+                    currentSessionId = ui.currentSessionId,
+                    onSession = vm::switchSession,
+                    onDeleteSession = vm::deleteSession,
+                )
+            }
         },
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
@@ -221,101 +220,96 @@ fun AiChatScreen(
     }
 }
 
+/** The assistant, or the open chat by its title; a chat is untitled until its first question names it. */
+@Composable
+private fun chatTitle(
+    currentSessionId: String?,
+    sessions: List<AiChatSession>,
+): String =
+    if (currentSessionId == null) {
+        stringResource(Res.string.ai_assistant_title)
+    } else {
+        sessions.firstOrNull { it.id == currentSessionId }?.title ?: stringResource(Res.string.ai_new_chat)
+    }
+
+/** Back, then the chat's actions; [historyMenu] sits between starting a chat and the AI edit hand-off. */
 @Composable
 private fun AiChatTopBar(
+    title: String,
     clearEnabled: Boolean,
     newSessionEnabled: Boolean,
-    sessions: List<AiChatSession>,
-    currentSessionId: String?,
     onBack: () -> Unit,
     onClear: () -> Unit,
-    onAiEdit: () -> Unit,
-    showAiEdit: Boolean,
-    onSession: (String) -> Unit,
     onNewSession: () -> Unit,
+    /** Hands off to the AI-edit page; null when that page is not offered. */
+    onAiEdit: (() -> Unit)?,
+    historyMenu: @Composable () -> Unit,
+) {
+    BackTopBar(title = title, onBack = onBack) {
+        TooltipIconButton(
+            icon = Icons.Outlined.Add,
+            label = stringResource(Res.string.ai_new_chat),
+            onClick = onNewSession,
+            enabled = newSessionEnabled,
+        )
+        historyMenu()
+        if (onAiEdit != null) {
+            TooltipIconButton(
+                icon = Icons.Outlined.AutoFixHigh,
+                label = stringResource(Res.string.library_ai_edit),
+                onClick = onAiEdit,
+            )
+        }
+        TooltipIconButton(
+            icon = Icons.Filled.DeleteSweep,
+            label = stringResource(Res.string.ai_clear_conversation),
+            onClick = onClear,
+            enabled = clearEnabled,
+        )
+    }
+}
+
+/** Past chats behind the history button: open one, or delete it. The open chat is in bold. */
+@Composable
+private fun ChatHistoryMenu(
+    sessions: List<AiChatSession>,
+    currentSessionId: String?,
+    onSession: (String) -> Unit,
     onDeleteSession: (String) -> Unit,
 ) {
-    var historyExpanded by remember { mutableStateOf(false) }
-    TopAppBar(
-        title = {
-            Text(
-                if (currentSessionId == null) {
-                    stringResource(Res.string.ai_assistant_title)
-                } else {
-                    // A session is untitled until its first question names it.
-                    sessions.firstOrNull { it.id == currentSessionId }?.title ?: stringResource(Res.string.ai_new_chat)
-                },
-                maxLines = 1,
-            )
-        },
-        navigationIcon = {
-            IconButton(onClick = onBack) {
-                Icon(
-                    Icons.AutoMirrored.Filled.ArrowBack,
-                    contentDescription = stringResource(Res.string.common_back),
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TooltipIconButton(
+            icon = Icons.Outlined.History,
+            label = stringResource(Res.string.ai_chat_history),
+            onClick = { expanded = true },
+        )
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            sessions.forEach { session ->
+                DropdownMenuItem(
+                    text = {
+                        Text(
+                            session.title ?: stringResource(Res.string.ai_new_chat),
+                            fontWeight = if (session.id == currentSessionId) FontWeight.Bold else null,
+                            maxLines = 1,
+                        )
+                    },
+                    onClick = {
+                        expanded = false
+                        onSession(session.id)
+                    },
+                    trailingIcon = {
+                        IconButton(onClick = {
+                            expanded = false
+                            onDeleteSession(session.id)
+                        }) {
+                            Icon(Icons.Outlined.Delete, contentDescription = stringResource(Res.string.ai_delete_chat))
+                        }
+                    },
                 )
             }
-        },
-        actions = {
-            IconButton(onClick = onNewSession, enabled = newSessionEnabled) {
-                Icon(
-                    Icons.Outlined.Add,
-                    contentDescription = stringResource(Res.string.ai_new_chat),
-                )
-            }
-            IconButton(onClick = { historyExpanded = true }) {
-                Icon(
-                    Icons.Outlined.History,
-                    contentDescription = stringResource(Res.string.ai_chat_history),
-                )
-            }
-            DropdownMenu(
-                expanded = historyExpanded,
-                onDismissRequest = { historyExpanded = false },
-            ) {
-                sessions.forEach { session ->
-                    DropdownMenuItem(
-                        text = {
-                            Text(
-                                session.title ?: stringResource(Res.string.ai_new_chat),
-                                fontWeight = if (session.id == currentSessionId) FontWeight.Bold else null,
-                                maxLines = 1,
-                            )
-                        },
-                        onClick = {
-                            historyExpanded = false
-                            onSession(session.id)
-                        },
-                        trailingIcon = {
-                            IconButton(onClick = {
-                                historyExpanded = false
-                                onDeleteSession(session.id)
-                            }) {
-                                Icon(
-                                    Icons.Outlined.Delete,
-                                    contentDescription = stringResource(Res.string.ai_delete_chat),
-                                )
-                            }
-                        },
-                    )
-                }
-            }
-            if (showAiEdit) {
-                IconButton(onClick = onAiEdit) {
-                    Icon(
-                        Icons.Outlined.AutoFixHigh,
-                        contentDescription = stringResource(Res.string.library_ai_edit),
-                    )
-                }
-            }
-            IconButton(onClick = onClear, enabled = clearEnabled) {
-                Icon(
-                    Icons.Filled.DeleteSweep,
-                    contentDescription = stringResource(Res.string.ai_clear_conversation),
-                )
-            }
-        },
-    )
+        }
+    }
 }
 
 private fun hasStreamingText(turns: List<TranscriptItem>): Boolean =
