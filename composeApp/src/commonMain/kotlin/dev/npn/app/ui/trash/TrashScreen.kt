@@ -3,7 +3,6 @@
 package dev.npn.app.ui.trash
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -14,7 +13,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.FileCopy
+import androidx.compose.material.icons.filled.FindInPage
 import androidx.compose.material.icons.filled.Restore
 import androidx.compose.material3.Card
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -340,9 +340,7 @@ private fun TrashList(
     onDeleteForever: (String) -> Unit,
 ) {
     if (items.isEmpty()) {
-        Box(Modifier.fillMaxSize()) {
-            EmptyState(icon = Icons.Filled.Delete, title = stringResource(Res.string.common_trash_empty))
-        }
+        EmptyState(icon = Icons.Filled.Delete, title = stringResource(Res.string.common_trash_empty))
         return
     }
     LazyColumn(
@@ -394,13 +392,11 @@ private fun DuplicatesList(
     onResolve: (docId: String, extraRelPath: String) -> Unit,
 ) {
     if (duplicates.isEmpty()) {
-        Box(Modifier.fillMaxSize()) {
-            EmptyState(
-                icon = Icons.Filled.Refresh,
-                title = stringResource(Res.string.common_trash_no_duplicates),
-                subtitle = stringResource(Res.string.common_trash_no_duplicates_subtitle),
-            )
-        }
+        EmptyState(
+            icon = Icons.Filled.FileCopy,
+            title = stringResource(Res.string.common_trash_no_duplicates),
+            subtitle = stringResource(Res.string.common_trash_no_duplicates_subtitle),
+        )
         return
     }
     LazyColumn(
@@ -438,12 +434,7 @@ private fun MissingList(
     onRelink: (oldDocId: String, newDocId: String) -> Unit,
 ) {
     if (missing.isEmpty()) {
-        Box(Modifier.fillMaxSize()) {
-            EmptyState(
-                icon = Icons.Filled.Refresh,
-                title = stringResource(Res.string.common_trash_no_missing_files),
-            )
-        }
+        EmptyState(icon = Icons.Filled.FindInPage, title = stringResource(Res.string.common_trash_no_missing_files))
         return
     }
     val relinkByOld = remember(relinks) { relinks.groupBy { it.oldDocId } }

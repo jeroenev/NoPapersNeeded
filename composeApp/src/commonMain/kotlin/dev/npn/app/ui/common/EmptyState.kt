@@ -16,14 +16,19 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 
+/**
+ * What a screen or tab shows while it has nothing to list: an [icon] for the kind of thing that is
+ * missing, a [title], optional [subtitle] and one optional action. It fills the space it is given,
+ * so it needs no container of its own.
+ */
 @Composable
 fun EmptyState(
     icon: ImageVector,
     title: String,
+    modifier: Modifier = Modifier,
     subtitle: String? = null,
     actionLabel: String? = null,
     onAction: (() -> Unit)? = null,
-    modifier: Modifier = Modifier,
 ) {
     Column(
         modifier = modifier.fillMaxSize().padding(32.dp),

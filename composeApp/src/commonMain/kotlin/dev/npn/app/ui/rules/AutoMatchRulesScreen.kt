@@ -1,7 +1,6 @@
 package dev.npn.app.ui.rules
 
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -12,6 +11,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.Rule
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Edit
@@ -164,13 +164,12 @@ private fun AutoMatchRulesScaffold(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         if (rules.isEmpty()) {
-            Box(Modifier.fillMaxSize().padding(padding)) {
-                EmptyState(
-                    icon = Icons.Filled.Add,
-                    title = stringResource(Res.string.common_rules_empty_title),
-                    subtitle = stringResource(Res.string.common_rules_empty_subtitle),
-                )
-            }
+            EmptyState(
+                icon = Icons.AutoMirrored.Filled.Rule,
+                title = stringResource(Res.string.common_rules_empty_title),
+                modifier = Modifier.padding(padding),
+                subtitle = stringResource(Res.string.common_rules_empty_subtitle),
+            )
         } else {
             LazyColumn(Modifier.fillMaxSize().padding(padding)) {
                 items(rules, key = { it.id }) { rule ->

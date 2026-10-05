@@ -42,7 +42,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
@@ -292,13 +291,12 @@ private fun TagListScaffold(
         snackbarHost = { SnackbarHost(snackbar) },
     ) { padding ->
         if (isEmpty) {
-            Box(Modifier.fillMaxSize().padding(padding)) {
-                EmptyState(
-                    icon = Icons.Filled.Sell,
-                    title = stringResource(Res.string.common_tags_empty_title),
-                    subtitle = stringResource(Res.string.common_tags_empty_subtitle),
-                )
-            }
+            EmptyState(
+                icon = Icons.Filled.Sell,
+                title = stringResource(Res.string.common_tags_empty_title),
+                modifier = Modifier.padding(padding),
+                subtitle = stringResource(Res.string.common_tags_empty_subtitle),
+            )
         } else {
             // Compact cards in an adaptive grid: several tags per row on wide layouts instead of
             // one full-width row each. The namespace hierarchy shows as a muted parent-path line

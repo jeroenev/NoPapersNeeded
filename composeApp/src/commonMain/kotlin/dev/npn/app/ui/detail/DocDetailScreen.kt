@@ -333,13 +333,12 @@ private fun UnavailableDocScaffold(onBack: () -> Unit) {
             )
         },
     ) { padding ->
-        Box(Modifier.fillMaxSize().padding(padding)) {
-            EmptyState(
-                icon = Icons.Filled.Delete,
-                title = stringResource(Res.string.detail_document_unavailable),
-                subtitle = stringResource(Res.string.detail_document_unavailable_hint),
-            )
-        }
+        EmptyState(
+            icon = Icons.Filled.Delete,
+            title = stringResource(Res.string.detail_document_unavailable),
+            modifier = Modifier.padding(padding),
+            subtitle = stringResource(Res.string.detail_document_unavailable_hint),
+        )
     }
 }
 

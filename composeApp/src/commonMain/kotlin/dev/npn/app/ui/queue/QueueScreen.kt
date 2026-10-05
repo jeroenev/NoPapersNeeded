@@ -4,7 +4,6 @@ package dev.npn.app.ui.queue
 
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
@@ -133,13 +132,12 @@ private fun QueueList(
     modifier: Modifier = Modifier,
 ) {
     if (items.isEmpty() && editRuns.isEmpty()) {
-        Box(modifier) {
-            EmptyState(
-                icon = Icons.Filled.DoneAll,
-                title = stringResource(Res.string.queue_empty),
-                subtitle = stringResource(Res.string.queue_empty_subtitle),
-            )
-        }
+        EmptyState(
+            icon = Icons.Filled.DoneAll,
+            title = stringResource(Res.string.queue_empty),
+            modifier = modifier,
+            subtitle = stringResource(Res.string.queue_empty_subtitle),
+        )
         return
     }
     LazyColumn(modifier) {
