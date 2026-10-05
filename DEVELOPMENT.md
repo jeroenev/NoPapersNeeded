@@ -361,8 +361,9 @@ views) are journal transactions like any other metadata, so every device shares 
 
 Metadata uses content-addressed storage-v2 objects. Metadata writes require verified
 publication with atomic create-without-replacement semantics, supported by all current
-desktop and Android libraries. A future provider that cannot guarantee this is
-read-only for metadata rather than falling back to another storage format.
+desktop and Android libraries. A library on storage that cannot guarantee this refuses
+to open, with its own message, rather than falling back to another storage format.
+Legacy v1 segments (`journal/<deviceId>/<seq>.jsonl`) from older builds are still read.
 
 ### Android storage
 
