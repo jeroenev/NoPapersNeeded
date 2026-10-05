@@ -6,9 +6,9 @@ import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.db.DeviceDatabase
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TempIndexDb
+import dev.npn.core.db.documentEntity
 import dev.npn.core.index.MutableClock
 import dev.npn.core.testing.FakeAiSuggest
 import dev.npn.core.testing.FakeFieldRegistry
@@ -98,17 +98,7 @@ internal class Rig(
         trashed: Boolean = false,
         aiEnrichedAt: Long? = null,
     ) {
-        db.documentDao().upsert(
-            DocumentEntity(
-                docId = docId,
-                relPath = "$docId.pdf",
-                fileName = "$docId.pdf",
-                size = 0L,
-                mtime = 0L,
-                addedAt = 0L,
-                trashed = trashed,
-            ),
-        )
+        db.documentDao().upsert(documentEntity(docId, trashed = trashed))
         aiEnrichedAt?.let { deviceDb.aiEnrichQueueDao().markEnriched(AiEnrichedEntity(docId, it)) }
     }
 

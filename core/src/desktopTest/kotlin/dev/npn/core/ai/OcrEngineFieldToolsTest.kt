@@ -1,7 +1,7 @@
 package dev.npn.core.ai
 
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.TempIndexDb
+import dev.npn.core.db.documentEntity
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -33,28 +33,12 @@ class OcrEngineFieldToolsTest {
     @AfterTest
     fun teardown() = temp.close()
 
-    private fun doc(
-        id: String,
-        ocrEngine: String? = null,
-        ocrEngineOverride: String? = null,
-    ) = DocumentEntity(
-        docId = id,
-        relPath = "$id.pdf",
-        fileName = "$id.pdf",
-        size = 100,
-        mtime = 1000,
-        addedAt = 1000,
-        title = "Report",
-        ocrEngine = ocrEngine,
-        ocrEngineOverride = ocrEngineOverride,
-    )
-
     private suspend fun seed() {
         db.documentDao().upsertAll(
             listOf(
-                doc(aiDoc, ocrEngine = "ai", ocrEngineOverride = "ai"),
-                doc(tesseractDoc, ocrEngine = "tesseract"),
-                doc(unreadDoc),
+                documentEntity(aiDoc, title = "Report", ocrEngine = "ai", ocrEngineOverride = "ai"),
+                documentEntity(tesseractDoc, title = "Report", ocrEngine = "tesseract"),
+                documentEntity(unreadDoc, title = "Report"),
             ),
         )
     }

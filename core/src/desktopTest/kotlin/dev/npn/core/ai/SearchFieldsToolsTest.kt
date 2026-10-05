@@ -1,8 +1,8 @@
 package dev.npn.core.ai
 
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DocumentFieldEntity
 import dev.npn.core.db.TempIndexDb
+import dev.npn.core.db.documentEntity
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -20,34 +20,6 @@ import kotlin.test.Test
 class SearchFieldsToolsTest {
     private val temp = TempIndexDb("npn-ai-fields-test")
     private val db = temp.db
-
-    private fun doc(
-        id: String,
-        relPath: String = "$id.pdf",
-        title: String? = null,
-        correspondent: String? = null,
-        docType: String? = null,
-        docDate: String? = null,
-        notes: String? = null,
-        trashed: Boolean = false,
-        deleted: Boolean = false,
-        missing: Boolean = false,
-    ) = DocumentEntity(
-        docId = id,
-        relPath = relPath,
-        fileName = relPath.substringAfterLast('/'),
-        size = 100,
-        mtime = 1000,
-        addedAt = 1000,
-        title = title,
-        correspondent = correspondent,
-        docType = docType,
-        docDate = docDate,
-        notes = notes,
-        trashed = trashed,
-        deleted = deleted,
-        missing = missing,
-    )
 
     @AfterTest
     fun teardown() = temp.close()
@@ -67,16 +39,16 @@ class SearchFieldsToolsTest {
     private suspend fun seed() {
         db.documentDao().upsertAll(
             listOf(
-                doc(
+                documentEntity(
                     "a".repeat(64),
                     title = "Q3 Report",
                     correspondent = "ACME Corp",
                     docType = "report",
                     docDate = "2026-07-15",
                 ),
-                doc("b".repeat(64), relPath = "b.pdf", correspondent = "Example BV"),
-                doc("c".repeat(64), relPath = "c.pdf", trashed = true),
-                doc("d".repeat(64), relPath = "d.pdf", deleted = true),
+                documentEntity("b".repeat(64), relPath = "b.pdf", correspondent = "Example BV"),
+                documentEntity("c".repeat(64), relPath = "c.pdf", trashed = true),
+                documentEntity("d".repeat(64), relPath = "d.pdf", deleted = true),
             ),
         )
         // document_fields is the authoritative projection of every value, well-known ones
@@ -270,7 +242,7 @@ class SearchFieldsToolsTest {
             // "9" even though the strings compare the other way. from="10" keeps only the 10 doc.
             val nineDoc = "a".repeat(64)
             val tenDoc = "b".repeat(64)
-            db.documentDao().upsertAll(listOf(doc(nineDoc), doc(tenDoc, relPath = "b.pdf")))
+            db.documentDao().upsertAll(listOf(documentEntity(nineDoc), documentEntity(tenDoc, relPath = "b.pdf")))
             db.documentFieldDao().upsertAll(
                 listOf(
                     DocumentFieldEntity(nineDoc, "amount", "9", numValue = 9.0),
@@ -298,7 +270,7 @@ class SearchFieldsToolsTest {
         val id = "a".repeat(64)
         val line =
             LibraryAiTools.docLine(
-                doc(id, correspondent = "ACME Corp"),
+                documentEntity(id, correspondent = "ACME Corp"),
                 field = "amount" to "EUR 42.50",
             )
         line shouldContain "[doc:$id]"

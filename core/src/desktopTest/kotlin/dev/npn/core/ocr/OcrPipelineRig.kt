@@ -1,12 +1,12 @@
 package dev.npn.core.ocr
 
 import dev.npn.core.db.DeviceDatabase
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.deviceDatabase
+import dev.npn.core.db.documentEntity
 import dev.npn.core.db.npnDatabase
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
@@ -82,14 +82,7 @@ internal class OcrPipelineRig {
         fs.writeBytesOnce(relPath, bytes)
         val docId = fs.sha256(relPath)
         db.documentDao().upsert(
-            DocumentEntity(
-                docId = docId,
-                relPath = relPath,
-                fileName = relPath.substringAfterLast('/'),
-                size = bytes.size.toLong(),
-                mtime = 1000,
-                addedAt = 1000,
-            ),
+            documentEntity(docId, relPath, size = bytes.size.toLong()),
         )
         deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
         return docId

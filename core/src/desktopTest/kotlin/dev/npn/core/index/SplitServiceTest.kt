@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.app.SplitFailure
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.documentEntity
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
@@ -44,10 +45,9 @@ class SplitServiceTest {
         val bytes = PdfFixtures.embeddedTextPdf("first page", "second page")
         rig.fs.writeBytesOnce("contract.pdf", bytes)
         val row =
-            DocumentEntity(
-                docId = rig.fs.sha256("contract.pdf"),
-                relPath = "contract.pdf",
-                fileName = "contract.pdf",
+            documentEntity(
+                rig.fs.sha256("contract.pdf"),
+                "contract.pdf",
                 size = bytes.size.toLong(),
                 mtime = 1,
                 addedAt = 1,

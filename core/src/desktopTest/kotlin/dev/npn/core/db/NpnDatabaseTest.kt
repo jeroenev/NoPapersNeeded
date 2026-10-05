@@ -23,32 +23,6 @@ class NpnDatabaseTest {
     private val temp = TempIndexDb("npn-db-test")
     private val db = temp.db
 
-    private fun doc(
-        id: String,
-        relPath: String = "$id.pdf",
-        reviewed: Boolean = false,
-        correspondent: String? = null,
-        docType: String? = null,
-        docDate: String? = null,
-        trashed: Boolean = false,
-        deleted: Boolean = false,
-        missing: Boolean = false,
-    ) = DocumentEntity(
-        docId = id,
-        relPath = relPath,
-        fileName = relPath.substringAfterLast('/'),
-        size = 100,
-        mtime = 1000,
-        addedAt = 1000,
-        reviewed = reviewed,
-        correspondent = correspondent,
-        docType = docType,
-        docDate = docDate,
-        trashed = trashed,
-        deleted = deleted,
-        missing = missing,
-    )
-
     @AfterTest
     fun teardown() = temp.close()
 
@@ -56,12 +30,12 @@ class NpnDatabaseTest {
     fun documentUpsertAndLookup() =
         runTest {
             val dao = db.documentDao()
-            dao.upsert(doc("a".repeat(64)))
+            dao.upsert(documentEntity("a".repeat(64)))
             dao.getByDocId("a".repeat(64))!!.fileName shouldBe "${"a".repeat(64)}.pdf"
             dao.allPathsAndMeta().single { it.relPath == "${"a".repeat(64)}.pdf" }.docId shouldBe "a".repeat(64)
 
             // upsert updates in place
-            dao.upsert(doc("a".repeat(64), reviewed = true))
+            dao.upsert(documentEntity("a".repeat(64), reviewed = true))
             dao.getByDocId("a".repeat(64))!!.reviewed shouldBe true
         }
 
@@ -71,10 +45,10 @@ class NpnDatabaseTest {
             val dao = db.documentDao()
             dao.upsertAll(
                 listOf(
-                    doc("a".repeat(64)),
-                    doc("b".repeat(64), relPath = "b.pdf", trashed = true),
-                    doc("c".repeat(64), relPath = "c.pdf", deleted = true),
-                    doc("d".repeat(64), relPath = "d.pdf", missing = true),
+                    documentEntity("a".repeat(64)),
+                    documentEntity("b".repeat(64), relPath = "b.pdf", trashed = true),
+                    documentEntity("c".repeat(64), relPath = "c.pdf", deleted = true),
+                    documentEntity("d".repeat(64), relPath = "d.pdf", missing = true),
                 ),
             )
             dao.getAllLive().map { it.docId } shouldContainExactly listOf("a".repeat(64))
@@ -88,9 +62,9 @@ class NpnDatabaseTest {
             val dao = db.documentDao()
             dao.upsertAll(
                 listOf(
-                    doc("a".repeat(64), reviewed = false),
-                    doc("b".repeat(64), relPath = "b.pdf", reviewed = false),
-                    doc("c".repeat(64), relPath = "c.pdf", reviewed = true),
+                    documentEntity("a".repeat(64), reviewed = false),
+                    documentEntity("b".repeat(64), relPath = "b.pdf", reviewed = false),
+                    documentEntity("c".repeat(64), relPath = "c.pdf", reviewed = true),
                 ),
             )
             // All three are untagged, so the untagged-only review count is 3.
@@ -106,7 +80,7 @@ class NpnDatabaseTest {
             val tagDao = db.tagDao()
             val tagged = "a".repeat(64)
             val untagged = "b".repeat(64)
-            docDao.upsertAll(listOf(doc(tagged), doc(untagged, relPath = "b.pdf")))
+            docDao.upsertAll(listOf(documentEntity(tagged), documentEntity(untagged, relPath = "b.pdf")))
             tagDao.upsertAll(listOf(TagEntity("invoice", color = "#ff0000"), TagEntity("empty")))
             tagDao.setForDocuments(mapOf(tagged to listOf("invoice")))
 
@@ -128,9 +102,9 @@ class NpnDatabaseTest {
             val missing = "c".repeat(64)
             docDao.upsertAll(
                 listOf(
-                    doc(live),
-                    doc(trashed, relPath = "trashed.pdf", trashed = true),
-                    doc(missing, relPath = "missing.pdf", missing = true),
+                    documentEntity(live),
+                    documentEntity(trashed, relPath = "trashed.pdf", trashed = true),
+                    documentEntity(missing, relPath = "missing.pdf", missing = true),
                 ),
             )
             tagDao.upsertAll(listOf(TagEntity("invoice")))
@@ -148,7 +122,7 @@ class NpnDatabaseTest {
             val docDao = db.documentDao()
             val tagDao = db.tagDao()
             val id = "a".repeat(64)
-            docDao.upsert(doc(id))
+            docDao.upsert(documentEntity(id))
             tagDao.setForDocuments(mapOf(id to listOf("x", "y")))
             tagDao.tagsForDocument(id) shouldContainExactly listOf("x", "y")
             tagDao.setForDocuments(mapOf(id to listOf("y", "z")))
@@ -165,9 +139,9 @@ class NpnDatabaseTest {
             val trashed = "c".repeat(64)
             docDao.upsertAll(
                 listOf(
-                    doc(liveA),
-                    doc(liveB, relPath = "b.pdf"),
-                    doc(trashed, relPath = "c.pdf", trashed = true),
+                    documentEntity(liveA),
+                    documentEntity(liveB, relPath = "b.pdf"),
+                    documentEntity(trashed, relPath = "c.pdf", trashed = true),
                 ),
             )
             tagDao.setForDocuments(listOf(liveA, liveB, trashed).associateWith { listOf("invoice") })
@@ -186,7 +160,7 @@ class NpnDatabaseTest {
             val tagDao = db.tagDao()
             val a = "a".repeat(64)
             val b = "b".repeat(64)
-            docDao.upsertAll(listOf(doc(a), doc(b, relPath = "b.pdf")))
+            docDao.upsertAll(listOf(documentEntity(a), documentEntity(b, relPath = "b.pdf")))
             tagDao.setForDocuments(mapOf(a to listOf("shared"), b to listOf("shared")))
             tagDao.tagsForDocument(a) shouldContainExactly listOf("shared")
             tagDao.tagsForDocument(b) shouldContainExactly listOf("shared")
@@ -201,8 +175,8 @@ class NpnDatabaseTest {
             val dao = db.documentDao()
             dao.upsertAll(
                 listOf(
-                    doc("a".repeat(64), relPath = "docs/a.pdf"),
-                    doc("b".repeat(64), relPath = "docs/b.pdf", deleted = true),
+                    documentEntity("a".repeat(64), relPath = "docs/a.pdf"),
+                    documentEntity("b".repeat(64), relPath = "docs/b.pdf", deleted = true),
                 ),
             )
             val metas = dao.allPathsAndMeta()
@@ -346,7 +320,7 @@ class NpnDatabaseTest {
         runTest {
             val id = "a".repeat(64)
             db.documentDao().upsertAll(
-                listOf(doc(id, correspondent = "Invoice Corp", docType = "Invoice type")),
+                listOf(documentEntity(id, correspondent = "Invoice Corp", docType = "Invoice type")),
             )
             // Field suggestions come from every registered TEXT field's rows, not the cache columns.
             db.fieldDefDao().replaceAll(FieldKeys.seedDefinitions())
@@ -448,9 +422,9 @@ class NpnDatabaseTest {
             val c = "c".repeat(64)
             docDao.upsertAll(
                 listOf(
-                    doc(a, reviewed = false),
-                    doc(b, relPath = "b.pdf", reviewed = false),
-                    doc(c, relPath = "c.pdf", reviewed = true),
+                    documentEntity(a, reviewed = false),
+                    documentEntity(b, relPath = "b.pdf", reviewed = false),
+                    documentEntity(c, relPath = "c.pdf", reviewed = true),
                 ),
             )
             tagDao.setForDocuments(mapOf(a to listOf("invoice"), c to listOf("invoice")))

@@ -3,6 +3,7 @@ package dev.npn.core.pdf
 import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.TempIndexDb
+import dev.npn.core.db.documentEntity
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.PathExternalIo
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -42,15 +43,7 @@ class ThumbnailServiceTest {
             fs.writeBytesOnce("doc.pdf", bytes)
             val docId = fs.sha256("doc.pdf")
             db.documentDao().upsert(
-                DocumentEntity(
-                    docId = docId,
-                    relPath = "doc.pdf",
-                    fileName = "doc.pdf",
-                    size = bytes.size.toLong(),
-                    mtime = 1,
-                    addedAt = 1,
-                    pageCount = null,
-                ),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
             )
             val store = RecordingThumbnailStore()
             val service =
@@ -78,15 +71,7 @@ class ThumbnailServiceTest {
             val docId = fs.sha256("doc.pdf")
             val dao = db.documentDao()
             dao.upsert(
-                DocumentEntity(
-                    docId = docId,
-                    relPath = "doc.pdf",
-                    fileName = "doc.pdf",
-                    size = bytes.size.toLong(),
-                    mtime = 1,
-                    addedAt = 1,
-                    pageCount = null,
-                ),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
             )
             // A fold moves the document just before the backfill writes, whichever way it writes.
             val racingDao =
@@ -131,15 +116,7 @@ class ThumbnailServiceTest {
     fun aKnownPageCountIsNeverOverwritten() =
         runTest {
             db.documentDao().upsert(
-                DocumentEntity(
-                    docId = "d",
-                    relPath = "d.pdf",
-                    fileName = "d.pdf",
-                    size = 1,
-                    mtime = 1,
-                    addedAt = 1,
-                    pageCount = 3,
-                ),
+                documentEntity("d", "d.pdf", size = 1, mtime = 1, addedAt = 1, pageCount = 3),
             )
             db.documentDao().fillPageCount("d", 5)
             db
@@ -156,14 +133,7 @@ class ThumbnailServiceTest {
             fs.writeBytesOnce("doc.pdf", bytes)
             val docId = fs.sha256("doc.pdf")
             db.documentDao().upsert(
-                DocumentEntity(
-                    docId = docId,
-                    relPath = "doc.pdf",
-                    fileName = "doc.pdf",
-                    size = bytes.size.toLong(),
-                    mtime = 1,
-                    addedAt = 1,
-                ),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
             )
             val store = RecordingThumbnailStore()
             val service =
@@ -191,14 +161,7 @@ class ThumbnailServiceTest {
             fs.writeBytesOnce("doc.pdf", bytes)
             val docId = fs.sha256("doc.pdf")
             db.documentDao().upsert(
-                DocumentEntity(
-                    docId = docId,
-                    relPath = "doc.pdf",
-                    fileName = "doc.pdf",
-                    size = bytes.size.toLong(),
-                    mtime = 1,
-                    addedAt = 1,
-                ),
+                documentEntity(docId, "doc.pdf", size = bytes.size.toLong(), mtime = 1, addedAt = 1),
             )
             val store = RecordingThumbnailStore()
             val service =

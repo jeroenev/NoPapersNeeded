@@ -1,6 +1,6 @@
 package dev.npn.core.ai
 
-import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.documentEntity
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import io.kotest.matchers.string.shouldNotContain
@@ -14,17 +14,7 @@ class LibraryAiToolsTest {
         title: String? = null,
         docDate: String? = null,
         correspondent: String? = null,
-    ) = DocumentEntity(
-        docId = docId,
-        relPath = relPath,
-        fileName = fileName,
-        size = 100L,
-        mtime = 0L,
-        addedAt = 0L,
-        title = title,
-        docDate = docDate,
-        correspondent = correspondent,
-    )
+    ) = documentEntity(docId, relPath, fileName, title = title, docDate = docDate, correspondent = correspondent)
 
     @Test
     fun docLineIncludesDocIdAndFileName() {

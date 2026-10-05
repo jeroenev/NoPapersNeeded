@@ -1,8 +1,8 @@
 package dev.npn.core.ocr
 
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
+import dev.npn.core.db.documentEntity
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.pdf.PdfFixtures
@@ -151,14 +151,7 @@ class OcrPipelineRerunTest {
             val queueB = rig.openSecondDevice()
             try {
                 dbB.documentDao().upsert(
-                    DocumentEntity(
-                        docId = docId,
-                        relPath = "scan.pdf",
-                        fileName = "scan.pdf",
-                        size = bytes.size.toLong(),
-                        mtime = 1000,
-                        addedAt = 1000,
-                    ),
+                    documentEntity(docId, "scan.pdf", size = bytes.size.toLong()),
                 )
                 val deviceB =
                     rig.pipeline("devB", FakeOcrEngine(isAvailable = false, name = "mlkit"), dbB, queueB.ocrQueueDao())

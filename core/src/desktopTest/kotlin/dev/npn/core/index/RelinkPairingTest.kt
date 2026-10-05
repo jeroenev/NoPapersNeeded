@@ -1,6 +1,6 @@
 package dev.npn.core.index
 
-import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.documentEntity
 import dev.npn.core.fs.FileMeta
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
@@ -16,15 +16,7 @@ class RelinkPairingTest {
         id: String,
         relPath: String,
         size: Long,
-    ) = DocumentEntity(
-        docId = id,
-        relPath = relPath,
-        fileName = relPath.substringAfterLast('/'),
-        size = size,
-        mtime = 1,
-        addedAt = 1,
-        missing = true,
-    )
+    ) = documentEntity(id, relPath, size = size, mtime = 1, addedAt = 1, missing = true)
 
     private fun found(
         relPath: String,

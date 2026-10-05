@@ -4,11 +4,11 @@ import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.DeviceDatabase
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.TempIndexDb
+import dev.npn.core.db.documentEntity
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -53,19 +53,7 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
         title: String? = null,
         trashed: Boolean = false,
         deleted: Boolean = false,
-    ) = db.documentDao().upsert(
-        DocumentEntity(
-            docId = id,
-            relPath = "$id.pdf",
-            fileName = "$id.pdf",
-            size = 10,
-            mtime = 1,
-            addedAt = 1,
-            title = title,
-            trashed = trashed,
-            deleted = deleted,
-        ),
-    )
+    ) = db.documentDao().upsert(documentEntity(id, title = title, trashed = trashed, deleted = deleted))
 
     private suspend fun putOcr(
         id: String,

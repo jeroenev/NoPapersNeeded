@@ -1,9 +1,9 @@
 package dev.npn.core.ocr
 
 import dev.npn.core.app.DocumentRepositoryImpl
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
+import dev.npn.core.db.documentEntity
 import dev.npn.core.db.searchDocIds
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.index.MutableClock
@@ -119,14 +119,7 @@ class OcrPipelineTest {
             val deviceB = rig.openSecondDevice()
             try {
                 dbB.documentDao().upsert(
-                    DocumentEntity(
-                        docId = docId,
-                        relPath = "scan.pdf",
-                        fileName = "scan.pdf",
-                        size = bytes.size.toLong(),
-                        mtime = 1000,
-                        addedAt = 1000,
-                    ),
+                    documentEntity(docId, "scan.pdf", size = bytes.size.toLong()),
                 )
                 deviceB.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
 
@@ -217,14 +210,7 @@ class OcrPipelineTest {
             fs.writeBytesOnce("broken.pdf", "not a pdf".encodeToByteArray())
             val docId = fs.sha256("broken.pdf")
             db.documentDao().upsert(
-                DocumentEntity(
-                    docId = docId,
-                    relPath = "broken.pdf",
-                    fileName = "broken.pdf",
-                    size = 10,
-                    mtime = 1,
-                    addedAt = 1,
-                ),
+                documentEntity(docId, "broken.pdf", size = 10, mtime = 1, addedAt = 1),
             )
             rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, "pending", updatedAt = 1))
 

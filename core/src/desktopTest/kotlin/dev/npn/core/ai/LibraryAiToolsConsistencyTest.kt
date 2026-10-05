@@ -1,9 +1,9 @@
 package dev.npn.core.ai
 
-import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.DocumentFieldEntity
 import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.TempIndexDb
+import dev.npn.core.db.documentEntity
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -19,22 +19,6 @@ class LibraryAiToolsConsistencyTest {
 
     @AfterTest
     fun teardown() = temp.close()
-
-    private fun doc(
-        id: String,
-        relPath: String = "$id.pdf",
-        trashed: Boolean = false,
-        deleted: Boolean = false,
-    ) = DocumentEntity(
-        docId = id,
-        relPath = relPath,
-        fileName = relPath.substringAfterLast('/'),
-        size = 100,
-        mtime = 1000,
-        addedAt = 1000,
-        trashed = trashed,
-        deleted = deleted,
-    )
 
     /** The chat screen labels tool rows by [ChatTools]; the model must see exactly those names and keys. */
     @Test
@@ -70,7 +54,13 @@ class LibraryAiToolsConsistencyTest {
             val live = "a".repeat(64)
             val trashed = "c".repeat(64)
             val deleted = "d".repeat(64)
-            db.documentDao().upsertAll(listOf(doc(live), doc(trashed, trashed = true), doc(deleted, deleted = true)))
+            db.documentDao().upsertAll(
+                listOf(
+                    documentEntity(live),
+                    documentEntity(trashed, trashed = true),
+                    documentEntity(deleted, deleted = true),
+                ),
+            )
             db.documentFieldDao().upsertAll(
                 listOf(
                     DocumentFieldEntity(live, "amount", "live"),
@@ -90,7 +80,7 @@ class LibraryAiToolsConsistencyTest {
     fun pathSearchMatchesFolderWhileFileNameSearchDoesNot() =
         runTest {
             val id = "a".repeat(64)
-            db.documentDao().upsert(doc(id, relPath = "invoices/report.pdf"))
+            db.documentDao().upsert(documentEntity(id, relPath = "invoices/report.pdf"))
             val tool =
                 LibraryAiTools.SearchFieldsTool(
                     db.documentDao(),
@@ -110,7 +100,7 @@ class LibraryAiToolsConsistencyTest {
     fun getDocumentReportsDeletedStatus() =
         runTest {
             val id = "d".repeat(64)
-            db.documentDao().upsert(doc(id, deleted = true))
+            db.documentDao().upsert(documentEntity(id, deleted = true))
             val tool =
                 LibraryAiTools.GetDocumentTool(
                     db.documentDao(),
@@ -128,7 +118,8 @@ class LibraryAiToolsConsistencyTest {
             val hidden = (0 until LibraryAiTools.MAX_SEARCH_RESULTS).map { it.toString().padStart(64, '0') }
             val live = "f".repeat(64)
             db.documentDao().upsertAll(
-                hidden.mapIndexed { index, id -> doc(id, relPath = "$index.pdf", trashed = true) } + doc(live),
+                hidden.mapIndexed { index, id -> documentEntity(id, relPath = "$index.pdf", trashed = true) } +
+                    documentEntity(live),
             )
             (hidden + live).forEach { db.ftsDao().upsertContent(FtsDocumentEntity(docId = it, content = "needle")) }
             val tool = LibraryAiTools.SearchDocumentsTool(db.ftsDao(), db.documentDao())
