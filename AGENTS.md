@@ -63,13 +63,14 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   Detekt below; it compiles first, so keep it a separate invocation from spotless).
 - Fast UI iteration: `mise hot` (Compose Hot Reload on desktop). Android-only paths
   (scanner, share intents, WorkManager) need a device: `mise deploy`.
-- CI (`.github/workflows/ci.yml`) runs: spotlessCheck → shellcheck → checkLocalization →
-  detekt → tests+coverage (kover drives both desktop test suites) → Android-target host tests →
-  compile android+desktop + `detektTyped` → assembleDebug → desktopApp build → packageAppImage.
-  Match that order when verifying larger changes. Actions minutes and artifact storage are
-  metered (private repo): PRs stop after compile, packaging runs on `main` only, binaries upload
+- CI (`.github/workflows/ci.yml`) runs: shellcheck (hooks, mise tasks, `.github/scripts`) →
+  spotlessCheck → checkLocalization → detekt → tests+coverage (kover drives both desktop test
+  suites) → Android-target host tests → compile android+desktop + `detektTyped` → assembleDebug →
+  desktopApp build → packageAppImage. Match that order when verifying larger changes. Actions
+  minutes and artifact storage are metered (private repo): PRs stop after compile, packaging runs
+  on `main` only, the coverage report uploads only on `main` or after a failure, binaries upload
   only on a manual run, and the Windows build (`windows.yml`) and CodeQL run weekly or on demand.
-  Keep it that way.
+  Keep it that way. `mise release` refuses to tag a commit CI has not passed on.
 - Version: `npn.version` in `gradle.properties` is the only version; everything else derives
   from it (`buildSrc` `NpnVersion`, generated `dev.npn.app.BuildInfo`). Never hardcode a version
   or bump it by hand: `mise release <version>` bumps, commits and tags together, and
