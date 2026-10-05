@@ -57,6 +57,7 @@ class QueueViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             job.cancel()
 
-            messages shouldContainExactly listOf(failure(Res.string.queue_edit_run_discard_failed, "database is locked"))
+            messages shouldContainExactly
+                listOf(failure(Res.string.queue_edit_run_discard_failed, "database is locked"))
         }
 }
