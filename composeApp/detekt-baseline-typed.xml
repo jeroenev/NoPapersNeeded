@@ -89,9 +89,6 @@
     <ID>ParameterNaming:TagManagementScreen.kt:onDeleteSelected: () -&gt; Unit</ID>
     <ID>ParameterNaming:TagManagementScreen.kt:onMergeSelected: () -&gt; Unit</ID>
     <ID>ParameterNaming:TagManagementScreen.kt:onStyleSelected: () -&gt; Unit</ID>
-    <ID>SpreadOperator:HistoryTextResources.kt:(key.resource, *arguments.toTypedArray())</ID>
-    <ID>SpreadOperator:UiText.kt:(res, *args.renderAll())</ID>
-    <ID>SpreadOperator:UiText.kt:(res, quantity, *args.renderAll())</ID>
     <ID>UnsafeCallOnNullableType:LocalAppLocale.kt:LocalAppLocale$default!!</ID>
     <ID>UnsafeCallOnNullableType:PageViewer.kt:parsed!!</ID>
     <ID>UnsafeCallOnNullableType:TagDialogs.kt:selected!!</ID>
