@@ -4,7 +4,7 @@
 set -euo pipefail
 
 # mise exposes declared args as usage_<name>, not positional $1.
-adb connect "$usage_addr"
+adb connect "${usage_addr:?usage: mise connect <ip:port>}"
 echo
 echo ">> Connected. Devices:"
 adb devices -l
