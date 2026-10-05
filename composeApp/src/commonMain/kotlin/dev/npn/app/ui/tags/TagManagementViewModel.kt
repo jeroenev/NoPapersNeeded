@@ -24,15 +24,13 @@ import org.jetbrains.compose.resources.StringResource
 
 /**
  * A node in the hierarchical tag tree. Dot-separated tag paths ("a.b.c") form a namespace tree.
- * Intermediate nodes may not be real tags (no [TagInfo]); [count] is the direct doc count of this
- * exact path, [descendantCount] the sum including children.
+ * Intermediate nodes may not be real tags (no [TagInfo]); [descendantCount] is the number of
+ * documents carrying this exact path or any path under it.
  */
 data class TagNode(
     val path: String,
     val segment: String,
-    val depth: Int,
     val info: TagInfo?,
-    val count: Int,
     val descendantCount: Int,
     val children: List<TagNode>,
 )
@@ -58,11 +56,10 @@ interface TagWrites {
 
     fun delete(names: List<String>)
 
-    /** Give every one of [names] the same [color] (and [icon]). */
+    /** Give every one of [names] the same [color]. */
     fun setStyle(
         names: List<String>,
         color: String?,
-        icon: String?,
     )
 }
 
@@ -103,9 +100,8 @@ class TagManagementViewModel(
     override fun setStyle(
         names: List<String>,
         color: String?,
-        icon: String?,
     ) = eachTag(names, Res.string.common_tags_style_failed, Res.plurals.common_tags_color_some_failed) {
-        tagAdmin.setTagStyle(it, color, icon)
+        tagAdmin.setTagStyle(it, color, null)
     }
 
     /**

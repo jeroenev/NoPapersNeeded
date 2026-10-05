@@ -339,7 +339,7 @@ private fun TagDialogHost(
                 initialColor = single?.let { name -> tags.firstOrNull { it.name == name }?.color },
                 confirmLabel = stringResource(Res.string.common_save),
                 onConfirm = { _, color ->
-                    writes.setStyle(dialog.names, color, null)
+                    writes.setStyle(dialog.names, color)
                     onDone()
                 },
                 onDismiss = onClose,
@@ -618,28 +618,20 @@ internal fun buildTree(flat: List<TagInfo>): List<TagNode> {
         childrenByParent.getOrPut(parent) { mutableListOf() }.add(path)
     }
 
-    fun childrenOf(
-        prefix: String,
-        depth: Int,
-    ): List<TagNode> {
-        val direct = childrenByParent[prefix].orEmpty()
-        return direct.map { path ->
-            val kids = childrenOf(path, depth + 1)
+    fun childrenOf(prefix: String): List<TagNode> =
+        childrenByParent[prefix].orEmpty().map { path ->
+            val kids = childrenOf(path)
             val info = byPath[path]
-            val own = info?.count ?: 0
             TagNode(
                 path = path,
                 segment = path.substringAfterLast('.'),
-                depth = depth,
                 info = info,
-                count = own,
-                descendantCount = own + kids.sumOf { it.descendantCount },
+                descendantCount = (info?.count ?: 0) + kids.sumOf { it.descendantCount },
                 children = kids,
             )
         }
-    }
 
-    return childrenOf("", 0)
+    return childrenOf("")
 }
 
 private fun flatten(nodes: List<TagNode>): List<TagNode> {

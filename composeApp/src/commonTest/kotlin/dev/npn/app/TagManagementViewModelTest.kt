@@ -35,7 +35,6 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             val tree = buildTree(listOf(tag("finance", 3), tag("travel", 1)))
             tree.map { it.path } shouldContainExactly listOf("finance", "travel")
             tree.all { it.children.isEmpty() } shouldBe true
-            tree.first().count shouldBe 3
             tree.first().descendantCount shouldBe 3
         }
 
@@ -47,11 +46,9 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             tree.map { it.path } shouldContainExactly listOf("finance")
             val finance = tree.first()
             finance.info shouldBe null // intermediate, not a real tag
-            finance.count shouldBe 0 // no direct docs
             finance.descendantCount shouldBe 2 // rolled up from child
             finance.children.map { it.path } shouldContainExactly listOf("finance.tax")
             finance.children.first().segment shouldBe "tax"
-            finance.children.first().depth shouldBe 1
         }
 
     @Test
@@ -62,13 +59,10 @@ class TagManagementViewModelTest : MainDispatcherTest() {
                     listOf(tag("a", 1), tag("a.b", 2), tag("a.b.c", 4)),
                 )
             val a = tree.single()
-            a.count shouldBe 1
             a.descendantCount shouldBe 7 // 1 + 2 + 4
             val b = a.children.single()
-            b.count shouldBe 2
             b.descendantCount shouldBe 6 // 2 + 4
             val c = b.children.single()
-            c.count shouldBe 4
             c.descendantCount shouldBe 4
             c.info.shouldNotBeNull()
         }
@@ -96,7 +90,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session)
-            model.setStyle(listOf("finance", "travel"), "#abc", null)
+            model.setStyle(listOf("finance", "travel"), "#abc")
             advanceUntilIdle()
             session.tagAdmin.tagStyles shouldContainExactly
                 listOf(
@@ -134,9 +128,9 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session)
-            model.setStyle(listOf("finance"), "#abc", "star")
+            model.setStyle(listOf("finance"), "#abc")
             advanceUntilIdle()
-            session.tagAdmin.tagStyles shouldContainExactly listOf(Triple("finance", "#abc", "star"))
+            session.tagAdmin.tagStyles shouldContainExactly listOf(Triple("finance", "#abc", null))
         }
 
     @Test
@@ -149,7 +143,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.delete(listOf("finance", "invoices", "travel"))
             model.merge(listOf("finance", "invoices", "bills"), into = "finance")
-            model.setStyle(listOf("invoices", "travel"), "#abc", null)
+            model.setStyle(listOf("invoices", "travel"), "#abc")
             advanceUntilIdle()
             session.tagAdmin.deletedTags shouldContainExactly listOf("finance", "travel")
             session.tagAdmin.mergedTags shouldContainExactly listOf("bills" to "finance")

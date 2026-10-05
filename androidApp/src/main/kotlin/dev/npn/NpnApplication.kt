@@ -19,20 +19,16 @@ class NpnApplication : Application() {
 
     override fun onCreate() {
         super.onCreate()
-        instance = this
         NpnWork.schedulePeriodic(this)
     }
 
     companion object {
-        @Volatile
-        private var instance: NpnApplication? = null
-
-        /** Obtain the singleton environment from any Android component (activity, worker). */
-        fun environment(context: android.content.Context): AppEnvironment {
-            val app = (context.applicationContext as? NpnApplication)
-                ?: instance
-                ?: error("NpnApplication not initialized")
-            return app.environment
-        }
+        /**
+         * Obtain the singleton environment from any Android component (activity, worker). The
+         * manifest names this class as the application, so every component's application context
+         * is this instance.
+         */
+        fun environment(context: android.content.Context): AppEnvironment =
+            (context.applicationContext as NpnApplication).environment
     }
 }
