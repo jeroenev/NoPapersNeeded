@@ -53,8 +53,8 @@ data class FieldLocale(
  * `0`), so comparing two canonical strings compares the numbers. Values stored before that by older
  * builds are read through [normalized].
  *
- * A blank input always canonicalizes to `Ok(null)`: a cleared field has no stored row (P4 in the
- * plan), and this is the one place that turns `""` into "no value".
+ * A blank input always canonicalizes to `Ok(null)`: a cleared field has no stored row, and this is
+ * the one place that turns `""` into "no value".
  */
 object FieldValues {
     private val integerPattern = Regex("^[-+]?\\d+$")

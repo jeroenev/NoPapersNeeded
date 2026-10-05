@@ -24,7 +24,7 @@ data class BakeResult(
 /**
  * Orchestrates XMP baking on top of a [LibraryFileSystem] and a [PdfXmpIO].
  *
- * Two flows (PLAN section 2, "XMP baking"):
+ * Two flows:
  * - [bakeToBytes]: export/share path. Produces baked bytes; the library file is never touched.
  * - [bakeInPlace]: explicit, user-invoked rewrite of the library file, followed by a relink so
  *   document identity (the sha256) follows the new bytes.

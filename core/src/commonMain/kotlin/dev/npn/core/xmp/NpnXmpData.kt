@@ -3,8 +3,7 @@ package dev.npn.core.xmp
 import dev.npn.core.model.FieldKeys
 
 /**
- * The npn-owned metadata that gets baked into a PDF's XMP packet (PLAN section 2, "XMP
- * baking").
+ * The npn-owned metadata that gets baked into a PDF's XMP packet.
  *
  * Mapping to XMP properties ([XmpProperties], written by [XmpSerializer]):
  * - [documentId] -> `npn:documentId` (sha256 of the file at bake time; enables relink)

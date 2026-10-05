@@ -24,7 +24,7 @@ import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
 /**
- * The plan's acceptance gate (§8): one field definition, then assertions across the seams it has
+ * Fields are registry data: one field definition, then assertions across the seams it has
  * to reach without a line of per-field code — the document value, the index, search, filter, sort,
  * the storage-path template, the AI contract and the assistant's field list.
  */

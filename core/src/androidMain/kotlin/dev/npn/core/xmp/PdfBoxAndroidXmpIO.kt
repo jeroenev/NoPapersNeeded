@@ -14,8 +14,7 @@ import java.io.ByteArrayOutputStream
  * `com.tom_roush.pdfbox`).
  *
  * Like the desktop impl, this only moves raw XMP bytes and doc-info fields; XMP generation and
- * parsing stay in commonMain, sidestepping pdfbox-android's xmpbox gaps (PLAN section 2 / risks
- * table).
+ * parsing stay in commonMain, sidestepping pdfbox-android's xmpbox gaps.
  *
  * pdfbox-android needs its resource loader before some operations (font/resource loading). The
  * constructor sets it up through the guard the PDF engine shares ([PdfBoxAndroidInit]). A failure

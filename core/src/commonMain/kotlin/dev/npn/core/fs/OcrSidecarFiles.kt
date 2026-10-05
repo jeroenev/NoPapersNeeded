@@ -1,7 +1,7 @@
 package dev.npn.core.fs
 
 /**
- * File-level adapter for OCR sidecars (PLAN "OCR sidecars"), named as [OcrSidecarName] describes.
+ * File-level adapter for OCR sidecars, named as [OcrSidecarName] describes.
  * Single-writer by construction (writer key in the name) and write-once. Devices adopt one
  * another's sidecars instead of re-OCRing with the same or a worse engine.
  */

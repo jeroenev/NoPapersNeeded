@@ -5,8 +5,8 @@ package dev.npn.core.xmp
  *
  * The output is deterministic (stable property order, fixed indentation) so it can be asserted
  * against golden fixtures, and [XmpParser] reads back what bake needs from it. It is intentionally
- * hand-written rather than produced by xmpbox: pdfbox-android ships no usable xmpbox, and per PLAN
- * section 2 PDFBox on each platform is only used to move the raw metadata bytes.
+ * hand-written rather than produced by xmpbox: pdfbox-android ships no usable xmpbox, so PDFBox on
+ * each platform only moves the raw metadata bytes.
  *
  * Namespaces emitted:
  * - `dc`  -> Dublin Core (`http://purl.org/dc/elements/1.1/`): `dc:subject`, `dc:title`

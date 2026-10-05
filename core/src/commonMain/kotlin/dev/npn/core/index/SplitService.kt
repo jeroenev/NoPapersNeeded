@@ -15,9 +15,9 @@ import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.withContext
 
 /**
- * Splits one library PDF into multiple new documents (PLAN "PDFs are immutable": the original is
- * never rewritten; each part is a brand-new file that flows through the normal [ImportService]
- * path, so parts get dedup, canonical inbox placement and an OCR queue entry for free). Trashing
+ * Splits one library PDF into multiple new documents. PDFs are immutable, so the original is never
+ * rewritten: each part is a brand-new file that flows through the normal [ImportService] path, and
+ * so gets dedup, canonical inbox placement and an OCR queue entry for free. Trashing
  * the original and carrying metadata over is the session's job, not this service's.
  *
  * A split is all or nothing: when a later part cannot be made, or the split is cancelled, the parts

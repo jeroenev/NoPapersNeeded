@@ -174,7 +174,7 @@ class AutoMatchRuleIntegrationTest {
                 item.doc.fields["dueDate"] shouldBe "2026-09-30"
                 item.doc.docDate shouldBe null
 
-                // P16: the gate is "value differs", so a second pass writes nothing.
+                // A rule writes only a value that differs, so a second pass writes nothing.
                 val before = rig.journalObjectCount()
                 rig.session.rules.setEnabled(
                     rig.session.rules

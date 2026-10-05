@@ -16,9 +16,9 @@ import java.security.MessageDigest
 import kotlin.uuid.Uuid
 
 /**
- * Storage Access Framework backed [LibraryFileSystem] for Android (PLAN section 4, "Android
- * storage"). Given a tree uri from `ACTION_OPEN_DOCUMENT_TREE`, it exposes the same
- * library-relative, '/'-separated view as the desktop implementation.
+ * Storage Access Framework backed [LibraryFileSystem] for Android. Given a tree uri from
+ * `ACTION_OPEN_DOCUMENT_TREE`, it exposes the same library-relative, '/'-separated view as the
+ * direct-filesystem implementation.
  *
  * Performance: [listAll] walks the tree with direct [android.content.ContentResolver] queries
  * against [DocumentsContract] child-document uris (COLUMN_DOCUMENT_ID/DISPLAY_NAME/MIME_TYPE/

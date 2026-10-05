@@ -1,9 +1,8 @@
 package dev.npn.core.fs
 
 /**
- * Layout constants and pure path helpers for the library folder (PLAN section 2, "Library
- * folder layout"). No I/O here; everything is string manipulation on library-relative,
- * '/'-separated paths.
+ * Layout constants and pure path helpers for the library folder. No I/O here; everything is
+ * string manipulation on library-relative, '/'-separated paths.
  */
 object NpnPaths {
     const val NPN_DIR = ".npn"

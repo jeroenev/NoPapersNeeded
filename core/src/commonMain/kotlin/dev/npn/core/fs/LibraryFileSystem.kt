@@ -32,7 +32,7 @@ enum class VerifiedPublicationCapability {
 
 /**
  * This filesystem can never publish without replacement: the platform or mount has no primitive
- * for it. A capability, not an incident, so the journal may stop trying for the session.
+ * for it. A capability, not an incident, so the library refuses to open rather than write.
  */
 class VerifiedPublicationUnavailableException(
     message: String,
@@ -64,7 +64,7 @@ data class FsEvent(
  * for [quietMillis], so a file being written in place is not rescanned while its first bytes are
  * still landing. Continuous churn (a big sync batch) still emits at least every [maxWaitMillis].
  *
- * A burst that touched more than one path emits `Changed(null)`, so no path in it is lost to the
+ * A burst that touched more than one path emits `FsEvent(null)`, so no path in it is lost to the
  * collapse.
  */
 fun Flow<FsEvent>.debounced(
@@ -132,9 +132,9 @@ fun <T : Any> Flow<T>.debounced(
 /**
  * An external location outside the library: a file to import from.
  *
- * The desktop actual wraps a [java.nio.file.Path]; the android actual wraps an
- * [android.net.Uri]. The android [LibraryFileSystem] implementation carries the [Context]
- * needed to resolve the uri, so [ExternalSource] itself only holds the uri.
+ * The desktop actual wraps a `java.nio.file.Path`; the android actual wraps an `android.net.Uri`,
+ * which the library filesystem resolves through a `ContentResolver`, so the source itself only
+ * holds the uri.
  */
 expect class ExternalSource
 
@@ -144,8 +144,8 @@ expect class ExternalSource
  * Design invariants:
  * - The library is a plain folder of immutable PDFs plus a `.npn/` metadata directory.
  * - The app only ever creates new, write-once files (journal objects, OCR sidecars) and
- *   moves/renames PDFs. It never appends to or rewrites an existing file through this API
- *   (the explicit bake-in-place action is handled elsewhere, later).
+ *   moves/renames PDFs. It never appends to or rewrites an existing file through this API; the
+ *   explicit bake-in-place (`BakeService`) replaces a PDF by a delete and a move.
  * - All paths are library-relative, '/'-separated, no leading slash.
  */
 interface LibraryFileSystem {

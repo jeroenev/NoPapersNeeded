@@ -1,8 +1,8 @@
 package dev.npn.core.fs
 
 /**
- * Soft-delete operations backed by [LibraryFileSystem] and the `.npn/trash/` convention
- * (PLAN "Trash"). Moving to trash is a plain file move: the file stays in the library so it
+ * Soft-delete operations backed by [LibraryFileSystem] and the `.npn/trash/` convention.
+ * Moving to trash is a plain file move: the file stays in the library so it
  * syncs, but is excluded from the index. Filenames get a hash suffix to avoid collisions;
  * further collisions get a numeric `-1`, `-2`, ... suffix so the move stays write-once.
  */
