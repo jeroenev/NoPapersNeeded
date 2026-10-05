@@ -11,8 +11,6 @@ import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.selection.selectable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.MoreHoriz
-import androidx.compose.material.icons.outlined.AutoAwesome
-import androidx.compose.material.icons.outlined.AutoFixHigh
 import androidx.compose.material.icons.outlined.MoreHoriz
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
@@ -40,8 +38,6 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import no_papers_needed.composeapp.generated.resources.Res
-import no_papers_needed.composeapp.generated.resources.library_ai_assistant
-import no_papers_needed.composeapp.generated.resources.library_ai_edit
 import no_papers_needed.composeapp.generated.resources.nav_more
 import no_papers_needed.composeapp.generated.resources.nav_more_destinations
 import no_papers_needed.composeapp.generated.resources.nav_queue_pending
@@ -57,13 +53,10 @@ import org.jetbrains.compose.resources.stringResource
  * selected), since that is where they are launched from.
  *
  * The two surfaces offer the same destinations, but the compact bar has room for fewer of them at
- * once, so it keeps the [CompactPlacement.BAR] entries and reaches the others through a "More"
+ * once, so it keeps [TopLevelDestination.compactBar] and reaches the others through a "More"
  * sheet. [queue] badges the queue item and, on compact layouts, the "More" item standing in front
  * of it — background work has to be visible from the bar without spending a permanent slot on a
  * screen that is empty most of the time.
- *
- * The AI entries show while [aiConfigured], and stay while one of their screens is open, so they
- * never vanish from under the screen they lead to.
  */
 @Composable
 fun NavigationShell(
@@ -76,83 +69,68 @@ fun NavigationShell(
     onAiEdit: () -> Unit,
     content: @Composable () -> Unit,
 ) {
-    val showAi = aiConfigured || aiCurrent != null
+    val ai =
+        AiNavItems(
+            shown = aiConfigured || aiCurrent != null,
+            current = aiCurrent,
+            onChat = onAiChat,
+            onEdit = onAiEdit,
+        )
+    val shellShown = current != null || aiCurrent != null
     if (LocalWindowWidthClass.current.isWide) {
         Row(Modifier.fillMaxSize()) {
-            if (current != null || aiCurrent != null) {
-                ShellRail(
-                    current = current,
-                    aiCurrent = aiCurrent,
-                    showAi = showAi,
-                    queue = queue,
-                    onNavigate = onNavigate,
-                    onAiChat = onAiChat,
-                    onAiEdit = onAiEdit,
-                )
-            }
+            if (shellShown) ShellRail(current = current, ai = ai, queue = queue, onNavigate = onNavigate)
             Box(Modifier.weight(1f)) { content() }
         }
     } else {
         Column(Modifier.fillMaxSize()) {
             Box(Modifier.weight(1f)) { content() }
-            if (current != null || aiCurrent != null) {
-                ShellBottomBar(
-                    current = current,
-                    aiCurrent = aiCurrent,
-                    showAi = showAi,
-                    queue = queue,
-                    onNavigate = onNavigate,
-                    onAiChat = onAiChat,
-                    onAiEdit = onAiEdit,
-                )
-            }
+            if (shellShown) ShellBottomBar(current = current, ai = ai, queue = queue, onNavigate = onNavigate)
         }
     }
+}
+
+/**
+ * The shell's AI items, the assistant and AI edit. They show while AI is configured, and stay while
+ * one of their screens is open, so they never vanish from under the screen they lead to.
+ */
+private data class AiNavItems(
+    val shown: Boolean,
+    val current: AiDestination?,
+    private val onChat: () -> Unit,
+    private val onEdit: () -> Unit,
+) {
+    fun open(dest: AiDestination) =
+        when (dest) {
+            AiDestination.CHAT -> onChat()
+            AiDestination.EDIT -> onEdit()
+        }
 }
 
 @Composable
 private fun ShellRail(
     current: TopLevelDestination?,
-    aiCurrent: AiDestination?,
-    showAi: Boolean,
+    ai: AiNavItems,
     queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
-    onAiChat: () -> Unit,
-    onAiEdit: () -> Unit,
 ) {
     NavigationRail {
         Spacer(Modifier.height(8.dp))
-        TopLevelDestination.entries.forEach { dest ->
-            // Settings is pinned after the spacer at the bottom of the rail.
-            if (dest == TopLevelDestination.SETTINGS) return@forEach
-            RailItem(
-                dest = dest,
-                selected = dest == current,
-                badge = if (dest == TopLevelDestination.QUEUE) queue else QueueStatus.None,
-                onNavigate = onNavigate,
-            )
+        (TopLevelDestination.compactBar + TopLevelDestination.compactMore).forEach { dest ->
+            RailItem(dest = dest, current = current, queue = queue, onNavigate = onNavigate)
         }
-        if (showAi) {
-            NavigationRailItem(
-                selected = aiCurrent == AiDestination.CHAT,
-                onClick = onAiChat,
-                icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
-                label = { Text(stringResource(Res.string.library_ai_assistant)) },
-            )
-            NavigationRailItem(
-                selected = aiCurrent == AiDestination.EDIT,
-                onClick = onAiEdit,
-                icon = { Icon(Icons.Outlined.AutoFixHigh, contentDescription = null) },
-                label = { Text(stringResource(Res.string.library_ai_edit)) },
-            )
+        if (ai.shown) {
+            AiDestination.entries.forEach { dest ->
+                NavigationRailItem(
+                    selected = ai.current == dest,
+                    onClick = { ai.open(dest) },
+                    icon = { Icon(dest.icon, contentDescription = null) },
+                    label = { Text(stringResource(dest.label)) },
+                )
+            }
         }
         Spacer(Modifier.weight(1f))
-        RailItem(
-            dest = TopLevelDestination.SETTINGS,
-            selected = current == TopLevelDestination.SETTINGS,
-            badge = QueueStatus.None,
-            onNavigate = onNavigate,
-        )
+        RailItem(dest = TopLevelDestination.SETTINGS, current = current, queue = queue, onNavigate = onNavigate)
         Spacer(Modifier.height(8.dp))
     }
 }
@@ -160,15 +138,16 @@ private fun ShellRail(
 @Composable
 private fun RailItem(
     dest: TopLevelDestination,
-    selected: Boolean,
-    badge: QueueStatus,
+    current: TopLevelDestination?,
+    queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
 ) {
+    val selected = dest == current
     NavigationRailItem(
         selected = selected,
         onClick = { onNavigate(dest) },
         icon = {
-            BadgedIcon(badge) {
+            BadgedIcon(dest.badge(queue)) {
                 Icon(
                     imageVector = if (selected) dest.selectedIcon else dest.icon,
                     contentDescription = null,
@@ -179,9 +158,13 @@ private fun RailItem(
     )
 }
 
+/** The queue is the only destination that reports on itself. */
+private fun TopLevelDestination.badge(queue: QueueStatus): QueueStatus =
+    if (this == TopLevelDestination.QUEUE) queue else QueueStatus.None
+
 /**
- * The compact bottom bar: the [CompactPlacement.BAR] destinations, the AI assistant when it is
- * configured, and a "More" item for everything else.
+ * The compact bottom bar: [TopLevelDestination.compactBar], the AI assistant when it is shown, and
+ * a "More" item for everything else.
  *
  * Only the assistant gets a bar slot, because it is the AI screen you open cold; AI edit is
  * usually entered from the library's selection mode with documents in hand, so it rides in the
@@ -191,12 +174,9 @@ private fun RailItem(
 @Composable
 private fun ShellBottomBar(
     current: TopLevelDestination?,
-    aiCurrent: AiDestination?,
-    showAi: Boolean,
+    ai: AiNavItems,
     queue: QueueStatus,
     onNavigate: (TopLevelDestination) -> Unit,
-    onAiChat: () -> Unit,
-    onAiEdit: () -> Unit,
 ) {
     var moreOpen by remember { mutableStateOf(false) }
     NavigationBar {
@@ -214,18 +194,21 @@ private fun ShellBottomBar(
                 label = { Text(stringResource(dest.label)) },
             )
         }
-        if (showAi) {
+        if (ai.shown) {
+            val chat = AiDestination.CHAT
             NavigationBarItem(
-                selected = aiCurrent == AiDestination.CHAT,
-                onClick = onAiChat,
-                icon = { Icon(Icons.Outlined.AutoAwesome, contentDescription = null) },
-                label = { Text(stringResource(Res.string.library_ai_assistant)) },
+                selected = ai.current == chat,
+                onClick = { ai.open(chat) },
+                icon = { Icon(chat.icon, contentDescription = null) },
+                label = { Text(stringResource(chat.label)) },
             )
         }
         // "More" stays selected while one of the screens behind it is open, so the bar always
         // shows where you are rather than going blank on the sheet's screens.
         val moreSelected =
-            current in TopLevelDestination.compactMore || aiCurrent == AiDestination.EDIT
+            current in TopLevelDestination.compactMore ||
+                current == TopLevelDestination.SETTINGS ||
+                ai.current == AiDestination.EDIT
         NavigationBarItem(
             selected = moreSelected,
             onClick = { moreOpen = true },
@@ -243,64 +226,34 @@ private fun ShellBottomBar(
     }
     if (moreOpen) {
         MoreSheet(
-            rows = moreRows(aiEdit = showAi),
             current = current,
-            aiCurrent = aiCurrent,
+            ai = ai,
             queue = queue,
             onDismiss = { moreOpen = false },
-            onNavigate = { dest ->
-                moreOpen = false
-                onNavigate(dest)
-            },
-            onAiEdit = {
-                moreOpen = false
-                onAiEdit()
-            },
+            onNavigate = onNavigate,
         )
     }
 }
 
-/** A row of the compact bar's "More" sheet. */
-internal sealed interface MoreRow {
-    /** A top-level destination the bar has no slot for. */
-    data class Destination(
-        val dest: TopLevelDestination,
-    ) : MoreRow
-
-    /** The AI edit screen, which is a screen above Library rather than a destination of its own. */
-    data object AiEdit : MoreRow
-}
-
 /**
- * The sheet's rows, in the rail's order: the overflow destinations, then AI edit beneath them the
- * way the rail puts it beneath the other items, then settings — pinned last here because the rail
- * pins it to the bottom, and because it is the one row nobody is looking for in a hurry.
- *
- * [aiEdit] follows the bar's AI assistant item: both appear once the assistant is configured.
+ * The screens the compact bar cannot show at once, one tap behind its "More" item, in the rail's
+ * order: [TopLevelDestination.compactMore], then AI edit beneath them the way the rail puts it
+ * beneath the other items, then settings, last as on the rail.
  */
-internal fun moreRows(aiEdit: Boolean): List<MoreRow> =
-    buildList {
-        val settings = TopLevelDestination.SETTINGS
-        TopLevelDestination.compactMore
-            .filter { it != settings }
-            .mapTo(this) { MoreRow.Destination(it) }
-        if (aiEdit) add(MoreRow.AiEdit)
-        if (settings in TopLevelDestination.compactMore) add(MoreRow.Destination(settings))
-    }
-
-/** The screens the compact bar cannot show at once, one tap behind its "More" item. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun MoreSheet(
-    rows: List<MoreRow>,
     current: TopLevelDestination?,
-    aiCurrent: AiDestination?,
+    ai: AiNavItems,
     queue: QueueStatus,
     onDismiss: () -> Unit,
     onNavigate: (TopLevelDestination) -> Unit,
-    onAiEdit: () -> Unit,
 ) {
     val moreDestinations = stringResource(Res.string.nav_more_destinations)
+    val pick = { dest: TopLevelDestination ->
+        onDismiss()
+        onNavigate(dest)
+    }
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = rememberModalBottomSheetState(),
@@ -311,34 +264,43 @@ private fun MoreSheet(
                 .navigationBarsPadding()
                 .semantics { contentDescription = moreDestinations },
         ) {
-            rows.forEach { row ->
-                when (row) {
-                    is MoreRow.Destination -> {
-                        val selected = row.dest == current
-                        MoreSheetRow(
-                            label = stringResource(row.dest.label),
-                            icon = if (selected) row.dest.selectedIcon else row.dest.icon,
-                            selected = selected,
-                            // The queue is the only screen behind the sheet that reports on itself.
-                            badge =
-                                if (row.dest == TopLevelDestination.QUEUE) queue else QueueStatus.None,
-                            onClick = { onNavigate(row.dest) },
-                        )
-                    }
-
-                    MoreRow.AiEdit -> {
-                        MoreSheetRow(
-                            label = stringResource(Res.string.library_ai_edit),
-                            icon = Icons.Outlined.AutoFixHigh,
-                            selected = aiCurrent == AiDestination.EDIT,
-                            badge = QueueStatus.None,
-                            onClick = onAiEdit,
-                        )
-                    }
-                }
+            TopLevelDestination.compactMore.forEach { dest ->
+                DestinationRow(dest = dest, current = current, queue = queue, onClick = { pick(dest) })
             }
+            if (ai.shown) {
+                val edit = AiDestination.EDIT
+                MoreSheetRow(
+                    label = stringResource(edit.label),
+                    icon = edit.icon,
+                    selected = ai.current == edit,
+                    badge = QueueStatus.None,
+                    onClick = {
+                        onDismiss()
+                        ai.open(edit)
+                    },
+                )
+            }
+            val settings = TopLevelDestination.SETTINGS
+            DestinationRow(dest = settings, current = current, queue = queue, onClick = { pick(settings) })
         }
     }
+}
+
+@Composable
+private fun DestinationRow(
+    dest: TopLevelDestination,
+    current: TopLevelDestination?,
+    queue: QueueStatus,
+    onClick: () -> Unit,
+) {
+    val selected = dest == current
+    MoreSheetRow(
+        label = stringResource(dest.label),
+        icon = if (selected) dest.selectedIcon else dest.icon,
+        selected = selected,
+        badge = dest.badge(queue),
+        onClick = onClick,
+    )
 }
 
 @Composable
