@@ -5,14 +5,22 @@ import kotlin.test.assertEquals
 import kotlin.test.assertTrue
 
 class OrSetTest {
-
     private val doc = "a".repeat(64)
 
-    private fun add(dev: String, seq: Long, tag: String, t: Long) =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.TagAdd(tag))
+    private fun add(
+        dev: String,
+        seq: Long,
+        tag: String,
+        t: Long,
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.TagAdd(tag))
 
-    private fun remove(dev: String, seq: Long, tag: String, t: Long, dots: List<Dot>) =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.TagRemove(tag, dots))
+    private fun remove(
+        dev: String,
+        seq: Long,
+        tag: String,
+        t: Long,
+        dots: List<Dot>,
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.TagRemove(tag, dots))
 
     @Test
     fun add_then_remove_observed_dot() {

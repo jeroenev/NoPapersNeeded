@@ -13,28 +13,31 @@ import kotlin.test.Test
 class SearchHighlightTest {
     @Test
     fun parsesFtsMarkersWithoutTreatingLiteralBracketsAsMarkers() {
-        parseFtsSnippet("literal [text] \u0001match\u0002") shouldContainExactly listOf(
-            HighlightSegment("literal [text] ", false),
-            HighlightSegment("match", true),
-        )
+        parseFtsSnippet("literal [text] \u0001match\u0002") shouldContainExactly
+            listOf(
+                HighlightSegment("literal [text] ", false),
+                HighlightSegment("match", true),
+            )
     }
 
     @Test
     fun unmatchedMarkerIsPlainText() {
-        parseFtsSnippet("before \u0001unfinished") shouldContainExactly listOf(
-            HighlightSegment("before ", false),
-            HighlightSegment("\u0001unfinished", false),
-        )
+        parseFtsSnippet("before \u0001unfinished") shouldContainExactly
+            listOf(
+                HighlightSegment("before ", false),
+                HighlightSegment("\u0001unfinished", false),
+            )
     }
 
     @Test
     fun queryHighlightIsCaseInsensitiveAndSupportsQuotedTerms() {
         queryTerms("invoice \"New York\" invoice") shouldContainExactly listOf("invoice", "New York")
-        parseQueryHighlight("NEW YORK invoice", "\"new york\" INVOICE") shouldContainExactly listOf(
-            HighlightSegment("NEW YORK", true),
-            HighlightSegment(" ", false),
-            HighlightSegment("invoice", true),
-        )
+        parseQueryHighlight("NEW YORK invoice", "\"new york\" INVOICE") shouldContainExactly
+            listOf(
+                HighlightSegment("NEW YORK", true),
+                HighlightSegment(" ", false),
+                HighlightSegment("invoice", true),
+            )
     }
 
     @Test

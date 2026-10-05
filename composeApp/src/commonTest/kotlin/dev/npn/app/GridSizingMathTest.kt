@@ -2,8 +2,8 @@ package dev.npn.app
 
 import dev.npn.app.ui.library.gridColumnsFor
 import dev.npn.app.ui.library.gridWidthForColumns
-import io.kotest.matchers.shouldBe
 import io.kotest.matchers.floats.shouldBeLessThan
+import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 /**
@@ -12,7 +12,6 @@ import kotlin.test.Test
  * target column count must produce exactly that count when fed back into the count formula.
  */
 class GridSizingMathTest {
-
     @Test
     fun widthForColumnsRoundTripsThroughColumnsFor() {
         val availables = listOf(300f, 360f, 500f, 776f, 1000f, 1576f)

@@ -19,12 +19,13 @@ package dev.npn.core.xmp
  * XMP); such packets fall through to the UTF-8 path, matching prior behaviour.
  */
 internal fun decodeXmpBytes(bytes: ByteArray): String {
-    val decoded = when {
-        hasUtf16BeBom(bytes) -> decodeUtf16(bytes, startIndex = 2, bigEndian = true)
-        hasUtf16LeBom(bytes) -> decodeUtf16(bytes, startIndex = 2, bigEndian = false)
-        hasUtf8Bom(bytes) -> bytes.decodeToString(startIndex = 3)
-        else -> bytes.decodeToString()
-    }
+    val decoded =
+        when {
+            hasUtf16BeBom(bytes) -> decodeUtf16(bytes, startIndex = 2, bigEndian = true)
+            hasUtf16LeBom(bytes) -> decodeUtf16(bytes, startIndex = 2, bigEndian = false)
+            hasUtf8Bom(bytes) -> bytes.decodeToString(startIndex = 3)
+            else -> bytes.decodeToString()
+        }
     // A UTF-8 packet may still carry an encoded BOM (U+FEFF) or one may survive from a source
     // without a byte-level BOM; strip a single leading occurrence so the parser never sees it.
     return decoded.removePrefix("\uFEFF")
@@ -47,7 +48,11 @@ private fun hasUtf16LeBom(bytes: ByteArray): Boolean =
  * unit becomes a [Char]), so valid surrogate pairs reassemble into their supplementary code
  * points via Kotlin's UTF-16 [String] representation.
  */
-private fun decodeUtf16(bytes: ByteArray, startIndex: Int, bigEndian: Boolean): String {
+private fun decodeUtf16(
+    bytes: ByteArray,
+    startIndex: Int,
+    bigEndian: Boolean,
+): String {
     val sb = StringBuilder((bytes.size - startIndex) / 2)
     var i = startIndex
     while (i + 1 < bytes.size) {

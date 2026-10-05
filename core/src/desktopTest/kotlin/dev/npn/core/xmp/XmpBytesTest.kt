@@ -4,7 +4,6 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 class XmpBytesTest {
-
     private val packet = "<?xpacket?><npn:documentId>abc</npn:documentId>"
 
     @Test
@@ -45,7 +44,10 @@ class XmpBytesTest {
         XmpParser.parse(decoded).tags shouldBe listOf("invoice")
     }
 
-    private fun utf16Be(text: String, withBom: Boolean): ByteArray {
+    private fun utf16Be(
+        text: String,
+        withBom: Boolean,
+    ): ByteArray {
         val body = ByteArray(text.length * 2)
         for ((i, ch) in text.withIndex()) {
             val code = ch.code
@@ -55,7 +57,10 @@ class XmpBytesTest {
         return if (withBom) byteArrayOf(0xFE.toByte(), 0xFF.toByte()) + body else body
     }
 
-    private fun utf16Le(text: String, withBom: Boolean): ByteArray {
+    private fun utf16Le(
+        text: String,
+        withBom: Boolean,
+    ): ByteArray {
         val body = ByteArray(text.length * 2)
         for ((i, ch) in text.withIndex()) {
             val code = ch.code

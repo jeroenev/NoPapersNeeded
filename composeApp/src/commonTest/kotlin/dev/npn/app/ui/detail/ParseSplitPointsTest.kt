@@ -5,7 +5,6 @@ import kotlin.test.assertEquals
 import kotlin.test.assertNull
 
 class ParseSplitPointsTest {
-
     @Test
     fun singleCutPoint() {
         assertEquals(listOf(0..2, 3..5), parseSplitPoints("3", pageCount = 6))
@@ -27,9 +26,9 @@ class ParseSplitPointsTest {
         assertNull(parseSplitPoints("", pageCount = 6))
         assertNull(parseSplitPoints("  ", pageCount = 6))
         assertNull(parseSplitPoints("abc", pageCount = 6))
-        assertNull(parseSplitPoints("0", pageCount = 6))       // before page 1
-        assertNull(parseSplitPoints("6", pageCount = 6))       // after the last page
+        assertNull(parseSplitPoints("0", pageCount = 6)) // before page 1
+        assertNull(parseSplitPoints("6", pageCount = 6)) // after the last page
         assertNull(parseSplitPoints("2, x", pageCount = 6))
-        assertNull(parseSplitPoints("1", pageCount = 1))       // nothing to split
+        assertNull(parseSplitPoints("1", pageCount = 1)) // nothing to split
     }
 }

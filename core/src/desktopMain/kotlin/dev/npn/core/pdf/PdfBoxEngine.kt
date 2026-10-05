@@ -12,9 +12,9 @@ import org.apache.pdfbox.pdmodel.graphics.image.LosslessFactory
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject
 import org.apache.pdfbox.rendering.PDFRenderer
 import org.apache.pdfbox.text.PDFTextStripper
+import java.awt.image.BufferedImage
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
-import java.awt.image.BufferedImage
 import javax.imageio.ImageIO
 
 /**
@@ -23,47 +23,58 @@ import javax.imageio.ImageIO
  * `BufferedImage`.
  */
 class PdfBoxEngine : PdfEngine {
-
-    override suspend fun open(bytes: ByteArray): PdfDocumentHandle = withContext(Dispatchers.IO) {
-        val doc = try {
-            Loader.loadPDF(bytes)
-        } catch (t: Throwable) {
-            throw PdfOpenException("Failed to load PDF", t)
+    override suspend fun open(bytes: ByteArray): PdfDocumentHandle =
+        withContext(Dispatchers.IO) {
+            val doc =
+                try {
+                    Loader.loadPDF(bytes)
+                } catch (t: Throwable) {
+                    throw PdfOpenException("Failed to load PDF", t)
+                }
+            PdfBoxDocumentHandle(doc)
         }
-        PdfBoxDocumentHandle(doc)
-    }
 
-    override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray = withContext(Dispatchers.IO) {
-        PDDocument().use { doc ->
-            for (imageBytes in images) {
-                val image: PDImageXObject = when {
-                    isJpeg(imageBytes) -> JPEGFactory.createFromByteArray(doc, imageBytes)
-                    else -> {
-                        val bufferedImage: BufferedImage = ImageIO.read(ByteArrayInputStream(imageBytes))
-                            ?: error("Unsupported image bytes (not decodable)")
-                        LosslessFactory.createFromImage(doc, bufferedImage)
+    override suspend fun imagesToPdf(images: List<ByteArray>): ByteArray =
+        withContext(Dispatchers.IO) {
+            PDDocument().use { doc ->
+                for (imageBytes in images) {
+                    val image: PDImageXObject =
+                        when {
+                            isJpeg(imageBytes) -> {
+                                JPEGFactory.createFromByteArray(doc, imageBytes)
+                            }
+
+                            else -> {
+                                val bufferedImage: BufferedImage =
+                                    ImageIO.read(ByteArrayInputStream(imageBytes))
+                                        ?: error("Unsupported image bytes (not decodable)")
+                                LosslessFactory.createFromImage(doc, bufferedImage)
+                            }
+                        }
+                    val page = PDPage(PDRectangle(image.width.toFloat(), image.height.toFloat()))
+                    doc.addPage(page)
+                    PDPageContentStream(doc, page).use { cs ->
+                        cs.drawImage(image, 0f, 0f, image.width.toFloat(), image.height.toFloat())
                     }
                 }
-                val page = PDPage(PDRectangle(image.width.toFloat(), image.height.toFloat()))
-                doc.addPage(page)
-                PDPageContentStream(doc, page).use { cs ->
-                    cs.drawImage(image, 0f, 0f, image.width.toFloat(), image.height.toFloat())
-                }
+                val out = ByteArrayOutputStream()
+                doc.save(out)
+                out.toByteArray()
             }
-            val out = ByteArrayOutputStream()
-            doc.save(out)
-            out.toByteArray()
         }
-    }
 
-    override suspend fun extractPages(bytes: ByteArray, pageIndices: List<Int>): ByteArray =
+    override suspend fun extractPages(
+        bytes: ByteArray,
+        pageIndices: List<Int>,
+    ): ByteArray =
         withContext(Dispatchers.IO) {
             require(pageIndices.isNotEmpty()) { "pageIndices must not be empty" }
-            val source = try {
-                Loader.loadPDF(bytes)
-            } catch (t: Throwable) {
-                throw PdfOpenException("Failed to load PDF", t)
-            }
+            val source =
+                try {
+                    Loader.loadPDF(bytes)
+                } catch (t: Throwable) {
+                    throw PdfOpenException("Failed to load PDF", t)
+                }
             source.use { src ->
                 require(pageIndices.all { it in 0 until src.numberOfPages }) {
                     "page index out of range (pages: ${src.numberOfPages})"
@@ -78,8 +89,9 @@ class PdfBoxEngine : PdfEngine {
         }
 }
 
-private class PdfBoxDocumentHandle(private val doc: PDDocument) : PdfDocumentHandle {
-
+private class PdfBoxDocumentHandle(
+    private val doc: PDDocument,
+) : PdfDocumentHandle {
     override val pageCount: Int get() = doc.numberOfPages
 
     private val renderer: PDFRenderer by lazy { PDFRenderer(doc) }
@@ -92,7 +104,10 @@ private class PdfBoxDocumentHandle(private val doc: PDDocument) : PdfDocumentHan
         return stripper.getText(doc).trim()
     }
 
-    override fun renderPagePng(pageIndex: Int, maxDimensionPx: Int): ByteArray {
+    override fun renderPagePng(
+        pageIndex: Int,
+        maxDimensionPx: Int,
+    ): ByteArray {
         val page = doc.getPage(pageIndex)
         val box = page.cropBox
         val scale = pageRenderScale(box.width, box.height, maxDimensionPx)

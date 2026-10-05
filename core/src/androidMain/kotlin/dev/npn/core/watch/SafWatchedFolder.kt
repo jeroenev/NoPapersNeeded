@@ -19,31 +19,33 @@ class SafWatchedFolder(
     context: Context,
     private val treeUri: Uri,
 ) : WatchedFolder {
-
     private val appContext = context.applicationContext
 
-    override suspend fun listPdfs(): List<WatchedFolderFile> = withContext(Dispatchers.IO) {
-        val root = DocumentFile.fromTreeUri(appContext, treeUri) ?: return@withContext emptyList()
-        runCatching {
-            root.listFiles()
-                .filter { it.isFile && isPdf(it) }
-                .map { child ->
-                    WatchedFolderFile(
-                        id = child.uri.toString(),
-                        name = child.name ?: "document.pdf",
-                        size = child.length(),
-                        mtimeMillis = child.lastModified(),
-                        source = ExternalSource(child.uri),
-                    )
-                }
-        }.getOrDefault(emptyList())
-    }
+    override suspend fun listPdfs(): List<WatchedFolderFile> =
+        withContext(Dispatchers.IO) {
+            val root = DocumentFile.fromTreeUri(appContext, treeUri) ?: return@withContext emptyList()
+            runCatching {
+                root
+                    .listFiles()
+                    .filter { it.isFile && isPdf(it) }
+                    .map { child ->
+                        WatchedFolderFile(
+                            id = child.uri.toString(),
+                            name = child.name ?: "document.pdf",
+                            size = child.length(),
+                            mtimeMillis = child.lastModified(),
+                            source = ExternalSource(child.uri),
+                        )
+                    }
+            }.getOrDefault(emptyList())
+        }
 
-    override suspend fun delete(file: WatchedFolderFile): Boolean = withContext(Dispatchers.IO) {
-        runCatching {
-            DocumentFile.fromSingleUri(appContext, Uri.parse(file.id))?.delete() ?: false
-        }.getOrDefault(false)
-    }
+    override suspend fun delete(file: WatchedFolderFile): Boolean =
+        withContext(Dispatchers.IO) {
+            runCatching {
+                DocumentFile.fromSingleUri(appContext, Uri.parse(file.id))?.delete() ?: false
+            }.getOrDefault(false)
+        }
 
     override fun changes(): Flow<Unit> = emptyFlow()
 

@@ -24,23 +24,22 @@ import androidx.compose.ui.input.pointer.positionChanged
  *
  * [onZoom] receives the incremental zoom factor (>1 = fingers moving apart).
  */
-fun Modifier.pinchToZoom(
-    onZoom: (Float) -> Unit,
-): Modifier = pointerInput(Unit) {
-    awaitEachGesture {
-        awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
-        while (true) {
-            val event = awaitPointerEvent(PointerEventPass.Initial)
-            val pressed = event.changes.count { it.pressed }
-            if (pressed == 0) break
-            if (pressed >= 2) {
-                val zoom = event.calculateZoom()
-                if (zoom != 1f) onZoom(zoom)
-                event.changes.forEach { it.consume() }
+fun Modifier.pinchToZoom(onZoom: (Float) -> Unit): Modifier =
+    pointerInput(Unit) {
+        awaitEachGesture {
+            awaitFirstDown(requireUnconsumed = false, pass = PointerEventPass.Initial)
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val pressed = event.changes.count { it.pressed }
+                if (pressed == 0) break
+                if (pressed >= 2) {
+                    val zoom = event.calculateZoom()
+                    if (zoom != 1f) onZoom(zoom)
+                    event.changes.forEach { it.consume() }
+                }
             }
         }
     }
-}
 
 /**
  * Ctrl + mouse-wheel/touchpad scroll, the desktop zoom convention. Plain scrolling passes through
@@ -50,24 +49,23 @@ fun Modifier.pinchToZoom(
  * ignore it). Touchpads emit fine-grained fractional deltas, so callers should scale rather than
  * step.
  */
-fun Modifier.ctrlScrollZoom(
-    onScroll: (delta: Float, position: Offset) -> Unit,
-): Modifier = pointerInput(Unit) {
-    awaitPointerEventScope {
-        while (true) {
-            val event = awaitPointerEvent(PointerEventPass.Initial)
-            if (event.type == PointerEventType.Scroll && event.keyboardModifiers.isCtrlPressed) {
-                var delta = 0f
-                event.changes.forEach { delta += it.scrollDelta.y }
-                if (delta != 0f) {
-                    val position = event.changes.firstOrNull()?.position ?: Offset.Zero
-                    onScroll(delta, position)
-                    event.changes.forEach { it.consume() }
+fun Modifier.ctrlScrollZoom(onScroll: (delta: Float, position: Offset) -> Unit): Modifier =
+    pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                if (event.type == PointerEventType.Scroll && event.keyboardModifiers.isCtrlPressed) {
+                    var delta = 0f
+                    event.changes.forEach { delta += it.scrollDelta.y }
+                    if (delta != 0f) {
+                        val position = event.changes.firstOrNull()?.position ?: Offset.Zero
+                        onScroll(delta, position)
+                        event.changes.forEach { it.consume() }
+                    }
                 }
             }
         }
     }
-}
 
 /**
  * Desktop mouse-wheel / touchpad handling for the page viewer, on the [PointerEventPass.Initial]
@@ -84,37 +82,38 @@ fun Modifier.ctrlScrollZoom(
 fun Modifier.viewerScroll(
     onZoom: (delta: Float, position: Offset) -> Unit,
     onScroll: (delta: Float, position: Offset) -> Boolean,
-): Modifier = pointerInput(Unit) {
-    awaitPointerEventScope {
-        while (true) {
-            val event = awaitPointerEvent(PointerEventPass.Initial)
-            val delta = if (event.type == PointerEventType.Scroll) {
-                event.changes.sumOf { it.scrollDelta.y.toDouble() }.toFloat()
-            } else {
-                0f
-            }
-            if (delta != 0f) {
-                val position = event.changes.firstOrNull()?.position ?: Offset.Zero
-                val consumed = if (event.keyboardModifiers.isCtrlPressed) {
-                    onZoom(delta, position)
-                    true
-                } else {
-                    onScroll(delta, position)
+): Modifier =
+    pointerInput(Unit) {
+        awaitPointerEventScope {
+            while (true) {
+                val event = awaitPointerEvent(PointerEventPass.Initial)
+                val delta =
+                    if (event.type == PointerEventType.Scroll) {
+                        event.changes.sumOf { it.scrollDelta.y.toDouble() }.toFloat()
+                    } else {
+                        0f
+                    }
+                if (delta != 0f) {
+                    val position = event.changes.firstOrNull()?.position ?: Offset.Zero
+                    val consumed =
+                        if (event.keyboardModifiers.isCtrlPressed) {
+                            onZoom(delta, position)
+                            true
+                        } else {
+                            onScroll(delta, position)
+                        }
+                    if (consumed) event.changes.forEach { it.consume() }
                 }
-                if (consumed) event.changes.forEach { it.consume() }
             }
         }
     }
-}
 
 /**
  * Detects two-or-more-finger pinch only, reporting the incremental [centroid] and zoom factor for
  * each move. Single-pointer drags are ignored (and not consumed) so a parent pager can swipe. For
  * use inside a `pointerInput { }` block.
  */
-suspend fun PointerInputScope.detectPinchTransform(
-    onPinch: (centroid: Offset, zoomChange: Float) -> Unit,
-) {
+suspend fun PointerInputScope.detectPinchTransform(onPinch: (centroid: Offset, zoomChange: Float) -> Unit) {
     awaitEachGesture {
         awaitFirstDown(requireUnconsumed = false)
         while (true) {

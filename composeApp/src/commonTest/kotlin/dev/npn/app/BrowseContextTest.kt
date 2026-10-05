@@ -5,7 +5,6 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 class BrowseContextTest {
-
     private fun ctx(vararg ids: String) = BrowseContext().apply { setOrder(ids.toList()) }
 
     @Test

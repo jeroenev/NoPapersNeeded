@@ -23,14 +23,20 @@ class BrowseContext {
     var searchQuery: String? by mutableStateOf(null)
         private set
 
-    fun setOrder(ids: List<String>, query: String? = null) {
+    fun setOrder(
+        ids: List<String>,
+        query: String? = null,
+    ) {
         docIds = ids
         searchQuery = query
     }
 
     fun indexOf(docId: String): Int = docIds.indexOf(docId)
 
-    fun neighbour(docId: String, delta: Int): String? {
+    fun neighbour(
+        docId: String,
+        delta: Int,
+    ): String? {
         val i = indexOf(docId)
         if (i < 0) return null
         val target = i + delta

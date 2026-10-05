@@ -4,17 +4,30 @@ import kotlin.test.Test
 import kotlin.test.assertEquals
 
 class RenameMergeTest {
-
     private val doc = "a".repeat(64)
 
-    private fun add(seq: Long, tag: String, t: Long, dev: String = "d1") =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.TagAdd(tag))
+    private fun add(
+        seq: Long,
+        tag: String,
+        t: Long,
+        dev: String = "d1",
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, doc, JournalOp.TagAdd(tag))
 
-    private fun rename(seq: Long, from: String, to: String, t: Long, dev: String = "d1") =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, null, JournalOp.TagRename(from, to))
+    private fun rename(
+        seq: Long,
+        from: String,
+        to: String,
+        t: Long,
+        dev: String = "d1",
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, null, JournalOp.TagRename(from, to))
 
-    private fun merge(seq: Long, from: String, to: String, t: Long, dev: String = "d1") =
-        JournalEvent(1, seq, Hlc(t, 0, dev), dev, null, JournalOp.TagMerge(from, to))
+    private fun merge(
+        seq: Long,
+        from: String,
+        to: String,
+        t: Long,
+        dev: String = "d1",
+    ) = JournalEvent(1, seq, Hlc(t, 0, dev), dev, null, JournalOp.TagMerge(from, to))
 
     @Test
     fun add_before_rename_follows_rename() {
