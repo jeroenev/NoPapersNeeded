@@ -34,6 +34,7 @@ import dev.npn.app.ui.common.HelpText
 import dev.npn.app.ui.common.LocalAppLocale
 import dev.npn.app.ui.common.SettingsSection
 import dev.npn.app.ui.common.SwitchRow
+import dev.npn.app.ui.common.ocrLanguageName
 import dev.npn.app.ui.common.rememberStorageAccess
 import dev.npn.core.ocr.OcrLanguages
 import io.github.vinceglb.filekit.dialogs.compose.rememberDirectoryPickerLauncher
@@ -42,16 +43,10 @@ import no_papers_needed.composeapp.generated.resources.common_settings_auto_matc
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_help
 import no_papers_needed.composeapp.generated.resources.common_settings_auto_matching_rules
 import no_papers_needed.composeapp.generated.resources.common_settings_choose_folder
-import no_papers_needed.composeapp.generated.resources.common_settings_language_dutch
-import no_papers_needed.composeapp.generated.resources.common_settings_language_english
-import no_papers_needed.composeapp.generated.resources.common_settings_language_french
-import no_papers_needed.composeapp.generated.resources.common_settings_language_german
-import no_papers_needed.composeapp.generated.resources.common_settings_language_spanish
 import no_papers_needed.composeapp.generated.resources.common_settings_no_watched_folder
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr_add_language
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr_android_help
-import no_papers_needed.composeapp.generated.resources.common_settings_ocr_language_portuguese
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr_languages_help
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr_match_app_language
 import no_papers_needed.composeapp.generated.resources.common_settings_ocr_match_app_language_help
@@ -229,16 +224,3 @@ private fun OcrLanguageSettings(
         )
     }
 }
-
-/** A bundled model's language in its own name, as the app language picker shows it; else the code. */
-@Composable
-private fun ocrLanguageName(code: String): String =
-    when (code) {
-        "eng" -> stringResource(Res.string.common_settings_language_english)
-        "nld" -> stringResource(Res.string.common_settings_language_dutch)
-        "deu" -> stringResource(Res.string.common_settings_language_german)
-        "fra" -> stringResource(Res.string.common_settings_language_french)
-        "spa" -> stringResource(Res.string.common_settings_language_spanish)
-        "por" -> stringResource(Res.string.common_settings_ocr_language_portuguese)
-        else -> code
-    }
