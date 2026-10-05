@@ -41,7 +41,7 @@ jobs:
           cache-provider: basic
 
       - name: Shell scripts
-        run: shellcheck .githooks/* .mise/tasks/*
+        run: shellcheck .githooks/* .mise/tasks/* .github/scripts/*
 
       # Grouped into few Gradle invocations: each one pays configuration again.
       - name: Formatting, localization guard and static analysis

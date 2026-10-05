@@ -55,17 +55,9 @@ jobs:
       - name: Package Windows installers (MSI + Exe)
         run: ./gradlew.bat :desktopApp:createDistributable :desktopApp:packageDistributionForCurrentOS
 
-      # The bundled Tesseract (prepareWindowsTesseract) has to start on Windows: a DLL missing
-      # from the bundle would only show up as silently empty OCR on users' machines.
       - name: Check the bundled Tesseract
         shell: bash
-        run: |
-          tess=$(find desktopApp/build/compose/binaries -name tesseract.exe | head -n 1)
-          test -n "$tess" || { echo "No tesseract.exe in the app image"; exit 1; }
-          du -sh "$(dirname "$tess")"
-          langs=$(TESSDATA_PREFIX="$(dirname "$tess")/tessdata" "$tess" --list-langs | tr -d '\r')
-          echo "$langs"
-          for lang in eng nld deu fra spa por; do grep -qx "$lang" <<<"$langs"; done
+        run: bash .github/scripts/check-bundled-tesseract.sh
 
       - name: Upload Windows installer artifacts
         if: github.event_name == 'workflow_dispatch'
