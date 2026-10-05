@@ -88,7 +88,12 @@ fun AiEditScreen(
         Column(Modifier.fillMaxSize().padding(padding)) {
             when (val phase = ui.phase) {
                 is EditPhase.Idle -> {
-                    AiEditSetup(ui, vm, session.content)
+                    // Collected only in this phase, so the (possibly library-wide) scope query
+                    // runs only while the setup form is on screen.
+                    val preview by vm.preview.collectAsStateWithLifecycle()
+                    val plan by vm.plan.collectAsStateWithLifecycle()
+                    val blocker by vm.startBlocker.collectAsStateWithLifecycle()
+                    AiEditSetup(ui, preview, plan, blocker, setup = vm, content = session.content)
                 }
 
                 is EditPhase.Suggesting -> {

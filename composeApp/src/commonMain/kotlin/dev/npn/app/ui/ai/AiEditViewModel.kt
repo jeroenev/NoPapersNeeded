@@ -281,6 +281,73 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
     )
 
 /**
+ * What the setup form changes, and its Start. [AiEditViewModel] implements it; every change is
+ * ignored outside [EditPhase.Idle], where the run works from a snapshot of the form.
+ */
+interface AiEditSetupActions {
+    /**
+     * Pick the job this run does, applying its preset over the current configuration. Re-picking
+     * the task the run already carries resets it to the preset, a one-click way out of a form the
+     * user has edited into a corner.
+     */
+    fun setTask(task: EditTask)
+
+    /** Drop back to the task chooser, keeping the scope and the numeric overrides. */
+    fun clearTask()
+
+    /** Change the scope; unavailable scopes are ignored. */
+    fun setScope(scope: EditScope)
+
+    /** Pick which saved view backs the [EditScope.SAVED_VIEW] scope. */
+    fun setSavedView(id: String)
+
+    /** Set the per-run max suggested tags per document; clamped to [AiTagging.RANGE]. */
+    fun setMaxTags(value: Int)
+
+    /** Set the per-run max new tags per document; clamped to [AiTagging.NEW_TAGS_RANGE]. */
+    fun setMaxNewTags(value: Int)
+
+    /** Set the per-run batch size; clamped to [AiTagging.BATCH_RANGE]. */
+    fun setBatchSize(value: Int)
+
+    /** Toggle whether field [key] participates in the run. */
+    fun setFieldEnabled(
+        key: String,
+        enabled: Boolean,
+    )
+
+    /** Set the autofill [mode] for field [key]. */
+    fun setFieldMode(
+        key: String,
+        mode: AiFieldMode,
+    )
+
+    /** Add a registered field the seed left out to this run, enabled. */
+    fun addField(key: String)
+
+    /** Toggle whether tag additions are suggested at all. */
+    fun setIncludeTags(value: Boolean)
+
+    /** Toggle whether the model may invent tags outside the current vocabulary. */
+    fun setAllowNewTags(value: Boolean)
+
+    /** Toggle whether tag removals are suggested. */
+    fun setIncludeTagRemovals(value: Boolean)
+
+    /** Set the free-text extra instructions. */
+    fun setCustomPrompt(value: String)
+
+    /** Choose whether this run goes to the background queue, overriding the size-based default. */
+    fun setBackground(value: Boolean)
+
+    /**
+     * Start the run: suggest the next batch here, or hand the whole scope to the background
+     * queue. Refuses whatever [AiEditUiState.startBlocker] refuses.
+     */
+    fun start()
+}
+
+/**
  * Drives the bulk AI-edit screen for one opened library. State machine:
  * `Idle → Suggesting → Review → Applying → Done`.
  *
@@ -293,13 +360,13 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
  * Runs are cancellable via the shared [run] job and by leaving the screen (viewModelScope).
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@Suppress("TooManyFunctions")
 class AiEditViewModel(
     session: LibrarySession,
     private val settings: SettingsRepository,
     /** Documents handed over from the library's selection mode; empty when opened from the rail. */
     selection: List<String> = emptyList(),
-) : ReviewViewModel() {
+) : ReviewViewModel(),
+    AiEditSetupActions {
     private val editQueue = session.aiEditQueue
     private val fieldRegistry = session.fieldRegistry
     private val reviewConfig = session.reviewConfig
@@ -424,47 +491,32 @@ class AiEditViewModel(
     private fun reportSetupFailure(failure: Throwable) =
         message(uiText(Res.string.ai_edit_setup_load_failed, failure.reasonText()))
 
-    /**
-     * Pick the job this run does, applying its preset over the current configuration (Idle only).
-     *
-     * Also the way back: re-picking the task the run already carries resets it to the preset, so a
-     * form the user has edited into a corner has a one-click way out.
-     */
-    fun setTask(task: EditTask) = updateIdle { it.withTask(task) }
+    override fun setTask(task: EditTask) = updateIdle { it.withTask(task) }
 
-    /** Drop back to the task chooser, keeping the scope and the numeric overrides (Idle only). */
-    fun clearTask() = updateIdle { it.copy(task = null) }
+    override fun clearTask() = updateIdle { it.copy(task = null) }
 
-    /** Change the scope (Idle only); unavailable scopes are ignored. */
-    fun setScope(scope: EditScope) = updateIdle { if (it.scopeAvailable(scope)) it.copy(scope = scope) else it }
+    override fun setScope(scope: EditScope) = updateIdle { if (it.scopeAvailable(scope)) it.copy(scope = scope) else it }
 
-    /** Pick which saved view backs the [EditScope.SAVED_VIEW] scope (Idle only). */
-    fun setSavedView(id: String) =
+    override fun setSavedView(id: String) =
         updateIdle { state -> if (state.savedViews.any { it.id == id }) state.copy(savedViewId = id) else state }
 
-    /** Set the per-run max suggested tags per document (Idle only); clamped to [AiTagging.RANGE]. */
-    fun setMaxTags(value: Int) = updateIdle { it.copy(maxTags = value.coerceIn(AiTagging.RANGE)) }
+    override fun setMaxTags(value: Int) = updateIdle { it.copy(maxTags = value.coerceIn(AiTagging.RANGE)) }
 
-    /** Set the per-run max new tags per document (Idle only); clamped to [AiTagging.NEW_TAGS_RANGE]. */
-    fun setMaxNewTags(value: Int) = updateIdle { it.copy(maxNewTags = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
+    override fun setMaxNewTags(value: Int) = updateIdle { it.copy(maxNewTags = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
 
-    /** Set the per-run batch size (Idle only); clamped to [AiTagging.BATCH_RANGE]. */
-    fun setBatchSize(value: Int) = updateIdle { it.copy(batchSize = value.coerceIn(AiTagging.BATCH_RANGE)) }
+    override fun setBatchSize(value: Int) = updateIdle { it.copy(batchSize = value.coerceIn(AiTagging.BATCH_RANGE)) }
 
-    /** Toggle whether field [key] participates in the run (Idle only). */
-    fun setFieldEnabled(
+    override fun setFieldEnabled(
         key: String,
         enabled: Boolean,
     ) = updateFieldOption(key) { it.copy(enabled = enabled) }
 
-    /** Set the autofill [mode] for field [key] (Idle only). */
-    fun setFieldMode(
+    override fun setFieldMode(
         key: String,
         mode: AiFieldMode,
     ) = updateFieldOption(key) { it.copy(mode = mode) }
 
-    /** Add a registered field the seed left out to this run, enabled (Idle only). */
-    fun addField(key: String) =
+    override fun addField(key: String) =
         updateIdle {
             if (key in it.fieldOptions) {
                 it
@@ -473,20 +525,15 @@ class AiEditViewModel(
             }
         }
 
-    /** Toggle whether tag additions are suggested at all (Idle only). */
-    fun setIncludeTags(value: Boolean) = updateIdle { it.asCustom().copy(includeTags = value) }
+    override fun setIncludeTags(value: Boolean) = updateIdle { it.asCustom().copy(includeTags = value) }
 
-    /** Toggle whether the model may invent tags outside the current vocabulary (Idle only). */
-    fun setAllowNewTags(value: Boolean) = updateIdle { it.asCustom().copy(allowNewTags = value) }
+    override fun setAllowNewTags(value: Boolean) = updateIdle { it.asCustom().copy(allowNewTags = value) }
 
-    /** Toggle whether tag removals are suggested (Idle only). */
-    fun setIncludeTagRemovals(value: Boolean) = updateIdle { it.asCustom().copy(includeTagRemovals = value) }
+    override fun setIncludeTagRemovals(value: Boolean) = updateIdle { it.asCustom().copy(includeTagRemovals = value) }
 
-    /** Set the free-text extra instructions (Idle only). */
-    fun setCustomPrompt(value: String) = updateIdle { it.copy(customPrompt = value) }
+    override fun setCustomPrompt(value: String) = updateIdle { it.copy(customPrompt = value) }
 
-    /** Choose whether this run goes to the background queue, overriding the size-based default. */
-    fun setBackground(value: Boolean) = updateIdle { it.copy(backgroundOverride = value) }
+    override fun setBackground(value: Boolean) = updateIdle { it.copy(backgroundOverride = value) }
 
     private fun updateFieldOption(
         key: String,
@@ -521,7 +568,7 @@ class AiEditViewModel(
      * same gate the button reads, so nothing spends model calls while the page says it cannot. A
      * finished run asked for a next batch that is no longer there stops offering one.
      */
-    fun start() {
+    override fun start() {
         if (run?.isActive == true) return
         val state = _ui.value
         run =

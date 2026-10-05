@@ -30,7 +30,6 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.npn.app.ui.common.Dropdown
 import dev.npn.app.ui.common.ExpanderRow
 import dev.npn.app.ui.common.HelpText
@@ -102,14 +101,12 @@ private const val CAP_MAX_DIGITS = 3
 @Composable
 internal fun AiEditSetup(
     ui: AiEditUiState,
-    vm: AiEditViewModel,
+    preview: ScopePreview,
+    plan: RunPlan,
+    blocker: StartBlocker?,
+    setup: AiEditSetupActions,
     content: DocContentFacade,
 ) {
-    // Collected here rather than in AiEditScreen so the (possibly library-wide) scope query only
-    // runs while this phase is on screen.
-    val preview by vm.preview.collectAsStateWithLifecycle()
-    val plan by vm.plan.collectAsStateWithLifecycle()
-    val blocker by vm.startBlocker.collectAsStateWithLifecycle()
     val wide = LocalWindowWidthClass.current.isWide
     Column(Modifier.fillMaxSize()) {
         Box(Modifier.weight(1f).fillMaxWidth()) {
@@ -132,15 +129,15 @@ internal fun AiEditSetup(
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
-                        TaskChooser(onPick = vm::setTask)
+                        TaskChooser(onPick = setup::setTask)
                     } else {
-                        ChosenTask(task, onChange = vm::clearTask)
-                        SetupForm(ui, preview, plan, vm, content, wide)
+                        ChosenTask(task, onChange = setup::clearTask)
+                        SetupForm(ui, preview, plan, setup, content, wide)
                     }
                 }
             }
         }
-        RunBar(ui = ui, plan = plan, blocker = blocker, onStart = vm::start)
+        RunBar(ui = ui, plan = plan, blocker = blocker, onStart = setup::start)
     }
 }
 
@@ -149,28 +146,28 @@ private fun SetupForm(
     ui: AiEditUiState,
     preview: ScopePreview,
     plan: RunPlan,
-    vm: AiEditViewModel,
+    setup: AiEditSetupActions,
     content: DocContentFacade,
     wide: Boolean,
 ) {
     if (wide) {
         Row(horizontalArrangement = Arrangement.spacedBy(32.dp)) {
             SetupColumn(Modifier.weight(1f)) {
-                ScopeSection(ui, preview, vm, content)
-                FieldSection(ui, vm)
+                ScopeSection(ui, preview, setup, content)
+                FieldSection(ui, setup)
             }
             SetupColumn(Modifier.weight(1f)) {
-                TagSection(ui, vm)
-                PromptField(ui, vm)
-                RunSection(ui, plan, vm)
+                TagSection(ui, setup)
+                PromptField(ui.customPrompt, setup::setCustomPrompt)
+                RunSection(ui, plan, setup)
             }
         }
     } else {
-        ScopeSection(ui, preview, vm, content)
-        TagSection(ui, vm)
-        FieldSection(ui, vm)
-        PromptField(ui, vm)
-        RunSection(ui, plan, vm)
+        ScopeSection(ui, preview, setup, content)
+        TagSection(ui, setup)
+        FieldSection(ui, setup)
+        PromptField(ui.customPrompt, setup::setCustomPrompt)
+        RunSection(ui, plan, setup)
     }
 }
 
@@ -187,14 +184,14 @@ private fun SetupForm(
 private fun ScopeSection(
     ui: AiEditUiState,
     preview: ScopePreview,
-    vm: AiEditViewModel,
+    setup: AiEditSetupActions,
     content: DocContentFacade,
 ) {
     SetupSection(stringResource(Res.string.ai_edit_scope)) {
         EditScope.entries.filter { ui.scopeAvailable(it) || it == ui.scope }.forEach { scope ->
-            ScopeOption(scope, scopeLabel(scope, ui), ui.scope, vm::setScope)
+            ScopeOption(scope, scopeLabel(scope, ui), ui.scope, setup::setScope)
             if (scope == EditScope.SAVED_VIEW && ui.scope == EditScope.SAVED_VIEW) {
-                SavedViewPicker(ui, vm)
+                SavedViewPicker(ui, setup::setSavedView)
             }
         }
         BatchPreview(preview, ui.batchSize, content)
@@ -219,14 +216,14 @@ private fun scopeLabel(
 @Composable
 private fun SavedViewPicker(
     ui: AiEditUiState,
-    vm: AiEditViewModel,
+    onSelect: (id: String) -> Unit,
 ) {
     val current = ui.savedViews.firstOrNull { it.id == ui.savedViewId }
     Dropdown(
         selected = current?.name ?: stringResource(Res.string.ai_edit_saved_view_choose),
         options = ui.savedViews,
         optionLabel = { it.name },
-        onSelect = { vm.setSavedView(it.id) },
+        onSelect = { onSelect(it.id) },
         modifier = Modifier.padding(start = 48.dp),
     )
 }
@@ -235,28 +232,28 @@ private fun SavedViewPicker(
 @Composable
 private fun TagSection(
     ui: AiEditUiState,
-    vm: AiEditViewModel,
+    setup: AiEditSetupActions,
 ) {
     SetupSection(stringResource(Res.string.ai_edit_tags)) {
         SwitchRow(
             label = stringResource(Res.string.ai_edit_suggest_tags),
             help = stringResource(Res.string.ai_edit_suggest_tags_help),
             checked = ui.includeTags,
-            onCheckedChange = vm::setIncludeTags,
+            onCheckedChange = setup::setIncludeTags,
         )
         if (ui.includeTags) {
             SwitchRow(
                 label = stringResource(Res.string.ai_edit_allow_new_tags),
                 help = stringResource(Res.string.ai_edit_allow_new_tags_help),
                 checked = ui.allowNewTags,
-                onCheckedChange = vm::setAllowNewTags,
+                onCheckedChange = setup::setAllowNewTags,
             )
         }
         SwitchRow(
             label = stringResource(Res.string.ai_edit_suggest_tag_removals),
             help = stringResource(Res.string.ai_edit_suggest_tag_removals_help),
             checked = ui.includeTagRemovals,
-            onCheckedChange = vm::setIncludeTagRemovals,
+            onCheckedChange = setup::setIncludeTagRemovals,
         )
     }
 }
@@ -264,7 +261,7 @@ private fun TagSection(
 @Composable
 private fun FieldSection(
     ui: AiEditUiState,
-    vm: AiEditViewModel,
+    setup: AiEditSetupActions,
 ) {
     SetupSection(stringResource(Res.string.ai_edit_fields)) {
         HelpText(stringResource(Res.string.ai_edit_fields_help))
@@ -283,11 +280,11 @@ private fun FieldSection(
             FieldOption(
                 label = labels[key] ?: key,
                 option = ui.fieldOptions.getValue(key),
-                onEnabledChange = { vm.setFieldEnabled(key, it) },
-                onModeChange = { vm.setFieldMode(key, it) },
+                onEnabledChange = { setup.setFieldEnabled(key, it) },
+                onModeChange = { setup.setFieldMode(key, it) },
             )
         }
-        AddFieldPicker(ui.fields.filter { it.key !in ui.fieldOptions }, vm::addField)
+        AddFieldPicker(ui.fields.filter { it.key !in ui.fieldOptions }, setup::addField)
     }
 }
 
@@ -320,12 +317,12 @@ private fun AddFieldPicker(
 
 @Composable
 private fun PromptField(
-    ui: AiEditUiState,
-    vm: AiEditViewModel,
+    prompt: String,
+    onChange: (String) -> Unit,
 ) {
     OutlinedTextField(
-        value = ui.customPrompt,
-        onValueChange = vm::setCustomPrompt,
+        value = prompt,
+        onValueChange = onChange,
         modifier = Modifier.fillMaxWidth(),
         label = { Text(stringResource(Res.string.ai_edit_custom_prompt)) },
         supportingText = { Text(stringResource(Res.string.ai_edit_custom_prompt_hint)) },
@@ -344,7 +341,7 @@ private fun PromptField(
 private fun RunSection(
     ui: AiEditUiState,
     plan: RunPlan,
-    vm: AiEditViewModel,
+    setup: AiEditSetupActions,
 ) {
     SetupSection(stringResource(Res.string.ai_edit_run_where)) {
         RunPlacementOption(
@@ -352,16 +349,16 @@ private fun RunSection(
             help = stringResource(Res.string.ai_edit_run_now_help),
             selected = !plan.background,
             recommended = plan.loaded && ui.backgroundOverride == null && !plan.background,
-            onSelect = { vm.setBackground(false) },
+            onSelect = { setup.setBackground(false) },
         )
         RunPlacementOption(
             label = stringResource(Res.string.ai_edit_background),
             help = stringResource(Res.string.ai_edit_background_help),
             selected = plan.background,
             recommended = plan.loaded && ui.backgroundOverride == null && plan.background,
-            onSelect = { vm.setBackground(true) },
+            onSelect = { setup.setBackground(true) },
         )
-        AdvancedSection(ui, plan, vm)
+        AdvancedSection(ui, plan, setup)
     }
 }
 
@@ -406,7 +403,7 @@ private fun RunPlacementOption(
 private fun AdvancedSection(
     ui: AiEditUiState,
     plan: RunPlan,
-    vm: AiEditViewModel,
+    setup: AiEditSetupActions,
 ) {
     var expanded by remember { mutableStateOf(false) }
     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -422,7 +419,7 @@ private fun AdvancedSection(
         if (ui.includeTags) {
             NumericField(
                 value = ui.maxTags,
-                onValueChange = vm::setMaxTags,
+                onValueChange = setup::setMaxTags,
                 range = AiTagging.RANGE,
                 label = stringResource(Res.string.ai_edit_tags_per_document),
                 supportingText =
@@ -438,7 +435,7 @@ private fun AdvancedSection(
         if (ui.includeTags && ui.allowNewTags) {
             NumericField(
                 value = ui.maxNewTags,
-                onValueChange = vm::setMaxNewTags,
+                onValueChange = setup::setMaxNewTags,
                 range = AiTagging.NEW_TAGS_RANGE,
                 label = stringResource(Res.string.ai_edit_new_tags_per_document),
                 supportingText =
@@ -454,7 +451,7 @@ private fun AdvancedSection(
         if (!plan.background) {
             NumericField(
                 value = ui.batchSize,
-                onValueChange = vm::setBatchSize,
+                onValueChange = setup::setBatchSize,
                 range = AiTagging.BATCH_RANGE,
                 label = stringResource(Res.string.ai_edit_documents_per_batch),
                 supportingText =
