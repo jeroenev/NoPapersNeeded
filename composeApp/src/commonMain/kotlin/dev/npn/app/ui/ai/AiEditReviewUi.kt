@@ -113,7 +113,7 @@ internal fun ReviewBatch(
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(12.dp),
         ) {
-            item { BatchSelectionHeader(selected, total, docs.attentionCount(), actions) }
+            item { BatchSelectionHeader(selected, total, docs.sumOf { it.needsAttention }, actions) }
             items(docs, key = { it.docId }) { doc ->
                 ReviewRow(doc, content, actions)
             }

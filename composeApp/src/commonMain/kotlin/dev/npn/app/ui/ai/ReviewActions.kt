@@ -34,8 +34,7 @@ internal data class ReviewActions(
 )
 
 /**
- * Selection toggling over a Review batch — the tri-state half of the domain's pre-select policy,
- * as pure list transforms.
+ * Selection toggling over a Review batch, as pure list transforms.
  *
  * Which suggestions a run *starts* selected is domain policy and lives in core; which ones the user
  * then ticks is presentation state, and both AI-edit viewmodels drive exactly the same widgets over
@@ -69,31 +68,12 @@ internal fun List<ReviewDoc>.setDocSelection(
 internal fun List<ReviewDoc>.setAllSelected(selected: Boolean): List<ReviewDoc> = map { it.withAllSelected(selected) }
 
 /**
- * Select exactly the suggestions that need no judgement — reusing a tag the library already has,
- * filling a field that is empty — and deselect the rest.
- *
- * This is the domain's own pre-select policy expressed as a transform, which is what makes it a
- * safe bulk action: "select all" also ticks the three kinds of suggestion the projector
- * deliberately left off (invented tags, tag removals, values that would replace something), so
- * offering it as *the* prominent shortcut quietly undoes the one guard rail this screen has.
+ * Reset every document to the domain's pre-select policy ([ReviewDoc.recommended]), which is what
+ * makes it a safe bulk action: "select all" also ticks the three kinds of suggestion the policy
+ * deliberately leaves off (invented tags, tag removals, values that would replace something), so
+ * offering it as *the* prominent shortcut would quietly undo the one guard rail this screen has.
  */
-internal fun List<ReviewDoc>.selectRecommended(): List<ReviewDoc> =
-    map { doc ->
-        doc.copy(
-            chips = doc.chips.map { it.copy(selected = !it.isNew) },
-            removals = doc.removals.map { it.copy(selected = false) },
-            fields = doc.fields.map { it.copy(selected = it.current == null) },
-        )
-    }
-
-/**
- * How many suggestions in the batch are the kind a person has to decide about, so the header can
- * say so instead of leaving the user to notice one overwrite among two hundred rows.
- */
-internal fun List<ReviewDoc>.attentionCount(): Int =
-    sumOf { doc ->
-        doc.chips.count { it.isNew } + doc.removals.size + doc.fields.count { it.current != null }
-    }
+internal fun List<ReviewDoc>.selectRecommended(): List<ReviewDoc> = map { it.recommended() }
 
 private fun List<ReviewDoc>.mapDoc(
     docId: String,

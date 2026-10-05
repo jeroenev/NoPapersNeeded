@@ -4,10 +4,8 @@ import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.util.runCatchingCancellable
 
 /**
- * Turns one document's raw [AiEditSuggestion] into the [ReviewDoc] a human is shown, applying the
- * **pre-select policy** (CONTEXT.md, "Review"): existing-vocabulary tag additions are pre-selected,
- * new tags and every removal are pre-deselected, field fill-ins are pre-selected and overwrites are
- * pre-deselected.
+ * Turns one document's raw [AiEditSuggestion] into the [ReviewDoc] a human is shown, selected as
+ * the **pre-select policy** ([ReviewDoc.recommended]) says.
  *
  * Shared by the interactive [AiEditRun] and by [AiEditQueue]'s stored runs precisely because a
  * queued run is projected *late*: its suggestion may have been produced hours earlier, so the
@@ -29,29 +27,21 @@ internal class ReviewProjector(
             title = item.doc.title,
             fileName = item.doc.fileName,
             snippet = snippetFor(item.doc.docId),
-            chips = suggestion.addTags.map { ReviewChip(it.tag, it.isNew, selected = !it.isNew) },
+            chips = suggestion.addTags.map { ReviewChip(it.tag, it.isNew, selected = false) },
             removals = suggestion.removeTags.map { ReviewChip(it, isNew = false, selected = false) },
             fields =
                 suggestion.metadata.values.map { (key, value) ->
-                    reviewField(key, labels[key] ?: key, value, item.doc.fields[key])
+                    ReviewField(
+                        key = key,
+                        label = labels[key] ?: key,
+                        value = value,
+                        // A blank value is no value: filling it replaces nothing.
+                        current = item.doc.fields[key]?.takeIf { it.isNotBlank() },
+                        selected = false,
+                    )
                 },
-        )
+        ).recommended()
     }
-
-    /** Fill-ins (no current value) are pre-selected; overwrites require an explicit opt-in. */
-    private fun reviewField(
-        key: String,
-        label: String,
-        value: String,
-        current: String?,
-    ): ReviewField =
-        ReviewField(
-            key = key,
-            label = label,
-            value = value,
-            current = current?.takeIf { it.isNotBlank() },
-            selected = current.isNullOrBlank(),
-        )
 
     /** First ~[SNIPPET_LENGTH] chars of extracted text, whitespace-collapsed; null when unavailable. */
     private suspend fun snippetFor(docId: String): String? =
