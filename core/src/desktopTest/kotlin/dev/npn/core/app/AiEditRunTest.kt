@@ -18,6 +18,7 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -480,9 +481,11 @@ class AiEditRunScopeTest {
     fun selectionScopeQueriesTheSelectedIds() =
         runTest {
             val h = Harness(selection = listOf("a", "c"))
+            h.documents.documents.value = listOf(item("a"), item("b"), item("c"))
 
-            h.run.docsFor(key(scope = EditScope.SELECTION))
+            val docs = h.run.docsFor(key(scope = EditScope.SELECTION)).first()
 
+            docs.map { it.doc.docId } shouldContainExactly listOf("a", "c")
             h.documents.observedFilters
                 .single()
                 .first shouldBe LibraryFilter(docIds = listOf("a", "c"))

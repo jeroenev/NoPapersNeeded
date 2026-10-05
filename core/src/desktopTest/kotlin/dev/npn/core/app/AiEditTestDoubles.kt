@@ -7,6 +7,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.model.FieldKeys
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.map
 
 // Shared test doubles for the AI-edit suites: AiEditRunTest drives the interactive run,
 // AiEditQueueTest the background one. Both need the same three collaborators, and the point of
@@ -64,12 +65,14 @@ internal class FakeDocuments : DocumentRepository {
     /** Records every (filter, sort) the run subscribed with. */
     val observedFilters = mutableListOf<Pair<LibraryFilter, LibrarySort>>()
 
+    /** [documents], narrowed to [LibraryFilter.docIds] when the filter names any; no other filtering. */
     override fun observeDocuments(
         filter: LibraryFilter,
         sort: LibrarySort,
     ): Flow<List<DocListItem>> {
         observedFilters += filter to sort
-        return documents
+        if (filter.docIds.isEmpty()) return documents
+        return documents.map { list -> list.filter { it.doc.docId in filter.docIds } }
     }
 
     override fun observeDoc(docId: String): Flow<DocListItem?> = error("unused")
