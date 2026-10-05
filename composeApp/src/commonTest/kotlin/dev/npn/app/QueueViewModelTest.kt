@@ -1,11 +1,10 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.queue.QueueViewModel
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -32,12 +31,10 @@ class QueueViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val vm = QueueViewModel(session)
-            val messages = mutableListOf<UiText>()
-            val job = launch { vm.messages.collect { messages += it.text } }
+            val messages = collecting(vm.messages.map { it.text })
 
             vm.discardEditRun("run")
             advanceUntilIdle()
-            job.cancel()
 
             session.aiEditQueue.discarded shouldContainExactly listOf("run")
             messages.shouldBeEmpty()
@@ -50,12 +47,10 @@ class QueueViewModelTest : MainDispatcherTest() {
             val session = FakeLibrarySession()
             session.aiEditQueue.discardFailure = IllegalStateException("database is locked")
             val vm = QueueViewModel(session)
-            val messages = mutableListOf<UiText>()
-            val job = launch { vm.messages.collect { messages += it.text } }
+            val messages = collecting(vm.messages.map { it.text })
 
             vm.discardEditRun("run")
             advanceUntilIdle()
-            job.cancel()
 
             messages shouldContainExactly
                 listOf(failure(Res.string.queue_edit_run_discard_failed, "database is locked"))

@@ -3,6 +3,7 @@ package dev.npn.app.ui.detail
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
+import dev.npn.app.collecting
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
@@ -34,7 +35,7 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
                         )
                 }
             val model = DocDetailViewModel("doc-1", session, FakeSettingsRepository())
-            val job = launch { model.metadata.collect {} }
+            collecting(model.metadata)
             advanceUntilIdle()
 
             model.metadata.value.history shouldBe HistoryUiState.NotLoaded
@@ -47,7 +48,6 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
                     uiText(Res.string.detail_history_tag_added, "invoice"),
                     uiText(Res.string.detail_history_field_set, "Title", "X"),
                 )
-            job.cancel()
         }
 
     @Test

@@ -1,6 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.tags.TagManagementViewModel
 import dev.npn.app.ui.tags.buildTree
@@ -9,7 +8,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -138,8 +137,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { tagAdmin.failTags = setOf("invoices") }
             val model = vm(session)
-            val messages = mutableListOf<UiText>()
-            val job = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.delete(listOf("finance", "invoices", "travel"))
             model.merge(listOf("finance", "invoices", "bills"), into = "finance")
@@ -154,7 +152,6 @@ class TagManagementViewModelTest : MainDispatcherTest() {
                     uiText(Res.plurals.common_tags_merge_some_failed, 2, 1, 2),
                     uiText(Res.plurals.common_tags_color_some_failed, 2, 1, 2),
                 )
-            job.cancel()
         }
 
     @Test
@@ -162,8 +159,7 @@ class TagManagementViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { tagAdmin.failTagAdmin = { error("segment write failed") } }
             val model = vm(session)
-            val messages = mutableListOf<UiText>()
-            val job = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.delete(listOf("gone"))
             model.rename("old", "new")
@@ -175,6 +171,5 @@ class TagManagementViewModelTest : MainDispatcherTest() {
                     failure(Res.string.common_tags_delete_failed, "segment write failed"),
                     failure(Res.string.common_tags_rename_failed, "segment write failed"),
                 )
-            job.cancel()
         }
 }

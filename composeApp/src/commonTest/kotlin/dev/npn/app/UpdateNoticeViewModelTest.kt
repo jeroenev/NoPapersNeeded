@@ -6,7 +6,6 @@ import dev.npn.core.update.LatestReleaseSource
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -37,20 +36,18 @@ class UpdateNoticeViewModelTest : MainDispatcherTest() {
     fun offersANewerRelease() =
         runTest(dispatcher) {
             val vm = vm(FakeSettingsRepository(), CountingSource(release))
-            val job = launch { vm.notice.collect {} }
+            collecting(vm.notice)
             advanceUntilIdle()
             vm.notice.value shouldBe release
-            job.cancel()
         }
 
     @Test
     fun ignoresTheRunningOrAnOlderVersion() =
         runTest(dispatcher) {
             val vm = vm(FakeSettingsRepository(), CountingSource(release), current = "1.1.0")
-            val job = launch { vm.notice.collect {} }
+            collecting(vm.notice)
             advanceUntilIdle()
             vm.notice.value shouldBe null
-            job.cancel()
         }
 
     @Test
@@ -58,13 +55,12 @@ class UpdateNoticeViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val vm = vm(settings, CountingSource(release))
-            val job = launch { vm.notice.collect {} }
+            collecting(vm.notice)
             advanceUntilIdle()
             vm.dismiss(release)
             advanceUntilIdle()
             vm.notice.value shouldBe null
             settings.settings.first().dismissedUpdateVersion shouldBe "1.1.0"
-            job.cancel()
         }
 
     @Test
@@ -73,7 +69,7 @@ class UpdateNoticeViewModelTest : MainDispatcherTest() {
             val settings = FakeSettingsRepository().apply { updateSettings { it.copy(updateCheckEnabled = false) } }
             val source = CountingSource(release)
             val vm = vm(settings, source)
-            val job = launch { vm.notice.collect {} }
+            collecting(vm.notice)
             advanceUntilIdle()
             source.calls shouldBe 0
             vm.notice.value shouldBe null
@@ -82,7 +78,6 @@ class UpdateNoticeViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             source.calls shouldBe 1
             vm.notice.value shouldBe release
-            job.cancel()
         }
 
     @Test
@@ -90,10 +85,9 @@ class UpdateNoticeViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val source = CountingSource(release)
             val vm = vm(FakeSettingsRepository(), source, platformChecks = false)
-            val job = launch { vm.notice.collect {} }
+            collecting(vm.notice)
             advanceUntilIdle()
             source.calls shouldBe 0
             vm.notice.value shouldBe null
-            job.cancel()
         }
 }

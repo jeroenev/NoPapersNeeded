@@ -8,6 +8,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -137,12 +138,10 @@ class LibraryTrashTest : MainDispatcherTest() {
             model.toggleSelection("d2")
             model.toggleSelection("d3")
 
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             runCurrent()
             model.bulkTrash()
             advanceUntilIdle()
-            collector.cancel()
             // Both messages show, in order: the failure, then the Undo for what did move.
             messages shouldContainExactly
                 listOf(

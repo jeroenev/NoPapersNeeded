@@ -4,8 +4,8 @@ package dev.npn.app.ui.ai
 
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.MainDispatcherTest
+import dev.npn.app.collecting
 import dev.npn.app.failure
-import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
@@ -18,7 +18,7 @@ import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -83,23 +83,21 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val review = ScriptedReview(docs = listOf(reviewDoc("a"), reviewDoc("b")))
             val model = AiEditReviewViewModel(sessionWith(review), "job")
-            val job = launch { model.phase.collect {} }
+            collecting(model.phase)
             advanceUntilIdle()
 
             val phase = model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
             phase.docs.map { it.docId } shouldContainExactly listOf("a", "b")
-            job.cancel()
         }
 
     @Test
     fun aRunThatIsGoneReportsItselfRatherThanShowingAnEmptyReview() =
         runTest(dispatcher) {
             val model = AiEditReviewViewModel(FakeLibrarySession(), "job")
-            val job = launch { model.phase.collect {} }
+            collecting(model.phase)
             advanceUntilIdle()
 
             model.phase.value shouldBe QueuedReviewPhase.Unavailable
-            job.cancel()
         }
 
     @Test
@@ -108,15 +106,12 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply { aiEditQueue.openFailure = IllegalStateException("database locked") }
             val model = AiEditReviewViewModel(session, "job")
-            val job = launch { model.phase.collect {} }
-            val messages = mutableListOf<UiText>()
-            val messageJob = launch { model.messages.collect { messages += it.text } }
+            collecting(model.phase)
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
             model.phase.value shouldBe QueuedReviewPhase.Unavailable
             messages shouldContainExactly listOf(failure(Res.string.ai_edit_review_open_failed, "database locked"))
-            job.cancel()
-            messageJob.cancel()
         }
 
     @Test
@@ -124,9 +119,8 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val review = ScriptedReview(discardFailure = IllegalStateException("disk full"))
             val model = AiEditReviewViewModel(sessionWith(review), "job")
-            val job = launch { model.phase.collect {} }
-            val messages = mutableListOf<UiText>()
-            val messageJob = launch { model.messages.collect { messages += it.text } }
+            collecting(model.phase)
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
             model.leaveReview()
@@ -134,8 +128,6 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
 
             model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Review>()
             messages shouldContainExactly listOf(failure(Res.string.ai_edit_review_discard_failed, "disk full"))
-            job.cancel()
-            messageJob.cancel()
         }
 
     @Test
@@ -143,7 +135,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val review = ScriptedReview()
             val model = AiEditReviewViewModel(sessionWith(review), "job")
-            val job = launch { model.phase.collect {} }
+            collecting(model.phase)
             advanceUntilIdle()
 
             model.toggleField("a", FieldKeys.TITLE)
@@ -153,7 +145,6 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val applied = review.applied.single().single()
             applied.chips.single().selected shouldBe true
             applied.fields.single().selected shouldBe false
-            job.cancel()
         }
 
     @Test
@@ -161,7 +152,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val review = ScriptedReview()
             val model = AiEditReviewViewModel(sessionWith(review), "job")
-            val job = launch { model.phase.collect {} }
+            collecting(model.phase)
             advanceUntilIdle()
 
             model.apply()
@@ -170,7 +161,6 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val done = model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Done>()
             done.result.applied shouldBe 2
             done.result.moreRemain shouldBe false
-            job.cancel()
         }
 
     @Test
@@ -183,9 +173,8 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
                     outcome = ApplyOutcome.Retry(listOf(retryRow), failedDocs = 1, total = 2),
                 )
             val model = AiEditReviewViewModel(sessionWith(review), "job")
-            val job = launch { model.phase.collect {} }
-            val messages = mutableListOf<UiText>()
-            val messageJob = launch { model.messages.collect { messages += it.text } }
+            collecting(model.phase)
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
 
             model.apply()
@@ -195,8 +184,6 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             phase.docs.map { it.docId } shouldContainExactly listOf("b")
             // Only b's title is still owed, so it is the details that failed, not a tag.
             messages shouldContainExactly listOf(uiText(Res.plurals.ai_edit_apply_fields_failed, 2, 1, 2))
-            job.cancel()
-            messageJob.cancel()
         }
 
     @Test
@@ -204,7 +191,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val review = ScriptedReview(outcome = ApplyOutcome.NothingSelected)
             val model = AiEditReviewViewModel(sessionWith(review), "job")
-            val job = launch { model.phase.collect {} }
+            collecting(model.phase)
             advanceUntilIdle()
             val before = model.phase.value
 
@@ -212,7 +199,6 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
 
             model.phase.value shouldBe before
-            job.cancel()
         }
 
     @Test
@@ -220,7 +206,7 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val review = ScriptedReview()
             val model = AiEditReviewViewModel(sessionWith(review), "job")
-            val job = launch { model.phase.collect {} }
+            collecting(model.phase)
             advanceUntilIdle()
 
             model.leaveReview()
@@ -231,6 +217,5 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             model.phase.value
                 .shouldBeInstanceOf<QueuedReviewPhase.Done>()
                 .result.applied shouldBe 0
-            job.cancel()
         }
 }

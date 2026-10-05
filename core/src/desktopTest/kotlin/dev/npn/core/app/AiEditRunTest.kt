@@ -505,12 +505,8 @@ class AiEditRunScopeTest {
             val h = Harness()
             h.documents.documents.value = listOf(listItem("a"))
 
-            var seen: List<DocListItem>? = null
-            val job = launch { h.run.docsFor(key(scope = EditScope.SELECTION)).collect { seen = it } }
-            advanceUntilIdle()
-            seen shouldBe emptyList()
+            h.run.docsFor(key(scope = EditScope.SELECTION)).first() shouldBe emptyList()
             h.documents.observedFilters shouldBe emptyList()
-            job.cancel()
         }
 
     @Test
@@ -536,15 +532,8 @@ class AiEditRunScopeTest {
             val h = Harness()
             h.documents.documents.value = listOf(listItem("a"))
 
-            var seen: List<DocListItem>? = null
-            val job =
-                launch {
-                    h.run.docsFor(key(scope = EditScope.SAVED_VIEW, savedView = null)).collect { seen = it }
-                }
-            advanceUntilIdle()
-            seen shouldBe emptyList()
+            h.run.docsFor(key(scope = EditScope.SAVED_VIEW, savedView = null)).first() shouldBe emptyList()
             h.documents.observedFilters shouldBe emptyList()
-            job.cancel()
         }
 
     @Test
@@ -567,15 +556,8 @@ class AiEditRunScopeTest {
             val h = Harness()
             h.documents.documents.value = listOf(listItem("a"))
 
-            var seen: List<DocListItem>? = null
-            val job =
-                launch {
-                    h.run.docsFor(key(scope = EditScope.MISSING_FIELDS, missing = emptyList())).collect { seen = it }
-                }
-            advanceUntilIdle()
-            seen shouldBe emptyList()
+            h.run.docsFor(key(scope = EditScope.MISSING_FIELDS, missing = emptyList())).first() shouldBe emptyList()
             h.documents.observedFilters shouldBe emptyList()
-            job.cancel()
         }
 
     @Test

@@ -1,6 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsViewModel
@@ -25,7 +24,7 @@ import dev.npn.core.pathrules.StoragePathError
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
@@ -50,8 +49,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
 
             session.content.clearedThumbnails = 3
             model.clearThumbnailCache()
@@ -59,7 +57,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             session.content.clearedThumbnails = 0
             model.clearThumbnailCache()
             advanceUntilIdle()
-            collector.cancel()
 
             messages shouldContainExactly
                 listOf(
@@ -97,7 +94,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
             session.storagePath.storagePathFlow.value =
                 StoragePathSetting("{doc_date:yyyy}/{title}.pdf", enabled = true)
             val model = vm(settings = settings, session = session)
-            val job = launch { model.state.collect {} }
+            collecting(model.state)
             advanceUntilIdle()
             val state = model.state.value
             val s = state.snapshot
@@ -118,7 +115,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             s.aiReasoningEdit shouldBe AiReasoningLevel.NONE
             s.aiMaxTagsPerDoc shouldBe 12
             s.aiMaxNewTagsPerDoc shouldBe 7
-            job.cancel()
         }
 
     @Test
@@ -126,13 +122,12 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
-            val job = launch { model.state.collect {} }
+            collecting(model.state)
             advanceUntilIdle()
             model.state.value.snapshot.ocrLanguage shouldBe null
             settings.updateSettings { it.copy(ocrLanguage = "fra") }
             advanceUntilIdle()
             model.state.value.snapshot.ocrLanguage shouldBe "fra"
-            job.cancel()
         }
 
     @Test
@@ -227,7 +222,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            val job = launch { model.state.collect {} }
+            collecting(model.state)
             for (typed in listOf("{d", "{docType}", "{docType}/{title}.pdf")) {
                 model.setStoragePathTemplate(typed)
                 runCurrent()
@@ -240,7 +235,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
 
             session.storagePath.templateWrites shouldContainExactly listOf("{docType}/{title}.pdf")
             model.state.value.storagePathTemplate shouldBe "{docType}/{title}.pdf"
-            job.cancel()
         }
 
     @Test
@@ -258,7 +252,7 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = FakeSettingsRepository()
             val model = vm(settings = settings)
-            val job = launch { model.state.collect {} }
+            collecting(model.state)
             advanceUntilIdle()
             model.edit { it.copy(appLanguage = "nl") }
             advanceUntilIdle()
@@ -267,7 +261,6 @@ class SettingsViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.state.value.snapshot.appLanguage shouldBe null
             settings.settingsFlow.value?.appLanguage shouldBe null
-            job.cancel()
         }
 
     @Test
@@ -355,13 +348,11 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { reviewConfig.failSetReviewMode = { error("writes blocked") } }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
 
             model.setUntaggedOnlyMode()
             model.setInboxWorkflowMode(ReviewMigration.MARK_NONE)
             advanceUntilIdle()
-            collector.cancel()
 
             messages shouldContainExactly
                 List(2) { failure(Res.string.common_settings_review_workflow_failed, "writes blocked") }
@@ -443,12 +434,10 @@ class SettingsViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val settings = aiSettings().apply { failEdit = { error("read-only file system") } }
             val model = vm(settings = settings, selfTest = { report(AiCheckStatus.FAILED) })
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
 
             model.runAiSelfTest()
             advanceUntilIdle()
-            collector.cancel()
 
             model.aiSelfTest.value.aiOcrTurnedOff shouldBe false
             model.aiSelfTest.value.running shouldBe false

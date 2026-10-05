@@ -1,7 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.UiText
-import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.trash.TrashViewModel
 import dev.npn.core.index.RelinkCandidate
 import dev.npn.core.testing.doc
@@ -9,7 +7,7 @@ import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -24,10 +22,9 @@ class TrashViewModelTest : MainDispatcherTest() {
     fun relinkCandidatesEmptyWhenNoReport() =
         runTest(dispatcher) {
             val model = vm()
-            val job = launch { model.state.collect {} }
+            collecting(model.state)
             advanceUntilIdle()
             model.state.value.relinks shouldBe emptyMap()
-            job.cancel()
         }
 
     @Test
@@ -37,10 +34,9 @@ class TrashViewModelTest : MainDispatcherTest() {
             val candidate = RelinkCandidate("old", "new", "name+size", 10)
             session.ingest.lastScanReportFlow.value = emptyScanReport().copy(relinkCandidates = listOf(candidate))
             val model = vm(session)
-            val job = launch { model.state.collect {} }
+            collecting(model.state)
             advanceUntilIdle()
             model.state.value.relinks shouldBe mapOf("old" to listOf(candidate))
-            job.cancel()
         }
 
     @Test
@@ -51,13 +47,12 @@ class TrashViewModelTest : MainDispatcherTest() {
             session.documents.duplicates.value = listOf("d2" to "copy/d2.pdf")
             session.documents.missing.value = listOf(doc("d3"))
             val model = vm(session)
-            val job = launch { model.state.collect {} }
+            collecting(model.state)
             advanceUntilIdle()
             val state = model.state.value
             state.trashed.map { it.doc.docId } shouldContainExactly listOf("d1")
             state.duplicates shouldContainExactly listOf("d2" to "copy/d2.pdf")
             state.missing.map { it.docId } shouldContainExactly listOf("d3")
-            job.cancel()
         }
 
     @Test
@@ -81,14 +76,12 @@ class TrashViewModelTest : MainDispatcherTest() {
                         { error("file exists at original path") }
                 }
             val model = vm(session)
-            val messages = mutableListOf<UiText>()
-            val job = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.restore("d1")
             advanceUntilIdle()
             session.docLifecycle.restoredDocs shouldBe emptyList()
             messages shouldContainExactly
                 listOf(failure(Res.string.common_trash_restore_failed, "file exists at original path"))
-            job.cancel()
         }
 }

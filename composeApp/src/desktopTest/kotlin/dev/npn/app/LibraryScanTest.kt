@@ -8,7 +8,7 @@ import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.ExternalSource
 import io.kotest.matchers.collections.shouldContainExactly
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Path
@@ -52,12 +52,10 @@ class LibraryScanTest : MainDispatcherTest() {
                 ingest.failImport = failure
             }
         val model = LibraryViewModel(session, FakeSettingsRepository())
-        val messages = mutableListOf<String>()
-        val collector = launch { model.messages.collect { messages += it.english() } }
+        val messages = collecting(model.messages.map { it.english() })
 
         model.importScan(ScanResult.Scanned(scanned))
         advanceUntilIdle()
-        collector.cancel()
 
         messages shouldContainExactly listOf(expected)
     }

@@ -6,7 +6,7 @@ import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.ExternalSource
 import io.kotest.matchers.collections.shouldContainExactly
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Path
@@ -30,12 +30,10 @@ class LibraryImportTest : MainDispatcherTest() {
                         )
                 }
             val model = LibraryViewModel(session, FakeSettingsRepository())
-            val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.english() } }
+            val messages = collecting(model.messages.map { it.english() })
 
             model.import(sources)
             advanceUntilIdle()
-            collector.cancel()
 
             messages shouldContainExactly listOf("1 imported, 1 duplicate, 1 failed")
         }
@@ -45,12 +43,10 @@ class LibraryImportTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { ingest.failImport = { error("Library session is closed") } }
             val model = LibraryViewModel(session, FakeSettingsRepository())
-            val messages = mutableListOf<String>()
-            val collector = launch { model.messages.collect { messages += it.english() } }
+            val messages = collecting(model.messages.map { it.english() })
 
             model.import(sources)
             advanceUntilIdle()
-            collector.cancel()
 
             messages shouldContainExactly listOf("Could not import the files: Library session is closed")
         }

@@ -4,7 +4,7 @@ import dev.npn.core.app.ImportOutcome
 import dev.npn.core.fs.ExternalSource
 import io.kotest.matchers.collections.shouldContainExactly
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
@@ -62,11 +62,9 @@ class DroppedFilesTest : MainDispatcherTest() {
         vm: AppViewModel,
         action: () -> Unit,
     ): List<String> {
-        val messages = mutableListOf<String>()
-        val collector = launch { vm.messages.collect { messages += it.english() } }
+        val messages = collecting(vm.messages.map { it.english() })
         action()
         advanceUntilIdle()
-        collector.cancel()
         return messages
     }
 }

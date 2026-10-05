@@ -1,6 +1,5 @@
 package dev.npn.app
 
-import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.core.app.AiOcrOffer
@@ -12,7 +11,7 @@ import dev.npn.core.app.SplitOutcome
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
-import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
@@ -55,15 +54,13 @@ class DocDetailActionsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { docLifecycle.failTrashDocIds = setOf("doc-1") }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val job = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             var done = false
             model.trash { done = true }
             advanceUntilIdle()
             done shouldBe false
             messages shouldContainExactly listOf(failure(Res.string.detail_trash_failed, "trash failed for doc-1"))
-            job.cancel()
         }
 
     @Test
@@ -82,14 +79,12 @@ class DocDetailActionsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { ocr.failReOcr = { error("ocr engine missing") } }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val job = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.reOcr()
             advanceUntilIdle()
             model.ui.value.reindexing shouldBe false
             messages shouldContainExactly listOf(failure(Res.string.common_rerun_ocr_failed, "ocr engine missing"))
-            job.cancel()
         }
 
     @Test
@@ -128,14 +123,12 @@ class DocDetailActionsTest : MainDispatcherTest() {
                     ocr.aiOcrOutcome = AiOcrOutcome.NO_ENDPOINT
                 }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val job = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.ocrWithAi()
             advanceUntilIdle()
             model.ui.value.reindexing shouldBe false
             messages shouldContainExactly listOf(uiText(Res.string.detail_ai_ocr_no_endpoint))
-            job.cancel()
         }
 
     @Test
@@ -147,8 +140,7 @@ class DocDetailActionsTest : MainDispatcherTest() {
                     ocr.failAiOcr = { error("Library session is closed") }
                 }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val job = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             advanceUntilIdle()
             model.ocrWithAi()
             advanceUntilIdle()
@@ -156,7 +148,6 @@ class DocDetailActionsTest : MainDispatcherTest() {
             model.ui.value.reindexing shouldBe false
             messages shouldContainExactly
                 listOf(failure(Res.string.detail_ai_ocr_failed, "Library session is closed"))
-            job.cancel()
         }
 
     @Test
@@ -170,13 +161,11 @@ class DocDetailActionsTest : MainDispatcherTest() {
                         )
                 }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             var left = false
 
             model.split(listOf(0..0, 1..1)) { left = true }
             advanceUntilIdle()
-            collector.cancel()
 
             left shouldBe true
             messages shouldBe emptyList()
@@ -192,13 +181,11 @@ class DocDetailActionsTest : MainDispatcherTest() {
                     maintenance.splitOutcome = SplitOutcome.Failed(SplitFailure.UNREADABLE_PDF)
                 }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             var left = false
 
             model.split(listOf(0..0, 1..1)) { left = true }
             advanceUntilIdle()
-            collector.cancel()
 
             left shouldBe false
             messages shouldContainExactly listOf(uiText(Res.string.detail_split_failed_unreadable))
@@ -210,12 +197,10 @@ class DocDetailActionsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
 
             model.bakeInPlace()
             advanceUntilIdle()
-            collector.cancel()
 
             messages shouldContainExactly listOf(uiText(Res.string.detail_baked_in_place))
             session.content.bakedInPlace shouldContainExactly listOf("doc-1")
@@ -228,12 +213,10 @@ class DocDetailActionsTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply { content.bakeResult = BakeOutcome.Failed(BakeFailure.UNSUPPORTED_PDF) }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
 
             model.bakeInPlace()
             advanceUntilIdle()
-            collector.cancel()
 
             messages shouldContainExactly listOf(uiText(Res.string.detail_bake_failed_unsupported))
             model.ui.value.baking shouldBe false
@@ -244,12 +227,10 @@ class DocDetailActionsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.failBake = { error("Library session is closed") } }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
 
             model.bakeInPlace()
             advanceUntilIdle()
-            collector.cancel()
 
             messages shouldContainExactly listOf(failure(Res.string.detail_bake_failed, "Library session is closed"))
             model.ui.value.baking shouldBe false
@@ -260,13 +241,11 @@ class DocDetailActionsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.bakedBytes = byteArrayOf(1, 2, 3) }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             var written: ByteArray? = null
 
             model.exportBakedCopy { written = it }
             advanceUntilIdle()
-            collector.cancel()
 
             written?.toList() shouldBe listOf<Byte>(1, 2, 3)
             messages shouldContainExactly listOf(uiText(Res.string.detail_exported_baked_copy))
@@ -276,13 +255,11 @@ class DocDetailActionsTest : MainDispatcherTest() {
     fun aCopyThatCannotBeBakedIsNotDelivered() =
         runTest(dispatcher) {
             val model = vm()
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             var delivered = false
 
             model.shareBakedCopy { delivered = true }
             advanceUntilIdle()
-            collector.cancel()
 
             delivered shouldBe false
             messages shouldContainExactly listOf(uiText(Res.string.detail_could_not_bake_copy))
@@ -293,12 +270,10 @@ class DocDetailActionsTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { content.bakedBytes = byteArrayOf(1) }
             val model = vm(session = session)
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
 
             model.shareBakedCopy { error("no app can receive it") }
             advanceUntilIdle()
-            collector.cancel()
 
             messages shouldContainExactly listOf(failure(Res.string.detail_share_failed, "no app can receive it"))
         }

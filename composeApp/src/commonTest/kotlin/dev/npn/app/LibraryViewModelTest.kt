@@ -5,9 +5,7 @@ import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.library.LibraryQuery
 import dev.npn.app.ui.library.LibraryViewModel
-import dev.npn.app.ui.library.asUiText
 import dev.npn.core.ai.AiProvider
-import dev.npn.core.app.ImportTally
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySort
 import dev.npn.core.app.SavedView
@@ -18,11 +16,11 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
-import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.maps.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceTimeBy
@@ -94,7 +92,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     documents.suggestionsList = listOf("invoice", "inventory")
                 }
             val model = vm(session = session)
-            val job = launch { model.suggestions.collect {} }
+            collecting(model.suggestions)
             model.onQueryChange("annual inv")
             advanceTimeBy(99)
             runCurrent()
@@ -104,21 +102,19 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.suggestions.value shouldContainExactly listOf("invoice", "inventory")
             model.acceptSuggestion("invoice")
             model.queryText.value shouldBe "annual invoice"
-            job.cancel()
         }
 
     @Test
     fun shortOrNoResultSuggestionQueryStaysEmpty() =
         runTest(dispatcher) {
             val model = vm()
-            val job = launch { model.suggestions.collect {} }
+            collecting(model.suggestions)
             model.onQueryChange("a")
             advanceUntilIdle()
             model.suggestions.value shouldBe emptyList()
             model.onQueryChange("missing")
             advanceUntilIdle()
             model.suggestions.value shouldBe emptyList()
-            job.cancel()
         }
 
     @Test
@@ -161,11 +157,10 @@ class LibraryViewModelTest : MainDispatcherTest() {
             val session = FakeLibrarySession().apply { reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY }
             val model = vm(session = session)
             // reviewMode is a WhileSubscribed StateFlow; keep a live collector so .value tracks upstream.
-            val job = launch { model.reviewMode.collect {} }
+            collecting(model.reviewMode)
             advanceUntilIdle()
             model.applyReviewPreset()
             model.ui.value.filter shouldBe LibraryFilter(untaggedOnly = true)
-            job.cancel()
         }
 
     @Test
@@ -173,11 +168,10 @@ class LibraryViewModelTest : MainDispatcherTest() {
         runTest(dispatcher) {
             val session = FakeLibrarySession().apply { reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW }
             val model = vm(session = session)
-            val job = launch { model.reviewMode.collect {} }
+            collecting(model.reviewMode)
             advanceUntilIdle()
             model.applyReviewPreset()
             model.ui.value.filter shouldBe LibraryFilter(unreviewedOrUntagged = true)
-            job.cancel()
         }
 
     @Test
@@ -250,12 +244,10 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.startSelection("d1")
             model.toggleSelection("d2")
 
-            val messages = mutableListOf<UiText>()
-            val collector = launch { model.messages.collect { messages += it.text } }
+            val messages = collecting(model.messages.map { it.text })
             runCurrent()
             model.bulkAddTag("finance")
             advanceUntilIdle()
-            collector.cancel()
             messages shouldContainExactly listOf(uiText(Res.plurals.library_add_tag_failed, 2, 2))
             // Selection preserved so the user can retry.
             model.ui.value.selected shouldBe setOf("d1", "d2")
@@ -515,13 +507,12 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     reviewConfig.reviewModeFlow.value = ReviewMode.UNTAGGED_ONLY
                 }
             val model = vm(session = session)
-            val job = launch { model.needsReviewCount.collect {} }
+            collecting(model.needsReviewCount)
             advanceUntilIdle()
             model.needsReviewCount.value shouldBe 5
             session.reviewConfig.reviewModeFlow.value = ReviewMode.INBOX_WORKFLOW
             advanceUntilIdle()
             model.needsReviewCount.value shouldBe 9
-            job.cancel()
         }
 
     @Test
@@ -532,8 +523,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     documents.documents.value = listOf(listItem("d1"), listItem("d2"))
                 }
             val model = vm(session = session)
-            val emitted = mutableListOf<Int>()
-            val job = launch { model.documents.collect { emitted += it?.items?.size ?: 0 } }
+            val emitted = collecting(model.documents.map { it?.items?.size ?: 0 })
             advanceUntilIdle()
             model.documents.value
                 ?.items
@@ -542,7 +532,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             session.documents.observedFilters
                 .first()
                 .first shouldBe LibraryFilter()
-            job.cancel()
         }
 
     // The library screen resets the scroll position when this query changes, so it may only
@@ -557,7 +546,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     documents.documents.value = listOf(listItem("d1"), listItem("d2"))
                 }
             val model = vm(session = session)
-            val job = launch { model.documents.collect {} }
+            collecting(model.documents)
             advanceUntilIdle()
             model.documents.value?.query shouldBe LibraryQuery(LibraryFilter(), LibrarySort())
 
@@ -565,7 +554,6 @@ class LibraryViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             model.documents.value?.query shouldBe
                 LibraryQuery(LibraryFilter(), LibrarySort(SortField.Field(FieldKeys.DOC_DATE), ascending = false))
-            job.cancel()
         }
 
     @Test
@@ -576,8 +564,7 @@ class LibraryViewModelTest : MainDispatcherTest() {
                     documents.documents.value = listOf(listItem("d1"))
                 }
             val model = vm(session = session)
-            val queries = mutableListOf<LibraryQuery?>()
-            val job = launch { model.documents.collect { queries += it?.query } }
+            val queries = collecting(model.documents.map { it?.query })
             advanceUntilIdle()
 
             // A document arriving under the same filter/sort (import, rescan) is not a new query.
@@ -587,6 +574,5 @@ class LibraryViewModelTest : MainDispatcherTest() {
                 ?.items
                 ?.size shouldBe 2
             queries.filterNotNull().distinct() shouldBe listOf(LibraryQuery(LibraryFilter(), LibrarySort()))
-            job.cancel()
         }
 }
