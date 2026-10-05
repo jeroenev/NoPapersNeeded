@@ -6,12 +6,12 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.withTimeoutOrNull
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -206,21 +206,28 @@ class JvmLibraryFileSystemTest {
     @Test
     fun watchEmitsOnFileCreate() =
         runBlocking {
-            // Real WatchService with real time (not virtual): expect an event within the timeout.
-            withTimeout(5000) {
-                val flow = fs.watch()
-                val deferred = kotlinx.coroutines.CompletableDeferred<FsEvent>()
-                val job =
-                    launch(Dispatchers.IO) {
-                        deferred.complete(flow.first())
+            // A real WatchService on real time. Probe files are written until one is reported, so
+            // the file under test is only written once the watch is registered.
+            withTimeout(WATCH_TIMEOUT_MILLIS) {
+                val changes = Channel<FsEvent>(Channel.UNLIMITED)
+                val collector = launch { fs.watch().collect { changes.send(it) } }
+                try {
+                    var probe = 0
+                    while (withTimeoutOrNull(PROBE_MILLIS) { changes.receive() } == null) {
+                        Files.write(root.resolve("probe-${probe++}"), byteArrayOf(1))
                     }
-                // Give the watcher a moment to register before creating the file.
-                kotlinx.coroutines.delay(500)
-                Files.write(root.resolve("watched.pdf"), "x".encodeToByteArray())
-                val event = deferred.await()
-                event.relPath shouldBe "watched.pdf"
-                job.cancel()
+                    Files.write(root.resolve("watched.pdf"), "x".encodeToByteArray())
+                    while (changes.receive() != FsEvent("watched.pdf")) {
+                        // skip the probes still being reported
+                    }
+                } finally {
+                    collector.cancel()
+                }
             }
-            Unit
         }
+
+    private companion object {
+        const val WATCH_TIMEOUT_MILLIS = 10_000L
+        const val PROBE_MILLIS = 100L
+    }
 }
