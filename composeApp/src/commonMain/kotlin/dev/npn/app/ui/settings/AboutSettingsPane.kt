@@ -17,7 +17,10 @@ import no_papers_needed.composeapp.generated.resources.common_settings_update_ch
 import org.jetbrains.compose.resources.stringResource
 
 @Composable
-internal fun AboutSettingsPane(context: SettingsPaneContext) {
+internal fun AboutSettingsPane(
+    state: SettingsPaneState,
+    actions: SettingsPaneActions,
+) {
     SettingsSection(title = null) {
         Text(
             text =
@@ -34,8 +37,8 @@ internal fun AboutSettingsPane(context: SettingsPaneContext) {
             SwitchRow(
                 label = stringResource(Res.string.common_settings_update_check),
                 help = stringResource(Res.string.common_settings_update_check_help),
-                checked = context.state.snapshot.updateCheckEnabled,
-                onCheckedChange = { on -> context.vm.edit { it.copy(updateCheckEnabled = on) } },
+                checked = state.settings.snapshot.updateCheckEnabled,
+                onCheckedChange = { on -> actions.edit { it.copy(updateCheckEnabled = on) } },
             )
         }
     }

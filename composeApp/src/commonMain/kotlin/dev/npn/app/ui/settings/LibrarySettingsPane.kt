@@ -49,8 +49,11 @@ private const val STORAGE_PATH_VARIABLES =
  * derived thumbnail cache that can be thrown away at any time.
  */
 @Composable
-internal fun LibrarySettingsPane(context: SettingsPaneContext) {
-    val location = context.state.snapshot.libraryLocation
+internal fun LibrarySettingsPane(
+    state: SettingsPaneState,
+    actions: SettingsPaneActions,
+) {
+    val location = state.settings.snapshot.libraryLocation
     val safLibrary = location != null && LibraryLocations.isContentUri(location)
     val storage = rememberStorageAccess()
     SettingsSection(title = null) {
@@ -73,21 +76,21 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
         }
         SettingsActionRow(
             label = stringResource(Res.string.common_settings_change_library),
-            onClick = context.onChangeLibrary,
+            onClick = actions::changeLibrary,
         )
     }
 
     SettingsSection(title = stringResource(Res.string.common_settings_storage)) {
         StoragePathRuleEditor(
-            template = context.state.storagePathTemplate,
-            enabled = context.state.storagePathEnabled,
-            fieldTypes = context.fields.associate { it.key to it.type },
-            onTemplateChange = context.vm::setStoragePathTemplate,
-            onEnabledChange = context.vm::setStoragePathEnabled,
+            template = state.settings.storagePathTemplate,
+            enabled = state.settings.storagePathEnabled,
+            fieldTypes = state.fields.associate { it.key to it.type },
+            onTemplateChange = actions::setStoragePathTemplate,
+            onEnabledChange = actions::setStoragePathEnabled,
         )
         SettingsActionRow(
             label = stringResource(Res.string.common_settings_clear_thumbnail_cache),
-            onClick = context.vm::clearThumbnailCache,
+            onClick = actions::clearThumbnailCache,
             help = stringResource(Res.string.common_settings_thumbnail_cache_help),
         )
     }
@@ -99,8 +102,8 @@ internal fun LibrarySettingsPane(context: SettingsPaneContext) {
             SwitchRow(
                 label = stringResource(Res.string.common_settings_use_saf),
                 help = stringResource(Res.string.common_settings_use_saf_help),
-                checked = context.state.snapshot.useSafStorage,
-                onCheckedChange = { on -> context.vm.edit { it.copy(useSafStorage = on) } },
+                checked = state.settings.snapshot.useSafStorage,
+                onCheckedChange = { on -> actions.edit { it.copy(useSafStorage = on) } },
             )
         }
     }

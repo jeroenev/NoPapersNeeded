@@ -25,33 +25,36 @@ private val APP_LANGUAGES: List<String?> = listOf(null) + UiLanguage.entries.map
 
 /** Device-local presentation: how the library renders by default, and in which language. */
 @Composable
-internal fun AppearanceSettingsPane(context: SettingsPaneContext) {
+internal fun AppearanceSettingsPane(
+    state: SettingsPaneState,
+    actions: SettingsPaneActions,
+) {
     SettingsSection(title = stringResource(Res.string.common_settings_views)) {
         Dropdown(
             selected =
                 stringResource(
                     Res.string.common_settings_default_view,
-                    viewTypeLabel(context.state.snapshot.defaultViewType),
+                    viewTypeLabel(state.settings.snapshot.defaultViewType),
                 ),
             options = ViewType.entries,
             optionLabel = { viewTypeLabel(it) },
-            onSelect = { v -> context.vm.edit { it.copy(defaultViewType = v) } },
+            onSelect = { v -> actions.edit { it.copy(defaultViewType = v) } },
         )
         HelpText(stringResource(Res.string.common_settings_grid_size_help))
         SwitchRow(
             label = stringResource(Res.string.common_settings_landscape_columns),
             help = stringResource(Res.string.common_settings_landscape_columns_help),
-            checked = context.state.snapshot.landscapeListColumns,
-            onCheckedChange = { on -> context.vm.edit { it.copy(landscapeListColumns = on) } },
+            checked = state.settings.snapshot.landscapeListColumns,
+            onCheckedChange = { on -> actions.edit { it.copy(landscapeListColumns = on) } },
         )
     }
 
     SettingsSection(title = stringResource(Res.string.common_settings_language)) {
         Dropdown(
-            selected = appLanguageName(context.state.snapshot.appLanguage),
+            selected = appLanguageName(state.settings.snapshot.appLanguage),
             options = APP_LANGUAGES,
             optionLabel = { appLanguageName(it) },
-            onSelect = { lang -> context.vm.edit { it.copy(appLanguage = lang) } },
+            onSelect = { lang -> actions.edit { it.copy(appLanguage = lang) } },
         )
         HelpText(stringResource(Res.string.common_settings_language_help))
     }

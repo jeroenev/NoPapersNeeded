@@ -34,6 +34,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -118,18 +119,22 @@ fun SettingsScreen(
         if (pending != null) draftToResume = pending.key else pickLibrary()
     }
 
-    val context =
-        SettingsPaneContext(
-            vm = vm,
-            state = state,
-            aiModels = aiModels,
-            aiSelfTest = aiSelfTest,
-            reviewMode = reviewMode,
-            fields = fields,
-            fieldUsage = fieldUsage,
-            onChangeLibrary = onChangeLibrary,
-            onAutoMatchRules = onAutoMatchRules,
-        )
+    val paneState =
+        remember(state, aiModels, aiSelfTest, reviewMode, fields, fieldUsage) {
+            SettingsPaneState(state, aiModels, aiSelfTest, reviewMode, fields, fieldUsage)
+        }
+    // The viewmodel's writes, plus the two ways out of a pane; one object for the screen's life,
+    // calling whichever callbacks the latest composition passed.
+    val currentChangeLibrary by rememberUpdatedState(onChangeLibrary)
+    val currentAutoMatchRules by rememberUpdatedState(onAutoMatchRules)
+    val paneActions =
+        remember(vm) {
+            object : SettingsPaneActions, SettingsActions by vm {
+                override fun changeLibrary() = currentChangeLibrary()
+
+                override fun openAutoMatchRules() = currentAutoMatchRules()
+            }
+        }
 
     val wide = LocalWindowWidthClass.current.isWide
     // Wide layouts keep the list on screen, so switching panes is a selection, not navigation:
@@ -146,7 +151,8 @@ fun SettingsScreen(
                 category
             },
         snackbar = snackbar,
-        context = context,
+        paneState = paneState,
+        paneActions = paneActions,
         onSelect = { id -> if (wide) picked = id.routeKey else onOpenCategory(id) },
         onBack = onBack,
     )
@@ -169,7 +175,8 @@ private fun SettingsScaffold(
     wide: Boolean,
     selected: SettingsCategoryId?,
     snackbar: SnackbarHostState,
-    context: SettingsPaneContext,
+    paneState: SettingsPaneState,
+    paneActions: SettingsPaneActions,
     onSelect: (SettingsCategoryId) -> Unit,
     onBack: () -> Unit,
 ) {
@@ -199,12 +206,18 @@ private fun SettingsScaffold(
                             modifier = Modifier.width(CategoryListWidth).fillMaxHeight(),
                         )
                         VerticalDivider()
-                        SettingsPane(openCategory, context, showTitle = true, Modifier.weight(1f).fillMaxHeight())
+                        SettingsPane(
+                            openCategory,
+                            paneState,
+                            paneActions,
+                            showTitle = true,
+                            Modifier.weight(1f).fillMaxHeight(),
+                        )
                     }
                 }
 
                 openCategory != null -> {
-                    SettingsPane(openCategory, context, showTitle = false, Modifier.fillMaxSize())
+                    SettingsPane(openCategory, paneState, paneActions, showTitle = false, Modifier.fillMaxSize())
                 }
 
                 else -> {
@@ -326,7 +339,8 @@ private fun SettingsCategoryRow(
 @Composable
 private fun SettingsPane(
     category: SettingsCategory?,
-    context: SettingsPaneContext,
+    state: SettingsPaneState,
+    actions: SettingsPaneActions,
     showTitle: Boolean,
     modifier: Modifier = Modifier,
 ) {
@@ -338,6 +352,6 @@ private fun SettingsPane(
         if (showTitle) {
             Text(text = stringResource(category.title), style = MaterialTheme.typography.headlineSmall)
         }
-        category.content(context)
+        category.content(state, actions)
     }
 }

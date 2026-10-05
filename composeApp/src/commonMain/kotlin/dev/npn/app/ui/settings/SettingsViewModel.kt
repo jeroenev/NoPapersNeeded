@@ -93,8 +93,82 @@ data class AiModelListState(
 enum class ReviewMigration { MARK_ALL, MARK_TAGGED, MARK_NONE }
 
 /**
+ * What the settings panes change. [SettingsViewModel] implements it; a device setting is one
+ * [edit], the library's settings and the settings that need logic around them have their own.
+ */
+interface SettingsActions {
+    /**
+     * The single write path for a plain setting: the pane edits one field with
+     * `edit { it.copy(field = value) }`. Clamping and defaults are applied inside the repository,
+     * and a failed write is reported as a message.
+     */
+    fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot)
+
+    /**
+     * Edit the library's storage-path template. Each saved value is a journal event every replica
+     * keeps, so a keystroke only updates what the screen shows, and the template is saved once
+     * typing pauses. Leaving the screen during that pause still saves it.
+     */
+    fun setStoragePathTemplate(template: String)
+
+    /** Arm or disarm the storage-path rule; arming saves the template shown, if it expands. */
+    fun setStoragePathEnabled(enabled: Boolean)
+
+    /**
+     * Switch provider and drop what belonged to the previous endpoint: the model list, and the base
+     * URL, which the settings screen hides for fixed-URL providers so nobody could clear it there.
+     */
+    fun setAiProvider(provider: AiProvider)
+
+    /**
+     * Fetch the model ids the currently configured provider offers (for the model dropdown).
+     * Runs against the live settings values, so the user can load models right after typing an
+     * API key. Failures land in [AiModelListState.error]; typing a model id manually always works.
+     */
+    fun loadAiModels()
+
+    /**
+     * Diagnose the configured endpoint: reachability, then an answer, then reading an image
+     * ([AiSelfTest]). Runs against the live settings values, like [loadAiModels], so it can be run
+     * straight after typing a key.
+     *
+     * A vision check that ran and failed switches AI page reading off, because that setting spends
+     * a request per page on a model that cannot produce text — an unattended, paid no-op. It is
+     * only ever switched OFF here, never back on: a model proving it can read images is not a
+     * reason to start paying per page.
+     */
+    fun runAiSelfTest()
+
+    /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
+    fun clearThumbnailCache()
+
+    fun saveField(def: FieldDef)
+
+    fun removeField(
+        key: String,
+        clearValues: Boolean,
+    )
+
+    /** Swap [key] with its neighbour in registry order; a move past either end is a no-op. */
+    fun moveField(
+        key: String,
+        delta: Int,
+    )
+
+    /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */
+    fun setUntaggedOnlyMode()
+
+    /**
+     * Switch to INBOX_WORKFLOW, running the chosen one-shot migration of the reviewed marker.
+     * Order: run the migration writes first, then set the mode, so the flag state is ready when
+     * the mode flips.
+     */
+    fun setInboxWorkflowMode(migration: ReviewMigration)
+}
+
+/**
  * Settings screen view model. Device settings go through the one [SettingsRepository.edit]
- * mutation, so the screen edits a field with `vm.edit { it.copy(field = value) }` and there is no
+ * mutation, so a pane edits a field with `edit { it.copy(field = value) }` and there is no
  * per-setting forwarder to keep in sync. The library's own settings (review mode, storage path) are
  * written through the session; they, and the device settings that need surrounding logic (provider
  * switch clears the stale model list), keep their own methods.
@@ -111,7 +185,8 @@ class SettingsViewModel(
      * reading off — is testable without an endpoint; production always uses [AiSelfTest.run].
      */
     private val selfTest: suspend (AiConfig) -> AiSelfTestReport = AiSelfTest::run,
-) : MessagesViewModel() {
+) : MessagesViewModel(),
+    SettingsActions {
     private val content = session.content
     private val reviewConfig = session.reviewConfig
     private val storagePath = session.storagePath
@@ -156,15 +231,14 @@ class SettingsViewModel(
     val fieldUsage: StateFlow<Map<String, Int>> =
         fieldRegistry.usageCounts().stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
-    fun saveField(def: FieldDef) = launchReporting(Res.string.common_save_field_failed) { fieldRegistry.upsert(def) }
+    override fun saveField(def: FieldDef) = launchReporting(Res.string.common_save_field_failed) { fieldRegistry.upsert(def) }
 
-    fun removeField(
+    override fun removeField(
         key: String,
         clearValues: Boolean,
     ) = launchReporting(Res.string.common_settings_remove_field_failed) { fieldRegistry.remove(key, clearValues) }
 
-    /** Swap [key] with its neighbour in registry order; a move past either end is a no-op. */
-    fun moveField(
+    override fun moveField(
         key: String,
         delta: Int,
     ) = launchReporting(Res.string.common_settings_move_field_failed) {
@@ -176,20 +250,10 @@ class SettingsViewModel(
         fieldRegistry.reorder(keys)
     }
 
-    /**
-     * The single write path for a plain setting: the screen edits one field with
-     * `vm.edit { it.copy(field = value) }`. Clamping and defaults are applied inside the repository,
-     * and a failed write is reported via the inherited [messages] snackbar.
-     */
-    fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
+    override fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
         launchReporting(Res.string.common_save_setting_failed) { settings.edit(transform) }
 
-    /**
-     * Edit the library's storage-path template. Each saved value is a journal event every replica
-     * keeps, so a keystroke only updates what the screen shows, and the template is saved once
-     * typing pauses. Leaving the screen during that pause still saves it.
-     */
-    fun setStoragePathTemplate(template: String) {
+    override fun setStoragePathTemplate(template: String) {
         templateDraft.value = template
         templateSave?.cancel()
         templateSave =
@@ -210,7 +274,7 @@ class SettingsViewModel(
         templateDraft.compareAndSet(template, null)
     }
 
-    fun setStoragePathEnabled(enabled: Boolean) =
+    override fun setStoragePathEnabled(enabled: Boolean) =
         launchReporting(Res.string.common_save_setting_failed) {
             if (enabled) {
                 // Arm the template the screen shows, saved or not: a draft still waiting for its
@@ -227,23 +291,14 @@ class SettingsViewModel(
             storagePath.setStoragePathEnabled(enabled)
         }
 
-    /**
-     * Switch provider and drop what belonged to the previous endpoint: the model list, and the base
-     * URL, which the settings screen hides for fixed-URL providers so nobody could clear it there.
-     */
-    fun setAiProvider(provider: AiProvider) =
+    override fun setAiProvider(provider: AiProvider) =
         launchReporting(Res.string.common_save_setting_failed) {
             aiModelsJob?.cancel()
             _aiModels.value = AiModelListState()
             settings.edit { if (it.aiProvider == provider) it else it.copy(aiProvider = provider, aiBaseUrl = "") }
         }
 
-    /**
-     * Fetch the model ids the currently configured provider offers (for the model dropdown).
-     * Runs against the live settings values, so the user can load models right after typing an
-     * API key. Failures land in [AiModelListState.error]; typing a model id manually always works.
-     */
-    fun loadAiModels() {
+    override fun loadAiModels() {
         aiModelsJob?.cancel()
         aiModelsJob =
             viewModelScope.launch {
@@ -257,17 +312,7 @@ class SettingsViewModel(
             }
     }
 
-    /**
-     * Diagnose the configured endpoint: reachability, then an answer, then reading an image
-     * ([AiSelfTest]). Runs against the live settings values, like [loadAiModels], so it can be run
-     * straight after typing a key.
-     *
-     * A vision check that ran and failed switches AI page reading off, because that setting spends
-     * a request per page on a model that cannot produce text — an unattended, paid no-op. It is
-     * only ever switched OFF here, never back on: a model proving it can read images is not a
-     * reason to start paying per page.
-     */
-    fun runAiSelfTest() {
+    override fun runAiSelfTest() {
         aiSelfTestJob?.cancel()
         aiSelfTestJob =
             viewModelScope.launch {
@@ -289,8 +334,7 @@ class SettingsViewModel(
         return done
     }
 
-    /** Drop all cached thumbnails so they regenerate at the current render quality, and say so. */
-    fun clearThumbnailCache() =
+    override fun clearThumbnailCache() =
         launchReporting(Res.string.common_settings_clear_thumbnails_failed) {
             val cleared = content.clearThumbnailCache()
             message(
@@ -305,18 +349,12 @@ class SettingsViewModel(
     /** A library folder was picked that direct mode cannot use: it is not on device storage. */
     fun folderNotOnDevice() = message(uiText(Res.string.common_folder_not_on_device))
 
-    /** Switch to UNTAGGED_ONLY. No migration prompt (the stored reviewed flag is ignored). */
-    fun setUntaggedOnlyMode() =
+    override fun setUntaggedOnlyMode() =
         launchReporting(Res.string.common_settings_review_workflow_failed) {
             reviewConfig.setReviewMode(ReviewMode.UNTAGGED_ONLY)
         }
 
-    /**
-     * Switch to INBOX_WORKFLOW, running the chosen one-shot migration of the reviewed marker.
-     * Order: run the migration writes first, then set the mode, so the flag state is ready when
-     * the mode flips.
-     */
-    fun setInboxWorkflowMode(migration: ReviewMigration) =
+    override fun setInboxWorkflowMode(migration: ReviewMigration) =
         launchReporting(Res.string.common_settings_review_workflow_failed) {
             when (migration) {
                 ReviewMigration.MARK_ALL -> reviewConfig.markReviewedForMigration(onlyTagged = false)

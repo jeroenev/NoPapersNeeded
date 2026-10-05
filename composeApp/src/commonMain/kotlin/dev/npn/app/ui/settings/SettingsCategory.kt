@@ -9,7 +9,6 @@ import androidx.compose.material.icons.outlined.MoveToInbox
 import androidx.compose.material.icons.outlined.Palette
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.Stable
 import androidx.compose.ui.graphics.vector.ImageVector
 import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.core.model.FieldDef
@@ -80,22 +79,26 @@ enum class SettingsCategoryId {
 }
 
 /**
- * Everything a settings pane may need, bundled so the registry can hand every category the same
+ * Everything a settings pane may show, bundled so the registry can hand every category the same
  * argument. Panes read what they use and ignore the rest; adding a dependency touches this class
  * and one pane instead of threading a parameter through the whole screen.
  */
-@Stable
-internal class SettingsPaneContext(
-    val vm: SettingsViewModel,
-    val state: SettingsUiState,
+internal data class SettingsPaneState(
+    val settings: SettingsUiState,
     val aiModels: AiModelListState,
     val aiSelfTest: AiSelfTestState,
     val reviewMode: ReviewMode,
     val fields: List<FieldDef>,
     val fieldUsage: Map<String, Int>,
-    val onChangeLibrary: () -> Unit,
-    val onAutoMatchRules: () -> Unit,
 )
+
+/** What a settings pane can do: change a setting ([SettingsActions]), or open what one leads to. */
+internal interface SettingsPaneActions : SettingsActions {
+    /** Pick another library folder; a document with unsaved changes is offered back first. */
+    fun changeLibrary()
+
+    fun openAutoMatchRules()
+}
 
 /**
  * One entry in the settings table of contents.
@@ -110,7 +113,7 @@ internal class SettingsCategory(
     val title: StringResource,
     val icon: ImageVector,
     val keywords: List<StringResource>,
-    val content: @Composable (SettingsPaneContext) -> Unit,
+    val content: @Composable (SettingsPaneState, SettingsPaneActions) -> Unit,
 )
 
 /**
@@ -132,7 +135,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_clear_thumbnail_cache,
                     Res.string.common_settings_use_saf,
                 ),
-            content = { LibrarySettingsPane(it) },
+            content = { state, actions -> LibrarySettingsPane(state, actions) },
         ),
         SettingsCategory(
             id = SettingsCategoryId.IMPORT,
@@ -148,7 +151,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_ocr_match_app_language.takeIf { ocrHasLanguageSetting() },
                     Res.string.common_settings_auto_matching_rules,
                 ),
-            content = { ImportSettingsPane(it) },
+            content = { state, actions -> ImportSettingsPane(state, actions) },
         ),
         SettingsCategory(
             id = SettingsCategoryId.DOCUMENTS,
@@ -162,7 +165,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_trash,
                     Res.string.common_settings_trash_retention_days,
                 ),
-            content = { DocumentSettingsPane(it) },
+            content = { state, actions -> DocumentSettingsPane(state, actions) },
         ),
         SettingsCategory(
             id = SettingsCategoryId.AI,
@@ -182,7 +185,7 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_ai_auto_on_ocr,
                     Res.string.common_settings_ai_test,
                 ),
-            content = { AiSettingsPane(it) },
+            content = { state, actions -> AiSettingsPane(state, actions) },
         ),
         SettingsCategory(
             id = SettingsCategoryId.APPEARANCE,
@@ -195,14 +198,14 @@ internal val SettingsCategories: List<SettingsCategory> =
                     Res.string.common_settings_landscape_columns,
                     Res.string.common_settings_language,
                 ),
-            content = { AppearanceSettingsPane(it) },
+            content = { state, actions -> AppearanceSettingsPane(state, actions) },
         ),
         SettingsCategory(
             id = SettingsCategoryId.ABOUT,
             title = Res.string.common_settings_about,
             icon = Icons.Outlined.Info,
             keywords = listOf(Res.string.common_settings_about_help, Res.string.common_settings_update_check),
-            content = { AboutSettingsPane(it) },
+            content = { state, actions -> AboutSettingsPane(state, actions) },
         ),
     )
 

@@ -67,22 +67,25 @@ private const val OTHER_OCR_LANGUAGE_EXAMPLES = "ita, pol"
  * text recognition, and the rules that fill in metadata from the recognised text.
  */
 @Composable
-internal fun ImportSettingsPane(context: SettingsPaneContext) {
+internal fun ImportSettingsPane(
+    state: SettingsPaneState,
+    actions: SettingsPaneActions,
+) {
     SettingsSection(title = stringResource(Res.string.common_settings_watched_folder)) {
         WatchedFolderSettings(
-            watchedFolder = context.state.snapshot.watchedFolder,
-            useSaf = context.state.snapshot.useSafStorage,
-            deleteAfterImport = context.state.snapshot.watchedFolderDeleteAfterImport,
-            onSetFolder = { folder -> context.vm.edit { it.copy(watchedFolder = folder) } },
-            onSetDeleteAfterImport = { on -> context.vm.edit { it.copy(watchedFolderDeleteAfterImport = on) } },
+            watchedFolder = state.settings.snapshot.watchedFolder,
+            useSaf = state.settings.snapshot.useSafStorage,
+            deleteAfterImport = state.settings.snapshot.watchedFolderDeleteAfterImport,
+            onSetFolder = { folder -> actions.edit { it.copy(watchedFolder = folder) } },
+            onSetDeleteAfterImport = { on -> actions.edit { it.copy(watchedFolderDeleteAfterImport = on) } },
         )
     }
 
     SettingsSection(title = stringResource(Res.string.common_settings_ocr)) {
         if (ocrHasLanguageSetting()) {
             OcrLanguageSettings(
-                setting = context.state.snapshot.ocrLanguage,
-                onChange = { value -> context.vm.edit { it.copy(ocrLanguage = value) } },
+                setting = state.settings.snapshot.ocrLanguage,
+                onChange = { value -> actions.edit { it.copy(ocrLanguage = value) } },
             )
         } else {
             HelpText(stringResource(Res.string.common_settings_ocr_android_help))
@@ -92,7 +95,7 @@ internal fun ImportSettingsPane(context: SettingsPaneContext) {
     SettingsSection(title = stringResource(Res.string.common_settings_auto_matching)) {
         SettingsActionRow(
             label = stringResource(Res.string.common_settings_auto_matching_rules),
-            onClick = context.onAutoMatchRules,
+            onClick = actions::openAutoMatchRules,
             help = stringResource(Res.string.common_settings_auto_matching_help),
         )
     }

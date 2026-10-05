@@ -105,21 +105,23 @@ private val CheckIconSize = 20.dp
  * the feature off. Every change persists immediately; there is no explicit save.
  */
 @Composable
-internal fun AiSettingsPane(context: SettingsPaneContext) {
-    val vm = context.vm
-    val state = context.state
+internal fun AiSettingsPane(
+    state: SettingsPaneState,
+    actions: SettingsPaneActions,
+) {
+    val settings = state.settings
     SettingsSection(title = null) {
         SwitchRow(
             label = stringResource(Res.string.common_settings_enable_ai),
             help = stringResource(Res.string.common_settings_ai_help),
-            checked = state.snapshot.aiEnabled,
-            onCheckedChange = { on -> vm.edit { it.copy(aiEnabled = on) } },
+            checked = settings.snapshot.aiEnabled,
+            onCheckedChange = { on -> actions.edit { it.copy(aiEnabled = on) } },
         )
-        if (state.snapshot.aiEnabled) {
-            AiEndpointSettings(state = state, models = context.aiModels, vm = vm)
-            AiBehaviourSettings(state = state, vm = vm)
+        if (settings.snapshot.aiEnabled) {
+            AiEndpointSettings(state = settings, models = state.aiModels, actions = actions)
+            AiBehaviourSettings(state = settings, actions = actions)
             // Last, because it is a verdict on everything above it.
-            AiSelfTestSection(state = state, selfTest = context.aiSelfTest, onRun = vm::runAiSelfTest)
+            AiSelfTestSection(state = settings, selfTest = state.aiSelfTest, onRun = actions::runAiSelfTest)
         }
     }
 }
@@ -129,7 +131,7 @@ internal fun AiSettingsPane(context: SettingsPaneContext) {
 private fun AiEndpointSettings(
     state: SettingsUiState,
     models: AiModelListState,
-    vm: SettingsViewModel,
+    actions: SettingsActions,
 ) {
     // setAiProvider stays a named method (it clears the stale model list), unlike the plain
     // field edits below.
@@ -138,29 +140,29 @@ private fun AiEndpointSettings(
         options = AiProvider.entries,
         // Provider names are product names, so displayName is deliberately not localized.
         optionLabel = { it.displayName },
-        onSelect = vm::setAiProvider,
+        onSelect = actions::setAiProvider,
     )
     HelpText(stringResource(Res.string.common_settings_ai_provider_help))
     if (state.snapshot.aiProvider.editableBaseUrl) {
         AiBaseUrlField(
             provider = state.snapshot.aiProvider,
             baseUrl = state.snapshot.aiBaseUrl,
-            onSetBaseUrl = { url -> vm.edit { it.copy(aiBaseUrl = url) } },
+            onSetBaseUrl = { url -> actions.edit { it.copy(aiBaseUrl = url) } },
         )
     }
     if (state.snapshot.aiProvider != AiProvider.OLLAMA) {
         AiApiKeyField(
             provider = state.snapshot.aiProvider,
             apiKey = state.snapshot.aiApiKey,
-            onSetApiKey = { key -> vm.edit { it.copy(aiApiKey = key) } },
+            onSetApiKey = { key -> actions.edit { it.copy(aiApiKey = key) } },
         )
     }
     AiModelField(
         provider = state.snapshot.aiProvider,
         model = state.snapshot.aiModel,
         models = models,
-        onSetModel = { model -> vm.edit { it.copy(aiModel = model) } },
-        onLoadModels = vm::loadAiModels,
+        onSetModel = { model -> actions.edit { it.copy(aiModel = model) } },
+        onLoadModels = actions::loadAiModels,
     )
 }
 
@@ -168,24 +170,24 @@ private fun AiEndpointSettings(
 @Composable
 private fun AiBehaviourSettings(
     state: SettingsUiState,
-    vm: SettingsViewModel,
+    actions: SettingsActions,
 ) {
     AiReasoningDropdown(
         label = { level -> stringResource(Res.string.common_settings_reasoning_assistant, level) },
         current = state.snapshot.aiReasoningAssistant,
-        onSelect = { level -> vm.edit { it.copy(aiReasoningAssistant = level) } },
+        onSelect = { level -> actions.edit { it.copy(aiReasoningAssistant = level) } },
     )
     AiReasoningDropdown(
         label = { level -> stringResource(Res.string.common_settings_reasoning_edit, level) },
         current = state.snapshot.aiReasoningEdit,
-        onSelect = { level -> vm.edit { it.copy(aiReasoningEdit = level) } },
+        onSelect = { level -> actions.edit { it.copy(aiReasoningEdit = level) } },
     )
     HelpText(stringResource(Res.string.common_settings_reasoning_help))
     AiTagCapDefaults(
         maxTagsPerDoc = state.snapshot.aiMaxTagsPerDoc,
-        onSetMaxTagsPerDoc = { value -> vm.edit { it.copy(aiMaxTagsPerDoc = value) } },
+        onSetMaxTagsPerDoc = { value -> actions.edit { it.copy(aiMaxTagsPerDoc = value) } },
         maxNewTagsPerDoc = state.snapshot.aiMaxNewTagsPerDoc,
-        onSetMaxNewTagsPerDoc = { value -> vm.edit { it.copy(aiMaxNewTagsPerDoc = value) } },
+        onSetMaxNewTagsPerDoc = { value -> actions.edit { it.copy(aiMaxNewTagsPerDoc = value) } },
     )
     // The unattended post-OCR enrichment switch. It lives here (and is therefore only reachable
     // once AI is on) because it spends the same endpoint; the help text spells out that it writes
@@ -194,7 +196,7 @@ private fun AiBehaviourSettings(
         label = stringResource(Res.string.common_settings_ai_auto_on_ocr),
         help = stringResource(Res.string.common_settings_ai_auto_on_ocr_help),
         checked = state.snapshot.aiAutoOnOcr,
-        onCheckedChange = { on -> vm.edit { it.copy(aiAutoOnOcr = on) } },
+        onCheckedChange = { on -> actions.edit { it.copy(aiAutoOnOcr = on) } },
     )
     // Making the vision model the default OCR engine. Kept next to the switch above because both
     // spend the endpoint unattended, but this one is charged per PAGE rather than per document, and
@@ -208,7 +210,7 @@ private fun AiBehaviourSettings(
                 OcrEngineSelector.DEFAULT_LARGE_DOCUMENT_PAGES,
             ),
         checked = state.snapshot.aiOcrAuto,
-        onCheckedChange = { on -> vm.edit { it.copy(aiOcrAuto = on) } },
+        onCheckedChange = { on -> actions.edit { it.copy(aiOcrAuto = on) } },
     )
     HelpText(stringResource(Res.string.common_settings_ai_request_help))
 }

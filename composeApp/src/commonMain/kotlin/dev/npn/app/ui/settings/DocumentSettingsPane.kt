@@ -38,29 +38,32 @@ private const val TRASH_RETENTION_MAX_DIGITS = 4
  * documents need an explicit review pass, and how long the trash holds on to deletions.
  */
 @Composable
-internal fun DocumentSettingsPane(context: SettingsPaneContext) {
+internal fun DocumentSettingsPane(
+    state: SettingsPaneState,
+    actions: SettingsPaneActions,
+) {
     SettingsSection(title = stringResource(Res.string.common_settings_document_fields)) {
         FieldsSettingsPane(
-            fields = context.fields,
-            usage = context.fieldUsage,
-            onSave = context.vm::saveField,
-            onRemove = context.vm::removeField,
-            onMove = context.vm::moveField,
+            fields = state.fields,
+            usage = state.fieldUsage,
+            onSave = actions::saveField,
+            onRemove = actions::removeField,
+            onMove = actions::moveField,
         )
     }
 
     SettingsSection(title = stringResource(Res.string.common_settings_review_workflow)) {
         InboxWorkflowToggle(
-            current = context.reviewMode,
-            onUntaggedOnly = context.vm::setUntaggedOnlyMode,
-            onInboxWorkflow = context.vm::setInboxWorkflowMode,
+            current = state.reviewMode,
+            onUntaggedOnly = actions::setUntaggedOnlyMode,
+            onInboxWorkflow = actions::setInboxWorkflowMode,
         )
     }
 
     SettingsSection(title = stringResource(Res.string.common_settings_trash)) {
         NumericField(
-            value = context.state.snapshot.trashRetentionDays,
-            onValueChange = { days -> context.vm.edit { it.copy(trashRetentionDays = days) } },
+            value = state.settings.snapshot.trashRetentionDays,
+            onValueChange = { days -> actions.edit { it.copy(trashRetentionDays = days) } },
             range = TRASH_RETENTION_RANGE,
             label = stringResource(Res.string.common_settings_trash_retention_days),
             maxDigits = TRASH_RETENTION_MAX_DIGITS,
