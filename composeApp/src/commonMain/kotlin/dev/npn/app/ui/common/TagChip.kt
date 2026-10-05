@@ -28,8 +28,14 @@ fun parseHexColor(hex: String?): Color? {
                 val v = cleaned.toLong(16)
                 Color(0xFF000000 or v)
             }
-            8 -> Color(cleaned.toLong(16))
-            else -> null
+
+            8 -> {
+                Color(cleaned.toLong(16))
+            }
+
+            else -> {
+                null
+            }
         }
     }.getOrNull()
 }
@@ -45,10 +51,11 @@ fun TagChip(
 ) {
     val dot = parseHexColor(color) ?: MaterialTheme.colorScheme.primary
     Row(
-        modifier = modifier
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(horizontal = 8.dp, vertical = 4.dp),
+        modifier =
+            modifier
+                .clip(RoundedCornerShape(50))
+                .background(MaterialTheme.colorScheme.surfaceVariant)
+                .padding(horizontal = 8.dp, vertical = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {

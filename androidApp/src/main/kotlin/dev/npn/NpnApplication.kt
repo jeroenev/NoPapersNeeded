@@ -13,7 +13,6 @@ import dev.npn.app.di.createAppEnvironment
  * from filekit-core's manifest), so no explicit FileKit.init call is needed here.
  */
 class NpnApplication : Application() {
-
     /** Lazily created so the first component that needs it (activity or worker) triggers it. */
     val environment: AppEnvironment by lazy { createAppEnvironment(this) }
 
