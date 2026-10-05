@@ -58,11 +58,11 @@ jobs:
           # Nothing here pushes; a token left in .git/config would reach every later step.
           persist-credentials: false
 
-      - name: Set up JDK 25
+      - name: Set up JDK
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
-          java-version: "25"
+          java-version-file: .java-version
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
@@ -135,11 +135,11 @@ jobs:
           # Nothing here pushes; a token left in .git/config would reach every later step.
           persist-credentials: false
 
-      - name: Set up JDK 25
+      - name: Set up JDK
         uses: actions/setup-java@b6effb05e454b25005698d916606bdc6ffcbf961 # v5.7.0
         with:
           distribution: temurin
-          java-version: "25"
+          java-version-file: .java-version
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0

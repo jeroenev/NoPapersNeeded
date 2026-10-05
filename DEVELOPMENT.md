@@ -67,7 +67,8 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 
 The build needs one JDK, Java 25 (`jdk` in `gradle/libs.versions.toml`). It runs the
 Gradle daemon (pinned in `gradle/gradle-daemon-jvm.properties`), compiles every module and
-is bundled as the desktop app's runtime. Gradle downloads it via the foojay resolver if no
+is bundled as the desktop app's runtime; the workflows install it from `.java-version`. A
+`buildSrc` test fails when either of those two files names another JDK than the catalog. Gradle downloads it via the foojay resolver if no
 matching JDK is installed. All code still compiles to Java 17 bytecode (`jvm-target`):
 Android only provides newer Java library APIs on newer OS versions, and the app supports
 API 30. Desktop compilations also pass `-Xjdk-release=17`, so they cannot call a newer API

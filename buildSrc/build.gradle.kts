@@ -37,4 +37,7 @@ fun plugin(plugin: Provider<PluginDependency>): Provider<String> =
 // buildSrc tests do not run as part of the main build; run them with `./gradlew :buildSrc:test`.
 tasks.test {
     useJUnit()
+    // JdkPinsTest holds the JDK named outside the catalog to the catalog's.
+    inputs.files("../.java-version", "../gradle/gradle-daemon-jvm.properties")
+    systemProperty("npn.jdk", libs.versions.jdk.get())
 }

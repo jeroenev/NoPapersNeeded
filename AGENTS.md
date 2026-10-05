@@ -20,9 +20,11 @@ design, build/packaging/release details, and the library folder layout.
   Flathub one). The Flatpak app ID is `io.github.jeroenev.NoPapersNeeded`, which Flathub ties
   to the GitHub repo `jeroenev/NoPapersNeeded`; the Android package stays `dev.npn`.
 - Java: one JDK, 25 (`jdk` in `libs.versions.toml`), runs Gradle, compiles everything and is the
-  desktop runtime. Bytecode stays at `jvm-target` 17, with `-Xjdk-release` on desktop
-  compilations, because Android shares it and minSdk 30 lacks newer library APIs. Raising
-  `jdk` never raises the target; raising the target is a separate, Android-driven decision.
+  desktop runtime. `.java-version` (what the workflows install) and the daemon criteria in
+  `gradle/gradle-daemon-jvm.properties` repeat it; `:buildSrc:test` fails when they disagree.
+  Bytecode stays at `jvm-target` 17, with `-Xjdk-release` on desktop compilations, because
+  Android shares it and minSdk 30 lacks newer library APIs. Raising `jdk` never raises the
+  target; raising the target is a separate, Android-driven decision.
 - `buildSrc` — build logic: every task class the build scripts register (packaging, `BuildInfo`,
   `checkLocalization`), and convention plugins that read the catalog: `npn.toolchain` (the JDK and
   bytecode target, applied by every module) and `npn.kmp-module` (the `desktop` and Android
