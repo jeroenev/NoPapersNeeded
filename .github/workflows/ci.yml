@@ -103,8 +103,9 @@ jobs:
           path: core/build/reports/tests/desktopTest
           retention-days: 7
 
+      # Artifact storage is metered: coverage is kept for main, and for a run that failed.
       - name: Upload coverage reports
-        if: always()
+        if: failure() || (success() && github.ref == 'refs/heads/main')
         uses: actions/upload-artifact@v7
         with:
           name: kover-coverage-reports
