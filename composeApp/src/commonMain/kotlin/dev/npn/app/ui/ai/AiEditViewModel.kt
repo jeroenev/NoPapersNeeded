@@ -489,14 +489,16 @@ class AiEditViewModel(
 
     override fun clearTask() = updateIdle { it.copy(task = null) }
 
-    override fun setScope(scope: EditScope) = updateIdle { if (it.scopeAvailable(scope)) it.copy(scope = scope) else it }
+    override fun setScope(scope: EditScope) =
+        updateIdle { if (it.scopeAvailable(scope)) it.copy(scope = scope) else it }
 
     override fun setSavedView(id: String) =
         updateIdle { state -> if (state.savedViews.any { it.id == id }) state.copy(savedViewId = id) else state }
 
     override fun setMaxTags(value: Int) = updateIdle { it.copy(maxTags = value.coerceIn(AiTagging.RANGE)) }
 
-    override fun setMaxNewTags(value: Int) = updateIdle { it.copy(maxNewTags = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
+    override fun setMaxNewTags(value: Int) =
+        updateIdle { it.copy(maxNewTags = value.coerceIn(AiTagging.NEW_TAGS_RANGE)) }
 
     override fun setBatchSize(value: Int) = updateIdle { it.copy(batchSize = value.coerceIn(AiTagging.BATCH_RANGE)) }
 

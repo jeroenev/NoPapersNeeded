@@ -231,7 +231,8 @@ class SettingsViewModel(
     val fieldUsage: StateFlow<Map<String, Int>> =
         fieldRegistry.usageCounts().stateIn(viewModelScope, WhileSubscribedTimeout, emptyMap())
 
-    override fun saveField(def: FieldDef) = launchReporting(Res.string.common_save_field_failed) { fieldRegistry.upsert(def) }
+    override fun saveField(def: FieldDef) =
+        launchReporting(Res.string.common_save_field_failed) { fieldRegistry.upsert(def) }
 
     override fun removeField(
         key: String,
