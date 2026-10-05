@@ -1,10 +1,9 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 // Generates androidApp's baseline profile on a connected device: `mise baseline-profile`.
 // The profile is committed (androidApp/src/main/generated/baselineProfiles), so builds and CI
 // never run this module.
 plugins {
-    alias(libs.plugins.androidTest)
+    id("com.android.test")
+    id("npn.toolchain")
     alias(libs.plugins.androidxBaselineProfile)
 }
 
@@ -27,35 +26,7 @@ android {
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
-    compileOptions {
-        sourceCompatibility =
-            JavaVersion.toVersion(
-                libs.versions.jvm.target
-                    .get(),
-            )
-        targetCompatibility =
-            JavaVersion.toVersion(
-                libs.versions.jvm.target
-                    .get(),
-            )
-    }
-
     targetProjectPath = ":androidApp"
-}
-
-kotlin {
-    jvmToolchain(
-        libs.versions.jdk
-            .get()
-            .toInt(),
-    )
-    compilerOptions {
-        jvmTarget =
-            JvmTarget.fromTarget(
-                libs.versions.jvm.target
-                    .get(),
-            )
-    }
 }
 
 baselineProfile {

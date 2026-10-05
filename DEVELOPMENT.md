@@ -71,7 +71,8 @@ is bundled as the desktop app's runtime. Gradle downloads it via the foojay reso
 matching JDK is installed. All code still compiles to Java 17 bytecode (`jvm-target`):
 Android only provides newer Java library APIs on newer OS versions, and the app supports
 API 30. Desktop compilations also pass `-Xjdk-release=17`, so they cannot call a newer API
-either. The Android SDK is located via
+either. Both levels are applied in one place, the `npn.toolchain` convention plugin in
+`buildSrc`, which every module applies. The Android SDK is located via
 `local.properties` (`sdk.dir`) or the `ANDROID_HOME` / `ANDROID_SDK_ROOT`
 environment variable.
 

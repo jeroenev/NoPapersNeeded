@@ -1,8 +1,5 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidMultiplatformLibrary)
+    id("npn.kmp-module")
     alias(libs.plugins.kotlinxSerialization)
     alias(libs.plugins.ksp)
     alias(libs.plugins.kover)
@@ -10,22 +7,6 @@ plugins {
 }
 
 kotlin {
-    jvmToolchain(
-        libs.versions.jdk
-            .get()
-            .toInt(),
-    )
-    jvm("desktop") {
-        compilerOptions {
-            jvmTarget =
-                JvmTarget.fromTarget(
-                    libs.versions.jvm.target
-                        .get(),
-                )
-            freeCompilerArgs.add("-Xjdk-release=${libs.versions.jvm.target.get()}")
-        }
-    }
-
     // `jvmShared` is what Android and desktop have in common beyond commonMain: java.nio and
     // java.security. The direct-filesystem library implementation lives there so Android's
     // non-SAF storage mode is the very same class the desktop app runs, not a port of it.
@@ -38,24 +19,8 @@ kotlin {
         }
     }
 
-    androidLibrary {
+    android {
         namespace = "dev.npn.core"
-        compileSdk =
-            libs.versions.android.compileSdk
-                .get()
-                .toInt()
-        minSdk =
-            libs.versions.android.minSdk
-                .get()
-                .toInt()
-
-        compilerOptions {
-            jvmTarget =
-                JvmTarget.fromTarget(
-                    libs.versions.jvm.target
-                        .get(),
-                )
-        }
 
         // Runs commonTest against the Android target on a host JVM, and gives androidMain code
         // (SAF, MLKit wrappers) a test source set it never had. Without it, everything in
@@ -132,10 +97,6 @@ kotlin {
                 implementation(libs.pdfbox)
             }
         }
-    }
-
-    compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 }
 

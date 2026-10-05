@@ -1,13 +1,9 @@
+// Kotlin and the Android Gradle plugin come from buildSrc, which the convention plugins need them in.
 plugins {
-    alias(libs.plugins.androidApplication) apply false
-    alias(libs.plugins.androidMultiplatformLibrary) apply false
-    alias(libs.plugins.androidTest) apply false
     alias(libs.plugins.androidxBaselineProfile) apply false
     alias(libs.plugins.composeCompiler) apply false
     alias(libs.plugins.composeMultiplatform) apply false
     alias(libs.plugins.detekt)
-    alias(libs.plugins.kotlinJvm) apply false
-    alias(libs.plugins.kotlinMultiplatform) apply false
     alias(libs.plugins.kotlinxSerialization) apply false
     alias(libs.plugins.ksp) apply false
     alias(libs.plugins.kover) apply false

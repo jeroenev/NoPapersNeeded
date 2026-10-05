@@ -1,12 +1,12 @@
 import org.gradle.jvm.toolchain.JavaLanguageVersion
 import org.gradle.process.ExecOperations
 import org.jetbrains.compose.desktop.application.dsl.TargetFormat
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
 import java.io.File
 import javax.inject.Inject
 
 plugins {
-    alias(libs.plugins.kotlinJvm)
+    id("org.jetbrains.kotlin.jvm")
+    id("npn.toolchain")
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
 }
@@ -32,30 +32,6 @@ dependencies {
 
 tasks.test {
     useJUnit()
-}
-
-kotlin {
-    jvmToolchain(
-        libs.versions.jdk
-            .get()
-            .toInt(),
-    )
-    compilerOptions {
-        jvmTarget =
-            JvmTarget.fromTarget(
-                libs.versions.jvm.target
-                    .get(),
-            )
-        freeCompilerArgs.add("-Xjdk-release=${libs.versions.jvm.target.get()}")
-    }
-}
-
-tasks.withType<JavaCompile>().configureEach {
-    options.release.set(
-        libs.versions.jvm.target
-            .get()
-            .toInt(),
-    )
 }
 
 val npnAppName = "no-papers-needed"

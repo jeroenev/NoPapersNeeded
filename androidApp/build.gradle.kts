@@ -1,7 +1,6 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.androidApplication)
+    id("com.android.application")
+    id("npn.toolchain")
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.androidxBaselineProfile)
 }
@@ -87,18 +86,6 @@ android {
             }
         }
     }
-    compileOptions {
-        sourceCompatibility =
-            JavaVersion.toVersion(
-                libs.versions.jvm.target
-                    .get(),
-            )
-        targetCompatibility =
-            JavaVersion.toVersion(
-                libs.versions.jvm.target
-                    .get(),
-            )
-    }
 }
 
 // `mise baseline-profile` regenerates the committed profile; builds only package it.
@@ -112,19 +99,4 @@ baselineProfile {
 androidComponents {
     onVariants(selector().withBuildType("nonMinifiedRelease")) { it.applicationId.set("dev.npn.benchmark") }
     onVariants(selector().withBuildType("benchmarkRelease")) { it.applicationId.set("dev.npn.benchmark") }
-}
-
-kotlin {
-    jvmToolchain(
-        libs.versions.jdk
-            .get()
-            .toInt(),
-    )
-    compilerOptions {
-        jvmTarget =
-            JvmTarget.fromTarget(
-                libs.versions.jvm.target
-                    .get(),
-            )
-    }
 }

@@ -1,8 +1,5 @@
-import org.jetbrains.kotlin.gradle.dsl.JvmTarget
-
 plugins {
-    alias(libs.plugins.kotlinMultiplatform)
-    alias(libs.plugins.androidMultiplatformLibrary)
+    id("npn.kmp-module")
     alias(libs.plugins.composeMultiplatform)
     alias(libs.plugins.composeCompiler)
     alias(libs.plugins.kotlinxSerialization)
@@ -42,40 +39,8 @@ val generateBuildInfo =
     }
 
 kotlin {
-    jvmToolchain(
-        libs.versions.jdk
-            .get()
-            .toInt(),
-    )
-    jvm("desktop") {
-        compilerOptions {
-            jvmTarget =
-                JvmTarget.fromTarget(
-                    libs.versions.jvm.target
-                        .get(),
-                )
-            freeCompilerArgs.add("-Xjdk-release=${libs.versions.jvm.target.get()}")
-        }
-    }
-
-    androidLibrary {
+    android {
         namespace = "dev.npn.app"
-        compileSdk =
-            libs.versions.android.compileSdk
-                .get()
-                .toInt()
-        minSdk =
-            libs.versions.android.minSdk
-                .get()
-                .toInt()
-
-        compilerOptions {
-            jvmTarget =
-                JvmTarget.fromTarget(
-                    libs.versions.jvm.target
-                        .get(),
-                )
-        }
         androidResources {
             enable = true
         }
@@ -161,10 +126,6 @@ kotlin {
                 ) { builtBy("copyAndroidMainComposeResourcesToAndroidAssets") },
             )
         }
-    }
-
-    compilerOptions {
-        freeCompilerArgs.add("-Xexpect-actual-classes")
     }
 }
 
