@@ -15,7 +15,6 @@
     <ID>InjectDispatcher:Indexer.kt:Indexer$Default</ID>
     <ID>InjectDispatcher:JvmLibraryFileSystem.kt:JvmLibraryFileSystem$IO</ID>
     <ID>InjectDispatcher:JvmLibraryFileSystemNoReplaceTest.kt:JvmLibraryFileSystemNoReplaceTest$IO</ID>
-    <ID>InjectDispatcher:JvmLibraryFileSystemTest.kt:JvmLibraryFileSystemTest$IO</ID>
     <ID>InjectDispatcher:JvmWatchedFolder.kt:JvmWatchedFolder$IO</ID>
     <ID>InjectDispatcher:LocalLibraryFolders.kt:LocalLibraryFolders$IO</ID>
     <ID>InjectDispatcher:PdfBoxAndroidEngine.kt:PdfBoxAndroidEngine$IO</ID>
