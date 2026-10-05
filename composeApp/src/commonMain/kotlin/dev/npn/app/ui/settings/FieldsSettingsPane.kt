@@ -218,17 +218,8 @@ private fun FieldDefDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                stringResource(
-                    if (def ==
-                        null
-                    ) {
-                        Res.string.detail_new_field
-                    } else {
-                        Res.string.common_settings_field_edit_title
-                    },
-                ),
-            )
+            val title = if (def == null) Res.string.detail_new_field else Res.string.common_settings_field_edit_title
+            Text(stringResource(title))
         },
         text = {
             Column(Modifier.fillMaxWidth().verticalScroll(rememberScrollState())) {

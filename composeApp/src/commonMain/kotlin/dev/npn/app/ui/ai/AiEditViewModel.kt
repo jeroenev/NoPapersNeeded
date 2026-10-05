@@ -249,23 +249,17 @@ fun AiEditUiState.scopeAvailable(scope: EditScope): Boolean =
         EditScope.UNTAGGED, EditScope.ALL -> true
     }
 
-/** The autofilled fields' registry keys, in registry order; these define [EditScope.MISSING_FIELDS]. */
-fun AiEditUiState.missingFields(): List<String> = enabledFieldKeys()
+/**
+ * The autofilled fields' keys in registry order: what the run asks for, and the fields whose
+ * absence defines [EditScope.MISSING_FIELDS].
+ */
+fun AiEditUiState.enabledFieldKeys(): List<String> =
+    fieldOptions.filterValues { it.enabled }.keys.inRegistryOrder(fields)
 
-/** Enabled field keys in registry order (keys the registry no longer lists come last). */
-fun AiEditUiState.enabledFieldKeys(): List<String> {
+/** These keys in [fields]' registry order; a key the registry no longer lists comes last. */
+internal fun Iterable<String>.inRegistryOrder(fields: List<FieldDef>): List<String> {
     val order = fields.map { it.key }
-    return fieldOptions.filterValues { it.enabled }.keys.sortedBy {
-        order.indexOf(it).let { i ->
-            if (i <
-                0
-            ) {
-                Int.MAX_VALUE
-            } else {
-                i
-            }
-        }
-    }
+    return sortedBy { key -> order.indexOf(key).takeIf { it >= 0 } ?: Int.MAX_VALUE }
 }
 
 /** True when the run asks about more fields than one reply can sensibly carry (see P11 in the plan). */
@@ -276,7 +270,7 @@ private fun AiEditUiState.scopeKey(): ScopeKey =
     ScopeKey(
         scope = scope,
         savedView = savedViews.firstOrNull { it.id == savedViewId },
-        missing = missingFields(),
+        missing = enabledFieldKeys(),
         batchSize = batchSize,
     )
 

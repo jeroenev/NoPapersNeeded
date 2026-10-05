@@ -274,9 +274,7 @@ private fun FieldSection(
         val labels = ui.fields.associate { it.key to it.label }
         // Registry order, so the run's rows read like the document panel; a key the registry no
         // longer lists keeps its row (shown by key) so a configured run is never silently trimmed.
-        val order = ui.fields.map { it.key }
-        val keys = ui.fieldOptions.keys.sortedBy { order.indexOf(it).let { i -> if (i < 0) Int.MAX_VALUE else i } }
-        for (key in keys) {
+        for (key in ui.fieldOptions.keys.inRegistryOrder(ui.fields)) {
             FieldOption(
                 label = labels[key] ?: key,
                 option = ui.fieldOptions.getValue(key),
