@@ -28,17 +28,15 @@ abstract class PackageAppImageTask
         @get:InputFile
         abstract val appImageTool: RegularFileProperty
 
+        /** The AppDir's desktop entry, which appimagetool requires; its Icon names [appName]. */
+        @get:InputFile
+        abstract val desktopEntry: RegularFileProperty
+
         @get:InputFile
         abstract val iconFile: RegularFileProperty
 
         @get:Input
         abstract val appName: Property<String>
-
-        @get:Input
-        abstract val displayName: Property<String>
-
-        @get:Input
-        abstract val wmClass: Property<String>
 
         @get:Input
         abstract val arch: Property<String>
@@ -96,24 +94,10 @@ abstract class PackageAppImageTask
             )
             appRun.setExecutable(true)
 
-            // Minimal .desktop entry (required by appimagetool). StartupWMClass lets the
-            // shell match the running window to this entry and show the app icon in the
-            // taskbar.
-            File(dir, "$name.desktop").writeText(
-                """
-                [Desktop Entry]
-                Type=Application
-                Name=${displayName.get()}
-                Exec=$name
-                Icon=$name
-                Categories=Office;Utility;
-                Terminal=false
-                StartupWMClass=${wmClass.get()}
-                """.trimIndent() + "\n",
-            )
+            desktopEntry.get().asFile.copyTo(File(dir, "$name.desktop"), overwrite = true)
 
-            // Icon: the .desktop entry above points at "$name", which appimagetool resolves
-            // to this PNG at the AppDir root. Same file jpackage uses for the .deb.
+            // The desktop entry's Icon is "$name", which appimagetool resolves to this PNG at the
+            // AppDir root. Same file jpackage uses for the .deb.
             iconFile.get().asFile.copyTo(File(dir, "$name.png"), overwrite = true)
 
             val out = outFile.get().asFile

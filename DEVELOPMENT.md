@@ -220,7 +220,10 @@ plugin appends its own `--resource-dir` after any `freeArgs`, and jpackage keeps
 last one ([#773](https://github.com/JetBrains/compose-multiplatform/issues/773),
 [CMP-9837](https://youtrack.jetbrains.com/projects/CMP/issues/CMP-9837/packageDeb-task-fails-to-include-custom-.desktop-files)).
 Without the override the entry has no `StartupWMClass`, so GNOME cannot match the
-running window to the installed app and shows a generic taskbar icon.
+running window to the installed app and shows a generic taskbar icon. Every Linux package
+(`.deb`, `.rpm`, AppImage, Flatpak) renders its desktop entry from the same template,
+`desktopApp/linux/no-papers-needed.desktop`, filling in only how it starts the app and names its
+icon.
 
 `./gradlew :desktopApp:packageRpm` builds the `.rpm` the same way. It needs `rpmbuild`,
 which Debian/Ubuntu hosts get from the `rpm` package.

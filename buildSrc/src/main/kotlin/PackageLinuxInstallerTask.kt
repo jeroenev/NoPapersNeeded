@@ -12,7 +12,8 @@ import javax.inject.Inject
 
 /**
  * Builds a Linux .deb or .rpm by running jpackage on the app image the Compose plugin produces,
- * with [resourceDir] overriding the desktop entry template. The plugin can't do that itself: it
+ * with [resourceDir] overriding the desktop entry template and its icon: jpackage picks them out by
+ * file name, `<app name>.desktop` and `<app name>.png`. The plugin can't do that itself: it
  * appends its own `--resource-dir` (which it uses for the macOS Info.plist) after the task's
  * freeArgs, and jpackage keeps the last one (JetBrains/compose-multiplatform#773, CMP-9837).
  */
@@ -46,9 +47,6 @@ abstract class PackageLinuxInstallerTask
         @get:Input
         abstract val appDescription: Property<String>
 
-        @get:Input
-        abstract val menuGroup: Property<String>
-
         @get:OutputDirectory
         abstract val destinationDir: DirectoryProperty
 
@@ -79,8 +77,6 @@ abstract class PackageLinuxInstallerTask
                             "--license-file",
                             licenseFile.get().asFile.absolutePath,
                             "--linux-shortcut",
-                            "--linux-menu-group",
-                            menuGroup.get(),
                             "--resource-dir",
                             resourceDir.get().asFile.absolutePath,
                             "--dest",

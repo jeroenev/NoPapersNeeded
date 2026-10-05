@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<!-- @VERSION@ and @DATE@ are filled in by the stageLinuxBundle task (desktopApp/build.gradle.kts). -->
+<!-- The release version and date are filled in by renderMetainfo (desktopApp/build.gradle.kts). -->
 <component type="desktop-application">
   <id>io.github.jeroenev.NoPapersNeeded</id>
   <name>No papers needed</name>

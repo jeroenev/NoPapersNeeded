@@ -37,10 +37,6 @@ val npnDisplayName = "No papers needed"
 val npnDescription = "Personal paperless document library"
 val npnMainClass = "dev.npn.desktop.MainKt"
 
-// Becomes Categories= in the Linux desktop entry, which jpackage otherwise sets to
-// "Unknown".
-val npnLinuxMenuGroup = "Office"
-
 // GNOME (and other Wayland/X11 shells) identify a window by its WM_CLASS and look up the
 // matching .desktop entry to decide which taskbar icon to show; the window's own icon is
 // not used for that. AWT derives WM_CLASS from the main class with dots turned into
@@ -97,7 +93,6 @@ compose.desktop {
             linux {
                 shortcut = true
                 iconFile.set(npnIconPng)
-                menuGroup = npnLinuxMenuGroup
             }
             windows {
                 menuGroup = "No Papers Needed"
@@ -116,30 +111,47 @@ compose.desktop {
 // Linux package below repackages.
 val distributableAppImage = layout.buildDirectory.dir("compose/binaries/main/app/$npnAppName")
 
+// Every Linux package ships the one desktop entry template (linux/), so they share its categories
+// and StartupWMClass; each fills in how it starts the app and names its icon.
+fun desktopEntry(
+    name: String,
+    exec: String,
+    icon: String,
+) = tasks.register<RenderTemplateTask>(name) {
+    template.set(layout.projectDirectory.file("linux/$npnAppName.desktop"))
+    tokens.putAll(
+        mapOf(
+            "NAME" to npnDisplayName,
+            "COMMENT" to npnDescription,
+            "EXEC" to exec,
+            "ICON" to icon,
+            "WM_CLASS" to npnWmClass,
+        ),
+    )
+    outFile.set(layout.buildDirectory.file("desktop-entries/$name.desktop"))
+}
+
 // --- Linux .deb and .rpm packaging ---------------------------------------
-// jpackage builds the installed .desktop entry from a template, and its built-in one has
-// no StartupWMClass, so the shell cannot match the running window to the installed entry
-// and shows a generic taskbar icon. Overriding that template is a supported jpackage
-// feature (--resource-dir), but not through the Compose plugin: the plugin appends its
-// own --resource-dir (which it uses for the macOS Info.plist) after the task's freeArgs,
-// and jpackage keeps the last one. See JetBrains/compose-multiplatform#773 and CMP-9837.
-//
-// So the .deb and .rpm are built here instead, by calling jpackage on the app image the
-// plugin produces - the same approach the AppImage task below already uses. Nothing is
-// post-processed: jpackage generates the entry from our template. The .rpm needs
-// `rpmbuild` on the host (the `rpm` package on Debian/Ubuntu).
+// Built here by running jpackage on the app image, not by the Compose plugin, which cannot pass
+// jpackage our desktop entry template (see PackageLinuxInstallerTask). jpackage's built-in one has
+// no StartupWMClass, so the shell would not match the running window to the installed entry and
+// would show a generic taskbar icon. The .rpm needs `rpmbuild` on the host (the `rpm` package on
+// Debian/Ubuntu).
+
+// jpackage fills in the installed launcher and icon paths itself.
+val jpackageDesktopEntry = desktopEntry("jpackageDesktopEntry", "APPLICATION_LAUNCHER", "APPLICATION_ICON")
 
 val jpackageResourceDir = layout.buildDirectory.dir("jpackage-resources")
 
+// Packaging from an app image does not reuse the icon inside it, so the icon goes here too, or the
+// entry falls back to the default Java coffee cup.
 val prepareJPackageResources =
-    tasks.register<PrepareJPackageResourcesTask>("prepareJPackageResources") {
+    tasks.register<Sync>("prepareJPackageResources") {
         group = "compose desktop"
-        description = "Writes the jpackage overrides for the Linux desktop entry and its icon."
-        appName.set(npnAppName)
-        displayName.set(npnDisplayName)
-        wmClass.set(npnWmClass)
-        iconFile.set(npnIconPng)
-        outDir.set(jpackageResourceDir)
+        description = "Stages the jpackage overrides for the Linux desktop entry and its icon."
+        from(jpackageDesktopEntry) { rename(".*", "$npnAppName.desktop") }
+        from(npnIconPng) { rename(".*", "$npnAppName.png") }
+        into(jpackageResourceDir)
     }
 
 fun PackageLinuxInstallerTask.packageAs(type: String) {
@@ -161,7 +173,6 @@ fun PackageLinuxInstallerTask.packageAs(type: String) {
     appName.set(npnAppName)
     appVersion.set(npnAppVersion)
     appDescription.set(npnDescription)
-    menuGroup.set(npnLinuxMenuGroup)
     destinationDir.set(layout.buildDirectory.dir("compose/binaries/main/$type"))
 }
 
@@ -190,6 +201,8 @@ val downloadAppImageTool =
         outFile.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
     }
 
+val appImageDesktopEntry = desktopEntry("appImageDesktopEntry", npnAppName, npnAppName)
+
 val packageAppImage =
     tasks.register<PackageAppImageTask>("packageAppImage") {
         group = "compose desktop"
@@ -197,8 +210,7 @@ val packageAppImage =
         dependsOn("createDistributable", downloadAppImageTool)
 
         appName.set(npnAppName)
-        displayName.set(npnDisplayName)
-        wmClass.set(npnWmClass)
+        desktopEntry.set(appImageDesktopEntry.flatMap { it.outFile })
         arch.set(appImageArch)
         // AppImageUpdate (and launchers such as Gear Lever) fetch the .zsync of the latest GitHub
         // release, so the release has to upload it next to the AppImage.
@@ -294,11 +306,13 @@ if (isWindowsHost) {
 val npnFlatpakId = "io.github.jeroenev.NoPapersNeeded"
 val linuxBundleName = "$npnAppName-$npnAppVersion-linux-x86_64"
 
+// The release date is the built commit's, which keeps the tarball reproducible.
 val renderMetainfo =
-    tasks.register<RenderMetainfoTask>("renderMetainfo") {
+    tasks.register<RenderTemplateTask>("renderMetainfo") {
         template.set(layout.projectDirectory.file("flatpak/$npnFlatpakId.metainfo.xml"))
-        version.set(npnAppVersion)
-        releaseDate.set(
+        tokens.put("VERSION", npnAppVersion)
+        tokens.put(
+            "DATE",
             providers
                 .exec { commandLine("git", "log", "-1", "--format=%cs") }
                 .standardOutput.asText
@@ -306,6 +320,8 @@ val renderMetainfo =
         )
         outFile.set(layout.buildDirectory.file("linux-bundle/metainfo/$npnFlatpakId.metainfo.xml"))
     }
+
+val flatpakDesktopEntry = desktopEntry("flatpakDesktopEntry", npnAppName, npnFlatpakId)
 
 val stageLinuxBundle =
     tasks.register<Sync>("stageLinuxBundle") {
@@ -316,11 +332,13 @@ val stageLinuxBundle =
         // jlink leaves the runtime's legal notices read-only, so the copy cannot overwrite them.
         doFirst { (this as Sync).destinationDir.deleteRecursively() }
         from(distributableAppImage) { into("app") }
-        from("flatpak/$npnFlatpakId.desktop") { into("share") }
+        from(flatpakDesktopEntry) {
+            rename(".*", "$npnFlatpakId.desktop")
+            into("share")
+        }
         from(renderMetainfo) { into("share") }
-        val iconName = "$npnFlatpakId.png"
         from(npnIconPng) {
-            rename { iconName }
+            rename(".*", "$npnFlatpakId.png")
             into("share")
         }
     }

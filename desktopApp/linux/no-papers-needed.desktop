@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=@NAME@
+Comment=@COMMENT@
+Exec=@EXEC@
+Icon=@ICON@
+Categories=Office;
+Terminal=false
+StartupWMClass=@WM_CLASS@
