@@ -3,6 +3,7 @@
 package dev.npn.core.app
 
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.testing.FakeMetadataWriter
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
@@ -32,7 +33,7 @@ private fun reviewed(
  * Scope accounting stays on [AiEditRun]; the two flows' end-to-end behaviour is in their own suites.
  */
 class ReviewApplyTest {
-    private val meta = FakeMeta()
+    private val meta = FakeMetadataWriter(batchedFieldsOnly = true)
     private val apply = ReviewApply(meta)
 
     private suspend fun apply(vararg docs: ReviewDoc): ApplyOutcome = apply.apply(docs.toList()) { false }
@@ -66,7 +67,7 @@ class ReviewApplyTest {
 
             val outcome = apply(reviewed("a", fields = fields), reviewed("b", fields = fields))
 
-            meta.batchedEdits shouldContainExactly listOf("a" to fields, "b" to fields)
+            meta.batchedEdits.map { it.docId to it.fields } shouldContainExactly listOf("a" to fields, "b" to fields)
             outcome.shouldBeInstanceOf<ApplyOutcome.Done>().result.applied shouldBe 4
         }
 

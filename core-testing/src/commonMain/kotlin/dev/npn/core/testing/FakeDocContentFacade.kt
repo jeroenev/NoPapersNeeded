@@ -1,8 +1,9 @@
-package dev.npn.app
+package dev.npn.core.testing
 
 import dev.npn.core.app.BakeOutcome
 import dev.npn.core.app.DocContentFacade
 
+/** Document content: canned page count, extracted text and bake results; nothing is rendered. */
 class FakeDocContentFacade : DocContentFacade {
     /** Null models a page count that could not be read; the facade returns null, never throws. */
     var pageCountValue: Int? = null
@@ -10,6 +11,11 @@ class FakeDocContentFacade : DocContentFacade {
     var failBake: (() -> Nothing)? = null
     var bakedBytes: ByteArray? = null
     val bakedInPlace = mutableListOf<String>()
+    var clearedThumbnails = 0
+    var extractedTextValue: String? = null
+
+    /** Per-doc extracted text; a docId present here wins over [extractedTextValue]. */
+    var extractedTextByDoc: Map<String, String?> = emptyMap()
 
     override suspend fun thumbnailPath(docId: String): String? = null
 
@@ -31,14 +37,7 @@ class FakeDocContentFacade : DocContentFacade {
 
     override suspend fun rawBytes(docId: String): ByteArray? = null
 
-    var clearedThumbnails = 0
-
     override suspend fun clearThumbnailCache(): Int = clearedThumbnails
-
-    var extractedTextValue: String? = null
-
-    /** Per-doc extracted text; a docId present here wins over [extractedTextValue]. */
-    var extractedTextByDoc: Map<String, String?> = emptyMap()
 
     override suspend fun extractedText(docId: String): String? =
         if (docId in extractedTextByDoc) extractedTextByDoc[docId] else extractedTextValue

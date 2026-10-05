@@ -121,6 +121,7 @@ kotlin {
             implementation(libs.filekit.dialogs.compose)
         }
         commonTest.dependencies {
+            implementation(projects.coreTesting)
             implementation(kotlin("test"))
             implementation(libs.kotlinx.coroutines.test)
             implementation(libs.kotest.assertions)

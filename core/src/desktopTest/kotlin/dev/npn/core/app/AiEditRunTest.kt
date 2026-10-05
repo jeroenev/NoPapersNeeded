@@ -5,10 +5,17 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.FakeAiSuggest
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.testing.FakeAiSuggest
+import dev.npn.core.testing.FakeDocContentFacade
+import dev.npn.core.testing.FakeDocumentRepository
+import dev.npn.core.testing.FakeFieldRegistry
+import dev.npn.core.testing.FakeMetadataWriter
+import dev.npn.core.testing.doc
+import dev.npn.core.testing.edit
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
@@ -29,9 +36,9 @@ import kotlin.test.Test
 private class Harness(
     selection: List<String> = emptyList(),
 ) {
-    val documents = FakeDocuments()
-    val meta = FakeMeta()
-    val content = FakeContent()
+    val documents = FakeDocumentRepository()
+    val meta = FakeMetadataWriter(batchedFieldsOnly = true)
+    val content = FakeDocContentFacade()
     val ai = FakeAiSuggest()
     val fieldRegistry = FakeFieldRegistry()
     val run = AiEditRun(documents, meta, content, ai, fieldRegistry, selection)
@@ -69,7 +76,7 @@ class AiEditRunSuggestTest {
             // Skew completion order (c finishes first, then b, then a) to prove results are
             // re-ordered back to batch order and progress climbs as docs COMPLETE.
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"), item("c"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"), listItem("c"))
             h.ai.suggestDelayByDoc = mapOf("a" to 300, "b" to 200, "c" to 100)
             h.ai.editByDoc =
                 mapOf(
@@ -91,7 +98,7 @@ class AiEditRunSuggestTest {
         runTest {
             // 14 docs, concurrency 12: only 12 calls should be dispatched before any completes.
             val h = Harness()
-            h.documents.documents.value = (1..14).map { item("d$it") }
+            h.documents.documents.value = (1..14).map { listItem("d$it") }
             h.ai.suggestDelayMillis = 100
             h.ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
 
@@ -109,7 +116,7 @@ class AiEditRunSuggestTest {
     fun preSelectPolicyForTags() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"))
+            h.documents.documents.value = listOf(listItem("a"))
             h.ai.edit =
                 edit(
                     addTags =
@@ -132,7 +139,7 @@ class AiEditRunSuggestTest {
     fun preSelectPolicyForFields() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a", title = "Old title"))
+            h.documents.documents.value = listOf(listItem(doc("a", title = "Old title")))
             h.ai.edit =
                 edit(
                     metadata =
@@ -163,7 +170,7 @@ class AiEditRunSuggestTest {
     fun noSuggestionDocsPartitionedIntoEmptyDocs() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"))
             h.ai.editByDoc =
                 mapOf(
                     "a" to edit(addTags = listOf(TagSuggestion("t", isNew = false))),
@@ -180,7 +187,7 @@ class AiEditRunSuggestTest {
     fun fieldOnlySuggestionsCountAsSuggestions() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"))
             h.ai.editByDoc =
                 mapOf(
                     "a" to edit(metadata = FieldSuggestion(mapOf(FieldKeys.DOC_DATE to "2024-01-15"))),
@@ -197,7 +204,7 @@ class AiEditRunSuggestTest {
     fun failedDocsAreCountedNotProcessedAndRetriedNextBatch() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"))
             h.ai.failWith = { if (it == "a") error("suggest edits failed for a") }
             h.ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
 
@@ -217,7 +224,7 @@ class AiEditRunSuggestTest {
     fun processedDocsExcludedFromNextBatchIncludingEmptyOnes() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"), item("c"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"), listItem("c"))
             h.ai.editByDoc =
                 mapOf(
                     "a" to edit(addTags = listOf(TagSuggestion("t", isNew = false))),
@@ -236,7 +243,7 @@ class AiEditRunSuggestTest {
     fun snippetIsCollapsedWhitespaceAndBlankBecomesNull() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"))
             h.ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
             h.content.extractedTextByDoc =
                 mapOf(
@@ -254,7 +261,7 @@ class AiEditRunSuggestTest {
     fun cancellationTearsDownTheWholeBatch() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"))
             h.ai.suggestDelayMillis = 1_000
             h.ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
 
@@ -287,7 +294,7 @@ class AiEditRunApplyTest {
     fun applyWritesOnlySelectedItems() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"))
+            h.documents.documents.value = listOf(listItem("a"))
             h.ai.edit =
                 edit(
                     addTags =
@@ -310,7 +317,7 @@ class AiEditRunApplyTest {
         runTest {
             // Distinct removal tags keep the calls separate, so only a's fails.
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"))
             h.ai.editByDoc =
                 mapOf(
                     "a" to edit(removeTags = listOf("utility")),
@@ -349,7 +356,7 @@ class AiEditRunApplyTest {
     fun aFailedFieldWriteRetainsEveryFieldOfThatDocument() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"))
+            h.documents.documents.value = listOf(listItem("a"))
             h.ai.edit =
                 edit(
                     metadata =
@@ -359,7 +366,7 @@ class AiEditRunApplyTest {
                 )
 
             val review = reviewOf(h)
-            h.meta.failEditsForDocs = setOf("a")
+            h.meta.failApplyEditsForDocs = setOf("a")
             val retry = h.run.apply(key(), review.docs).shouldBeInstanceOf<ApplyOutcome.Retry>()
 
             retry.remaining
@@ -372,7 +379,7 @@ class AiEditRunApplyTest {
     fun nothingSelectedWritesNothing() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"))
+            h.documents.documents.value = listOf(listItem("a"))
             h.ai.edit = edit(addTags = listOf(TagSuggestion("brandnew", isNew = true)))
 
             val review = reviewOf(h)
@@ -384,7 +391,7 @@ class AiEditRunApplyTest {
     fun doneReportsMoreRemainWhenScopeHasUnprocessedDocs() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"), item("c"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"), listItem("c"))
             h.ai.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
 
             val review = reviewOf(h, key(batchSize = 2))
@@ -397,7 +404,7 @@ class AiEditRunApplyTest {
     fun partialFailureRetainsFailedDocsWithUnappliedSelections() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"))
             h.ai.editByDoc =
                 mapOf(
                     "a" to edit(addTags = listOf(TagSuggestion("t1", isNew = false))),
@@ -433,7 +440,7 @@ class AiEditRunApplyTest {
             // Doc a: the "bad" tag call fails (a shares it with nothing), the title write succeeds.
             // The retained row must keep the failed chip selected but deselect the written field.
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"))
+            h.documents.documents.value = listOf(listItem("a"))
             h.ai.edit =
                 edit(
                     addTags = listOf(TagSuggestion("bad", isNew = false)),
@@ -454,7 +461,7 @@ class AiEditRunApplyTest {
         runTest {
             // A partial failure carries its succeeded count; a NEW batch must not inherit it.
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"), item("b"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"))
             h.ai.editByDoc =
                 mapOf(
                     "a" to edit(addTags = listOf(TagSuggestion("t1", isNew = false))),
@@ -481,7 +488,7 @@ class AiEditRunScopeTest {
     fun selectionScopeQueriesTheSelectedIds() =
         runTest {
             val h = Harness(selection = listOf("a", "c"))
-            h.documents.documents.value = listOf(item("a"), item("b"), item("c"))
+            h.documents.documents.value = listOf(listItem("a"), listItem("b"), listItem("c"))
 
             val docs = h.run.docsFor(key(scope = EditScope.SELECTION)).first()
 
@@ -496,7 +503,7 @@ class AiEditRunScopeTest {
         runTest {
             // An empty id list is no constraint at all to the library query, so it must not get one.
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"))
+            h.documents.documents.value = listOf(listItem("a"))
 
             var seen: List<DocListItem>? = null
             val job = launch { h.run.docsFor(key(scope = EditScope.SELECTION)).collect { seen = it } }
@@ -527,7 +534,7 @@ class AiEditRunScopeTest {
     fun savedViewScopeWithoutViewSelectsNothing() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"))
+            h.documents.documents.value = listOf(listItem("a"))
 
             var seen: List<DocListItem>? = null
             val job =
@@ -558,7 +565,7 @@ class AiEditRunScopeTest {
         runTest {
             // No autofill field enabled must select nothing, not degrade into "all documents".
             val h = Harness()
-            h.documents.documents.value = listOf(item("a"))
+            h.documents.documents.value = listOf(listItem("a"))
 
             var seen: List<DocListItem>? = null
             val job =

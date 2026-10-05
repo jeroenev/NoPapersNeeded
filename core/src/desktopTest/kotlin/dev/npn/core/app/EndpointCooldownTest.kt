@@ -1,6 +1,10 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditRequest
+import dev.npn.core.testing.FakeDocContentFacade
+import dev.npn.core.testing.FakeDocumentRepository
+import dev.npn.core.testing.FakeMetadataWriter
+import dev.npn.core.testing.listItem
 import dev.npn.core.work.QueueRetryPolicy
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
@@ -13,12 +17,12 @@ import kotlin.test.Test
  */
 class EndpointCooldownTest {
     private fun Rig.editQueue(): AiEditQueue {
-        val documents = FakeDocuments().apply { documents.value = listOf(item("a")) }
+        val documents = FakeDocumentRepository().apply { documents.value = listOf(listItem("a")) }
         return AiEditQueue(
             dao = deviceDb.aiEditJobDao(),
             documents = documents,
-            content = FakeContent(),
-            meta = FakeMeta(),
+            content = FakeDocContentFacade(),
+            meta = FakeMetadataWriter(batchedFieldsOnly = true),
             ai = ai,
             fieldRegistry = fieldRegistry,
             readConfig = { config },

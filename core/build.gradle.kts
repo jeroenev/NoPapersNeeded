@@ -127,6 +127,7 @@ kotlin {
         }
         getByName("desktopTest") {
             dependencies {
+                implementation(projects.coreTesting)
                 implementation(libs.kotest.property)
                 implementation(libs.pdfbox)
             }

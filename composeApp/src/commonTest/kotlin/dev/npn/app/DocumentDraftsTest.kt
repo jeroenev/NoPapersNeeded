@@ -4,6 +4,7 @@ import dev.npn.app.ui.detail.DocumentDrafts
 import dev.npn.core.app.MetadataWriter
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
+import dev.npn.core.testing.FakeMetadataWriter
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.test.advanceUntilIdle
@@ -98,7 +99,7 @@ class DocumentDraftsTest : MainDispatcherTest() {
             // The fields land in one applyEdits transaction; the reviewed marker is a separate call.
             assertEquals(
                 mapOf(FieldKeys.TITLE to "Invoice"),
-                writer.batchedEdits.single().third,
+                writer.batchedEdits.single().fields,
             )
             assertEquals(listOf("one") to true, writer.reviewedSets.single())
         }
@@ -167,7 +168,7 @@ class DocumentDraftsTest : MainDispatcherTest() {
             finish.complete(Unit)
             advanceUntilIdle()
             assertEquals(1, fake.batchedEdits.size)
-            assertEquals("First", fake.batchedEdits.single().third[FieldKeys.TITLE])
+            assertEquals("First", fake.batchedEdits.single().fields[FieldKeys.TITLE])
             assertEquals(
                 "Second",
                 store.state

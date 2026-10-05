@@ -1,4 +1,4 @@
-package dev.npn.app
+package dev.npn.core.testing
 
 import dev.npn.core.app.FieldRegistry
 import dev.npn.core.db.FieldKeyCount
@@ -9,13 +9,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 
 /**
- * In-memory field registry. Starts seeded with the well-known five so viewmodels see the same
+ * In-memory field registry. Starts seeded with the well-known five so callers see the same
  * registry a fresh library gets; tests mutate [defs] directly or through the write methods.
  */
 class FakeFieldRegistry : FieldRegistry {
     val defs = MutableStateFlow(FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) })
     val orphans = MutableStateFlow<List<FieldKeyCount>>(emptyList())
     val values = MutableStateFlow<Map<String, List<String>>>(emptyMap())
+    val usage = MutableStateFlow<Map<String, Int>>(emptyMap())
 
     val upserts = mutableListOf<FieldDef>()
     val removals = mutableListOf<Pair<String, Boolean>>()
@@ -24,8 +25,6 @@ class FakeFieldRegistry : FieldRegistry {
     override val fields: Flow<List<FieldDef>> get() = defs
 
     override fun orphanKeys(): Flow<List<FieldKeyCount>> = orphans
-
-    val usage = MutableStateFlow<Map<String, Int>>(emptyMap())
 
     override fun usageCounts(): Flow<Map<String, Int>> = usage
 

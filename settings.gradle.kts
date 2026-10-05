@@ -33,6 +33,7 @@ plugins {
 }
 
 include(":core")
+include(":core-testing")
 include(":composeApp")
 include(":androidApp")
 include(":desktopApp")

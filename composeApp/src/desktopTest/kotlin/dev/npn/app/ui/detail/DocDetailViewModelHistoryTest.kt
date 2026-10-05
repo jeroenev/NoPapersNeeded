@@ -3,11 +3,11 @@ package dev.npn.app.ui.detail
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
-import dev.npn.app.listItem
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.DocumentHistoryRecord
 import dev.npn.core.app.HistoryEntry
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi

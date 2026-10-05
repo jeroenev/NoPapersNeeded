@@ -9,6 +9,9 @@ design, build/packaging/release details, and the library folder layout.
 - `core` — platform-agnostic domain: journal, index, fs, pdf, ocr, xmp, Room db.
   Room 3 via KSP, two databases per library: the index (`NpnDatabase`, `index.db`) and the
   device's own state (`DeviceDatabase`, `device.db`); schemas in `core/schemas/<database>/`.
+- `core-testing` — fakes of `core`'s facets shared by `core`'s desktopTest and `composeApp`'s
+  commonTest (`dev.npn.core.testing`). Only test source sets depend on it; a fake both suites need
+  goes here rather than into either module's tests.
 - `composeApp` — shared Compose UI + viewmodels (`dev.npn.app.ui.*`, `di`).
 - `androidApp` — Android entrypoint (`dev.npn`, launcher `dev.npn/.MainActivity`). The debug
   build is a separate package, `dev.npn.debug`, so it installs next to the release build.
@@ -71,13 +74,13 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
     compile. Baseline: per-module `detekt-baseline.xml`.
   - `./gradlew detektTyped`: the type-resolved per-compilation tasks (`detektMainDesktop`,
     `detektMainAndroid`, `detektTestDesktop`, `detektHostTestAndroid` in `core`/`composeApp`;
-    `detektDebug` in `androidApp`; `detektMain` in `desktopApp`). Only these run the rules that
-    need the Analysis API (`LongParameterList`, `UnusedPrivate*`, `UnusedVariable`,
-    `SuspendFunSwallowedCancellation`, ...); the source-only run skips them silently. They also
-    load the Compose ruleset (`io.nlopez.compose.rules:detekt`, its default config): viewmodels
-    forwarded into child composables, composables without a `modifier`, parameter order and
-    naming. Baseline: per-module `detekt-baseline-typed.xml`. Device tests, release variants and
-    `baselineprofile` only get the source-only run.
+    `detektMainDesktop` in `core-testing`; `detektDebug` in `androidApp`; `detektMain` in
+    `desktopApp`). Only these run the rules that need the Analysis API (`LongParameterList`,
+    `UnusedPrivate*`, `UnusedVariable`, `SuspendFunSwallowedCancellation`, ...); the source-only
+    run skips them silently. They also load the Compose ruleset (`io.nlopez.compose.rules:detekt`,
+    its default config): viewmodels forwarded into child composables, composables without a
+    `modifier`, parameter order and naming. Baseline: per-module `detekt-baseline-typed.xml`.
+    Device tests, release variants and `baselineprofile` only get the source-only run.
 - Baselines grandfather old findings; CI fails on NEW issues only. Do not add to baselines; fix
   findings in code you touch. Baselines should shrink: after a cleanup, regenerate with
   `./gradlew :<module>:detektBaseline` or `./gradlew detektTypedBaseline` and check that the diff

@@ -93,7 +93,7 @@ class AiAutoEnricherRetryTest {
                 rig.ai.edit =
                     AiEditSuggestion(metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "Electricity invoice")))
                 rig.enricher.enqueue("d1")
-                rig.meta.failEditsWith = { IllegalStateException("journal rejected the write") }
+                rig.meta.failBatchOps = { throw IllegalStateException("journal rejected the write") }
 
                 rig.drain()
 

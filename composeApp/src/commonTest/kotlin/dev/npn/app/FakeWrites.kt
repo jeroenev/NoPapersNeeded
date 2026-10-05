@@ -1,91 +1,11 @@
 package dev.npn.app
 
 import dev.npn.core.app.DocLifecycle
-import dev.npn.core.app.MetadataWriter
 import dev.npn.core.app.TagAdmin
 
-// Write-side test doubles, one per write facet. Each records its calls so tests can assert what
-// was invoked, and each `fail*` hook makes the matching op throw.
-
-/** Per-document and bulk metadata edits. */
-class FakeMetadataWriter : MetadataWriter {
-    val addedTags = mutableListOf<Pair<List<String>, String>>()
-    val removedTags = mutableListOf<Pair<List<String>, String>>()
-    val reviewedSets = mutableListOf<Pair<List<String>, Boolean>>()
-
-    /** Every setField call (both single- and multi-doc overloads) as (docIds, key, value). */
-    val fieldSets = mutableListOf<Triple<List<String>, String, String?>>()
-    val batchedEdits = mutableListOf<Triple<List<String>, List<String>, Map<String, String?>>>()
-
-    /** If set, every batched op (addTag/removeTag/setReviewed/applyEdits) throws this. */
-    var failBatchOps: (() -> Nothing)? = null
-
-    /** addTag throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
-    var failAddTagForDocs: Set<String> = emptySet()
-
-    /** removeTag throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
-    var failRemoveTagForDocs: Set<String> = emptySet()
-
-    /** applyEdits throws when any of these ids is in the call's docIds (per-doc partial-failure testing). */
-    var failApplyEditsForDocs: Set<String> = emptySet()
-
-    /** If set, setField throws. */
-    var failSetField: (() -> Nothing)? = null
-
-    override suspend fun addTag(
-        docIds: List<String>,
-        tag: String,
-    ) {
-        failBatchOps?.invoke()
-        if (docIds.any { it in failAddTagForDocs }) error("addTag failed for $docIds")
-        addedTags += docIds to tag
-    }
-
-    override suspend fun removeTag(
-        docIds: List<String>,
-        tag: String,
-    ) {
-        failBatchOps?.invoke()
-        if (docIds.any { it in failRemoveTagForDocs }) error("removeTag failed for $docIds")
-        removedTags += docIds to tag
-    }
-
-    override suspend fun setReviewed(
-        docIds: List<String>,
-        reviewed: Boolean,
-    ) {
-        failBatchOps?.invoke()
-        reviewedSets += docIds to reviewed
-    }
-
-    override suspend fun setField(
-        docId: String,
-        key: String,
-        value: String?,
-    ) {
-        failSetField?.invoke()
-        fieldSets += Triple(listOf(docId), key, value)
-    }
-
-    override suspend fun setField(
-        docIds: List<String>,
-        key: String,
-        value: String?,
-    ) {
-        failSetField?.invoke()
-        fieldSets += Triple(docIds, key, value)
-    }
-
-    override suspend fun applyEdits(
-        docIds: List<String>,
-        addTags: List<String>,
-        fields: Map<String, String?>,
-    ) {
-        failBatchOps?.invoke()
-        if (docIds.any { it in failApplyEditsForDocs }) error("applyEdits failed for $docIds")
-        batchedEdits += Triple(docIds, addTags, fields)
-    }
-}
+// Write-side test doubles for the tag and lifecycle facets; the metadata writer's is shared, in
+// :core-testing. Each records its calls so tests can assert what was invoked, and each `fail*`
+// hook makes the matching op throw.
 
 /** Vocabulary-level tag administration. */
 class FakeTagAdmin : TagAdmin {

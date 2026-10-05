@@ -59,6 +59,8 @@ tasks.named("check") {
 val typedDetektCompilations =
     mapOf(
         ":core" to listOf("MainDesktop", "MainAndroid", "TestDesktop", "HostTestAndroid"),
+        // All commonMain: the desktop compilation sees every line of it.
+        ":core-testing" to listOf("MainDesktop"),
         ":composeApp" to listOf("MainDesktop", "MainAndroid", "TestDesktop", "HostTestAndroid"),
         ":androidApp" to listOf("Debug"),
         ":desktopApp" to listOf("Main"),

@@ -4,6 +4,7 @@ import dev.npn.app.ui.detail.DocDetailViewModel
 import dev.npn.app.ui.detail.DocLoadState
 import dev.npn.app.ui.detail.PageCountState
 import dev.npn.core.app.DocListItem
+import dev.npn.core.testing.doc
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.launch

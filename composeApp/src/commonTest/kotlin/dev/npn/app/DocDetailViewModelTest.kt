@@ -20,6 +20,8 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.ocr.OcrState
+import dev.npn.core.testing.doc
+import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.maps.shouldContainExactly
@@ -420,7 +422,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun suggestAiTagsFailureSurfacesErrorAndClearsBusy() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { aiSuggest.failSuggestEdits = { error("network down") } }
+            val session = FakeLibrarySession().apply { aiSuggest.failWith = { error("network down") } }
             val model = vm(session = session)
             val messages = mutableListOf<UiText>()
             val job = launch { model.messages.collect { messages += it.text } }
@@ -545,7 +547,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
     @Test
     fun suggestAiMetadataFailureSurfacesErrorAndClearsBusy() =
         runTest(dispatcher) {
-            val session = FakeLibrarySession().apply { aiSuggest.failSuggestEdits = { error("network down") } }
+            val session = FakeLibrarySession().apply { aiSuggest.failWith = { error("network down") } }
             val model = vm(session = session)
             val messages = mutableListOf<UiText>()
             val job = launch { model.messages.collect { messages += it.text } }

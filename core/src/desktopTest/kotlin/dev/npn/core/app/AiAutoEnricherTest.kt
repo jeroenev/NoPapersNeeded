@@ -142,7 +142,7 @@ class AiAutoEnricherTest {
                 // One write for the whole suggestion, so the file is renamed at most once. Removals
                 // are dropped, not applied: the pass is additive even if the facade proposes them.
                 val edit =
-                    rig.meta.edits
+                    rig.meta.batchedEdits
                         .shouldBeSingleton()
                         .single()
                 edit.docId shouldBe "d1"
@@ -182,7 +182,7 @@ class AiAutoEnricherTest {
                 // Exactly one write, carrying the tag AND the field. Two writes would mean the
                 // enricher had regressed to the Edit Run's per-tag/per-doc split, losing atomicity.
                 val edit =
-                    rig.meta.edits
+                    rig.meta.batchedEdits
                         .shouldBeSingleton()
                         .single()
                 edit.addTags shouldContainExactly listOf("invoice")
@@ -267,7 +267,8 @@ class AiAutoEnricherTest {
 
                 rig.drain()
 
-                rig.meta.addedTags shouldContainExactly listOf("d1" to listOf("invoice"))
+                rig.meta.batchedEdits.map { it.docId to it.addTags } shouldContainExactly
+                    listOf("d1" to listOf("invoice"))
             }
         }
 
@@ -282,7 +283,7 @@ class AiAutoEnricherTest {
                 rig.drain()
 
                 // Nothing to write at all, so not even an empty transaction is committed.
-                rig.meta.edits.shouldBeEmpty()
+                rig.meta.batchedEdits.shouldBeEmpty()
                 rig.enrichedAt("d1").shouldNotBeNull()
                 rig.row("d1").shouldBeNull()
             }

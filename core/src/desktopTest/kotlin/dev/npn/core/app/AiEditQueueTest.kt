@@ -5,7 +5,6 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.ai.AiEditRequest
 import dev.npn.core.ai.AiEditSuggestion
-import dev.npn.core.ai.FakeAiSuggest
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.db.AiEditJobDocEntity
@@ -13,6 +12,14 @@ import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.deviceDatabase
 import dev.npn.core.index.MutableClock
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.testing.FakeAiSuggest
+import dev.npn.core.testing.FakeDocContentFacade
+import dev.npn.core.testing.FakeDocumentRepository
+import dev.npn.core.testing.FakeFieldRegistry
+import dev.npn.core.testing.FakeMetadataWriter
+import dev.npn.core.testing.doc
+import dev.npn.core.testing.edit
+import dev.npn.core.testing.listItem
 import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueRetryPolicy
 import dev.npn.core.work.backoffMs
@@ -39,9 +46,9 @@ private class QueueRig(
     val db: DeviceDatabase,
     private val dbDir: File,
 ) {
-    val documents = FakeDocuments()
-    val meta = FakeMeta()
-    val content = FakeContent()
+    val documents = FakeDocumentRepository()
+    val meta = FakeMetadataWriter(batchedFieldsOnly = true)
+    val content = FakeDocContentFacade()
     val ai = FakeAiSuggest()
     val fieldRegistry = FakeFieldRegistry()
     val clock = MutableClock(start = 1_000L)
@@ -80,7 +87,7 @@ private class QueueRig(
         vararg docIds: String,
         request: AiEditRequest = AiEditRequest(),
     ): String {
-        documents.documents.value = docIds.map { item(it) }
+        documents.documents.value = docIds.map { listItem(it) }
         return queue.enqueueEditRun(docIds.toList(), request)
     }
 
@@ -138,7 +145,7 @@ class AiEditQueueSuggestionTest {
             withQueue { rig ->
                 rig.ai.edit = suggestion()
                 val docIds = (1..SuggestionRunner.CONCURRENCY + 3).map { "d$it" }
-                rig.documents.documents.value = docIds.map { item(it) }
+                rig.documents.documents.value = docIds.map { listItem(it) }
                 val jobId = rig.queue.enqueueEditRun(docIds, AiEditRequest())
 
                 rig.queue.processNext() shouldBe true
@@ -180,7 +187,7 @@ class AiEditQueueSuggestionTest {
     fun `duplicate documents are queued once, because each one costs a model call`() =
         runTest {
             withQueue { rig ->
-                rig.documents.documents.value = listOf(item("a"))
+                rig.documents.documents.value = listOf(listItem("a"))
                 val jobId = rig.queue.enqueueEditRun(listOf("a", "a", "a"), AiEditRequest())
 
                 rig.rows(jobId) shouldHaveSize 1
@@ -194,7 +201,7 @@ class AiEditQueueSuggestionTest {
                 rig.ai.edit = suggestion()
                 val jobId = rig.enqueue("a", "b")
                 // "a" leaves the library between queueing and the drain.
-                rig.documents.documents.value = listOf(item("b"))
+                rig.documents.documents.value = listOf(listItem("b"))
 
                 rig.queue.processNext() shouldBe true
 
@@ -333,7 +340,7 @@ class AiEditQueueFailureTest {
             withQueue { rig ->
                 // Two runs: the second has never failed and so carries no backoff of its own. Only
                 // the endpoint-level cooldown can stop it being fired at the same dead endpoint.
-                rig.documents.documents.value = listOf(item("a"), item("b"))
+                rig.documents.documents.value = listOf(listItem("a"), listItem("b"))
                 rig.queue.enqueueEditRun(listOf("a"), AiEditRequest())
                 rig.queue.enqueueEditRun(listOf("b"), AiEditRequest())
                 rig.ai.failWith = { error("endpoint down") }
@@ -472,7 +479,7 @@ class AiEditQueueReviewTest {
 
                 // Someone titled the document while the run sat in the queue: the suggestion is now
                 // an overwrite, which the pre-select policy must leave unticked.
-                rig.documents.documents.value = listOf(item("a", title = "Already named"))
+                rig.documents.documents.value = listOf(listItem(doc("a", title = "Already named")))
 
                 val field =
                     rig.queue
@@ -515,7 +522,7 @@ class AiEditQueueReviewTest {
                 // A queued run has no scope left to carry on into.
                 outcome.result.moreRemain shouldBe false
                 rig.meta.addedTags shouldContainExactly listOf(listOf("a") to "invoice")
-                rig.meta.batchedEdits shouldContainExactly
+                rig.meta.batchedEdits.map { it.docId to it.fields } shouldContainExactly
                     listOf("a" to mapOf(FieldKeys.TITLE to "Electricity bill"))
                 rig.job(jobId) shouldBe null
                 rig.rows(jobId) shouldBe emptyList()

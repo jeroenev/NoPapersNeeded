@@ -16,8 +16,6 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
-import dev.npn.app.FakeMetadataWriter
-import dev.npn.app.doc
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.FieldSuggestion
@@ -25,6 +23,8 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.testing.FakeMetadataWriter
+import dev.npn.core.testing.doc
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import java.io.File

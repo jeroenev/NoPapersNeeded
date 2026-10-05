@@ -5,7 +5,6 @@ package dev.npn.app.ui.ai
 import dev.npn.app.FakeLibrarySession
 import dev.npn.app.FakeSettingsRepository
 import dev.npn.app.MainDispatcherTest
-import dev.npn.app.doc
 import dev.npn.app.failure
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.uiText
@@ -30,6 +29,7 @@ import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.testing.doc
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
@@ -413,7 +413,7 @@ class AiEditFailureHandlingTest : MainDispatcherTest() {
             val session =
                 FakeLibrarySession().apply {
                     documents.documents.value = listOf(item("a"), item("b"))
-                    aiSuggest.failSuggestEditsForDocs = setOf("a")
+                    aiSuggest.failWith = { if (it == "a") error("suggest edits failed for a") }
                     aiSuggest.edit = edit(addTags = listOf(TagSuggestion("t", isNew = false)))
                 }
             val model = vm(session)
