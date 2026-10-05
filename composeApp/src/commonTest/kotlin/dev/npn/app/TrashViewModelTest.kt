@@ -22,9 +22,9 @@ class TrashViewModelTest : MainDispatcherTest() {
     fun relinkCandidatesEmptyWhenNoReport() =
         runTest(dispatcher) {
             val model = vm()
-            val job = launch { model.relinkCandidates.collect {} }
+            val job = launch { model.state.collect {} }
             advanceUntilIdle()
-            model.relinkCandidates.value shouldBe emptyList()
+            model.state.value.relinks shouldBe emptyMap()
             job.cancel()
         }
 
@@ -35,31 +35,27 @@ class TrashViewModelTest : MainDispatcherTest() {
             val candidate = RelinkCandidate("old", "new", "name+size", 10)
             session.ingest.lastScanReportFlow.value = emptyScanReport().copy(relinkCandidates = listOf(candidate))
             val model = vm(session)
-            val job = launch { model.relinkCandidates.collect {} }
+            val job = launch { model.state.collect {} }
             advanceUntilIdle()
-            model.relinkCandidates.value shouldContainExactly listOf(candidate)
+            model.state.value.relinks shouldBe mapOf("old" to listOf(candidate))
             job.cancel()
         }
 
     @Test
-    fun trashedDuplicatesMissingPassThrough() =
+    fun trashedDuplicatesMissingPassThroughOneState() =
         runTest(dispatcher) {
             val session = FakeLibrarySession()
             session.documents.trashed.value = listOf(listItem("d1"))
             session.documents.duplicates.value = listOf("d2" to "copy/d2.pdf")
             session.documents.missing.value = listOf(doc("d3"))
             val model = vm(session)
-            val jobs =
-                listOf(
-                    launch { model.trashed.collect {} },
-                    launch { model.duplicates.collect {} },
-                    launch { model.missing.collect {} },
-                )
+            val job = launch { model.state.collect {} }
             advanceUntilIdle()
-            model.trashed.value.map { it.doc.docId } shouldContainExactly listOf("d1")
-            model.duplicates.value shouldContainExactly listOf("d2" to "copy/d2.pdf")
-            model.missing.value.map { it.docId } shouldContainExactly listOf("d3")
-            jobs.forEach { it.cancel() }
+            val state = model.state.value
+            state.trashed.map { it.doc.docId } shouldContainExactly listOf("d1")
+            state.duplicates shouldContainExactly listOf("d2" to "copy/d2.pdf")
+            state.missing.map { it.docId } shouldContainExactly listOf("d3")
+            job.cancel()
         }
 
     @Test

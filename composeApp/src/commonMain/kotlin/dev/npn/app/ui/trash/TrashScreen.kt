@@ -48,7 +48,11 @@ import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
 import dev.npn.app.ui.common.enumNameSaver
+import dev.npn.core.app.Doc
+import dev.npn.core.app.DocContentFacade
+import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.index.RelinkCandidate
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_delete
 import no_papers_needed.composeapp.generated.resources.common_empty_trash
@@ -81,26 +85,16 @@ import org.jetbrains.compose.resources.stringResource
 
 private enum class TrashTab { TRASH, DUPLICATES, MISSING }
 
-private enum class TrashBulkAction { RESTORE_ALL, EMPTY_TRASH }
+/** The confirmation open on the trash screen, if any: each of these writes cannot be undone. */
+private sealed interface TrashConfirm {
+    data class DeleteForever(
+        val docId: String,
+    ) : TrashConfirm
 
-private data class TrashContentState(
-    val trashed: List<dev.npn.core.app.DocListItem>,
-    val duplicates: List<Pair<String, String>>,
-    val missing: List<dev.npn.core.app.Doc>,
-    val relinks: List<dev.npn.core.index.RelinkCandidate>,
-)
+    data object RestoreAll : TrashConfirm
 
-private data class TrashActions(
-    val onRestore: (String) -> Unit,
-    val onDeleteForever: (String) -> Unit,
-    val onResolveDuplicate: (String, String) -> Unit,
-    val onRelink: (String, String) -> Unit,
-)
-
-private data class TrashBulkActions(
-    val onRestoreAll: () -> Unit,
-    val onEmptyTrash: () -> Unit,
-)
+    data object EmptyTrash : TrashConfirm
+}
 
 @Composable
 private fun trashTabLabel(tab: TrashTab): String = stringResource(tab.labelResource)
@@ -116,77 +110,80 @@ private val TrashTab.labelResource: StringResource
 @Composable
 fun TrashScreen(session: LibrarySession) {
     val vm: TrashViewModel = viewModel { TrashViewModel(session) }
-    val trashed by vm.trashed.collectAsStateWithLifecycle()
-    val duplicates by vm.duplicates.collectAsStateWithLifecycle()
-    val missing by vm.missing.collectAsStateWithLifecycle()
-    val relinks by vm.relinkCandidates.collectAsStateWithLifecycle()
+    val state by vm.state.collectAsStateWithLifecycle()
 
     var tab by rememberSaveable(stateSaver = enumNameSaver()) { mutableStateOf(TrashTab.TRASH) }
-    var confirmDelete by remember { mutableStateOf<String?>(null) }
-    var confirmBulk by remember { mutableStateOf<TrashBulkAction?>(null) }
+    var confirm by remember { mutableStateOf<TrashConfirm?>(null) }
 
     val snackbar = remember { SnackbarHostState() }
     SnackbarMessages(vm.messages, snackbar)
 
     TrashScaffold(
         tab = tab,
-        state = TrashContentState(trashed, duplicates, missing, relinks),
+        state = state,
         content = session.content,
         snackbar = snackbar,
+        writes = vm,
         onSelectTab = { tab = it },
-        actions =
-            TrashActions(
-                onRestore = vm::restore,
-                onDeleteForever = { confirmDelete = it },
-                onResolveDuplicate = vm::resolveDuplicate,
-                onRelink = vm::applyRelink,
-            ),
-        bulkActions =
-            TrashBulkActions(
-                onRestoreAll = { confirmBulk = TrashBulkAction.RESTORE_ALL },
-                onEmptyTrash = { confirmBulk = TrashBulkAction.EMPTY_TRASH },
-            ),
+        onConfirm = { confirm = it },
     )
-
-    confirmDelete?.let { docId ->
-        DeleteForeverDialog(
-            onConfirm = {
-                vm.deleteForever(docId)
-                confirmDelete = null
-            },
-            onDismiss = { confirmDelete = null },
+    confirm?.let {
+        TrashConfirmDialog(
+            confirm = it,
+            trashedCount = state.trashed.size,
+            writes = vm,
+            onClose = { confirm = null },
         )
     }
+}
 
-    confirmBulk?.let { bulk ->
-        val count = trashed.size
-        when (bulk) {
-            TrashBulkAction.RESTORE_ALL -> {
-                ConfirmDialog(
-                    title = stringResource(Res.string.common_restore_all),
-                    message = pluralStringResource(Res.plurals.common_restore_all_question, count, count),
-                    confirmLabel = stringResource(Res.string.common_restore_all),
-                    onConfirm = {
-                        vm.restoreAll()
-                        confirmBulk = null
-                    },
-                    onDismiss = { confirmBulk = null },
-                )
-            }
+@Composable
+private fun TrashConfirmDialog(
+    confirm: TrashConfirm,
+    trashedCount: Int,
+    writes: TrashWrites,
+    onClose: () -> Unit,
+) {
+    when (confirm) {
+        is TrashConfirm.DeleteForever -> {
+            ConfirmDialog(
+                title = stringResource(Res.string.common_trash_delete_forever),
+                message = stringResource(Res.string.common_trash_delete_forever_message),
+                confirmLabel = stringResource(Res.string.common_trash_delete_forever),
+                destructive = true,
+                onConfirm = {
+                    writes.deleteForever(confirm.docId)
+                    onClose()
+                },
+                onDismiss = onClose,
+            )
+        }
 
-            TrashBulkAction.EMPTY_TRASH -> {
-                ConfirmDialog(
-                    title = stringResource(Res.string.common_empty_trash),
-                    message = pluralStringResource(Res.plurals.common_empty_trash_question, count, count),
-                    confirmLabel = stringResource(Res.string.common_empty_trash),
-                    destructive = true,
-                    onConfirm = {
-                        vm.emptyTrash()
-                        confirmBulk = null
-                    },
-                    onDismiss = { confirmBulk = null },
-                )
-            }
+        TrashConfirm.RestoreAll -> {
+            ConfirmDialog(
+                title = stringResource(Res.string.common_restore_all),
+                message = pluralStringResource(Res.plurals.common_restore_all_question, trashedCount, trashedCount),
+                confirmLabel = stringResource(Res.string.common_restore_all),
+                onConfirm = {
+                    writes.restoreAll()
+                    onClose()
+                },
+                onDismiss = onClose,
+            )
+        }
+
+        TrashConfirm.EmptyTrash -> {
+            ConfirmDialog(
+                title = stringResource(Res.string.common_empty_trash),
+                message = pluralStringResource(Res.plurals.common_empty_trash_question, trashedCount, trashedCount),
+                confirmLabel = stringResource(Res.string.common_empty_trash),
+                destructive = true,
+                onConfirm = {
+                    writes.emptyTrash()
+                    onClose()
+                },
+                onDismiss = onClose,
+            )
         }
     }
 }
@@ -194,12 +191,12 @@ fun TrashScreen(session: LibrarySession) {
 @Composable
 private fun TrashScaffold(
     tab: TrashTab,
-    state: TrashContentState,
-    content: dev.npn.core.app.DocContentFacade,
+    state: TrashUiState,
+    content: DocContentFacade,
     snackbar: SnackbarHostState,
+    writes: TrashWrites,
     onSelectTab: (TrashTab) -> Unit,
-    actions: TrashActions,
-    bulkActions: TrashBulkActions,
+    onConfirm: (TrashConfirm) -> Unit,
 ) {
     Scaffold(
         topBar = {
@@ -214,8 +211,8 @@ private fun TrashScaffold(
                     if (tab == TrashTab.TRASH && state.trashed.isNotEmpty()) {
                         TrashBulkActions(
                             wide = wide,
-                            onRestoreAll = bulkActions.onRestoreAll,
-                            onEmptyTrash = bulkActions.onEmptyTrash,
+                            onRestoreAll = { onConfirm(TrashConfirm.RestoreAll) },
+                            onEmptyTrash = { onConfirm(TrashConfirm.EmptyTrash) },
                         )
                     }
                 },
@@ -225,7 +222,24 @@ private fun TrashScaffold(
     ) { padding ->
         Column(Modifier.fillMaxSize().padding(padding)) {
             TrashTabs(tab, state, onSelectTab)
-            TrashTabContent(tab, state, content, actions)
+            when (tab) {
+                TrashTab.TRASH -> {
+                    TrashList(
+                        items = state.trashed,
+                        content = content,
+                        onRestore = writes::restore,
+                        onDeleteForever = { onConfirm(TrashConfirm.DeleteForever(it)) },
+                    )
+                }
+
+                TrashTab.DUPLICATES -> {
+                    DuplicatesList(state.duplicates, writes::resolveDuplicate)
+                }
+
+                TrashTab.MISSING -> {
+                    MissingList(state.missing, state.relinks, writes::applyRelink)
+                }
+            }
         }
     }
 }
@@ -261,7 +275,7 @@ private fun TrashBulkActions(
 @Composable
 private fun TrashTabs(
     selectedTab: TrashTab,
-    state: TrashContentState,
+    state: TrashUiState,
     onSelectTab: (TrashTab) -> Unit,
 ) {
     PrimaryTabRow(selectedTabIndex = selectedTab.ordinal) {
@@ -291,51 +305,9 @@ private fun TrashTabs(
 }
 
 @Composable
-private fun TrashTabContent(
-    tab: TrashTab,
-    state: TrashContentState,
-    content: dev.npn.core.app.DocContentFacade,
-    actions: TrashActions,
-) {
-    when (tab) {
-        TrashTab.TRASH -> {
-            TrashList(
-                items = state.trashed,
-                content = content,
-                onRestore = actions.onRestore,
-                onDeleteForever = actions.onDeleteForever,
-            )
-        }
-
-        TrashTab.DUPLICATES -> {
-            DuplicatesList(state.duplicates, actions.onResolveDuplicate)
-        }
-
-        TrashTab.MISSING -> {
-            MissingList(state.missing, state.relinks, actions.onRelink)
-        }
-    }
-}
-
-@Composable
-private fun DeleteForeverDialog(
-    onConfirm: () -> Unit,
-    onDismiss: () -> Unit,
-) {
-    ConfirmDialog(
-        title = stringResource(Res.string.common_trash_delete_forever),
-        message = stringResource(Res.string.common_trash_delete_forever_message),
-        confirmLabel = stringResource(Res.string.common_trash_delete_forever),
-        destructive = true,
-        onConfirm = onConfirm,
-        onDismiss = onDismiss,
-    )
-}
-
-@Composable
 private fun TrashList(
-    items: List<dev.npn.core.app.DocListItem>,
-    content: dev.npn.core.app.DocContentFacade,
+    items: List<DocListItem>,
+    content: DocContentFacade,
     onRestore: (String) -> Unit,
     onDeleteForever: (String) -> Unit,
 ) {
@@ -429,15 +401,14 @@ private fun DuplicatesList(
 
 @Composable
 private fun MissingList(
-    missing: List<dev.npn.core.app.Doc>,
-    relinks: List<dev.npn.core.index.RelinkCandidate>,
+    missing: List<Doc>,
+    relinks: Map<String, List<RelinkCandidate>>,
     onRelink: (oldDocId: String, newDocId: String) -> Unit,
 ) {
     if (missing.isEmpty()) {
         EmptyState(icon = Icons.Filled.FindInPage, title = stringResource(Res.string.common_trash_no_missing_files))
         return
     }
-    val relinkByOld = remember(relinks) { relinks.groupBy { it.oldDocId } }
     LazyColumn(
         Modifier.fillMaxSize().padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -454,11 +425,11 @@ private fun MissingList(
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
-                    val candidates = relinkByOld[doc.docId].orEmpty()
+                    val candidates = relinks[doc.docId].orEmpty()
                     if (candidates.isEmpty()) {
                         HelpText(stringResource(Res.string.common_trash_no_relink_candidates))
                     } else {
-                        candidates.sortedByDescending { it.score }.forEach { c ->
+                        candidates.forEach { c ->
                             Row(
                                 Modifier.fillMaxWidth(),
                                 verticalAlignment = Alignment.CenterVertically,

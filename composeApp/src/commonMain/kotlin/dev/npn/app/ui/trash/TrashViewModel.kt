@@ -10,7 +10,7 @@ import dev.npn.core.app.LibrarySession
 import dev.npn.core.index.RelinkCandidate
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
@@ -22,60 +22,92 @@ import no_papers_needed.composeapp.generated.resources.common_trash_remove_dupli
 import no_papers_needed.composeapp.generated.resources.common_trash_restore_failed
 import org.jetbrains.compose.resources.PluralStringResource
 
-/**
- * Trash + maintenance. Trashed docs come from the repository; duplicates (extra copies sharing a
- * hash) and missing files (relink candidates) come from the repository / last scan report.
- */
-class TrashViewModel(
-    session: LibrarySession,
-) : MessagesViewModel() {
-    private val docLifecycle = session.docLifecycle
-    private val maintenance = session.maintenance
+/** Everything the trash screen shows. */
+data class TrashUiState(
+    val trashed: List<DocListItem> = emptyList(),
+    /** Extra copies of a document's bytes: its id, and the path of the copy. */
+    val duplicates: List<Pair<String, String>> = emptyList(),
+    val missing: List<Doc> = emptyList(),
+    /** Where each missing document may have gone, by its id, best match first. */
+    val relinks: Map<String, List<RelinkCandidate>> = emptyMap(),
+)
 
-    val trashed: StateFlow<List<DocListItem>> =
-        session.documents
-            .observeTrashed()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
+/** What the trash screen writes: restore and purge, alone or all at once, and the repairs. */
+interface TrashWrites {
+    fun restore(docId: String)
 
-    val duplicates: StateFlow<List<Pair<String, String>>> =
-        session.documents
-            .observeDuplicates()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
-
-    val missing: StateFlow<List<Doc>> =
-        session.documents
-            .observeMissing()
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
-
-    val relinkCandidates: StateFlow<List<RelinkCandidate>> =
-        session.ingest.lastScanReport
-            .map { report -> report?.relinkCandidates.orEmpty() }
-            .stateIn(viewModelScope, WhileSubscribedTimeout, emptyList())
-
-    fun restore(docId: String) =
-        launchReporting(Res.string.common_trash_restore_failed) { docLifecycle.restoreDoc(docId) }
-
-    fun deleteForever(docId: String) =
-        launchReporting(Res.string.common_trash_delete_failed) { docLifecycle.deleteDocPermanently(docId) }
+    fun deleteForever(docId: String)
 
     /**
      * Restore every currently trashed document. Runs each doc independently so one failure does
      * not abort the rest; a partial failure is reported with the count that could not be restored.
      */
-    fun restoreAll() = runBulk(Res.plurals.common_restore_documents_failed, docLifecycle::restoreDoc)
+    fun restoreAll()
 
     /**
      * Permanently delete every currently trashed document. Runs each doc independently so one
      * failure does not abort the rest; a partial failure is reported with the count that could
      * not be deleted.
      */
-    fun emptyTrash() = runBulk(Res.plurals.common_trash_delete_all_failed, docLifecycle::deleteDocPermanently)
+    fun emptyTrash()
+
+    fun resolveDuplicate(
+        docId: String,
+        extraRelPath: String,
+    )
+
+    fun applyRelink(
+        oldDocId: String,
+        newDocId: String,
+    )
+}
+
+/**
+ * Trash + maintenance. Trashed docs come from the repository; duplicates (extra copies sharing a
+ * hash) and missing files (relink candidates) come from the repository / last scan report.
+ */
+class TrashViewModel(
+    session: LibrarySession,
+) : MessagesViewModel(),
+    TrashWrites {
+    private val docLifecycle = session.docLifecycle
+    private val maintenance = session.maintenance
+
+    val state: StateFlow<TrashUiState> =
+        combine(
+            session.documents.observeTrashed(),
+            session.documents.observeDuplicates(),
+            session.documents.observeMissing(),
+            session.ingest.lastScanReport,
+        ) { trashed, duplicates, missing, report ->
+            TrashUiState(
+                trashed = trashed,
+                duplicates = duplicates,
+                missing = missing,
+                relinks =
+                    report
+                        ?.relinkCandidates
+                        .orEmpty()
+                        .sortedByDescending { it.score }
+                        .groupBy { it.oldDocId },
+            )
+        }.stateIn(viewModelScope, WhileSubscribedTimeout, TrashUiState())
+
+    override fun restore(docId: String) =
+        launchReporting(Res.string.common_trash_restore_failed) { docLifecycle.restoreDoc(docId) }
+
+    override fun deleteForever(docId: String) =
+        launchReporting(Res.string.common_trash_delete_failed) { docLifecycle.deleteDocPermanently(docId) }
+
+    override fun restoreAll() = runBulk(Res.plurals.common_restore_documents_failed, docLifecycle::restoreDoc)
+
+    override fun emptyTrash() = runBulk(Res.plurals.common_trash_delete_all_failed, docLifecycle::deleteDocPermanently)
 
     private fun runBulk(
         partlyFailed: PluralStringResource,
         op: suspend (String) -> Unit,
     ) {
-        val ids = trashed.value.map { it.doc.docId }
+        val ids = state.value.trashed.map { it.doc.docId }
         if (ids.isEmpty()) return
         viewModelScope.launch {
             val failed = ids.count { runCatchingCancellable { op(it) }.isFailure }
@@ -85,14 +117,14 @@ class TrashViewModel(
         }
     }
 
-    fun resolveDuplicate(
+    override fun resolveDuplicate(
         docId: String,
         extraRelPath: String,
     ) = launchReporting(Res.string.common_trash_remove_duplicate_failed) {
         maintenance.resolveDuplicate(docId, extraRelPath)
     }
 
-    fun applyRelink(
+    override fun applyRelink(
         oldDocId: String,
         newDocId: String,
     ) = launchReporting(Res.string.common_trash_relink_failed) { maintenance.applyRelink(oldDocId, newDocId) }
