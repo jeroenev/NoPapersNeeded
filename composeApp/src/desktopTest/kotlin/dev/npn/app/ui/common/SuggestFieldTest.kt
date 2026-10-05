@@ -62,14 +62,22 @@ class SuggestFieldTest {
             val scene = keyForm(suggestions = listOf("invoice_no", "iban"))
             try {
                 scene.render()
-                scene.keyField().config[SemanticsActions.RequestFocus].action?.invoke()
+                scene
+                    .keyField()
+                    .config[SemanticsActions.RequestFocus]
+                    .action
+                    ?.invoke()
                 scene.render()
                 scene.type("in")
                 scene.render()
                 scene.has { it.text() == "invoice_no" } shouldBe true
                 scene.pressBackspace()
                 scene.render()
-                scene.keyField().config.getOrNull(SemanticsProperties.EditableText)?.text shouldBe "i"
+                scene
+                    .keyField()
+                    .config
+                    .getOrNull(SemanticsProperties.EditableText)
+                    ?.text shouldBe "i"
             } finally {
                 scene.close()
             }

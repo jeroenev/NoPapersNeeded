@@ -269,6 +269,11 @@ internal fun settingsCategoryLabels(): List<SettingsCategoryLabels> =
     }
 
 /** A label's name as search matches it: without the value a label like "Default view: %1$s" holds. */
-internal fun searchableLabel(label: String): String = label.replace(PLACEHOLDER, "").trim().trimEnd(':').trim()
+internal fun searchableLabel(label: String): String =
+    label
+        .replace(PLACEHOLDER, "")
+        .trim()
+        .trimEnd(':')
+        .trim()
 
 private val PLACEHOLDER = Regex("""%\d+\$[sd]""")
