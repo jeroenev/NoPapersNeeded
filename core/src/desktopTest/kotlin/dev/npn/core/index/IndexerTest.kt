@@ -14,6 +14,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
+import java.nio.file.StandardCopyOption
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -97,6 +98,83 @@ class IndexerTest {
             val moved = rig.db.documentDao().rowAtPath("archive/a.pdf")!!
             moved.docId shouldBe docId
             moved.missing.shouldBeFalse()
+        }
+
+    /** A file moved over another document's file takes its path; the overwritten document is missing. */
+    @Test
+    fun aFileMovedOverAnotherDocumentTakesItsPath() =
+        runTest {
+            rig.writePdf("p.pdf", "xray")
+            rig.writePdf("q.pdf", "alpha")
+            rig.rescan()
+            val overwritten = rig.fs.sha256("p.pdf")
+            val moved = rig.fs.sha256("q.pdf")
+
+            Files.move(rig.libRoot.resolve("q.pdf"), rig.libRoot.resolve("p.pdf"), StandardCopyOption.REPLACE_EXISTING)
+            val report = rig.rescan()
+
+            report.moved shouldBe 1
+            rig.db
+                .documentDao()
+                .rowAtPath("p.pdf")
+                ?.docId shouldBe moved
+            rig.db
+                .documentDao()
+                .getByDocId(overwritten)
+                ?.missing shouldBe true
+            rig.rescan().moved shouldBe 0
+        }
+
+    /** A copy over another document's file is a duplicate of the copied one; the overwritten one is missing. */
+    @Test
+    fun aFileCopiedOverAnotherDocumentLeavesThatOneMissing() =
+        runTest {
+            rig.writePdf("p.pdf", "xray")
+            rig.writePdf("q.pdf", "alpha")
+            rig.rescan()
+            val overwritten = rig.fs.sha256("p.pdf")
+            val copied = rig.fs.sha256("q.pdf")
+
+            Files.copy(rig.libRoot.resolve("q.pdf"), rig.libRoot.resolve("p.pdf"), StandardCopyOption.REPLACE_EXISTING)
+            val report = rig.rescan()
+
+            report.duplicates shouldContainExactly listOf(DuplicateReport(copied, "p.pdf"))
+            rig.db
+                .documentDao()
+                .getByDocId(copied)
+                ?.relPath shouldBe "q.pdf"
+            rig.db
+                .documentDao()
+                .getByDocId(overwritten)
+                ?.missing shouldBe true
+        }
+
+    /** Names shuffled in one go (a to b, then c to a): every document follows its bytes. */
+    @Test
+    fun shuffledNamesFollowTheirBytesInOneRescan() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.writePdf("c.pdf", "charlie")
+            rig.rescan()
+            val alpha = rig.fs.sha256("a.pdf")
+            val charlie = rig.fs.sha256("c.pdf")
+
+            rig.moveFile("a.pdf", "b.pdf")
+            rig.moveFile("c.pdf", "a.pdf")
+            val report = rig.rescan()
+
+            report.moved shouldBe 2
+            report.missingCount shouldBe 0
+            report.duplicates.shouldBeEmpty()
+            report.relinkCandidates.shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .rowAtPath("a.pdf")
+                ?.docId shouldBe charlie
+            rig.db
+                .documentDao()
+                .rowAtPath("b.pdf")
+                ?.docId shouldBe alpha
         }
 
     @Test

@@ -271,16 +271,34 @@ class Indexer(
         // Canonical rows we loaded/updated, kept current so later steps re-read consistently.
         val existingByDocId = HashMap<String, DocumentEntity>()
 
+        // The same rows by the path each holds now.
+        val existingByPath = HashMap<String, DocumentEntity>()
+
         // Rows to write, in the order the pass decided them: relPath is unique, so a row that
         // vacates a path must be written before the one that takes it.
         val writes = ArrayList<DocumentEntity>()
+
+        /** Take [row] as the pass found it. */
+        fun load(row: DocumentEntity) {
+            existingByDocId[row.docId] = row
+            existingByPath[row.relPath] = row
+        }
+
+        /** Queue [row] to be written, after every row queued so far, and keep both lookups current. */
+        fun write(row: DocumentEntity) {
+            val old = existingByDocId[row.docId]
+            if (old != null && existingByPath[old.relPath]?.docId == row.docId) existingByPath.remove(old.relPath)
+            load(row)
+            writes += row
+        }
     }
 
     /**
      * Reconcile hashed files against the DB. For each hashed file, one of: an unchanged/refreshed
      * canonical, a move/rename, an external duplicate, an external edit (old -> missing sentinel +
-     * new doc + path-match relink candidate), or a brand-new doc. Writes the rows it changed in one
-     * batch and returns the counters + new docs + duplicates + relink candidates collected.
+     * new doc + path-match relink candidate), or a brand-new doc. A row whose path now holds another
+     * document's bytes gives the path up and is missing. Writes the rows it changed in one batch
+     * and returns the counters + new docs + duplicates + relink candidates collected.
      */
     private suspend fun reconcile(
         toHash: List<FileMeta>,
@@ -289,67 +307,60 @@ class Indexer(
         diskPaths: Set<String>,
     ): Reconciliation {
         val recon = Reconciliation()
-        val existingByPath = HashMap<String, DocumentEntity>()
         // One bulk read (chunked under SQLite's bind limit), not a query per document: this runs
         // over the whole projection on every rescan.
-        for (row in documentDao.getByDocIds(dbProjection.map { it.docId })) {
-            recon.existingByDocId[row.docId] = row
-            existingByPath[row.relPath] = row
-        }
+        for (row in documentDao.getByDocIds(dbProjection.map { it.docId })) recon.load(row)
         val now = clock.nowMillis()
 
         for (meta in toHash) {
             val hash = hashes[meta.relPath] ?: continue
             val existingDoc = recon.existingByDocId[hash]
+            // The row holding this path, when the bytes here are no longer its own. It must vacate
+            // the path (relPath is unique) for the document that is here now: it moves to a per-doc
+            // sentinel path under .npn (never indexed) that preserves its identity and metadata.
+            val replaced = recon.existingByPath[meta.relPath]?.takeIf { it.docId != hash }
+            replaced?.let { recon.write(it.copy(relPath = missingSentinel(it.docId), missing = true)) }
 
             if (existingDoc != null) {
-                reconcileKnownHash(existingDoc, meta, hash, diskPaths, recon)
+                reconcileKnownHash(existingDoc, meta, hash, diskPaths, hashes, recon)
                 continue
             }
 
-            // Hash unknown. Does this path currently hold a different doc? (external edit)
-            val docAtPath = existingByPath[meta.relPath]
-            if (docAtPath != null && docAtPath.docId != hash) {
-                // External edit: mark old missing (keep metadata), create new doc here. The old
-                // doc must vacate the path (relPath is unique) so the new doc can take it; move it
-                // to a per-doc sentinel path under .npn (never indexed) that preserves identity.
-                val missingDoc =
-                    docAtPath.copy(relPath = missingSentinel(docAtPath.docId), missing = true)
-                recon.writes += missingDoc
-                recon.existingByDocId[docAtPath.docId] = missingDoc
-                existingByPath.remove(meta.relPath)
-                recon.existingByDocId[hash] = newDocument(hash, meta, now).also { recon.writes += it }
-                recon.newDocs[hash] = meta
-                recon.added++
+            recon.write(newDocument(hash, meta, now))
+            recon.newDocs[hash] = meta
+            recon.added++
+            if (replaced != null) {
+                // External edit: the new bytes may be an edit of the document that was here.
                 recon.changed++
                 recon.relinkCandidates.add(
                     RelinkCandidate(
-                        docAtPath.docId,
+                        replaced.docId,
                         hash,
                         reason = RelinkPairing.PATH_MATCH,
                         score = RelinkPairing.SCORE_PATH_MATCH,
                     ),
                 )
-            } else {
-                recon.existingByDocId[hash] = newDocument(hash, meta, now).also { recon.writes += it }
-                recon.newDocs[hash] = meta
-                recon.added++
             }
         }
         if (recon.writes.isNotEmpty()) documentDao.upsertAll(recon.writes)
         return recon
     }
 
-    /** Handle a hashed file whose content hash already maps to a known canonical doc. */
+    /**
+     * Handle a hashed file whose content hash already maps to a known canonical doc. Its old path
+     * still holds it unless the file there is gone or this pass hashed it to other bytes.
+     */
     private fun reconcileKnownHash(
         existingDoc: DocumentEntity,
         meta: FileMeta,
         hash: String,
         diskPaths: Set<String>,
+        hashes: Map<String, String>,
         recon: Reconciliation,
     ) {
         val oldPath = existingDoc.relPath
-        val canonicalStillOnDisk = oldPath in diskPaths && oldPath != meta.relPath
+        val canonicalStillOnDisk =
+            oldPath in diskPaths && oldPath != meta.relPath && hashes[oldPath].let { it == null || it == hash }
         if (canonicalStillOnDisk) {
             // External duplicate: canonical untouched, record the extra path.
             recon.duplicates.add(DuplicateReport(hash, meta.relPath))
@@ -363,14 +374,11 @@ class Indexer(
                     mtime = meta.mtimeMillis,
                     missing = false,
                 )
-            recon.writes += movedDoc
-            recon.existingByDocId[hash] = movedDoc
+            recon.write(movedDoc)
             recon.moved++
         } else if (existingDoc.missing || existingDoc.size != meta.size || existingDoc.mtime != meta.mtimeMillis) {
             // Same path, bytes unchanged but was flagged (e.g. mtime touched): refresh.
-            val refreshedDoc = existingDoc.copy(size = meta.size, mtime = meta.mtimeMillis, missing = false)
-            recon.writes += refreshedDoc
-            recon.existingByDocId[hash] = refreshedDoc
+            recon.write(existingDoc.copy(size = meta.size, mtime = meta.mtimeMillis, missing = false))
         }
     }
 
