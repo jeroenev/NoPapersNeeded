@@ -53,6 +53,9 @@ internal class Rig(
     /** The endpoint's cooldown, as the session's AI facade holds it for every queue. */
     val health = EndpointHealth()
 
+    /** Whether the library refuses metadata writes, as a latched journal coordinator does. */
+    var writesBlocked = false
+
     val enricher: AiAutoEnricher by lazy { newEnricher(health) }
 
     /**
@@ -69,6 +72,7 @@ internal class Rig(
             policy = UnattendedAiPolicy { config },
             clock = clock,
             health = health,
+            checkWritable = { check(!writesBlocked) { "Metadata writes are disabled" } },
             onEnqueued = { kicks++ },
         )
 

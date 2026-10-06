@@ -105,6 +105,28 @@ class AiAutoEnricherRetryTest {
             }
         }
 
+    /**
+     * An answer the library would not save is not worth buying: while writes are blocked the drain
+     * makes no call, and the row waits without spending an attempt or cooling the endpoint down.
+     */
+    @Test
+    fun `makes no call while metadata writes are blocked`() =
+        runTest {
+            withRig { rig ->
+                rig.insertAndQueue("d1")
+                rig.writesBlocked = true
+
+                rig.drain() shouldBe 0
+                rig.ai.suggestEditsCalls.shouldBeEmpty()
+                rig.row("d1").shouldNotBeNull().attempts shouldBe 0
+                rig.health.coolingDown(rig.clock.nowMillis()) shouldBe false
+
+                rig.writesBlocked = false
+                rig.drain() shouldBe 1
+                rig.enrichedAt("d1").shouldNotBeNull()
+            }
+        }
+
     @Test
     fun `does not retry before the backoff has elapsed, then succeeds`() =
         runTest {

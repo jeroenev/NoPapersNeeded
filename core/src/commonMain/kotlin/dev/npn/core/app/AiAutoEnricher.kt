@@ -45,6 +45,11 @@ import dev.npn.core.work.QueueRetryPolicy
  * on *why* calls fail, and an afternoon offline would then silently and permanently cost every
  * document queued in it. The worst case is one call a day for a document the endpoint always
  * rejects, until it is trashed or a manual AI edit stamps it.
+ *
+ * Only a failed call says anything about the endpoint ([EndpointHealth]). An answer that could not
+ * be written is the document's own problem: its row backs off on the same ramp, and the queues that
+ * share the endpoint carry on. While the library refuses writes no call is made at all, since its
+ * answer could not be saved.
  */
 class AiAutoEnricher(
     private val documentDao: DocumentDao,
@@ -56,6 +61,8 @@ class AiAutoEnricher(
     private val clock: EpochClock,
     /** The endpoint's cooldown, shared with every other queue that calls it. */
     private val health: EndpointHealth,
+    /** Throws while the library refuses metadata writes (`JournalCoordinator.checkWritable`). */
+    private val checkWritable: suspend () -> Unit,
     /** Asks for a drain of this queue; called whenever [enqueue] writes a new row. */
     private val onEnqueued: () -> Unit,
 ) {
@@ -87,36 +94,61 @@ class AiAutoEnricher(
     /**
      * Process at most one queued document, returning whether the drain should continue.
      *
-     * Returns false, pausing the drain until the next kick, when there is no due work and when a
-     * call failed: a failure is most likely systemic (endpoint down, no network), and the backlog
-     * must not be fired at a dead endpoint. Since each newly OCR'd document kicks a fresh drain and
-     * [AiEnrichQueueDao.nextDue] hands out never-tried rows first, a failure also puts the endpoint
-     * on its shared cooldown ([EndpointHealth]), capping an outage at one call a minute.
+     * Returns false, pausing the drain until the next kick, when there is no due work, while the
+     * library refuses writes, and when a call or its write failed. A failed call is most likely
+     * systemic (endpoint down, no network), and the backlog must not be fired at a dead endpoint.
+     * Since each newly OCR'd document kicks a fresh drain and [AiEnrichQueueDao.nextDue] hands out
+     * never-tried rows first, it also puts the endpoint on its shared cooldown ([EndpointHealth]),
+     * capping an outage at one call a minute. A failed write backs its row off alone.
      *
      * The write, the stamp and the row delete span two stores (journal, device database) and cannot
      * be atomic. Dying between them costs one repeat call whose suggestion changes nothing, since
      * the fields are filled and the tags present; stamping first would lose the enrichment outright.
      */
     suspend fun processNext(): Boolean {
-        if (!policy.autoEnrich()) return false
-        val now = clock.nowMillis()
-        if (health.coolingDown(now)) return false
-        val entry = queueDao.nextDue(now) ?: return false
+        val entry = dueEntry() ?: return false
         if (!isEnrichable(entry.docId)) {
             // Enriched by another path, trashed, or gone since it was queued.
             queueDao.delete(entry.docId)
             return true
         }
+        // An answer the library would not save is not worth paying for; the row waits, uncharged.
+        if (runCatchingCancellable { checkWritable() }.isFailure) return false
+        return enrich(entry)
+    }
+
+    /**
+     * The row to work on now; null while the feature is off or the endpoint cools down, and when
+     * nothing is due.
+     */
+    private suspend fun dueEntry(): AiEnrichQueueEntity? {
+        if (!policy.autoEnrich()) return null
+        val now = clock.nowMillis()
+        if (health.coolingDown(now)) return null
+        return queueDao.nextDue(now)
+    }
+
+    /**
+     * One paid call for [entry], and the write of its answer. Only the call reports to the
+     * endpoint's [health]: a write that fails after an answer backs off this row alone.
+     */
+    private suspend fun enrich(entry: AiEnrichQueueEntity): Boolean {
+        val request = request()
+        val suggestion =
+            runCatchingCancellable { ai.suggestEdits(entry.docId, request) }.getOrElse { cause ->
+                reschedule(entry, cause)
+                health.failed(clock.nowMillis())
+                return false
+            }
+        health.answered()
         return runCatchingCancellable {
-            write(entry.docId, ai.suggestEdits(entry.docId, request()))
+            write(entry.docId, suggestion)
             queueDao.markEnriched(AiEnrichedEntity(entry.docId, clock.nowMillis()))
             queueDao.delete(entry.docId)
-            health.answered()
         }.fold(
             onSuccess = { true },
             onFailure = { cause ->
                 reschedule(entry, cause)
-                health.failed(clock.nowMillis())
                 false
             },
         )
@@ -160,7 +192,7 @@ class AiAutoEnricher(
      * Write what this unattended pass may of one suggestion, as ONE [MetadataWriter.applyEdits]
      * (tags and fields in one journal transaction): the file is renamed at most once, and a failed
      * pass writes nothing, so its retry asks about the state the model was first shown. A failure
-     * throws into [processNext], which drives the cooldown and backoff.
+     * throws into [enrich], which backs this row off and leaves the endpoint's cooldown alone.
      *
      * The request already asks for no new tags and no removals, but this path writes without
      * review, so new tags are dropped and removals never carried here too. Only the fields the

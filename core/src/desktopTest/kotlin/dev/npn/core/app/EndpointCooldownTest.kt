@@ -1,12 +1,16 @@
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditRequest
+import dev.npn.core.ai.AiEditSuggestion
+import dev.npn.core.ai.FieldSuggestion
+import dev.npn.core.model.FieldKeys
 import dev.npn.core.testing.FakeDocContentFacade
 import dev.npn.core.testing.FakeDocumentRepository
 import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.listItem
 import dev.npn.core.work.QueueRetryPolicy
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -47,6 +51,29 @@ class EndpointCooldownTest {
                 rig.ai.suggestEditsCalls shouldContainExactly listOf("d1")
 
                 rig.clock.advance(QueueRetryPolicy.ENDPOINT_COOLDOWN_MS)
+                edits.processNext() shouldBe true
+                rig.ai.suggestEditsCalls shouldContainExactly listOf("d1", "a")
+            }
+        }
+
+    /**
+     * A suggestion the endpoint answered but the library would not save is the document's own
+     * problem: it says nothing about the endpoint, so queued edit runs carry on.
+     */
+    @Test
+    fun `a write that fails after an answer leaves the endpoint healthy for queued edit runs`() =
+        runTest {
+            withRig { rig ->
+                val edits = rig.editQueue()
+                edits.enqueueEditRun(listOf("a"), AiEditRequest())
+                rig.insertAndQueue("d1")
+                rig.ai.edit = AiEditSuggestion(metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "Invoice")))
+                rig.meta.failBatchOps = { throw IllegalStateException("journal rejected the write") }
+
+                rig.drain() shouldBe 0
+                rig.health.coolingDown(rig.clock.nowMillis()) shouldBe false
+                rig.row("d1").shouldNotBeNull().lastError shouldBe "journal rejected the write"
+
                 edits.processNext() shouldBe true
                 rig.ai.suggestEditsCalls shouldContainExactly listOf("d1", "a")
             }

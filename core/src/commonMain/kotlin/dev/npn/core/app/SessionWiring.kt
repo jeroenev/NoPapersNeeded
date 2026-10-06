@@ -206,6 +206,7 @@ private fun buildContent(
 internal fun buildEnrichment(
     deps: SessionDeps,
     lifetime: SessionLifetime,
+    coordinator: JournalCoordinator,
     library: Library,
     ai: AiFacadeImpl,
 ): DrainedQueue<AiAutoEnricher> =
@@ -219,6 +220,7 @@ internal fun buildEnrichment(
             policy = UnattendedAiPolicy(deps.settings.aiConfig),
             clock = deps.clock,
             health = ai.endpointHealth,
+            checkWritable = coordinator::checkWritable,
             onEnqueued = onEnqueued,
         )
     }) { it.processNext() }

@@ -341,7 +341,7 @@ class LibrarySessionImpl private constructor(
                     clock = deps.clock,
                     configProvider = deps.settings.aiConfig,
                 )
-            val enrichment = buildEnrichment(deps, lifetime, library, ai)
+            val enrichment = buildEnrichment(deps, lifetime, coordinator, library, ai)
             val edits = buildEditQueue(deps, lifetime, library, ai)
             // The pipeline's stale-file hook asks the session for a follow-up rescan; the session is
             // built last, and the hook only runs on a drain.
