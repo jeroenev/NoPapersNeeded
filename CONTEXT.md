@@ -9,20 +9,27 @@ and discussion; sharpen them here when they drift.
   (`FieldKeys.normalize`d, case-insensitively unique) and written as a `field-set`
   journal op with HLC last-writer-wins. Title, correspondent, document type,
   document date and notes are fields like any other; nothing in the code path is
-  specific to them beyond a few tuned strings (AI prompt wording, XMP interop
-  properties, the title's file-name fallback).
+  specific to them beyond the XMP interop properties and the title's file-name
+  fallback. What a model is told about them is their seeded definition: type,
+  flags and hint.
 - **Field definition** (`FieldDef`) — the registry entry for a key: label, `FieldType`
-  (TEXT, LONG_TEXT, NUMBER, DECIMAL, DATE), optional hint, and two flags:
+  (TEXT, LONG_TEXT, NUMBER, DECIMAL, DATE), optional hint, and three flags:
   **showByDefault** (render on every document and in the library filter, empty or
-  not) and **aiEnabled** (asked for in AI edit runs and filled by automatic
-  enrichment). Synced through `field-def` ops; edited in Settings → Documents.
+  not), **aiEnabled** (asked for in AI edit runs and filled by automatic
+  enrichment) and **perDocument** (the value is the document's own, like its
+  title: no vocabulary is shared, and a model writes it in the app's language).
+  Synced through `field-def` ops; edited in Settings → Documents.
 - **Well-known field** — one of the five keys a fresh library is seeded with
   (`FieldKeys.WELL_KNOWN`). Their type is locked because other subsystems read
-  them as that type; everything else about them is editable.
+  them as that type; everything else about them is editable. A change to the
+  seeds raises `FieldKeys.SEED_VERSION`, and older libraries are upgraded once
+  without overriding what their users changed.
 - **Canonical form** — the one stored representation of a value for its type
   (`FieldValues`): trimmed text, `yyyy-MM-dd`, `-?\d+`, `-?\d+(\.\d+)?`. Locale
   formatting happens only at the UI boundary. Blank canonicalizes to "no value":
-  a cleared field has no row, so "missing" is exactly "no row".
+  a cleared field has no row, so "missing" is exactly "no row". Each number has
+  one canonical form (`7`, `1.5`); values older builds stored as `007` or `1.50`
+  are read through `FieldValues.normalized`.
 - **Orphan value** — a value whose key has no definition (the definition was
   removed without clearing values, or a sync brought a key this device has not
   defined). Still stored, searchable and shown in a muted group; "Add to fields"
@@ -34,7 +41,7 @@ and discussion; sharpen them here when they drift.
 
 - **Edit Run** — a scoped, batched, reviewable AI edit pass over library
   documents. Owned by `AiEditRun` (core.app): holds the run's `processed` docId
-  set and the `appliedSoFar` accumulator. One run spans a whole edit session
+  set. One run spans a whole edit session
   (its `processed` set survives cancels and scope changes) and is consumed
   batch by batch via `suggestNextBatch` and `apply`.
 - **Queued Edit Run** — an Edit Run whose *suggestion* half was handed to the
@@ -82,13 +89,10 @@ and discussion; sharpen them here when they drift.
   it writes ONE unattended document and, on failure, re-asks the model, so it
   commits the whole edit — tags and fields — in a single `applyEdits`, so a
   failed pass writes nothing and its retry starts from the state the model was
-  originally shown.
-- **Writable Edit** — the part of one document's suggestion that policy permits
-  writing: tag additions, tag removals, and property values, after new tags and
-  removals have been dropped for the closed-vocabulary flows. A Writable Edit is
-  binary — a dropped item is gone. That is what separates it from Review
-  pre-selection, which is tri-state: a new tag stays visible as a deselected
-  chip so the user can opt in. The two must not be collapsed into one rule.
+  originally shown. What it may write is binary: new tags and removals are
+  dropped outright. Review pre-selection is tri-state instead (a new tag stays
+  visible as a deselected chip the user can opt into); the two must not be
+  collapsed into one rule.
 
 The UI's `EditPhase` (Idle/Suggesting/Review/Applying/Queued/Done) and
 `QueuedReviewPhase` are presentation state in `composeApp` and are not part of
@@ -114,22 +118,30 @@ the domain vocabulary.
 ## Library session facets
 
 `LibrarySession` (core.app) is a pure aggregate of narrow facades plus
-lifecycle (`start`/`close`). Consumers depend on the facets they use, never on
-the aggregate; only the composable tree and platform entry points hold the
-whole session. Each operation has exactly one public home:
+lifecycle (`start`/`close`). Viewmodels take the session and read the facets
+they use from it; code in `core` depends on the facets alone. Each operation has
+exactly one public home:
 
+- **Reads** — `documents` (`DocumentRepository`: lists, filters, counts and a
+  document's history), `tags` (`TagRepository`) and `content` (`DocContentFacade`:
+  thumbnails, page renders, extracted text, baked copies and bake-in-place).
+- **Library settings** — library data kept in the journal, so every device
+  shares it: the storage-path rule (`StoragePathFacade`, session property
+  `storagePath`), the auto-match rules (`AutoMatchRuleRepository`, `rules`) and
+  saved views (`SavedViewRepository`, `savedViews`).
 - **Ingest** (`IngestFacade`) — getting documents into the library: `importPdf`,
   `importPdfBytes`, `importImagesAsPdf`, `rescan`, plus the `scanProgress` and
   `lastScanReport` flows.
 - **OCR ops** (`OcrFacade`) — text-recognition management per document: `reOcr`,
   `ocrVersions`, `setOcrEngine` (the single public home for the engine pin),
-  plus the `ocrStatus` flow.
+  `aiOcrOffer` and `ocrWithAi` (a transcription by the vision model, asked for
+  on this device), plus the `ocrStatus` flow.
 - **Review Config** (`ReviewConfigFacade`) — library-wide review settings:
   `reviewMode`/`setReviewMode`, `markReviewedForMigration`.
 - **Field Registry** (`FieldRegistry`, session property `fieldRegistry`) — the
-  library's field definitions: `fields`/`visible`/`aiFields` flows, `upsert`,
+  library's field definitions: the `fields` flow and `current()`, `upsert`,
   `remove(key, clearValues)`, `reorder`, plus the values vocabulary
-  (`distinctValues`, `valuesForPrefix`), `orphanKeys` and `usageCounts`.
+  (`distinctValues`), `orphanKeys` and `usageCounts`.
 - **Maintenance** (`MaintenanceFacade`) — repair and surgery on existing
   documents: `resolveDuplicate`, `applyRelink`, `splitPdf`.
 - **Metadata writing** (`MetadataWriter`, session property `meta`) — per-doc and
@@ -151,7 +163,7 @@ whole session. Each operation has exactly one public home:
   drains until no further progress is possible right now (queue empty, feature
   off, endpoint unconfigured, or a backoff pending) and returns; it never waits
   out a backoff. For callers that must hold a process open while background work
-  runs — today only Android's maintenance job. Plus two reads: `queue`, which
+  runs: Android's WorkManager workers. Plus two reads: `queue`, which
   flattens the per-document tables into `QueuedWork` entries (outstanding work
   only), and `editRuns`, the queued AI edits at batch grain with finished ones
   first. The two stay separate because they differ in grain, in lifetime (the
