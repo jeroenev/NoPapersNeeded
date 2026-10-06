@@ -221,7 +221,8 @@ class DocumentRestoreTest {
             rig.session.rescan()
             rig.session.rescan()
 
-            journalOps().filter { it.contains(JournalOp.DocUndelete.WIRE) || it.contains(JournalOp.DocRestore.WIRE) }
+            journalOps()
+                .filter { it.contains(JournalOp.DocUndelete.WIRE) || it.contains(JournalOp.DocRestore.WIRE) }
                 .shouldBeEmpty()
             rig.db
                 .documentDao()

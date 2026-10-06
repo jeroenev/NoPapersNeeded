@@ -478,7 +478,11 @@ class IndexerTest {
             rig.rescan()
             val deleted = hide("inbox/scan.pdf") { PendingOp.docDelete(it) }
 
-            val imported = rig.importService.importBytes("bravo".encodeToByteArray(), "scan.pdf") as ImportResult.Imported
+            val imported =
+                rig.importService.importBytes(
+                    "bravo".encodeToByteArray(),
+                    "scan.pdf",
+                ) as ImportResult.Imported
 
             imported.relPath shouldBe "inbox/scan.pdf"
             rig.db
@@ -503,13 +507,21 @@ class IndexerTest {
             rig.rescan()
             val trashed = hide("inbox/scan.pdf") { PendingOp.docTrash(it, "inbox/scan.pdf") }
 
-            val imported = rig.importService.importBytes("bravo".encodeToByteArray(), "scan.pdf") as ImportResult.Imported
+            val imported =
+                rig.importService.importBytes(
+                    "bravo".encodeToByteArray(),
+                    "scan.pdf",
+                ) as ImportResult.Imported
 
             rig.db
                 .documentDao()
                 .rowAtPath("inbox/scan.pdf")
                 ?.docId shouldBe imported.docId
-            val row = rig.db.documentDao().getByDocId(trashed).shouldNotBeNull()
+            val row =
+                rig.db
+                    .documentDao()
+                    .getByDocId(trashed)
+                    .shouldNotBeNull()
             row.trashed.shouldBeTrue()
             row.trashedOrigPath shouldBe "inbox/scan.pdf"
         }

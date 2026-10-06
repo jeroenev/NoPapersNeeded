@@ -679,9 +679,8 @@ class Indexer(
     ) {
         val resurrected = ArrayList<Resurrected>()
 
-        /** Which document's row holds each path, as the pass found them; a rescan's resurrection checks it. */
-        private val holders: Map<String, String> =
-            if (scope is FoldScope.FullRescan) preloaded.rows.values.associate { it.relPath to it.docId } else emptyMap()
+        /** Which document's row holds each path, as the pass found them; a resurrection checks it. */
+        private val holders by lazy { preloaded.rows.values.associate { it.relPath to it.docId } }
 
         /**
          * Project one doc's tags, fields, props, lifecycle, row and FTS from the folded state. The

@@ -261,7 +261,11 @@ class MetadataWriterImpl(
         var committed = false
         try {
             coordinator.commitWithOptimisticLifecycle(
-                ops = listOf(PendingOp.docRestore(docId), PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath)),
+                ops =
+                    listOf(
+                        PendingOp.docRestore(docId),
+                        PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath),
+                    ),
                 lifecycleDocs = setOf(docId),
             ) {
                 documentDao.upsert(
