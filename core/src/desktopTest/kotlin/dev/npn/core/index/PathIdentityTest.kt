@@ -231,7 +231,7 @@ class PathIdentityTest {
 
             rig.writePdf("inbox/scan.pdf", "bravo")
             val resurrected = ArrayList<Resurrected>()
-            repeat(2) { rig.rescan { resurrected += it } }
+            repeat(2) { rig.rescan { found -> resurrected += found } }
 
             resurrected.shouldBeEmpty()
             rig.db
