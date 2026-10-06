@@ -2,6 +2,7 @@ package dev.npn.app.ui.common
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -59,9 +60,7 @@ fun TagChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        androidx.compose.foundation.layout.Box(
-            Modifier.size(8.dp).clip(CircleShape).background(dot),
-        )
+        Box(Modifier.size(8.dp).clip(CircleShape).background(dot))
         Text(
             text = name,
             style = MaterialTheme.typography.labelMedium,

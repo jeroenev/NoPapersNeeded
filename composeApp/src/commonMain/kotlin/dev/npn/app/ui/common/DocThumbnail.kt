@@ -17,6 +17,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -73,7 +74,7 @@ fun DocThumbnail(
     content: DocContentFacade,
     modifier: Modifier = Modifier,
     size: Dp = 48.dp,
-    shape: androidx.compose.ui.graphics.Shape = RoundedCornerShape(4.dp),
+    shape: Shape = RoundedCornerShape(4.dp),
 ) {
     val state by produceState<ThumbState>(ThumbState.Loading, docId) {
         // Serve from the in-memory cache instantly on re-scroll without touching disk.

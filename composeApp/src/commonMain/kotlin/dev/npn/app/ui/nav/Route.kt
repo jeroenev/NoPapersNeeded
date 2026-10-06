@@ -35,7 +35,7 @@ sealed interface Route {
 
     /**
      * The processing queue: the OCR / AI-enrichment backlog plus the AI edit runs handed to the
-     * background. Wide layouts show it in the library side panel.
+     * background. A top-level destination ([TopLevelDestination.QUEUE]).
      */
     @Serializable
     data object Queue : Route

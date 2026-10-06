@@ -1,5 +1,6 @@
 package dev.npn.app.di
 
+import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.LibrarySessionImpl
 import dev.npn.core.app.SessionDeps
 import dev.npn.core.app.SettingsRepository
@@ -47,11 +48,11 @@ class DefaultAppEnvironment(
 
     private val _session = MutableStateFlow<LibrarySessionImpl?>(null)
 
-    override val session: StateFlow<dev.npn.core.app.LibrarySession?> = _session.asStateFlow()
+    override val session: StateFlow<LibrarySession?> = _session.asStateFlow()
 
-    // Serializes open/close so two overlapping opens (e.g. requestOpenLibrary on appScope racing
-    // openPersistedLibrary) cannot interleave closeCurrentInternal with _session assignment and
-    // leak a db handle or close a live session.
+    // Serializes open/close so two overlapping opens (a user's switch racing openPersistedLibrary)
+    // cannot interleave closeCurrentInternal with _session assignment and leak a db handle or close
+    // a live session.
     private val sessionMutex = Mutex()
 
     private val _opening = MutableStateFlow(false)
@@ -69,7 +70,7 @@ class DefaultAppEnvironment(
 
     /** The continuous importer and what it sweeps for, so an on-demand sweep reuses its memory. */
     private class RunningImporter(
-        val session: dev.npn.core.app.LibrarySession,
+        val session: LibrarySession,
         val location: String,
         val importer: WatchedFolderImporter,
     )
@@ -97,7 +98,7 @@ class DefaultAppEnvironment(
     }
 
     private fun buildImporter(
-        session: dev.npn.core.app.LibrarySession,
+        session: LibrarySession,
         folder: WatchedFolder,
     ) = WatchedFolderImporter(
         ingest = session.ingest,

@@ -82,9 +82,9 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * The processing queue: everything the OCR and AI-enrichment passes still owe, plus the AI edit
- * runs handed to the background. The single presentation of that list — reached from the
- * navigation rail on wide layouts, from settings on compact ones, and from the library's progress
- * banners on both.
+ * runs handed to the background. The single presentation of that list: a top-level destination
+ * (the rail on wide layouts, the bottom bar's "More" sheet on compact ones), also reached from the
+ * library's progress indicators and the AI edit page.
  *
  * Edit runs sit at the top and finished ones first, because they are the only entries that need a
  * person: a finished run is a review waiting to be opened, while everything below it clears itself.

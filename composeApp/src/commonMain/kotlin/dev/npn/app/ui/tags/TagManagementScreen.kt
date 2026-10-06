@@ -600,8 +600,8 @@ private fun TagCardMenu(
 internal fun buildTree(flat: List<TagInfo>): List<TagNode> {
     val byPath = flat.associateBy { it.name }
     // Collect every distinct path (real tags plus the intermediate namespace prefixes they imply),
-    // already sorted. Grouping by immediate parent prefix below makes the tree build linear instead
-    // of repeatedly filtering the whole path set per node (the old implementation was O(N^2)).
+    // already sorted. Grouping by immediate parent prefix below keeps the tree build linear, rather
+    // than filtering the whole path set once per node.
     val allPaths = sortedSetOf<String>()
     for (t in flat) {
         val parts = t.name.split('.')

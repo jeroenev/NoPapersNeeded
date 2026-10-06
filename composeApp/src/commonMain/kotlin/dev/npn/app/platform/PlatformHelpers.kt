@@ -79,8 +79,7 @@ expect fun checksForUpdates(): Boolean
 
 /**
  * Whether the platform can create a new library folder inside a [FolderAccess.DIRECT] parent.
- * True everywhere now that Android has plain paths; SAF parents are still refused by
- * [createLibraryFolder].
+ * True on both platforms; a SAF parent is refused by [createLibraryFolder].
  */
 expect fun supportsLibraryFolderCreation(): Boolean
 

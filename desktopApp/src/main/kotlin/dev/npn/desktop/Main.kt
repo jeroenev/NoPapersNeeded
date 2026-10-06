@@ -1,5 +1,6 @@
 package dev.npn.desktop
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.draganddrop.dragAndDropTarget
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
@@ -10,6 +11,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draganddrop.DragAndDropEvent
 import androidx.compose.ui.draganddrop.DragAndDropTarget
@@ -37,6 +39,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import org.jetbrains.compose.resources.stringResource
+import java.awt.Dimension
 import java.net.URI
 import java.nio.file.Files
 import java.nio.file.Path
@@ -74,10 +77,7 @@ private fun showAlreadyRunning() =
         }
     }
 
-@OptIn(
-    androidx.compose.foundation.ExperimentalFoundationApi::class,
-    androidx.compose.ui.ExperimentalComposeUiApi::class,
-)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalComposeUiApi::class)
 private fun runApp() =
     application {
         // Process-wide environment. The desktop LibrarySession self-starts its WatchService rescan loop
@@ -111,7 +111,7 @@ private fun runApp() =
         ) {
             DisposableEffect(window) {
                 // A sensible minimum size for the AWT window; set once, not on every recomposition.
-                window.minimumSize = java.awt.Dimension(800, 600)
+                window.minimumSize = Dimension(800, 600)
                 val monitorMoveWorkaround = MonitorMoveSurfaceWorkaround.install(window)
                 onDispose(monitorMoveWorkaround::close)
             }
@@ -134,7 +134,7 @@ private fun runApp() =
  * Drop target for PDF files. The shared UI imports them into the open library and says what became
  * of them, so a drop is reported like any other import.
  */
-@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@OptIn(ExperimentalComposeUiApi::class)
 private fun pdfDropTarget(): DragAndDropTarget =
     object : DragAndDropTarget {
         override fun onDrop(event: DragAndDropEvent): Boolean {

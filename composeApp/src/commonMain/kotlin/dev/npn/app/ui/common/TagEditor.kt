@@ -4,11 +4,13 @@ package dev.npn.app.ui.common
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Clear
@@ -137,11 +139,6 @@ fun TagEditor(
 @Composable
 private fun TagColorDot(color: String?) {
     parseHexColor(color)?.let {
-        androidx.compose.foundation.layout.Box(
-            Modifier
-                .size(10.dp)
-                .clip(androidx.compose.foundation.shape.CircleShape)
-                .background(it),
-        )
+        Box(Modifier.size(10.dp).clip(CircleShape).background(it))
     }
 }

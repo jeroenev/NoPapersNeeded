@@ -34,12 +34,14 @@ import dev.npn.app.di.AppEnvironment
 import dev.npn.app.ui.ai.AiChatScreen
 import dev.npn.app.ui.ai.AiEditReviewScreen
 import dev.npn.app.ui.ai.AiEditScreen
+import dev.npn.app.ui.ai.AiEditSelection
 import dev.npn.app.ui.common.DesktopBridge
 import dev.npn.app.ui.common.LocalWindowWidthClass
 import dev.npn.app.ui.common.LocaleProvider
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.testTagsAsResourceIds
+import dev.npn.app.ui.detail.BrowseContext
 import dev.npn.app.ui.detail.DocDetailScreen
 import dev.npn.app.ui.detail.DocumentDraftHost
 import dev.npn.app.ui.detail.WithDraftResumeBanner
@@ -62,6 +64,9 @@ import dev.npn.app.ui.tags.TagManagementScreen
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.app.ui.trash.TrashScreen
 import dev.npn.app.ui.update.WithUpdateBanner
+import dev.npn.core.app.LibraryFilter
+import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.SettingsRepository
 import kotlinx.coroutines.flow.receiveAsFlow
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
@@ -159,7 +164,7 @@ private fun OpenFailedDialog(
 @Composable
 private fun MainNav(
     env: AppEnvironment,
-    session: dev.npn.core.app.LibrarySession,
+    session: LibrarySession,
     aiConfigured: Boolean,
     onOpenLibrary: (location: String) -> Unit,
 ) {
@@ -167,8 +172,7 @@ private fun MainNav(
     // Ordered doc list for prev/next-document paging in the detail screen; populated on open.
     val browse =
         remember {
-            dev.npn.app.ui.detail
-                .BrowseContext()
+            BrowseContext()
         }
     // Outstanding background work, for the shell's queue badge. Read here rather than in a screen
     // because the badge is the only standing sign that the app is still busy — or, once a
@@ -180,8 +184,7 @@ private fun MainNav(
     // Documents handed from the library's selection mode to the AI-edit page (see AiEditSelection).
     val aiSelection =
         remember {
-            dev.npn.app.ui.ai
-                .AiEditSelection()
+            AiEditSelection()
         }
     val libraryFilterHandoff = remember { LibraryFilterHandoff() }
 
@@ -224,7 +227,7 @@ private fun MainNav(
  */
 private fun NavHostController.resumeDraft(
     docId: String,
-    browse: dev.npn.app.ui.detail.BrowseContext,
+    browse: BrowseContext,
 ) {
     browse.setOrder(listOf(docId), null)
     navigate(Route.DocDetail(docId)) {
@@ -237,9 +240,9 @@ private fun NavHostController.resumeDraft(
 private fun MainNavHost(
     nav: NavHostController,
     env: AppEnvironment,
-    session: dev.npn.core.app.LibrarySession,
-    browse: dev.npn.app.ui.detail.BrowseContext,
-    aiSelection: dev.npn.app.ui.ai.AiEditSelection,
+    session: LibrarySession,
+    browse: BrowseContext,
+    aiSelection: AiEditSelection,
     libraryFilterHandoff: LibraryFilterHandoff,
     showAiEditTopBar: Boolean,
     onOpenLibrary: (location: String) -> Unit,
@@ -307,8 +310,8 @@ private fun MainNavHost(
 private fun NavGraphBuilder.settingsRoutes(
     nav: NavHostController,
     env: AppEnvironment,
-    session: dev.npn.core.app.LibrarySession,
-    browse: dev.npn.app.ui.detail.BrowseContext,
+    session: LibrarySession,
+    browse: BrowseContext,
     onOpenLibrary: (location: String) -> Unit,
 ) {
     composable<Route.Settings> { entry ->
@@ -432,9 +435,9 @@ private fun PublishWindowTitle(title: String?) {
 /** AI assistant + AI tagging destinations (both reached from the library drawer). */
 private fun NavGraphBuilder.aiRoutes(
     nav: NavHostController,
-    session: dev.npn.core.app.LibrarySession,
-    settings: dev.npn.core.app.SettingsRepository,
-    aiSelection: dev.npn.app.ui.ai.AiEditSelection,
+    session: LibrarySession,
+    settings: SettingsRepository,
+    aiSelection: AiEditSelection,
     libraryFilterHandoff: LibraryFilterHandoff,
     showAiEditTopBar: Boolean,
 ) {
@@ -446,8 +449,7 @@ private fun NavGraphBuilder.aiRoutes(
             onOpenDoc = { docId -> nav.navigate(Route.DocDetail(docId)) },
             onOpenFiltered = { docIds ->
                 libraryFilterHandoff.set(
-                    dev.npn.core.app
-                        .LibraryFilter(docIds = docIds),
+                    LibraryFilter(docIds = docIds),
                 )
                 nav.navigateTopLevel(TopLevelDestination.LIBRARY)
             },

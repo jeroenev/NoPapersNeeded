@@ -104,8 +104,12 @@ import dev.npn.core.app.DocContentFacade
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibraryFilter
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.LibrarySort
+import dev.npn.core.app.OcrStatus
+import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.app.SortField
 import dev.npn.core.app.ViewType
+import dev.npn.core.index.ScanReport
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
 import io.github.vinceglb.filekit.dialogs.FileKitMode
@@ -648,7 +652,7 @@ private fun DocList(
 @Composable
 private fun LibraryTopBar(
     viewType: ViewType,
-    sort: dev.npn.core.app.LibrarySort,
+    sort: LibrarySort,
     sortableFields: List<FieldDef>,
     wide: Boolean,
     extras: @Composable () -> Unit,
@@ -696,7 +700,7 @@ private fun LibraryTopBar(
 
 @Composable
 private fun SortMenuButton(
-    sort: dev.npn.core.app.LibrarySort,
+    sort: LibrarySort,
     sortableFields: List<FieldDef>,
     onSetSort: (SortField, Boolean) -> Unit,
 ) {
@@ -822,9 +826,9 @@ private fun SelectionTopBar(
 
 @Composable
 private fun Banners(
-    scanProgress: dev.npn.core.app.ScanProgressUi?,
-    lastScan: dev.npn.core.index.ScanReport?,
-    ocr: dev.npn.core.app.OcrStatus,
+    scanProgress: ScanProgressUi?,
+    lastScan: ScanReport?,
+    ocr: OcrStatus,
     queueCounts: QueueCounts,
     dismissed: Boolean,
     onDismiss: () -> Unit,
@@ -846,7 +850,7 @@ private fun Banners(
 }
 
 @Composable
-private fun ScanProgressBanner(scanProgress: dev.npn.core.app.ScanProgressUi) {
+private fun ScanProgressBanner(scanProgress: ScanProgressUi) {
     Card(Modifier.fillMaxWidth().padding(vertical = 4.dp)) {
         Column(Modifier.padding(12.dp)) {
             Text(
@@ -907,7 +911,7 @@ private fun ScanIssuesBanner(
 
 @Composable
 private fun OcrStatusIndicator(
-    ocr: dev.npn.core.app.OcrStatus,
+    ocr: OcrStatus,
     onOpenQueue: () -> Unit,
 ) {
     QueueStatusIndicator(
@@ -1013,7 +1017,7 @@ private fun LibraryFab(
 @Composable
 private fun ResultsSummary(
     count: Int,
-    sort: dev.npn.core.app.LibrarySort,
+    sort: LibrarySort,
     sortableFields: List<FieldDef>,
     modifier: Modifier = Modifier,
 ) {

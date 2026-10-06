@@ -6,6 +6,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_new
@@ -27,9 +28,7 @@ fun TagSuggestionLabel(
                 stringResource(Res.string.common_new),
                 style = MaterialTheme.typography.labelSmall,
                 color = MaterialTheme.colorScheme.primary,
-                modifier =
-                    androidx.compose.ui.Modifier
-                        .padding(start = 6.dp),
+                modifier = Modifier.padding(start = 6.dp),
             )
         }
     }
