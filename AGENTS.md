@@ -118,10 +118,10 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   bake-in-place, which records a `relink` journal event for the new hash.
 - All app-written files in `.npn/` are write-once. Journal transactions are content-addressed
   by their complete-file SHA-256 and require verified create-without-replacement publication;
-  OCR sidecars are keyed by hash+deviceId. Never append to or rewrite a published object. New
-  journal writes must go through `JournalCoordinator` — this is enforced at the type level, not
-  just by convention: `ContentAddressedJournalWriter` is `internal` to `core` and the
-  coordinator's `writer` is private, so no outside caller can grab a raw writer.
+  OCR sidecars are keyed by hash and writer (device id + engine). Never append to or rewrite a
+  published object. New journal writes must go through `JournalCoordinator` — this is enforced
+  at the type level, not just by convention: `ContentAddressedJournalWriter` is `internal` to
+  `core` and the coordinator's `writer` is private, so no outside caller can grab a raw writer.
 - The journal is written only as storage-v2 objects; legacy v1 segments are read, never written.
   A filesystem that cannot publish without replacement (no hard link, no exclusive rename) refuses
   to open the library; never add a fallback format. `device.id` belongs to one installation:
@@ -136,16 +136,16 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   value is its own, so no vocabulary is shared and it is written in the app's language) and its
   hint, which carries the seeded fields' guidance. A change to the seeds raises
   `FieldKeys.SEED_VERSION`; `FieldKeys.upgradeSeeded` then brings libraries seeded earlier up to
-  it once, never overriding what their users changed. An exhaustive `when (FieldType)` belongs only in `FieldValues` (canonical form) and in
-  the UI, where the type picks a control: `FieldEditor.kt` (the editor and its type label) and the
-  filter sheet's per-type filter control. Every other branch reads the `FieldDef`'s data (its
-  flags and hint, and the capabilities each `FieldType` constant must declare, such as
-  `singleLine` or `hasVocabulary`), never compares or switches on the type. Storage is always the
-  canonical form; a blank value clears the field and is never stored as `""`. Each number has
-  exactly one canonical form (`7`, `1.5`), so canonical strings compare as values; the fold reads
-  what older builds stored (`007`, `1.50`) through `FieldValues.normalized`.
-  The five typed `documents` columns are a read cache the fold writes from the field map, never
-  a second source.
+  it once, never overriding what their users changed. An exhaustive `when (FieldType)` belongs
+  only in `FieldValues` (canonical form) and in the UI, where the type picks a control:
+  `FieldEditor.kt` (the editor and its type label) and the filter sheet's per-type filter
+  control. Every other branch reads the `FieldDef`'s data (its flags and hint, and the
+  capabilities each `FieldType` constant must declare, such as `singleLine` or `hasVocabulary`),
+  never compares or switches on the type. Storage is always the canonical form; a blank value
+  clears the field and is never stored as `""`. Each number has exactly one canonical form (`7`,
+  `1.5`), so canonical strings compare as values; the fold reads what older builds stored (`007`,
+  `1.50`) through `FieldValues.normalized`. The five typed `documents` columns are a read cache
+  the fold writes from the field map, never a second source.
 
 ## Conventions
 
@@ -166,6 +166,11 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   composable. New text is `UiText.Res`/`UiText.Plural` over a whole-sentence resource in all six
   locales, never a sentence stitched from fragments; `UiText.Raw` is only for untranslated text
   such as a file name or an exception's message. Viewmodel tests assert on the `UiText` itself.
+- UI is built from the shared pieces in `ui/common` (`SettingsSection`, `SwitchRow`, `HelpText`,
+  `Dropdown`, `ExpanderRow`, `SuggestField`, `BackTopBar`, `TooltipIconButton`, ...) rather than a
+  screen's own copy, and a screen binds keys only through `keyShortcuts`/`previewKeyShortcuts`.
+  Leaf composables take state and an actions interface, never a viewmodel; wide-or-compact comes
+  from `LocalWindowWidthClass`, never a screen's own window-width check.
 - Facets follow the contract in ARCHITECTURE.md: main-safe, expected failures as a typed outcome
   with an error enum (mapped to a string resource in `composeApp`, never English from `core`),
   throws only for bugs and misuse.

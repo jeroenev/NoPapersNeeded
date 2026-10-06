@@ -12,12 +12,11 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
   app can rebuild all of its state from the folder alone.
 - Documents are immutable. Once a PDF is in the library the app never rewrites its
   bytes (rename/move only). The one exception is the explicit bake-in-place action.
-- Metadata is a journal. Changes (tags, properties, trash, relink) are stored as
-  immutable JSONL transactions under `.npn/journal/`. Transactions use their
-  complete-file SHA-256 as the filename. No published transaction is modified after
-  it is written. Merges are conflict-free:
-  OR-set semantics for tags, hybrid-logical-clock last-writer-wins for single-value
-  properties.
+- Metadata is a journal. Changes (tags, fields, properties, library settings, trash,
+  relink) are stored as immutable JSONL transactions under `.npn/journal/`. Transactions
+  use their complete-file SHA-256 as the filename. No published transaction is modified
+  after it is written. Merges are conflict-free: OR-set semantics for tags,
+  hybrid-logical-clock last-writer-wins for single-value fields, properties and settings.
 - SQLite is a rebuildable cache. The index (search, thumbnails, source provenance,
   and incremental metadata projection) lives in device-local storage, never inside
   the library folder, and is never synced. Delete it and it rebuilds from the folder.
@@ -27,7 +26,8 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
   keeps all of that but takes a new device id, so two installations never write
   under one name.
 - OCR travels as sidecars. Extracted text is written to `.npn/ocr/` keyed by file
-  hash and device id, so a device adopts another device's OCR instead of redoing it.
+  hash, device id and engine, so a device adopts another device's OCR instead of
+  redoing it.
   The best-ranked engine is indexed (ai > mlkit > tesseract > embedded text layer);
   a device runs its own engine only when it would rank higher, or when the user asks
   for a re-OCR and its engine ranks at least as high. A re-run of an engine the device
@@ -68,14 +68,16 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 The build needs one JDK, Java 25 (`jdk` in `gradle/libs.versions.toml`). It runs the
 Gradle daemon (pinned in `gradle/gradle-daemon-jvm.properties`), compiles every module and
 is bundled as the desktop app's runtime; the workflows install it from `.java-version`. A
-`buildSrc` test fails when either of those two files names another JDK than the catalog. Gradle downloads it via the foojay resolver if no
-matching JDK is installed. All code still compiles to Java 17 bytecode (`jvm-target`):
-Android only provides newer Java library APIs on newer OS versions, and the app supports
-API 30. Desktop compilations also pass `-Xjdk-release=17`, so they cannot call a newer API
-either. Both levels are applied in one place, the `npn.toolchain` convention plugin in
-`buildSrc`, which every module applies. The Android SDK is located via
-`local.properties` (`sdk.dir`) or the `ANDROID_HOME` / `ANDROID_SDK_ROOT`
-environment variable.
+`buildSrc` test fails when either of those two files names another JDK than the catalog.
+Gradle downloads it via the foojay resolver if no matching JDK is installed. All code still
+compiles to Java 17 bytecode (`jvm-target`): Android only provides newer Java library APIs on
+newer OS versions, and the app supports API 30. Desktop compilations also pass
+`-Xjdk-release=17`, so they cannot call a newer API either. Both levels are applied in one
+place, the `npn.toolchain` convention plugin in `buildSrc`, which every module applies; the
+multiplatform modules (`core`, `core-testing`, `composeApp`) also share their `desktop` and
+Android targets through `npn.kmp-module`. Both plugins read `gradle/libs.versions.toml`. The
+Android SDK is located via `local.properties` (`sdk.dir`) or the `ANDROID_HOME` /
+`ANDROID_SDK_ROOT` environment variable.
 
 ### Task runner (mise)
 
@@ -358,8 +360,11 @@ Library/
   .npn/
     journal/objects-v2-<00..ff>/
       <sha256>.jsonl                    # content-addressed metadata transactions
+    journal/objects-snap-v2-<00..ff>/   # compaction snapshots of older transactions
     ocr/<sha256>.<deviceId>.<engine>.json # OCR sidecars, adopted across devices
+    devices/<deviceId>/<installationId>.json # which installations use a device id
     trash/                              # soft-deleted files (synced, not indexed)
+    tmp/                                # import staging; crash leftovers swept after a day
 ```
 
 The `.npn/` directory syncs with the documents. The device-local index (`index.db`), this
@@ -371,7 +376,9 @@ Metadata uses content-addressed storage-v2 objects. Metadata writes require veri
 publication with atomic create-without-replacement semantics, supported by all current
 desktop and Android libraries. A library on storage that cannot guarantee this refuses
 to open, with its own message, rather than falling back to another storage format.
-Legacy v1 segments (`journal/<deviceId>/<seq>.jsonl`) from older builds are still read.
+Legacy v1 segments (`journal/<deviceId>/<seq>.jsonl`) from older builds are still read, never
+written. The `devices/` markers tie each device id to the one installation that uses it, so a
+restored or cloned installation takes a fresh id rather than writing under another's name.
 
 ### Android storage
 

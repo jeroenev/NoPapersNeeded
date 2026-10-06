@@ -8,9 +8,9 @@ break.
 
 Local-first paperless document manager. A *library* is a plain folder of PDFs
 plus a `.npn/` metadata directory; everything else is derived state that can be
-rebuilt from the folder, except what one device alone knows (its journal identity, its
-queues of work owed, chats), which it keeps in its own `device.db`. The app runs on Android and Linux desktop from one code
-base:
+rebuilt from the folder, except what one device alone knows (its journal identity,
+its queues of work owed, chats), which it keeps in its own `device.db`. The app runs
+on Android and Linux desktop from one code base:
 
 ```
 androidApp ─┐
@@ -57,7 +57,7 @@ source sets hold implementations. Key packages:
 | `core.work` | `QueueDrainer`: the single-flight background drain shared by the OCR queue, the automatic AI enrichment queue and queued AI edit runs. One worker loop fed by conflated kicks, so a burst of kicks during a drain costs one more drain; a step that throws is logged and ends that drain, never the loop. `drainedQueue` builds a queue together with its drainer, handing the queue an `onEnqueued` callback that kicks that drainer. `QueueRetryPolicy`: when a persisted queue's failed row is tried again (the shared `backoffMs` ramp, stored as `nextAttemptAt`) and when it is given up on. `EndpointHealth`: the one cooldown of an AI endpoint, held by `AiFacadeImpl` and shared by the enrichment and edit queues, so a failed call in either holds both back and an answer to either lifts it. |
 | `core.xmp` | XMP metadata on export/bake-in-place: `PdfXmpIO` (platform, moves the raw packet), `XmpBytes`, `XmpSerializer`, `XmpParser` (reads back only what bake needs: title, document id, tags), `XmpMerger`, `NpnXmpData` with `XmpProperties` (every property name, and which fields get their own), `BakeService`. |
 | `core.model` | Per-document vocabulary in `Document.kt` (`ReviewMode`, the app-owned `SystemProperty` keys) and the field model: `Field.kt` (`FieldType`, `FieldDef`, `FieldKeys` — well-known keys, seed definitions and their versioned upgrade, key normalization) and `FieldValues.kt` (the one authority on a value's canonical form per type); `AppLanguages` reduces an app-language tag to its subtag and knows each language's English name (for prompts) and Tesseract model (for automatic OCR). |
-| `core.rules` / `core.pathrules` | Auto-match rules (`RuleMatcher`, `RuleApplier`, `AutoMatchRule`) and storage-path templates (`StoragePathRule*`, `StoragePathTemplate`, `StoragePathContext`). Both are library data: synced `setting-set` keys in the journal (`core.app.LibrarySettings`), so every device files and matches documents alike; the rules table in the index only caches the journal's list (`AutoMatchRuleRepositoryImpl`). A device's pre-journal settings are adopted once by a library that has no value yet. A template that cannot expand says why with a `StoragePathError`, which Settings maps to its own copy; the context always carries the registry's field types, since they decide which fields take a date pattern. |
+| `core.rules` / `core.pathrules` | Auto-match rules (`RuleMatcher`, `RuleApplier`, `AutoMatchRule`) and storage-path templates (`StoragePathRule*`, `StoragePathTemplate`, `StoragePathContext`). Both are library data: synced `setting-set` keys in the journal (`LibrarySettingKeys` in `core.app`), so every device files and matches documents alike; the rules table in the index only caches the journal's list (`AutoMatchRuleRepositoryImpl`). A device's pre-journal settings are adopted once by a library that has no value yet. A template that cannot expand says why with a `StoragePathError`, which Settings maps to its own copy; the context always carries the registry's field types, since they decide which fields take a date pattern. |
 | `core.watch` | Watched inbox folder: `WatchedFolder` (platform), `WatchedFolderImporter`. |
 | `core.ai` | Local/AI chat loop and tools over the library (`KoogChatAgent`, `AiFacadeImpl`, `LibraryAiTools`, whose `LibraryToolSet` holds the tools Koog advertises and a call map by tool name); `ChatHistoryWindow` sizes what a conversation keeps and what each request replays, in characters, with old tool results stubbed. Contracts split per concept: `AiChat.kt`, `AiSuggest.kt`, `AiConfig.kt` (with `AiAvailability`), `UnattendedAiPolicy.kt` (may this replica spend without being asked); `AiFacadeImpl` implements the two facets and is the vision OCR engine (`ocrEngine`), so all of them share one cached endpoint client (`AiRuntimeCache`). Every endpoint client is built in one place, `AiRuntime.build(config, transport)`: the facade's cached one, and the short-lived ones the settings self-test (`AiSelfTest`, which makes paid calls) and the model picker (`AiModelCatalog`) build per use. Its `transport` is the test seam: Ktor plugins installed on a base client a test passes in see every call that runtime makes; provider-specific wire needs (the OpenCode Go session header) are layered on top, never in place of it. Consumers in `core.app` drive it: `AiEditRun` (bulk, review-then-apply) and `AiEditQueue` (the same, handed to the background), which ask through one `SuggestionRunner` and so share its concurrency ceiling, `AiAutoEnricher` (unattended, queued in `ai_enrich_queue` off the OCR thread), and `OcrPipeline` through `AiFacadeImpl.ocrEngine` (page-image transcription, one call per page). `LibraryAiTools` is the assistant's entire view of the library — see docs/AI_TOOL_DATA_GAPS.md for what it deliberately does not expose. |
 
@@ -83,10 +83,11 @@ Every `core.app` facet keeps one contract, so a caller needs no defensive wrappi
 Opening a library is `LibrarySessionImpl.openSession(SessionDeps)` (commonMain) followed by
 `start()`. Everything the session runs — background loops, queue drains, every facet write — is a
 child of one `SessionLifetime` job under `SessionDeps.scope`, so `close()` stops and awaits all of
-it before the host closes the database; closing is final. On a plain JVM the `SessionDeps` come from `core.app.jvmSessionDeps`
-(`desktopMain`): the one place that wires java.nio + PDFBox + Tesseract + a Room index under an
-`AppDirs`. The desktop app, the `AppSessionRig` test harness and any headless JVM host build
-their sessions through it — nothing in `composeApp` is needed to run a library without a UI.
+it before the host closes the databases; closing is final. On a plain JVM the `SessionDeps` come
+from `core.app.jvmSessionDeps` (`desktopMain`): the one place that wires java.nio + PDFBox +
+Tesseract + the two Room databases under an `AppDirs`. The desktop app, the `AppSessionRig` test
+harness and any headless JVM host build their sessions through it — nothing in `composeApp` is
+needed to run a library without a UI.
 Android's counterpart is `core.app.androidSessionDeps` (`androidMain`). Both take the device
 settings a session reads while it runs as one `SessionSettings`, which the apps build with
 `SessionSettings.from(settingsRepository, systemLanguage)`; a new session setting is a field there.
@@ -100,7 +101,7 @@ Shared Compose Multiplatform UI + viewmodels + dependency wiring.
 | `app/App.kt`, `app/AppViewModel.kt` | Root composable / app shell, and the viewmodel that opens, restores and switches the library for it: one sealed `AppState` (`Restoring`, `Opening`, `NoLibrary`, `RestoreFailed`, `Open`) that also carries every failure to open, as a localized `OpenFailureReason` with the technical cause as an optional detail. |
 | `app/di/` | `AppEnvironment` (session lifecycle: open/close/swap, watched folder; a failed swap closes what it built, reopens the previous library and rethrows) + `DefaultAppEnvironment`. A platform factory that knows why a library cannot open throws `LibraryUnavailableException` with an `OpenFailureReason`. The platform source sets hand it two plain functions, one that builds a location's `SessionDeps` and one that opens its watched folder, in `AppEnvironment.android/desktop.kt`. The per-library wiring itself is `core`'s `jvmSessionDeps`/`androidSessionDeps` (see above); the DI files only check that a location can be opened and bind the session's settings. Android's wiring dispatches on the location string: direct path → `JvmLibraryFileSystem` with `ContentResolverExternalIo` and exclusive `renameat2(RENAME_NOREPLACE)` publication through JNA, `content://` → `SafLibraryFileSystem`. The DI package imports no UI package. |
 | `app/platform/` | Small shared platform hooks: `PlatformHelpers.kt`, the `expect` functions each platform answers (folder access and library-folder creation, image decoding, sharing, which settings it offers), plus the document scanner, foreground import and direct storage access. |
-| `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split; `DocumentView` is the one wiring of a document to its `DocDetailViewModel`, which the detail screen and the library's side panel each frame with their own chrome), `tags/`, `rules/`, `settings/`, `trash/`, `queue/` (the read-only OCR + AI enrichment backlog; a top-level rail destination on wide layouts, reached from settings on compact ones), `onboarding/` (onboarding and the restore-failed screen, which share `LibraryLocationChooser`: the all-files grant, the folder pickers and the SAF switch), `nav/` (shell + routes), `ai/`, `common/` (shared components, one per UI concept: the form building blocks `SettingsSection`, `SwitchRow`, `HelpText`, `Dropdown`, `ExpanderRow` (with the `expander`/`disclosure` semantics every expander uses), `SuggestField` (the one autocomplete; `SearchField` shares its menu), `rememberNumberInput`, `UiLanguage` (the one language-name table); `BackTopBar` and `TooltipIconButton`/`TopBarActions` for top bars; `keyShortcuts`, the one way a screen binds keys (a `when (event.key)` naming each key's action); `EmptyState`, `TagEditor`, `TagFormDialog`, `DocThumbnail`; `MessagesViewModel`, `SnackbarMessages`, `UiText`; and `LocalWindowWidthClass`, the window's one wide-or-compact decision that the shell and every screen read), `theme/`. Leaf composables take state plus actions, never a viewmodel: a screen hands its viewmodel down as a small actions interface it implements (`AiEditSetupActions`, `ReviewController`, `SettingsActions`, `TagWrites`, `TrashWrites`, `DocumentWrites`, `DocumentActions`). ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). One-shot messages have one path: a `MessagesViewModel` sends `UiMessage`s (text, plus an optional action such as Undo) into a buffered channel with `message` or `launchReporting`, and the screen's one `SnackbarMessages` shows them one at a time, in order. A message's `UiText` names a whole-sentence `StringResource` (or plural) and its arguments; the snackbar resolves it with the suspend `UiText.resolve(environment)` in the composition's resource environment, so it follows the app's language, and composables use the `@Composable` `resolve()`. |
+| `app/ui/` | Screens, one package each: `library/` (list/grid, filters, preview), `detail/` (page viewer, metadata panel, history, split; `DocumentView` is the one wiring of a document to its `DocDetailViewModel`, which the detail screen and the library's side panel each frame with their own chrome), `tags/`, `rules/`, `settings/`, `trash/`, `queue/` (the read-only OCR + AI enrichment backlog and the AI edit runs handed to the background; a top-level destination, on the rail on wide layouts and in the bottom bar's More sheet on compact ones), `onboarding/` (onboarding and the restore-failed screen, which share `LibraryLocationChooser`: the all-files grant, the folder pickers and the SAF switch), `nav/` (shell + routes), `ai/`, `common/` (shared components, one per UI concept: the form building blocks `SettingsSection`, `SwitchRow`, `HelpText`, `Dropdown`, `ExpanderRow` (with the `expander`/`disclosure` semantics every expander uses), `SuggestField` (the one autocomplete; `SearchField` shares its menu), `rememberNumberInput`, `UiLanguage` (the one language-name table); `BackTopBar` and `TooltipIconButton`/`TopBarActions` for top bars; `keyShortcuts`, the one way a screen binds keys (a `when (event.key)` naming each key's action); `EmptyState`, `TagEditor`, `TagFormDialog`, `DocThumbnail`; `MessagesViewModel`, `SnackbarMessages`, `UiText`; and `LocalWindowWidthClass`, the window's one wide-or-compact decision that the shell and every screen read), `theme/`. Leaf composables take state plus actions, never a viewmodel: a screen hands its viewmodel down as a small actions interface it implements (`AiEditSetupActions`, `ReviewController`, `SettingsActions`, `TagWrites`, `TrashWrites`, `DocumentWrites`, `DocumentActions`). ViewModels are co-located with their screen (e.g. `LibraryViewModel`, `DocDetailViewModel`). One-shot messages have one path: a `MessagesViewModel` sends `UiMessage`s (text, plus an optional action such as Undo) into a buffered channel with `message` or `launchReporting`, and the screen's one `SnackbarMessages` shows them one at a time, in order. A message's `UiText` names a whole-sentence `StringResource` (or plural) and its arguments; the snackbar resolves it with the suspend `UiText.resolve(environment)` in the composition's resource environment, so it follows the app's language, and composables use the `@Composable` `resolve()`. |
 | `commonMain/composeResources` | `values/` (English) plus `values-nl/`, `values-de/`, `values-fr/`, `values-es/` and `values-pt/` string resources; `checkLocalization` checks every translation for missing keys and placeholder parity. |
 
 ### `core-testing` — `dev.npn.core.testing`
@@ -114,8 +115,8 @@ else does, so it never ships.
 
 Android entrypoint (`MainActivity`, `NpnApplication`), plus Android-only features:
 `MlKitDocumentScanner`, `IntentImport` (share-sheet import, reported as soon as it is done),
-`NpnWork` (WorkManager: the periodic rescan and OCR, and the one-time drain of the OCR and
-enrichment a share import queued).
+`NpnWork` (WorkManager: the periodic watched-folder sweep, rescan and queue drains, and the
+one-time drain of the OCR and enrichment a share import queued).
 
 ### `desktopApp` — `dev.npn.desktop`
 
@@ -133,8 +134,10 @@ live in `buildSrc`. Hot Reload via `mise hot`.
 
 1. **Import**: `ImportService` (via `LibrarySessionImpl`) reads PDFs from picker /
    scanner / share intent / watched folder, hashes bytes (`SHA-256` = document
-   identity), dedups, moves the file into the library, writes OCR sidecars, and
-   appends metadata to the journal.
+   identity), dedups, moves the file into the library, adds its index row and
+   queues it for OCR. Its only journal write is the restore of bytes the journal
+   had trashed or deleted. `OcrPipeline` then writes the OCR sidecar, after which
+   the auto-match rules (and, when enabled, AI enrichment) write metadata.
 2. **Journal is source of truth for metadata**: every change (tags, field values,
     field definitions, system properties, library settings — review mode, storage-path
     rule, auto-match rules, saved views — trash, relink) is an immutable,
@@ -275,8 +278,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
 - A queue row records only that work is *owed*, never that it is under way. No queue
   table has a `running` state: the drain is single-flight in-process, so a row left
   claiming to be running has nobody alive to withdraw the claim, and every drain
-  thereafter skips it (`OcrQueueEntity` documents the outage this caused). "Who is
-  being worked on right now" is a `StateFlow` on the live queue (`OcrPipeline.inFlight`,
+  thereafter skips it (`OcrQueueEntity` says why). "Who is being worked on right now"
+  is a `StateFlow` on the live queue (`OcrPipeline.inFlight`,
   `AiEditQueue.inFlight`), which the read seam and `OcrStatus` combine in; it is never
   inferred from a row's progress. An interrupted pass must leave its
   row exactly as it found it — including its attempt count, which is why cancellation
