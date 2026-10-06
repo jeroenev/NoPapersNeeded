@@ -368,6 +368,85 @@ class IndexerTest {
             rig.exists("inbox/converted.pdf").shouldBeTrue()
         }
 
+    /** Hide the document at [relPath] through the journal, as another device would, and take its file away. */
+    private suspend fun hide(
+        relPath: String,
+        op: (String) -> PendingOp,
+    ): String {
+        val docId = rig.fs.sha256(relPath)
+        rig.clock.advance()
+        rig.writer("dev-main").commit(listOf(op(docId)))
+        rig.deleteFile(relPath)
+        rig.rescan()
+        return docId
+    }
+
+    /** A deleted document's row keeps its path; other bytes imported under that name still get a row. */
+    @Test
+    fun anImportOntoThePathOfADeletedDocumentIsIndexed() =
+        runTest {
+            rig.writePdf("inbox/scan.pdf", "alpha")
+            rig.rescan()
+            val deleted = hide("inbox/scan.pdf") { PendingOp.docDelete(it) }
+
+            val imported = rig.importService.importBytes("bravo".encodeToByteArray(), "scan.pdf") as ImportResult.Imported
+
+            imported.relPath shouldBe "inbox/scan.pdf"
+            rig.db
+                .documentDao()
+                .rowAtPath("inbox/scan.pdf")
+                ?.docId shouldBe imported.docId
+            rig.rescan()
+            rig.db
+                .documentDao()
+                .rowAtPath("inbox/scan.pdf")
+                ?.docId shouldBe imported.docId
+            rig.db
+                .documentDao()
+                .getByDocId(deleted)
+                ?.deleted shouldBe true
+        }
+
+    @Test
+    fun anImportOntoThePathOfATrashedDocumentIsIndexed() =
+        runTest {
+            rig.writePdf("inbox/scan.pdf", "alpha")
+            rig.rescan()
+            val trashed = hide("inbox/scan.pdf") { PendingOp.docTrash(it, "inbox/scan.pdf") }
+
+            val imported = rig.importService.importBytes("bravo".encodeToByteArray(), "scan.pdf") as ImportResult.Imported
+
+            rig.db
+                .documentDao()
+                .rowAtPath("inbox/scan.pdf")
+                ?.docId shouldBe imported.docId
+            val row = rig.db.documentDao().getByDocId(trashed).shouldNotBeNull()
+            row.trashed.shouldBeTrue()
+            row.trashedOrigPath shouldBe "inbox/scan.pdf"
+        }
+
+    /** A file copied in from outside onto a deleted document's old path is a new document there. */
+    @Test
+    fun aFileCopiedOntoThePathOfADeletedDocumentIsIndexed() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
+            val deleted = hide("a.pdf") { PendingOp.docDelete(it) }
+
+            rig.writePdf("a.pdf", "bravo")
+            val report = rig.rescan()
+
+            report.added shouldBe 1
+            rig.db
+                .documentDao()
+                .rowAtPath("a.pdf")
+                ?.docId shouldBe rig.fs.sha256("a.pdf")
+            rig.db
+                .documentDao()
+                .getByDocId(deleted)
+                ?.deleted shouldBe true
+        }
+
     @Test
     fun twoDeviceInterleavedTagsFoldDeterministically() =
         runTest {

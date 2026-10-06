@@ -4,9 +4,9 @@ import androidx.room3.withWriteTransaction
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.util.runCatchingCancellable
@@ -197,13 +197,4 @@ internal class DocumentPathReconciler(
         // Physical failures leave the journal intent pending, surfaced by conflicts(). They must
         // not prevent unrelated documents and metadata from being projected.
         runCatchingCancellable { paths.reconcile(docId, source, target) }.getOrDefault(source)
-
-    companion object {
-        /**
-         * A synthetic, unique relPath for a row that lost its path while its document waits (a
-         * file replaced in place, an owner released for an intent). It lives under `.npn/` so it
-         * is never indexed, and encodes the docId to satisfy the unique relPath constraint.
-         */
-        fun missingSentinel(docId: String): String = "${NpnPaths.NPN_DIR}/missing/$docId"
-    }
 }

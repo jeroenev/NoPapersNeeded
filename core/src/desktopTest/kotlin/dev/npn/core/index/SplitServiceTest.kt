@@ -7,6 +7,7 @@ import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CancellationException
@@ -82,6 +83,24 @@ class SplitServiceTest {
                 .observeQueue()
                 .first()
                 .shouldBeEmpty()
+        }
+
+    /** Parts go through the import's placement, so a deleted document's old path does not swallow one. */
+    @Test
+    fun aPartLandingOnThePathOfADeletedDocumentIsIndexed() =
+        runTest {
+            val original = stageOriginal()
+            rig.db.documentDao().upsert(documentEntity("d".repeat(64), "contract (part 1).pdf", deleted = true))
+            val split = SplitService(rig.fs, PdfBoxEngine(), rig.importService, rig.db.documentDao())
+
+            val result = split.split(original.docId, listOf(0..0, 1..1))
+
+            val parts = result.shouldBeInstanceOf<SplitService.Result.Done>().parts.map { it as ImportResult.Imported }
+            parts.map { it.relPath } shouldBe listOf("contract (part 1).pdf", "contract (part 2).pdf")
+            rig.db
+                .documentDao()
+                .getAllLive()
+                .map { it.docId } shouldContainExactlyInAnyOrder parts.map { it.docId } + original.docId
         }
 
     @Test

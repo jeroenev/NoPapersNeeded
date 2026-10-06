@@ -152,7 +152,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     on metadata refresh or rescan. The cached `relPath` remains the actual available
     location, not an unfulfilled intent. Trash/delete suspend path reconciliation;
     restore records its final destination. PDFs without a path intent retain their
-    discovered location.
+    discovered location. A path holds one row: a trashed, deleted or missing row gives
+    it up to a live document and waits under `.npn/missing/` (`DocumentDao.upsertAll`,
+    which fails the write rather than drop a row on a path another live row holds).
 3. **Index is a cache**: `Indexer` folds journal state (OR-set tags, HLC LWW) into
    the Room database (`FoldedState`, `MetadataAccumulator`). Field values land in
    `document_fields` (one row per document × key, canonical string plus a numeric

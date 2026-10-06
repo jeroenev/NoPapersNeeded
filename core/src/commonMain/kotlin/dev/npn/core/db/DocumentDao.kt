@@ -4,7 +4,9 @@ import androidx.room3.Dao
 import androidx.room3.Query
 import androidx.room3.RawQuery
 import androidx.room3.RoomRawQuery
+import androidx.room3.Transaction
 import androidx.room3.Upsert
+import dev.npn.core.fs.NpnPaths
 import kotlinx.coroutines.flow.Flow
 
 /**
@@ -13,13 +15,55 @@ import kotlinx.coroutines.flow.Flow
  */
 internal const val LIVE_DOCUMENT = "d.trashed = 0 AND d.deleted = 0 AND d.missing = 0"
 
+/**
+ * Where a row waits while its document holds no path in the library: its file was replaced in
+ * place, or another document took the path. Under `.npn/`, so never indexed, and one per document,
+ * as the unique relPath requires.
+ */
+internal fun missingSentinel(docId: String): String = MISSING_SENTINEL_PREFIX + docId
+
+private const val MISSING_SENTINEL_PREFIX = "${NpnPaths.NPN_DIR}/missing/"
+
 @Dao
 interface DocumentDao {
-    @Upsert
-    suspend fun upsert(doc: DocumentEntity)
+    suspend fun upsert(doc: DocumentEntity) = upsertAll(listOf(doc))
 
+    /**
+     * Write [docs], in order, as whole rows. relPath is unique, and this is where a path's holder is
+     * decided: a hidden row (trashed, deleted or missing) gives its path up to a live one and waits
+     * at its [missingSentinel]; any other row landing on a held path fails the write. Room's
+     * `@Upsert` alone turns that conflict into an UPDATE that matches no row, so a new document
+     * would vanish while the write reports success.
+     */
+    @Transaction
+    suspend fun upsertAll(docs: List<DocumentEntity>) {
+        if (docs.isEmpty()) return
+        for (paths in docs.filter { it.isLive }.map { it.relPath }.chunked(BIND_CHUNK)) {
+            releaseHiddenHolders(paths, MISSING_SENTINEL_PREFIX)
+        }
+        upsertUnchecked(docs)
+        val ids = docs.mapTo(LinkedHashSet()) { it.docId }.toList()
+        val written = ids.chunkedBind { storedDocIdsChunk(it) }.toHashSet()
+        val dropped = ids.filterNot(written::contains)
+        check(dropped.isEmpty()) { "Another live document holds the path of ${dropped.joinToString()}" }
+    }
+
+    /** Room's upsert without [upsertAll]'s rule for who holds a path; write through that instead. */
     @Upsert
-    suspend fun upsertAll(docs: List<DocumentEntity>)
+    suspend fun upsertUnchecked(docs: List<DocumentEntity>)
+
+    /** Move every hidden row at one of [paths] to its [missingSentinel], so a live row can take it. */
+    @Query(
+        "UPDATE documents SET relPath = :sentinelPrefix || docId " +
+            "WHERE relPath IN (:paths) AND (trashed = 1 OR deleted = 1 OR missing = 1)",
+    )
+    suspend fun releaseHiddenHolders(
+        paths: List<String>,
+        sentinelPrefix: String,
+    )
+
+    @Query("SELECT docId FROM documents WHERE docId IN (:docIds)")
+    suspend fun storedDocIdsChunk(docIds: List<String>): List<String>
 
     @Query("SELECT * FROM documents WHERE docId = :docId")
     suspend fun getByDocId(docId: String): DocumentEntity?

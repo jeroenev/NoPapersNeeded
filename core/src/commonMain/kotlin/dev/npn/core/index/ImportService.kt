@@ -152,6 +152,7 @@ class ImportService(
 
         val meta = fs.stat(target) ?: error("Imported file vanished: $target")
         val now = clock.nowMillis()
+        // The target was free on disk; a trashed or deleted row still naming it gives it up.
         documentDao.upsert(
             DocumentEntity(
                 docId = hash,

@@ -8,6 +8,7 @@ import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.PathMeta
 import dev.npn.core.db.TagEntity
+import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
@@ -310,7 +311,7 @@ class Indexer(
                 // doc must vacate the path (relPath is unique) so the new doc can take it; move it
                 // to a per-doc sentinel path under .npn (never indexed) that preserves identity.
                 val missingDoc =
-                    docAtPath.copy(relPath = DocumentPathReconciler.missingSentinel(docAtPath.docId), missing = true)
+                    docAtPath.copy(relPath = missingSentinel(docAtPath.docId), missing = true)
                 recon.writes += missingDoc
                 recon.existingByDocId[docAtPath.docId] = missingDoc
                 existingByPath.remove(meta.relPath)
