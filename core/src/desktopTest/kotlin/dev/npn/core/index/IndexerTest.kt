@@ -182,6 +182,16 @@ class IndexerTest {
                 .getByDocId(oldId)!!
                 .deleted
                 .shouldBeTrue()
+
+            // Superseded for good: no later fold shows it again, as missing or otherwise.
+            repeat(2) {
+                coordinator.rescan()
+                rig.db
+                    .documentDao()
+                    .getByDocId(oldId)!!
+                    .deleted
+                    .shouldBeTrue()
+            }
         }
 
     @Test

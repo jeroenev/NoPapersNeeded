@@ -540,11 +540,11 @@ class Indexer(
         // with the fold at negligible cost and needs no per-op scoping.
         fieldDefDao.replaceAll(state.effectiveFieldDefs())
         val changes = ProjectionChanges()
-        val supersession = resolveSupersessions(state, journalDocs, preloaded.rows, changes)
+        val predecessors = predecessors(state, journalDocs)
         val work = documentPaths.work()
         work.state = state
 
-        val pass = FoldPass(state, scope, supersession, preloaded, changes, work)
+        val pass = FoldPass(state, scope, predecessors, preloaded, changes, work)
         for (doc in journalDocs) {
             val row = preloaded.rows[doc] ?: continue
             pass.project(doc, row)
@@ -558,11 +558,10 @@ class Indexer(
 
     /**
      * The current DB projection for one [applyFold] pass, read in a handful of bulk queries so
-     * the per-doc projection performs no serial reads. [rows] is kept mutable: supersession
-     * flips the deleted flag in place so the projection and the final flush both see it.
+     * the per-doc projection performs no serial reads.
      */
     private class PreloadedRows(
-        val rows: HashMap<String, DocumentEntity>,
+        val rows: Map<String, DocumentEntity>,
         val tags: Map<String, List<String>>,
         val fields: Map<String, List<DocumentFieldEntity>>,
         /**
@@ -631,41 +630,20 @@ class Indexer(
     }
 
     /**
-     * Result of the relink-supersession pass: which docs were marked deleted/superseded, and, per
-     * resolved target, the older ids that relinked onto it (so their metadata carries over).
+     * Per resolved relink target, the older ids among [journalDocs] that relinked onto it, so their
+     * metadata carries over. Those older documents are superseded: [FoldPass.lifecycle] keeps them
+     * deleted.
      */
-    private class Supersession(
-        val superseded: Set<String>,
-        val predecessors: Map<String, List<String>>,
-    )
-
-    /**
-     * Mark old docs deleted where a winning relink resolves to a different, known id, and record
-     * predecessors so metadata carries onto the resolved target. Superseded rows are updated in
-     * [rowsByDocId] and recorded in [changes] so the deletion flushes with the rest of the fold.
-     */
-    private fun resolveSupersessions(
+    private fun predecessors(
         state: FoldedState,
         journalDocs: Set<String>,
-        rowsByDocId: HashMap<String, DocumentEntity>,
-        changes: ProjectionChanges,
-    ): Supersession {
-        val superseded = HashSet<String>()
+    ): Map<String, List<String>> {
         val predecessors = HashMap<String, MutableList<String>>() // target -> old docs resolving here
         for (doc in journalDocs) {
             val resolved = state.resolveDocId(doc)
-            if (resolved != doc) {
-                predecessors.getOrPut(resolved) { ArrayList() }.add(doc)
-                val oldRow = rowsByDocId[doc]
-                if (oldRow != null && !oldRow.deleted) {
-                    val deletedRow = oldRow.copy(deleted = true)
-                    rowsByDocId[doc] = deletedRow
-                    changes.docRows.add(deletedRow)
-                    superseded.add(doc)
-                }
-            }
+            if (resolved != doc) predecessors.getOrPut(resolved) { ArrayList() }.add(doc)
         }
-        return Supersession(superseded, predecessors)
+        return predecessors
     }
 
     /** The trash/delete lifecycle for a doc, after applying the file-resurrection preference. */
@@ -680,13 +658,13 @@ class Indexer(
 
     /**
      * One [applyFold] pass over its documents: what it projects them from (the folded [state], the
-     * [preloaded] rows, the [supersession]) and where it leaves what it projected: [changes] for the
-     * database, [work] for the path work after the transaction, [resurrected] for the caller.
+     * [preloaded] rows, the relink [predecessors]) and where it leaves what it projected: [changes]
+     * for the database, [work] for the path work after the transaction, [resurrected] for the caller.
      */
     private inner class FoldPass(
         private val state: FoldedState,
         private val scope: FoldScope,
-        private val supersession: Supersession,
+        private val predecessors: Map<String, List<String>>,
         private val preloaded: PreloadedRows,
         private val changes: ProjectionChanges,
         private val work: DocumentPathReconciler.PathWork,
@@ -707,7 +685,7 @@ class Indexer(
             row: DocumentEntity,
         ) {
             // Predecessors (older ids that relinked onto this doc): their metadata carries over.
-            val preds = supersession.predecessors[doc].orEmpty()
+            val preds = predecessors[doc].orEmpty()
 
             val effTags = tags(doc, preds)
             val fields = fields(doc, preds)
@@ -806,14 +784,15 @@ class Indexer(
             doc: String,
             row: DocumentEntity,
         ): Lifecycle {
-            val superseded = doc in supersession.superseded
+            // Relinked onto another id: deleted for good, on every fold, whatever its own events say.
+            val superseded = state.resolveDocId(doc) != doc
             val journalDeleted = state.isDeleted(doc) || superseded
             val journalTrashed = state.isTrashed(doc)
             val origPath = state.trashOrigPath(doc)
             val preserved = scope is FoldScope.Events && doc in scope.preserveLifecycleDocs
 
             var trashed = if (preserved) row.trashed else journalTrashed
-            var deleted = if (preserved) row.deleted else journalDeleted
+            var deleted = if (preserved) row.deleted || superseded else journalDeleted
             var missing = row.missing
             var relPath = row.relPath
             var fileName = row.fileName

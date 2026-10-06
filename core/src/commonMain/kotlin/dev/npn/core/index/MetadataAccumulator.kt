@@ -508,7 +508,7 @@ class MetadataAccumulator(
          * Not needed for changes that only affect ingestion/validation, or for Room schema changes
          * that already drop the affected tables.
          */
-        const val PROJECTION_VERSION = 8
+        const val PROJECTION_VERSION = 9
         private const val STAGING_MAX_AGE_MS = 60L * 60L * 1000L
     }
 }
