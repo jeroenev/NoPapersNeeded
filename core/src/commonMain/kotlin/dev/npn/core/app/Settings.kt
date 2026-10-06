@@ -84,10 +84,8 @@ fun SettingsSnapshot.toAiConfig(systemLanguage: String? = null): AiConfig =
  * journal ([StoragePathFacade], [AutoMatchRuleRepository]), which every device reads the same.
  *
  * The seam is deliberately narrow: one [settings] snapshot flow to read and one [edit] mutation
- * to write. It used to be 27 members — a snapshot flow plus 26 one-line setters — so the interface
- * *was* the storage schema and every new setting cost five edits (contract, both platform impls,
- * the fake, the viewmodel). Now a new setting is one field on [SettingsSnapshot] and one line in
- * [SettingsCodec]; nothing changes here.
+ * to write, so the interface is not the storage schema: a new setting is one field on
+ * [SettingsSnapshot] and one line in [SettingsCodec], and nothing changes here.
  *
  * Clamping, defaults and key mapping are NOT caller discipline: they live inside the
  * implementations (via the shared [SettingsCodec]), which normalise every snapshot before it is

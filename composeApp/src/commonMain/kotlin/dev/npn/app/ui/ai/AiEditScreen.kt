@@ -160,8 +160,8 @@ internal fun LeaveGuard(
  *
  * Reports documents *completed*, not the one being worked on: the run is concurrent
  * ([dev.npn.core.app.AiEditRun]), so there is no single current document, and the title the run
- * reports is the one that finished last. The count used to be `done + 1` to read as "working on
- * number N", which meant a finished batch of twelve claimed "13 of 12".
+ * reports is the one that finished last. (Counting `done + 1` as "working on number N" would claim
+ * "13 of 12" for a finished batch of twelve.)
  */
 @Composable
 private fun SuggestingPhase(

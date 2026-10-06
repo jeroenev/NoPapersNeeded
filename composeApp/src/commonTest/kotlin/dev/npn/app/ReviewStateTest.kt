@@ -9,8 +9,8 @@ import io.kotest.matchers.shouldBe
 import kotlin.test.Test
 
 /**
- * Pure tests for the single reviewed-state rule that used to be re-encoded at three call sites: the
- * "stored marker is authoritative only in INBOX_WORKFLOW; otherwise reviewed == has tags" rule.
+ * Pure tests for the one reviewed-state rule every screen shares: the stored marker is
+ * authoritative only in INBOX_WORKFLOW; otherwise reviewed == has tags.
  */
 class ReviewStateTest {
     private fun item(

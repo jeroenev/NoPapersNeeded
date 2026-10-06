@@ -57,10 +57,9 @@ private const val CLAUSE_SEPARATOR = ", "
 /**
  * The standing answer to "what happens if I press this", pinned below the setup form.
  *
- * Start used to sit at the end of a long scrolling form, which on a phone meant configuring a run
- * and then scrolling past everything to find the button — and, worse, that the count the decision
- * rests on was somewhere else entirely. The bar keeps the scope, the requested changes, the price
- * in model calls and the action in one place that never scrolls away.
+ * It keeps the scope, the requested changes, the price in model calls and the Start button in one
+ * place that never scrolls away, so on a phone the decision and the count it rests on are never
+ * at opposite ends of a long form.
  */
 @Composable
 internal fun RunBar(

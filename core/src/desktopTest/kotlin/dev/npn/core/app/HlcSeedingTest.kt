@@ -15,12 +15,11 @@ import kotlin.test.Test
 /**
  * Regression tests for HLC clock seeding ([dev.npn.core.journal.ContentAddressedJournalWriter.observeHlc]).
  *
- * The clock starts at zero on every session open and used to be driven by the raw wall clock
- * only. Whenever the wall clock was behind HLCs already in the journal (restart after a clock
- * correction, or a peer device with a faster clock), every LWW write — prop/field set AND
- * clear — silently lost to the stale on-disk winner: edits "didn't stick", deletes "came back",
- * re-added values "disappeared again". The coordinator now merges the fold's max HLC into the
- * writer's clock after every refold, so new events always order after everything already seen.
+ * The clock starts at zero on every session open. Driven by the wall clock alone, it would lose
+ * every LWW write (prop/field set AND clear) to the stale on-disk winner whenever the wall clock
+ * is behind HLCs already in the journal (a restart after a clock correction, or a peer device
+ * with a faster clock). The coordinator merges the fold's max HLC into the writer's clock after
+ * every refold, so new events always order after everything already seen.
  */
 class HlcSeedingTest {
     @Test

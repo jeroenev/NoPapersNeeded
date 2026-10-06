@@ -100,55 +100,36 @@ interface AiEditQueueFacade {
 /**
  * Bulk AI edits the user handed to the background, run as a persisted queue.
  *
- * ## Why a queue
- *
- * The suggestion phase of an Edit Run is one model call per document, and a run over a few hundred
- * documents takes long enough that holding a screen open for it is the wrong shape. Queueing turns
- * it into work the app owes: the run survives leaving the page, the endpoint being down, the
- * network being off and the process being killed, and its answers wait on the processing queue
- * until the user opens them.
- *
- * The result is *not* applied unattended. This queue only buys the expensive half — the model calls
- * — and stores each answer verbatim; the Review, its pre-select policy and every write still go
- * through the same human confirmation as an interactive run. That is the whole difference between
- * this and [AiAutoEnricher], which is allowed to write because its policy is fixed and
- * conservative.
+ * An Edit Run costs one model call per document, too long to hold a screen open for. Queued, it is
+ * work the app owes: it survives leaving the page, an endpoint outage and a killed process, and
+ * its answers wait on the processing queue until the user opens them. Only the model calls happen
+ * here, each answer stored verbatim; the Review and every write still go through the same human
+ * confirmation as an interactive run. (That is the difference from [AiAutoEnricher], which may
+ * write because its policy is fixed and conservative.)
  *
  * ## Failure: systemic versus per-document
  *
  * [processNext] works one chunk of documents per step, as many as [SuggestionRunner] asks about at
- * once. What it does about failure depends on how much of the chunk failed, because the two causes
- * want opposite treatment:
+ * once, and treats failure by how much of the chunk failed:
  *
- * - **Part of the chunk failed** — the endpoint is clearly alive, so this is about those documents.
- *   They carry the attempt, and at [MAX_DOC_ATTEMPTS] they are given up on and reported as
- *   failures. Without that cap one document the endpoint always rejects would keep a finished run
- *   from ever becoming reviewable.
- * - **The whole chunk failed** — overwhelmingly an endpoint down, no network, bad credentials.
- *   Nothing is held against the documents (charging them attempts would let one afternoon of
- *   airplane mode silently destroy a run the user is waiting on); the *job* backs off exponentially
- *   and the endpoint goes on its cooldown ([EndpointHealth]), which caps an outage at one chunk a
- *   minute however many runs are queued, and holds automatic enrichment back as well.
+ * - **Part of the chunk failed**: the endpoint is alive, so the failed documents carry the attempt
+ *   and are given up on at [MAX_DOC_ATTEMPTS], so one document the endpoint always rejects cannot
+ *   keep a run from ever becoming reviewable.
+ * - **The whole chunk failed**: most likely an outage (endpoint down, no network, bad
+ *   credentials). The documents are not charged; the *job* backs off and the endpoint goes on its
+ *   shared cooldown ([EndpointHealth]), which also holds automatic enrichment back.
  *
- * That second rule cannot hold forever, because "the whole chunk failed" stops being evidence of
- * anything once the chunk is one document: the last poison document of a run is always alone in
- * its chunk, and a run whose documents are never charged is a run that never becomes reviewable.
- * So the systemic reading is a *budget*: for [MAX_JOB_ATTEMPTS] backed-off retries a total failure
- * is read as an outage and costs the documents nothing, and after that it is charged like any
- * other failure. With the shared backoff ramp that buys roughly half an hour of downtime for free
- * and still clears a permanently-rejected document within a few hours.
+ * A one-document chunk that always fails would never be charged under the second rule, so the
+ * systemic reading is a budget: [MAX_JOB_ATTEMPTS] backed-off retries (about half an hour on the
+ * shared ramp) cost the documents nothing, and after that a total failure is charged like any
+ * other. A chunk that made any progress clears the job's backoff and its budget.
  *
- * A chunk that made any progress clears the job's backoff *and* its budget, so a run recovers on
- * its next kick rather than serving out a delay earned while the network was down.
- *
- * The drain steps are single-flight ([dev.npn.core.work.QueueDrainer]), but nothing holds a run
- * while its model calls are out: a step writes its results back only if the run still exists
+ * The drain is single-flight ([dev.npn.core.work.QueueDrainer]), but nothing holds a run while its
+ * model calls are out: a step writes back only if the run still exists
  * ([AiEditJobDao.writeBackIfPresent]), so a discard lands at once and stays.
  *
- * ## Triggering
- *
- * Queueing a run asks for its drain through [onEnqueued], so a queued run never waits for the
- * periodic tick, whoever holds the queue. The queue writes run through [ownWrite].
+ * Queueing a run asks for its drain through [onEnqueued], so it never waits for the periodic tick.
+ * The queue's writes run through [ownWrite].
  */
 class AiEditQueue(
     private val dao: AiEditJobDao,

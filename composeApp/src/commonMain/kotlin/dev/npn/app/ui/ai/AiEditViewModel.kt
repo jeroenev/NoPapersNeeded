@@ -264,7 +264,7 @@ internal fun Iterable<String>.inRegistryOrder(fields: List<FieldDef>): List<Stri
     return sortedBy { key -> order.indexOf(key).takeIf { it >= 0 } ?: Int.MAX_VALUE }
 }
 
-/** True when the run asks about more fields than one reply can sensibly carry (see P11 in the plan). */
+/** True when the run asks about more fields than one reply can sensibly carry ([AiEditRequest.MAX_FIELDS_PER_RUN]). */
 val AiEditUiState.tooManyFields: Boolean
     get() = fieldOptions.count { it.value.enabled } > AiEditRequest.MAX_FIELDS_PER_RUN
 

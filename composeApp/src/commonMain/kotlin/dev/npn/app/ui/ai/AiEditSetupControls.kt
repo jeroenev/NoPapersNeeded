@@ -78,9 +78,9 @@ internal fun ScopeOption(
  * One autofill field: an enable checkbox and, once enabled, what it may do to a value that is
  * already there.
  *
- * The mode used to be a switch labelled "Overwrite", which asked the user to infer what "off"
- * meant. Naming both outcomes ("Fill empty values only" / "Replace existing values too") is the
- * whole point, and it is also the one control on this page that can silently replace data.
+ * The mode names both outcomes ("Fill empty values only" / "Replace existing values too") rather
+ * than offering an "Overwrite" switch whose "off" the user would have to infer: it is the one
+ * control on this page that can silently replace data.
  */
 @Composable
 internal fun FieldOption(

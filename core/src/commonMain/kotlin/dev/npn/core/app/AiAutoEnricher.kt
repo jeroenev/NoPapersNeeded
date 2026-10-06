@@ -20,48 +20,31 @@ import dev.npn.core.work.QueueRetryPolicy
 /**
  * Unattended AI enrichment of documents whose OCR text was just indexed, run as a persisted queue.
  *
- * This is the no-review counterpart of [AiEditRun]: there is no human in the loop, so the policy is
- * deliberately conservative and fixed rather than user-tunable.
+ * The no-review counterpart of [AiEditRun]: with no human in the loop, the policy is conservative
+ * and fixed rather than user-tunable.
  *
- * - **Tags**: additions are restricted to the library's existing vocabulary
- *   ([AiEditRequest.maxNewTags] `= 0`, plus a defensive filter here) — the automation organizes
- *   documents into the taxonomy the user already built, it never invents one. A document the model
- *   finds no existing tag for is simply left untagged.
- * - **Tag removals** are not requested: the pass is purely additive. Nothing here is reviewed, and
- *   the deterministic auto-match rules run immediately before it, so a removal would let the model
- *   silently undo a rule — or a tag the user added while the document sat in the queue. Correcting
- *   tags is the reviewed [AiEditRun]'s job, where each removal is opt-in.
- * - **Fields** (every registry field marked aiEnabled) use [AiFieldMode.UNFILLED]: only empty fields
- *   are filled, so an automatic pass can never overwrite a value a human entered. Tags and fields
- *   are independent — fields are written even when no vocabulary tag matched.
+ * - **Tags**: additions only from the library's existing vocabulary ([AiEditRequest.maxNewTags]
+ *   `= 0`, plus a defensive filter here); a document no existing tag fits stays untagged.
+ * - **Tag removals** are never requested. The auto-match rules run just before this pass, and a
+ *   removal could silently undo a rule or a tag the user added meanwhile; correcting tags is the
+ *   reviewed [AiEditRun]'s job.
+ * - **Fields** (every registry field marked aiEnabled) use [AiFieldMode.UNFILLED], so a value a
+ *   human entered is never overwritten. Fields are written even when no tag matched.
  *
- * Everything comes from ONE [AiSuggest.suggestEdits] call per document, and all writes go through
- * [MetadataWriter] (i.e. the journal), never straight to the index.
+ * Everything comes from ONE [AiSuggest.suggestEdits] call per document, and every write goes
+ * through [MetadataWriter] (the journal).
  *
- * ## Why a queue
+ * [enqueue] runs on the OCR pipeline's drain and only writes a row; the model call happens later on
+ * the [dev.npn.core.work.QueueDrainer] (kicked through [onEnqueued]), so OCR never waits on the
+ * network, and the persisted row survives an outage or a killed process until a later kick.
  *
- * [enqueue] runs on the OCR pipeline's drain thread and does nothing but local DB work; the model
- * call happens later on the [dev.npn.core.work.QueueDrainer], so OCR of the remaining import is
- * never stalled behind the network. Queueing a document kicks that drain through [onEnqueued].
- * Because the intent to enrich is persisted, work also survives the endpoint being down, the
- * network being off and the process being killed mid-import: the row stays and the next drain kick
- * (new work, a rescan, or the periodic maintenance tick) picks it up.
- *
- * ## Completion and retries
- *
- * A successful pass stamps [AiEnrichQueueDao.markEnriched] and deletes the row — the stamp, not the
- * queue, is what stops a later re-OCR of the same document (an upgrade run under a better engine)
- * from re-spending the user's quota. Both live in the device database, keyed by hash, so a rebuilt
- * index forgets neither. A failed call backs off along the shared [QueueRetryPolicy] ramp up to a
- * daily ceiling and is retried indefinitely; the feature being off or the endpoint unconfigured is
- * not a failure at all, since the drain simply does not run.
- *
- * Nothing here gives up on a document. An attempt cap would have to be a bet on *why* the call
- * failed, and the likely reasons — endpoint down, device offline, misconfigured URL — are ones that
- * outlive any cap worth having and then resolve: an afternoon of airplane mode would silently cost
- * every document queued in it, permanently and invisibly. Retrying forever instead makes the worst
- * case a document whose content the endpoint always rejects, which costs one call a day and stops
- * the moment the user trashes it or a manual AI edit stamps it.
+ * A successful pass stamps [AiEnrichQueueDao.markEnriched] and deletes the row. The stamp is what
+ * stops a later re-OCR of the document from spending again; both live in the device database,
+ * keyed by hash, so a rebuilt index forgets neither. A failed call backs off along the shared
+ * [QueueRetryPolicy] ramp up to a daily ceiling and is retried for ever: an attempt cap would bet
+ * on *why* calls fail, and an afternoon offline would then silently and permanently cost every
+ * document queued in it. The worst case is one call a day for a document the endpoint always
+ * rejects, until it is trashed or a manual AI edit stamps it.
  */
 class AiAutoEnricher(
     private val documentDao: DocumentDao,
@@ -81,20 +64,15 @@ class AiAutoEnricher(
 
     /**
      * Record that [docId] is owed an enrichment pass. Called from the OCR pipeline's
-     * [dev.npn.core.ocr.OcrPipeline.onOcrProduced] hook, so this must stay local-only work — never
-     * a model call.
+     * [dev.npn.core.ocr.OcrPipeline.onOcrProduced] hook, so this must stay local work, never a
+     * model call.
      *
-     * Enqueueing (not the drain) is where the [UnattendedAiPolicy] is honoured: a document OCR'd
-     * while the policy said no is never queued, so allowing it later enriches new documents
-     * rather than retroactively spending on the whole library.
+     * The [UnattendedAiPolicy] is honoured here, not in the drain: a document OCR'd while the policy
+     * said no is never queued, so allowing it later does not spend on the whole library. An
+     * existing row is left as it is, so a re-OCR cannot restart a failing document's backoff.
      *
-     * An existing row is left exactly as it is. Repeat firings for the same document are still
-     * possible (a re-OCR under a better engine), and resetting the row on each one would let a
-     * document that always fails restart its backoff forever.
-     *
-     * A new row kicks the drain ([onEnqueued]) and returns true. The kick is deliberately tied to
-     * *this* call rather than to an observer of the queue table: a table observer cannot tell a new
-     * document from a failed one being rescheduled, and only the former should wake the drain.
+     * A new row kicks the drain ([onEnqueued]) and returns true. A table observer could not tell a
+     * new document from a failed one being rescheduled, which must not wake the drain.
      */
     suspend fun enqueue(docId: String): Boolean {
         if (!policy.autoEnrich()) return false
@@ -109,22 +87,15 @@ class AiAutoEnricher(
     /**
      * Process at most one queued document, returning whether the drain should continue.
      *
-     * Returns false — pausing the whole drain until the next kick — both when there is no due work
-     * and when a call failed. Stopping on failure is deliberate: the overwhelmingly likely cause is
-     * a systemic one (endpoint down, no network), and continuing would fire the entire backlog at a
-     * dead endpoint one document at a time.
+     * Returns false, pausing the drain until the next kick, when there is no due work and when a
+     * call failed: a failure is most likely systemic (endpoint down, no network), and the backlog
+     * must not be fired at a dead endpoint. Since each newly OCR'd document kicks a fresh drain and
+     * [AiEnrichQueueDao.nextDue] hands out never-tried rows first, a failure also puts the endpoint
+     * on its shared cooldown ([EndpointHealth]), capping an outage at one call a minute.
      *
-     * Stopping the drain is not enough on its own, because each newly OCR'd document kicks a fresh
-     * one and [AiEnrichQueueDao.nextDue] hands out never-tried rows first: importing a folder
-     * against a dead endpoint would spend one failed call per document anyway. So a failure also
-     * puts the endpoint on its cooldown ([EndpointHealth]), which caps a systemic outage at one
-     * call a minute however fast documents arrive, here and on every other queue that calls it.
-     *
-     * The write, the stamp and the row delete are three steps across two stores (journal, device
-     * database) and cannot be made atomic. Dying between them costs one repeat call on the next drain, whose
-     * suggestion then lands on already-filled fields and already-present tags and so changes
-     * nothing. That is deliberately the direction to fail in: stamping first would make the same
-     * crash lose the enrichment outright, with nothing left to say it was owed.
+     * The write, the stamp and the row delete span two stores (journal, device database) and cannot
+     * be atomic. Dying between them costs one repeat call whose suggestion changes nothing, since
+     * the fields are filled and the tags present; stamping first would lose the enrichment outright.
      */
     suspend fun processNext(): Boolean {
         if (!policy.autoEnrich()) return false
@@ -186,19 +157,14 @@ class AiAutoEnricher(
     }
 
     /**
-     * Write what this unattended pass may of one suggestion, as ONE [MetadataWriter.applyEdits]:
-     * this document's vocabulary tags AND its fields in one journal transaction. That gives both
-     * things this pass depends on: the file is renamed at most once (a template keyed on
-     * correspondent and date does not rename per field), and the commit is all-or-nothing, so a
-     * failed pass writes nothing and its retry re-asks the model about the state it was originally
-     * shown rather than a half-written one. A failure throws, with its own cause, into the
-     * [processNext] catch that drives the cooldown and backoff.
+     * Write what this unattended pass may of one suggestion, as ONE [MetadataWriter.applyEdits]
+     * (tags and fields in one journal transaction): the file is renamed at most once, and a failed
+     * pass writes nothing, so its retry asks about the state the model was first shown. A failure
+     * throws into [processNext], which drives the cooldown and backoff.
      *
-     * Belt and braces: the request already caps new tags at 0 and asks for no removals, but this
-     * path writes without review, so an out-of-contract facade must not be able to grow the
-     * vocabulary or take a tag off a document: new tags are dropped and removals never carried.
-     * Only the fields the model filled are written; absent means "the model had nothing", which
-     * must leave the document's value alone, not clear it.
+     * The request already asks for no new tags and no removals, but this path writes without
+     * review, so new tags are dropped and removals never carried here too. Only the fields the
+     * model filled are written; an absent one leaves the document's value alone.
      */
     private suspend fun write(
         docId: String,
@@ -219,8 +185,8 @@ class AiAutoEnricher(
      */
     private suspend fun request(): AiEditRequest =
         AiEditRequest(
-            // Registry order, capped (P11): an unattended pass must not grow the reply contract
-            // with every field the user marks for AI.
+            // Registry order, capped: an unattended pass must not grow the reply contract with
+            // every field the user marks for AI.
             fields =
                 fieldRegistry
                     .current()

@@ -72,7 +72,7 @@ class DocDetailViewModelTest : MainDispatcherTest() {
             model.ui.value.pageIndex shouldBe 2
         }
 
-    // Zoom/pan are no longer VM state; they live in the viewer's ViewerTransform (see
+    // Zoom/pan are not VM state; they live in the viewer's ViewerTransform (see
     // ViewerTransformTest for the zoom/pan math).
 
     @Test

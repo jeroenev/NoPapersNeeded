@@ -145,9 +145,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
     }
 
     /**
-     * A field the user defined as a date takes a date pattern like the seeded document date does.
-     * Judged against the seed types alone, Settings refused to enable a template the import path
-     * would have expanded.
+     * A field the user defined as a date takes a date pattern like the seeded document date does;
+     * judged against the seed types alone, Settings would refuse a template the import path expands.
      */
     @Test
     fun aDatePatternOnAUserDefinedDateFieldValidatesAndEnables() =
