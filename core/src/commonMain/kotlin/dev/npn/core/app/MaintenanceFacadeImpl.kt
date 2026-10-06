@@ -64,8 +64,10 @@ internal class MaintenanceFacadeImpl(
         var finished = false
         try {
             // Trash last, so a failure anywhere leaves the original untouched; the parts are then
-            // taken back. Metadata already copied onto them stays in the journal under their
-            // hashes, harmless: a retry makes the same parts and copies the same metadata.
+            // taken back, from wherever the storage-path rules moved them. Metadata already copied
+            // onto them, and the paths the rules chose, stay in the journal under their hashes,
+            // harmless: only a file in the library makes a row, and a retry makes the same parts
+            // and copies the same metadata.
             runCatchingCancellable {
                 copyMetadataToParts(docId, partIds)
                 writer.trashDoc(docId)

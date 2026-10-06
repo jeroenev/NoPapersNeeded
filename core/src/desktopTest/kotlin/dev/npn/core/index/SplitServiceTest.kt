@@ -63,6 +63,16 @@ class SplitServiceTest {
             .filter { !it.isDirectory }
             .map { it.relPath }
 
+    /** Move [part]'s file and row to [target], as a storage-path rule settling its metadata does. */
+    private suspend fun IndexRig.movePart(
+        part: ImportResult.Imported,
+        target: String,
+    ) {
+        moveFile(part.relPath, target)
+        val meta = checkNotNull(fs.stat(target))
+        db.documentDao().relocate(part.docId, target, meta.name, meta.size, meta.mtimeMillis)
+    }
+
     @Test
     fun aFailedLaterPartTakesBackTheOnesAlreadyImported() =
         runTest {
@@ -101,6 +111,48 @@ class SplitServiceTest {
                 .documentDao()
                 .getAllLive()
                 .map { it.docId } shouldContainExactlyInAnyOrder parts.map { it.docId } + original.docId
+        }
+
+    /**
+     * A part that metadata moved after the split (a storage-path rule) is taken back from where it
+     * is now; the file another import put at the name it left is not touched.
+     */
+    @Test
+    fun aRollBackFollowsAMovedPartAndSparesTheFileAtItsOldName() =
+        runTest {
+            val original = stageOriginal()
+            val split = SplitService(rig.fs, PdfBoxEngine(), rig.importService, rig.db.documentDao())
+            val result = split.split(original.docId, listOf(0..0, 1..1))
+            val parts = result.shouldBeInstanceOf<SplitService.Result.Done>().parts
+            val first = parts[0] as ImportResult.Imported
+            rig.movePart(first, "acme/contract (part 1).pdf")
+            rig.writePdf(first.relPath, "another document")
+
+            split.rollBack(parts)
+
+            libraryPdfs() shouldContainExactlyInAnyOrder listOf("contract.pdf", first.relPath)
+            rig.db
+                .documentDao()
+                .getAllLive()
+                .map { it.docId } shouldBe listOf(original.docId)
+        }
+
+    /** Taking a part back never deletes bytes that are not the part's, wherever its row points. */
+    @Test
+    fun aRollBackKeepsAFileThatNoLongerHoldsThePart() =
+        runTest {
+            val original = stageOriginal()
+            val split = SplitService(rig.fs, PdfBoxEngine(), rig.importService, rig.db.documentDao())
+            val result = split.split(original.docId, listOf(0..0, 1..1))
+            val parts = result.shouldBeInstanceOf<SplitService.Result.Done>().parts
+            val first = parts[0] as ImportResult.Imported
+            rig.deleteFile(first.relPath)
+            rig.writePdf(first.relPath, "replaced in place")
+
+            split.rollBack(parts)
+
+            libraryPdfs() shouldContainExactlyInAnyOrder listOf("contract.pdf", first.relPath)
+            rig.db.documentDao().getByDocId(first.docId) shouldBe null
         }
 
     @Test

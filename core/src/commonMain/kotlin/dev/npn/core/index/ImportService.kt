@@ -119,20 +119,29 @@ class ImportService(
 
     /**
      * Take back an import this service just made, for a caller whose larger operation failed after
-     * it: a split whose later part could not be made. An import writes no journal event beyond the
-     * restore of bytes the journal had hidden, so taking it back is removing the file and its rows,
-     * not a trash or a tombstone; a tombstone would hide the same bytes when the caller retries and
-     * makes the same part again. Leaves alone a document that no longer sits where the import put
-     * it.
+     * it: a split whose later part could not be made, or whose original could not be trashed. An
+     * import writes no journal event beyond the restore of bytes the journal had hidden, so taking
+     * it back is removing the file and its rows, not a trash or a tombstone; a tombstone would hide
+     * the same bytes when the caller retries and makes the same part again.
+     *
+     * Follows the document, not the path the import chose: metadata the caller wrote meanwhile can
+     * have moved it (a storage-path rule), and another file can have taken the name it left. Only
+     * the document's own bytes are deleted, and a document since trashed or deleted is left alone.
      */
     suspend fun undoImport(imported: ImportResult.Imported) =
         serialize {
-            val row = documentDao.getByDocId(imported.docId)?.takeIf { it.relPath == imported.relPath }
-            if (row == null || row.deleted || row.trashed) return@serialize
-            if (fs.exists(imported.relPath)) fs.delete(imported.relPath)
-            documentDao.delete(imported.docId)
+            val row = documentDao.getByDocId(imported.docId) ?: return@serialize
+            if (row.deleted || row.trashed) return@serialize
+            if (holds(row.relPath, imported.docId)) fs.delete(row.relPath)
+            documentDao.forget(imported.docId)
             ocrQueueDao.delete(imported.docId)
         }
+
+    /** Whether [relPath] is a file holding [docId]'s bytes; a missing document's row names none. */
+    private suspend fun holds(
+        relPath: String,
+        docId: String,
+    ): Boolean = fs.stat(relPath)?.isDirectory == false && fs.sha256(relPath) == docId
 
     private suspend fun place(
         tmpPath: String,

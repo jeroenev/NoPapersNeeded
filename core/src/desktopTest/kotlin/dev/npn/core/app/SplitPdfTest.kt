@@ -1,11 +1,19 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.FieldKeyCount
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
 import kotlin.test.Test
 
 class SplitPdfTest {
@@ -48,6 +56,35 @@ class SplitPdfTest {
                         .observeTrashed()
                         .first()
                 trashed.map { it.doc.docId } shouldBe listOf(imported.docId)
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * A split whose original cannot be trashed takes its parts back from wherever the storage-path
+     * rule moved them once the metadata reached them, and a rescan finds nothing to bring back.
+     */
+    @Test
+    fun aFailedSplitTakesBackThePartsTheStoragePathRuleMoved() =
+        runTest {
+            val rule = StoragePathRule("{correspondent}/{title}.pdf", enabled = true)
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
+            try {
+                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("moved pages"), "contract.pdf")
+                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+                rig.session.meta.addTag(listOf(imported.docId), "invoice")
+                rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
+                val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
+                original.relPath shouldBe "acme/contract.pdf"
+                rig.blockTrash()
+
+                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
+                    SplitOutcome.Failed(SplitFailure.NOT_COMPLETED)
+
+                rig.shouldHoldOnly(original)
+                rig.session.rescan()
+                rig.shouldHoldOnly(original)
             } finally {
                 rig.close()
             }
@@ -115,4 +152,26 @@ class SplitPdfTest {
                 rig.close()
             }
         }
+}
+
+/** Make every move into the trash fail, as a refused SAF move would: the trash folder is a file. */
+private fun AppSessionRig.blockTrash() {
+    val trash = libRoot.resolve(NpnPaths.TRASH_DIR)
+    trash.toFile().deleteRecursively()
+    Files.createDirectories(trash.parent)
+    Files.write(trash, byteArrayOf(1))
+}
+
+/**
+ * The library holds [original] as it was and nothing of a part: no row, no tag or field row, no
+ * search entry (a part's file name has the word "part"), no file.
+ */
+private suspend fun AppSessionRig.shouldHoldOnly(original: DocumentEntity) {
+    db.documentDao().getByDocId(original.docId) shouldBe original
+    db.documentDao().allPathsAndMeta().map { it.docId } shouldContainExactly listOf(original.docId)
+    db.tagDao().docIdsWithTag("invoice") shouldContainExactly listOf(original.docId)
+    db.documentFieldDao().observeKeysWithCounts().first() shouldContainExactly
+        listOf(FieldKeyCount(FieldKeys.CORRESPONDENT, 1))
+    db.ftsDao().search("part").shouldBeEmpty()
+    fs.listAllIndexable().filterNot { it.isDirectory }.map { it.relPath } shouldContainExactly listOf(original.relPath)
 }
