@@ -29,9 +29,9 @@ import kotlinx.serialization.json.jsonObject
  *
  * A chunk with no `choices` cannot produce a [ai.koog.prompt.streaming.StreamFrame] (Koog skips
  * it), so it decodes to a well-formed empty-choices response instead, and so does any chunk that
- * fails the strict decode. The override uses only Koog's multiplatform API (`decodeStreamingResponse`
- * is `protected` in Koog 1.1.1); Koog's own `Json` is module-internal, so a lenient one reads the
- * `choices` field.
+ * fails the strict decode. The override uses only Koog's multiplatform API
+ * (`decodeStreamingResponse` is `protected` in Koog 1.1.1); Koog's own `Json` is module-internal,
+ * so a lenient one reads the `choices` field.
  */
 internal class TolerantOpenAILLMClient(
     apiKey: String,
