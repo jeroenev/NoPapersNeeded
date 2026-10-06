@@ -251,23 +251,33 @@ class MetadataWriterImpl(
         val doc = documentDao.getByDocId(docId) ?: return
         if (!doc.trashed) return
         val target = doc.trashedOrigPath ?: doc.relPath
+        // A file moved out of the trash with no doc-restore event leaves the document trashed with
+        // its trash entry gone, so refuse before the move, as trashDoc does.
+        coordinator.checkWritable()
         // The file lives in trash under a hash-suffixed name; find it and move it back (uniquify
         // via TrashOps.restore if the target is taken).
-        val finalPath = restoreFromTrash(docId, target) ?: target
-        coordinator.commitWithOptimisticLifecycle(
-            ops = listOf(PendingOp.docRestore(docId), PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath)),
-            lifecycleDocs = setOf(docId),
-        ) {
-            documentDao.upsert(
-                doc.copy(
-                    trashed = false,
-                    trashedOrigPath = null,
-                    trashedAt = null,
-                    relPath = finalPath,
-                    fileName = NpnPaths.fileName(finalPath),
-                    missing = false,
-                ),
-            )
+        val entry = findTrashEntry(docId)
+        val finalPath = entry?.let { trashOps.restore(it, target) } ?: target
+        var committed = false
+        try {
+            coordinator.commitWithOptimisticLifecycle(
+                ops = listOf(PendingOp.docRestore(docId), PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath)),
+                lifecycleDocs = setOf(docId),
+            ) {
+                documentDao.upsert(
+                    doc.copy(
+                        trashed = false,
+                        trashedOrigPath = null,
+                        trashedAt = null,
+                        relPath = finalPath,
+                        fileName = NpnPaths.fileName(finalPath),
+                        missing = false,
+                    ),
+                )
+            }
+            committed = true
+        } finally {
+            if (!committed && entry != null) moveBack(finalPath, entry)
         }
     }
 
@@ -330,14 +340,6 @@ class MetadataWriterImpl(
     private suspend fun findTrashEntry(docId: String): String? {
         val marker = "__${docId.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}"
         return trashOps.listTrash().firstOrNull { it.name.contains(marker) }?.relPath
-    }
-
-    private suspend fun restoreFromTrash(
-        docId: String,
-        toRelPath: String,
-    ): String? {
-        val entry = findTrashEntry(docId) ?: return null
-        return trashOps.restore(entry, toRelPath)
     }
 }
 

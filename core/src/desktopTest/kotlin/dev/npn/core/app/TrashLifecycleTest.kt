@@ -1,8 +1,16 @@
 package dev.npn.core.app
 
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.TrashOps
+import dev.npn.core.fs.VerifiedPublicationFailedException
+import dev.npn.core.index.IndexRig
 import dev.npn.core.index.MutableClock
+import dev.npn.core.journal.ContentAddressedJournalWriter
+import dev.npn.core.journal.HlcWatermarkAllocator
+import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfFixtures
+import dev.npn.core.util.NpnLog
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldHaveSize
@@ -189,6 +197,81 @@ class TrashLifecycleTest {
                 rig.close()
             }
         }
+
+    @Test
+    fun restoringWhileWritesAreBlockedLeavesThePdfInTheTrash() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+                blockMetadataWrites(rig)
+
+                assertFailsWith<IllegalStateException> { rig.session.docLifecycle.restoreDoc(id) }
+
+                rig.exists("a.pdf").shouldBeFalse()
+                trashEntries(rig.fs) shouldHaveSize 1
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)
+                    ?.trashed shouldBe true
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A restore whose commit fails after the move puts the PDF back, as a failed trash does. */
+    @Test
+    fun aRestoreWhoseCommitFailsPutsThePdfBackInTheTrash() =
+        runTest {
+            val rig = IndexRig.create()
+            try {
+                var failures = 0
+                val flaky =
+                    object : LibraryFileSystem by rig.fs {
+                        override suspend fun publishVerifiedObjectOnce(
+                            stagingPath: String,
+                            canonicalPath: String,
+                            expectedHash: String,
+                        ) {
+                            if (failures-- > 0) throw VerifiedPublicationFailedException("rename failed")
+                            rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
+                        }
+                    }
+                val coordinator =
+                    JournalCoordinator(
+                        ContentAddressedJournalWriter(flaky, "test-installation", HlcWatermarkAllocator(rig.clock)),
+                        rig.indexer,
+                        rig.accumulator,
+                    )
+                val writer =
+                    MetadataWriterImpl(
+                        coordinator,
+                        rig.db,
+                        rig.fs,
+                        TrashOps(rig.fs),
+                        StoragePathRuleApplicator(rig.fs, rig.db, { null }, { _, _ -> }),
+                        NpnLog.None,
+                    )
+                rig.writePdf("a.pdf", "alpha")
+                coordinator.rescan()
+                val id = rig.fs.sha256("a.pdf")
+                writer.trashDoc(id)
+
+                failures = 1
+                assertFailsWith<VerifiedPublicationFailedException> { writer.restoreDoc(id) }
+
+                rig.exists("a.pdf").shouldBeFalse()
+                trashEntries(rig.fs) shouldHaveSize 1
+            } finally {
+                rig.close()
+            }
+        }
+
+    private suspend fun trashEntries(fs: LibraryFileSystem) =
+        fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }
 
     /** A journal store from a newer build makes the rescan refuse, which blocks metadata writes. */
     private suspend fun blockMetadataWrites(rig: AppSessionRig) {
