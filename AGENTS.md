@@ -128,6 +128,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `DeviceIdentity` gives a restored or cloned installation a fresh one (ARCHITECTURE.md,
   "Journal storage").
 - Document identity = SHA-256 of bytes; duplicates are forbidden (one canonical path per hash).
+  A path holds one row: a trashed, deleted or missing row gives it up to a live document
+  (`DocumentDao.upsertAll`). A hidden document is back only when the file at its path hashes to
+  it; something else at its old name, or a file still being written, is no evidence.
 - Merge semantics: OR-set for tags, HLC last-writer-wins for single-value fields, system
   properties, settings and field definitions, and for trash/restore and delete/undelete.
 - Document fields are registry data, not code. Title, correspondent, docType, docDate and notes

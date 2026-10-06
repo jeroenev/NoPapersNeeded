@@ -181,11 +181,12 @@ class Indexer(
                 if (moves.isNotEmpty()) onExternalMoves(moves)
             }
             val diskPaths = indexable.map { it.relPath }.toHashSet()
+            val contentAt = knownHashes(indexable, changed, byPath, hashes)
 
             // The reconcile writes and the fold land in one transaction, so no reader sees a row
             // before its tags and fields; the files their intents move wait until it commits.
             val recon =
-                documentPaths.deferring(known = knownHashes(indexable, changed, byPath, hashes)) {
+                documentPaths.deferring(known = contentAt) {
                     db.withWriteTransaction {
                         reconcile(toHash, hashes, dbProjection, diskPaths).also { recon ->
                             val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
@@ -195,7 +196,7 @@ class Indexer(
                             )
 
                             _scanState.value = IndexProgress(IndexProgress.Phase.FOLDING)
-                            recon.resurrected = applyFold(metadataState, FoldScope.FullRescan(diskPaths))
+                            recon.resurrected = applyFold(metadataState, FoldScope.FullRescan(contentAt))
                         }
                     }
                 }
@@ -399,11 +400,12 @@ class Indexer(
     /** Which documents one [applyFold] projects, and what else it takes into account. */
     private sealed interface FoldScope {
         /**
-         * A rescan's fold: every document, preferring a file the rescan found at [diskPaths] over a
-         * journal that hides its document (see [FoldPass.lifecycle]).
+         * A rescan's fold: every document, preferring a document's own bytes, found back in the
+         * library, over a journal that hides it (see [FoldPass.lifecycle]). [contentAt] is the
+         * content hash of every listed file the rescan knows, by path ([knownHashes]).
          */
         class FullRescan(
-            val diskPaths: Set<String>,
+            val contentAt: Map<String, String>,
         ) : FoldScope
 
         /**
@@ -503,9 +505,9 @@ class Indexer(
      *   doc row. reviewed/ocrEngineOverride come from the system props.
      * - Trash and delete: the trashed and deleted flags, trashedOrigPath and trashedAt come from the
      *   fold's lifecycle state. Resurrection, on a full rescan only: when the journal says trashed
-     *   or deleted but the file exists at its original or current path, the file wins (flags and
-     *   missing cleared) and the document is reported, so the caller can record a restore; until
-     *   one is recorded, any other fold hides it again (see [FoldPass.lifecycle]).
+     *   or deleted but the document's own bytes are back at its current or original path, the file
+     *   wins (flags and missing cleared) and the document is reported, so the caller can record a
+     *   restore; until one is recorded, any other fold hides it again (see [FoldPass.lifecycle]).
      * - Relinks: fold resolves old->new; the effective views are already keyed on ids. For a folded
      *   relink where both ids are known, the OLD doc is marked deleted/superseded and the NEW doc
      *   carries the metadata (fold exposes effective views on the resolved id).
@@ -689,6 +691,10 @@ class Indexer(
     ) {
         val resurrected = ArrayList<Resurrected>()
 
+        /** Which document's row holds each path, as the pass found them; a rescan's resurrection checks it. */
+        private val holders: Map<String, String> =
+            if (scope is FoldScope.FullRescan) preloaded.rows.values.associate { it.relPath to it.docId } else emptyMap()
+
         /**
          * Project one doc's tags, fields, props, lifecycle, row and FTS from the folded state. The
          * row goes to [work] as written, for the path work after the transaction: the fold itself
@@ -790,8 +796,8 @@ class Indexer(
 
         /**
          * Resolve the doc's trash/delete state. On a [FoldScope.FullRescan] the file is preferred:
-         * if the journal says trashed/deleted but the file exists at the original (or current)
-         * path, the flags are cleared and a [Resurrected] recorded. Docs an [FoldScope.Events] fold
+         * if the journal says trashed/deleted but the document's own bytes are back ([returnedPath]),
+         * the flags are cleared and a [Resurrected] recorded. Docs an [FoldScope.Events] fold
          * preserves keep their stored lifecycle.
          */
         private fun lifecycle(
@@ -810,25 +816,42 @@ class Indexer(
             var relPath = row.relPath
             var fileName = row.fileName
 
-            val diskPaths = (scope as? FoldScope.FullRescan)?.diskPaths
-            val origOnDisk = origPath?.takeIf { diskPaths != null && it in diskPaths }
-            val tombstonedFileExists =
-                (journalTrashed || journalDeleted) && (origOnDisk != null || diskPaths?.contains(relPath) == true)
-
-            if (tombstonedFileExists && !superseded) {
+            val contentAt = (scope as? FoldScope.FullRescan)?.contentAt
+            val backAt =
+                if (contentAt != null && (journalTrashed || journalDeleted) && !superseded) {
+                    returnedPath(doc, row, origPath, contentAt)
+                } else {
+                    null
+                }
+            if (backAt != null) {
                 // Resurrection: prefer the file. Clear trashed/deleted for the working view.
                 trashed = false
                 deleted = false
                 missing = false
-                if (origOnDisk != null) {
-                    relPath = origOnDisk
-                    fileName = NpnPaths.fileName(origOnDisk)
+                if (backAt != relPath) {
+                    relPath = backAt
+                    fileName = NpnPaths.fileName(backAt)
                 }
                 val hiddenAt = state.hiddenBy(doc)?.physicalMillis ?: 0L
                 resurrected.add(Resurrected(doc, relPath, wasDeleted = journalDeleted, hiddenAtMillis = hiddenAt))
             }
             return Lifecycle(trashed, deleted, missing, relPath, fileName, origPath)
         }
+
+        /**
+         * Where a hidden [doc]'s own bytes are back in the library: at its row's path, else at
+         * [origPath], the path it was trashed from, when no other row holds that. Only a file whose
+         * hash the rescan knows ([contentAt]) is evidence: another document's file at the path, or
+         * one still being written, says nothing about this one.
+         */
+        private fun returnedPath(
+            doc: String,
+            row: DocumentEntity,
+            origPath: String?,
+            contentAt: Map<String, String>,
+        ): String? =
+            row.relPath.takeIf { contentAt[it] == doc }
+                ?: origPath?.takeIf { contentAt[it] == doc && it !in holders }
     }
 
     private companion object {

@@ -6,6 +6,7 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldHaveSize
@@ -579,6 +580,58 @@ class IndexerTest {
             val row = rig.db.documentDao().getByDocId(docId)!!
             row.trashed.shouldBeFalse()
             row.missing.shouldBeFalse()
+        }
+
+    /** Only a document's own bytes bring it back: another file at its old path is another document. */
+    @Test
+    fun anotherFileAtATrashedDocumentsPathLeavesItInTheTrash() =
+        runTest {
+            rig.writePdf("inbox/scan.pdf", "alpha")
+            rig.rescan()
+            val trashed = hide("inbox/scan.pdf") { PendingOp.docTrash(it, "inbox/scan.pdf") }
+
+            rig.writePdf("inbox/scan.pdf", "bravo")
+            val resurrected = ArrayList<Resurrected>()
+            rig.rescan { resurrected += it }
+
+            resurrected.shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .rowAtPath("inbox/scan.pdf")
+                ?.docId shouldBe rig.fs.sha256("inbox/scan.pdf")
+            rig.db
+                .documentDao()
+                .getByDocId(trashed)
+                ?.trashed shouldBe true
+        }
+
+    @Test
+    fun anotherFileAtADeletedDocumentsPathLeavesItDeleted() =
+        runTest {
+            rig.writePdf("inbox/scan.pdf", "alpha")
+            rig.rescan()
+            val deleted = rig.fs.sha256("inbox/scan.pdf")
+            // A title, so every fold projects the deleted document.
+            rig.clock.advance()
+            rig.writer("dev-main").commit(listOf(PendingOp.fieldSet(deleted, FieldKeys.TITLE, "First scan")))
+            hide("inbox/scan.pdf") { PendingOp.docTrash(it, "inbox/scan.pdf") }
+            rig.clock.advance()
+            rig.writer("dev-main").commit(listOf(PendingOp.docDelete(deleted)))
+            rig.rescan()
+
+            rig.writePdf("inbox/scan.pdf", "bravo")
+            val resurrected = ArrayList<Resurrected>()
+            repeat(2) { rig.rescan { resurrected += it } }
+
+            resurrected.shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .rowAtPath("inbox/scan.pdf")
+                ?.docId shouldBe rig.fs.sha256("inbox/scan.pdf")
+            rig.db
+                .documentDao()
+                .getByDocId(deleted)
+                ?.deleted shouldBe true
         }
 }
 

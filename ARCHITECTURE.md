@@ -226,6 +226,10 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   (`JournalCoordinator.restoreReturned`), and a rescan that finds the file back in the library
   writes it once the event that hid the document is a day old (`RESTORE_SETTLE_MS`). Sooner, the
   file may be one a sync tool has not taken away yet, so the rescan shows it for that scan only.
+  The file wins only with the document's own bytes: the rescan must know the hash of the file at
+  the document's path, or at the path it was trashed from when no other row holds that, and the
+  hash must be the document's. Another file under the same name (a second `scan.pdf`) or a file
+  still being written brings nothing back.
   Builds from before `doc-undelete` ignore it and keep the document deleted until they update.
 
 ## Where to look for common tasks

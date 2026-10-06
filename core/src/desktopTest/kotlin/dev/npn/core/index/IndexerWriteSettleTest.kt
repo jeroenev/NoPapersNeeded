@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.journal.PendingOp
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
@@ -126,6 +127,34 @@ class IndexerWriteSettleTest {
             val edited = rig.rescan()
             edited.changed shouldBe 1
             docIdAt("a.pdf") shouldBe sha256Bytes("%PDF new, partly".encodeToByteArray())
+        }
+
+    /** A file at a trashed document's path counts as its return only once the rescan knows its hash. */
+    @Test
+    fun aTrashedDocumentWaitsForItsReturningFileToSettle() =
+        runTest {
+            write("a.pdf", "%PDF old %%EOF", mtime = T)
+            rig.clock.now = T + WriteSettle.TRAILER_GRACE_MILLIS
+            rig.rescan()
+            val trashed = docIdAt("a.pdf").shouldNotBeNull()
+            rig.writer().commit(listOf(PendingOp.docTrash(trashed, "a.pdf")))
+            rig.deleteFile("a.pdf")
+            rig.rescan()
+
+            write("a.pdf", "%PDF old %%EOF", mtime = rig.clock.now - 500)
+            val resurrected = ArrayList<Resurrected>()
+            val writing = rig.rescan { resurrected += it }
+
+            writing.deferred shouldContainExactly listOf("a.pdf")
+            resurrected.shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .getByDocId(trashed)
+                ?.trashed shouldBe true
+
+            rig.clock.now += WriteSettle.QUIET_MILLIS
+            rig.rescan { resurrected += it }
+            resurrected.map { it.docId } shouldContainExactly listOf(trashed)
         }
 
     @Test

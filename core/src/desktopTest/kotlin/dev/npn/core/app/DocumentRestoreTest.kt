@@ -1,9 +1,15 @@
 package dev.npn.core.app
 
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.journal.JournalOp
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -152,7 +158,95 @@ class DocumentRestoreTest {
             rig.session.rescan()
 
             rig.journalObjectCount() shouldBe objects
+            assertVisible(id)
         }
+
+    @Test
+    fun aTrashedFileBackRightAfterTheTrashIsShownButNotRestoredForGood() =
+        withRig {
+            val bytes = PdfFixtures.embeddedTextPdf("alpha")
+            rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+            val id = rig.docId("a.pdf")
+            rig.session.docLifecycle.trashDoc(id)
+            val objects = rig.journalObjectCount()
+
+            rig.writePdf("a.pdf", bytes)
+            rig.session.rescan()
+
+            rig.journalObjectCount() shouldBe objects
+            assertVisible(id)
+        }
+
+    /**
+     * Two scans imported under one name: the second lands where the trashed first one was. The
+     * file there is the second scan, which says nothing about the first.
+     */
+    @Test
+    fun aScanImportedWhereATrashedScanWasLeavesThatOneInTheTrash() =
+        withRig {
+            val first = importScan("first")
+            rig.session.meta.setField(first, FieldKeys.TITLE, "First scan")
+            rig.session.docLifecycle.trashDoc(first)
+            val second = importScan("second")
+
+            rig.session.rescan()
+
+            rig.db
+                .documentDao()
+                .getByDocId(second)
+                ?.relPath shouldBe SCAN_PATH
+            rig.db
+                .documentDao()
+                .getByDocId(first)
+                .shouldNotBeNull()
+                .trashed
+                .shouldBeTrue()
+            rig.session.meta.setField(second, FieldKeys.TITLE, "Second scan")
+            rig.session.rescan()
+            assertVisible(second)
+        }
+
+    /** Nor does it, long after the first was deleted for good, write the first one's return. */
+    @Test
+    fun aScanImportedLongAfterADeleteWhereTheDeletedScanWasLeavesItDeleted() =
+        withRig {
+            val first = importScan("first")
+            rig.session.meta.setField(first, FieldKeys.TITLE, "First scan")
+            rig.session.docLifecycle.trashDoc(first)
+            rig.session.docLifecycle.deleteDocPermanently(first)
+
+            rig.clock.advance(2 * DAY)
+            val second = importScan("second")
+            rig.session.rescan()
+            rig.session.rescan()
+
+            journalOps().filter { it.contains(JournalOp.DocUndelete.WIRE) || it.contains(JournalOp.DocRestore.WIRE) }
+                .shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .getByDocId(first)
+                .shouldNotBeNull()
+                .deleted
+                .shouldBeTrue()
+            assertVisible(second)
+        }
+
+    /** Import a scan of [text] as `scan.pdf`, the name every scan gets; returns its document id. */
+    private suspend fun importScan(text: String): String {
+        val bytes = PdfFixtures.embeddedTextPdf(text)
+        rig.session.ingest
+            .importPdfBytes(bytes, "scan.pdf")
+            .shouldBeInstanceOf<ImportOutcome.Imported>()
+        return sha256Bytes(bytes)
+    }
+
+    /** Every published journal object's text. */
+    private suspend fun journalOps(): List<String> =
+        rig.fs
+            .listAllUnder(NpnPaths.JOURNAL_DIR)
+            .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
+            .map { rig.fs.readBytes(it.relPath).decodeToString() }
 
     private suspend fun assertVisible(id: String) {
         val row =
@@ -170,5 +264,6 @@ class DocumentRestoreTest {
 
     private companion object {
         const val DAY = 24L * 60L * 60L * 1000L
+        const val SCAN_PATH = "inbox/scan.pdf"
     }
 }

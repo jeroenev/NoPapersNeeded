@@ -31,7 +31,7 @@ data class RelinkCandidate(
 )
 
 /**
- * A document whose journal state says trashed/deleted but whose file is in the library at
+ * A document whose journal state says trashed/deleted but whose own bytes are in the library at
  * [relPath] (put back by a sync tool or the user). A rescan prefers the file and reports it, so
  * the coordinator can record a restore; [hiddenAtMillis] is the wall time of the event that hid it.
  */
