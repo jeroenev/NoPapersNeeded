@@ -804,13 +804,11 @@ class Indexer(
             var relPath = row.relPath
             var fileName = row.fileName
 
-            val contentAt = (scope as? FoldScope.FullRescan)?.contentAt
+            val hidden = journalTrashed || journalDeleted
             val backAt =
-                if (contentAt != null && (journalTrashed || journalDeleted) && !superseded) {
-                    returnedPath(doc, row, origPath, contentAt)
-                } else {
-                    null
-                }
+                (scope as? FoldScope.FullRescan)
+                    ?.takeIf { hidden && !superseded }
+                    ?.let { returnedPath(doc, row, origPath, it.contentAt) }
             if (backAt != null) {
                 // Resurrection: prefer the file. Clear trashed/deleted for the working view.
                 trashed = false
