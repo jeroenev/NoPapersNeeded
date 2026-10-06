@@ -1,8 +1,12 @@
 package dev.npn.core.app
 
+import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
+import dev.npn.core.ocr.OcrEngineSelector
+import dev.npn.core.ocr.OcrPipeline
+import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
@@ -424,18 +428,12 @@ class DocumentFilterTest {
         while (pipeline.processNext()) {}
     }
 
-    private fun buildPipeline(rig: AppSessionRig): dev.npn.core.ocr.OcrPipeline =
-        dev.npn.core.ocr.OcrPipeline(
+    private fun buildPipeline(rig: AppSessionRig): OcrPipeline =
+        OcrPipeline(
             fs = rig.fs,
-            sidecars =
-                dev.npn.core.fs
-                    .OcrSidecarFiles(rig.fs),
-            pdfEngine =
-                dev.npn.core.pdf
-                    .PdfBoxEngine(),
-            engines =
-                dev.npn.core.ocr
-                    .OcrEngineSelector(local = NoopOcrEngine()),
+            sidecars = OcrSidecarFiles(rig.fs),
+            pdfEngine = PdfBoxEngine(),
+            engines = OcrEngineSelector(local = NoopOcrEngine()),
             documentDao = rig.db.documentDao(),
             ftsDao = rig.db.ftsDao(),
             ocrQueueDao = rig.deviceDb.ocrQueueDao(),

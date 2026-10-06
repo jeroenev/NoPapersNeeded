@@ -2,6 +2,7 @@ package dev.npn.core.journal
 
 import dev.npn.core.fs.SHA256_HEX
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonElement
 import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
@@ -179,7 +180,7 @@ object EventDecoderRegistry {
         return version
     }
 
-    private fun canonicalJson(element: kotlinx.serialization.json.JsonElement): String =
+    private fun canonicalJson(element: JsonElement): String =
         when (element) {
             is JsonObject -> {
                 element.entries.sortedBy { it.key }.joinToString(",", "{", "}") { (key, value) ->
@@ -188,7 +189,7 @@ object EventDecoderRegistry {
                 }
             }
 
-            is kotlinx.serialization.json.JsonArray -> {
+            is JsonArray -> {
                 element.joinToString(",", "[", "]") { canonicalJson(it) }
             }
 

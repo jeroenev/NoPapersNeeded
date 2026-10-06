@@ -4,6 +4,7 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.xmp.PdfBoxXmpIO
 import dev.npn.core.xmp.XmpParser
 import io.kotest.assertions.throwables.shouldThrow
 import io.kotest.matchers.collections.shouldHaveSize
@@ -96,9 +97,7 @@ class SessionSmokeTest {
                 val baked = rig.session.content.bakedCopyBytes(id)
                 baked.shouldNotBeNull()
 
-                val io =
-                    dev.npn.core.xmp
-                        .PdfBoxXmpIO()
+                val io = PdfBoxXmpIO()
                 val xmp = io.readXmp(baked)
                 xmp.shouldNotBeNull()
                 val parsed = XmpParser.parse(xmp)

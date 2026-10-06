@@ -1,6 +1,7 @@
 package dev.npn.core.app
 
 import androidx.room3.RoomRawQuery
+import androidx.sqlite.SQLiteStatement
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
@@ -263,7 +264,7 @@ class DocumentRepositoryImpl(
     /** WHERE clause + bind lambdas of the list query. */
     private fun buildWhere(filter: LibraryFilter): QueryParts {
         val where = ArrayList<String>()
-        val binds = ArrayList<(androidx.sqlite.SQLiteStatement, Int) -> Unit>()
+        val binds = ArrayList<(SQLiteStatement, Int) -> Unit>()
 
         fun bindText(v: String) {
             binds.add { st, i -> st.bindText(i, v) }
@@ -408,7 +409,7 @@ class DocumentRepositoryImpl(
     /** WHERE clause list plus ordered bind lambdas, built once and shared by list + count queries. */
     private data class QueryParts(
         val where: List<String>,
-        val binds: List<(androidx.sqlite.SQLiteStatement, Int) -> Unit>,
+        val binds: List<(SQLiteStatement, Int) -> Unit>,
     )
 
     private companion object {

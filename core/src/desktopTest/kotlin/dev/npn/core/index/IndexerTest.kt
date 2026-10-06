@@ -12,6 +12,7 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -351,10 +352,7 @@ class IndexerTest {
             // .npn/tmp left clean
             rig.exists(".npn/tmp").let { present ->
                 if (present) {
-                    val entries =
-                        java.nio.file.Files
-                            .list(rig.libRoot.resolve(".npn/tmp"))
-                            .use { it.count() }
+                    val entries = Files.list(rig.libRoot.resolve(".npn/tmp")).use { it.count() }
                     entries shouldBe 0L
                 }
             }

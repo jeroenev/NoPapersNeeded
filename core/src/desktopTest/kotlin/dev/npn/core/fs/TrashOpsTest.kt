@@ -8,6 +8,7 @@ import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.Path
+import java.nio.file.attribute.FileTime
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -89,11 +90,7 @@ class TrashOpsTest {
             val oldTrash = trash.moveToTrash("x/old.pdf", "0000000000000000")
             // Force an old mtime.
             val oldPath = root.resolve(oldTrash)
-            Files.setLastModifiedTime(
-                oldPath,
-                java.nio.file.attribute.FileTime
-                    .fromMillis(1000),
-            )
+            Files.setLastModifiedTime(oldPath, FileTime.fromMillis(1000))
 
             fs.writeBytesOnce("y/new.pdf", "new".encodeToByteArray())
             trash.moveToTrash("y/new.pdf", "1111111111111111")
@@ -158,11 +155,7 @@ class TrashOpsTest {
     ): String {
         fs.writeBytesOnce(relPath, relPath.encodeToByteArray())
         val trashed = trash.moveToTrash(relPath, sha256)
-        Files.setLastModifiedTime(
-            root.resolve(trashed),
-            java.nio.file.attribute.FileTime
-                .fromMillis(mtime),
-        )
+        Files.setLastModifiedTime(root.resolve(trashed), FileTime.fromMillis(mtime))
         return trashed
     }
 }

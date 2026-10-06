@@ -4,6 +4,7 @@ import dev.npn.core.db.ProjectionStatus
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.MetadataWriteBlocked
+import dev.npn.core.journal.CompactionCandidate
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.JournalCodec
 import dev.npn.core.journal.JournalEvent
@@ -12,6 +13,7 @@ import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.JournalSourceRead
+import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.StorageV2Reader
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.SystemProperty
@@ -490,10 +492,10 @@ class MetadataWriterTest {
                 val candidates =
                     objects.map { file ->
                         val bytes = rig.fs.readBytes(file.relPath)
-                        dev.npn.core.journal.CompactionCandidate(
+                        CompactionCandidate(
                             file.relPath,
                             sha256Bytes(bytes),
-                            dev.npn.core.journal.StorageV2Reader
+                            StorageV2Reader
                                 .read(file.relPath, bytes)
                                 .let { it as JournalSourceRead.Accepted }
                                 .events
@@ -501,9 +503,7 @@ class MetadataWriterTest {
                             file.mtimeMillis,
                         )
                     }
-                val compactor =
-                    dev.npn.core.journal
-                        .SnapshotCompactor(rig.fs, "test-installation")
+                val compactor = SnapshotCompactor(rig.fs, "test-installation")
                 compactor.publish(candidates).shouldNotBeNull()
                 objects.forEach { rig.fs.delete(it.relPath) }
 

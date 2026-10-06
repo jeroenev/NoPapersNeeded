@@ -23,6 +23,7 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.map
@@ -44,10 +45,10 @@ private class SyncedSettings {
     private val values = MutableStateFlow<Map<String, String?>>(emptyMap())
 
     /** [key]'s value as it changes; a write to any other setting does not re-emit it. */
-    fun flow(key: String): kotlinx.coroutines.flow.Flow<String?> = values.map { it[key] }.distinctUntilChanged()
+    fun flow(key: String): Flow<String?> = values.map { it[key] }.distinctUntilChanged()
 
     /** Every setting, cleared ones as null. */
-    fun all(): kotlinx.coroutines.flow.Flow<Map<String, String?>> = values
+    fun all(): Flow<Map<String, String?>> = values
 
     /** The current value of a key, without touching the fold. */
     fun current(key: String): String? = values.value[key]
@@ -156,10 +157,10 @@ class JournalCoordinator internal constructor(
 
     private val syncedSettings = SyncedSettings()
 
-    fun settingFlow(key: String): kotlinx.coroutines.flow.Flow<String?> = syncedSettings.flow(key)
+    fun settingFlow(key: String): Flow<String?> = syncedSettings.flow(key)
 
     /** Every synced setting the journal holds, a cleared one as null; for keys a reader enumerates. */
-    fun settings(): kotlinx.coroutines.flow.Flow<Map<String, String?>> = syncedSettings.all()
+    fun settings(): Flow<Map<String, String?>> = syncedSettings.all()
 
     /** The current value of the synced setting [key], without touching the fold. */
     fun setting(key: String): String? = syncedSettings.current(key)
