@@ -42,7 +42,7 @@ import kotlinx.coroutines.sync.withLock
  *  3. reconciles hashed files against the DB projection (move / external duplicate / external edit /
  *     brand-new),
  *  4. flags disappeared files as missing and builds relink candidates,
- *  5. handles trash resurrection (reported through `onResurrected` once the fold has committed),
+ *  5. handles trash resurrection (reported through `onResurrected` at the end of the scan),
  *  6. folds the journals and applies effective views (tags, props, trash, deletes, relinks) into the
  *     DB, then updates FTS,
  *  7. moves documents to the paths their intents name, and records where each was seen,
@@ -200,8 +200,6 @@ class Indexer(
                         }
                     }
                 }
-            if (recon.resurrected.isNotEmpty()) onResurrected(recon.resurrected)
-
             if (recon.duplicates.isNotEmpty()) {
                 val duplicateDocs = recon.duplicates.mapTo(LinkedHashSet()) { it.docId }
                 documentPaths.reconcileDuplicates(metadataState, recon.duplicates)
@@ -213,6 +211,10 @@ class Indexer(
 
             // The listing is at hand: clear away what a crash left of the app's own temporary files.
             tempFiles.sweep(all, started)
+
+            // Last: recording a return is a journal write, which must not cost the scan its
+            // duplicates or its sweep if it fails.
+            if (recon.resurrected.isNotEmpty()) onResurrected(recon.resurrected)
 
             _scanState.value = IndexProgress(IndexProgress.Phase.DONE)
 

@@ -15,6 +15,7 @@ import dev.npn.core.journal.PendingOp
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
@@ -89,6 +90,58 @@ class JournalCoordinatorWritesTest {
             val journal = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR).filter { !it.isDirectory }
             journal.filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 } shouldHaveSize 1
             journal.filter { JournalPaths.classify(it.relPath) is JournalPath.Legacy }.shouldBeEmpty()
+        }
+
+    /**
+     * Recording that a document is back is the rescan's last word, not its purpose: a publish that
+     * fails there is retried by the next rescan, and neither fails this one nor blocks writes.
+     */
+    @Test
+    fun aRestoreThatFailsToPublishLeavesTheRescanAndWritesAlone() =
+        runTest {
+            var failures = 0
+            val flaky =
+                object : LibraryFileSystem by rig.fs {
+                    override suspend fun publishVerifiedObjectOnce(
+                        stagingPath: String,
+                        canonicalPath: String,
+                        expectedHash: String,
+                    ) {
+                        if (failures-- > 0) throw VerifiedPublicationFailedException("rename failed")
+                        rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
+                    }
+                }
+            val logged = ArrayList<Throwable?>()
+            val coordinator =
+                JournalCoordinator(
+                    ContentAddressedJournalWriter(flaky, "test-installation", HlcWatermarkAllocator(rig.clock)),
+                    rig.indexer,
+                    rig.accumulator,
+                    clock = rig.clock,
+                    log = { _, _, error -> logged += error },
+                )
+            rig.writePdf("a.pdf", "alpha")
+            rig.writePdf("b.pdf", "bravo")
+            coordinator.rescan()
+            val doc = rig.fs.sha256("a.pdf")
+            // Trashed on another device long ago; a sync tool has since put the file back.
+            coordinator.commitAndApply(listOf(PendingOp.docTrash(doc, "a.pdf")))
+            rig.clock.advance(JournalCoordinator.RESTORE_SETTLE_MS + 1)
+            rig.copyFile("b.pdf", "b-copy.pdf")
+
+            failures = 1
+            val report = coordinator.rescan()
+
+            report.duplicates.map { it.extraRelPath } shouldBe listOf("b-copy.pdf")
+            logged.single().shouldBeInstanceOf<VerifiedPublicationFailedException>()
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(doc, "kept"))).shouldBeTrue()
+
+            coordinator.rescan()
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(doc, "edited")))
+            rig.db
+                .documentDao()
+                .getByDocId(doc)
+                ?.trashed shouldBe false
         }
 
     /** There is no older format to fall back to: a filesystem that cannot publish fails the write. */

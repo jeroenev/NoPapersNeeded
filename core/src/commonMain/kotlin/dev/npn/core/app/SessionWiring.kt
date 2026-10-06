@@ -86,6 +86,7 @@ internal suspend fun createCoordinator(
         compactor = SnapshotCompactor(deps.fs, deps.installationId),
         snapshots = snapshots,
         clock = deps.clock,
+        log = deps.log,
     )
 }
 

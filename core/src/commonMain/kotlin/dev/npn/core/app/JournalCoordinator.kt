@@ -18,7 +18,9 @@ import dev.npn.core.journal.SnapshotCompactor
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
@@ -117,6 +119,8 @@ class JournalCoordinator internal constructor(
     private val dispatcher: CoroutineDispatcher = Dispatchers.Default,
     /** How long ago a document was hidden, when a rescan finds its file back (see [recordRestores]). */
     private val clock: EpochClock = SystemEpochClock,
+    /** Where a rescan's failure to record a restore goes; the rescan itself carries on. */
+    private val log: NpnLog = NpnLog.None,
 ) {
     private val mutex = Mutex()
     private var writeBlockReason: String? = null
@@ -513,17 +517,22 @@ class JournalCoordinator internal constructor(
      * before the file move that went with it, and writing a restore then would undo that device's
      * decision and leave the document pointing at a file about to disappear. Such a file is shown
      * for this scan only, as before, and restored for good by a rescan once the window has passed.
+     *
+     * A failure to publish is logged, not thrown: the scan has projected what it found, and the next
+     * rescan finds the same return and tries again. Thrown, it would fail the scan and block every
+     * write over one journal object.
      */
     private suspend fun recordRestores(
         state: FoldedState,
         resurrected: List<Resurrected>,
     ) {
         val settled = clock.nowMillis() - RESTORE_SETTLE_MS
-        val ops =
-            resurrected
-                .filter { it.hiddenAtMillis <= settled }
-                .flatMap { state.restoreOps(it.docId, it.relPath) }
-        if (ops.isNotEmpty()) withContext(NonCancellable) { recordProjected(state, ops) }
+        val returned = resurrected.filter { it.hiddenAtMillis <= settled }
+        val ops = returned.flatMap { state.restoreOps(it.docId, it.relPath) }
+        if (ops.isEmpty()) return
+        log.runLogged("Recording the return of ${returned.joinToString { it.relPath }}") {
+            withContext(NonCancellable) { recordProjected(state, ops) }
+        }
     }
 
     /**

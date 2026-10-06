@@ -224,8 +224,10 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   bytes of a deleted or trashed document come back, the return is recorded in the journal, or the
   next fold would hide the document again: an import of them writes it
   (`JournalCoordinator.restoreReturned`), and a rescan that finds the file back in the library
-  writes it once the event that hid the document is a day old (`RESTORE_SETTLE_MS`). Sooner, the
-  file may be one a sync tool has not taken away yet, so the rescan shows it for that scan only.
+  writes it once the event that hid the document is a day old (`RESTORE_SETTLE_MS`), as the scan's
+  last step; a write that fails is logged and left to the next rescan, never failing the scan or
+  blocking writes. Sooner, the file may be one a sync tool has not taken away yet, so the rescan
+  shows it for that scan only.
   The file wins only with the document's own bytes: the rescan must know the hash of the file at
   the document's path, or at the path it was trashed from when no other row holds that, and the
   hash must be the document's. Another file under the same name (a second `scan.pdf`) or a file
