@@ -58,6 +58,7 @@ import no_papers_needed.composeapp.generated.resources.common_import_failure_ima
 import no_papers_needed.composeapp.generated.resources.common_imported_count
 import no_papers_needed.composeapp.generated.resources.common_join_items
 import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
+import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_already_in_library
 import no_papers_needed.composeapp.generated.resources.common_scan_capture_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_import_failed
@@ -330,7 +331,7 @@ class LibraryViewModel(
         val sort = LibrarySort(field, ascending)
         _ui.update { it.copy(sort = sort) }
         // Persist so the choice survives restart.
-        viewModelScope.launch { settings.edit { it.copy(librarySort = sort) } }
+        launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(librarySort = sort) } }
     }
 
     fun setViewType(v: ViewType) {
@@ -338,7 +339,7 @@ class LibraryViewModel(
         _ui.update { it.copy(viewType = v) }
         // Persist so the choice becomes the default and survives restart (also keeps the settings
         // screen in sync with the top-bar switcher).
-        viewModelScope.launch { settings.edit { it.copy(defaultViewType = v) } }
+        launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(defaultViewType = v) } }
     }
 
     fun applySavedView(view: SavedView) {
@@ -353,9 +354,8 @@ class LibraryViewModel(
      * Persist the grid cell width (dp) chosen by direct manipulation (pinch / ctrl+scroll / zoom
      * buttons) on the grid. The grid previews changes locally and commits through here.
      */
-    fun setGridColumnWidth(dp: Int) {
-        viewModelScope.launch { settings.edit { it.copy(gridColumnWidth = dp) } }
-    }
+    fun setGridColumnWidth(dp: Int) =
+        launchReporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(gridColumnWidth = dp) } }
 
     private companion object {
         const val QUERY_DEBOUNCE_MS = 300L

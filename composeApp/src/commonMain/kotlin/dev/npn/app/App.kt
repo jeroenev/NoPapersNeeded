@@ -136,7 +136,13 @@ private fun AppRoot(
             is AppState.Open -> {
                 val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
                 DocumentDraftHost(current.session, env.appScope) {
-                    MainNav(env = env, session = current.session, aiConfigured = aiConfigured, onOpenLibrary = vm::open)
+                    MainNav(
+                        env = env,
+                        session = current.session,
+                        aiConfigured = aiConfigured,
+                        snackbar = snackbar,
+                        onOpenLibrary = vm::open,
+                    )
                 }
                 // A switch to another library that failed lands back in this one; say why.
                 current.failure?.let { OpenFailedDialog(it, onDismiss = vm::dismissFailure) }
@@ -166,6 +172,8 @@ private fun MainNav(
     env: AppEnvironment,
     session: LibrarySession,
     aiConfigured: Boolean,
+    /** The shell's own snackbar, for what is reported outside any one screen. */
+    snackbar: SnackbarHostState,
     onOpenLibrary: (location: String) -> Unit,
 ) {
     val nav = rememberNavController()
@@ -189,7 +197,7 @@ private fun MainNav(
     val libraryFilterHandoff = remember { LibraryFilterHandoff() }
 
     DriveWindowTitle(nav)
-    WithUpdateBanner(env.settings) {
+    WithUpdateBanner(env.settings, snackbar) {
         WithDraftResumeBanner(onOpen = { docId -> nav.resumeDraft(docId, browse) }) {
             // The rail carries AI edit on a wide window, so the chat's top bar offers it only on a
             // compact one.

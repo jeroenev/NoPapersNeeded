@@ -1,9 +1,9 @@
 package dev.npn.app.ui.update
 
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dev.npn.app.BuildInfo
 import dev.npn.app.platform.checksForUpdates
+import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.WhileSubscribedTimeout
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.update.AppRelease
@@ -15,6 +15,8 @@ import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 
 /**
  * Looks up the latest release once per app start and offers it while it is newer than this build,
@@ -26,7 +28,7 @@ class UpdateNoticeViewModel(
     private val source: LatestReleaseSource,
     private val currentVersion: String = BuildInfo.VERSION,
     platformChecks: Boolean = checksForUpdates(),
-) : ViewModel() {
+) : MessagesViewModel() {
     private val newer = MutableStateFlow<AppRelease?>(null)
 
     val notice: StateFlow<AppRelease?> =
@@ -43,7 +45,9 @@ class UpdateNoticeViewModel(
         }
     }
 
-    fun dismiss(release: AppRelease) {
-        viewModelScope.launch { settings.edit { it.copy(dismissedUpdateVersion = release.version) } }
-    }
+    /** Stop offering [release]; the banner stays, and says why, when that cannot be saved. */
+    fun dismiss(release: AppRelease) =
+        launchReporting(Res.string.common_save_setting_failed) {
+            settings.edit { it.copy(dismissedUpdateVersion = release.version) }
+        }
 }

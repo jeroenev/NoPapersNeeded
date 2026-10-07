@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.statusBars
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -20,9 +21,9 @@ import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.unit.dp
-import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.update.AppRelease
 import dev.npn.core.update.GitHubLatestRelease
@@ -34,14 +35,17 @@ import org.jetbrains.compose.resources.stringResource
 
 /**
  * Puts the "new version available" banner above [content]. Like the draft banner, it takes the
- * status-bar inset while visible and consumes it for [content].
+ * status-bar inset while visible and consumes it for [content]. A dismissal that cannot be saved
+ * says so on [snackbar].
  */
 @Composable
 internal fun WithUpdateBanner(
     settings: SettingsRepository,
+    snackbar: SnackbarHostState,
     content: @Composable () -> Unit,
 ) {
     val vm: UpdateNoticeViewModel = viewModel { UpdateNoticeViewModel(settings, GitHubLatestRelease()) }
+    SnackbarMessages(vm.messages, snackbar)
     val release by vm.notice.collectAsStateWithLifecycle()
     val shown = release
     Column(Modifier.fillMaxSize()) {

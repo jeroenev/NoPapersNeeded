@@ -3,11 +3,15 @@ package dev.npn.app
 import dev.npn.app.ui.update.UpdateNoticeViewModel
 import dev.npn.core.update.AppRelease
 import dev.npn.core.update.LatestReleaseSource
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import kotlin.test.Test
 
 @OptIn(ExperimentalCoroutinesApi::class)
@@ -61,6 +65,25 @@ class UpdateNoticeViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             vm.notice.value shouldBe null
             settings.settings.first().dismissedUpdateVersion shouldBe "1.1.0"
+        }
+
+    /** A dismissal that cannot be saved keeps the banner up and says why, instead of crashing. */
+    @Test
+    fun aDismissalThatCannotBeSavedIsReported() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository()
+            val vm = vm(settings, CountingSource(release))
+            collecting(vm.notice)
+            val messages = collecting(vm.messages.map { it.text })
+            advanceUntilIdle()
+
+            settings.failEdit = { error("read-only file system") }
+            vm.dismiss(release)
+            advanceUntilIdle()
+
+            messages shouldContainExactly
+                listOf(failure(Res.string.common_save_setting_failed, "read-only file system"))
+            vm.notice.value shouldBe release
         }
 
     @Test

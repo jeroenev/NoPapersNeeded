@@ -28,6 +28,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.common_scan_capture_failed
 import no_papers_needed.composeapp.generated.resources.library_add_tag_failed
 import no_papers_needed.composeapp.generated.resources.library_refresh_failed
@@ -437,6 +438,25 @@ class LibraryViewModelTest : MainDispatcherTest() {
             model.setGridColumnWidth(220)
             advanceUntilIdle()
             settings.settingsFlow.value?.gridColumnWidth shouldBe 220
+        }
+
+    /** Sort, view and grid width still apply on screen when saving them fails, and each failure says so. */
+    @Test
+    fun aFailedSaveOfTheSortViewOrGridWidthIsReportedNotCrashed() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository().apply { failEdit = { error("read-only file system") } }
+            val model = vm(settings = settings)
+            val messages = collectMessages(model)
+
+            model.setSort(SortField.Size, ascending = true)
+            model.setViewType(ViewType.GRID)
+            model.setGridColumnWidth(220)
+            advanceUntilIdle()
+
+            messages shouldContainExactly
+                List(3) { failure(Res.string.common_save_setting_failed, "read-only file system") }
+            model.ui.value.sort shouldBe LibrarySort(SortField.Size, ascending = true)
+            model.ui.value.viewType shouldBe ViewType.GRID
         }
 
     @Test
