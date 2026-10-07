@@ -12,17 +12,17 @@ import org.jetbrains.compose.resources.StringResource
 /**
  * Base for view models that surface one-shot user-facing messages, shown by [SnackbarMessages].
  *
- * Messages go through one buffered channel: each is delivered exactly once, in the order sent, to
+ * Messages go through one unbounded channel: each is delivered exactly once, in the order sent, to
  * the one collector the screen runs. A message sent while no screen collects (between lifecycles,
- * during navigation) waits for the next collector instead of being dropped, and two sent together
- * both show, one after the other.
+ * during navigation) waits for the next collector instead of being dropped, however many pile up,
+ * and two sent together both show, one after the other.
  *
  * Write operations are journal appends and file moves, so they can genuinely fail (SAF I/O errors,
  * full disk, permissions). Fire-and-forget writes must go through [launchReporting] so a failure
  * is reported to the user instead of silently swallowed, or crashing the app.
  */
 abstract class MessagesViewModel : ViewModel() {
-    private val channel = Channel<UiMessage>(Channel.BUFFERED)
+    private val channel = Channel<UiMessage>(Channel.UNLIMITED)
 
     /** The messages to show; collect it from one place only, normally [SnackbarMessages]. */
     val messages: Flow<UiMessage> = channel.receiveAsFlow()

@@ -52,4 +52,20 @@ class MessagesViewModelTest : MainDispatcherTest() {
             shown shouldContainExactly
                 listOf(UiText.Raw("while away"), failure(Res.string.common_save_setting_failed, "disk full"))
         }
+
+    /** A bulk action reporting per document while no screen collects loses none of its messages. */
+    @Test
+    fun everyMessageSentWhileNothingCollectsArrivesInOrder() =
+        runTest(dispatcher) {
+            val model = Messages()
+            val sent = List(100) { "message $it" }
+            model.say(*sent.toTypedArray())
+
+            val shown = mutableListOf<UiText>()
+            val collector = launch { model.messages.collect { shown += it.text } }
+            advanceUntilIdle()
+            collector.cancel()
+
+            shown shouldContainExactly sent.map(UiText::Raw)
+        }
 }
