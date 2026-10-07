@@ -171,7 +171,7 @@ class LibrarySettingsTest {
                 repeat(50) {
                     rig.session.rules
                         .current()
-                        .map { it.name } shouldBe listOf("Invoice rule")
+                        .map(AutoMatchRule::name) shouldBe listOf("Invoice rule")
                 }
                 warnings() shouldBe 1
 
@@ -179,7 +179,7 @@ class LibrarySettingsTest {
                 repeat(50) {
                     rig.session.rules
                         .current()
-                        .map { it.name } shouldBe listOf("Invoice rule")
+                        .map(AutoMatchRule::name) shouldBe listOf("Invoice rule")
                 }
                 warnings() shouldBe 2
             } finally {
