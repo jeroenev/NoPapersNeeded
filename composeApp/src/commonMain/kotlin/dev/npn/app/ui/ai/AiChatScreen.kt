@@ -55,11 +55,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.input.key.Key
-import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.isShiftPressed
 import androidx.compose.ui.input.key.key
-import androidx.compose.ui.input.key.onPreviewKeyEvent
-import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -72,6 +69,7 @@ import dev.npn.app.ui.common.ExpandIcon
 import dev.npn.app.ui.common.SnackbarMessages
 import dev.npn.app.ui.common.TooltipIconButton
 import dev.npn.app.ui.common.expander
+import dev.npn.app.ui.common.previewKeyShortcuts
 import dev.npn.core.ai.AiChatSession
 import dev.npn.core.ai.ChatTools
 import dev.npn.core.app.LibrarySession
@@ -480,14 +478,10 @@ private fun InputRow(
             modifier =
                 Modifier
                     .weight(1f)
-                    .onPreviewKeyEvent { event ->
-                        if (event.type != KeyEventType.KeyDown) {
-                            false
-                        } else if (event.key == Key.Enter && !event.isShiftPressed) {
-                            send()
-                            true
-                        } else {
-                            false
+                    .previewKeyShortcuts { event ->
+                        when (event.key) {
+                            Key.Enter -> send.takeIf { !event.isShiftPressed }
+                            else -> null
                         }
                     },
             placeholder = { Text(stringResource(Res.string.ai_ask_documents)) },

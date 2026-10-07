@@ -1,13 +1,17 @@
-@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
+@file:OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class, androidx.compose.ui.InternalComposeUiApi::class)
 
 package dev.npn.app.ui.ai
 
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.ImageComposeScene
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEvent
+import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import androidx.compose.ui.text.AnnotatedString
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
@@ -20,6 +24,7 @@ import dev.npn.app.aiConfiguredSettings
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.AiChatHistoryItem
 import dev.npn.core.ai.AiChatSession
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import java.util.Locale
 import javax.swing.SwingUtilities
@@ -78,6 +83,50 @@ class AiChatScreenTest {
                 scene.close()
             }
         }
+
+    /** Enter in the question field sends it; Shift+Enter leaves it there for another line. */
+    @Test
+    fun enterSendsTheQuestionAndShiftEnterDoesNot() =
+        onUiThread {
+            val session = FakeLibrarySession()
+            val scene = scene(session)
+            try {
+                scene.render()
+                scene
+                    .input()
+                    .config[SemanticsActions.RequestFocus]
+                    .action
+                    ?.invoke()
+                scene
+                    .input()
+                    .config[SemanticsActions.SetText]
+                    .action
+                    ?.invoke(AnnotatedString("What is due?"))
+                scene.render()
+
+                scene.press(Key.Enter, shift = true)
+                scene.render()
+                session.aiChat.asked shouldBe emptyList()
+
+                scene.press(Key.Enter)
+                scene.render()
+                session.aiChat.asked.map { it.second } shouldContainExactly listOf("What is due?")
+            } finally {
+                scene.close()
+            }
+        }
+
+    private fun ImageComposeScene.input(): SemanticsNode =
+        nodes().first { it.config.getOrNull(SemanticsProperties.EditableText) != null }
+
+    /** Sent to whatever holds the keyboard; the key-event constructor is Compose's internal one. */
+    private fun ImageComposeScene.press(
+        key: Key,
+        shift: Boolean = false,
+    ) {
+        sendKeyEvent(KeyEvent(key, KeyEventType.KeyDown, isShiftPressed = shift))
+        sendKeyEvent(KeyEvent(key, KeyEventType.KeyUp, isShiftPressed = shift))
+    }
 
     private fun toolChat(query: String) =
         listOf(
