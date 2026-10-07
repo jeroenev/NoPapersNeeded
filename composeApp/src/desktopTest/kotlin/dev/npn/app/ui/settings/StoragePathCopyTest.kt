@@ -1,9 +1,13 @@
 package dev.npn.app.ui.settings
 
 import dev.npn.app.english
+import dev.npn.app.ui.common.uiText
 import dev.npn.core.pathrules.StoragePathError
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_rule_stays_off
 import kotlin.test.Test
 
 class StoragePathCopyTest {
@@ -42,5 +46,15 @@ class StoragePathCopyTest {
                     "Path segments may not start or end with whitespace",
                     "Invalid filename segment a:b",
                 )
+        }
+
+    /** The rule that stays off names the error the template field shows, as one sentence. */
+    @Test
+    fun aRuleThatStaysOffSaysWhichErrorKeepsItOff() =
+        runTest {
+            val error = StoragePathError.UnknownVariable("author").text()
+
+            uiText(Res.string.common_settings_storage_rule_stays_off, error).english() shouldBe
+                "Automatic organizing stays off because the path template is invalid: Unknown template variable author"
         }
 }

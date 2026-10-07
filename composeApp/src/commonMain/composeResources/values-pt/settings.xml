@@ -84,6 +84,7 @@
     <string name="common_settings_storage_error_reserved">O diretório %1$s é reservado</string>
     <string name="common_settings_storage_error_whitespace">Segmentos do caminho não podem começar nem terminar com espaço</string>
     <string name="common_settings_storage_error_invalid_segment">Segmento de nome de arquivo inválido: %1$s</string>
+    <string name="common_settings_storage_rule_stays_off">A organização automática continua desativada porque o modelo de caminho é inválido: %1$s</string>
 
     <string name="common_settings_watched_folder_help">Os PDFs salvos nesta pasta (por exemplo, por um app de digitalização) são importados automaticamente para a biblioteca e processados com OCR.</string>
     <string name="common_settings_no_watched_folder">Nenhuma pasta monitorada</string>

@@ -84,6 +84,7 @@
     <string name="common_settings_storage_error_reserved">El directorio %1$s está reservado</string>
     <string name="common_settings_storage_error_whitespace">Los segmentos de la ruta no pueden empezar ni terminar con espacios</string>
     <string name="common_settings_storage_error_invalid_segment">Segmento de nombre de archivo no válido %1$s</string>
+    <string name="common_settings_storage_rule_stays_off">La organización automática sigue desactivada porque la plantilla de ruta no es válida: %1$s</string>
 
     <string name="common_settings_watched_folder_help">Los PDF guardados en esta carpeta (por ejemplo, por una aplicación de escaneo) se importan automáticamente a la biblioteca y se procesan con OCR.</string>
     <string name="common_settings_no_watched_folder">Ninguna carpeta vigilada</string>

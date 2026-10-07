@@ -32,6 +32,7 @@ import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_not_a_date
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_rule_stays_off
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 import kotlin.test.Test
@@ -244,6 +245,31 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.setStoragePathEnabled(true)
             advanceUntilIdle()
             session.storagePath.storagePathFlow.value shouldBe StoragePathSetting("{doc_date:yyyy}/{title}.pdf", true)
+        }
+
+    /**
+     * Turning the rule on with a template that does not expand leaves it off and says why, in the
+     * words the template field's own error uses.
+     */
+    @Test
+    fun enablingAnInvalidTemplateSaysWhyTheRuleStaysOff() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val messages = collecting(model.messages.map { it.text })
+
+            model.setStoragePathTemplate("{author}/{title}.pdf")
+            model.setStoragePathEnabled(true)
+            advanceUntilIdle()
+
+            messages shouldContainExactly
+                listOf(
+                    uiText(
+                        Res.string.common_settings_storage_rule_stays_off,
+                        StoragePathError.UnknownVariable("author").text(),
+                    ),
+                )
+            session.storagePath.storagePathFlow.value.enabled shouldBe false
         }
 
     @Test

@@ -45,6 +45,7 @@ import no_papers_needed.composeapp.generated.resources.common_settings_clear_thu
 import no_papers_needed.composeapp.generated.resources.common_settings_move_field_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_remove_field_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
+import no_papers_needed.composeapp.generated.resources.common_settings_storage_rule_stays_off
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnail_cache_empty
 import no_papers_needed.composeapp.generated.resources.common_settings_thumbnails_cleared
 
@@ -111,7 +112,10 @@ interface SettingsActions {
      */
     fun setStoragePathTemplate(template: String)
 
-    /** Arm or disarm the storage-path rule; arming saves the template shown, if it expands. */
+    /**
+     * Arm or disarm the storage-path rule. Arming saves the template shown if it expands, and
+     * otherwise says why the rule stays off.
+     */
     fun setStoragePathEnabled(enabled: Boolean)
 
     /**
@@ -284,7 +288,9 @@ class SettingsViewModel(
                 val template =
                     templateDraft.value ?: storagePath.storagePath.first().template ?: DEFAULT_STORAGE_PATH_TEMPLATE
                 val types = fieldRegistry.current().associate { it.key to it.type }
-                if (StoragePathTemplate.expand(template, validationContext(types)) !is StoragePathExpansion.Path) {
+                val expansion = StoragePathTemplate.expand(template, validationContext(types))
+                if (expansion is StoragePathExpansion.Invalid) {
+                    message(uiText(Res.string.common_settings_storage_rule_stays_off, expansion.error.text()))
                     return@launchReporting
                 }
                 storagePath.setStoragePathTemplate(template)

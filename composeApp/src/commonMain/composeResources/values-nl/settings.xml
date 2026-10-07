@@ -84,6 +84,7 @@
     <string name="common_settings_storage_error_reserved">De map %1$s is gereserveerd</string>
     <string name="common_settings_storage_error_whitespace">Padsegmenten mogen niet met witruimte beginnen of eindigen</string>
     <string name="common_settings_storage_error_invalid_segment">Ongeldig bestandsnaamsegment %1$s</string>
+    <string name="common_settings_storage_rule_stays_off">Automatisch ordenen blijft uit omdat het padsjabloon ongeldig is: %1$s</string>
 
     <string name="common_settings_watched_folder_help">Pdf-bestanden in deze map worden automatisch geïmporteerd en met OCR verwerkt.</string>
     <string name="common_settings_no_watched_folder">Geen bewaakte map</string>
