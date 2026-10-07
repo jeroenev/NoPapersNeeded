@@ -8,6 +8,7 @@ import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.rules.AutoMatchRuleJson
 import dev.npn.core.rules.MatchAlgorithm
+import dev.npn.core.util.RecordingLog
 import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
@@ -150,6 +151,48 @@ class LibrarySettingsTest {
                 rig.close()
             }
         }
+
+    /**
+     * Rules are read for every indexed document and every rule pass, so a list that does not decode
+     * is reported once per stored value, not on every read: a flood would push everything else out
+     * of the size-capped log.
+     */
+    @Test
+    fun rulesTheJournalCannotDecodeAreReportedOncePerStoredValue() =
+        runTest {
+            val log = RecordingLog()
+            val rig = AppSessionRig.create(backgroundScope, log = log)
+            try {
+                rig.session.rules.save(rule("r1", "Invoice rule"))
+
+                fun warnings() = log.entries.count { it.message.startsWith("Auto-match rules did not decode") }
+
+                rig.storeRulesFromANewerBuild("{not json")
+                repeat(50) {
+                    rig.session.rules
+                        .current()
+                        .map { it.name } shouldBe listOf("Invoice rule")
+                }
+                warnings() shouldBe 1
+
+                rig.storeRulesFromANewerBuild("[{still not json")
+                repeat(50) {
+                    rig.session.rules
+                        .current()
+                        .map { it.name } shouldBe listOf("Invoice rule")
+                }
+                warnings() shouldBe 2
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** Store [rules] as the library's rule list, as a newer build on another device would. */
+    private suspend fun AppSessionRig.storeRulesFromANewerBuild(rules: String) {
+        ContentAddressedJournalWriter(fs, "newer-installation", HlcWatermarkAllocator(clock))
+            .commit(listOf(PendingOp.settingSet(LibrarySettingKeys.AUTO_MATCH_RULES, rules)))
+        session.rescan()
+    }
 
     private fun rule(
         id: String,

@@ -10,6 +10,7 @@ import dev.npn.core.rules.RuleApplier
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.warn
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.map
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
@@ -32,6 +33,19 @@ class AutoMatchRuleRepositoryImpl internal constructor(
     private val log: NpnLog,
     private val owned: suspend (suspend () -> Unit) -> Unit,
 ) : AutoMatchRuleRepository {
+    /** One stored list and what it decoded to: [rules] null, and why in [failure], when it did not. */
+    private class Decoded(
+        val json: String?,
+        val rules: List<AutoMatchRule>?,
+        val failure: IllegalArgumentException? = null,
+    )
+
+    /**
+     * The last list [decoded] read. Rules are read for every indexed document and every rule pass,
+     * so each stored list is decoded, and a bad one reported, once rather than on every read.
+     */
+    private val last = MutableStateFlow(Decoded(null, emptyList()))
+
     override fun observeRules(): Flow<List<AutoMatchRule>> =
         dao.observeAll().map { list ->
             list.map { it.toRule() }.sortedWith(compareBy(AutoMatchRule::position, AutoMatchRule::id))
@@ -88,15 +102,21 @@ class AutoMatchRuleRepositoryImpl internal constructor(
         }
 
     /** The rules in [json], none for a library that never had any, null for a list that does not decode. */
-    private fun decoded(json: String?): List<AutoMatchRule>? =
-        if (json == null) {
-            emptyList()
-        } else {
-            try {
-                AutoMatchRuleJson.decodeList(json)
-            } catch (e: IllegalArgumentException) {
-                log.warn("Auto-match rules did not decode; keeping the last ones that did", e)
-                null
-            }
+    private fun decoded(json: String?): List<AutoMatchRule>? {
+        val cached = last.value
+        if (cached.json == json) return cached.rules
+        val fresh = decode(json)
+        // Only the read that records a list reports it, so concurrent reads of a bad one warn once.
+        if (last.compareAndSet(cached, fresh)) {
+            fresh.failure?.let { log.warn("Auto-match rules did not decode; keeping the last ones that did", it) }
+        }
+        return fresh.rules
+    }
+
+    private fun decode(json: String?): Decoded =
+        try {
+            Decoded(json, json?.let(AutoMatchRuleJson::decodeList).orEmpty())
+        } catch (e: IllegalArgumentException) {
+            Decoded(json, null, e)
         }
 }
