@@ -1,7 +1,8 @@
 package dev.npn.core.index
 
-import dev.npn.core.db.DocumentDao
+import androidx.room3.withWriteTransaction
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
@@ -58,7 +59,7 @@ class EmptyImportException : IllegalArgumentException("The file is empty")
 @OptIn(ExperimentalUuidApi::class)
 class ImportService(
     private val fs: LibraryFileSystem,
-    private val documentDao: DocumentDao,
+    private val db: NpnDatabase,
     private val ocrQueueDao: OcrQueueDao,
     private val clock: EpochClock = SystemEpochClock,
     private val ruleProvider: suspend () -> StoragePathRule? = { null },
@@ -68,6 +69,8 @@ class ImportService(
     /** Record that the document is back at the path, when the journal still hides it. */
     private val restore: suspend (docId: String, relPath: String) -> Unit = { _, _ -> },
 ) {
+    private val documentDao get() = db.documentDao()
+
     suspend fun importPdf(
         source: ExternalSource,
         suggestedName: String,
@@ -133,8 +136,17 @@ class ImportService(
             val row = documentDao.getByDocId(imported.docId) ?: return@serialize
             if (row.deleted || row.trashed) return@serialize
             if (holds(row.relPath, imported.docId)) fs.delete(row.relPath)
-            documentDao.forget(imported.docId)
+            forget(imported.docId)
             ocrQueueDao.delete(imported.docId)
+        }
+
+    /** Drop [docId] from the index: its row, and the tag, field and search rows the fold projected. */
+    private suspend fun forget(docId: String) =
+        db.withWriteTransaction {
+            documentDao.delete(docId)
+            db.tagDao().clearDocumentTagsFor(listOf(docId))
+            db.documentFieldDao().clearFieldsFor(listOf(docId))
+            db.ftsDao().delete(docId)
         }
 
     /** Whether [relPath] is a file holding [docId]'s bytes; a missing document's row names none. */

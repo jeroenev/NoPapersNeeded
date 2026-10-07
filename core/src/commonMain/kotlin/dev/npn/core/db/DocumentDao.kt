@@ -222,33 +222,7 @@ interface DocumentDao {
     /** Chunked [getByDocIdsChunk] so large id sets stay under SQLite's bind-variable limit. */
     suspend fun getByDocIds(docIds: List<String>): List<DocumentEntity> = docIds.chunkedBind { getByDocIdsChunk(it) }
 
-    /**
-     * Drop a document from the index outright: its row, and the tag, field and search rows the fold
-     * projected for it. Only for taking back an import whose file is gone again, which nothing in
-     * the journal hides.
-     */
-    @Transaction
-    suspend fun forget(docId: String) {
-        deleteRow(docId)
-        deleteTagRows(docId)
-        deleteFieldRows(docId)
-        deleteSearchRow(docId)
-        deleteSearchKey(docId)
-    }
-
+    /** Drop one row outright: only for taking back an import (`ImportService.undoImport`). */
     @Query("DELETE FROM documents WHERE docId = :docId")
-    suspend fun deleteRow(docId: String)
-
-    @Query("DELETE FROM document_tags WHERE docId = :docId")
-    suspend fun deleteTagRows(docId: String)
-
-    @Query("DELETE FROM document_fields WHERE docId = :docId")
-    suspend fun deleteFieldRows(docId: String)
-
-    /** Before [deleteSearchKey]: the key is how the FTS row is found (see [FtsDao]). */
-    @Query("DELETE FROM fts_documents WHERE rowid IN (SELECT ftsRowid FROM fts_keys WHERE docId = :docId)")
-    suspend fun deleteSearchRow(docId: String)
-
-    @Query("DELETE FROM fts_keys WHERE docId = :docId")
-    suspend fun deleteSearchKey(docId: String)
+    suspend fun delete(docId: String)
 }

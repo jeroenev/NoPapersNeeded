@@ -47,7 +47,7 @@ class IndexRig private constructor(
     val importService =
         ImportService(
             fs,
-            db.documentDao(),
+            db,
             deviceDb.ocrQueueDao(),
             clock,
             fieldTypes = { db.fieldDefDao().fieldTypes() },

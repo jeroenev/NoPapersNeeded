@@ -96,6 +96,20 @@ interface FtsDao {
     @Query("SELECT ftsRowid FROM fts_keys WHERE docId = :docId")
     suspend fun rowidFor(docId: String): Long?
 
+    /** Drop [docId]'s FTS row and its key, for a document the index forgets outright. */
+    @Transaction
+    suspend fun delete(docId: String) {
+        deleteRowOf(docId)
+        deleteKey(docId)
+    }
+
+    /** Before [deleteKey]: the key is how the row is found. */
+    @Query("DELETE FROM fts_documents WHERE rowid IN (SELECT ftsRowid FROM fts_keys WHERE docId = :docId)")
+    suspend fun deleteRowOf(docId: String)
+
+    @Query("DELETE FROM fts_keys WHERE docId = :docId")
+    suspend fun deleteKey(docId: String)
+
     @Query("SELECT * FROM fts_keys WHERE docId IN (:docIds)")
     suspend fun keysChunk(docIds: List<String>): List<FtsKeyEntity>
 

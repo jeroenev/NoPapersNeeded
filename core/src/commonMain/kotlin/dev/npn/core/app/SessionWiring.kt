@@ -158,7 +158,7 @@ internal suspend fun buildLibrary(
         imports =
             ImportService(
                 fs = deps.fs,
-                documentDao = db.documentDao(),
+                db = db,
                 ocrQueueDao = deps.deviceDb.ocrQueueDao(),
                 clock = deps.clock,
                 ruleProvider = storagePath::rule,
