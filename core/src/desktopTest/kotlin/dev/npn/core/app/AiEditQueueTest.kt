@@ -367,6 +367,34 @@ class AiEditQueueFailureTest {
             }
         }
 
+    /** The queue view shows the stored error; a blank one would show an empty failure. */
+    @Test
+    fun `a document failing with a blank message still stores what failed`() =
+        runTest {
+            withQueue { rig ->
+                rig.ai.edit = suggestion()
+                rig.ai.failWith = { docId -> if (docId == "b") error(" ") }
+                val jobId = rig.enqueue("a", "b")
+
+                rig.queue.processNext() shouldBe true
+
+                rig.rows(jobId).single { it.docId == "b" }.lastError shouldBe "IllegalStateException"
+            }
+        }
+
+    @Test
+    fun `a run parked by a failure with a blank message still stores what failed`() =
+        runTest {
+            withQueue { rig ->
+                rig.ai.failWith = { error("") }
+                val jobId = rig.enqueue("a")
+
+                rig.queue.processNext() shouldBe false
+
+                rig.job(jobId).shouldNotBeNull().lastError shouldBe "IllegalStateException"
+            }
+        }
+
     @Test
     fun `a document the endpoint always rejects is given up on, so its run still finishes`() =
         runTest {

@@ -9,6 +9,7 @@ import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.reason
 import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueRetryPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -310,7 +311,7 @@ class AiEditQueue(
                 copy(
                     attempts = tried,
                     failed = docRetry.givesUp(tried),
-                    lastError = cause.message ?: cause::class.simpleName,
+                    lastError = cause.reason(),
                 )
             },
         )
@@ -325,7 +326,7 @@ class AiEditQueue(
             attempts = tried,
             nextAttemptAt = jobRetry.nextAttemptAt(now, tried),
             updatedAt = now,
-            lastError = cause?.let { it.message ?: it::class.simpleName },
+            lastError = cause?.reason(),
         )
     }
 
