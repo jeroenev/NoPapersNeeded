@@ -2,6 +2,7 @@ package dev.npn.core.app
 
 import androidx.room3.RoomRawQuery
 import androidx.sqlite.SQLiteStatement
+import dev.npn.core.db.BIND_CHUNK
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
@@ -87,10 +88,15 @@ class DocumentRepositoryImpl(
         sort: LibrarySort,
     ): Flow<List<DocListItem>> {
         val queryText = filter.query?.takeIf { it.isNotBlank() }
-        val rawFlow = documentDao.observeLibraryRaw(buildQuery(filter, sort))
+        // An id list longer than one bind chunk (a large selection) could overflow SQLite's
+        // bind-variable limit as one IN list, so the query leaves it out and it narrows the rows here.
+        val idsInMemory = filter.docIds.takeIf { it.size > BIND_CHUNK }?.toHashSet()
+        val sqlFilter = if (idsInMemory == null) filter else filter.copy(docIds = emptyList())
+        val rawFlow = documentDao.observeLibraryRaw(buildQuery(sqlFilter, sort))
         return rawFlow
             .conflate()
-            .mapLatest { docs ->
+            .mapLatest { rows ->
+                val docs = if (idsInMemory == null) rows else rows.filter { it.docId in idsInMemory }
                 if (queryText == null) {
                     listItems(docs)
                 } else {

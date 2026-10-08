@@ -8,6 +8,7 @@ import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
 import dev.npn.core.model.FieldKeys
+import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.testing.FakeAiSuggest
 import dev.npn.core.testing.FakeDocContentFacade
 import dev.npn.core.testing.FakeDocumentRepository
@@ -17,6 +18,7 @@ import dev.npn.core.testing.doc
 import dev.npn.core.testing.edit
 import dev.npn.core.testing.listItem
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -481,6 +483,44 @@ class AiEditRunApplyTest {
             val done = h.run.apply(key(batchSize = 1), next.docs).shouldBeInstanceOf<ApplyOutcome.Done>()
             done.result.applied shouldBe 1
         }
+}
+
+/** The selection scope over the real library query, which a fake repository cannot vouch for. */
+class AiEditRunSelectionQueryTest {
+    @Test
+    fun aSelectionPastSqlitesBindLimitResolvesToItsLiveDocuments() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                listOf("a", "b", "c", "d").forEach { rig.writePdf("$it.pdf", PdfFixtures.embeddedTextPdf(it)) }
+                rig.session.rescan()
+                val (a, b, c) = listOf("a.pdf", "b.pdf", "c.pdf").map { rig.docId(it) }
+                rig.session.docLifecycle.trashDoc(b)
+                // d stays live but unselected; the rest of the selection names nothing in the library.
+                val selection = listOf(a, b, c) + (1..SQLITE_MAX_VARIABLE_NUMBER).map { "%064x".format(it) }
+                val run =
+                    AiEditRunImpl(
+                        DocumentRepositoryImpl(rig.db),
+                        FakeMetadataWriter(),
+                        FakeDocContentFacade(),
+                        FakeAiSuggest(),
+                        FakeFieldRegistry(),
+                        selection,
+                    )
+                val key = key(scope = EditScope.SELECTION)
+
+                run.docsFor(key).first().map { it.doc.docId } shouldContainExactlyInAnyOrder listOf(a, c)
+                run.remainingDocs(key).map { it.doc.docId } shouldContainExactlyInAnyOrder listOf(a, c)
+                run.moreRemain(key) shouldBe true
+            } finally {
+                rig.close()
+            }
+        }
+
+    private companion object {
+        /** The bundled SQLite's bind-variable limit on desktop and Android, which BIND_CHUNK stays under. */
+        const val SQLITE_MAX_VARIABLE_NUMBER = 32_766
+    }
 }
 
 class AiEditRunScopeTest {

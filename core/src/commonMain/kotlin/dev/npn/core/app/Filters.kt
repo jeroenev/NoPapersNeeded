@@ -17,7 +17,7 @@ data class FieldRange(
 
 @Serializable
 data class LibraryFilter(
-    /** Restrict results to these document identities; empty means no identity restriction. */
+    /** Restrict results to these document identities, however many; empty means no identity restriction. */
     val docIds: List<String> = emptyList(),
     val query: String? = null, // FTS query; null/blank = no text search
     val tagsAll: List<String> = emptyList(),

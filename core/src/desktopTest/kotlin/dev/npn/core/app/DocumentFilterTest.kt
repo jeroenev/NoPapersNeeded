@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.BIND_CHUNK
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -416,6 +417,36 @@ class DocumentFilterTest {
                         ).first()
                 ids(results) shouldContainExactly listOf(inv)
                 results.first().snippet.shouldNotBeNull()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** An id list too long to bind in one statement narrows the result like a short one does. */
+    @Test
+    fun aLongIdListNarrowsAlongsideTheRestOfTheFilter() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                listOf("alpha", "bravo", "charlie").forEach {
+                    rig.writePdf("$it.pdf", PdfFixtures.embeddedTextPdf("invoice $it"))
+                }
+                rig.session.rescan()
+                drainOcr(rig)
+                val (a, b, c) = listOf("alpha.pdf", "bravo.pdf", "charlie.pdf").map { rig.fs.sha256(it) }
+                rig.session.meta.addTag(listOf(a, b), "x")
+                val repo = DocumentRepositoryImpl(rig.db)
+
+                suspend fun matching(filter: LibraryFilter) = ids(repo.observeDocuments(filter, LibrarySort()).first())
+
+                val selected = listOf(a, c)
+                val long = selected + (1..BIND_CHUNK).map { "%064x".format(it) }
+                for (docIds in listOf(selected, long)) {
+                    matching(LibraryFilter(docIds = docIds)) shouldContainExactlyInAnyOrder listOf(a, c)
+                    matching(LibraryFilter(docIds = docIds, tagsAll = listOf("x"))) shouldContainExactly listOf(a)
+                    matching(LibraryFilter(docIds = docIds, query = "invoice")) shouldContainExactlyInAnyOrder
+                        listOf(a, c)
+                }
             } finally {
                 rig.close()
             }
