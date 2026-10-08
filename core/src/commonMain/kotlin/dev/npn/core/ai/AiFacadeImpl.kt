@@ -96,10 +96,12 @@ class AiFacadeImpl(
         // The one conversation of a build from before sessions existed, listed untitled beside the
         // others while it has history, until it is deleted or asked in (ask stores it then).
         val legacy =
-            AiChatSession(LEGACY_CONVERSATION_ID, title = null, updatedAt = 0L).takeIf {
-                stored.none { it.id == LEGACY_CONVERSATION_ID } && chatHistoryStore.has(LEGACY_CONVERSATION_ID)
+            if (stored.none { it.id == LEGACY_CONVERSATION_ID } && chatHistoryStore.has(LEGACY_CONVERSATION_ID)) {
+                listOf(AiChatSession(LEGACY_CONVERSATION_ID, title = null, updatedAt = 0L))
+            } else {
+                emptyList()
             }
-        return (stored + listOfNotNull(legacy)).sortedByDescending { it.updatedAt }
+        return (stored + legacy).sortedByDescending { it.updatedAt }
     }
 
     @OptIn(ExperimentalUuidApi::class)

@@ -497,7 +497,8 @@ class AiEditRunSelectionQueryTest {
                 val (a, b, c) = listOf("a.pdf", "b.pdf", "c.pdf").map { rig.docId(it) }
                 rig.session.docLifecycle.trashDoc(b)
                 // d stays live but unselected; the rest of the selection names nothing in the library.
-                val selection = listOf(a, b, c) + (1..SQLITE_MAX_VARIABLE_NUMBER).map { "%064x".format(it) }
+                val unknown = (1..SQLITE_MAX_VARIABLE_NUMBER).map { it.toString(16).padStart(64, '0') }
+                val selection = listOf(a, b, c) + unknown
                 val run =
                     AiEditRunImpl(
                         DocumentRepositoryImpl(rig.db),

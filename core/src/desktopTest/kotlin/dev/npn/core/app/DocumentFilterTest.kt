@@ -440,7 +440,7 @@ class DocumentFilterTest {
                 suspend fun matching(filter: LibraryFilter) = ids(repo.observeDocuments(filter, LibrarySort()).first())
 
                 val selected = listOf(a, c)
-                val long = selected + (1..BIND_CHUNK).map { "%064x".format(it) }
+                val long = selected + (1..BIND_CHUNK).map { it.toString(16).padStart(64, '0') }
                 for (docIds in listOf(selected, long)) {
                     matching(LibraryFilter(docIds = docIds)) shouldContainExactlyInAnyOrder listOf(a, c)
                     matching(LibraryFilter(docIds = docIds, tagsAll = listOf("x"))) shouldContainExactly listOf(a)
