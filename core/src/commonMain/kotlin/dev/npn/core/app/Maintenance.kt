@@ -2,6 +2,10 @@ package dev.npn.core.app
 
 /** Repair and surgery on existing documents: duplicates, relinks, and splitting. */
 interface MaintenanceFacade {
+    /**
+     * Forget the extra copy of [docId] recorded at [extraRelPath], deleting the file only while it
+     * is still a copy of the document's bytes beside the document's own file.
+     */
     suspend fun resolveDuplicate(
         docId: String,
         extraRelPath: String,

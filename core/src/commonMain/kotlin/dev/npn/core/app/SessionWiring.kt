@@ -303,6 +303,7 @@ internal fun buildOcr(
 internal fun buildMaintenance(
     deps: SessionDeps,
     lifetime: SessionLifetime,
+    coordinator: JournalCoordinator,
     library: Library,
     relink: RelinkService,
     ocr: OcrFacadeImpl,
@@ -311,7 +312,14 @@ internal fun buildMaintenance(
     MaintenanceFacadeImpl(
         lifetime = lifetime,
         db = deps.db,
-        maintenance = MaintenanceService(deps.fs, deps.db.duplicateDao(), library.imports),
+        maintenance =
+            MaintenanceService(
+                fs = deps.fs,
+                documentDao = deps.db.documentDao(),
+                duplicateDao = deps.db.duplicateDao(),
+                importService = library.imports,
+                serialize = { coordinator.serialized(it) },
+            ),
         relink = relink,
         splitter = SplitService(deps.fs, deps.pdfEngine, library.imports, deps.db.documentDao(), deps.log),
         writer = library.writer,

@@ -1,9 +1,10 @@
 package dev.npn.core.index
 
+import dev.npn.core.db.DocumentDao
 import dev.npn.core.db.DuplicateDao
-import dev.npn.core.db.DuplicateEntity
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.holds
 import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.util.runCatchingCancellable
 
@@ -22,21 +23,38 @@ sealed interface ConflictAction {
  */
 class MaintenanceService(
     private val fs: LibraryFileSystem,
+    private val documentDao: DocumentDao,
     private val duplicateDao: DuplicateDao,
     private val importService: ImportService,
+    /**
+     * Runs a removal under the journal coordinator's lock, as imports run, so a rescan cannot list
+     * the file, or move a document onto it, while it is checked and deleted.
+     */
+    private val serialize: suspend (suspend () -> Unit) -> Unit = { it() },
 ) {
     /**
      * Resolve an external duplicate recorded at [extraRelPath] for [docId]: delete the extra copy
-     * and its duplicates row, keeping the document's canonical path unchanged.
+     * and its duplicates row, keeping the document's own file.
+     *
+     * The row may be stale: the copy since overwritten with another document, or the document's
+     * only file now that the original went. So the file goes only while it holds [docId]'s bytes
+     * beside the document's own file, which still holds them too; the row goes either way.
      */
     suspend fun resolveDuplicate(
         docId: String,
         extraRelPath: String,
-    ) {
-        if (fs.exists(extraRelPath)) runCatchingCancellable { fs.delete(extraRelPath) }
-        val remaining = duplicateDao.forDoc(docId).filter { it.relPath != extraRelPath }
-        duplicateDao.replaceAll(docId, remaining)
+    ) = serialize {
+        val own = documentDao.getByDocId(docId)?.relPath
+        if (own != null && isExtraCopy(docId, extraRelPath, own)) fs.delete(extraRelPath)
+        duplicateDao.delete(docId, extraRelPath)
     }
+
+    /** Whether [path] holds a copy of [docId]'s bytes besides [own], the document's file, which holds them too. */
+    private suspend fun isExtraCopy(
+        docId: String,
+        path: String,
+        own: String,
+    ): Boolean = path != own && fs.holds(path, docId) && fs.holds(own, docId) && !fs.sameFile(path, own)
 
     /**
      * Resolve an external sync-conflict file at [relPath].

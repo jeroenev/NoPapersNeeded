@@ -9,6 +9,7 @@ import dev.npn.core.db.QueueState
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.holds
 import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
@@ -135,7 +136,7 @@ class ImportService(
         serialize {
             val row = documentDao.getByDocId(imported.docId) ?: return@serialize
             if (row.deleted || row.trashed) return@serialize
-            if (holds(row.relPath, imported.docId)) fs.delete(row.relPath)
+            if (fs.holds(row.relPath, imported.docId)) fs.delete(row.relPath)
             forget(imported.docId)
             ocrQueueDao.delete(imported.docId)
         }
@@ -148,12 +149,6 @@ class ImportService(
             db.documentFieldDao().clearFieldsFor(listOf(docId))
             db.ftsDao().delete(docId)
         }
-
-    /** Whether [relPath] is a file holding [docId]'s bytes; a missing document's row names none. */
-    private suspend fun holds(
-        relPath: String,
-        docId: String,
-    ): Boolean = fs.stat(relPath)?.isDirectory == false && fs.sha256(relPath) == docId
 
     private suspend fun place(
         tmpPath: String,

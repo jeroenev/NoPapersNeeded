@@ -216,14 +216,10 @@ class Indexer(
                         }
                     }
                 }
-            if (recon.duplicates.isNotEmpty()) {
-                val duplicateDocs = recon.duplicates.mapTo(LinkedHashSet()) { it.docId }
-                documentPaths.reconcileDuplicates(metadataState, recon.duplicates)
-                duplicateDao.replaceForDocs(
-                    duplicateDocs,
-                    recon.duplicates.map { DuplicateEntity(it.docId, it.extraRelPath) },
-                )
-            }
+            if (recon.duplicates.isNotEmpty()) documentPaths.reconcileDuplicates(metadataState, recon.duplicates)
+            // Every rescan lists the whole library, so its duplicates are all there are: a copy since
+            // deleted, or overwritten with another document, loses its row.
+            duplicateDao.replaceAll(recon.duplicates.map { DuplicateEntity(it.docId, it.extraRelPath) })
 
             // The listing is at hand: clear away what a crash left of the app's own temporary files.
             tempFiles.sweep(all, started)

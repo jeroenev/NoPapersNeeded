@@ -15,32 +15,30 @@ interface DuplicateDao {
     @Query("SELECT * FROM duplicates WHERE docId = :docId")
     suspend fun forDoc(docId: String): List<DuplicateEntity>
 
+    @Query("SELECT * FROM duplicates")
+    suspend fun all(): List<DuplicateEntity>
+
     @Insert(onConflict = OnConflictStrategy.IGNORE)
     suspend fun insertAll(rows: List<DuplicateEntity>)
 
-    @Query("DELETE FROM duplicates WHERE docId = :docId")
-    suspend fun deleteForDoc(docId: String)
-
-    /** Replace all duplicate paths recorded for a document. */
-    @Transaction
-    suspend fun replaceAll(
+    @Query("DELETE FROM duplicates WHERE docId = :docId AND relPath = :relPath")
+    suspend fun delete(
         docId: String,
-        rows: List<DuplicateEntity>,
-    ) {
-        deleteForDoc(docId)
-        if (rows.isNotEmpty()) insertAll(rows)
-    }
+        relPath: String,
+    )
 
-    @Query("DELETE FROM duplicates WHERE docId IN (:docIds)")
-    suspend fun deleteForDocs(docIds: List<String>)
+    @Query("DELETE FROM duplicates")
+    suspend fun deleteAll()
 
-    /** Replace the duplicate paths recorded for each of [docIds] with those in [rows], at once. */
+    /**
+     * Replace every recorded duplicate with [rows], what a rescan found: it lists the whole library,
+     * so a copy it did not find is gone, or holds other bytes now. Unchanged, it writes nothing, so
+     * the table's observers do not fire on every rescan.
+     */
     @Transaction
-    suspend fun replaceForDocs(
-        docIds: Collection<String>,
-        rows: List<DuplicateEntity>,
-    ) {
-        for (chunk in docIds.chunked(BIND_CHUNK)) deleteForDocs(chunk)
+    suspend fun replaceAll(rows: List<DuplicateEntity>) {
+        if (all().toSet() == rows.toSet()) return
+        deleteAll()
         if (rows.isNotEmpty()) insertAll(rows)
     }
 }

@@ -4,6 +4,7 @@ import androidx.room3.RoomRawQuery
 import dev.npn.core.app.DocumentRepositoryImpl
 import dev.npn.core.index.FtsRows
 import dev.npn.core.model.FieldKeys
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
@@ -505,15 +506,18 @@ class NpnDatabaseTest {
         runTest {
             val dao = db.duplicateDao()
             val id = "a".repeat(64)
-            dao.replaceAll(id, listOf(DuplicateEntity(id, "copy1.pdf"), DuplicateEntity(id, "copy2.pdf")))
+            val other = "b".repeat(64)
+            dao.replaceAll(listOf(DuplicateEntity(id, "copy1.pdf"), DuplicateEntity(other, "copy2.pdf")))
             dao
                 .observeAll()
                 .first()
                 .map { it.relPath }
                 .shouldContainExactlyInAnyOrder("copy1.pdf", "copy2.pdf")
-            // Re-projecting a doc's duplicates replaces the whole set for that doc.
-            dao.replaceAll(id, listOf(DuplicateEntity(id, "copy2.pdf")))
-            dao.observeAll().first().map { it.relPath } shouldContainExactly listOf("copy2.pdf")
+            // A rescan's duplicates replace the whole table, a document with none left included.
+            dao.replaceAll(listOf(DuplicateEntity(id, "copy1.pdf")))
+            dao.observeAll().first().map { it.relPath } shouldContainExactly listOf("copy1.pdf")
+            dao.delete(id, "copy1.pdf")
+            dao.observeAll().first().shouldBeEmpty()
         }
 
     @Test

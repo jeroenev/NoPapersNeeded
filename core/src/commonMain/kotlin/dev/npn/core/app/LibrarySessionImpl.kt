@@ -370,7 +370,7 @@ class LibrarySessionImpl private constructor(
                     library = library,
                     scanReports = scanReports,
                     ocrFacade = ocr,
-                    maintenance = buildMaintenance(deps, lifetime, library, relink, ocr, scanReports),
+                    maintenance = buildMaintenance(deps, lifetime, coordinator, library, relink, ocr, scanReports),
                     aiEditQueue = edits.queue,
                     queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits),
                     aiFacade = ai,
