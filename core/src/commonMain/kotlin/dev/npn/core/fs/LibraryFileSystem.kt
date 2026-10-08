@@ -252,3 +252,9 @@ interface LibraryFileSystem {
      */
     fun watch(): Flow<FsEvent>
 }
+
+/** Whether [relPath] is a file whose bytes hash to [hash], the SHA-256 that is a document's id. */
+internal suspend fun LibraryFileSystem.holds(
+    relPath: String,
+    hash: String,
+): Boolean = stat(relPath)?.isDirectory == false && sha256(relPath) == hash

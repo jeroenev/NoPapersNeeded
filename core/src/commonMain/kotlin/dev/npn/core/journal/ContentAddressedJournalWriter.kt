@@ -2,6 +2,7 @@ package dev.npn.core.journal
 
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.VerifiedPublicationCapability
+import dev.npn.core.fs.holds
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.runCatchingCancellable
 import kotlin.uuid.Uuid
@@ -59,9 +60,10 @@ internal class ContentAddressedJournalWriter(
 
 /**
  * Stage [bytes] under a per-installation `.part` name, then atomically publish them to the
- * content-addressed object path for [hash] (verified create-no-replace). On any publish failure the
- * staging file is best-effort deleted and the original failure rethrown, so a partial write never
- * lingers. Shared by [ContentAddressedJournalWriter] (regular objects) and [SnapshotCompactor]
+ * content-addressed object path for [hash] (verified create-no-replace). A publish that fails with
+ * no object of those bytes in place has the staging file best-effort deleted and the original
+ * failure rethrown, so a partial write never lingers; one whose object is in place regardless
+ * published it. Shared by [ContentAddressedJournalWriter] (regular objects) and [SnapshotCompactor]
  * (snapshots); [snapshot] selects the bucket namespace. Returns the canonical object path.
  */
 internal suspend fun stageAndPublishVerifiedObject(
@@ -76,7 +78,11 @@ internal suspend fun stageAndPublishVerifiedObject(
     fs.writeBytesOnce(stagingPath, bytes)
     var published = false
     try {
-        fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, hash)
+        runCatchingCancellable { fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, hash) }.onFailure { failure ->
+            // A failure after the object was installed (its staging file left behind, say) still
+            // published it: readers take it, so the write must not report that it did not.
+            if (!runCatchingCancellable { fs.holds(canonicalPath, hash) }.getOrDefault(false)) throw failure
+        }
         published = true
     } finally {
         if (!published) runCatchingCancellable { fs.delete(stagingPath) }

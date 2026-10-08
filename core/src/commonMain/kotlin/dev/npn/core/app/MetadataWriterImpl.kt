@@ -215,28 +215,33 @@ class MetadataWriterImpl(
         // missing and there is nothing to restore. So refuse before the move, not after it.
         coordinator.checkWritable()
         val origPath = doc.relPath
-        val trashPath = if (fs.exists(origPath)) trashOps.moveToTrash(origPath, docId) else null
-        var committed = false
-        try {
-            // Immediate DB sync so the UI hides it now; the event carries origPath for cross-device
-            // restore. The optimistic row write runs under the coordinator mutex, atomically with
-            // the committing fold, so a concurrent reconcile cannot clobber the trashed flag before
-            // the journal event is folded (see JournalCoordinator.commitWithOptimisticLifecycle).
-            coordinator.commitWithOptimisticLifecycle(
-                ops = listOf(PendingOp.docTrash(docId, origPath)),
-                lifecycleDocs = setOf(docId),
-            ) {
-                documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
+        // From the move on, a caller that goes away must not split the trash in two: a cancellation
+        // after the event was published would move the PDF back under a trashed document.
+        withContext(NonCancellable) {
+            val trashPath = if (fs.exists(origPath)) trashOps.moveToTrash(origPath, docId) else null
+            var committed = false
+            try {
+                // Immediate DB sync so the UI hides it now; the event carries origPath for cross-device
+                // restore. The optimistic row write runs under the coordinator mutex, atomically with
+                // the committing fold, so a concurrent reconcile cannot clobber the trashed flag before
+                // the journal event is folded; a commit that fails puts the row back (see
+                // JournalCoordinator.commitWithOptimisticLifecycle).
+                coordinator.commitWithOptimisticLifecycle(
+                    ops = listOf(PendingOp.docTrash(docId, origPath)),
+                    lifecycleDocs = setOf(docId),
+                ) {
+                    documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
+                }
+                committed = true
+            } finally {
+                if (!committed && trashPath != null) moveBack(trashPath, origPath)
             }
-            committed = true
-        } finally {
-            if (!committed && trashPath != null) moveBack(trashPath, origPath)
         }
     }
 
     /**
-     * Best-effort undo of a move whose commit failed or was cancelled. The caller still sees the
-     * commit's failure; an undo that fails too is only logged.
+     * Best-effort undo of a move whose commit published nothing. The caller still sees the commit's
+     * failure; an undo that fails too is only logged.
      */
     private suspend fun moveBack(
         from: String,
@@ -257,31 +262,34 @@ class MetadataWriterImpl(
         // The file lives in trash under a hash-suffixed name; find it and move it back (uniquify
         // via TrashOps.restore if the target is taken).
         val entry = findTrashEntry(docId)
-        val finalPath = entry?.let { trashOps.restore(it, target) } ?: target
-        var committed = false
-        try {
-            coordinator.commitWithOptimisticLifecycle(
-                ops =
-                    listOf(
-                        PendingOp.docRestore(docId),
-                        PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath),
-                    ),
-                lifecycleDocs = setOf(docId),
-            ) {
-                documentDao.upsert(
-                    doc.copy(
-                        trashed = false,
-                        trashedOrigPath = null,
-                        trashedAt = null,
-                        relPath = finalPath,
-                        fileName = NpnPaths.fileName(finalPath),
-                        missing = false,
-                    ),
-                )
+        // Not cancellable from the move on, as in trashDoc.
+        withContext(NonCancellable) {
+            val finalPath = entry?.let { trashOps.restore(it, target) } ?: target
+            var committed = false
+            try {
+                coordinator.commitWithOptimisticLifecycle(
+                    ops =
+                        listOf(
+                            PendingOp.docRestore(docId),
+                            PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath),
+                        ),
+                    lifecycleDocs = setOf(docId),
+                ) {
+                    documentDao.upsert(
+                        doc.copy(
+                            trashed = false,
+                            trashedOrigPath = null,
+                            trashedAt = null,
+                            relPath = finalPath,
+                            fileName = NpnPaths.fileName(finalPath),
+                            missing = false,
+                        ),
+                    )
+                }
+                committed = true
+            } finally {
+                if (!committed && entry != null) moveBack(finalPath, entry)
             }
-            committed = true
-        } finally {
-            if (!committed && entry != null) moveBack(finalPath, entry)
         }
     }
 

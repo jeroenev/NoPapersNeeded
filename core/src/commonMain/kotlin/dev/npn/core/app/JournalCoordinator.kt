@@ -381,20 +381,39 @@ class JournalCoordinator internal constructor(
     private suspend fun commitOnto(
         current: FoldedState,
         ops: List<PendingOp>,
+    ) = withContext(NonCancellable) { project(current, writeTransaction(ops)) }
+
+    /** Record [published], a transaction this session just wrote, and project it onto [current]. */
+    private suspend fun project(
+        current: FoldedState,
+        published: PublishedTransaction,
         preserveLifecycleDocs: Set<String> = emptySet(),
-    ) = withContext(NonCancellable) {
-        val published = writeTransaction(ops)
-        withDurableProjectionRecovery {
-            val local = accumulator.localSource(published)
-            indexer.projection {
-                recordWritten(current, local)
-                indexer.refreshEvents(current, published.events, preserveLifecycleDocs = preserveLifecycleDocs)
-            }
-            syncedSettings.update(current, published.events)
-            // This commit added a source and projected it incrementally, so the projection matches
-            // the new source set. Recording that is what lets the next open skip the refold; without
-            // it, any edit in one session would cost a full replay in the next.
-            accumulator.markReady(current.maxHlc)
+    ) = withDurableProjectionRecovery {
+        val local = accumulator.localSource(published)
+        indexer.projection {
+            recordWritten(current, local)
+            indexer.refreshEvents(current, published.events, preserveLifecycleDocs = preserveLifecycleDocs)
+        }
+        syncedSettings.update(current, published.events)
+        // This commit added a source and projected it incrementally, so the projection matches
+        // the new source set. Recording that is what lets the next open skip the refold; without
+        // it, any edit in one session would cost a full replay in the next.
+        accumulator.markReady(current.maxHlc)
+    }
+
+    /**
+     * [project] [published] for a caller that undoes what it did when the call fails: a moved PDF,
+     * an imported file. The journal holds the change now, so it stands, and the caller must not
+     * undo it. A failure to project it has already been dealt with as for any commit (writes
+     * latched, the projection rebuilt from the store), so it is logged here rather than thrown.
+     */
+    private suspend fun projectStanding(
+        current: FoldedState,
+        published: PublishedTransaction,
+        preserveLifecycleDocs: Set<String> = emptySet(),
+    ) {
+        log.runLogged("Projecting the published ${published.relPath}") {
+            project(current, published, preserveLifecycleDocs)
         }
     }
 
@@ -403,7 +422,8 @@ class JournalCoordinator internal constructor(
     /**
      * Record that [doc]'s bytes are in the library again, at [relPath], when the journal still has
      * it deleted or trashed: an import of those bytes. Writes nothing, and needs no write access,
-     * for a document nothing hides. Returns whether a restore was written.
+     * for a document nothing hides. Returns whether a restore was written; throws only when none
+     * was, so the importer takes back its file only then.
      */
     suspend fun restoreReturned(
         doc: String,
@@ -414,7 +434,7 @@ class JournalCoordinator internal constructor(
             val ops = current.restoreOps(doc, relPath)
             if (ops.isEmpty()) return@locked false
             ensureWritable()
-            commitOnto(current, ops)
+            withContext(NonCancellable) { projectStanding(current, writeTransaction(ops)) }
             true
         }
 
@@ -445,6 +465,11 @@ class JournalCoordinator internal constructor(
      * [lifecycleDocs] are additionally passed to [Indexer.refreshEvents] as preserveLifecycleDocs,
      * so the committing fold keeps the just-written lifecycle row rather than re-deriving it from a
      * journal state that (for a not-yet-folded source) might not carry it.
+     *
+     * Throws only when nothing was published, and then puts the rows of [lifecycleDocs] back as
+     * they were before [optimisticWrite], still under the mutex, so the caller's undo of its own
+     * file move leaves row and file agreeing. Once the transaction is published the change stands
+     * ([projectStanding]).
      */
     suspend fun commitWithOptimisticLifecycle(
         ops: List<PendingOp>,
@@ -454,9 +479,27 @@ class JournalCoordinator internal constructor(
         locked {
             ensureWritable()
             val current = foldedState()
-            optimisticWrite()
-            if (ops.isEmpty()) return@locked false
-            commitOnto(current, ops, preserveLifecycleDocs = lifecycleDocs)
+            if (ops.isEmpty()) {
+                optimisticWrite()
+                return@locked false
+            }
+            withContext(NonCancellable) {
+                val before = indexer.rowsOf(lifecycleDocs)
+                var published: PublishedTransaction? = null
+                try {
+                    optimisticWrite()
+                    published = writeTransaction(ops)
+                } finally {
+                    if (published == null) {
+                        // Logged, not thrown: the commit's own failure is the one the caller needs, and
+                        // a row left behind is corrected by the next fold of it, which the journal drives.
+                        log.runLogged("Putting back the rows of ${lifecycleDocs.joinToString()}") {
+                            indexer.putBack(lifecycleDocs, before)
+                        }
+                    }
+                }
+                projectStanding(current, checkNotNull(published), preserveLifecycleDocs = lifecycleDocs)
+            }
             true
         }
 

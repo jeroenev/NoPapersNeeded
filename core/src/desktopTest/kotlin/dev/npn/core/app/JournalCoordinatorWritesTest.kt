@@ -25,6 +25,7 @@ import kotlinx.coroutines.cancelAndJoin
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
+import java.io.IOException
 import java.util.concurrent.Executors
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -90,6 +91,43 @@ class JournalCoordinatorWritesTest {
             val journal = rig.fs.listAllUnder(NpnPaths.JOURNAL_DIR).filter { !it.isDirectory }
             journal.filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 } shouldHaveSize 1
             journal.filter { JournalPaths.classify(it.relPath) is JournalPath.Legacy }.shouldBeEmpty()
+        }
+
+    /**
+     * A publish that fails after the object is in place (removing the staging file, say) has
+     * published it: the journal holds the event, so the commit must not report that it did not.
+     */
+    @Test
+    fun aPublishThatFailsAfterInstallingTheObjectCommits() =
+        runTest {
+            var failures = 1
+            val failingLate =
+                object : LibraryFileSystem by rig.fs {
+                    override suspend fun publishVerifiedObjectOnce(
+                        stagingPath: String,
+                        canonicalPath: String,
+                        expectedHash: String,
+                    ) {
+                        rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
+                        if (failures-- > 0) throw IOException("could not remove $stagingPath")
+                    }
+                }
+            val coordinator =
+                JournalCoordinator(
+                    ContentAddressedJournalWriter(failingLate, "test-installation", HlcWatermarkAllocator(rig.clock)),
+                    rig.indexer,
+                    rig.accumulator,
+                )
+            rig.writePdf("a.pdf", "alpha")
+            coordinator.rescan()
+            val doc = rig.fs.sha256("a.pdf")
+
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(doc, "kept"))).shouldBeTrue()
+
+            rig.db.tagDao().tagsForDocument(doc) shouldBe listOf("kept")
+            rig.fs
+                .listAllUnder(NpnPaths.JOURNAL_DIR)
+                .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 } shouldHaveSize 1
         }
 
     /**

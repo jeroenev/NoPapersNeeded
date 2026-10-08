@@ -87,6 +87,22 @@ class Indexer(
     suspend fun <T> projection(block: suspend () -> T): T =
         documentPaths.deferring { db.withWriteTransaction { block() } }
 
+    /** The rows of [docIds] as they stand, for [putBack] to restore. */
+    suspend fun rowsOf(docIds: Set<String>): List<DocumentEntity> = documentDao.getByDocIds(docIds.toList())
+
+    /**
+     * Write back [rows], which [rowsOf] read for [docIds], undoing what was written to those rows
+     * since; a document that had no row then loses the one it has now.
+     */
+    suspend fun putBack(
+        docIds: Set<String>,
+        rows: List<DocumentEntity>,
+    ) = db.withWriteTransaction {
+        val had = rows.mapTo(HashSet()) { it.docId }
+        for (docId in docIds - had) documentDao.delete(docId)
+        documentDao.upsertAll(rows)
+    }
+
     @Suppress("LongMethod")
     suspend fun rescan(
         metadataState: FoldedState,

@@ -1,21 +1,29 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.isLive
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.VerifiedPublicationFailedException
 import dev.npn.core.index.IndexRig
+import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.MutableClock
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.NpnLog
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
+import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
 import kotlin.test.Test
@@ -222,53 +230,192 @@ class TrashLifecycleTest {
             }
         }
 
+    /**
+     * A trash whose commit fails leaves nothing behind: the PDF is back where it was and so is its
+     * row, so the document neither vanishes from the library nor shows in Trash with no file.
+     */
+    @Test
+    fun aTrashWhoseCommitFailsLeavesThePdfAndTheRowAsTheyWere() =
+        withLifecycle { lifecycle ->
+            val rig = lifecycle.rig
+            rig.writePdf("a.pdf", "alpha")
+            lifecycle.coordinator.rescan()
+            val id = rig.fs.sha256("a.pdf")
+            val before = rig.db.documentDao().getByDocId(id)
+
+            lifecycle.failures = 1
+            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.writer.trashDoc(id) }
+
+            rig.exists("a.pdf").shouldBeTrue()
+            trashEntries(rig.fs).shouldBeEmpty()
+            rig.db.documentDao().getByDocId(id) shouldBe before
+
+            lifecycle.writer.trashDoc(id)
+            rig.exists("a.pdf").shouldBeFalse()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .trashed
+                .shouldBeTrue()
+        }
+
     /** A restore whose commit fails after the move puts the PDF back, as a failed trash does. */
     @Test
     fun aRestoreWhoseCommitFailsPutsThePdfBackInTheTrash() =
-        runTest {
-            val rig = IndexRig.create()
-            try {
-                var failures = 0
-                val flaky =
-                    object : LibraryFileSystem by rig.fs {
-                        override suspend fun publishVerifiedObjectOnce(
-                            stagingPath: String,
-                            canonicalPath: String,
-                            expectedHash: String,
-                        ) {
-                            if (failures-- > 0) throw VerifiedPublicationFailedException("rename failed")
-                            rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
-                        }
-                    }
-                val coordinator =
-                    JournalCoordinator(
-                        ContentAddressedJournalWriter(flaky, "test-installation", HlcWatermarkAllocator(rig.clock)),
-                        rig.indexer,
-                        rig.accumulator,
-                    )
-                val writer =
-                    MetadataWriterImpl(
-                        coordinator,
-                        rig.db,
-                        rig.fs,
-                        TrashOps(rig.fs),
-                        StoragePathRuleApplicator(rig.fs, rig.db, { null }, { _, _ -> }),
-                        NpnLog.None,
-                    )
-                rig.writePdf("a.pdf", "alpha")
-                coordinator.rescan()
-                val id = rig.fs.sha256("a.pdf")
-                writer.trashDoc(id)
+        withLifecycle { lifecycle ->
+            val rig = lifecycle.rig
+            rig.writePdf("a.pdf", "alpha")
+            lifecycle.coordinator.rescan()
+            val id = rig.fs.sha256("a.pdf")
+            lifecycle.writer.trashDoc(id)
+            val before = rig.db.documentDao().getByDocId(id)
 
-                failures = 1
-                assertFailsWith<VerifiedPublicationFailedException> { writer.restoreDoc(id) }
+            lifecycle.failures = 1
+            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.writer.restoreDoc(id) }
 
-                rig.exists("a.pdf").shouldBeFalse()
-                trashEntries(rig.fs) shouldHaveSize 1
-            } finally {
-                rig.close()
-            }
+            rig.exists("a.pdf").shouldBeFalse()
+            trashEntries(rig.fs) shouldHaveSize 1
+            rig.db.documentDao().getByDocId(id) shouldBe before
+
+            lifecycle.writer.restoreDoc(id)
+            rig.exists("a.pdf").shouldBeTrue()
+            trashEntries(rig.fs).shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .isLive
+                .shouldBeTrue()
         }
+
+    @Test
+    fun aDeleteWhoseCommitFailsLeavesTheFileAndTheRowAsTheyWere() =
+        withLifecycle { lifecycle ->
+            val rig = lifecycle.rig
+            rig.writePdf("a.pdf", "alpha")
+            lifecycle.coordinator.rescan()
+            val id = rig.fs.sha256("a.pdf")
+            val before = rig.db.documentDao().getByDocId(id)
+
+            lifecycle.failures = 1
+            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.writer.deleteDocPermanently(id) }
+
+            rig.exists("a.pdf").shouldBeTrue()
+            rig.db.documentDao().getByDocId(id) shouldBe before
+
+            lifecycle.writer.deleteDocPermanently(id)
+            rig.exists("a.pdf").shouldBeFalse()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .deleted
+                .shouldBeTrue()
+        }
+
+    @Test
+    fun aDeleteFromTheTrashWhoseCommitFailsLeavesItInTheTrash() =
+        withLifecycle { lifecycle ->
+            val rig = lifecycle.rig
+            rig.writePdf("a.pdf", "alpha")
+            lifecycle.coordinator.rescan()
+            val id = rig.fs.sha256("a.pdf")
+            lifecycle.writer.trashDoc(id)
+            val before = rig.db.documentDao().getByDocId(id)
+
+            lifecycle.failures = 1
+            assertFailsWith<VerifiedPublicationFailedException> { lifecycle.writer.deleteDocPermanently(id) }
+
+            trashEntries(rig.fs) shouldHaveSize 1
+            rig.db.documentDao().getByDocId(id) shouldBe before
+        }
+
+    /**
+     * Once the event is published the journal says trashed, so the trash stands even when projecting
+     * it fails: moving the PDF back then would leave a trashed document with its file in the library.
+     */
+    @Test
+    fun aTrashWhoseEventIsPublishedStandsWhenProjectingItFails() =
+        withLifecycle(statFailuresOfObjects = 1) { lifecycle ->
+            val rig = lifecycle.rig
+            rig.writePdf("a.pdf", "alpha")
+            lifecycle.coordinator.rescan()
+            val id = rig.fs.sha256("a.pdf")
+
+            lifecycle.writer.trashDoc(id)
+
+            rig.exists("a.pdf").shouldBeFalse()
+            trashEntries(rig.fs) shouldHaveSize 1
+            lifecycle.coordinator.rescan()
+            rig.db
+                .documentDao()
+                .getByDocId(id)
+                .shouldNotBeNull()
+                .trashed
+                .shouldBeTrue()
+        }
+
+    /**
+     * A [MetadataWriterImpl] and its coordinator over an [IndexRig] whose next [failures] journal
+     * publishes fail; with [statFailuresOfObjects], that many reads of a published object's metadata
+     * fail too, which fails projecting a commit after its publish.
+     */
+    private class Lifecycle(
+        val rig: IndexRig,
+        statFailuresOfObjects: Int,
+    ) {
+        var failures = 0
+        private var statFailures = statFailuresOfObjects
+
+        private val journalFs =
+            object : LibraryFileSystem by rig.fs {
+                override suspend fun publishVerifiedObjectOnce(
+                    stagingPath: String,
+                    canonicalPath: String,
+                    expectedHash: String,
+                ) {
+                    if (failures-- > 0) throw VerifiedPublicationFailedException("rename failed")
+                    rig.fs.publishVerifiedObjectOnce(stagingPath, canonicalPath, expectedHash)
+                }
+
+                override suspend fun stat(relPath: String): FileMeta? {
+                    if (JournalPaths.classify(relPath) is JournalPath.ObjectV2 && statFailures-- > 0) {
+                        throw IOException("stat failed")
+                    }
+                    return rig.fs.stat(relPath)
+                }
+            }
+
+        val coordinator =
+            JournalCoordinator(
+                ContentAddressedJournalWriter(journalFs, "test-installation", HlcWatermarkAllocator(rig.clock)),
+                rig.indexer,
+                MetadataAccumulator(journalFs, rig.db, installationId = "test-installation"),
+            )
+
+        val writer =
+            MetadataWriterImpl(
+                coordinator,
+                rig.db,
+                rig.fs,
+                TrashOps(rig.fs),
+                StoragePathRuleApplicator(rig.fs, rig.db, { null }, { _, _ -> }),
+                NpnLog.None,
+            )
+    }
+
+    private fun withLifecycle(
+        statFailuresOfObjects: Int = 0,
+        block: suspend (Lifecycle) -> Unit,
+    ) = runTest {
+        val rig = IndexRig.create()
+        try {
+            block(Lifecycle(rig, statFailuresOfObjects))
+        } finally {
+            rig.close()
+        }
+    }
 
     private suspend fun trashEntries(fs: LibraryFileSystem) =
         fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }
