@@ -5,9 +5,9 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -27,11 +27,14 @@ import dev.npn.core.model.FieldValues
 class NumberInput internal constructor(
     val type: FieldType,
     private val locale: FieldLocale,
-    text: MutableState<String>,
+    value: String?,
 ) {
     /** Exactly what is typed, including a partial or off-type entry. */
-    var text by text
+    var text by mutableStateOf(shown(value))
         private set
+
+    /** The value [follow] last took, so only a change to it can replace [text]. */
+    private var followed by mutableStateOf(value)
 
     /** What [text] means for [type]. */
     val parsed: FieldParse get() = FieldValues.canonicalize(type, text, locale)
@@ -44,12 +47,39 @@ class NumberInput internal constructor(
         text = typed
         return parsed
     }
+
+    /**
+     * Take the value the field's owner holds. Only a change to it that means something other than
+     * [text] replaces [text]: each keystroke comes back here in canonical form (`12.0` as `12`), and
+     * a bound's partial entry (`1.`) does not come back at all.
+     */
+    internal fun follow(value: String?) {
+        if (value == followed) return
+        followed = value
+        if (meaning(value, FieldLocale.CANONICAL) != meaning(text, locale)) text = shown(value)
+    }
+
+    private fun shown(value: String?): String = value?.let { FieldValues.display(type, it, locale) }.orEmpty()
+
+    /**
+     * What [entry], written the [entryLocale] way, stands for: the value it commits (canonical, or a
+     * refused entry as typed), read as a stored value is ([FieldValues.normalized]).
+     */
+    private fun meaning(
+        entry: String?,
+        entryLocale: FieldLocale,
+    ): String =
+        when (val parsed = FieldValues.canonicalize(type, entry, entryLocale)) {
+            is FieldParse.Ok -> parsed.canonical.orEmpty()
+            is FieldParse.Invalid -> FieldValues.normalized(type, parsed.raw)
+        }
 }
 
 /**
  * The [NumberInput] for a number of [def]'s type holding the canonical [value] (null for none). It
- * shows the value in [locale] form, so `1.5` reads `1,5` under a comma locale, and takes a new
- * [value] from elsewhere as an edit; see [rememberFieldText].
+ * shows the value in [locale] form, so `1.5` reads `1,5` under a comma locale, and keeps what is
+ * typed until [value] changes to something the text does not already mean, such as another
+ * document's value or a cleared filter.
  */
 @Composable
 fun rememberNumberInput(
@@ -57,10 +87,9 @@ fun rememberNumberInput(
     value: String?,
     locale: FieldLocale,
 ): NumberInput {
-    val shown =
-        remember(def.type, value, locale) { value?.let { FieldValues.display(def.type, it, locale) }.orEmpty() }
-    val text = rememberFieldText(shown)
-    return remember(def.type, locale, text) { NumberInput(def.type, locale, text) }
+    val input = remember(def.type, locale) { NumberInput(def.type, locale, value) }
+    input.follow(value)
+    return input
 }
 
 /**

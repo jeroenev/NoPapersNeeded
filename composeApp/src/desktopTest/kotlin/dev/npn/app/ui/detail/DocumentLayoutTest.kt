@@ -235,8 +235,8 @@ class DocumentLayoutTest {
     }
 }
 
-/** The layout is under test here, not the writes: every action the panel offers does nothing. */
-private object NoWrites : DocumentWrites {
+/** What is on screen is under test, not the writes: every action the panel offers does nothing. */
+internal object NoWrites : DocumentWrites {
     override fun addTag(tag: String) = Unit
 
     override fun removeTag(tag: String) = Unit
