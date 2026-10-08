@@ -90,15 +90,17 @@ class AiFacadeImpl(
         KoogChatHistoryMapper.map(chatHistoryStore.load(sessionId))
 
     override suspend fun chatSessions(): List<AiChatSession> {
+        val stored = chatSessionStore.load()
         // An untitled session was never asked in, or was cleared: listed only while it still has
         // a conversation, which is a cheap existence check rather than a decode.
-        val listed = chatSessionStore.load().filter { it.title != null || chatHistoryStore.has(it.id) }
-        if (listed.isNotEmpty() || !chatHistoryStore.has(LEGACY_CONVERSATION_ID)) {
-            return listed.sortedByDescending { it.updatedAt }
-        }
-        // The one conversation of a build from before sessions existed, offered untitled until it
-        // is next used (ask stores it then).
-        return listOf(AiChatSession(LEGACY_CONVERSATION_ID, title = null, updatedAt = 0L))
+        val listed = stored.filter { it.title != null || chatHistoryStore.has(it.id) }
+        // The one conversation of a build from before sessions existed, listed untitled beside the
+        // others while it has history, until it is deleted or asked in (ask stores it then).
+        val legacy =
+            AiChatSession(LEGACY_CONVERSATION_ID, title = null, updatedAt = 0L).takeIf {
+                stored.none { it.id == LEGACY_CONVERSATION_ID } && chatHistoryStore.has(LEGACY_CONVERSATION_ID)
+            }
+        return (listed + listOfNotNull(legacy)).sortedByDescending { it.updatedAt }
     }
 
     @OptIn(ExperimentalUuidApi::class)

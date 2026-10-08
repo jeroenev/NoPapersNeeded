@@ -91,6 +91,56 @@ class AiChatSessionTest {
             facade.chatSessions().single().title shouldBe "Which invoices are overdue?"
         }
 
+    /** A user upgrading from a build without sessions asks in the new session the screen opens on. */
+    @Test
+    fun thePreSessionsChatStaysListedAfterAnotherSessionIsAskedIn() =
+        runTest {
+            RoomChatHistoryProvider(chats).store(
+                LEGACY_ID,
+                listOf(Message.Assistant("answer", ResponseMetaInfo.Empty)),
+            )
+            val facade = AiFacadeImpl(db, chats) { AiConfig() }
+            val fresh = facade.createChatSession()
+
+            assertFails { facade.ask(fresh.id, "Which invoices are overdue?").collect() }
+
+            facade.chatSessions().map { it.id to it.title } shouldContainExactly
+                listOf(fresh.id to "Which invoices are overdue?", LEGACY_ID to null)
+            // A reopen reads the same list: nothing about it lived in memory.
+            AiFacadeImpl(db, chats) { AiConfig() }.chatSessions().map { it.id } shouldContainExactly
+                listOf(fresh.id, LEGACY_ID)
+        }
+
+    @Test
+    fun askingInThePreSessionsChatStoresItTitledByTheQuestion() =
+        runTest {
+            RoomChatHistoryProvider(chats).store(
+                LEGACY_ID,
+                listOf(Message.Assistant("answer", ResponseMetaInfo.Empty)),
+            )
+            val facade = AiFacadeImpl(db, chats) { AiConfig() }
+
+            assertFails { facade.ask(LEGACY_ID, "And last year?").collect() }
+
+            facade.chatSessions().map { it.id to it.title } shouldContainExactly listOf(LEGACY_ID to "And last year?")
+            RoomChatSessionStore(chats).load().map { it.id } shouldContainExactly listOf(LEGACY_ID)
+        }
+
+    @Test
+    fun deletingThePreSessionsChatRemovesItForGood() =
+        runTest {
+            RoomChatHistoryProvider(chats).store(
+                LEGACY_ID,
+                listOf(Message.Assistant("answer", ResponseMetaInfo.Empty)),
+            )
+            val facade = AiFacadeImpl(db, chats) { AiConfig() }
+            assertFails { facade.ask("other", "Which invoices are overdue?").collect() }
+
+            facade.deleteChatSession(LEGACY_ID)
+
+            AiFacadeImpl(db, chats) { AiConfig() }.chatSessions().map { it.id } shouldContainExactly listOf("other")
+        }
+
     @Test
     fun concurrentAsksKeepEverySession() =
         runTest {
@@ -149,5 +199,8 @@ class AiChatSessionTest {
 
     private companion object {
         const val SESSIONS = 20
+
+        /** The conversation id builds from before sessions existed stored their one chat under. */
+        const val LEGACY_ID = "main"
     }
 }
