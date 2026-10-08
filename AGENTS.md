@@ -130,7 +130,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
 - Document identity = SHA-256 of bytes; duplicates are forbidden (one canonical path per hash).
   A path holds one row: a trashed, deleted or missing row gives it up to a live document
   (`DocumentDao.upsertAll`). A hidden document is back only when the file at its path hashes to
-  it; something else at its old name, or a file still being written, is no evidence.
+  it; something else at its old name, or a file still being written, is no evidence. An import is
+  a duplicate only of a live document whose file holds the bytes; a hidden document's bytes bring
+  it back (`ImportService`), since a caller may delete a duplicate's source.
 - Merge semantics: OR-set for tags, HLC last-writer-wins for single-value fields, system
   properties, settings and field definitions, and for trash/restore and delete/undelete.
 - Document fields are registry data, not code. Title, correspondent, docType, docDate and notes

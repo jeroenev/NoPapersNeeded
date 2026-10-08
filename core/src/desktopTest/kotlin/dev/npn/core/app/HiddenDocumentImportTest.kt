@@ -1,0 +1,210 @@
+package dev.npn.core.app
+
+import dev.npn.core.db.QueueState
+import dev.npn.core.db.queueState
+import dev.npn.core.db.searchDocIds
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.journal.JournalOp
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.pdf.PdfFixtures
+import io.kotest.matchers.booleans.shouldBeFalse
+import io.kotest.matchers.booleans.shouldBeTrue
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldHaveSize
+import io.kotest.matchers.nulls.shouldNotBeNull
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.shouldNotBe
+import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.test.runTest
+import java.nio.file.Files
+import kotlin.test.Test
+import kotlin.test.assertFailsWith
+
+/**
+ * Importing the bytes of a document the library does not show (missing, trashed) brings that
+ * document back: only bytes the library shows are a duplicate, and a caller may delete a
+ * duplicate's source.
+ */
+class HiddenDocumentImportTest {
+    private lateinit var rig: AppSessionRig
+
+    /** Run [block] over a fresh session holding `a.pdf`, closed before the test's scope ends. */
+    private fun withDocument(block: suspend (id: String, bytes: ByteArray) -> Unit) =
+        runTest {
+            rig = AppSessionRig.create(backgroundScope)
+            try {
+                val bytes = PdfFixtures.embeddedTextPdf("alpha")
+                rig.writePdf("a.pdf", bytes)
+                rig.session.rescan()
+                block(rig.docId("a.pdf"), bytes)
+            } finally {
+                rig.close()
+            }
+        }
+
+    @Test
+    fun importingTheBytesOfALiveDocumentIsADuplicate() =
+        withDocument { id, bytes ->
+            rig.session.ingest.importPdfBytes(bytes, "copy.pdf") shouldBe ImportOutcome.Duplicate(id, "a.pdf")
+
+            libraryPdfs() shouldBe listOf("a.pdf")
+        }
+
+    /** A document whose file went missing comes back with the file an import brings, metadata and all. */
+    @Test
+    fun importingTheBytesOfAMissingDocumentBringsItBack() =
+        withDocument { id, bytes ->
+            rig.session.meta.setField(id, FieldKeys.TITLE, "Kept")
+            Files.delete(rig.libRoot.resolve("a.pdf"))
+            rig.session.rescan()
+            row(id).missing.shouldBeTrue()
+
+            val imported = importAgain(bytes).shouldBeInstanceOf<ImportOutcome.Imported>()
+
+            imported.docId shouldBe id
+            rig.fs.sha256(imported.relPath) shouldBe id
+            assertLive(id)
+            row(id).title shouldBe "Kept"
+            rig.session.rescan()
+            assertLive(id)
+        }
+
+    /** Search finds a returning document under the name its file has now. */
+    @Test
+    fun aDocumentBroughtBackUnderAnotherNameIsFoundByIt() =
+        withDocument { id, bytes ->
+            rig.session.docLifecycle.trashDoc(id)
+
+            rig.session.ingest
+                .importPdfBytes(bytes, "zulu.pdf")
+                .shouldBeInstanceOf<ImportOutcome.Imported>()
+
+            rig.db.ftsDao().searchDocIds("zulu") shouldBe listOf(id)
+        }
+
+    /** Nor is a document a duplicate whose file is gone before a rescan noticed. */
+    @Test
+    fun importingTheBytesOfADocumentWhoseFileJustWentBringsItBack() =
+        withDocument { id, bytes ->
+            Files.delete(rig.libRoot.resolve("a.pdf"))
+
+            val imported = importAgain(bytes).shouldBeInstanceOf<ImportOutcome.Imported>()
+
+            rig.fs.sha256(imported.relPath) shouldBe id
+            rig.session.rescan()
+            assertLive(id)
+        }
+
+    /**
+     * A trashed document's bytes take it out of the trash: the journal records the restore, so no
+     * later fold hides it again, and the copy in the trash goes, so there is one copy, not two.
+     */
+    @Test
+    fun importingTheBytesOfATrashedDocumentBringsItBackOutOfTheTrash() =
+        withDocument { id, bytes ->
+            rig.session.meta.setField(id, FieldKeys.TITLE, "Kept")
+            rig.session.work.drainOcr()
+            rig.session.docLifecycle.trashDoc(id)
+
+            val imported = importAgain(bytes).shouldBeInstanceOf<ImportOutcome.Imported>()
+
+            imported.docId shouldBe id
+            assertLive(id)
+            journalObjects().filter { it.contains(JournalOp.DocRestore.WIRE) } shouldHaveSize 1
+            trashEntries().shouldBeEmpty()
+            libraryPdfs() shouldBe listOf(imported.relPath)
+            // Its text is indexed already, so OCR has nothing to redo.
+            rig.deviceDb
+                .ocrQueueDao()
+                .getByDocId(id)
+                ?.queueState shouldNotBe QueueState.PENDING
+            rig.session.rescan()
+            rig.session.meta.setField(id, FieldKeys.NOTES, "Edited")
+            assertLive(id)
+            row(id).title shouldBe "Kept"
+        }
+
+    /**
+     * When the return cannot be recorded, the import is taken back: the document stays in the trash
+     * as it was, with its copy there, and no second copy is left in the library.
+     */
+    @Test
+    fun aTrashedDocumentsImportThatCannotBeRecordedLeavesItInTheTrash() =
+        withDocument { id, bytes ->
+            // Settled first, so no OCR pass writes the row while the import runs.
+            rig.session.work.drainOcr()
+            rig.session.docLifecycle.trashDoc(id)
+            val before = row(id)
+            blockMetadataWrites()
+
+            importAgain(bytes) shouldBe ImportOutcome.Failed(ImportFailure.COPY_FAILED)
+
+            row(id) shouldBe before
+            trashEntries() shouldHaveSize 1
+            libraryPdfs().shouldBeEmpty()
+        }
+
+    /**
+     * Nor is the imported file deleted when it is the only copy of the bytes there is: it stays,
+     * the trashed row pointing at it, and an import retried meanwhile makes no second copy.
+     */
+    @Test
+    fun anImportThatCannotBeRecordedKeepsTheOnlyCopy() =
+        withDocument { id, bytes ->
+            rig.session.docLifecycle.trashDoc(id)
+            trashEntries().forEach { rig.fs.delete(it) }
+            blockMetadataWrites()
+
+            repeat(2) {
+                importAgain(bytes) shouldBe ImportOutcome.Failed(ImportFailure.COPY_FAILED)
+            }
+
+            val kept = libraryPdfs().single()
+            rig.fs.sha256(kept) shouldBe id
+            row(id).trashed.shouldBeTrue()
+            row(id).relPath shouldBe kept
+        }
+
+    /** Import [bytes] under the name the document had. */
+    private suspend fun importAgain(bytes: ByteArray) = rig.session.ingest.importPdfBytes(bytes, "a.pdf")
+
+    private suspend fun row(id: String) =
+        rig.db
+            .documentDao()
+            .getByDocId(id)
+            .shouldNotBeNull()
+
+    private suspend fun assertLive(id: String) {
+        val row = row(id)
+        row.trashed.shouldBeFalse()
+        row.deleted.shouldBeFalse()
+        row.missing.shouldBeFalse()
+    }
+
+    /** A journal store from a newer build makes the rescan refuse, which blocks metadata writes. */
+    private suspend fun blockMetadataWrites() {
+        Files.createDirectories(rig.libRoot.resolve("${NpnPaths.JOURNAL_DIR}/objects-v9-00"))
+        assertFailsWith<IllegalStateException> { rig.session.rescan() }
+    }
+
+    /** Every published journal object's text. */
+    private suspend fun journalObjects(): List<String> =
+        rig.fs
+            .listAllUnder(NpnPaths.JOURNAL_DIR)
+            .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
+            .map { rig.fs.readBytes(it.relPath).decodeToString() }
+
+    private suspend fun trashEntries() =
+        rig.fs
+            .listAllUnder(NpnPaths.TRASH_DIR)
+            .filter { !it.isDirectory }
+            .map { it.relPath }
+
+    private suspend fun libraryPdfs() =
+        rig.fs
+            .listAllIndexable()
+            .filter { !it.isDirectory }
+            .map { it.relPath }
+}

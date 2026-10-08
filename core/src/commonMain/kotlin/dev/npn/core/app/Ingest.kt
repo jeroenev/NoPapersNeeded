@@ -40,11 +40,16 @@ data class ScanProgressUi(
 )
 
 sealed interface ImportOutcome {
+    /**
+     * The file is [docId]'s in the library now: a new document, or one the library had but did not
+     * show (trashed, deleted or missing), brought back with its metadata.
+     */
     data class Imported(
         val docId: String,
         val relPath: String,
     ) : ImportOutcome
 
+    /** A document the library shows holds these bytes already; nothing was added. */
     data class Duplicate(
         val existingDocId: String,
         val existingPath: String,

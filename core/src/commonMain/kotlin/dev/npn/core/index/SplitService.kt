@@ -21,7 +21,8 @@ import kotlinx.coroutines.withContext
  * the original and carrying metadata over is the session's job, not this service's.
  *
  * A split is all or nothing: when a later part cannot be made, or the split is cancelled, the parts
- * it already imported are taken back ([rollBack]) and the library is left as it was.
+ * it already imported are taken back ([rollBack]) and the library is left as it was, but for a
+ * document a part brought back, which stays.
  */
 class SplitService(
     private val fs: LibraryFileSystem,
@@ -101,8 +102,9 @@ class SplitService(
 
     /**
      * Take back the parts a split imported, for a split that will not complete. Only the parts it
-     * created: a part that turned out to be an existing document ([ImportResult.Duplicate]) was
-     * there before and stays. Runs even when the split was cancelled, and best effort: a part that
+     * created: a part that turned out to be an existing document ([ImportResult.Duplicate]), or
+     * brought one back the library did not show ([ImportResult.Imported.broughtBack]), was there
+     * before and stays. Runs even when the split was cancelled, and best effort: a part that
      * cannot be taken back is logged and stays in the library.
      */
     suspend fun rollBack(parts: List<ImportResult>) =

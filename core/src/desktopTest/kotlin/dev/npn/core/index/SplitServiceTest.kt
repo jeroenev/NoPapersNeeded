@@ -3,6 +3,7 @@ package dev.npn.core.index
 import dev.npn.core.app.SplitFailure
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.documentEntity
+import dev.npn.core.db.isLive
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
@@ -153,6 +154,33 @@ class SplitServiceTest {
 
             libraryPdfs() shouldContainExactlyInAnyOrder listOf("contract.pdf", first.relPath)
             rig.db.documentDao().getByDocId(first.docId) shouldBe null
+        }
+
+    /**
+     * A part whose bytes were a document gone from the library brought that document back: it was
+     * the user's before the split, so a split that fails later leaves it, as it leaves a duplicate.
+     */
+    @Test
+    fun aRollBackLeavesADocumentAPartBroughtBack() =
+        runTest {
+            rig.writePdf("contract (part 1).pdf", "first page")
+            rig.rescan()
+            val doc = rig.fs.sha256("contract (part 1).pdf")
+            rig.deleteFile("contract (part 1).pdf")
+            rig.rescan()
+            val part =
+                rig.importService
+                    .importBytes("first page".encodeToByteArray(), "contract (part 1).pdf", "")
+                    .shouldBeInstanceOf<ImportResult.Imported>()
+            part.broughtBack shouldBe true
+
+            SplitService(rig.fs, PdfBoxEngine(), rig.importService, rig.db.documentDao()).rollBack(listOf(part))
+
+            rig.db
+                .documentDao()
+                .getByDocId(doc)
+                ?.isLive shouldBe true
+            rig.fs.sha256(part.relPath) shouldBe doc
         }
 
     @Test

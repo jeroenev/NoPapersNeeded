@@ -165,6 +165,7 @@ internal suspend fun buildLibrary(
                 fieldTypes = { db.fieldDefDao().fieldTypes() },
                 serialize = { coordinator.serialized(it) },
                 restore = { docId, relPath -> coordinator.restoreReturned(docId, relPath) },
+                log = deps.log,
             ),
     )
 }

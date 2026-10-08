@@ -7,6 +7,7 @@ import dev.npn.core.app.LibrarySort
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.ocr.OcrState
 import dev.npn.core.pdf.PdfFixtures
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.NonCancellable
@@ -66,6 +67,39 @@ class WatchedFolderImporterTest {
                 docs.map { it.doc.fileName }.sorted() shouldBe listOf("scan-a.pdf", "scan-b.pdf")
                 // Every auto-import is queued for OCR like a manual import.
                 docs.all { it.doc.ocrState == OcrState.PENDING || it.doc.ocrState == OcrState.DONE } shouldBe true
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * The bytes of a document whose file went missing are the only copy there is: the import brings
+     * the document back instead of calling them a duplicate, so deleting the source loses nothing.
+     */
+    @Test
+    fun aMissingDocumentsBytesAreKeptWhenTheSourceIsDeletedAfterImport() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val bytes = PdfFixtures.embeddedTextPdf("lost")
+                rig.writePdf("lost.pdf", bytes)
+                rig.session.rescan()
+                val id = rig.docId("lost.pdf")
+                Files.delete(rig.libRoot.resolve("lost.pdf"))
+                rig.session.rescan()
+                stagePdf("lost.pdf", bytes)
+
+                val tally = WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { true }).scanOnce()
+
+                tally.imported shouldBe 1
+                Files.exists(watchDir.resolve("lost.pdf")) shouldBe false
+                val row =
+                    rig.db
+                        .documentDao()
+                        .getByDocId(id)
+                        .shouldNotBeNull()
+                row.missing shouldBe false
+                rig.fs.sha256(row.relPath) shouldBe id
             } finally {
                 rig.close()
             }

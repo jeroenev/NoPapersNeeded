@@ -6,9 +6,13 @@ import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.OcrQueueDao
 import dev.npn.core.db.OcrQueueEntity
 import dev.npn.core.db.QueueState
+import dev.npn.core.db.isLive
+import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.ExternalSource
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
 import dev.npn.core.fs.uniquifyPath
 import dev.npn.core.journal.EpochClock
@@ -20,17 +24,25 @@ import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.pathrules.pathOrNull
 import dev.npn.core.pathrules.resolveUniqueTarget
+import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.runLogged
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
 sealed interface ImportResult {
+    /**
+     * The bytes are [docId]'s file at [relPath] now. [broughtBack]: they were a document the library
+     * had but did not show (trashed, deleted or missing), and the import brought that document back,
+     * metadata and all, rather than adding one.
+     */
     data class Imported(
         val docId: String,
         val relPath: String,
+        val broughtBack: Boolean = false,
     ) : ImportResult
 
-    /** An identical (by hash) non-deleted document already exists; nothing was added. */
+    /** A document the library shows holds these bytes already; nothing was added. */
     data class Duplicate(
         val existingDocId: String,
         val existingPath: String,
@@ -47,6 +59,13 @@ class EmptyImportException : IllegalArgumentException("The file is empty")
  * [ExternalSource]), imports stage into [NpnPaths.TMP_DIR] first, hash there, dedup-check, then
  * move into place or delete. The staging file is cleaned on both success and failure.
  *
+ * Only bytes the library shows are a [ImportResult.Duplicate]: a live document whose file still
+ * holds them. Bytes the index knows as a document it does not show (trashed, deleted, missing, or
+ * live with its file gone) bring that document back instead, its row and metadata kept: a caller
+ * may delete a duplicate's source (the watched folder does), and those bytes may be the only copy.
+ * The file lands at the import target, or stays where the document's row says if its bytes are
+ * back there already.
+ *
  * The dedup check, the move into place and the row write run as one step through [serialize],
  * which the session points at the journal coordinator's lock. Without it two imports of the same
  * bytes both pass the check and place two files for one hash, and a rescan listing the library
@@ -55,7 +74,9 @@ class EmptyImportException : IllegalArgumentException("The file is empty")
  *
  * Bytes the journal had deleted or trashed come back through [restore], which records that they
  * are back (`JournalCoordinator.restoreReturned`); without that record, the next fold would hide
- * the document again.
+ * the document again. Once a document is back, whatever the trash still holds of it is deleted:
+ * the trash keeps an entry for as long as its document is live, so it would be a second copy for
+ * good.
  */
 @OptIn(ExperimentalUuidApi::class)
 class ImportService(
@@ -67,10 +88,16 @@ class ImportService(
     /** The registry's field types by key, which decide where a template accepts a date pattern. */
     private val fieldTypes: suspend () -> Map<String, FieldType>,
     private val serialize: suspend (suspend () -> Unit) -> Unit = { it() },
-    /** Record that the document is back at the path, when the journal still hides it. */
-    private val restore: suspend (docId: String, relPath: String) -> Unit = { _, _ -> },
+    /**
+     * Record that the document is back at the path, when the journal still hides it; returns
+     * whether it wrote that, and throws only when it did not.
+     */
+    private val restore: suspend (docId: String, relPath: String) -> Boolean = { _, _ -> false },
+    /** Where clearing a returned document's trashed copy, best effort, reports a failure. */
+    private val log: NpnLog = NpnLog.None,
 ) {
     private val documentDao get() = db.documentDao()
+    private val trash = TrashOps(fs)
 
     suspend fun importPdf(
         source: ExternalSource,
@@ -108,17 +135,19 @@ class ImportService(
         // An empty file is never a document; its hash would claim the empty-content identity.
         if (fs.stat(tmpPath)?.size == 0L) throw EmptyImportException()
         val hash = fs.sha256(tmpPath)
-        var result: ImportResult? = null
-        serialize { result = place(tmpPath, hash, suggestedName, toDir) }
-        val placed = checkNotNull(result)
+        var placement: Placement? = null
+        serialize { placement = place(tmpPath, hash, suggestedName, toDir) }
+        val placed = checkNotNull(placement)
+        val imported = placed.result as? ImportResult.Imported ?: return placed.result
         // After [serialize]: the restore is a journal write, which takes the same lock.
-        if (placed is ImportResult.Imported) {
-            runCatchingCancellable { restore(placed.docId, placed.relPath) }.onFailure { failure ->
-                undoImport(placed)
+        val restored =
+            runCatchingCancellable { restore(imported.docId, imported.relPath) }.getOrElse { failure ->
+                log.runLogged("Taking back the import of ${imported.relPath}") { takeBack(placed) }
                 throw failure
             }
-        }
-        return placed
+        if (!restored && !imported.broughtBack) return imported
+        discardTrashCopies(imported.docId)
+        return imported.copy(broughtBack = true)
     }
 
     /**
@@ -131,8 +160,11 @@ class ImportService(
      * Follows the document, not the path the import chose: metadata the caller wrote meanwhile can
      * have moved it (a storage-path rule), and another file can have taken the name it left. Only
      * the document's own bytes are deleted, and a document since trashed or deleted is left alone.
+     * So is a document the import brought back ([ImportResult.Imported.broughtBack]): it was the
+     * user's before the import, and with its trashed copy gone its file may be the only one.
      */
-    suspend fun undoImport(imported: ImportResult.Imported) =
+    suspend fun undoImport(imported: ImportResult.Imported) {
+        if (imported.broughtBack) return
         serialize {
             val row = documentDao.getByDocId(imported.docId) ?: return@serialize
             if (row.deleted || row.trashed) return@serialize
@@ -140,6 +172,7 @@ class ImportService(
             forget(imported.docId)
             ocrQueueDao.delete(imported.docId)
         }
+    }
 
     /** Drop [docId] from the index: its row, and the tag, field and search rows the fold projected. */
     private suspend fun forget(docId: String) =
@@ -150,38 +183,154 @@ class ImportService(
             db.ftsDao().delete(docId)
         }
 
+    /**
+     * What [place] did: its [result] and, for a document it brought back, the row and OCR queue
+     * entry it had before ([queuedOcr]: whether [place] queued it), for [takeBack].
+     */
+    private class Placement(
+        val result: ImportResult,
+        val previous: DocumentEntity? = null,
+        val previousQueue: OcrQueueEntity? = null,
+        val queuedOcr: Boolean = false,
+    )
+
     private suspend fun place(
         tmpPath: String,
         hash: String,
         suggestedName: String,
         toDir: String,
-    ): ImportResult {
-        // Dedup: known, non-deleted hash -> duplicate.
+    ): Placement {
         val existing = documentDao.getByDocId(hash)
-        if (existing != null && !existing.deleted) {
-            return ImportResult.Duplicate(existing.docId, existing.relPath)
+        // The document's own path, when its bytes are there.
+        val inPlace = existing?.relPath?.takeIf { fs.holds(it, hash) }
+        if (existing != null && existing.isLive && inPlace != null) {
+            return Placement(ImportResult.Duplicate(existing.docId, existing.relPath))
         }
 
-        val cleanName = ensurePdfName(suggestedName)
-        val target = chooseImportTarget(cleanName, toDir)
-        fs.move(tmpPath, target)
-
+        val target = inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir).also { fs.move(tmpPath, it) }
         val meta = fs.stat(target) ?: error("Imported file vanished: $target")
         val now = clock.nowMillis()
-        // The target was free on disk; a trashed or deleted row still naming it gives it up.
-        documentDao.upsert(
-            DocumentEntity(
-                docId = hash,
-                relPath = target,
-                fileName = NpnPaths.fileName(target),
-                size = meta.size,
-                mtime = meta.mtimeMillis,
-                addedAt = now,
-                ocrState = OcrState.PENDING.column,
-            ),
+        val row = existing?.backAt(target, meta) ?: newDocument(hash, target, meta, now)
+        // A returning document whose text is indexed already has nothing for OCR to redo.
+        val queueOcr = OcrState.fromColumn(row.ocrState) !in INDEXED
+        val previousQueue = existing?.let { ocrQueueDao.getByDocId(hash) }
+        // The target was free on disk; a hidden row still naming it gives it up.
+        documentDao.upsert(if (queueOcr) row.copy(ocrState = OcrState.PENDING.column) else row)
+        if (queueOcr) ocrQueueDao.upsert(OcrQueueEntity(hash, state = QueueState.PENDING.column, updatedAt = now))
+        if (existing != null && existing.fileName != row.fileName) indexFileName(row)
+        return Placement(
+            ImportResult.Imported(hash, target, broughtBack = existing != null),
+            previous = existing,
+            previousQueue = previousQueue,
+            queuedOcr = queueOcr,
         )
-        ocrQueueDao.upsert(OcrQueueEntity(docId = hash, state = QueueState.PENDING.column, updatedAt = now))
-        return ImportResult.Imported(hash, target)
+    }
+
+    private fun newDocument(
+        hash: String,
+        target: String,
+        meta: FileMeta,
+        now: Long,
+    ) = DocumentEntity(
+        docId = hash,
+        relPath = target,
+        fileName = NpnPaths.fileName(target),
+        size = meta.size,
+        mtime = meta.mtimeMillis,
+        addedAt = now,
+        ocrState = OcrState.PENDING.column,
+    )
+
+    /** This row, of a document the library did not show, as the live document whose file is [target]. */
+    private fun DocumentEntity.backAt(
+        target: String,
+        meta: FileMeta,
+    ) = copy(
+        relPath = target,
+        fileName = NpnPaths.fileName(target),
+        size = meta.size,
+        mtime = meta.mtimeMillis,
+        trashed = false,
+        trashedOrigPath = null,
+        trashedAt = null,
+        deleted = false,
+        missing = false,
+    )
+
+    /**
+     * Undo [placed] after recording its document's return failed. A new document goes as
+     * [undoImport] takes one back. A returning one gets the row and OCR queue entry it had; its file
+     * goes only while the trash still holds the bytes, and otherwise stays, the row pointing at it
+     * with the lifecycle it had: a failed import never deletes the only copy of a document's bytes,
+     * and a retry or a rescan finds them back where the row says.
+     */
+    private suspend fun takeBack(placed: Placement) {
+        val imported = placed.result as ImportResult.Imported
+        val previous = placed.previous ?: return undoImport(imported)
+        serialize {
+            val docId = imported.docId
+            val placedAt = imported.relPath
+            val row =
+                when {
+                    // Brought back in place, the file there before; or no copy of ours left there.
+                    placedAt == previous.relPath || !fs.holds(placedAt, docId) -> {
+                        previous
+                    }
+
+                    trashCopies(docId).isNotEmpty() -> {
+                        fs.delete(placedAt)
+                        previous
+                    }
+
+                    else -> {
+                        val meta = fs.stat(placedAt) ?: error("Imported file vanished: $placedAt")
+                        previous.copy(
+                            relPath = placedAt,
+                            fileName = NpnPaths.fileName(placedAt),
+                            size = meta.size,
+                            mtime = meta.mtimeMillis,
+                            missing = false,
+                        )
+                    }
+                }
+            documentDao.upsert(row.onFreePath())
+            if (placed.queuedOcr) placed.previousQueue?.let { ocrQueueDao.upsert(it) } ?: ocrQueueDao.deleteRow(docId)
+            if (row.fileName != NpnPaths.fileName(placedAt)) indexFileName(row)
+        }
+    }
+
+    /**
+     * Make search find [row] under its file name, which bringing a document back can change: a fold
+     * rewrites a document's searchable columns only when it changes the row, and the row written
+     * here already holds what a fold would project.
+     */
+    private suspend fun indexFileName(row: DocumentEntity) {
+        val tags = db.tagDao().tagsForDocument(row.docId)
+        val fields = db.documentFieldDao().fieldsForDocs(listOf(row.docId)).associate { it.fieldKey to it.fieldValue }
+        db.ftsDao().upsertMetadata(listOf(FtsRows.row(row.docId, row.fileName, tags, fields, content = null)))
+    }
+
+    /** This row, or this row at its missing sentinel when another row holds its path now. */
+    private suspend fun DocumentEntity.onFreePath(): DocumentEntity {
+        val holder = documentDao.getByRelPath(relPath)?.docId
+        return if (holder == null || holder == docId) this else copy(relPath = missingSentinel(docId))
+    }
+
+    /** The trash entries holding [docId]'s bytes. */
+    private suspend fun trashCopies(docId: String): List<String> {
+        val prefix = docId.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)
+        return trash
+            .listTrash()
+            .filter { NpnPaths.trashHashPrefix(it.name) == prefix }
+            .map { it.relPath }
+            .filter { fs.holds(it, docId) }
+    }
+
+    /** Delete, best effort, what the trash holds of [docId], now that the document is back for good. */
+    private suspend fun discardTrashCopies(docId: String) {
+        log.runLogged("Removing the trashed copy of $docId") {
+            for (path in trashCopies(docId)) fs.delete(path)
+        }
     }
 
     private fun freshTmpPath(): String = NpnPaths.Temp.importPath(Uuid.random().toString())
@@ -228,5 +377,10 @@ class ImportService(
         val normDir = NpnPaths.normalize(dir)
         val target = if (normDir.isEmpty()) name else "$normDir/$name"
         return uniquifyPath(target, startIndex = 2, suffix = { " ($it)" }, exists = fs::exists)
+    }
+
+    private companion object {
+        /** The OCR states of a document whose text is indexed. */
+        val INDEXED = setOf(OcrState.DONE, OcrState.ADOPTED)
     }
 }

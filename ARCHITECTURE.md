@@ -135,9 +135,13 @@ live in `buildSrc`. Hot Reload via `mise hot`.
 1. **Import**: `ImportService` (via `LibrarySessionImpl`) reads PDFs from picker /
    scanner / share intent / watched folder, hashes bytes (`SHA-256` = document
    identity), dedups, moves the file into the library, adds its index row and
-   queues it for OCR. Its only journal write is the restore of bytes the journal
-   had trashed or deleted. `OcrPipeline` then writes the OCR sidecar, after which
-   the auto-match rules (and, when enabled, AI enrichment) write metadata.
+   queues it for OCR. Only a live document whose file still holds the bytes makes
+   an import a duplicate (whose source the watched folder may delete); the bytes
+   of a trashed, deleted or missing document bring that document back, metadata
+   and all, and any copy of it left in the trash is deleted. Its only journal
+   write is the restore of bytes the journal had trashed or deleted. `OcrPipeline`
+   then writes the OCR sidecar, after which the auto-match rules (and, when
+   enabled, AI enrichment) write metadata.
 2. **Journal is source of truth for metadata**: every change (tags, field values,
     field definitions, system properties, library settings — review mode, storage-path
     rule, auto-match rules, saved views — trash, relink) is an immutable,
