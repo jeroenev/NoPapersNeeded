@@ -47,7 +47,7 @@ class AiFacadeImpl(
     val endpointHealth = EndpointHealth()
 
     private val chatHistoryStore = RoomChatHistoryProvider(chats, ownWrite)
-    private val chatSessionStore = RoomChatSessionStore(chats, ownWrite)
+    private val chatSessionStore = RoomChatSessionStore(chats, ownWrite, chatHistoryStore)
 
     /** Serializes the read-modify-write of the session list across ask, create, clear and delete. */
     private val sessionsMutex = Mutex()
@@ -90,17 +90,16 @@ class AiFacadeImpl(
         KoogChatHistoryMapper.map(chatHistoryStore.load(sessionId))
 
     override suspend fun chatSessions(): List<AiChatSession> {
+        // Every stored session is listed: one is stored once asked in, and stays (untitled once
+        // cleared) until it is deleted.
         val stored = chatSessionStore.load()
-        // An untitled session was never asked in, or was cleared: listed only while it still has
-        // a conversation, which is a cheap existence check rather than a decode.
-        val listed = stored.filter { it.title != null || chatHistoryStore.has(it.id) }
         // The one conversation of a build from before sessions existed, listed untitled beside the
         // others while it has history, until it is deleted or asked in (ask stores it then).
         val legacy =
             AiChatSession(LEGACY_CONVERSATION_ID, title = null, updatedAt = 0L).takeIf {
                 stored.none { it.id == LEGACY_CONVERSATION_ID } && chatHistoryStore.has(LEGACY_CONVERSATION_ID)
             }
-        return (listed + listOfNotNull(legacy)).sortedByDescending { it.updatedAt }
+        return (stored + listOfNotNull(legacy)).sortedByDescending { it.updatedAt }
     }
 
     @OptIn(ExperimentalUuidApi::class)
@@ -112,9 +111,16 @@ class AiFacadeImpl(
     }
 
     override suspend fun clearChatSession(sessionId: String) {
+        // Stored untitled, so it stays listed; that includes the pre-sessions conversation, which
+        // is listed by its history alone until now.
+        val hadConversation = chatHistoryStore.has(sessionId)
         chatHistoryStore.delete(sessionId)
         editSessions { sessions ->
-            sessions.map { if (it.id == sessionId) it.copy(title = null, updatedAt = now()) else it }
+            if (!hadConversation && sessions.none { it.id == sessionId }) {
+                sessions
+            } else {
+                sessions.filterNot { it.id == sessionId } + AiChatSession(sessionId, title = null, updatedAt = now())
+            }
         }
     }
 

@@ -99,8 +99,8 @@ interface AiChat : AiAvailability {
     suspend fun chatTranscriptFor(sessionId: String): List<AiChatHistoryItem>
 
     /**
-     * All sessions that hold a conversation, newest first. A read: it never writes, and never
-     * decodes a conversation to answer.
+     * Every session asked in and not deleted since, a cleared one untitled, newest first. A read:
+     * it never writes, and never decodes a conversation to answer.
      */
     suspend fun chatSessions(): List<AiChatSession>
 
@@ -113,7 +113,10 @@ interface AiChat : AiAvailability {
     /** Delete a session and its stored conversation. */
     suspend fun deleteChatSession(sessionId: String)
 
-    /** Clear messages while keeping the session available in the session list. */
+    /**
+     * Delete a session's messages. It stays in the session list, untitled, until it is deleted;
+     * its next question titles it again.
+     */
     suspend fun clearChatSession(sessionId: String)
 }
 

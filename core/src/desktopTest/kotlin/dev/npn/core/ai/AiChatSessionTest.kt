@@ -5,12 +5,14 @@ import ai.koog.prompt.message.MessagePart
 import ai.koog.prompt.message.RequestMetaInfo
 import ai.koog.prompt.message.ResponseMetaInfo
 import dev.npn.core.db.TempIndexDb
+import dev.npn.core.util.NpnJson
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.flow.collect
 import kotlinx.coroutines.test.runTest
+import kotlinx.serialization.builtins.ListSerializer
 import kotlin.test.AfterTest
 import kotlin.test.Test
 import kotlin.test.assertFails
@@ -24,26 +26,82 @@ class AiChatSessionTest {
     @AfterTest
     fun teardown() = temp.close()
 
+    /**
+     * Builds before nullable titles stored a "New chat" session as soon as it was created; one that
+     * holds no conversation was never asked in, so it is not listed.
+     */
     @Test
-    fun chatSessionsListOnlyConversationsAndNeverWrite() =
+    fun anOlderBuildsUnusedSessionIsNotListedAndTheReadNeverWrites() =
         runTest {
-            val sessions = RoomChatSessionStore(chats)
-            sessions.save(
+            val stored =
                 listOf(
-                    AiChatSession("empty", null, 2L),
+                    AiChatSession("unused", "New chat", 3L),
+                    AiChatSession("cleared", null, 2L),
                     AiChatSession("full", "Saved chat", 1L),
-                ),
-            )
+                )
+            RoomChatSessionStore(chats).save(stored)
             RoomChatHistoryProvider(chats).store(
                 "full",
                 listOf(Message.Assistant("answer", ResponseMetaInfo.Empty)),
             )
 
-            val remaining = AiFacadeImpl(db, chats) { AiConfig() }.chatSessions()
+            val listed = AiFacadeImpl(db, chats) { AiConfig() }.chatSessions()
 
-            remaining.map { it.id } shouldContainExactly listOf("full")
-            // A read leaves the store as it found it.
-            sessions.load().map { it.id } shouldContainExactly listOf("empty", "full")
+            listed.map { it.id } shouldContainExactly listOf("cleared", "full")
+            // A read leaves the stored list as it found it.
+            chats.get(SESSION_LIST_KEY) shouldBe
+                NpnJson.Persisted.encodeToString(ListSerializer(AiChatSession.serializer()), stored)
+        }
+
+    @Test
+    fun aClearedSessionStaysListedUntitledUntilItIsDeleted() =
+        runTest {
+            val facade = AiFacadeImpl(db, chats) { AiConfig() }
+            val session = facade.createChatSession()
+            assertFails { facade.ask(session.id, "Which invoices are overdue?").collect() }
+            RoomChatHistoryProvider(chats).store(
+                session.id,
+                listOf(Message.Assistant("answer", ResponseMetaInfo.Empty)),
+            )
+
+            facade.clearChatSession(session.id)
+
+            // A reopen lists the sessions afresh, and shows what the open screen showed.
+            val reopened = AiFacadeImpl(db, chats) { AiConfig() }
+            reopened.chatSessions().map { it.id to it.title } shouldContainExactly listOf(session.id to null)
+            reopened.chatTranscriptFor(session.id) shouldBe emptyList()
+
+            assertFails { reopened.ask(session.id, "And last year?").collect() }
+            reopened.chatSessions().single().title shouldBe "And last year?"
+
+            reopened.deleteChatSession(session.id)
+            reopened.chatSessions() shouldBe emptyList()
+        }
+
+    @Test
+    fun aClearedPreSessionsChatStaysListedUntitled() =
+        runTest {
+            RoomChatHistoryProvider(chats).store(
+                LEGACY_ID,
+                listOf(Message.Assistant("answer", ResponseMetaInfo.Empty)),
+            )
+            val facade = AiFacadeImpl(db, chats) { AiConfig() }
+
+            facade.clearChatSession(LEGACY_ID)
+
+            AiFacadeImpl(db, chats) { AiConfig() }.chatSessions().map { it.id to it.title } shouldContainExactly
+                listOf(LEGACY_ID to null)
+        }
+
+    @Test
+    fun clearingASessionNeverAskedInLeavesNothingBehind() =
+        runTest {
+            val facade = AiFacadeImpl(db, chats) { AiConfig() }
+            val session = facade.createChatSession()
+
+            facade.clearChatSession(session.id)
+
+            facade.chatSessions() shouldBe emptyList()
         }
 
     @Test
@@ -202,5 +260,7 @@ class AiChatSessionTest {
 
         /** The conversation id builds from before sessions existed stored their one chat under. */
         const val LEGACY_ID = "main"
+
+        const val SESSION_LIST_KEY = "${RoomChatHistoryProvider.KEY_PREFIX}session-metadata"
     }
 }
