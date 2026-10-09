@@ -205,8 +205,9 @@ class ImportService(
         toDir: String,
     ): Placement {
         val existing = documentDao.getByDocId(hash)
-        // The document's own path, when its bytes are there.
-        val inPlace = existing?.let { ownFileOf(it, size) }
+        // The document's own path, when its bytes are there. This runs under the writer lock, so
+        // re-importing a known, unchanged PDF must read no library file.
+        val inPlace = existing?.takeIf { fs.holdsDocument(it, size) }?.relPath
         if (existing != null && existing.isLive && inPlace != null) {
             return Placement(ImportResult.Duplicate(existing.docId, existing.relPath))
         }
@@ -228,21 +229,6 @@ class ImportService(
             previousQueue = previousQueue,
             queuedOcr = queueOcr,
         )
-    }
-
-    /**
-     * [row]'s path when the file there holds its document's bytes, [size] bytes long. A live row's
-     * file that still has the size and mtime the row stored holds them by the evidence a rescan takes
-     * to skip hashing ([hasStoredStat]); any other file of that size is hashed. This runs under the
-     * writer lock, so re-importing a known, unchanged PDF must read no library file.
-     */
-    private suspend fun ownFileOf(
-        row: DocumentEntity,
-        size: Long,
-    ): String? {
-        val meta = fs.stat(row.relPath)?.takeIf { !it.isDirectory && it.size == size } ?: return null
-        val holds = (row.isLive && meta.hasStoredStat(row.size, row.mtime)) || fs.sha256(row.relPath) == row.docId
-        return row.relPath.takeIf { holds }
     }
 
     private fun newDocument(

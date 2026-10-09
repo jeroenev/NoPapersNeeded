@@ -9,6 +9,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
+import dev.npn.core.index.holdsDocument
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
@@ -216,10 +217,14 @@ class MetadataWriterImpl(
         // missing and there is nothing to restore. So refuse before the move, not after it.
         coordinator.checkWritable()
         val origPath = doc.relPath
+        // Only the document's own file goes into the trash. Another app may have written over it
+        // since the last rescan; that file stays where it is for the next rescan to index, and the
+        // trash is recorded as for a document whose file is gone.
+        val ownFile = fs.holdsDocument(doc)
         // From the move on, a caller that goes away must not split the trash in two: a cancellation
         // after the event was published would move the PDF back under a trashed document.
         withContext(NonCancellable) {
-            val trashPath = if (fs.exists(origPath)) trashOps.moveToTrash(origPath, docId) else null
+            val trashPath = if (ownFile) trashOps.moveToTrash(origPath, docId) else null
             var committed = false
             try {
                 // Immediate DB sync so the UI hides it now; the event carries origPath for cross-device

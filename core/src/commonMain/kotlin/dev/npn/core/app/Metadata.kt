@@ -88,7 +88,7 @@ interface TagAdmin {
 
 /** A document's existence and location: trash lifecycle plus file rename/move. */
 interface DocLifecycle {
-    suspend fun trashDoc(docId: String) // moves file to .npn/trash + doc-trash event
+    suspend fun trashDoc(docId: String) // moves its own file to .npn/trash + doc-trash event
 
     suspend fun restoreDoc(docId: String)
 

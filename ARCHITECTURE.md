@@ -160,8 +160,12 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     system property, keyed by document hash, before moving bytes. HLC LWW chooses
     the intended location across devices; `DocumentPathReconciler` materializes it
     on metadata refresh or rescan. The cached `relPath` remains the actual available
-    location, not an unfulfilled intent. Trash/delete suspend path reconciliation;
-    restore records its final destination: the path the document was trashed from, or
+    location, not an unfulfilled intent. Trash/delete suspend path reconciliation. A
+    trash moves the file at the document's path only while it is the document's own
+    (the size and mtime its row stored, else its hash, as an import judges it); a file
+    written over it since the last rescan stays where it is, and the trash is recorded
+    as for a document whose file is gone. Restore records its final destination: the
+    path the document was trashed from, or
     a `(restored)` name beside the file another document put there since. PDFs without
     a path intent retain their discovered location. A path holds one row: a trashed,
     deleted or missing row gives it up to a live document and waits under
