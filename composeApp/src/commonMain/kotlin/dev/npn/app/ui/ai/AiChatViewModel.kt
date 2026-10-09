@@ -68,14 +68,9 @@ class AiChatViewModel(
             settings.aiConfigured().collect { configured -> _ui.update { it.copy(configured = configured) } }
         }
         viewModelScope.launch {
-            val sessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(emptyList())
+            val stored = storedSessions()
             val created = ai.createChatSession()
-            _ui.update {
-                it.copy(
-                    sessions = (listOf(created) + sessions).distinctBy { item -> item.id },
-                    currentSessionId = created.id,
-                )
-            }
+            _ui.update { it.copy(sessions = listed(stored, created), currentSessionId = created.id) }
             loadSession(created.id)
         }
         // Resolve display titles for cited documents as they appear in the transcript, so the
@@ -180,10 +175,10 @@ class AiChatViewModel(
         if (_ui.value.busy) return
         launchReporting(Res.string.ai_chat_new_failed) {
             val session = ai.createChatSession()
-            val savedSessions = runCatchingCancellable { ai.chatSessions() }.getOrDefault(_ui.value.sessions)
+            val stored = storedSessions(ifUnreadable = _ui.value.sessions)
             _ui.update {
                 it.copy(
-                    sessions = (listOf(session) + savedSessions).distinctBy { item -> item.id },
+                    sessions = listed(stored, session),
                     currentSessionId = session.id,
                     transcript = it.transcript.cleared(),
                 )
@@ -196,16 +191,32 @@ class AiChatViewModel(
         if (_ui.value.busy) return
         launchReporting(Res.string.ai_chat_delete_failed) {
             ai.deleteChatSession(sessionId)
-            val remaining = runCatchingCancellable { ai.chatSessions() }.getOrDefault(emptyList())
-            if (sessionId != _ui.value.currentSessionId) {
-                _ui.update { it.copy(sessions = remaining) }
+            val state = _ui.value
+            val stored = storedSessions(ifUnreadable = state.sessions.filterNot { it.id == sessionId })
+            if (sessionId != state.currentSessionId) {
+                val current = state.sessions.firstOrNull { it.id == state.currentSessionId }
+                _ui.update { it.copy(sessions = listed(stored, current)) }
                 return@launchReporting
             }
-            val next = remaining.firstOrNull() ?: ai.createChatSession()
-            _ui.update { it.copy(sessions = (remaining + next).distinctBy { item -> item.id }) }
+            val next = stored.firstOrNull() ?: ai.createChatSession()
+            _ui.update { it.copy(sessions = listed(stored, next)) }
             loadSession(next.id)
         }
     }
+
+    /** The sessions the store lists, or [ifUnreadable] when it cannot be read. */
+    private suspend fun storedSessions(ifUnreadable: List<AiChatSession> = emptyList()): List<AiChatSession> =
+        runCatchingCancellable { ai.chatSessions() }.getOrDefault(ifUnreadable)
+
+    /**
+     * The session list: [stored], with [current] in front while the store doesn't have it. A session
+     * is stored only once asked in, and the open one must stay listed until then.
+     */
+    private fun listed(
+        stored: List<AiChatSession>,
+        current: AiChatSession?,
+    ): List<AiChatSession> =
+        if (current == null || stored.any { it.id == current.id }) stored else listOf(current) + stored
 
     private suspend fun collectAnswer(
         sessionId: String,

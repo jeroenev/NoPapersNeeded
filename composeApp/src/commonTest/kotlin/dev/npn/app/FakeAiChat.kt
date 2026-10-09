@@ -44,6 +44,7 @@ class FakeAiChat : AiChat {
 
     override suspend fun deleteChatSession(sessionId: String) {
         failDeleteChatSession?.invoke()
+        savedChatSessions = savedChatSessions.filterNot { it.id == sessionId }
     }
 
     override suspend fun clearChatSession(sessionId: String) = Unit

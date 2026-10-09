@@ -100,6 +100,40 @@ class AiChatViewModelTest : MainDispatcherTest() {
                 .map { it.id } shouldContainExactly listOf(fresh.id, saved.id)
         }
 
+    /** The open chat is stored only once asked in; deleting another one must not drop it from the list. */
+    @Test
+    fun deletingAnotherChatKeepsTheOpenUnaskedOneListed() =
+        runTest(dispatcher) {
+            val saved = AiChatSession("saved", "Previous chat", 2L)
+            val other = AiChatSession("other", "Older chat", 1L)
+            val fresh = AiChatSession("fresh", null, 3L)
+            val session =
+                FakeLibrarySession().apply {
+                    aiChat.savedChatSessions = listOf(saved, other)
+                    aiChat.createdChatSession = fresh
+                }
+            val model = vm(session)
+            collecting(model.ui)
+            advanceUntilIdle()
+
+            model.deleteSession(saved.id)
+            advanceUntilIdle()
+            model.ui.value.currentSessionId shouldBe fresh.id
+            model.ui.value.sessions
+                .map { it.id } shouldContainExactly listOf(fresh.id, other.id)
+
+            model.send("q")
+            advanceUntilIdle()
+            model.currentTitle() shouldBe "q"
+
+            model.switchSession(other.id)
+            advanceUntilIdle()
+            model.ui.value.currentSessionId shouldBe other.id
+            model.switchSession(fresh.id)
+            advanceUntilIdle()
+            model.ui.value.currentSessionId shouldBe fresh.id
+        }
+
     /** Untitled is null, named by the screen in the user's language; the first question titles it. */
     @Test
     fun aNewChatIsUntitledUntilItsFirstQuestionAndAgainAfterClear() =
