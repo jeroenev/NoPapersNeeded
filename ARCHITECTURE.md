@@ -144,7 +144,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
    mtime its row stored prove that, as they do for a rescan, and only a file whose
    stat drifted is hashed, under the writer lock the check runs in; the bytes
    of a trashed, deleted or missing document bring that document back, metadata
-   and all, and any copy of it left in the trash is deleted. Its only journal
+   and all, and any copy of it left in the trash is deleted, under the writer lock
+   and only while the document is still live (a trash of it since put its file
+   there). Its only journal
    write is the restore of bytes the journal had trashed or deleted. Bytes a
    relink superseded (a bake's original) are no document of their own: an import
    of them is a duplicate of the document they became while the library shows
@@ -175,7 +177,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     (`JournalCoordinator.changeLifecycle`), so no rescan or storage-path move lands in
     between: a restore hashes the trash entries before it takes the lock, and under it
     again only one whose stat changed; a delete for good deletes the bytes after its
-    tombstone is published, outside the lock, each hashed right before it goes.
+    tombstone is published, hashed before the lock and deleted under it only while
+    unchanged and while the document is still deleted (an import may have brought it
+    back meanwhile).
     Restore records its final destination: the path the document was trashed from, or
     a `(restored)` name beside the file another document put there since. PDFs without
     a path intent retain their discovered location. A path holds one row: a trashed,

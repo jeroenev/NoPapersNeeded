@@ -608,6 +608,41 @@ class TrashLifecycleTest {
 /** Deleting a document for good removes its own bytes and nothing else. */
 class PermanentDeleteTest {
     /**
+     * An import of the document's bytes brings it back, in its own file, after its deletion was
+     * committed and before that file was deleted. The file is the document's again, and stays.
+     */
+    @Test
+    fun aDocumentAnImportBroughtBackBeforeItsFileWentKeepsTheFile() =
+        runTest {
+            val importing = BeforeTrashListing()
+            val rig = AppSessionRig.create(backgroundScope, files = importing::over)
+            try {
+                val bytes = PdfFixtures.embeddedTextPdf("deleted, and imported again")
+                rig.writePdf("a.pdf", bytes)
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.work.drainOcr()
+                var imported: ImportOutcome? = null
+                importing.next = { imported = rig.session.ingest.importPdfBytes(bytes, "a.pdf") }
+
+                rig.session.docLifecycle.deleteDocPermanently(id)
+
+                imported shouldBe ImportOutcome.Imported(id, "a.pdf")
+                rig.fs.sha256("a.pdf") shouldBe id
+                rig.session.rescan()
+                val row =
+                    rig.db
+                        .documentDao()
+                        .getByDocId(id)
+                        .shouldNotBeNull()
+                row.deleted.shouldBeFalse()
+                row.relPath shouldBe "a.pdf"
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
      * A trashed document whose trash copy is gone gave its old path up: the file there now is another
      * one, not yet indexed. Deleting the document for good deletes the document, not that file.
      */

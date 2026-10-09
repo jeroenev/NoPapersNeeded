@@ -413,10 +413,20 @@ class ImportService(
         return if (holder == null || holder == docId) this else copy(relPath = missingSentinel(docId))
     }
 
-    /** Delete, best effort, what the trash holds of [docId], now that the document is back for good. */
+    /**
+     * Delete, best effort, what the trash holds of [docId], now that the document is back. Decided
+     * under the lock, and only while the document is live with its file holding its bytes: a trash
+     * of it since moved that file into the trash, as one more entry with its bytes. The entries are
+     * hashed before the lock; under it, only one that changed since, or appeared, is hashed.
+     */
     private suspend fun discardTrashCopies(docId: String) {
         log.runLogged("Removing the trashed copy of $docId") {
-            for (path in trash.copiesOf(docId)) fs.delete(path)
+            val hashed = trash.hashCandidates(docId)
+            serialize { _ ->
+                val row = documentDao.getByDocId(docId)
+                if (row == null || !row.isLive || !fs.holdsDocument(row)) return@serialize
+                for (path in trash.copiesOf(docId, hashed)) fs.delete(path)
+            }
         }
     }
 

@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.ai.AiConfig
 import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.index.DeviceIdentity
@@ -47,6 +48,22 @@ class FakeThumbStore(
     override suspend fun delete(docId: String) {
         File(dir, "$docId.png").delete()
     }
+}
+
+/**
+ * A library filesystem, for [AppSessionRig.create]'s `files`, that runs [next] once, right before the
+ * trash is next listed: another operation landing in the window of one that reads the trash.
+ */
+class BeforeTrashListing {
+    @Volatile var next: (suspend () -> Unit)? = null
+
+    fun over(fs: LibraryFileSystem): LibraryFileSystem =
+        object : LibraryFileSystem by fs {
+            override suspend fun listAllUnder(relPath: String): List<FileMeta> {
+                if (relPath == NpnPaths.TRASH_DIR) next?.also { next = null }?.invoke()
+                return fs.listAllUnder(relPath)
+            }
+        }
 }
 
 /**

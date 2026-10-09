@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.QueueState
 import dev.npn.core.db.queueState
 import dev.npn.core.db.searchDocIds
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.JournalOp
 import dev.npn.core.journal.JournalPath
@@ -12,6 +13,7 @@ import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -33,9 +35,10 @@ class HiddenDocumentImportTest {
     /** Run [block] over a fresh session holding a document at [at], closed before the test's scope ends. */
     private fun withDocument(
         at: String = "a.pdf",
+        files: (LibraryFileSystem) -> LibraryFileSystem = { it },
         block: suspend (id: String, bytes: ByteArray) -> Unit,
     ) = runTest {
-        rig = AppSessionRig.create(backgroundScope)
+        rig = AppSessionRig.create(backgroundScope, files = files)
         try {
             val bytes = PdfFixtures.embeddedTextPdf("alpha")
             rig.writePdf(at, bytes)
@@ -127,6 +130,29 @@ class HiddenDocumentImportTest {
             assertLive(id)
             row(id).title shouldBe "Kept"
         }
+
+    /**
+     * The document is trashed again after its import brought it back, before the import cleared the
+     * trash of its old copy. The trash then holds the document's file too, which that cleanup leaves
+     * alone: a trashed document keeps a copy of its bytes.
+     */
+    @Test
+    fun aDocumentTrashedAgainBeforeItsImportClearedTheTrashKeepsItsCopy() {
+        val trashing = BeforeTrashListing()
+        withDocument(files = trashing::over) { id, bytes ->
+            rig.session.work.drainOcr()
+            rig.session.docLifecycle.trashDoc(id)
+            trashing.next = { rig.session.docLifecycle.trashDoc(id) }
+
+            importAgain(bytes).shouldBeInstanceOf<ImportOutcome.Imported>()
+
+            row(id).trashed.shouldBeTrue()
+            trashEntries().map { rig.fs.sha256(it) } shouldContain id
+            rig.session.docLifecycle.restoreDoc(id)
+            assertLive(id)
+            rig.fs.sha256(row(id).relPath) shouldBe id
+        }
+    }
 
     /**
      * When the return cannot be recorded, the import is taken back: the document stays in the trash

@@ -5,6 +5,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.DocumentPaths
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
@@ -299,12 +300,32 @@ class MetadataWriterImpl(
         val doc = deleted ?: return
         // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden. Only
         // the document's bytes go: its copies in the trash, or else its file. A trashed or missing
-        // document gave its path up, so the file there may be another one now. Each is hashed right
-        // before it goes, outside the lock: a whole file read there would hold up every other write.
+        // document gave its path up, so the file there may be another one now. Each is hashed before
+        // the lock, as a whole file read under it would hold up every other write, and goes under it
+        // only while unchanged since and while the document is still deleted: an import of its bytes
+        // can have brought it back meanwhile, with that very file.
         log.runLogged("Deleting the file of $docId") {
-            val own = trashOps.copiesOf(docId).ifEmpty { listOfNotNull(doc.relPath.takeIf { fs.holds(it, docId) }) }
-            own.forEach { fs.delete(it) }
+            val hashed = trashOps.hashCandidates(docId)
+            val file = fs.stat(doc.relPath)?.let { mapOf(it to fs.holds(doc.relPath, docId)) }.orEmpty()
+            coordinator.serialized { _ ->
+                if (documentDao.getByDocId(docId)?.deleted == false) return@serialized
+                val own =
+                    trashOps.copiesOf(docId, hashed).ifEmpty {
+                        listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })
+                    }
+                own.forEach { fs.delete(it) }
+            }
         }
+    }
+
+    /** Whether [path] holds [docId]'s bytes: by [hashed] while it has the stat hashed there, else hashed. */
+    private suspend fun stillHolds(
+        path: String,
+        docId: String,
+        hashed: Map<FileMeta, Boolean>,
+    ): Boolean {
+        val meta = fs.stat(path) ?: return false
+        return hashed[meta] ?: fs.holds(path, docId)
     }
 
     override suspend fun renameFile(
