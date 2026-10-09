@@ -78,10 +78,13 @@ import org.jetbrains.compose.resources.PluralStringResource
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
-/** An import batch's tally as the snackbar reports it: "3 imported, 1 duplicate", leaving out what is 0. */
+/**
+ * An import batch's tally as the snackbar reports it: "3 imported, 1 duplicate", leaving out what is
+ * 0. A batch that came to nothing at all reads "0 imported".
+ */
 fun ImportTally.asUiText(): UiText =
     listOfNotNull(
-        uiText(Res.plurals.common_imported_count, imported, imported),
+        imported.takeIf { it > 0 || total == 0 }?.let { uiText(Res.plurals.common_imported_count, it, it) },
         duplicates.takeIf { it > 0 }?.let { uiText(Res.plurals.common_duplicate_count, it, it) },
         failed.takeIf { it > 0 }?.let { uiText(Res.plurals.common_failed_count, it, it) },
     ).reduce { summary, part -> uiText(Res.string.common_join_items, summary, part) }

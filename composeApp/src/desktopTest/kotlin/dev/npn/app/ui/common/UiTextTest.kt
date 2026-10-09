@@ -37,6 +37,11 @@ class UiTextTest {
             ImportTally(3, 0, 0).asUiText().english() shouldBe "3 imported"
             ImportTally(2, 1, 0).asUiText().english() shouldBe "2 imported, 1 duplicate"
             ImportTally(2, 1, 3).asUiText().english() shouldBe "2 imported, 1 duplicate, 3 failed"
+            ImportTally(0, 1, 0).asUiText().english() shouldBe "1 duplicate"
+            ImportTally(0, 0, 1).asUiText().english() shouldBe "1 failed"
+            ImportTally(0, 2, 1).asUiText().english() shouldBe "2 duplicates, 1 failed"
+            // Nothing happened at all: the tally still says so rather than reading empty.
+            ImportTally().asUiText().english() shouldBe "0 imported"
         }
 
     /** A failure is one sentence per language, so French can elide where it needs to. */
