@@ -716,7 +716,8 @@ class RestoreTargetTest {
 
 /**
  * Restoring or deleting for good every document in the trash lists the trash once, before any of
- * them takes the writer lock, rather than twice per document with one of those under the lock.
+ * them takes the writer lock, rather than twice per document with one of those under the lock; a
+ * copy that reaches the trash after that listing is still found.
  */
 class BulkTrashTest {
     private val rig = IndexRig.create()
@@ -770,6 +771,25 @@ class BulkTrashTest {
             trashEntries().shouldBeEmpty()
         }
 
+    /**
+     * A document's copy reaches the trash after the restore listed it, before the restore took the
+     * lock, as a sync delivering another device's trash move does: the restore still finds it there
+     * and brings the document back with its bytes, rather than without a file.
+     */
+    @Test
+    fun aCopyThatReachesTheTrashAfterItWasListedIsStillRestored() =
+        runTest {
+            val (id, path) = trashed().entries.first()
+            val entry = trashEntries().single { rig.fs.sha256(it.relPath) == id }.relPath
+            rig.fs.move(entry, "elsewhere.bin")
+            files.afterNextListing = { rig.fs.move("elsewhere.bin", entry) }
+
+            writer.restoreDoc(id)
+
+            rig.fs.sha256(path) shouldBe id
+            rig.fs.exists(entry).shouldBeFalse()
+        }
+
     /** Five documents in the trash, by id, each with the path it came from; the listings so far forgotten. */
     private suspend fun trashed(): Map<String, String> {
         val paths = (1..5).map { "doc $it.pdf" }
@@ -793,16 +813,23 @@ class BulkTrashTest {
         ) = threads.dispatch(context, block)
     }
 
-    /** [fs], noting of each listing of the trash whether it ran on [locked], under the writer lock. */
+    /**
+     * [fs], noting of each listing of the trash whether it ran on [locked], under the writer lock, and
+     * running [afterNextListing] once right after the next one.
+     */
     private class TrashListings(
         private val fs: LibraryFileSystem,
         private val locked: CoroutineDispatcher,
     ) : LibraryFileSystem by fs {
         val listings: MutableList<Boolean> = Collections.synchronizedList(mutableListOf())
+        var afterNextListing: (suspend () -> Unit)? = null
 
         override suspend fun listAllUnder(relPath: String): List<FileMeta> {
-            if (relPath == NpnPaths.TRASH_DIR) listings += currentCoroutineContext()[ContinuationInterceptor] === locked
-            return fs.listAllUnder(relPath)
+            if (relPath != NpnPaths.TRASH_DIR) return fs.listAllUnder(relPath)
+            listings += currentCoroutineContext()[ContinuationInterceptor] === locked
+            val listed = fs.listAllUnder(relPath)
+            afterNextListing?.also { afterNextListing = null }?.invoke()
+            return listed
         }
     }
 }

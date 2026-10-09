@@ -179,7 +179,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     (`JournalCoordinator.changeLifecycle`), so no rescan or storage-path move lands in
     between: a restore lists and hashes the trash entries before it takes the lock, and
     under it checks them by a stat, hashing again only one whose stat changed (it lists
-    the trash there only when every copy it found has gone); a delete for good deletes
+    the trash there only when no copy it found is left, or it found none: a copy can
+    reach the trash after the listing); a delete for good deletes
     the bytes after its tombstone is published, hashed before the lock and deleted under
     it only while unchanged and while the document is still deleted (an import may have
     brought it back meanwhile). Restoring or emptying the whole trash

@@ -77,7 +77,8 @@ class TrashOps(
     /**
      * Whether each entry [copiesOf] would look at for [docId] holds its bytes, keyed by the stat it
      * had before it was hashed. Taken before the writer lock, it leaves [copiesOf] under the lock to
-     * hash only an entry that changed since, or appeared, and [confirmedCopiesOf] to list nothing.
+     * hash only an entry that changed since, or appeared, and [confirmedCopiesOf] to list nothing
+     * while a copy found here is still there.
      * [listing], from [listTrash], lets a run over many documents list the trash once; without one,
      * the trash is listed here.
      */
@@ -88,18 +89,19 @@ class TrashOps(
 
     /**
      * The entries [hashed] (from [hashCandidates]) knows of that hold [docId]'s bytes now, for a caller
-     * under the writer lock, without listing the trash there: each is checked by a stat, and one whose
-     * stat changed since is hashed again; one that appeared since the listing is not seen. Only when
-     * none of the entries that held the bytes is left (moved, or written over) is the trash listed
-     * again ([copiesOf]), for a copy that went elsewhere in it.
+     * under the writer lock, without listing the trash there while one of them still does: each is
+     * checked by a stat, and one whose stat changed since is hashed again. When none does (moved,
+     * written over, or none was found), the trash is listed again ([copiesOf]), for a copy that went
+     * elsewhere in it or reached it since the listing (a sync delivering a trash move).
      */
     suspend fun confirmedCopiesOf(
         docId: String,
         hashed: Map<FileMeta, Boolean>,
-    ): List<String> {
-        val confirmed = hashed.keys.filter { holdsNow(it, docId, hashed.getValue(it)) }.map { it.relPath }
-        return if (confirmed.isEmpty() && true in hashed.values) copiesOf(docId, hashed) else confirmed
-    }
+    ): List<String> =
+        hashed.keys
+            .filter { holdsNow(it, docId, hashed.getValue(it)) }
+            .map { it.relPath }
+            .ifEmpty { copiesOf(docId, hashed) }
 
     /** Whether [listed] holds [docId]'s bytes now: [held], as when hashed, while its stat is unchanged. */
     private suspend fun holdsNow(
