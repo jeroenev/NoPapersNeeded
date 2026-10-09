@@ -33,10 +33,13 @@ class TrashOps(
         trashRelPath: String,
         toRelPath: String,
     ): String {
-        val target = uniquifyRestored(toRelPath)
+        val target = restoreTarget(toRelPath)
         fs.move(trashRelPath, target)
         return target
     }
+
+    /** Where [restore] puts a file restored to [toRelPath]: there, or beside it when it is taken. */
+    suspend fun restoreTarget(toRelPath: String): String = uniquifyRestored(toRelPath)
 
     /**
      * All entries currently in `.npn/trash/` (files only, never a temporary file a move into the trash

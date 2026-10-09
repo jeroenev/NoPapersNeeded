@@ -4,6 +4,7 @@ import androidx.room3.withWriteTransaction
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDocumentEntity
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.isLive
 import dev.npn.core.db.missingSentinel
 import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
@@ -129,6 +130,12 @@ internal class DocumentPathReconciler(
         }
     }
 
+    /**
+     * Free each intended path in [rows] that a hidden row (trashed, deleted or missing) holds while
+     * nothing is on disk there, the way [dev.npn.core.db.DocumentDao.upsertAll] frees one for a live
+     * row: the holder waits at its [missingSentinel] with its flags kept. A trashed document's
+     * restore goes by its `trashedOrigPath`, not by its row's path.
+     */
     private suspend fun releaseStaleOwners(
         state: FoldedState,
         rows: MutableMap<String, DocumentEntity>,
@@ -144,9 +151,9 @@ internal class DocumentPathReconciler(
                 db
                     .documentDao()
                     .getByRelPath(intended)
-                    ?.takeIf { it.docId != docId && (it.missing || it.deleted) } ?: continue
+                    ?.takeIf { it.docId != docId && !it.isLive } ?: continue
             if (!fs.exists(intended)) {
-                val released = owner.copy(relPath = missingSentinel(owner.docId), missing = true)
+                val released = owner.copy(relPath = missingSentinel(owner.docId))
                 db.documentDao().upsert(released)
                 if (owner.docId in rows) rows[owner.docId] = released
             }

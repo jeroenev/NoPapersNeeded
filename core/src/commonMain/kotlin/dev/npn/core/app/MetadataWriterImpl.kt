@@ -8,6 +8,7 @@ import dev.npn.core.fs.DocumentPaths
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
+import dev.npn.core.fs.holds
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
@@ -260,11 +261,15 @@ class MetadataWriterImpl(
         // its trash entry gone, so refuse before the move, as trashDoc does.
         coordinator.checkWritable()
         // The file lives in trash under a hash-suffixed name; find it and move it back (uniquify
-        // via TrashOps.restore if the target is taken).
+        // via TrashOps.restore if the target is taken). Another document may hold the target since
+        // the trash gave it up, so even with no copy left the row goes beside that one's file.
         val entry = findTrashEntry(docId)
         // Not cancellable from the move on, as in trashDoc.
         withContext(NonCancellable) {
-            val finalPath = entry?.let { trashOps.restore(it, target) } ?: target
+            val finalPath =
+                entry?.let { trashOps.restore(it, target) }
+                    ?: target.takeIf { !fs.exists(it) || fs.holds(it, docId) }
+                    ?: trashOps.restoreTarget(target)
             var committed = false
             try {
                 coordinator.commitWithOptimisticLifecycle(
