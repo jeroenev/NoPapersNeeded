@@ -237,11 +237,11 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   (`objects-snap-v2-<xx>/`) and deletes them. An object a snapshot supersedes is deleted later
   (a delete that failed, a copy put back) only while that snapshot, or one that superseded it in
   turn, is on disk and the same reconcile pass has read it; what the index remembers of a snapshot
-  vouches for nothing. Nor does a manifest alone: those snapshots must hold every event the index
-  recorded for the object. One that names an object without its events deletes nothing, and the
-  index drops that claim, so the object is live again (its loss counts as one) until a compaction
-  carries it. The pass reads that snapshot instead of the object, so an object a sync
-  conflict wrote over since fails nothing. A source that vanished is a loss only while no listed file holds its
+  vouches for nothing. The pass reads that snapshot instead of the object, so an object a sync
+  conflict wrote over since fails nothing. Nor does a manifest vouch for more than it holds: those
+  snapshots must hold every event the index recorded for the object. One that names an object
+  without its events deletes nothing, and the index drops that claim, so the object is live again
+  (its loss counts as one) until a compaction carries it. A source that vanished is a loss only while no listed file holds its
   events (`carriedByListed`); an unexplained one is tolerated for a grace window
   (`SourceSetValidator.PENDING_SUPERSESSION_LIMIT` reconciles, for a snapshot still on its way),
   then blocks writes. A snapshot gone with everything it superseded back on disk (a folder put
