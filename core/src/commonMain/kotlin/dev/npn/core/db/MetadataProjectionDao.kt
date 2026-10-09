@@ -166,6 +166,13 @@ interface MetadataProjectionDao {
     @Query("DELETE FROM metadata_superseded WHERE snapshotPath = :snapshotPath")
     suspend fun deleteSupersededBy(snapshotPath: String)
 
+    /** Drop one claim of [snapshotPath]'s: that it supersedes [supersededHash]. */
+    @Query("DELETE FROM metadata_superseded WHERE snapshotPath = :snapshotPath AND supersededHash = :supersededHash")
+    suspend fun deleteSupersession(
+        snapshotPath: String,
+        supersededHash: String,
+    )
+
     /** Content hashes superseded by any CURRENTLY-APPLIED snapshot source. */
     @Query(
         "SELECT DISTINCT s.supersededHash FROM metadata_superseded s " +

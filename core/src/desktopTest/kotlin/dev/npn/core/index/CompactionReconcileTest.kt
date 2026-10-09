@@ -11,15 +11,19 @@ import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.ContentAddressedJournalWriter
 import dev.npn.core.journal.HlcWatermarkAllocator
 import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.journal.PendingOp
+import dev.npn.core.journal.SnapshotCodec
 import dev.npn.core.journal.SnapshotCompactor
+import dev.npn.core.journal.SnapshotManifest
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
@@ -300,6 +304,73 @@ class CompactionReconcileTest {
                 state.shouldNotBeNull().effectiveTags(docId).size shouldBe 6
             }
         }
+
+    /**
+     * A snapshot vouches for an object only with the object's events in it. One whose manifest names
+     * an object it does not carry (another build's, or a faulty one's) deletes nothing, and the
+     * folder alone still folds every event of that object.
+     */
+    @Test
+    fun aSnapshotListingAnObjectWithoutItsEventsDeletesNothing() =
+        runTest {
+            val coordinator = coordinator()
+            val (docId, victim) = anObjectAndASnapshotThatOnlyNamesIt(coordinator)
+
+            repeat(2) { coordinator.reconcileMetadata() }
+
+            Files.exists(libRoot.resolve(victim)).shouldBeTrue()
+            checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
+            TempIndexDb("npn-compact-rebuild").use { rebuilt ->
+                val state = MetadataAccumulator(fs, rebuilt.db, installationId = "rebuild").reconcile().state
+                state.shouldNotBeNull().effectiveTags(docId) shouldBe setOf("tag0", "tag1")
+            }
+            // A live object again: the next compaction carries it.
+            SnapshotSupport(fs, db.metadataProjectionDao())
+                .compactionSources()
+                .first
+                .map { it.relPath } shouldContain victim
+        }
+
+    /** The index keeps no claim it found false: such an object's loss is a loss, as with no snapshot. */
+    @Test
+    fun anObjectASnapshotOnlyNamesIsMissedWhenItGoes() =
+        runTest {
+            val coordinator = coordinator()
+            val (_, victim) = anObjectAndASnapshotThatOnlyNamesIt(coordinator)
+            coordinator.reconcileMetadata()
+
+            Files.delete(libRoot.resolve(victim))
+
+            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) { coordinator.reconcileMetadata() }
+            assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }.message shouldContain victim
+        }
+
+    /**
+     * A document tagged in two transactions, and beside them a snapshot whose manifest supersedes
+     * one of those objects but holds none of its events. Returns the document and that object.
+     */
+    private suspend fun anObjectAndASnapshotThatOnlyNamesIt(coordinator: JournalCoordinator): Pair<String, String> {
+        writePdf("a.pdf", "alpha")
+        initialScan()
+        coordinator.refreshState()
+        val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
+        repeat(2) { i ->
+            clock.advance()
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
+        }
+        coordinator.reconcileMetadata()
+        val victim = journalFiles<JournalPath.ObjectV2>().first()
+        val hash = (JournalPaths.classify(victim) as JournalPath.ObjectV2).expectedHash
+        val bytes =
+            SnapshotCodec.encodeSnapshot(
+                SnapshotManifest(SnapshotCodec.SNAPSHOT_MANIFEST_VERSION, listOf(hash)),
+                emptyList(),
+            )
+        val snapshot = libRoot.resolve(JournalPaths.objectPath(sha256Bytes(bytes), snapshot = true))
+        Files.createDirectories(snapshot.parent)
+        Files.write(snapshot, bytes)
+        return docId to victim
+    }
 
     /** A snapshot that no longer reads as what was applied fails the pass before its leftovers go. */
     @Test
