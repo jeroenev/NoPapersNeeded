@@ -1,9 +1,11 @@
 package dev.npn.core.index
 
+import dev.npn.core.fs.sha256Bytes
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
@@ -119,6 +121,48 @@ class DuplicatesTest {
                 .duplicateDao()
                 .forDoc(doc)
                 .shouldBeEmpty()
+        }
+
+    /**
+     * Removing a copy reads no file under the writer lock, which every write, import and rescan waits
+     * on: the copy is hashed before it, and the document's own unchanged file is known by its stat.
+     */
+    @Test
+    fun removingADuplicateHashesNothingUnderTheLockNorTheDocumentsOwnFile() =
+        runTest {
+            val doc = recordDuplicate("a.pdf", "inbox/a.pdf")
+            val watched = WatchedFileSystem(rig.fs).also { it.db = rig.db }
+            val hashedUnderLock = ArrayList<String>()
+            val maintenance =
+                MaintenanceService(watched, rig.db.documentDao(), rig.db.duplicateDao(), rig.importService) { step ->
+                    val before = watched.calls("sha256").size
+                    step()
+                    hashedUnderLock += watched.calls("sha256").drop(before)
+                }
+
+            maintenance.resolveDuplicate(doc, "inbox/a.pdf")
+
+            rig.exists("inbox/a.pdf").shouldBeFalse()
+            rig.exists("a.pdf").shouldBeTrue()
+            watched.calls("sha256") shouldNotContain "sha256 a.pdf"
+            hashedUnderLock.shouldBeEmpty()
+        }
+
+    /** A copy written over between its hash and the lock is not taken for the copy it was. */
+    @Test
+    fun aCopyChangedAfterItWasHashedIsNotRemoved() =
+        runTest {
+            val doc = recordDuplicate("a.pdf", "inbox/a.pdf")
+            val edited = "alpha, edited since".encodeToByteArray()
+            val maintenance =
+                MaintenanceService(rig.fs, rig.db.documentDao(), rig.db.duplicateDao(), rig.importService) { step ->
+                    rig.writePdf("inbox/a.pdf", edited.decodeToString())
+                    step()
+                }
+
+            maintenance.resolveDuplicate(doc, "inbox/a.pdf")
+
+            rig.fs.sha256("inbox/a.pdf") shouldBe sha256Bytes(edited)
         }
 
     /** Index [original], copy it to [copy] and rescan, so the copy is a recorded duplicate; returns the document. */
