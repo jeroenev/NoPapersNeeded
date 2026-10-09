@@ -204,8 +204,8 @@ class Indexer(
             val recon =
                 documentPaths.deferring(known = contentAt) {
                     db.withWriteTransaction {
-                        reconcile(toHash, hashes, dbProjection, diskPaths).also { recon ->
-                            val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId)
+                        reconcile(toHash, hashes, dbProjection, diskPaths, metadataState).also { recon ->
+                            val missing = detectMissing(dbProjection, diskPaths, recon.existingByDocId, metadataState)
                             recon.missingCount = missing.size
                             recon.relinkCandidates.addAll(
                                 RelinkPairing.pair(missing, recon.newDocs, recon.relinkCandidates),
@@ -309,14 +309,17 @@ class Indexer(
      * Reconcile hashed files against the DB. For each hashed file, one of: an unchanged/refreshed
      * canonical, a move/rename, an external duplicate, an external edit (old -> missing sentinel +
      * new doc + path-match relink candidate), or a brand-new doc. A row whose path now holds another
-     * document's bytes gives the path up and is missing. Writes the rows it changed in one batch
-     * and returns the counters + new docs + duplicates + relink candidates collected.
+     * document's bytes gives the path up: missing when its file was there, only trashed when it was
+     * in the trash ([hidden], judged with the journal [state] this pass folds). Writes the rows it
+     * changed in one batch and returns the counters + new docs + duplicates + relink candidates
+     * collected.
      */
     private suspend fun reconcile(
         toHash: List<FileMeta>,
         hashes: Map<String, String>,
         dbProjection: List<PathMeta>,
         diskPaths: Set<String>,
+        state: FoldedState,
     ): Reconciliation {
         val recon = Reconciliation()
         // One bulk read (chunked under SQLite's bind limit), not a query per document: this runs
@@ -329,9 +332,17 @@ class Indexer(
             val existingDoc = recon.existingByDocId[hash]
             // The row holding this path, when the bytes here are no longer its own. It must vacate
             // the path (relPath is unique) for the document that is here now: it moves to a per-doc
-            // sentinel path under .npn (never indexed) that preserves its identity and metadata.
+            // sentinel path under .npn (never indexed) that preserves its identity and metadata. A
+            // hidden row keeps its flags, as DocumentDao.upsertAll keeps them: a trashed document's
+            // file went to the trash, it was not replaced, so it is neither missing nor a relink
+            // candidate for the bytes here.
             val replaced = recon.existingByPath[meta.relPath]?.takeIf { it.docId != hash }
-            replaced?.let { recon.write(it.copy(relPath = missingSentinel(it.docId), missing = true)) }
+            val overwritten = replaced != null && !hidden(replaced, state)
+            replaced?.let {
+                recon.write(
+                    it.copy(relPath = missingSentinel(it.docId), missing = it.missing || overwritten),
+                )
+            }
 
             if (existingDoc != null) {
                 reconcileKnownHash(existingDoc, meta, hash, diskPaths, hashes, recon)
@@ -341,7 +352,7 @@ class Indexer(
             recon.write(newDocument(hash, meta, now))
             recon.newDocs[hash] = meta
             recon.added++
-            if (replaced != null) {
+            if (replaced != null && overwritten) {
                 // External edit: the new bytes may be an edit of the document that was here.
                 recon.changed++
                 recon.relinkCandidates.add(
@@ -395,13 +406,14 @@ class Indexer(
     }
 
     /**
-     * Mark docs whose canonical path is no longer on disk as missing (skipping deleted/trashed), and
+     * Mark docs whose canonical path is no longer on disk as missing (skipping [hidden] ones), and
      * return every doc that is missing now.
      */
     private suspend fun detectMissing(
         dbProjection: List<PathMeta>,
         diskPaths: Set<String>,
         existingByDocId: Map<String, DocumentEntity>,
+        state: FoldedState,
     ): List<DocumentEntity> {
         val missingDocs = ArrayList<DocumentEntity>()
         val nowMissing = ArrayList<DocumentEntity>()
@@ -409,7 +421,7 @@ class Indexer(
             // [Reconciliation.existingByDocId] is kept current for every row the reconcile pass
             // upserted, so it already holds the post-reconcile row; no need to re-read it.
             val current = existingByDocId[pm.docId] ?: continue
-            if (current.deleted || current.trashed) continue
+            if (hidden(current, state)) continue
             if (current.relPath !in diskPaths) {
                 if (!current.missing) nowMissing.add(current.copy(missing = true))
                 missingDocs.add(current)
@@ -418,6 +430,17 @@ class Indexer(
         if (nowMissing.isNotEmpty()) documentDao.upsertAll(nowMissing)
         return missingDocs
     }
+
+    /**
+     * Whether [row]'s document is out of the library: trashed or deleted by its row, or by the
+     * journal [state] a rescan folds after its reconcile, which another device's trash reaches
+     * before the row does. Its file is not expected at its path, so it never goes missing there and
+     * is never a relink candidate.
+     */
+    private fun hidden(
+        row: DocumentEntity,
+        state: FoldedState,
+    ): Boolean = row.trashed || row.deleted || state.hiddenBy(row.docId) != null
 
     /** Which documents one [applyFold] projects, and what else it takes into account. */
     private sealed interface FoldScope {

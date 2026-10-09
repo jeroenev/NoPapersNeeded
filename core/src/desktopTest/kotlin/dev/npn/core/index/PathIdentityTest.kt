@@ -2,11 +2,14 @@ package dev.npn.core.index
 
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
+import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
@@ -202,18 +205,111 @@ class PathIdentityTest {
 
             rig.writePdf("inbox/scan.pdf", "bravo")
             val resurrected = ArrayList<Resurrected>()
-            rig.rescan { resurrected += it }
+            val report = rig.rescan { resurrected += it }
 
             resurrected.shouldBeEmpty()
             rig.db
                 .documentDao()
                 .rowAtPath("inbox/scan.pdf")
                 ?.docId shouldBe rig.fs.sha256("inbox/scan.pdf")
+            assertStillOnlyTrashed(trashed, "inbox/scan.pdf", report)
+        }
+
+    /** Nor does another document's file moved onto a trashed document's old path take it out of the trash. */
+    @Test
+    fun anotherDocumentMovedOntoATrashedDocumentsPathLeavesItInTheTrash() =
+        runTest {
+            rig.writePdf("inbox/scan.pdf", "alpha")
+            rig.writePdf("q.pdf", "bravo")
+            rig.rescan()
+            val moved = rig.fs.sha256("q.pdf")
+            val trashed = hide("inbox/scan.pdf") { PendingOp.docTrash(it, "inbox/scan.pdf") }
+
+            rig.moveFile("q.pdf", "inbox/scan.pdf")
+            val report = rig.rescan()
+
+            report.moved shouldBe 1
             rig.db
                 .documentDao()
-                .getByDocId(trashed)
-                ?.trashed shouldBe true
+                .rowAtPath("inbox/scan.pdf")
+                ?.docId shouldBe moved
+            assertStillOnlyTrashed(trashed, "inbox/scan.pdf", report)
         }
+
+    /**
+     * Another device's trash reaches a rescan together with a new file under the trashed document's
+     * name: the rescan reads the trash from the journal it folds, so the document is only trashed.
+     */
+    @Test
+    fun aTrashArrivingWithAnotherFileAtItsPathLeavesTheDocumentOnlyTrashed() =
+        runTest {
+            rig.writePdf("inbox/scan.pdf", "alpha")
+            rig.rescan()
+            val trashed = rig.fs.sha256("inbox/scan.pdf")
+
+            rig.clock.advance()
+            rig.writer("dev-main").commit(listOf(PendingOp.docTrash(trashed, "inbox/scan.pdf")))
+            rig.deleteFile("inbox/scan.pdf")
+            rig.writePdf("inbox/scan.pdf", "bravo")
+            val report = rig.rescan()
+
+            rig.db
+                .documentDao()
+                .rowAtPath("inbox/scan.pdf")
+                ?.docId shouldBe rig.fs.sha256("inbox/scan.pdf")
+            assertStillOnlyTrashed(trashed, "inbox/scan.pdf", report)
+        }
+
+    /** A document whose file is replaced in place is missing, the new file offered as its edit. */
+    @Test
+    fun aFileReplacedInPlaceLeavesItsDocumentMissingWithAPathMatch() =
+        runTest {
+            rig.writePdf("inbox/scan.pdf", "alpha")
+            rig.rescan()
+            val replaced = rig.fs.sha256("inbox/scan.pdf")
+
+            rig.deleteFile("inbox/scan.pdf")
+            rig.writePdf("inbox/scan.pdf", "bravo")
+            val report = rig.rescan()
+
+            val now = rig.fs.sha256("inbox/scan.pdf")
+            rig.db
+                .documentDao()
+                .getByDocId(replaced)
+                .shouldNotBeNull()
+                .missing
+                .shouldBeTrue()
+            report.relinkCandidates
+                .filter {
+                    it.reason == RelinkPairing.PATH_MATCH
+                }.map { it.oldDocId to it.newDocId } shouldContainExactly
+                listOf(replaced to now)
+        }
+
+    /**
+     * [docId] is in the trash and nowhere else: not missing, trashed from [origPath], and no relink
+     * candidate of the rescan that produced [report] would carry its metadata onto another file.
+     */
+    private suspend fun assertStillOnlyTrashed(
+        docId: String,
+        origPath: String,
+        report: ScanReport,
+    ) {
+        val row =
+            rig.db
+                .documentDao()
+                .getByDocId(docId)
+                .shouldNotBeNull()
+        row.trashed.shouldBeTrue()
+        row.missing.shouldBeFalse()
+        row.trashedOrigPath shouldBe origPath
+        rig.db
+            .documentDao()
+            .observeMissing()
+            .first()
+            .map { it.docId } shouldNotContain docId
+        report.relinkCandidates.map { it.oldDocId } shouldNotContain docId
+    }
 
     @Test
     fun anotherFileAtADeletedDocumentsPathLeavesItDeleted() =
@@ -231,9 +327,10 @@ class PathIdentityTest {
 
             rig.writePdf("inbox/scan.pdf", "bravo")
             val resurrected = ArrayList<Resurrected>()
-            repeat(2) { rig.rescan { found -> resurrected += found } }
+            val reports = List(2) { rig.rescan { found -> resurrected += found } }
 
             resurrected.shouldBeEmpty()
+            reports.flatMap { it.relinkCandidates }.map { it.oldDocId } shouldNotContain deleted
             rig.db
                 .documentDao()
                 .rowAtPath("inbox/scan.pdf")
