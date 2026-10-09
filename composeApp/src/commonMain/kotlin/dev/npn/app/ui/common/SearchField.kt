@@ -85,7 +85,7 @@ fun SearchField(
             SuggestionDropdown(
                 expanded = shown,
                 suggestions = suggestions,
-                active = menu.active,
+                active = menu.activeIn(suggestions.size),
                 onDismiss = { menu.open = false },
                 onPick = pick,
             )

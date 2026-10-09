@@ -87,7 +87,7 @@ fun SuggestField(
         SuggestionDropdown(
             expanded = shown,
             suggestions = matches,
-            active = menu.active,
+            active = menu.activeIn(matches.size),
             onDismiss = { menu.open = false },
             onPick = pick,
         )
@@ -111,7 +111,21 @@ internal fun suggestionsFor(
 @Stable
 internal class SuggestionMenu {
     var open by mutableStateOf(false)
-    var active by mutableIntStateOf(0)
+    private var active by mutableIntStateOf(0)
+
+    /**
+     * The row the arrow keys are on among [count] rows, null when there are none. Clamped as it is
+     * read, since the rows can change under an open menu.
+     */
+    fun activeIn(count: Int): Int? = if (count > 0) active.coerceIn(0, count - 1) else null
+
+    /** Move the arrow keys' row [by] rows, staying within [count]. */
+    fun move(
+        by: Int,
+        count: Int,
+    ) {
+        activeIn(count)?.let { active = (it + by).coerceIn(0, count - 1) }
+    }
 
     /** Open or close the menu, starting again from its first row. */
     fun reopen(open: Boolean) {
@@ -130,9 +144,9 @@ internal fun Modifier.suggestionKeys(
     onPreviewKeyEvent { event ->
         if (!shown || event.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
         when (event.key) {
-            Key.DirectionDown -> menu.active = (menu.active + 1).coerceAtMost(suggestions.lastIndex)
-            Key.DirectionUp -> menu.active = (menu.active - 1).coerceAtLeast(0)
-            Key.Enter -> suggestions.getOrNull(menu.active)?.let(onPick)
+            Key.DirectionDown -> menu.move(1, suggestions.size)
+            Key.DirectionUp -> menu.move(-1, suggestions.size)
+            Key.Enter -> menu.activeIn(suggestions.size)?.let { onPick(suggestions[it]) }
             Key.Escape -> menu.open = false
             else -> return@onPreviewKeyEvent false
         }
@@ -148,7 +162,7 @@ internal fun Modifier.suggestionKeys(
 internal fun SuggestionDropdown(
     expanded: Boolean,
     suggestions: List<String>,
-    active: Int,
+    active: Int?,
     onDismiss: () -> Unit,
     onPick: (String) -> Unit,
 ) {
