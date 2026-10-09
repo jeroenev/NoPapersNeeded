@@ -229,7 +229,11 @@ class PathIdentityTest {
             rig.rescan()
             val moved = rig.fs.sha256("q.pdf")
             val trashed = hide("inbox/scan.pdf") { PendingOp.docTrash(it, "inbox/scan.pdf") }
-            val trashedRow = rig.db.documentDao().getByDocId(trashed).shouldNotBeNull()
+            val trashedRow =
+                rig.db
+                    .documentDao()
+                    .getByDocId(trashed)
+                    .shouldNotBeNull()
             rig.fs.stat("q.pdf")?.size shouldBe trashedRow.size
             Files.setLastModifiedTime(rig.libRoot.resolve("q.pdf"), FileTime.fromMillis(trashedRow.mtime))
 
