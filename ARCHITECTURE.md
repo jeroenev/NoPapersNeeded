@@ -145,7 +145,10 @@ live in `buildSrc`. Hot Reload via `mise hot`.
    stat drifted is hashed, under the writer lock the check runs in; the bytes
    of a trashed, deleted or missing document bring that document back, metadata
    and all, and any copy of it left in the trash is deleted. Its only journal
-   write is the restore of bytes the journal had trashed or deleted. `OcrPipeline`
+   write is the restore of bytes the journal had trashed or deleted. Bytes a
+   relink superseded (a bake's original) are no document of their own: an import
+   of them is a duplicate of the document they became while the library shows
+   it, and is refused otherwise; a rescan gives a file of them no row. `OcrPipeline`
    then writes the OCR sidecar, after which the auto-match rules (and, when
    enabled, AI enrichment) write metadata.
 2. **Journal is source of truth for metadata**: every change (tags, field values,

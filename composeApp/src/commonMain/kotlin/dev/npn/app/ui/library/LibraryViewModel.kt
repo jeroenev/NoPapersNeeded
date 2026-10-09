@@ -55,6 +55,7 @@ import no_papers_needed.composeapp.generated.resources.common_failed_count
 import no_papers_needed.composeapp.generated.resources.common_import_failure_copy
 import no_papers_needed.composeapp.generated.resources.common_import_failure_empty
 import no_papers_needed.composeapp.generated.resources.common_import_failure_images
+import no_papers_needed.composeapp.generated.resources.common_import_failure_superseded
 import no_papers_needed.composeapp.generated.resources.common_imported_count
 import no_papers_needed.composeapp.generated.resources.common_join_items
 import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
@@ -566,4 +567,5 @@ private fun ImportFailure.text(): UiText =
         ImportFailure.EMPTY_FILE -> uiText(Res.string.common_import_failure_empty)
         ImportFailure.UNREADABLE_IMAGES -> uiText(Res.string.common_import_failure_images)
         ImportFailure.COPY_FAILED -> uiText(Res.string.common_import_failure_copy)
+        ImportFailure.SUPERSEDED -> uiText(Res.string.common_import_failure_superseded)
     }

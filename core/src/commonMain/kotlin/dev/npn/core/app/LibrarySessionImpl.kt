@@ -16,6 +16,7 @@ import dev.npn.core.index.ImportService
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.RelinkService
 import dev.npn.core.index.ScanReport
+import dev.npn.core.index.SupersededImportException
 import dev.npn.core.index.WriteSettle
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
@@ -162,11 +163,19 @@ class LibrarySessionImpl private constructor(
         runCatchingCancellable(import).fold(
             onSuccess = { map(it).also(::afterImport) },
             onFailure = { failure ->
-                if (failure is EmptyImportException) {
-                    ImportOutcome.Failed(ImportFailure.EMPTY_FILE)
-                } else {
-                    log.warn("Importing $name failed", failure)
-                    ImportOutcome.Failed(ImportFailure.COPY_FAILED)
+                when (failure) {
+                    is EmptyImportException -> {
+                        ImportOutcome.Failed(ImportFailure.EMPTY_FILE)
+                    }
+
+                    is SupersededImportException -> {
+                        ImportOutcome.Failed(ImportFailure.SUPERSEDED)
+                    }
+
+                    else -> {
+                        log.warn("Importing $name failed", failure)
+                        ImportOutcome.Failed(ImportFailure.COPY_FAILED)
+                    }
                 }
             },
         )

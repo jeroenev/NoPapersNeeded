@@ -343,7 +343,7 @@ internal fun buildMaintenance(
                 documentDao = deps.db.documentDao(),
                 duplicateDao = deps.db.duplicateDao(),
                 importService = library.imports,
-                serialize = { coordinator.serialized(it) },
+                serialize = { step -> coordinator.serialized { step() } },
             ),
         relink = relink,
         splitter = SplitService(deps.fs, deps.pdfEngine, library.imports, deps.db.documentDao(), deps.log),

@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.OpenReconciliation
+import dev.npn.core.index.RelinkLookup
 import dev.npn.core.index.Resurrected
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SnapshotSupport
@@ -448,9 +449,14 @@ class JournalCoordinator internal constructor(
      * Run [block] under the single-writer mutex: for a change to which file holds which hash that
      * does not go through the journal, an import placing its file and row. That serializes it
      * against other imports and against every rescan, whose listing and row writes it would
-     * otherwise interleave with.
+     * otherwise interleave with. [block] reads the journal's relinks through the [RelinkLookup] it
+     * is handed, under the same lock; it must not call another member here, as the lock is not
+     * reentrant.
      */
-    suspend fun <T> serialized(block: suspend () -> T): T = locked { block() }
+    suspend fun <T> serialized(block: suspend (RelinkLookup) -> T): T = locked { block(relinks) }
+
+    /** The live fold's relinks, for a [serialized] block, which holds the lock they are read under. */
+    private val relinks = RelinkLookup { foldedState().resolveDocId(it) }
 
     /**
      * Apply an immediate, optimistic DB mutation for [lifecycleDocs] and commit [ops] atomically

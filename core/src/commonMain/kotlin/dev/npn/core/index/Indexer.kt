@@ -310,7 +310,8 @@ class Indexer(
     /**
      * Reconcile hashed files against the DB. For each hashed file, one of: an unchanged/refreshed
      * canonical, a move/rename, an external duplicate, an external edit (old -> missing sentinel +
-     * new doc + path-match relink candidate), or a brand-new doc. A row whose path now holds another
+     * new doc + path-match relink candidate), a brand-new doc, or nothing for bytes a relink
+     * superseded, which get no row of their own. A row whose path now holds another
      * document's bytes gives the path up: missing when its file was there, only trashed when it was
      * in the trash ([hidden], judged with the journal [state] this pass folds). Writes the rows it
      * changed in one batch and returns the counters + new docs + duplicates + relink candidates
@@ -350,6 +351,10 @@ class Indexer(
                 reconcileKnownHash(existingDoc, meta, hash, diskPaths, hashes, recon)
                 continue
             }
+            // Bytes a relink superseded (a bake's original) are an earlier version of another
+            // document, which no event makes live again: written as a new document, they would be
+            // counted and offered for a relink, then hidden by this very fold, on every rescan.
+            if (state.resolveDocId(hash) != hash) continue
 
             recon.write(newDocument(hash, meta, now))
             recon.newDocs[hash] = meta

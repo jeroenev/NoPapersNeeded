@@ -134,9 +134,12 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   or a file still being written, is no evidence. An import is a duplicate only of a live document
   whose file holds the bytes (the size and mtime its row stored prove that, as for a rescan; a
   drifted stat means hashing the file); a hidden document's bytes bring it back (`ImportService`),
-  since a caller may delete a duplicate's source. A file is moved, trashed or deleted as a
-  document's only while it holds the document's bytes by that same proof (`holdsDocument`) or a
-  hash; another file at the document's path is left for the next rescan.
+  since a caller may delete a duplicate's source. Bytes a relink superseded (a bake's original)
+  bring nothing back, as no event makes a superseded document live: an import of them is a
+  duplicate of the document they became while the library shows it, else refused, and a rescan
+  gives a file of them no row. A file is moved, trashed or deleted as a document's only while it
+  holds the document's bytes by that same proof (`holdsDocument`) or a hash; another file at the
+  document's path is left for the next rescan.
 - Merge semantics: OR-set for tags, HLC last-writer-wins for single-value fields, system
   properties, settings and field definitions, and for trash/restore and delete/undelete.
 - Document fields are registry data, not code. Title, correspondent, docType, docDate and notes

@@ -34,6 +34,13 @@ class LibraryScanTest : MainDispatcherTest() {
         expectMessage(ImportOutcome.Failed(ImportFailure.EMPTY_FILE), "Scan import failed: the file is empty")
 
     @Test
+    fun aScanOfAnEarlierVersionSaysSo() =
+        expectMessage(
+            ImportOutcome.Failed(ImportFailure.SUPERSEDED),
+            "Scan import failed: the file is an earlier version of a document in the library",
+        )
+
+    @Test
     fun aScanImportThatThrowsIsReported() =
         expectMessage(failure = { error("disk full") }, expected = "Scan import failed: disk full")
 

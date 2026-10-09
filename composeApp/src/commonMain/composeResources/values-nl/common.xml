@@ -112,6 +112,7 @@
     <string name="common_import_failure_empty">het bestand is leeg</string>
     <string name="common_import_failure_images">van de afbeeldingen kon geen pdf worden gemaakt</string>
     <string name="common_import_failure_copy">het bestand kon niet naar de bibliotheek worden gekopieerd</string>
+    <string name="common_import_failure_superseded">het bestand is een eerdere versie van een document in de bibliotheek</string>
     <string name="common_rerun_ocr_failed">OCR kon niet opnieuw worden uitgevoerd: %1$s</string>
     <string name="common_save_field_failed">Het veld kon niet worden opgeslagen: %1$s</string>
     <string name="common_save_setting_failed">De instelling kon niet worden opgeslagen: %1$s</string>

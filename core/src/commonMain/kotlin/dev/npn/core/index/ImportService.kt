@@ -56,6 +56,24 @@ sealed interface ImportResult {
 class EmptyImportException : IllegalArgumentException("The file is empty")
 
 /**
+ * The file to import holds bytes a relink superseded (a bake's original), and the document they
+ * became is not one the library shows; no import brings superseded bytes back.
+ */
+class SupersededImportException :
+    IllegalArgumentException("The file is an earlier version of a document in the library")
+
+/** The journal's relinks, as an import reads them under the writer lock ([ImportService]). */
+fun interface RelinkLookup {
+    /** The document [docId]'s bytes became, its relink chain followed to the end; [docId] when none superseded it. */
+    suspend fun successorOf(docId: String): String
+
+    companion object {
+        /** For a library whose journal holds no relink. */
+        val NONE = RelinkLookup { it }
+    }
+}
+
+/**
  * Imports external PDFs or byte payloads into the library, deduplicating by content hash.
  *
  * Because [LibraryFileSystem.sha256] hashes a library-relative path (there is no stream-hash of an
@@ -71,11 +89,16 @@ class EmptyImportException : IllegalArgumentException("The file is empty")
  * The file lands at the import target, or stays where the document's row says if its bytes are
  * back there already.
  *
+ * Bytes a relink superseded (a bake's original) are an earlier version of another document, and
+ * no journal event makes a superseded document live again: they are a duplicate of the document
+ * they became while the library shows it, and otherwise refused ([SupersededImportException]),
+ * with nothing moved either way.
+ *
  * The dedup check, the move into place and the row write run as one step through [serialize],
- * which the session points at the journal coordinator's lock. Without it two imports of the same
- * bytes both pass the check and place two files for one hash, and a rescan listing the library
- * between the move and the row write inserts a row of its own that the import then overwrites
- * (or that overwrites the import's).
+ * which the session points at the journal coordinator's lock, handing the step the journal's
+ * relinks as they stand under it. Without it two imports of the same bytes both pass the check and
+ * place two files for one hash, and a rescan listing the library between the move and the row
+ * write inserts a row of its own that the import then overwrites (or that overwrites the import's).
  *
  * Bytes the journal had deleted or trashed come back through [restore], which records that they
  * are back (`JournalCoordinator.restoreReturned`); without that record, the next fold would hide
@@ -92,7 +115,7 @@ class ImportService(
     private val ruleProvider: suspend () -> StoragePathRule? = { null },
     /** The registry's field types by key, which decide where a template accepts a date pattern. */
     private val fieldTypes: suspend () -> Map<String, FieldType>,
-    private val serialize: suspend (suspend () -> Unit) -> Unit = { it() },
+    private val serialize: suspend (suspend (RelinkLookup) -> Unit) -> Unit = { it(RelinkLookup.NONE) },
     /**
      * Record that the document is back at the path, when the journal still hides it; returns
      * whether it wrote that, and throws only when it did not.
@@ -147,7 +170,7 @@ class ImportService(
         // it again with the import's copy left in the library.
         return withContext(NonCancellable) {
             var placement: Placement? = null
-            serialize { placement = place(tmpPath, hash, size, suggestedName, toDir) }
+            serialize { relinks -> placement = place(tmpPath, hash, size, suggestedName, toDir, relinks) }
             val placed = checkNotNull(placement)
             val imported = placed.result as? ImportResult.Imported ?: return@withContext placed.result
             // After [serialize]: the restore is a journal write, which takes the same lock.
@@ -214,6 +237,7 @@ class ImportService(
         size: Long,
         suggestedName: String,
         toDir: String,
+        relinks: RelinkLookup,
     ): Placement {
         val existing = documentDao.getByDocId(hash)
         // The document's own path, when its bytes are there. This runs under the writer lock, so
@@ -222,6 +246,10 @@ class ImportService(
         if (existing != null && existing.isLive && inPlace != null) {
             return Placement(ImportResult.Duplicate(existing.docId, existing.relPath))
         }
+        // Asked of the journal, not the index: a superseded row is deleted like any other, and an
+        // index rebuilt since has none.
+        val successor = relinks.successorOf(hash)
+        if (successor != hash) return Placement(supersededBy(successor))
 
         val target = inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir).also { fs.move(tmpPath, it) }
         var placement: Placement? = null
@@ -231,6 +259,16 @@ class ImportService(
             if (placement == null) unplace(hash, existing, target.takeIf { inPlace == null }, tmpPath)
         }
         return checkNotNull(placement)
+    }
+
+    /**
+     * What an import of bytes a relink superseded comes to: a duplicate of their [successor] while
+     * the library shows it and its file holds its bytes, else a refusal. Bringing the superseded
+     * document back would last until the next fold, which hides it again whatever its events say.
+     */
+    private suspend fun supersededBy(successor: String): ImportResult {
+        val shown = documentDao.getByDocId(successor)?.takeIf { it.isLive && fs.holdsDocument(it) }
+        return shown?.let { ImportResult.Duplicate(it.docId, it.relPath) } ?: throw SupersededImportException()
     }
 
     /**

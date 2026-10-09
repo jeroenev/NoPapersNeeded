@@ -100,4 +100,11 @@ enum class ImportFailure {
 
     /** The file could not be copied into the library: unreadable, gone, or the library refused it. */
     COPY_FAILED,
+
+    /**
+     * The file is an earlier version of a document in the library, whose bytes a bake replaced, and
+     * the library does not show that document (it is in the trash, deleted or missing). The file
+     * is left where it was.
+     */
+    SUPERSEDED,
 }

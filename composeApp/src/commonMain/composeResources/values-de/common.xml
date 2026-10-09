@@ -111,6 +111,7 @@
     <string name="common_import_failure_empty">die Datei ist leer</string>
     <string name="common_import_failure_images">aus den Bildern konnte kein PDF erstellt werden</string>
     <string name="common_import_failure_copy">die Datei konnte nicht in die Bibliothek kopiert werden</string>
+    <string name="common_import_failure_superseded">die Datei ist eine frühere Version eines Dokuments in der Bibliothek</string>
     <string name="common_rerun_ocr_failed">OCR konnte nicht erneut ausgeführt werden: %1$s</string>
     <string name="common_save_field_failed">Das Feld konnte nicht gespeichert werden: %1$s</string>
     <string name="common_save_setting_failed">Die Einstellung konnte nicht gespeichert werden: %1$s</string>
