@@ -36,7 +36,6 @@ import dev.npn.app.ui.common.formatEpochDateTime
 import dev.npn.app.ui.common.resolve
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_retry
-import no_papers_needed.composeapp.generated.resources.common_unknown_error
 import no_papers_needed.composeapp.generated.resources.detail_history_load_failed
 import no_papers_needed.composeapp.generated.resources.detail_history_secondary
 import no_papers_needed.composeapp.generated.resources.detail_no_history
@@ -70,12 +69,7 @@ internal fun HistoryTab(
             }
 
             is HistoryUiState.Error -> {
-                Text(
-                    stringResource(
-                        Res.string.detail_history_load_failed,
-                        history.message.ifBlank { stringResource(Res.string.common_unknown_error) },
-                    ),
-                )
+                Text(stringResource(Res.string.detail_history_load_failed, history.message))
                 Button(onClick = onRefresh) { Text(stringResource(Res.string.common_retry)) }
             }
 

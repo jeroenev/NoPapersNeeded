@@ -1,6 +1,7 @@
 package dev.npn.core.journal
 
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.util.reason
 
 data class JournalDiagnostic(
     val line: Int?,
@@ -157,7 +158,7 @@ internal object StrictLines {
                         "$noun line $number uses unsupported event version ${e.version}",
                     )
                 } catch (e: Exception) {
-                    return JournalSourceRead.Retryable("$noun line $number is invalid: ${e.message}")
+                    return JournalSourceRead.Retryable("$noun line $number is invalid: ${e.reason()}")
                 }
             if (event.event.op is JournalOp.Unknown) {
                 return JournalSourceRead.Unsupported("$noun line $number uses unknown operation ${event.event.op.wire}")

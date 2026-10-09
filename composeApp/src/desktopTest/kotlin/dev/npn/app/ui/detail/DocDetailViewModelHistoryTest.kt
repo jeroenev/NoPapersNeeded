@@ -71,4 +71,17 @@ class DocDetailViewModelHistoryTest : MainDispatcherTest() {
             model.metadata.value.history shouldBe HistoryUiState.Error("index unavailable")
             session.documents.historyCalls shouldBe 2
         }
+
+    /** A failure without a message still says what failed, as every error text does (`reason()`). */
+    @Test
+    fun aHistoryFailureWithoutAMessageNamesItsCause() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { documents.historyError = IllegalStateException() }
+            val model = DocDetailViewModel("doc-1", session, FakeSettingsRepository())
+            backgroundScope.launch { model.metadata.collect {} }
+
+            model.loadHistory()
+            advanceUntilIdle()
+            model.metadata.value.history shouldBe HistoryUiState.Error("IllegalStateException")
+        }
 }

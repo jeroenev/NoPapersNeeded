@@ -2,6 +2,7 @@ package dev.npn.core.journal
 
 import dev.npn.core.fs.SHA256_HEX
 import dev.npn.core.fs.sha256Bytes
+import dev.npn.core.util.reason
 import kotlinx.serialization.json.JsonArray
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
@@ -106,7 +107,7 @@ object SnapshotV2Reader {
                 try {
                     SnapshotCodec.decodeManifest(lines.first())
                 } catch (e: Exception) {
-                    return@read JournalSourceRead.Retryable("Snapshot manifest is invalid: ${e.message}")
+                    return@read JournalSourceRead.Retryable("Snapshot manifest is invalid: ${e.reason()}")
                 }
             if (manifest.version != SnapshotCodec.SNAPSHOT_MANIFEST_VERSION) {
                 return@read JournalSourceRead.Unsupported(

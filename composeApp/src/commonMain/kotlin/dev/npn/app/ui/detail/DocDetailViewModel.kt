@@ -29,6 +29,7 @@ import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.ReviewMode
+import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.Flow
@@ -391,7 +392,7 @@ class DocDetailViewModel(
             HistoryMapper.toHistoryItems(documents.history(docId)) { key -> labels[key] ?: key }
         }.fold(
             onSuccess = { items -> if (items.isEmpty()) HistoryUiState.Empty else HistoryUiState.Loaded(items) },
-            onFailure = { error -> HistoryUiState.Error(error.message.orEmpty()) },
+            onFailure = { error -> HistoryUiState.Error(error.reason()) },
         )
 
     override fun addTag(tag: String) =

@@ -8,6 +8,7 @@ import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import dev.npn.core.model.FieldValues
 import dev.npn.core.util.NpnJson
+import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -245,7 +246,7 @@ internal class DocumentDrafts(
             outcome.onFailure { error ->
                 withContext(Dispatchers.Main) {
                     mutate { all ->
-                        all + (docId to all.getValue(docId).copy(saving = false, error = error.message.orEmpty()))
+                        all + (docId to all.getValue(docId).copy(saving = false, error = error.reason()))
                     }
                 }
                 return@launch

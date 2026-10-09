@@ -21,6 +21,7 @@ import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.reason
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.CancellationException
@@ -619,7 +620,7 @@ class JournalCoordinator internal constructor(
     }
 
     private fun blockWrites(failure: Throwable) {
-        writeBlockReason = failure.message ?: failure::class.simpleName ?: "metadata reconciliation failed"
+        writeBlockReason = failure.reason()
     }
 
     /**

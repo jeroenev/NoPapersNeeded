@@ -104,6 +104,18 @@ class DocumentDraftsTest : MainDispatcherTest() {
             assertEquals(listOf("one") to true, writer.reviewedSets.single())
         }
 
+    /** The save bar's technical details name a failure that has no message, rather than going blank. */
+    @Test
+    fun aFailureWithoutAMessageStillSaysWhatFailed() =
+        runTest(dispatcher) {
+            val writer = FakeMetadataWriter().apply { failBatchOps = { throw IllegalStateException() } }
+            val store = DocumentDrafts(writer, this)
+            store.field("one", FieldKeys.TITLE, "Invoice", persisted = null)
+            store.save("one")
+            advanceUntilIdle()
+            store.state.getValue("one").error shouldBe "IllegalStateException"
+        }
+
     @Test
     fun savedDraftIsDroppedOnceTheNoticeHasBeenRead() =
         runTest(dispatcher) {
