@@ -137,8 +137,8 @@ class BakeService(
      * hash [oldSha]. One of the two versions stays on disk at every step: baked bytes that a failed
      * move still landed at [norm] go back to [tmpPath] before the original is written, and [tmpPath]
      * goes only once [norm] holds the original again (until then [dev.npn.core.fs.TempFileSweep]
-     * keeps it, as it keeps a bake's temporary file whose document is missing). The caller still sees the swap's
-     * failure; a restore that fails too is logged with where the document's bytes are.
+     * keeps it, as it keeps any bake's temporary file whose document is missing). The caller still
+     * sees the swap's failure; a restore that fails too is logged with where the document's bytes are.
      */
     private suspend fun restoreOriginal(
         norm: String,
