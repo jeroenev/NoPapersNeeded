@@ -30,19 +30,21 @@ import kotlin.test.assertFailsWith
 class HiddenDocumentImportTest {
     private lateinit var rig: AppSessionRig
 
-    /** Run [block] over a fresh session holding `a.pdf`, closed before the test's scope ends. */
-    private fun withDocument(block: suspend (id: String, bytes: ByteArray) -> Unit) =
-        runTest {
-            rig = AppSessionRig.create(backgroundScope)
-            try {
-                val bytes = PdfFixtures.embeddedTextPdf("alpha")
-                rig.writePdf("a.pdf", bytes)
-                rig.session.rescan()
-                block(rig.docId("a.pdf"), bytes)
-            } finally {
-                rig.close()
-            }
+    /** Run [block] over a fresh session holding a document at [at], closed before the test's scope ends. */
+    private fun withDocument(
+        at: String = "a.pdf",
+        block: suspend (id: String, bytes: ByteArray) -> Unit,
+    ) = runTest {
+        rig = AppSessionRig.create(backgroundScope)
+        try {
+            val bytes = PdfFixtures.embeddedTextPdf("alpha")
+            rig.writePdf(at, bytes)
+            rig.session.rescan()
+            block(rig.docId(at), bytes)
+        } finally {
+            rig.close()
         }
+    }
 
     @Test
     fun importingTheBytesOfALiveDocumentIsADuplicate() =
@@ -147,6 +149,31 @@ class HiddenDocumentImportTest {
         }
 
     /**
+     * The same for a document trashed from the import's own target, `inbox/a.pdf`: the import moved
+     * a copy onto the path the trashed row still names, and takes it back out, so no rescan finds the
+     * document's bytes there and takes it out of the trash.
+     */
+    @Test
+    fun aTrashedDocumentsImportOntoItsOldPathThatCannotBeRecordedLeavesItInTheTrash() =
+        withDocument(at = "inbox/a.pdf") { id, bytes ->
+            rig.session.work.drainOcr()
+            rig.session.docLifecycle.trashDoc(id)
+            val before = row(id)
+            before.relPath shouldBe "inbox/a.pdf"
+            blockMetadataWrites()
+
+            importAgain(bytes) shouldBe ImportOutcome.Failed(ImportFailure.COPY_FAILED)
+
+            row(id) shouldBe before
+            trashEntries() shouldHaveSize 1
+            libraryPdfs().shouldBeEmpty()
+            unblockMetadataWrites()
+            rig.session.rescan()
+            row(id).trashed.shouldBeTrue()
+            libraryPdfs().shouldBeEmpty()
+        }
+
+    /**
      * Nor is the imported file deleted when it is the only copy of the bytes there is: it stays,
      * the trashed row pointing at it, and an import retried meanwhile makes no second copy.
      */
@@ -185,8 +212,13 @@ class HiddenDocumentImportTest {
 
     /** A journal store from a newer build makes the rescan refuse, which blocks metadata writes. */
     private suspend fun blockMetadataWrites() {
-        Files.createDirectories(rig.libRoot.resolve("${NpnPaths.JOURNAL_DIR}/objects-v9-00"))
+        Files.createDirectories(rig.libRoot.resolve(NEWER_STORE))
         assertFailsWith<IllegalStateException> { rig.session.rescan() }
+    }
+
+    /** Take away what [blockMetadataWrites] put there; the next rescan lets writes through again. */
+    private fun unblockMetadataWrites() {
+        Files.delete(rig.libRoot.resolve(NEWER_STORE))
     }
 
     /** Every published journal object's text. */
@@ -207,4 +239,9 @@ class HiddenDocumentImportTest {
             .listAllIndexable()
             .filter { !it.isDirectory }
             .map { it.relPath }
+
+    private companion object {
+        /** An object store from a newer build. */
+        const val NEWER_STORE = "${NpnPaths.JOURNAL_DIR}/objects-v9-00"
+    }
 }

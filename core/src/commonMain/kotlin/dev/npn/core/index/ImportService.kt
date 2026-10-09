@@ -141,19 +141,25 @@ class ImportService(
         // An empty file is never a document; its hash would claim the empty-content identity.
         if (size == 0L) throw EmptyImportException()
         val hash = fs.sha256(tmpPath)
-        var placement: Placement? = null
-        serialize { placement = place(tmpPath, hash, size, suggestedName, toDir) }
-        val placed = checkNotNull(placement)
-        val imported = placed.result as? ImportResult.Imported ?: return placed.result
-        // After [serialize]: the restore is a journal write, which takes the same lock.
-        val restored =
-            runCatchingCancellable { restore(imported.docId, imported.relPath) }.getOrElse { failure ->
-                log.runLogged("Taking back the import of ${imported.relPath}") { takeBack(placed) }
-                throw failure
-            }
-        if (!restored && !imported.broughtBack) return imported
-        discardTrashCopies(imported.docId)
-        return imported.copy(broughtBack = true)
+        // From the lock on, the import runs to its end even when its caller goes away: cut short
+        // between placing a returning document and recording its return (or taking it back), the
+        // document would be live with nothing in the journal to say so, and the next fold would hide
+        // it again with the import's copy left in the library.
+        return withContext(NonCancellable) {
+            var placement: Placement? = null
+            serialize { placement = place(tmpPath, hash, size, suggestedName, toDir) }
+            val placed = checkNotNull(placement)
+            val imported = placed.result as? ImportResult.Imported ?: return@withContext placed.result
+            // After [serialize]: the restore is a journal write, which takes the same lock.
+            val restored =
+                runCatchingCancellable { restore(imported.docId, imported.relPath) }.getOrElse { failure ->
+                    log.runLogged("Taking back the import of ${imported.relPath}") { takeBack(placed) }
+                    throw failure
+                }
+            if (!restored && !imported.broughtBack) return@withContext imported
+            discardTrashCopies(imported.docId)
+            imported.copy(broughtBack = true)
+        }
     }
 
     /**
@@ -190,11 +196,13 @@ class ImportService(
         }
 
     /**
-     * What [place] did: its [result] and, for a document it brought back, the row and OCR queue
-     * entry it had before ([queuedOcr]: whether [place] queued it), for [takeBack].
+     * What [place] did: its [result], whether it [moved] the imported file into the library (or found
+     * the bytes back at the document's own path), and, for a document it brought back, the row and
+     * OCR queue entry it had before ([queuedOcr]: whether [place] queued it), for [takeBack].
      */
     private class Placement(
         val result: ImportResult,
+        val moved: Boolean = false,
         val previous: DocumentEntity? = null,
         val previousQueue: OcrQueueEntity? = null,
         val queuedOcr: Boolean = false,
@@ -218,7 +226,7 @@ class ImportService(
         val target = inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir).also { fs.move(tmpPath, it) }
         var placement: Placement? = null
         try {
-            placement = record(hash, target, existing)
+            placement = record(hash, target, existing, moved = inPlace == null)
         } finally {
             if (placement == null) unplace(hash, existing, target.takeIf { inPlace == null }, tmpPath)
         }
@@ -226,13 +234,14 @@ class ImportService(
     }
 
     /**
-     * Write the row of the document whose file [place] put at [target], [existing] brought back or a
-     * new one, and queue it for OCR.
+     * Write the row of the document whose file [place] put at [target] (having [moved] it there),
+     * [existing] brought back or a new one, and queue it for OCR.
      */
     private suspend fun record(
         hash: String,
         target: String,
         existing: DocumentEntity?,
+        moved: Boolean,
     ): Placement {
         val meta = fs.stat(target) ?: error("Imported file vanished: $target")
         val now = clock.nowMillis()
@@ -246,6 +255,7 @@ class ImportService(
         if (existing != null && existing.fileName != row.fileName) indexFileName(row)
         return Placement(
             ImportResult.Imported(hash, target, broughtBack = existing != null),
+            moved = moved,
             previous = existing,
             previousQueue = previousQueue,
             queuedOcr = queueOcr,
@@ -264,7 +274,7 @@ class ImportService(
         existing: DocumentEntity?,
         movedTo: String?,
         tmpPath: String,
-    ) = withContext(NonCancellable) {
+    ) {
         log.runLogged("Putting back the row of $hash after a failed import") {
             if (existing != null) documentDao.upsert(existing.onFreePath()) else forget(hash)
         }
@@ -319,8 +329,10 @@ class ImportService(
             val placedAt = imported.relPath
             val row =
                 when {
-                    // Brought back in place, the file there before; or no copy of ours left there.
-                    placedAt == previous.relPath || !fs.holds(placedAt, docId) -> {
+                    // Brought back in place, the file there before; or no copy of ours left where the
+                    // import moved one. That can be the hidden row's own path too, which a trashed
+                    // row keeps: a copy moved there is the import's, not the document's file.
+                    !placed.moved || !fs.holds(placedAt, docId) -> {
                         previous
                     }
 
