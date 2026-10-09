@@ -59,6 +59,9 @@ private class QueueRig(
     /** How many writes a queue handed to the session as owned work, as it must every write a caller drives. */
     var ownedWrites = 0
 
+    /** Thrown by every owned write when set, as a closed device database would. */
+    var ownWriteFailure: Throwable? = null
+
     /** The endpoint's cooldown, as the session's AI facade holds it for every queue. */
     val health = EndpointHealth()
 
@@ -82,6 +85,7 @@ private class QueueRig(
             onEnqueued = { kicks++ },
             ownWrite = { write ->
                 ownedWrites++
+                ownWriteFailure?.let { throw it }
                 write()
             },
             newJobId = { "job-${++ids}" },
@@ -591,6 +595,29 @@ class AiEditQueueReviewTest {
                 rig.job(discarded) shouldBe null
                 // Two runs queued, two finished.
                 rig.ownedWrites shouldBe 4
+            }
+        }
+
+    /**
+     * Dropping the run from the queue comes after the writes; when it fails, the writes still stand,
+     * so the review is done, with the failure beside its counts, and the run stays queued.
+     */
+    @Test
+    fun `an applied run that cannot leave the queue is still done`() =
+        runTest {
+            withQueue { rig ->
+                rig.ai.edit = suggestion(tag = "invoice")
+                val jobId = rig.suggestAll(rig.enqueue("a"))
+                val review = rig.queue.openEditRun(jobId).shouldNotBeNull()
+                val failure = IllegalStateException("database closed")
+                rig.ownWriteFailure = failure
+
+                val done = review.apply(review.docs).shouldBeInstanceOf<ApplyOutcome.Done>()
+
+                done.result shouldBe ApplyResult(applied = 1, docsChanged = 1, moreRemain = false)
+                done.followUpFailure shouldBe failure
+                rig.meta.addedTags shouldContainExactly listOf(listOf("a") to "invoice")
+                rig.job(jobId).shouldNotBeNull()
             }
         }
 

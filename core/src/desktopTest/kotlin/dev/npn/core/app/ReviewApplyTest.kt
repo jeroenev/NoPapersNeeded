@@ -101,4 +101,23 @@ class ReviewApplyTest {
             meta.failAddTagForDocs = emptySet()
             apply(remaining) shouldBe ApplyOutcome.Done(ApplyResult(applied = 3, docsChanged = 1, moreRemain = false))
         }
+
+    /**
+     * Asking whether more documents remain comes after the writes; when it fails, the writes still
+     * stand, so the batch is done, with no next batch offered and the failure beside the counts.
+     */
+    @Test
+    fun `a batch whose follow-up question fails is still done`() =
+        runTest {
+            val failure = IllegalStateException("database closed")
+
+            val done =
+                apply
+                    .apply(listOf(reviewed("a", add = listOf("t")))) { throw failure }
+                    .shouldBeInstanceOf<ApplyOutcome.Done>()
+
+            done.result shouldBe ApplyResult(applied = 1, docsChanged = 1, moreRemain = false)
+            done.followUpFailure shouldBe failure
+            meta.addedTags shouldContainExactly listOf(listOf("a") to "t")
+        }
 }

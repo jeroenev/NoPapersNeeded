@@ -44,6 +44,7 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_more_remain_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_queue_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_setup_load_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_suggest_failed
@@ -637,8 +638,9 @@ class AiEditViewModel(
 
     /**
      * Write the selected suggestions; see [AiEditRun] for partial-failure semantics. A failed write
-     * comes back as a Retry; what can still throw comes after the writes (whether more remain), so
-     * that failure says applying could not finish, and the Review is back for another Apply.
+     * comes back as a Retry. Once every write landed the page shows Done, also when asking whether
+     * more documents remain then failed: that is reported on its own, and no next batch is offered.
+     * An Apply that throws is reported, and the Review is back as it was.
      */
     override fun apply() {
         val review = _ui.value.phase as? EditPhase.Review ?: return
@@ -709,14 +711,16 @@ class AiEditViewModel(
 
     /**
      * Leave Review without writing anything: jump straight to Done with zero counts and the
-     * correct moreRemain (reviewed docs are already processed, so they are excluded).
+     * correct moreRemain (reviewed docs are already processed, so they are excluded). When that
+     * cannot be found out, the failure is reported and no next batch is offered.
      */
     override fun leaveReview() {
         if (_ui.value.phase !is EditPhase.Review) return
         if (run?.isActive == true) return
         run =
             viewModelScope.launch {
-                val more = edit.moreRemain(_ui.value.scopeKey())
+                var more = false
+                reporting(Res.string.ai_edit_more_remain_failed) { more = edit.moreRemain(_ui.value.scopeKey()) }
                 _ui.update { it.copy(phase = EditPhase.Done(ApplyResult(0, 0, more))) }
             }
     }
@@ -732,6 +736,9 @@ class AiEditViewModel(
             }
 
             is ApplyOutcome.Done -> {
+                outcome.followUpFailure?.let { failure ->
+                    message(uiText(Res.string.ai_edit_more_remain_failed, failure.reasonText()))
+                }
                 _ui.update { it.copy(phase = EditPhase.Done(outcome.result)) }
             }
 

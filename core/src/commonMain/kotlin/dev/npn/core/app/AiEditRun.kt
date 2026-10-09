@@ -138,9 +138,15 @@ sealed interface ApplyOutcome {
     /** No selection was set; nothing was written. */
     data object NothingSelected : ApplyOutcome
 
-    /** Every selected suggestion was written (counting earlier retry attempts of this batch). */
+    /**
+     * Every selected suggestion was written (counting earlier retry attempts of this batch). The
+     * writes stand even when what follows them failed: asking whether the scope has documents left
+     * ([ApplyResult.moreRemain] is then false), or dropping a finished queued run from the queue (it
+     * stays queued). [followUpFailure] is that failure, for the caller to report; null when none.
+     */
     data class Done(
         val result: ApplyResult,
+        val followUpFailure: Throwable? = null,
     ) : ApplyOutcome
 
     /**
@@ -168,7 +174,8 @@ sealed interface ApplyOutcome {
  * - Review pre-selection is [ReviewDoc.recommended], applied by [ReviewProjector].
  * - [apply] hands the batch to its [ReviewApply] (per-tag transactions, one `applyEdits` per
  *   document, failures as an [ApplyOutcome.Retry] with succeeded items deselected, and the count of
- *   what earlier attempts of the batch wrote); the run adds whether the scope has documents left.
+ *   what earlier attempts of the batch wrote); the run adds whether the scope has documents left,
+ *   and a failure to find out is the Done's [ApplyOutcome.Done.followUpFailure].
  *
  * [processed] marks every reviewed document (including no-suggestion ones) at review time, not on
  * apply, so deselecting or skipping a document never sends it back through the model. A run handed

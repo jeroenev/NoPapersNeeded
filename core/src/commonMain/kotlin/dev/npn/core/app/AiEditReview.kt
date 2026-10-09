@@ -90,6 +90,7 @@ internal class ReviewApply(
     /**
      * Write the selected items of [docs]. [onDocWritten] fires with each document's id as a write
      * covering it lands; [moreRemain] is asked only once everything landed, for [ApplyResult.moreRemain].
+     * The writes stand when it fails: the Done offers no more and carries the failure.
      */
     suspend fun apply(
         docs: List<ReviewDoc>,
@@ -100,7 +101,9 @@ internal class ReviewApply(
         if (edits.all { it.isEmpty }) return ApplyOutcome.NothingSelected
         val written = write(edits, onDocWritten)
         if (written.failedDocs.isEmpty()) {
-            return ApplyOutcome.Done(ApplyResult(written.count + appliedSoFar, written.changedDocs, moreRemain()))
+            val more = runCatchingCancellable { moreRemain() }
+            val result = ApplyResult(written.count + appliedSoFar, written.changedDocs, more.getOrDefault(false))
+            return ApplyOutcome.Done(result, followUpFailure = more.exceptionOrNull())
         }
         appliedSoFar += written.count
         return ApplyOutcome.Retry(

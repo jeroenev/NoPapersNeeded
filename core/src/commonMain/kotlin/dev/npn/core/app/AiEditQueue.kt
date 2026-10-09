@@ -10,6 +10,7 @@ import dev.npn.core.db.AiEditJobEntity
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.util.NpnJson
 import dev.npn.core.util.reason
+import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.work.EndpointHealth
 import dev.npn.core.work.QueueRetryPolicy
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -48,7 +49,8 @@ interface EditRunReview {
      * Write the selected suggestions of [reviewed]. Identical semantics to [AiEditRun.apply] —
      * per-tag transactions, failures as an [ApplyOutcome.Retry] with succeeded items deselected —
      * except that a queued run has no scope left to continue into, so [ApplyResult.moreRemain] is
-     * always false. A fully applied run is finished, and is dropped from the queue.
+     * always false. A fully applied run is finished, and is dropped from the queue; when dropping it
+     * fails, the writes stand, the run stays queued and the Done carries the failure.
      */
     suspend fun apply(reviewed: List<ReviewDoc>): ApplyOutcome
 
@@ -64,10 +66,11 @@ internal class QueuedEditReview(
     private val reviewApply: ReviewApply,
     private val onFinished: suspend () -> Unit,
 ) : EditRunReview {
-    override suspend fun apply(reviewed: List<ReviewDoc>): ApplyOutcome =
-        reviewApply
-            .apply(reviewed, moreRemain = { false })
-            .also { if (it is ApplyOutcome.Done) onFinished() }
+    override suspend fun apply(reviewed: List<ReviewDoc>): ApplyOutcome {
+        val outcome = reviewApply.apply(reviewed, moreRemain = { false })
+        if (outcome !is ApplyOutcome.Done) return outcome
+        return runCatchingCancellable { onFinished() }.fold({ outcome }, { outcome.copy(followUpFailure = it) })
+    }
 
     override suspend fun discard() = onFinished()
 }

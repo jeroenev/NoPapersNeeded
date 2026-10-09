@@ -164,6 +164,7 @@
         <item quantity="other">Bei %1$d von %2$d Dokumenten konnten die Vorschläge nicht übernommen werden</item>
     </plurals>
     <string name="ai_edit_apply_finish_failed">Das Übernehmen der Vorschläge konnte nicht abgeschlossen werden: %1$s</string>
+    <string name="ai_edit_more_remain_failed">Es konnte nicht geprüft werden, ob noch Dokumente für einen weiteren Stapel übrig sind: %1$s</string>
     <plurals name="ai_edit_scope_count_batch">
         <item quantity="one">%1$d Dokument - die ersten %2$d laufen in diesem Stapel</item>
         <item quantity="other">%1$d Dokumente - die ersten %2$d laufen in diesem Stapel</item>

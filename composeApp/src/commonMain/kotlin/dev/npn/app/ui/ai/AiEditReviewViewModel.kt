@@ -102,8 +102,9 @@ class AiEditReviewViewModel(
 
     /**
      * Write the selected suggestions; a fully applied run leaves the queue. A failed write comes back
-     * as a Retry; what can still throw comes after the writes (dropping the run from the queue), so
-     * that failure says applying could not finish, and the Review is back for another Apply.
+     * as a Retry. Once every write landed the page shows Done, also when the run then could not leave
+     * the queue: that is reported on its own, and the run stays queued. An Apply that throws is
+     * reported, and the Review is back as it was.
      */
     override fun apply() {
         val current = _phase.value as? QueuedReviewPhase.Review ?: return
@@ -147,6 +148,9 @@ class AiEditReviewViewModel(
             }
 
             is ApplyOutcome.Done -> {
+                outcome.followUpFailure?.let { failure ->
+                    message(uiText(Res.string.ai_edit_review_discard_failed, failure.reasonText()))
+                }
                 _phase.value = QueuedReviewPhase.Done(outcome.result)
             }
 

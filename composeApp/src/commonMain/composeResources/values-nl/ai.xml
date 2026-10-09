@@ -164,6 +164,7 @@
         <item quantity="other">Kon de suggesties niet toepassen op %1$d van de %2$d documenten</item>
     </plurals>
     <string name="ai_edit_apply_finish_failed">Het toepassen van de suggesties kon niet worden afgerond: %1$s</string>
+    <string name="ai_edit_more_remain_failed">Kon niet nagaan of er nog documenten over zijn voor een volgende batch: %1$s</string>
     <plurals name="ai_edit_scope_count_batch">
         <item quantity="one">%1$d document - de eerste %2$d worden in deze batch uitgevoerd</item>
         <item quantity="other">%1$d documenten - de eerste %2$d worden in deze batch uitgevoerd</item>

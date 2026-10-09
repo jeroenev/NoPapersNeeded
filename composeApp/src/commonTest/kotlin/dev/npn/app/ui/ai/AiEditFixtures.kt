@@ -54,11 +54,14 @@ internal class FakeAiEditRun : AiEditRun {
     var batch: BatchResult = BatchResult.Empty
     var outcome: ApplyOutcome = ApplyOutcome.NothingSelected
 
-    /** Thrown by [apply] when set, as a failing next-batch query after the writes would be. */
+    /** Thrown by [apply] when set, as a failure before any write landed would be. */
     var applyFailure: Throwable? = null
 
     /** What [moreRemain] answers. */
     var moreLeft: Boolean = false
+
+    /** Thrown by [moreRemain] when set. */
+    var moreRemainFailure: Throwable? = null
 
     /** Put documents with these ids in scope. */
     fun inScope(vararg docIds: String) {
@@ -70,7 +73,10 @@ internal class FakeAiEditRun : AiEditRun {
         return documents
     }
 
-    override suspend fun moreRemain(key: ScopeKey): Boolean = moreLeft
+    override suspend fun moreRemain(key: ScopeKey): Boolean {
+        moreRemainFailure?.let { throw it }
+        return moreLeft
+    }
 
     override suspend fun remainingDocs(key: ScopeKey): List<DocListItem> {
         keys += key

@@ -24,6 +24,7 @@ import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_more_remain_failed
 import kotlin.test.Test
 
 /** Review → Apply: selecting in the review, and how the run's apply outcome shows on the page. */
@@ -174,11 +175,31 @@ class AiEditApplicationTest : MainDispatcherTest() {
         }
 
     /**
-     * What can throw comes after the writes (asking whether more remain), so the message says
-     * applying did not finish, and the Review is back for another Apply.
+     * Once the writes landed the batch is applied, even when asking whether more documents remain
+     * then fails: the page shows Done with what was written and no next batch, says why, and there
+     * is no second Apply to write it all again.
      */
     @Test
-    fun anApplyThatCannotFinishGoesBackToTheReviewAndSaysSo() =
+    fun anApplyWhoseNextBatchCheckFailsIsDoneWithoutANextBatchAndSaysSo() =
+        runTest(dispatcher) {
+            val (run, model) = reviewing(reviewDoc("a", tags = listOf("t1")))
+            val messages = collecting(model.messages.map { it.text })
+            val result = ApplyResult(applied = 1, docsChanged = 1, moreRemain = false)
+            run.outcome = ApplyOutcome.Done(result, followUpFailure = IllegalStateException("database closed"))
+
+            model.apply()
+            advanceUntilIdle()
+            model.apply()
+            advanceUntilIdle()
+
+            model.ui.value.phase shouldBe EditPhase.Done(result)
+            messages shouldContainExactly listOf(failure(Res.string.ai_edit_more_remain_failed, "database closed"))
+            run.applied.size shouldBe 1
+        }
+
+    /** An Apply that fails before its writes land goes back to the Review as it was, and says so. */
+    @Test
+    fun anApplyThatFailsBeforeItsWritesLandGoesBackToTheReviewAndSaysSo() =
         runTest(dispatcher) {
             val (run, model) = reviewing(reviewDoc("a", tags = listOf("t1")))
             val messages = collecting(model.messages.map { it.text })
@@ -209,5 +230,21 @@ class AiEditApplicationTest : MainDispatcherTest() {
 
             run.applied.shouldBeEmpty()
             model.ui.value.phase shouldBe EditPhase.Done(ApplyResult(0, 0, moreRemain = true))
+        }
+
+    /** Leaving the review when asking whether more remain fails ends in Done with no next batch, and says why. */
+    @Test
+    fun leavingTheReviewWhenTheNextBatchCheckFailsIsDoneAndSaysSo() =
+        runTest(dispatcher) {
+            val (run, model) = reviewing(reviewDoc("a", newTags = listOf("brandnew")))
+            val messages = collecting(model.messages.map { it.text })
+            run.moreLeft = true
+            run.moreRemainFailure = IllegalStateException("database closed")
+
+            model.leaveReview()
+            advanceUntilIdle()
+
+            model.ui.value.phase shouldBe EditPhase.Done(ApplyResult(0, 0, moreRemain = false))
+            messages shouldContainExactly listOf(failure(Res.string.ai_edit_more_remain_failed, "database closed"))
         }
 }

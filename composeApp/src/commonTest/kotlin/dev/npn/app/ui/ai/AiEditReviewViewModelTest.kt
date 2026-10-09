@@ -64,7 +64,7 @@ private class ScriptedReview(
     val applied = mutableListOf<List<ReviewDoc>>()
     var discarded = false
 
-    /** Thrown by [apply] when set, as dropping the finished run from the queue would after the writes. */
+    /** Thrown by [apply] when set, as a failure before any write landed would be. */
     var applyFailure: Throwable? = null
 
     override suspend fun apply(reviewed: List<ReviewDoc>): ApplyOutcome {
@@ -169,11 +169,34 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
         }
 
     /**
-     * What can throw comes after the writes (dropping the finished run from the queue), so the
-     * message says applying did not finish, and the Review is back for another Apply.
+     * Once the writes landed the run is applied, even when it then cannot leave the queue: the page
+     * shows Done with what was written and says the run could not be discarded, and there is no
+     * second Apply to write it all again.
      */
     @Test
-    fun anApplyThatCannotFinishGoesBackToTheReviewAndSaysSo() =
+    fun anAppliedRunThatCannotLeaveTheQueueIsDoneAndSaysSo() =
+        runTest(dispatcher) {
+            val result = ApplyResult(2, 1, moreRemain = false)
+            val failed = IllegalStateException("database closed")
+            val review = ScriptedReview(outcome = ApplyOutcome.Done(result, followUpFailure = failed))
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
+            collecting(model.phase)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+
+            model.apply()
+            advanceUntilIdle()
+            model.apply()
+            advanceUntilIdle()
+
+            model.phase.value shouldBe QueuedReviewPhase.Done(result)
+            messages shouldContainExactly listOf(failure(Res.string.ai_edit_review_discard_failed, "database closed"))
+            review.applied.size shouldBe 1
+        }
+
+    /** An Apply that fails before its writes land goes back to the Review as it was, and says so. */
+    @Test
+    fun anApplyThatFailsBeforeItsWritesLandGoesBackToTheReviewAndSaysSo() =
         runTest(dispatcher) {
             val review = ScriptedReview().apply { applyFailure = IllegalStateException("database closed") }
             val model = AiEditReviewViewModel(sessionWith(review), "job")

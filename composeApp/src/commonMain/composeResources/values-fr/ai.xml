@@ -164,6 +164,7 @@
         <item quantity="other">Impossible d’appliquer les suggestions à %1$d des %2$d documents</item>
     </plurals>
     <string name="ai_edit_apply_finish_failed">Impossible de terminer l’application des suggestions : %1$s</string>
+    <string name="ai_edit_more_remain_failed">Impossible de vérifier s’il reste des documents pour un autre lot : %1$s</string>
     <plurals name="ai_edit_scope_count_batch">
         <item quantity="one">%1$d document : les %2$d premiers sont traités dans ce lot</item>
         <item quantity="other">%1$d documents : les %2$d premiers sont traités dans ce lot</item>
