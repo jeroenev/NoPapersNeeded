@@ -84,7 +84,12 @@ class JvmLibraryFileSystem internal constructor(
         return if (norm.isEmpty()) root else root.resolve(norm)
     }
 
-    private fun relOf(path: Path): String = root.relativize(path).toString().replace('\\', '/')
+    /**
+     * [path] relative to the root, its names joined with `/`. Where `\` is no separator (Linux,
+     * Android) a name holding one stays one segment, which [NpnPaths.isSafe] refuses, rather than
+     * turning into a path that does not exist.
+     */
+    private fun relOf(path: Path): String = root.relativize(path).joinToString("/")
 
     override suspend fun listAll(): List<FileMeta> = listAllFrom(root)
 

@@ -12,6 +12,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withTimeout
 import kotlinx.coroutines.withTimeoutOrNull
+import org.junit.Assume.assumeTrue
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.security.MessageDigest
@@ -66,6 +68,17 @@ class JvmLibraryFileSystemTest {
             fs.stat("does/not/exist").shouldBe(null)
             fs.exists("inbox/a.pdf").shouldBeTrue()
             fs.exists("nope").shouldBeFalse()
+        }
+
+    /** Where `\` is no separator it is part of a name, listed as it is, so [NpnPaths.isSafe] refuses it. */
+    @Test
+    fun aBackslashInANameIsListedAsPartOfIt() =
+        runTest {
+            assumeTrue(File.separatorChar == '/')
+            Files.createDirectories(root.resolve("dir"))
+            Files.write(root.resolve("dir").resolve("x\\y.pdf"), "hello".encodeToByteArray())
+
+            fs.listAll().map { it.relPath }.shouldContainExactlyInAnyOrder("dir", "dir/x\\y.pdf")
         }
 
     @Test

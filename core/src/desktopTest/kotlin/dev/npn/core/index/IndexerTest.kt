@@ -12,6 +12,8 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
+import org.junit.Assume.assumeTrue
+import java.io.File
 import java.nio.file.Files
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
@@ -59,6 +61,26 @@ class IndexerTest {
                     .getByDocId(pm.docId)!!
                     .addedAt shouldBe 1_000L
             }
+        }
+
+    /**
+     * Where `\` is no separator, a name holding one is a single segment the library cannot address:
+     * the rescan passes over it, as over any unsafe name, and indexes the rest.
+     */
+    @Test
+    fun aNameWithABackslashIsPassedOverByTheRescan() =
+        runTest {
+            assumeTrue(File.separatorChar == '/')
+            rig.writePdf("a\\b.pdf", "alpha")
+            rig.writePdf("c.pdf", "charlie")
+
+            val report = rig.rescan()
+
+            report.added shouldBe 1
+            rig.db
+                .documentDao()
+                .allPathsAndMeta()
+                .map { it.relPath } shouldContainExactly listOf("c.pdf")
         }
 
     @Test

@@ -43,6 +43,8 @@ internal class TempFileSweep(
         val cutoff = nowMillis - STALE_AFTER_MS
         val paths by lazy { listing.mapTo(HashSet()) { it.relPath } }
         for (meta in listing.filter { !it.isDirectory && it.mtimeMillis in 1 until cutoff }) {
+            // A name the library cannot address is none of its temporary files.
+            if (!NpnPaths.isSafe(meta.relPath)) continue
             val deletable =
                 when (NpnPaths.Temp.kindOf(meta.relPath)) {
                     null -> false

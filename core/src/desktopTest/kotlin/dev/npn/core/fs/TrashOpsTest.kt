@@ -6,6 +6,8 @@ import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.test.runTest
+import org.junit.Assume.assumeTrue
+import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
 import java.nio.file.attribute.FileTime
@@ -94,6 +96,24 @@ class TrashOpsTest {
             )
 
             trash.listTrash().map { it.relPath } shouldBe listOf(trashed)
+        }
+
+    /** A name the library cannot address is no trash entry: listing and purging pass over it. */
+    @Test
+    fun aTrashedNameWithABackslashIsPassedOver() =
+        runTest {
+            assumeTrue(File.separatorChar == '/')
+            fs.writeBytesOnce("x/old.pdf", "old".encodeToByteArray())
+            val oldTrash = trash.moveToTrash("x/old.pdf", "0000000000000000")
+            Files.setLastModifiedTime(root.resolve(oldTrash), FileTime.fromMillis(1000))
+            val odd = root.resolve(NpnPaths.TRASH_DIR).resolve("a\\b__00000000.pdf")
+            Files.write(odd, "odd".encodeToByteArray())
+            Files.setLastModifiedTime(odd, FileTime.fromMillis(1000))
+
+            trash.listTrash().map { it.relPath } shouldBe listOf(oldTrash)
+            trash.purgeOlderThan(cutoffMillis = 500_000)
+            fs.exists(oldTrash).shouldBeFalse()
+            Files.exists(odd).shouldBeTrue()
         }
 
     @Test
