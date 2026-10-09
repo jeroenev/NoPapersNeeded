@@ -211,7 +211,7 @@ class MetadataWriterImpl(
         coordinator.commitAndApply(listOf(PendingOp.tagStyle(t, color, icon)))
     }
 
-    override suspend fun trashDoc(docId: String) {
+    override suspend fun trashDoc(docId: String): Boolean =
         coordinator.changeLifecycle(docId) { doc ->
             if (doc == null || doc.trashed || doc.deleted) return@changeLifecycle null
             val origPath = doc.relPath
@@ -230,7 +230,6 @@ class MetadataWriterImpl(
                 undoMove = { trashPath?.let { fs.move(it, origPath) } },
             )
         }
-    }
 
     override suspend fun restoreDoc(docId: String) {
         // Hashed before the lock, which every write, import and rescan waits on; under it, only an

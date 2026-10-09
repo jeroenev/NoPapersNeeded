@@ -88,7 +88,12 @@ interface TagAdmin {
 
 /** A document's existence and location: trash lifecycle plus file rename/move. */
 interface DocLifecycle {
-    suspend fun trashDoc(docId: String) // moves its own file to .npn/trash + doc-trash event
+    /**
+     * Move the document's own file to `.npn/trash` and record a doc-trash event. Returns whether it
+     * trashed the document: false, with nothing written, for one already trashed or deleted (here or
+     * by another device) or unknown, which a caller's Undo must leave alone.
+     */
+    suspend fun trashDoc(docId: String): Boolean
 
     suspend fun restoreDoc(docId: String)
 

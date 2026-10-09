@@ -2,6 +2,7 @@ package dev.npn.app
 
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.TagAdmin
+import kotlinx.coroutines.CompletableDeferred
 
 // Write-side test doubles for the tag and lifecycle facets; the metadata writer's is shared, in
 // :core-testing. Each records its calls so tests can assert what was invoked, and each `fail*`
@@ -67,12 +68,21 @@ class FakeDocLifecycle : DocLifecycle {
     /** trashDoc throws for these ids only (per-doc partial-failure testing). */
     var failTrashDocIds: Set<String> = emptySet()
 
+    /** trashDoc finds these already trashed or deleted elsewhere, and trashes nothing. */
+    var goneDocIds: Set<String> = emptySet()
+
+    /** If set, trashDoc waits for it first. */
+    var trashGate: CompletableDeferred<Unit>? = null
+
     /** If set, restoreDoc throws. */
     var failRestore: (() -> Nothing)? = null
 
-    override suspend fun trashDoc(docId: String) {
+    override suspend fun trashDoc(docId: String): Boolean {
+        trashGate?.await()
         if (docId in failTrashDocIds) error("trash failed for $docId")
+        if (docId in goneDocIds) return false
         trashedDocs += docId
+        return true
     }
 
     override suspend fun restoreDoc(docId: String) {

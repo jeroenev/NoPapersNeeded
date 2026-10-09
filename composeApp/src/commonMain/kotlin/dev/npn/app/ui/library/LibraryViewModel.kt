@@ -35,6 +35,7 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -431,31 +432,37 @@ class LibraryViewModel(
             meta.setReviewed(it, reviewed)
         }
 
+    /** The bulk trash under way, so a second press while it runs does not trash the selection again. */
+    private var trashing: Job? = null
+
     /**
      * Move the current selection to the trash, one document at a time so a single failure does not
-     * abort the rest. Any successful move is reported with an Undo action that restores exactly the
-     * documents moved; the failed ids stay selected for retry. See [runOnSelection] for the per-doc
+     * abort the rest. The documents it moved are reported with an Undo action that restores exactly
+     * those; one already trashed or deleted elsewhere is dropped without a word, as restoring it
+     * would undo that; the failed ids stay selected for retry. See [runOnSelection] for the per-doc
      * failure contract this mirrors.
      */
     fun bulkTrash() {
         val ids = _ui.value.selected.toList()
-        if (ids.isEmpty()) return
-        viewModelScope.launch {
-            val trashed = ids.filter { runCatchingCancellable { docLifecycle.trashDoc(it) }.isSuccess }
-            val failed = ids - trashed.toSet()
-            if (failed.isEmpty()) {
-                clearSelection()
-            } else {
-                _ui.update { it.copy(selected = failed.toSet(), selectionMode = true) }
-                message(uiText(Res.plurals.library_trash_failed, ids.size, failed.size, ids.size))
+        if (ids.isEmpty() || trashing?.isActive == true) return
+        trashing =
+            viewModelScope.launch {
+                val outcomes = ids.associateWith { runCatchingCancellable { docLifecycle.trashDoc(it) } }
+                val trashed = outcomes.filterValues { it.getOrNull() == true }.keys.toList()
+                val failed = outcomes.filterValues { it.isFailure }.keys
+                if (failed.isEmpty()) {
+                    clearSelection()
+                } else {
+                    _ui.update { it.copy(selected = failed, selectionMode = true) }
+                    message(uiText(Res.plurals.library_trash_failed, ids.size, failed.size, ids.size))
+                }
+                if (trashed.isNotEmpty()) {
+                    message(
+                        uiText(Res.plurals.library_moved_to_trash, trashed.size, trashed.size),
+                        UiMessage.Action(uiText(Res.string.library_undo)) { undoTrash(trashed) },
+                    )
+                }
             }
-            if (trashed.isNotEmpty()) {
-                message(
-                    uiText(Res.plurals.library_moved_to_trash, trashed.size, trashed.size),
-                    UiMessage.Action(uiText(Res.string.library_undo)) { undoTrash(trashed) },
-                )
-            }
-        }
     }
 
     /** Restore [ids] previously moved to the trash (the Undo action of the trash message). */

@@ -68,6 +68,31 @@ class TrashLifecycleTest {
             }
         }
 
+    /** Trashing a document already in the trash does nothing, and says so: there is nothing to undo. */
+    @Test
+    fun trashingADocumentAlreadyInTheTrashJournalsNothing() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.docLifecycle
+                    .trashDoc(id)
+                    .shouldBeTrue()
+                val objects = rig.journalObjectCount()
+
+                rig.session.docLifecycle
+                    .trashDoc(id)
+                    .shouldBeFalse()
+
+                rig.journalObjectCount() shouldBe objects
+                trashEntries(rig.fs) shouldHaveSize 1
+            } finally {
+                rig.close()
+            }
+        }
+
     @Test
     fun restoreBringsFileBack() =
         runTest {

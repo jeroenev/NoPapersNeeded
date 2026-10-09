@@ -7,6 +7,7 @@ import dev.npn.app.ui.library.LibraryViewModel
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
@@ -92,6 +93,53 @@ class LibraryTrashTest : MainDispatcherTest() {
                 ?.invoke()
             advanceUntilIdle()
             session.docLifecycle.restoredDocs shouldContainExactly listOf("d1", "d3")
+        }
+
+    /**
+     * A document trashed or deleted elsewhere meanwhile is not this action's: it is neither counted
+     * nor offered for Undo, whose restore would undo the other device's trash.
+     */
+    @Test
+    fun bulkTrashLeavesADocumentAlreadyGoneOutOfTheCountAndTheUndo() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { docLifecycle.goneDocIds = setOf("d2") }
+            val model = vm(session = session)
+            val messages = mutableListOf<UiMessage>()
+            backgroundScope.launch { model.messages.collect { messages += it } }
+            model.startSelection("d1")
+            model.toggleSelection("d2")
+            model.toggleSelection("d3")
+            runCurrent()
+            model.bulkTrash()
+            advanceUntilIdle()
+
+            val undo = messages.single()
+            undo.text shouldBe uiText(Res.plurals.library_moved_to_trash, 2, 2)
+            model.ui.value.selected shouldBe emptySet()
+            undo.action?.onPerform?.invoke()
+            advanceUntilIdle()
+            session.docLifecycle.restoredDocs shouldContainExactly listOf("d1", "d3")
+        }
+
+    /** A second press while the first bulk trash runs does not trash the selection again. */
+    @Test
+    fun aSecondBulkTrashWhileOneRunsDoesNothing() =
+        runTest(dispatcher) {
+            val gate = CompletableDeferred<Unit>()
+            val session = FakeLibrarySession().apply { docLifecycle.trashGate = gate }
+            val model = vm(session = session)
+            val messages = collectMessages(model)
+            model.startSelection("d1")
+            runCurrent()
+            model.bulkTrash()
+            runCurrent()
+
+            model.bulkTrash()
+            gate.complete(Unit)
+            advanceUntilIdle()
+
+            session.docLifecycle.trashedDocs shouldContainExactly listOf("d1")
+            messages shouldContainExactly listOf(uiText(Res.plurals.library_moved_to_trash, 1, 1))
         }
 
     @Test
