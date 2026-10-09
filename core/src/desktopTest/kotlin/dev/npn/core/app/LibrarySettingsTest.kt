@@ -85,6 +85,55 @@ class LibrarySettingsTest {
             }
         }
 
+    /**
+     * The template and its switch are one setting: a device's pair is adopted whole, its switch
+     * included when off, and not at all once the library holds either half.
+     */
+    @Test
+    fun aDevicesStoragePathRuleIsAdoptedWholeOrNotAtAll() =
+        runTest {
+            val first = LegacyLibrarySettings("{title}.pdf", storagePathEnabled = false)
+            val rig = AppSessionRig.create(backgroundScope, legacyLibrarySettings = { first })
+            try {
+                val other = LegacyLibrarySettings("archive/{title}.pdf", storagePathEnabled = true)
+                val (second, secondDb) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
+                try {
+                    second.storagePath.storagePath.first() shouldBe StoragePathSetting("{title}.pdf", enabled = false)
+                    rig.session.rescan()
+                    rig.session.storagePath.storagePath
+                        .first() shouldBe StoragePathSetting("{title}.pdf", enabled = false)
+                } finally {
+                    second.close()
+                    secondDb.close()
+                }
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A switch without a template is no rule: nothing is adopted, and a later device's whole pair is. */
+    @Test
+    fun aSwitchWithoutATemplateIsNotAdopted() =
+        runTest {
+            val first = LegacyLibrarySettings(" ", storagePathEnabled = true)
+            val rig = AppSessionRig.create(backgroundScope, legacyLibrarySettings = { first })
+            try {
+                rig.session.storagePath.storagePath
+                    .first() shouldBe StoragePathSetting()
+                val other = LegacyLibrarySettings("archive/{title}.pdf", storagePathEnabled = false)
+                val (second, secondDb) = rig.secondSession(backgroundScope, legacyLibrarySettings = { other })
+                try {
+                    second.storagePath.storagePath.first() shouldBe
+                        StoragePathSetting("archive/{title}.pdf", enabled = false)
+                } finally {
+                    second.close()
+                    secondDb.close()
+                }
+            } finally {
+                rig.close()
+            }
+        }
+
     @Test
     fun rulesSurviveACorruptCache() =
         runTest {

@@ -52,7 +52,8 @@ class SavedViewRepositoryImpl internal constructor(
     internal suspend fun adoptIndexViews(db: NpnDatabase) {
         val stored = LegacyIndexTables.savedViews(db) ?: return
         val views = stored.mapNotNull(::decode).associate { key(it.id) to encode(it) }
-        if (coordinator.adoptSettings(views)) LegacyIndexTables.drop(db, LegacyIndexTables.SAVED_VIEWS)
+        val adopted = coordinator.adoptSettings(views.map { (key, view) -> mapOf(key to view) })
+        if (adopted) LegacyIndexTables.drop(db, LegacyIndexTables.SAVED_VIEWS)
     }
 
     private fun encode(view: SavedView): String = json.encodeToString(SavedView.serializer(), view)

@@ -190,20 +190,23 @@ class JournalCoordinator internal constructor(
     fun setting(key: String): String? = syncedSettings.current(key)
 
     /**
-     * Write each of [values] under a key the journal has never held, a cleared one included: a
+     * Write each of [groups] whose keys the journal has never held, a cleared one included: a
      * one-time adoption of what this device had, which must not overwrite what any replica already
-     * decided. Like [seedFieldRegistryIfNeeded], the in-memory check runs first, so only an open
-     * that has something to adopt pays for the fold.
+     * decided. A group is one setting kept under one or more keys, adopted whole or not at all: a
+     * journal holding any of its keys takes none of them. Like [seedFieldRegistryIfNeeded], the
+     * in-memory check runs first, so only an open that has something to adopt pays for the fold.
      *
-     * Returns whether the journal now holds every key, false when writes are blocked and nothing was
-     * adopted, so a caller keeps its copy for the next attempt.
+     * Returns whether the journal now settles every group, false when writes are blocked and nothing
+     * was adopted, so a caller keeps its copy for the next attempt.
      */
-    suspend fun adoptSettings(values: Map<String, String>): Boolean {
-        if (values.keys.all(syncedSettings::written)) return true
+    suspend fun adoptSettings(groups: List<Map<String, String>>): Boolean {
+        if (groups.all { group -> group.keys.any(syncedSettings::written) }) return true
         if (writeBlockReason != null) return false
         commitBuilt { state ->
             val held = state.settings()
-            values.filterKeys { it !in held }.map { (key, value) -> PendingOp.settingSet(key, value) }
+            groups
+                .filter { group -> group.keys.none { it in held } }
+                .flatMap { group -> group.map { (key, value) -> PendingOp.settingSet(key, value) } }
         }
         return true
     }

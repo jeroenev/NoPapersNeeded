@@ -74,16 +74,22 @@ internal class JournalStoragePath(
 }
 
 /**
- * The journal settings [legacy] stands for, minus its defaults: a device that never set a template
- * or a rule has nothing to adopt. A rules blob this build cannot read is carried over as it is, for
- * the newer build that wrote it.
+ * The journal settings these device settings stand for, as [JournalCoordinator.adoptSettings]
+ * groups, minus the defaults. The storage-path template and its switch are one setting, so they are
+ * one group: a device with no template has no rule to adopt, whatever its switch says, and one with
+ * a template adopts its switch too, off included. A rules blob this build cannot read is carried
+ * over as it is, for the newer build that wrote it.
  */
-internal fun LegacyLibrarySettings.journalSettings(): Map<String, String> =
-    buildMap {
-        storagePathTemplate?.takeIf { it.isNotBlank() }?.let { put(LibrarySettingKeys.STORAGE_PATH_TEMPLATE, it) }
-        if (storagePathEnabled) put(LibrarySettingKeys.STORAGE_PATH_ENABLED, true.toString())
-        autoMatchRulesJson?.takeIf(::holdsRules)?.let { put(LibrarySettingKeys.AUTO_MATCH_RULES, it) }
-    }
+internal fun LegacyLibrarySettings.journalSettings(): List<Map<String, String>> =
+    listOfNotNull(
+        storagePathTemplate?.takeIf { it.isNotBlank() }?.let { template ->
+            mapOf(
+                LibrarySettingKeys.STORAGE_PATH_TEMPLATE to template,
+                LibrarySettingKeys.STORAGE_PATH_ENABLED to storagePathEnabled.toString(),
+            )
+        },
+        autoMatchRulesJson?.takeIf(::holdsRules)?.let { mapOf(LibrarySettingKeys.AUTO_MATCH_RULES to it) },
+    )
 
 private fun holdsRules(json: String): Boolean =
     try {
