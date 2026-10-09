@@ -90,6 +90,34 @@ class SplitPdfTest {
             }
         }
 
+    /**
+     * Another app wrote a different PDF over the document's file since the last rescan (SAF has no
+     * watcher). That file is not split as the document: its pages would get the document's metadata.
+     */
+    @Test
+    fun aDocumentWhoseFileWasReplacedIsNotSplit() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val outcome = rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("the document"), "contract.pdf")
+                val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
+                rig.session.meta.addTag(listOf(imported.docId), "invoice")
+                rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
+                val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
+                val replacement = PdfFixtures.embeddedTextPdf("another document")
+                rig.fs.delete(original.relPath)
+                rig.writePdf(original.relPath, replacement)
+
+                rig.session.maintenance.splitPdf(imported.docId, listOf(0..0, 1..1)) shouldBe
+                    SplitOutcome.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
+
+                rig.fs.readBytes(original.relPath) shouldBe replacement
+                rig.shouldHoldOnly(original)
+            } finally {
+                rig.close()
+            }
+        }
+
     @Test
     fun aPartIsNamedAfterItsOriginalWithoutTheExtensionInAnyCase() =
         runTest {

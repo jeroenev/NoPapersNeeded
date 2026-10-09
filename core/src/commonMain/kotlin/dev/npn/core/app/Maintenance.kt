@@ -44,7 +44,7 @@ sealed interface SplitOutcome {
 
 /** Why a split did not happen. The underlying cause, if any, is in the session log. */
 enum class SplitFailure {
-    /** The document is gone, trashed or missing. */
+    /** The document is gone, trashed or missing, or the file at its path is no longer its own. */
     DOCUMENT_UNAVAILABLE,
 
     /** The page ranges are not at least two parts covering every page once, in order. */

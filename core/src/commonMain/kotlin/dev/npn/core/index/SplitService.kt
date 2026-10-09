@@ -6,6 +6,7 @@ import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
@@ -67,6 +68,9 @@ class SplitService(
         segments: List<IntRange>,
     ): Result {
         val bytes = fs.readBytes(doc.relPath)
+        // The file at the document's path may be another one since the index last looked; its parts
+        // would get this document's metadata, and the document would be trashed in its place.
+        if (sha256Bytes(bytes) != doc.docId) return Result.Failed(SplitFailure.DOCUMENT_UNAVAILABLE)
         val handle = pdfEngine.open(bytes)
         val pageCount =
             try {
