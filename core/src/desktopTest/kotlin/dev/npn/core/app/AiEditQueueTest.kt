@@ -56,6 +56,9 @@ private class QueueRig(
     /** How often a queue asked for its drain; the session's drainer would run once per kick. */
     var kicks = 0
 
+    /** How many writes a queue handed to the session as owned work, as it must every write a caller drives. */
+    var ownedWrites = 0
+
     /** The endpoint's cooldown, as the session's AI facade holds it for every queue. */
     val health = EndpointHealth()
 
@@ -77,6 +80,10 @@ private class QueueRig(
             clock = clock,
             health = health,
             onEnqueued = { kicks++ },
+            ownWrite = { write ->
+                ownedWrites++
+                write()
+            },
             newJobId = { "job-${++ids}" },
         )
 
@@ -558,6 +565,32 @@ class AiEditQueueReviewTest {
                 review.apply(review.docs).shouldBeInstanceOf<ApplyOutcome.Retry>()
 
                 rig.job(jobId).shouldNotBeNull()
+            }
+        }
+
+    /**
+     * Applying and discarding are caller-driven, like queueing: the session must be able to wait for
+     * their writes before it closes the device database. The drain's own writes run on the session's
+     * drain and are not counted here.
+     */
+    @Test
+    fun `finishing a review deletes the run as owned work, applied or discarded`() =
+        runTest {
+            withQueue { rig ->
+                rig.ai.edit = suggestion(tag = "invoice")
+                val applied = rig.suggestAll(rig.enqueue("a"))
+                val review = rig.queue.openEditRun(applied).shouldNotBeNull()
+                review.apply(review.docs).shouldBeInstanceOf<ApplyOutcome.Done>()
+                val discarded = rig.suggestAll(rig.enqueue("b"))
+                rig.queue
+                    .openEditRun(discarded)
+                    .shouldNotBeNull()
+                    .discard()
+
+                rig.job(applied) shouldBe null
+                rig.job(discarded) shouldBe null
+                // Two runs queued, two finished.
+                rig.ownedWrites shouldBe 4
             }
         }
 

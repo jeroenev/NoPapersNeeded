@@ -130,7 +130,8 @@ interface AiEditQueueFacade {
  * ([AiEditJobDao.writeBackIfPresent]), so a discard lands at once and stays.
  *
  * Queueing a run asks for its drain through [onEnqueued], so it never waits for the periodic tick.
- * The queue's writes run through [ownWrite].
+ * The writes a caller drives (queueing a run, finishing or discarding its review) run through
+ * [ownWrite]; the drain's own already run as the session's work.
  */
 class AiEditQueue(
     private val dao: AiEditJobDao,
@@ -220,7 +221,7 @@ class AiEditQueue(
             emptyDocs = empty,
             failures = rows.count { it.failed },
             reviewApply = ReviewApply(meta),
-            onFinished = { dao.deleteJob(jobId) },
+            onFinished = { discardEditRun(jobId) },
         )
     }
 
