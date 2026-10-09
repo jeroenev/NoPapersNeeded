@@ -1,7 +1,11 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.BIND_CHUNK
+import dev.npn.core.db.StatementLog
+import dev.npn.core.db.queryPlan
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.index.IndexRig
+import dev.npn.core.index.rowAtPath
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
@@ -9,10 +13,12 @@ import dev.npn.core.ocr.OcrEngineSelector
 import dev.npn.core.ocr.OcrPipeline
 import dev.npn.core.pdf.PdfBoxEngine
 import dev.npn.core.pdf.PdfFixtures
+import io.kotest.assertions.withClue
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.string.shouldContain
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
@@ -452,6 +458,46 @@ class DocumentFilterTest {
             }
         }
 
+    /**
+     * An id filter of any length stays in the SQL as one bind on the primary key, so a selection
+     * reads its own rows and no others, even past SQLite's bind-variable limit, under every sort.
+     */
+    @Test
+    fun anIdFilterOfAnyLengthIsOneBindLookedUpByPrimaryKey() =
+        runTest {
+            val statements = StatementLog()
+            val rig = IndexRig.create(statements)
+            try {
+                listOf("a", "b", "c", "d").forEach { rig.writePdf("$it.pdf", it) }
+                rig.rescan()
+                val dao = rig.db.documentDao()
+                val (a, b, c) = listOf("a.pdf", "b.pdf", "c.pdf").map { checkNotNull(dao.rowAtPath(it)).docId }
+                dao.upsert(checkNotNull(dao.getByDocId(b)).copy(trashed = true))
+                val repo = DocumentRepositoryImpl(rig.db)
+                val sorts = listOf(LibrarySort()) + listOf(SortField.Name, SortField.Size).map { LibrarySort(it, true) }
+
+                for (unknown in listOf(BIND_CHUNK + 100, SQLITE_MAX_VARIABLE_NUMBER + 7_000)) {
+                    val docIds = listOf(a, b, c) + (1..unknown).map { it.toString(16).padStart(64, '0') }
+                    for (sort in sorts) {
+                        statements.clear()
+                        val found = repo.observeDocuments(LibraryFilter(docIds = docIds), sort).first()
+                        val sql = statements.statements.single { it.startsWith("SELECT d.* FROM ") }
+
+                        withClue("${docIds.size} ids, $sort: $sql") {
+                            ids(found) shouldContainExactlyInAnyOrder listOf(a, c)
+                            sql shouldContain "d.docId = ids.value"
+                            sql.count { it == '?' } shouldBe 1
+                            // The documents are read once per id, through the primary key, and no other way.
+                            rig.db.queryPlan(sql).filter { readsDocuments.containsMatchIn(it) } shouldBe
+                                listOf("SEARCH d USING INDEX sqlite_autoindex_documents_1 (docId=?)")
+                        }
+                    }
+                }
+            } finally {
+                rig.close()
+            }
+        }
+
     private suspend fun drainOcr(rig: AppSessionRig) {
         // Drive the pipeline synchronously through each pending queue entry.
         val pipeline = buildPipeline(rig)
@@ -473,4 +519,12 @@ class DocumentFilterTest {
             deviceId = rig.session.deviceId,
             language = { "eng" },
         )
+
+    private companion object {
+        /** The bundled SQLite's bind-variable limit on desktop and Android. */
+        const val SQLITE_MAX_VARIABLE_NUMBER = 32_766
+
+        /** A query plan line that reads the library query's `documents d`. */
+        val readsDocuments = Regex("""^(SCAN|SEARCH) d\b""")
+    }
 }

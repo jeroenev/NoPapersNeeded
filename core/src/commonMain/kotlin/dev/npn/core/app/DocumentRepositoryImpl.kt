@@ -2,7 +2,6 @@ package dev.npn.core.app
 
 import androidx.room3.RoomRawQuery
 import androidx.sqlite.SQLiteStatement
-import dev.npn.core.db.BIND_CHUNK
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FtsDao
 import dev.npn.core.db.FtsQuery
@@ -15,6 +14,7 @@ import dev.npn.core.journal.JournalCodec
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.ocr.OcrEngineRef
 import dev.npn.core.ocr.OcrState
+import dev.npn.core.util.NpnJson
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
@@ -88,15 +88,10 @@ class DocumentRepositoryImpl(
         sort: LibrarySort,
     ): Flow<List<DocListItem>> {
         val queryText = filter.query?.takeIf { it.isNotBlank() }
-        // An id list longer than one bind chunk (a large selection) could overflow SQLite's
-        // bind-variable limit as one IN list, so the query leaves it out and it narrows the rows here.
-        val idsInMemory = filter.docIds.takeIf { it.size > BIND_CHUNK }?.toHashSet()
-        val sqlFilter = if (idsInMemory == null) filter else filter.copy(docIds = emptyList())
-        val rawFlow = documentDao.observeLibraryRaw(buildQuery(sqlFilter, sort))
+        val rawFlow = documentDao.observeLibraryRaw(buildQuery(filter, sort))
         return rawFlow
             .conflate()
-            .mapLatest { rows ->
-                val docs = if (idsInMemory == null) rows else rows.filter { it.docId in idsInMemory }
+            .mapLatest { docs ->
                 if (queryText == null) {
                     listItems(docs)
                 } else {
@@ -242,26 +237,36 @@ class DocumentRepositoryImpl(
      * "no field row" group.
      * Query text (FTS) is handled by the two-step above, so it is not
      * part of this SQL beyond the id constraint being applied in memory.
+     *
+     * An id filter drives the query instead of narrowing it: its ids, bound as one JSON array however
+     * many there are (a selection can pass SQLite's bind-variable limit), each look their row up by
+     * primary key. CROSS JOIN keeps them the outer loop; as a `docId IN (...)` term, the planner reads
+     * every live row through the trashed/deleted/missing indices, which it takes for selective.
      */
     private fun buildQuery(
         filter: LibraryFilter,
         sort: LibrarySort,
     ): RoomRawQuery {
         val parts = buildWhere(filter)
+        val ids = filter.docIds.takeIf { it.isNotEmpty() }?.let { NpnJson.Persisted.encodeToString(it.distinct()) }
         val join = sortJoinSql(sort)
         val sql =
             buildString {
-                append("SELECT d.* FROM documents d")
+                append("SELECT d.* FROM ")
+                if (ids != null) append("json_each(?) ids CROSS JOIN ")
+                append("documents d")
                 join?.let(::append)
                 append(" WHERE ")
+                if (ids != null) append("d.docId = ids.value AND ")
                 append(parts.where.joinToString(" AND "))
                 append(" ORDER BY ")
                 append(orderBySql(sort))
             }
-        // The join's bind precedes every WHERE bind in the statement, so it is bound first.
+        // The ids and the join precede every WHERE bind in the statement, so they are bound first.
         val sortKey = (sort.field as? SortField.Field)?.key
         return RoomRawQuery(sql = sql, onBindStatement = { st ->
             var index = 1
+            if (ids != null) st.bindText(index++, ids)
             if (sortKey != null) st.bindText(index++, sortKey)
             parts.binds.forEach { bind -> bind(st, index++) }
         })
@@ -304,11 +309,6 @@ class DocumentRepositoryImpl(
             where.add(
                 "(d.reviewed = 0 OR NOT EXISTS (SELECT 1 FROM document_tags dt WHERE dt.docId = d.docId))",
             )
-        }
-        if (filter.docIds.isNotEmpty()) {
-            val placeholders = filter.docIds.joinToString(", ") { "?" }
-            where.add("d.docId IN ($placeholders)")
-            filter.docIds.forEach(::bindText)
         }
         filter.reviewed?.let {
             where.add("d.reviewed = ?")
