@@ -61,15 +61,20 @@ internal class MaintenanceFacadeImpl(
                     is ImportResult.Duplicate -> it.existingDocId
                 }
             }
+        // Only the parts the split made get the original's metadata. A part whose bytes were a
+        // document already (a duplicate, or one the import brought back) keeps its own.
+        val made = parts.filterIsInstance<ImportResult.Imported>().filterNot { it.broughtBack }.map { it.docId }
         var finished = false
         try {
-            // Trash last, so a failure anywhere leaves the original untouched; the parts are then
-            // taken back, from wherever the storage-path rules moved them. Metadata already copied
-            // onto them, and the paths the rules chose, stay in the journal under their hashes,
-            // harmless: only a file in the library makes a row, and a retry makes the same parts
-            // and copies the same metadata.
+            // Trash last, so a failure anywhere leaves the original untouched; the parts the split
+            // made are then taken back, from wherever the storage-path rules moved them. Metadata
+            // already copied onto them, and the paths the rules chose, stay in the journal under
+            // their hashes, unused: only a file with those bytes makes a row, and a retry makes
+            // other bytes (the PDF writer stamps each file's /ID with the time).
             runCatchingCancellable {
-                copyMetadataToParts(docId, partIds)
+                copyMetadataToParts(docId, made)
+                // False for an original trashed or deleted meanwhile: it is out of the library, as
+                // the split wants it, so the split is done.
                 writer.trashDoc(docId)
             }.getOrElse {
                 log.warn("Finishing the split of $docId failed; taking its parts back", it)
@@ -84,7 +89,7 @@ internal class MaintenanceFacadeImpl(
     }
 
     /**
-     * Carry tags and single-value properties of the split source onto its parts.
+     * Carry tags and single-value properties of the split source onto the parts it made, [partIds].
      *
      * One [MetadataWriter.applyEdits] for every part rather than a setter per tag and per property:
      * the setters each re-run the storage path rules, so a source with several tags would rename

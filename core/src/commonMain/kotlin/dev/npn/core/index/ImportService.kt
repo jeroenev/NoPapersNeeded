@@ -220,7 +220,7 @@ class ImportService(
      * it: a split whose later part could not be made, or whose original could not be trashed. An
      * import writes no journal event beyond the restore of bytes the journal had hidden, so taking
      * it back is removing the file and its rows, not a trash or a tombstone; a tombstone would hide
-     * the same bytes when the caller retries and makes the same part again.
+     * the same bytes should they be imported again.
      *
      * Follows the document, not the path the import chose: metadata the caller wrote meanwhile can
      * have moved it (a storage-path rule), and another file can have taken the name it left. Only

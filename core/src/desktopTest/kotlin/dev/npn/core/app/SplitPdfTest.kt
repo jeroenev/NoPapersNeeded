@@ -2,12 +2,15 @@ package dev.npn.core.app
 
 import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.FieldKeyCount
+import dev.npn.core.db.isLive
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pathrules.StoragePathRule
+import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
@@ -122,6 +125,112 @@ class SplitPdfTest {
             }
         }
 
+    /**
+     * A part whose bytes are a document the library shows is that document. The split lists it
+     * among its parts, but its tags and fields stay its own: only a part the split made gets the
+     * original's.
+     */
+    @Test
+    fun aPartThatIsAnExistingDocumentKeepsItsOwnMetadata() =
+        runTest {
+            val hook = SplitHook()
+            val rig = AppSessionRig.create(backgroundScope, pdfEngine = hook::over)
+            try {
+                val receiptBytes = PdfFixtures.embeddedTextPdf("receipt")
+                val receipt = rig.importDocument(receiptBytes, "receipt", "beta")
+                val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
+                val before = rig.metadataOf(receipt)
+                hook.firstPart = receiptBytes
+
+                val done = rig.splitInTwo(source).shouldBeInstanceOf<SplitOutcome.Done>()
+
+                done.partDocIds shouldHaveSize 2
+                done.partDocIds[0] shouldBe receipt
+                rig.metadataOf(receipt) shouldBe before
+                rig.metadataOf(done.partDocIds[1]) shouldBe
+                    (listOf("invoice") to mapOf(FieldKeys.CORRESPONDENT to "acme"))
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A part whose bytes are a trashed document brings that document back with its own metadata. */
+    @Test
+    fun aPartThatBringsADocumentBackKeepsItsOwnMetadata() =
+        runTest {
+            val hook = SplitHook()
+            val rig = AppSessionRig.create(backgroundScope, pdfEngine = hook::over)
+            try {
+                val receiptBytes = PdfFixtures.embeddedTextPdf("receipt")
+                val receipt = rig.importDocument(receiptBytes, "receipt", "beta")
+                val before = rig.metadataOf(receipt)
+                rig.session.docLifecycle.trashDoc(receipt) shouldBe true
+                val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
+                hook.firstPart = receiptBytes
+
+                val done = rig.splitInTwo(source).shouldBeInstanceOf<SplitOutcome.Done>()
+
+                done.partDocIds[0] shouldBe receipt
+                checkNotNull(rig.db.documentDao().getByDocId(receipt)).isLive shouldBe true
+                rig.metadataOf(receipt) shouldBe before
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A split that cannot trash its original leaves a part that was an existing document as it was. */
+    @Test
+    fun aFailedSplitLeavesAnExistingDocumentAsItWas() =
+        runTest {
+            val hook = SplitHook()
+            val rig = AppSessionRig.create(backgroundScope, pdfEngine = hook::over)
+            try {
+                val receiptBytes = PdfFixtures.embeddedTextPdf("receipt")
+                val receipt = rig.importDocument(receiptBytes, "receipt", "beta")
+                val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
+                // The imports' OCR writes the rows in the background; it is done before the rows are kept.
+                rig.session.work.drainOcr()
+                val receiptRow = rig.db.documentDao().getByDocId(receipt)
+                val before = rig.metadataOf(receipt)
+                hook.firstPart = receiptBytes
+                rig.blockTrash()
+
+                rig.splitInTwo(source) shouldBe SplitOutcome.Failed(SplitFailure.NOT_COMPLETED)
+
+                rig.db.documentDao().getByDocId(receipt) shouldBe receiptRow
+                rig.metadataOf(receipt) shouldBe before
+                val rows = rig.db.documentDao().allPathsAndMeta()
+                rows.map { it.docId } shouldContainExactlyInAnyOrder listOf(receipt, source)
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * An original trashed elsewhere while it was being split is out of the library, as the split
+     * wants it: the split is done and keeps its parts.
+     */
+    @Test
+    fun aSplitWhoseOriginalWasTrashedMeanwhileIsDone() =
+        runTest {
+            val hook = SplitHook()
+            val rig = AppSessionRig.create(backgroundScope, pdfEngine = hook::over)
+            try {
+                val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
+                hook.beforePart = { rig.session.docLifecycle.trashDoc(source) shouldBe true }
+
+                val done = rig.splitInTwo(source).shouldBeInstanceOf<SplitOutcome.Done>()
+
+                for (part in done.partDocIds) {
+                    checkNotNull(rig.db.documentDao().getByDocId(part)).isLive shouldBe true
+                    rig.metadataOf(part).first shouldBe listOf("invoice")
+                }
+                checkNotNull(rig.db.documentDao().getByDocId(source)).trashed shouldBe true
+            } finally {
+                rig.close()
+            }
+        }
+
     @Test
     fun aPartIsNamedAfterItsOriginalWithoutTheExtensionInAnyCase() =
         runTest {
@@ -185,6 +294,51 @@ class SplitPdfTest {
             }
         }
 }
+
+/**
+ * A PDF engine, for [AppSessionRig.create]'s `pdfEngine`, that runs [beforePart] once before a split
+ * makes its next part, and makes the first page into [firstPart] when set: a part whose bytes are a
+ * document the library has.
+ */
+private class SplitHook {
+    @Volatile var firstPart: ByteArray? = null
+
+    @Volatile var beforePart: (suspend () -> Unit)? = null
+
+    fun over(engine: PdfEngine): PdfEngine =
+        object : PdfEngine by engine {
+            override suspend fun extractPages(
+                bytes: ByteArray,
+                pageIndices: List<Int>,
+            ): ByteArray {
+                beforePart?.also { beforePart = null }?.invoke()
+                return firstPart?.takeIf { pageIndices == listOf(0) } ?: engine.extractPages(bytes, pageIndices)
+            }
+        }
+}
+
+/** Import [bytes] as `<tag>.pdf`, tagged [tag] and from [correspondent]; returns its docId. */
+private suspend fun AppSessionRig.importDocument(
+    bytes: ByteArray,
+    tag: String,
+    correspondent: String,
+): String {
+    val docId = session.importPdfBytes(bytes, "$tag.pdf").shouldBeInstanceOf<ImportOutcome.Imported>().docId
+    session.meta.addTag(listOf(docId), tag)
+    session.meta.setField(listOf(docId), FieldKeys.CORRESPONDENT, correspondent)
+    return docId
+}
+
+/** Split the two-page [docId] into one part per page. */
+private suspend fun AppSessionRig.splitInTwo(docId: String): SplitOutcome {
+    val pages = listOf(0..0, 1..1)
+    return session.maintenance.splitPdf(docId, pages)
+}
+
+/** [docId]'s tags and its fields by key, as the index has them. */
+private suspend fun AppSessionRig.metadataOf(docId: String): Pair<List<String>, Map<String, String>> =
+    db.tagDao().tagsForDocument(docId) to
+        db.documentFieldDao().fieldsForDocs(listOf(docId)).associate { it.fieldKey to it.fieldValue }
 
 /** Make every move into the trash fail, as a refused SAF move would: the trash folder is a file. */
 private fun AppSessionRig.blockTrash() {

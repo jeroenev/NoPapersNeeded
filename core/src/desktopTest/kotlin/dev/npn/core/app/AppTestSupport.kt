@@ -12,6 +12,7 @@ import dev.npn.core.journal.JournalPath
 import dev.npn.core.journal.JournalPaths
 import dev.npn.core.ocr.OcrEngine
 import dev.npn.core.pathrules.StoragePathRule
+import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.ThumbnailStore
 import dev.npn.core.util.JvmLog
 import dev.npn.core.util.NpnLog
@@ -124,6 +125,8 @@ class AppSessionRig private constructor(
             log: NpnLog = JvmLog(),
             trashRetentionDays: suspend () -> Int = { 30 },
             legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
+            /** The PDF engine the session uses, over the real one. */
+            pdfEngine: (PdfEngine) -> PdfEngine = { it },
             /** The library filesystem the session sees, over the real one the rig's [fs] reads directly. */
             files: (LibraryFileSystem) -> LibraryFileSystem = { it },
         ): AppSessionRig {
@@ -147,7 +150,7 @@ class AppSessionRig private constructor(
                     thumbnailStore = FakeThumbStore(File(dbDir, "thumbs")),
                     log = log,
                 )
-            val session = LibrarySessionImpl.openSession(base.over(files(base.fs)))
+            val session = LibrarySessionImpl.openSession(base.over(files(base.fs), pdfEngine(base.pdfEngine)))
             storagePath?.let {
                 session.storagePath.setStoragePathTemplate(it.template)
                 session.storagePath.setStoragePathEnabled(it.enabled)
@@ -155,23 +158,25 @@ class AppSessionRig private constructor(
             return AppSessionRig(libRoot, dbDir, base.fs, base.db, base.deviceDb, clock, scope, session)
         }
 
-        /** These deps with the library filesystem [fs] in place of their own. */
-        private fun SessionDeps.over(fs: LibraryFileSystem) =
-            SessionDeps(
-                fs = fs,
-                db = db,
-                deviceDb = deviceDb,
-                pdfEngine = pdfEngine,
-                ocrEngine = ocrEngine,
-                xmpIO = xmpIO,
-                thumbnailStore = thumbnailStore,
-                renderParallelism = renderParallelism,
-                scope = scope,
-                settings = settings,
-                log = log,
-                clock = clock,
-                installationId = installationId,
-            )
+        /** These deps with the library filesystem [fs] and the PDF engine [pdf] in place of their own. */
+        private fun SessionDeps.over(
+            fs: LibraryFileSystem,
+            pdf: PdfEngine,
+        ) = SessionDeps(
+            fs = fs,
+            db = db,
+            deviceDb = deviceDb,
+            pdfEngine = pdf,
+            ocrEngine = ocrEngine,
+            xmpIO = xmpIO,
+            thumbnailStore = thumbnailStore,
+            renderParallelism = renderParallelism,
+            scope = scope,
+            settings = settings,
+            log = log,
+            clock = clock,
+            installationId = installationId,
+        )
 
         /** One device's app-local dirs; each session over the folder gets its own. */
         private fun appDirs(

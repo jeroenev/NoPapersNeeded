@@ -19,8 +19,9 @@ interface MaintenanceFacade {
     /**
      * Split a document into one new document per [segments] entry (0-based page ranges; must be
      * contiguous and cover all pages). Parts are imported as regular new documents (deduped,
-     * OCR queued), tags and single-value properties are copied onto them, and the original is
-     * moved to trash. The original file itself is never modified.
+     * OCR queued), tags and single-value properties are copied onto the ones the split made (a
+     * part that is a document already keeps its own), and the original is moved to trash. The
+     * original file itself is never modified.
      *
      * A split that cannot finish returns [SplitOutcome.Failed] and leaves the library as it was;
      * it throws only when the session is closed.
@@ -32,7 +33,10 @@ interface MaintenanceFacade {
 }
 
 sealed interface SplitOutcome {
-    /** One docId per requested segment (an already-existing identical part reuses its docId). */
+    /**
+     * One docId per requested segment: the document that holds those pages now. A part whose bytes
+     * were a document already is that document, with its own metadata.
+     */
     data class Done(
         val partDocIds: List<String>,
     ) : SplitOutcome
