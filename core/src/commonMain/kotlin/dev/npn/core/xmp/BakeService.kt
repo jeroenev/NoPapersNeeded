@@ -3,6 +3,7 @@ package dev.npn.core.xmp
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.holds
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.error
 import dev.npn.core.util.runCatchingCancellable
@@ -61,13 +62,18 @@ class BakeService(
     }
 
     /**
-     * Rewrite the library file at [relPath] with baked metadata, then emit a relink from the
-     * old sha256 to the new one.
+     * Rewrite the library file at [relPath], the document [docId]'s, with baked metadata, then emit
+     * a relink from [docId] to the new sha256. Returns null, with nothing written or relinked, when
+     * the file is not the document's: its bytes do not hash to [docId], or it changed before the swap.
      *
-     * Sequence: read old bytes and old sha -> produce baked bytes -> write them to a sibling
-     * temp file -> re-read the temp and verify it parses and carries our metadata -> delete the
-     * original -> move the temp into the original path -> compute the new sha -> [emitRelink]
-     * (skipped when the bytes came out identical).
+     * Sequence: read the file once and check its hash -> produce baked bytes -> write them to a
+     * sibling temp file -> re-read the temp and verify it is what was written and carries our
+     * metadata -> re-stat the original -> delete it -> move the temp into its path -> [emitRelink]
+     * (skipped when the bytes came out identical). The new sha256 is that of the verified bytes.
+     *
+     * The bake only replaces the bytes it read and proved to be the document's: another app or a
+     * sync tool may write over the file at any point, so the file goes only while it still has the
+     * size and mtime it had when it was read; otherwise the temp is removed and nothing is swapped.
      *
      * Atomicity compromise: [LibraryFileSystem.move] refuses to overwrite an existing target
      * (fail-if-exists, required for the write-once invariant elsewhere), and SAF offers no atomic
@@ -83,15 +89,17 @@ class BakeService(
      */
     suspend fun bakeInPlace(
         relPath: String,
+        docId: String,
         data: NpnXmpData,
         emitRelink: suspend (oldSha256: String, newSha256: String) -> Unit,
-    ): BakeResult {
+    ): BakeResult? {
         val norm = NpnPaths.normalize(relPath)
-        val oldSha = fs.sha256(norm)
-
+        // Taken before the read, so a file written to during or after it no longer matches.
+        val read = fs.stat(norm)?.takeIf { !it.isDirectory } ?: return null
         val src = fs.readBytes(norm)
+        if (sha256Bytes(src) != docId) return null
         // Ensure documentId reflects the pre-bake identity when the caller did not set one.
-        val effectiveData = if (data.documentId == null) data.copy(documentId = oldSha) else data
+        val effectiveData = if (data.documentId == null) data.copy(documentId = docId) else data
         val bakedBytes =
             runCatchingCancellable { bake(src, effectiveData) }.getOrElse {
                 throw BakeRefusedException("$norm cannot carry baked metadata", it)
@@ -103,14 +111,24 @@ class BakeService(
         fs.writeBytesOnce(tmpPath, bakedBytes)
 
         // Verify by re-reading the temp file (round-trips through the real filesystem).
-        val verified = runCatchingCancellable { carriesNpnMetadata(fs.readBytes(tmpPath)) }.getOrDefault(false)
+        val verified =
+            runCatchingCancellable {
+                val written = fs.readBytes(tmpPath)
+                written.contentEquals(bakedBytes) && carriesNpnMetadata(written)
+            }.getOrDefault(false)
         if (!verified) {
             // Left behind, the next bake of this document removes it first.
             log.runLogged("Removing the unverified bake of $norm") { fs.delete(tmpPath) }
             throw BakeRefusedException("Bake verification failed for $norm; original left untouched")
         }
+        val newSha = sha256Bytes(bakedBytes)
 
         return withContext(NonCancellable) {
+            // Only the file that was read goes: same size and mtime as then.
+            if (fs.stat(norm) != read) {
+                log.runLogged("Removing the bake of $norm, written over since it was read") { fs.delete(tmpPath) }
+                return@withContext null
+            }
             // Non-atomic replace: delete original, then move temp into place.
             var swapped = false
             try {
@@ -118,11 +136,10 @@ class BakeService(
                 fs.move(tmpPath, norm)
                 swapped = true
             } finally {
-                if (!swapped) restoreOriginal(norm, src, oldSha, tmpPath)
+                if (!swapped) restoreOriginal(norm, src, docId, tmpPath)
             }
-            val newSha = fs.sha256(norm)
-            if (newSha != oldSha) emitRelink(oldSha, newSha)
-            BakeResult(oldSha256 = oldSha, newSha256 = newSha, finalRelPath = norm)
+            if (newSha != docId) emitRelink(docId, newSha)
+            BakeResult(oldSha256 = docId, newSha256 = newSha, finalRelPath = norm)
         }
     }
 

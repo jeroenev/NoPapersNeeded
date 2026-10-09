@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.RecordingLog
@@ -169,6 +171,44 @@ class BakeInPlaceTest {
             }
         }
 
+    /**
+     * Another document's bytes replace the file while the bake waits for the writer lock (a sync
+     * tool): the bake reads them, finds they are not the document's and refuses, with nothing
+     * written or relinked.
+     */
+    @Test
+    fun aFileReplacedBeforeTheBakeReadsItIsNotBaked() = replacedDuringABake(Replacing.Moment.BEFORE_READ)
+
+    /**
+     * Another document's bytes replace the file while the bake rewrites its copy: the bake leaves
+     * them where they are and removes its own rewrite, rather than deleting them to put it in place.
+     */
+    @Test
+    fun aFileReplacedWhileItIsBakedIsLeftAlone() = replacedDuringABake(Replacing.Moment.AFTER_REWRITE)
+
+    private fun replacedDuringABake(moment: Replacing.Moment) =
+        runTest {
+            val other = PdfFixtures.embeddedTextPdf("another document, written over the one being baked")
+            val replacing = Replacing("a.pdf", other, moment)
+            val rig = AppSessionRig.create(backgroundScope, files = replacing::over)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                rig.session.work.drainOcr()
+                val id = rig.docId("a.pdf")
+                val objects = rig.journalObjectCount()
+                replacing.armed = true
+
+                rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
+
+                rig.fs.readBytes("a.pdf") shouldBe other
+                rig.journalObjectCount() shouldBe objects
+                rig.exists(NpnPaths.Temp.bakePath("a.pdf")) shouldBe false
+            } finally {
+                rig.close()
+            }
+        }
+
     @Test
     fun aFileThatCannotCarryMetadataIsRefusedAndLeftAlone() =
         runTest {
@@ -206,4 +246,47 @@ class BakeInPlaceTest {
             .listAllIndexable()
             .filter { !it.isDirectory }
             .map { it.relPath }
+
+    /**
+     * A library filesystem over which, once [armed], [bytes] replace the file at [path] once, at
+     * [moment] of a bake: as another app or a sync tool would write over it.
+     */
+    private class Replacing(
+        private val path: String,
+        private val bytes: ByteArray,
+        private val moment: Moment,
+    ) {
+        enum class Moment {
+            /** Right before the file at [path] is read. */
+            BEFORE_READ,
+
+            /** Right after the bake wrote its rewritten copy beside it. */
+            AFTER_REWRITE,
+        }
+
+        @Volatile var armed = false
+
+        fun over(fs: LibraryFileSystem): LibraryFileSystem =
+            object : LibraryFileSystem by fs {
+                override suspend fun readBytes(relPath: String): ByteArray {
+                    if (moment == Moment.BEFORE_READ && relPath == path) replace(fs)
+                    return fs.readBytes(relPath)
+                }
+
+                override suspend fun writeBytesOnce(
+                    relPath: String,
+                    bytes: ByteArray,
+                ) {
+                    fs.writeBytesOnce(relPath, bytes)
+                    if (moment == Moment.AFTER_REWRITE && relPath == NpnPaths.Temp.bakePath(path)) replace(fs)
+                }
+            }
+
+        private suspend fun replace(fs: LibraryFileSystem) {
+            if (!armed) return
+            armed = false
+            fs.delete(path)
+            fs.writeBytesOnce(path, bytes)
+        }
+    }
 }

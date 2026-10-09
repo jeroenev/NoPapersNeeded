@@ -115,7 +115,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   only. Library data (settings, saved views, rules) belongs in the journal, not in either
   database.
 - PDFs are immutable after import (rename/move only). Sole exception: explicit
-  bake-in-place, which records a `relink` journal event for the new hash.
+  bake-in-place, which replaces only the bytes it read and hashed as the document's (while the
+  file keeps the size and mtime it had then) and records a `relink` journal event for the new hash.
 - All app-written files in `.npn/` are write-once. Journal transactions are content-addressed
   by their complete-file SHA-256 and require verified create-without-replacement publication;
   OCR sidecars are keyed by hash and writer (device id + engine). Never append to or rewrite a

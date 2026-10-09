@@ -4,6 +4,7 @@ import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.RecordingLog
 import io.kotest.assertions.withClue
@@ -80,10 +81,11 @@ class BakeServiceTest {
             val data = xmp(tags = listOf("filed", "acme"), reviewed = "true")
 
             val result =
-                BakeService(fs, io).bakeInPlace("doc.pdf", data) { old, new ->
-                    relinkOld = old
-                    relinkNew = new
-                }
+                BakeService(fs, io)
+                    .bakeInPlace("doc.pdf", oldSha, data) { old, new ->
+                        relinkOld = old
+                        relinkNew = new
+                    }.shouldNotBeNull()
 
             // Relink called with correct shas.
             relinkOld shouldBe oldSha
@@ -98,6 +100,72 @@ class BakeServiceTest {
             io.readXmp(fs.readBytes("doc.pdf")) shouldBe XmpSerializer.serialize(data.copy(documentId = oldSha))
 
             // No temp litter.
+            noTempLitter().shouldBeTrue()
+        }
+
+    /** The bake reads the document's file once and hashes what it read, and the rewrite in memory. */
+    @Test
+    fun aBakeReadsTheDocumentsFileOnceAndHashesNoFile() =
+        runTest {
+            fs.writeBytesOnce("doc.pdf", fixturePdf())
+            val oldSha = fs.sha256("doc.pdf")
+            val counting = Counting(fs)
+
+            val result =
+                BakeService(counting, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ -> }
+
+            result.shouldNotBeNull().newSha256 shouldBe fs.sha256("doc.pdf")
+            counting.calls shouldBe listOf("read doc.pdf")
+        }
+
+    /** A file that is not the document's is not baked as it: nothing is written and no relink emitted. */
+    @Test
+    fun aFileThatDoesNotHoldTheDocumentIsLeftAlone() =
+        runTest {
+            val other = fixturePdf()
+            fs.writeBytesOnce("doc.pdf", other)
+            var relinkCalled = false
+
+            BakeService(fs, io).bakeInPlace("doc.pdf", "0".repeat(64), xmp(tags = listOf("t"))) { _, _ ->
+                relinkCalled = true
+            } shouldBe null
+
+            relinkCalled.shouldBeFalse()
+            fs.readBytes("doc.pdf") shouldBe other
+            noTempLitter().shouldBeTrue()
+        }
+
+    /**
+     * Another file is written over the document's while the bake rewrites its copy: that file stays,
+     * and the rewrite is removed instead of put in its place.
+     */
+    @Test
+    fun aFileWrittenOverWhileItIsBakedIsLeftAlone() =
+        runTest {
+            fs.writeBytesOnce("doc.pdf", fixturePdf())
+            val oldSha = fs.sha256("doc.pdf")
+            val other = "another app's file, written over the document".encodeToByteArray()
+            val overwriting =
+                object : LibraryFileSystem by fs {
+                    override suspend fun writeBytesOnce(
+                        relPath: String,
+                        bytes: ByteArray,
+                    ) {
+                        fs.writeBytesOnce(relPath, bytes)
+                        if (relPath == NpnPaths.Temp.bakePath("doc.pdf")) {
+                            fs.delete("doc.pdf")
+                            fs.writeBytesOnce("doc.pdf", other)
+                        }
+                    }
+                }
+            var relinkCalled = false
+
+            BakeService(overwriting, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
+                relinkCalled = true
+            } shouldBe null
+
+            relinkCalled.shouldBeFalse()
+            fs.readBytes("doc.pdf") shouldBe other
             noTempLitter().shouldBeTrue()
         }
 
@@ -123,7 +191,7 @@ class BakeServiceTest {
 
             var relinkCalled = false
             assertFailsWith<BakeRefusedException> {
-                BakeService(fs, brokenIo).bakeInPlace("doc.pdf", xmp(tags = listOf("t"))) { _, _ ->
+                BakeService(fs, brokenIo).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
                     relinkCalled = true
                 }
             }
@@ -152,7 +220,7 @@ class BakeServiceTest {
 
             var relinkCalled = false
             assertFailsWith<IOException> {
-                BakeService(failingMove, io).bakeInPlace("doc.pdf", xmp(tags = listOf("t"))) { _, _ ->
+                BakeService(failingMove, io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
                     relinkCalled = true
                 }
             }
@@ -171,7 +239,7 @@ class BakeServiceTest {
 
             var relinkCalled = false
             assertFailsWith<IOException> {
-                BakeService(LandingMoveFails(fs), io).bakeInPlace("doc.pdf", xmp(tags = listOf("t"))) { _, _ ->
+                BakeService(LandingMoveFails(fs), io).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
                     relinkCalled = true
                 }
             }
@@ -196,7 +264,7 @@ class BakeServiceTest {
 
             var relinkCalled = false
             assertFailsWith<IOException> {
-                BakeService(failing, io, log).bakeInPlace("doc.pdf", xmp(tags = listOf("t"))) { _, _ ->
+                BakeService(failing, io, log).bakeInPlace("doc.pdf", oldSha, xmp(tags = listOf("t"))) { _, _ ->
                     relinkCalled = true
                 }
             }
@@ -226,7 +294,7 @@ class BakeServiceTest {
 
                     val bake =
                         launch {
-                            BakeService(cancelling, io).bakeInPlace(doc, xmp(tags = listOf("t"))) { old, new ->
+                            BakeService(cancelling, io).bakeInPlace(doc, oldSha, xmp(tags = listOf("t"))) { old, new ->
                                 relink = old to new
                             }
                         }
@@ -251,7 +319,7 @@ class BakeServiceTest {
             val before = fs.readBytes("doc.pdf")
 
             assertFailsWith<BakeRefusedException> {
-                BakeService(fs, io).bakeInPlace("doc.pdf", xmp(tags = listOf("t"))) { _, _ -> }
+                BakeService(fs, io).bakeInPlace("doc.pdf", sha256Bytes(before), xmp(tags = listOf("t"))) { _, _ -> }
             }
             fs.readBytes("doc.pdf") shouldBe before
             noTempLitter().shouldBeTrue()
@@ -276,6 +344,23 @@ class BakeServiceTest {
         if (fs.sha256(path) == oldSha) return true
         val xmp = io.readXmp(fs.readBytes(path)) ?: return false
         return XmpParser.parse(xmp).documentId == oldSha
+    }
+
+    /** [fs] recording every read and hash of a library PDF: `read <path>`, `sha256 <path>`. */
+    private class Counting(
+        private val fs: LibraryFileSystem,
+    ) : LibraryFileSystem by fs {
+        val calls = ArrayList<String>()
+
+        override suspend fun readBytes(relPath: String): ByteArray {
+            if (NpnPaths.isPdf(relPath)) calls += "read $relPath"
+            return fs.readBytes(relPath)
+        }
+
+        override suspend fun sha256(relPath: String): String {
+            if (NpnPaths.isPdf(relPath)) calls += "sha256 $relPath"
+            return fs.sha256(relPath)
+        }
     }
 
     /**

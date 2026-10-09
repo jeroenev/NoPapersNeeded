@@ -107,11 +107,13 @@ class AppSessionRig private constructor(
             log: NpnLog = JvmLog(),
             trashRetentionDays: suspend () -> Int = { 30 },
             legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
+            /** The library filesystem the session sees, over the real one the rig's [fs] reads directly. */
+            files: (LibraryFileSystem) -> LibraryFileSystem = { it },
         ): AppSessionRig {
             val libRoot = Files.createTempDirectory("npn-app-lib")
             val dbDir = Files.createTempDirectory("npn-app-db").toFile()
             val clock = MutableClock(autoTick = true)
-            val deps =
+            val base =
                 jvmSessionDeps(
                     libraryRoot = libRoot,
                     dirs = appDirs(dbDir, "first"),
@@ -128,13 +130,31 @@ class AppSessionRig private constructor(
                     thumbnailStore = FakeThumbStore(File(dbDir, "thumbs")),
                     log = log,
                 )
-            val session = LibrarySessionImpl.openSession(deps)
+            val session = LibrarySessionImpl.openSession(base.over(files(base.fs)))
             storagePath?.let {
                 session.storagePath.setStoragePathTemplate(it.template)
                 session.storagePath.setStoragePathEnabled(it.enabled)
             }
-            return AppSessionRig(libRoot, dbDir, deps.fs, deps.db, deps.deviceDb, clock, scope, session)
+            return AppSessionRig(libRoot, dbDir, base.fs, base.db, base.deviceDb, clock, scope, session)
         }
+
+        /** These deps with the library filesystem [fs] in place of their own. */
+        private fun SessionDeps.over(fs: LibraryFileSystem) =
+            SessionDeps(
+                fs = fs,
+                db = db,
+                deviceDb = deviceDb,
+                pdfEngine = pdfEngine,
+                ocrEngine = ocrEngine,
+                xmpIO = xmpIO,
+                thumbnailStore = thumbnailStore,
+                renderParallelism = renderParallelism,
+                scope = scope,
+                settings = settings,
+                log = log,
+                clock = clock,
+                installationId = installationId,
+            )
 
         /** One device's app-local dirs; each session over the folder gets its own. */
         private fun appDirs(
