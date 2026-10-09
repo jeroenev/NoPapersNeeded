@@ -147,7 +147,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
    and all, and any copy of it left in the trash is deleted, under the writer lock
    and only while the document is still live (a trash of it since put its file
    there). Its only journal
-   write is the restore of bytes the journal had trashed or deleted. Bytes a
+   write is the restore of bytes the journal had trashed or deleted, in the step
+   under the writer lock that makes the row live (a failed one takes the import
+   back in that step), so no trash or rescan lands in between. Bytes a
    relink superseded (a bake's original) are no document of their own: an import
    of them is a duplicate of the document they became while the library shows
    it, and is refused otherwise; a rescan gives a file of them no row. `OcrPipeline`
@@ -282,8 +284,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
 - **Delete and restore.** `doc-trash`/`doc-restore` and `doc-delete`/`doc-undelete` are
   last-writer-wins pairs by HLC; an undelete also takes the document out of the trash. When the
   bytes of a deleted or trashed document come back, the return is recorded in the journal, or the
-  next fold would hide the document again: an import of them writes it
-  (`JournalCoordinator.restoreReturned`), and a rescan that finds the file back in the library
+  next fold would hide the document again: an import of them writes it under the lock it placed
+  the file under (`ImportJournal.restoreReturned`, handed to it by `JournalCoordinator.serialized`),
+  and a rescan that finds the file back in the library
   writes it once the event that hid the document is a day old (`RESTORE_SETTLE_MS`), as the scan's
   last step; a write that fails is logged and left to the next rescan, never failing the scan or
   blocking writes. Sooner, the file may be one a sync tool has not taken away yet, so the rescan

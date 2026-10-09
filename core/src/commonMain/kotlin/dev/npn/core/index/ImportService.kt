@@ -62,14 +62,35 @@ class EmptyImportException : IllegalArgumentException("The file is empty")
 class SupersededImportException :
     IllegalArgumentException("The file is an earlier version of a document in the library")
 
-/** The journal's relinks, as an import reads them under the writer lock ([ImportService]). */
-fun interface RelinkLookup {
+/**
+ * The journal as an import's step reads and writes it, under the writer lock that step holds
+ * ([ImportService]). Its calls take no lock of their own, so they are for that step alone.
+ */
+interface ImportJournal {
     /** The document [docId]'s bytes became, its relink chain followed to the end; [docId] when none superseded it. */
     suspend fun successorOf(docId: String): String
 
+    /**
+     * Record that [docId]'s bytes are in the library again, at [relPath], when the journal still has
+     * it deleted or trashed. Writes nothing, and needs no write access, for a document nothing hides.
+     * Returns whether it wrote the return; throws only when it did not.
+     */
+    suspend fun restoreReturned(
+        docId: String,
+        relPath: String,
+    ): Boolean
+
     companion object {
-        /** For a library whose journal holds no relink. */
-        val NONE = RelinkLookup { it }
+        /** For a library whose journal holds no relink and hides no document. */
+        val NONE: ImportJournal =
+            object : ImportJournal {
+                override suspend fun successorOf(docId: String): String = docId
+
+                override suspend fun restoreReturned(
+                    docId: String,
+                    relPath: String,
+                ): Boolean = false
+            }
     }
 }
 
@@ -95,16 +116,18 @@ fun interface RelinkLookup {
  * with nothing moved either way.
  *
  * The dedup check, the move into place and the row write run as one step through [serialize],
- * which the session points at the journal coordinator's lock, handing the step the journal's
- * relinks as they stand under it. Without it two imports of the same bytes both pass the check and
- * place two files for one hash, and a rescan listing the library between the move and the row
- * write inserts a row of its own that the import then overwrites (or that overwrites the import's).
+ * which the session points at the journal coordinator's lock, handing the step the journal
+ * ([ImportJournal]) as it stands under it. Without it two imports of the same bytes both pass the
+ * check and place two files for one hash, and a rescan listing the library between the move and the
+ * row write inserts a row of its own that the import then overwrites (or that overwrites the
+ * import's).
  *
- * Bytes the journal had deleted or trashed come back through [restore], which records that they
- * are back (`JournalCoordinator.restoreReturned`); without that record, the next fold would hide
- * the document again. Once a document is back, whatever the trash still holds of it is deleted:
- * the trash keeps an entry for as long as its document is live, so it would be a second copy for
- * good.
+ * Bytes the journal had deleted or trashed are recorded as back ([ImportJournal.restoreReturned])
+ * in that same step; without that record, the next fold would hide the document again. One step,
+ * so no trash, rescan or other lifecycle change lands between the row turning live and the journal
+ * saying so, and a record that fails takes the import back before the lock is let go. Once a
+ * document is back, whatever the trash still holds of it is deleted: the trash keeps an entry for
+ * as long as its document is live, so it would be a second copy for good.
  */
 @OptIn(ExperimentalUuidApi::class)
 class ImportService(
@@ -115,12 +138,7 @@ class ImportService(
     private val ruleProvider: suspend () -> StoragePathRule? = { null },
     /** The registry's field types by key, which decide where a template accepts a date pattern. */
     private val fieldTypes: suspend () -> Map<String, FieldType>,
-    private val serialize: suspend (suspend (RelinkLookup) -> Unit) -> Unit = { it(RelinkLookup.NONE) },
-    /**
-     * Record that the document is back at the path, when the journal still hides it; returns
-     * whether it wrote that, and throws only when it did not.
-     */
-    private val restore: suspend (docId: String, relPath: String) -> Boolean = { _, _ -> false },
+    private val serialize: suspend (suspend (ImportJournal) -> Unit) -> Unit = { it(ImportJournal.NONE) },
     /** Where clearing a returned document's trashed copy, best effort, reports a failure. */
     private val log: NpnLog = NpnLog.None,
 ) {
@@ -169,20 +187,32 @@ class ImportService(
         // document would be live with nothing in the journal to say so, and the next fold would hide
         // it again with the import's copy left in the library.
         return withContext(NonCancellable) {
-            var placement: Placement? = null
-            serialize { relinks -> placement = place(tmpPath, hash, size, suggestedName, toDir, relinks) }
-            val placed = checkNotNull(placement)
-            val imported = placed.result as? ImportResult.Imported ?: return@withContext placed.result
-            // After [serialize]: the restore is a journal write, which takes the same lock.
-            val restored =
-                runCatchingCancellable { restore(imported.docId, imported.relPath) }.getOrElse { failure ->
-                    log.runLogged("Taking back the import of ${imported.relPath}") { takeBack(placed) }
-                    throw failure
-                }
-            if (!restored && !imported.broughtBack) return@withContext imported
-            discardTrashCopies(imported.docId)
-            imported.copy(broughtBack = true)
+            var outcome: ImportResult? = null
+            serialize { journal ->
+                outcome = recordReturn(place(tmpPath, hash, size, suggestedName, toDir, journal), journal, tmpPath)
+            }
+            val result = checkNotNull(outcome)
+            if (result is ImportResult.Imported && result.broughtBack) discardTrashCopies(result.docId)
+            result
         }
+    }
+
+    /**
+     * Record in the journal that [placed]'s document is back, when the journal still hides it, in the
+     * step that placed it; when that fails, [takeBack] the placement there too and throw.
+     */
+    private suspend fun recordReturn(
+        placed: Placement,
+        journal: ImportJournal,
+        tmpPath: String,
+    ): ImportResult {
+        val imported = placed.result as? ImportResult.Imported ?: return placed.result
+        val restored =
+            runCatchingCancellable { journal.restoreReturned(imported.docId, imported.relPath) }.getOrElse { failure ->
+                log.runLogged("Taking back the import of ${imported.relPath}") { takeBack(placed, tmpPath) }
+                throw failure
+            }
+        return if (restored) imported.copy(broughtBack = true) else imported
     }
 
     /**
@@ -237,7 +267,7 @@ class ImportService(
         size: Long,
         suggestedName: String,
         toDir: String,
-        relinks: RelinkLookup,
+        journal: ImportJournal,
     ): Placement {
         val existing = documentDao.getByDocId(hash)
         // The document's own path, when its bytes are there. This runs under the writer lock, so
@@ -248,7 +278,7 @@ class ImportService(
         }
         // Asked of the journal, not the index: a superseded row is deleted like any other, and an
         // index rebuilt since has none.
-        val successor = relinks.successorOf(hash)
+        val successor = journal.successorOf(hash)
         if (successor != hash) return Placement(supersededBy(successor))
 
         val target = inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir).also { fs.move(tmpPath, it) }
@@ -301,8 +331,9 @@ class ImportService(
     }
 
     /**
-     * Undo a [place] whose rows could not be written, still under the lock: [hash]'s row goes back to
-     * [existing] (away, for a new document), and the file [place] moved to [movedTo] goes back to
+     * Undo a [place] whose rows could not be written (or, for a new document, whose return could not
+     * be recorded), still under the lock: [hash]'s row goes back to [existing] (away, for a new
+     * document), and the file [place] moved to [movedTo] goes back to
      * [tmpPath], so a failed import leaves nothing in the library. Best effort and logged; the caller
      * still throws the failure. A queue entry left behind is dropped by the OCR drain, which finds no
      * live document for it.
@@ -353,47 +384,49 @@ class ImportService(
     )
 
     /**
-     * Undo [placed] after recording its document's return failed. A new document goes as
-     * [undoImport] takes one back. A returning one gets the row and OCR queue entry it had; its file
-     * goes only while the trash still holds the bytes, and otherwise stays, the row pointing at it
-     * with the lifecycle it had: a failed import never deletes the only copy of a document's bytes,
-     * and a retry or a rescan finds them back where the row says.
+     * Undo [placed] after recording its document's return failed, still in the step under the lock
+     * that placed it. A new document goes as [unplace] takes one back, its file to [tmpPath]. A
+     * returning one gets the row and OCR queue entry it had; its file goes only while the trash still
+     * holds the bytes, and otherwise stays, the row pointing at it with the lifecycle it had: a failed
+     * import never deletes the only copy of a document's bytes, and a retry or a rescan finds them
+     * back where the row says.
      */
-    private suspend fun takeBack(placed: Placement) {
+    private suspend fun takeBack(
+        placed: Placement,
+        tmpPath: String,
+    ) {
         val imported = placed.result as ImportResult.Imported
-        val previous = placed.previous ?: return undoImport(imported)
-        serialize { _ ->
-            val docId = imported.docId
-            val placedAt = imported.relPath
-            val row =
-                when {
-                    // Brought back in place, the file there before; or no copy of ours left where the
-                    // import moved one. That can be the hidden row's own path too, which a trashed
-                    // row keeps: a copy moved there is the import's, not the document's file.
-                    !placed.moved || !fs.holds(placedAt, docId) -> {
-                        previous
-                    }
-
-                    trash.copiesOf(docId).isNotEmpty() -> {
-                        fs.delete(placedAt)
-                        previous
-                    }
-
-                    else -> {
-                        val meta = fs.stat(placedAt) ?: error("Imported file vanished: $placedAt")
-                        previous.copy(
-                            relPath = placedAt,
-                            fileName = NpnPaths.fileName(placedAt),
-                            size = meta.size,
-                            mtime = meta.mtimeMillis,
-                            missing = false,
-                        )
-                    }
+        val docId = imported.docId
+        val placedAt = imported.relPath
+        val previous = placed.previous ?: return unplace(docId, existing = null, movedTo = placedAt, tmpPath)
+        val row =
+            when {
+                // Brought back in place, the file there before; or no copy of ours left where the
+                // import moved one. That can be the hidden row's own path too, which a trashed
+                // row keeps: a copy moved there is the import's, not the document's file.
+                !placed.moved || !fs.holds(placedAt, docId) -> {
+                    previous
                 }
-            documentDao.upsert(row.onFreePath())
-            if (placed.queuedOcr) placed.previousQueue?.let { ocrQueueDao.upsert(it) } ?: ocrQueueDao.deleteRow(docId)
-            if (row.fileName != NpnPaths.fileName(placedAt)) indexFileName(row)
-        }
+
+                trash.copiesOf(docId).isNotEmpty() -> {
+                    fs.delete(placedAt)
+                    previous
+                }
+
+                else -> {
+                    val meta = fs.stat(placedAt) ?: error("Imported file vanished: $placedAt")
+                    previous.copy(
+                        relPath = placedAt,
+                        fileName = NpnPaths.fileName(placedAt),
+                        size = meta.size,
+                        mtime = meta.mtimeMillis,
+                        missing = false,
+                    )
+                }
+            }
+        documentDao.upsert(row.onFreePath())
+        if (placed.queuedOcr) placed.previousQueue?.let { ocrQueueDao.upsert(it) } ?: ocrQueueDao.deleteRow(docId)
+        if (row.fileName != NpnPaths.fileName(placedAt)) indexFileName(row)
     }
 
     /**
@@ -436,11 +469,6 @@ class ImportService(
         // Best effort: a staging file left behind is never indexed (it lives under `.npn/`), and a
         // rescan sweeps it away once it is old (TempFileSweep).
         if (fs.exists(tmpPath)) runCatchingCancellable { fs.delete(tmpPath) }
-    }
-
-    private fun ensurePdfName(name: String): String {
-        val sanitized = NpnPaths.sanitizeFileName(name.trim()).ifEmpty { "document" }
-        return if (NpnPaths.isPdf(sanitized)) sanitized else "$sanitized.pdf"
     }
 
     private suspend fun chooseImportTarget(
@@ -486,4 +514,10 @@ class ImportService(
         /** The OCR states of a document whose text is indexed. */
         val INDEXED = setOf(OcrState.DONE, OcrState.ADOPTED)
     }
+}
+
+/** [name] as the file name of an imported PDF: sanitized, never empty, ending in `.pdf`. */
+private fun ensurePdfName(name: String): String {
+    val sanitized = NpnPaths.sanitizeFileName(name.trim()).ifEmpty { "document" }
+    return if (NpnPaths.isPdf(sanitized)) sanitized else "$sanitized.pdf"
 }

@@ -38,9 +38,20 @@ class ImportTakeBackTest {
                     rig.deviceDb.ocrQueueDao(),
                     rig.clock,
                     fieldTypes = { emptyMap() },
-                    restore = { _, _ ->
-                        recording.complete(Unit)
-                        recorded.await()
+                    serialize = { step ->
+                        step(
+                            object : ImportJournal {
+                                override suspend fun successorOf(docId: String): String = docId
+
+                                override suspend fun restoreReturned(
+                                    docId: String,
+                                    relPath: String,
+                                ): Boolean {
+                                    recording.complete(Unit)
+                                    return recorded.await()
+                                }
+                            },
+                        )
                     },
                 )
 

@@ -19,8 +19,14 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
 import io.kotest.matchers.types.shouldBeInstanceOf
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.CoroutineStart
+import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.async
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
+import kotlin.coroutines.ContinuationInterceptor
 import kotlin.test.Test
 import kotlin.test.assertFailsWith
 
@@ -155,6 +161,35 @@ class HiddenDocumentImportTest {
     }
 
     /**
+     * The document is trashed while its import brings it back, between its row turning live and the
+     * return being journaled. The trash waits until the import has journaled the return, then
+     * trashes it: the row, the file and the journal agree it is in the trash.
+     */
+    @Test
+    fun aTrashLandingWhileAnImportBringsTheDocumentBackWaitsForTheReturnToBeJournaled() {
+        val placing = AfterImportPlaced()
+        withDocument(files = placing::over) { id, bytes ->
+            rig.session.work.drainOcr()
+            rig.session.docLifecycle.trashDoc(id)
+            placing.scope = rig.scope
+            placing.next = { rig.session.docLifecycle.trashDoc(id) }
+
+            importAgain(bytes).shouldBeInstanceOf<ImportOutcome.Imported>()
+            placing.started.shouldNotBeNull().await()
+
+            row(id).trashed.shouldBeTrue()
+            trashEntries().map { rig.fs.sha256(it) } shouldContain id
+            libraryPdfs().shouldBeEmpty()
+            rig.session.rescan()
+            row(id).trashed.shouldBeTrue()
+            row(id).missing.shouldBeFalse()
+            rig.session.docLifecycle.restoreDoc(id)
+            assertLive(id)
+            rig.fs.sha256(row(id).relPath) shouldBe id
+        }
+    }
+
+    /**
      * When the return cannot be recorded, the import is taken back: the document stays in the trash
      * as it was, with its copy there, and no second copy is left in the library.
      */
@@ -270,4 +305,32 @@ class HiddenDocumentImportTest {
         /** An object store from a newer build. */
         const val NEWER_STORE = "${NpnPaths.JOURNAL_DIR}/objects-v9-00"
     }
+}
+
+/**
+ * A library filesystem, for [AppSessionRig.create]'s `files`, that starts [next] on [scope] once an
+ * import has moved its staged file into the library, while the import holds the writer lock. [next]
+ * runs at once, on the lock holder's dispatcher, until it waits for that lock.
+ */
+private class AfterImportPlaced {
+    @Volatile var next: (suspend () -> Unit)? = null
+    lateinit var scope: CoroutineScope
+
+    /** [next], once started. */
+    @Volatile var started: Deferred<Unit>? = null
+
+    fun over(fs: LibraryFileSystem): LibraryFileSystem =
+        object : LibraryFileSystem by fs {
+            override suspend fun move(
+                fromRelPath: String,
+                toRelPath: String,
+            ) {
+                fs.move(fromRelPath, toRelPath)
+                if (!fromRelPath.startsWith("${NpnPaths.TMP_DIR}/")) return
+                val action = next ?: return
+                next = null
+                val dispatcher = checkNotNull(currentCoroutineContext()[ContinuationInterceptor])
+                started = scope.async(dispatcher, CoroutineStart.UNDISPATCHED) { action() }
+            }
+        }
 }

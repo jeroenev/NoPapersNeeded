@@ -1,10 +1,10 @@
 package dev.npn.core.app
 
 import dev.npn.core.db.DocumentEntity
+import dev.npn.core.index.ImportJournal
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.OpenReconciliation
-import dev.npn.core.index.RelinkLookup
 import dev.npn.core.index.Resurrected
 import dev.npn.core.index.ScanReport
 import dev.npn.core.index.SnapshotSupport
@@ -443,25 +443,6 @@ class JournalCoordinator internal constructor(
     suspend fun commitAndApply(ops: List<PendingOp>): Boolean = commitBuilt { ops }
 
     /**
-     * Record that [doc]'s bytes are in the library again, at [relPath], when the journal still has
-     * it deleted or trashed: an import of those bytes. Writes nothing, and needs no write access,
-     * for a document nothing hides. Returns whether a restore was written; throws only when none
-     * was, so the importer takes back its file only then.
-     */
-    suspend fun restoreReturned(
-        doc: String,
-        relPath: String,
-    ): Boolean =
-        locked {
-            val current = foldedState()
-            val ops = current.restoreOps(doc, relPath)
-            if (ops.isEmpty()) return@locked false
-            ensureWritable()
-            withContext(NonCancellable) { projectStanding(current, writeTransaction(ops)) }
-            true
-        }
-
-    /**
      * Throw now if a commit would be refused. For a caller that changes the filesystem before it
      * commits, outside the lock (an in-place bake, before its relink), so a refused commit does not
      * strand a rewritten PDF with no journal record of it; or that pays for work only a commit can
@@ -473,14 +454,30 @@ class JournalCoordinator internal constructor(
      * Run [block] under the single-writer mutex: for a change to which file holds which hash that
      * does not go through the journal, an import placing its file and row. That serializes it
      * against other imports and against every rescan, whose listing and row writes it would
-     * otherwise interleave with. [block] reads the journal's relinks through the [RelinkLookup] it
-     * is handed, under the same lock; it must not call another member here, as the lock is not
-     * reentrant.
+     * otherwise interleave with. [block] reads and writes the journal through the [ImportJournal] it
+     * is handed, under the same lock: an import reads the relinks and records a returning
+     * document's return in the step that made its row live. It must not call another member here,
+     * as the lock is not reentrant.
      */
-    suspend fun <T> serialized(block: suspend (RelinkLookup) -> T): T = locked { block(relinks) }
+    suspend fun <T> serialized(block: suspend (ImportJournal) -> T): T = locked { block(lockedJournal) }
 
-    /** The live fold's relinks, for a [serialized] block, which holds the lock they are read under. */
-    private val relinks = RelinkLookup { foldedState().resolveDocId(it) }
+    /** The live fold, for a [serialized] block, which holds the lock it is read and written under. */
+    private val lockedJournal =
+        object : ImportJournal {
+            override suspend fun successorOf(docId: String): String = foldedState().resolveDocId(docId)
+
+            override suspend fun restoreReturned(
+                docId: String,
+                relPath: String,
+            ): Boolean {
+                val current = foldedState()
+                val ops = current.restoreOps(docId, relPath)
+                if (ops.isEmpty()) return false
+                ensureWritable()
+                withContext(NonCancellable) { projectStanding(current, writeTransaction(ops)) }
+                return true
+            }
+        }
 
     /**
      * Change [docId]'s lifecycle (trash, restore, delete) in one step under the single-writer mutex:
