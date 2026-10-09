@@ -39,6 +39,7 @@ import dev.npn.app.ui.common.FieldDefForm
 import dev.npn.app.ui.common.FieldDefFormState
 import dev.npn.app.ui.common.FieldEditor
 import dev.npn.app.ui.common.HelpText
+import dev.npn.app.ui.common.rememberFieldLocale
 import dev.npn.core.app.Doc
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
@@ -61,11 +62,13 @@ import org.jetbrains.compose.resources.stringResource
  * always, other registered fields render when this document carries a value (or the user just
  * added them), and values whose key has no definition sit in a muted group with a way to promote
  * the key into the registry. One "Add field" affordance covers both picking an existing
- * definition and defining a new one.
+ * definition and defining a new one. [refused] are the keys whose value in [doc] is an entry its
+ * editor refused, as typed, so a field coming back on screen shows it as it was typed.
  */
 @Composable
 internal fun FieldsSection(
     doc: Doc,
+    refused: Set<String>,
     defs: List<FieldDef>,
     vocabulary: VocabularyState,
     actions: MetadataActions,
@@ -82,6 +85,7 @@ internal fun FieldsSection(
                 FieldRow(
                     def = def,
                     value = doc.fields[def.key],
+                    refused = def.key in refused,
                     suggestions = vocabulary.fieldValues[def.key].orEmpty(),
                     // The title stands in for the file name when empty, so the file name is its placeholder.
                     placeholder = doc.fileName.takeIf { def.key == FieldKeys.TITLE },
@@ -155,9 +159,10 @@ internal fun FieldsSection(
 private fun FieldRow(
     def: FieldDef,
     value: String?,
+    refused: Boolean,
     suggestions: List<String>,
     placeholder: String?,
-    onCommit: (String) -> Unit,
+    onCommit: (FieldParse) -> Unit,
     onRemove: (() -> Unit)?,
 ) {
     Row(
@@ -168,6 +173,7 @@ private fun FieldRow(
         FieldEditor(
             def = def,
             value = value,
+            refused = refused,
             suggestions = suggestions,
             placeholder = placeholder,
             onCommit = onCommit,
@@ -231,7 +237,8 @@ internal data class NewFieldSeed(
  * Define a field from the document panel: the shared [FieldDefForm] plus an optional first value
  * for this document, edited with the control of the chosen type so what gets saved is already
  * canonical. Confirming writes the definition and the value together through [onConfirm], and is
- * blocked while the value does not fit the chosen type (a type switch drops a value it refuses).
+ * blocked while the value's editor refuses what it shows (a type switch drops a value the new
+ * type's editor would refuse).
  */
 @Composable
 internal fun NewFieldDialog(
@@ -245,16 +252,22 @@ internal fun NewFieldDialog(
         mutableStateOf(FieldDefFormState(label = seed.label, key = seed.key, keyEdited = seed.key.isNotEmpty()))
     }
     var value by remember { mutableStateOf(seed.value.orEmpty()) }
+    // The editor's verdict on what it shows: it reads a number the way the user writes it, so only
+    // it can tell that `12.34` is none where a comma is the decimal point. [value] is then as typed.
+    var refused by remember { mutableStateOf(false) }
+    val locale = rememberFieldLocale()
     val draftDef = form.toDef(position = (existing.maxOfOrNull { it.position } ?: -1) + 1)
-    val valueValid = value.isBlank() || FieldValues.canonicalize(form.type, value) is FieldParse.Ok
+    val valueValid = !refused && (value.isBlank() || FieldValues.canonicalize(form.type, value) is FieldParse.Ok)
     val canSave = form.label.isNotBlank() && draftDef != null && !form.collides(existing) && valueValid
-    // Switching type can strand the typed value: drop it when the new type refuses it, so the
-    // dialog never confirms a definition whose first value would fail to write (the definition is
-    // committed before the value, so a rejected value would otherwise leave the field half-applied).
+    // Switching type can strand the typed value. The new type's editor shows it the locale's way and
+    // reads it back the same way: keep what it reads, in canonical form, and drop what it would
+    // refuse, or what the old editor refused, so the dialog never confirms a value its editor does
+    // not show, or one that would fail to write (the definition is committed before the value, so a
+    // rejected value would otherwise leave the field half-applied).
     LaunchedEffect(form.type) {
-        if (value.isNotBlank() && FieldValues.canonicalize(form.type, value) is FieldParse.Invalid) {
-            value = ""
-        }
+        val read = FieldValues.canonicalize(form.type, FieldValues.display(form.type, value, locale), locale)
+        value = if (refused) "" else (read as? FieldParse.Ok)?.canonical.orEmpty()
+        refused = false
     }
 
     AlertDialog(
@@ -273,7 +286,20 @@ internal fun NewFieldDialog(
                 )
                 draftDef?.let { def ->
                     key(def.type) {
-                        FieldEditor(def = def, value = value, onCommit = { value = it })
+                        FieldEditor(
+                            def = def,
+                            value = value,
+                            refused = refused,
+                            locale = locale,
+                            onCommit = { entry ->
+                                refused = entry is FieldParse.Invalid
+                                value =
+                                    when (entry) {
+                                        is FieldParse.Ok -> entry.canonical.orEmpty()
+                                        is FieldParse.Invalid -> entry.raw
+                                    }
+                            },
+                        )
                     }
                 }
             }

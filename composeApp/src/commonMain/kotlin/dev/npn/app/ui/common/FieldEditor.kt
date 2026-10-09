@@ -51,37 +51,40 @@ fun rememberFieldLocale(): FieldLocale {
  * else in the UI hands a field here and lets the type decide.
  *
  * [value] is what the document holds (or the draft overlay shows): canonical when it fits the
- * type. [onCommit] receives every keystroke or pick, already in canonical form when the input
- * parses; input the type refuses is passed through verbatim so the draft can flag it and block
- * the save, and the field shows an inline error instead of silently discarding what was typed.
- * A stored value that does not fit the type is shown as-is with the same warning and is never
- * rewritten.
+ * type, or, when [refused], an entry this editor refused, as typed. [onCommit] receives every
+ * keystroke or pick as the editor reads it: the canonical value, or an entry the type refuses
+ * ([FieldParse.Invalid]), so the draft can block the save while the field shows an inline error
+ * instead of silently discarding what was typed. Only the editor can give that verdict, since it
+ * reads a number the way [locale] writes it. A stored value that does not fit the type is shown
+ * as-is with the same warning and is never rewritten.
  */
 @Composable
 fun FieldEditor(
     def: FieldDef,
     value: String?,
-    onCommit: (String) -> Unit,
+    onCommit: (FieldParse) -> Unit,
     modifier: Modifier = Modifier,
     suggestions: List<String> = emptyList(),
     placeholder: String? = null,
+    refused: Boolean = false,
     locale: FieldLocale = rememberFieldLocale(),
 ) {
+    val commitText: (String) -> Unit = { onCommit(FieldValues.canonicalize(def.type, it)) }
     when (def.type) {
         FieldType.TEXT -> {
-            TextValueField(def.label, value.orEmpty(), suggestions, def.hint, placeholder, modifier, onCommit)
+            TextValueField(def.label, value.orEmpty(), suggestions, def.hint, placeholder, modifier, commitText)
         }
 
         FieldType.LONG_TEXT -> {
-            LongTextField(def.label, value.orEmpty(), def.hint, modifier, onCommit)
+            LongTextField(def.label, value.orEmpty(), def.hint, modifier, commitText)
         }
 
         FieldType.NUMBER, FieldType.DECIMAL -> {
-            NumberField(def, value.orEmpty(), locale, modifier, onCommit)
+            NumberField(def, value.orEmpty(), refused, locale, onCommit, modifier)
         }
 
         FieldType.DATE -> {
-            DateField(def, value.orEmpty(), modifier, onCommit)
+            DateField(def, value.orEmpty(), modifier, commitText)
         }
     }
 }
@@ -188,27 +191,21 @@ private fun LongTextField(
 
 /**
  * Numbers are typed the way the locale writes them and stored canonically ([NumberInput]). An
- * entry the type refuses is committed as typed, so the draft can flag it and block the save.
+ * entry the type refuses is committed as refused, so the draft can block the save.
  */
 @Composable
 private fun NumberField(
     def: FieldDef,
-    canonical: String,
+    value: String,
+    refused: Boolean,
     locale: FieldLocale,
+    onCommit: (FieldParse) -> Unit,
     modifier: Modifier,
-    onCommit: (String) -> Unit,
 ) {
     NumberInputField(
-        input = rememberNumberInput(def, canonical, locale),
+        input = rememberNumberInput(def, value, locale, refused),
         label = def.label,
-        onInput = { parsed ->
-            onCommit(
-                when (parsed) {
-                    is FieldParse.Ok -> parsed.canonical.orEmpty()
-                    is FieldParse.Invalid -> parsed.raw
-                },
-            )
-        },
+        onInput = onCommit,
         modifier = modifier,
         hint = def.hint,
     )

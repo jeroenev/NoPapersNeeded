@@ -90,8 +90,9 @@ import org.jetbrains.compose.resources.stringResource
  * **History** (immutable journal timeline). Text fields offer existing values as suggestions.
  *
  * Everything shown comes from [state] (assembled by `DocDetailViewModel.metadata`) and [item],
- * the document as its draft shows it, and everything it can do from [actions] (provided by
- * [DocumentEditor], which routes field edits into the draft).
+ * the document as its draft shows it ([refused] naming the draft values that are entries their
+ * editor refused), and everything it can do from [actions] (provided by [DocumentEditor], which
+ * routes field edits into the draft).
  *
  * When [previewTab] is provided (a compact window, where the page viewer cannot sit beside the
  * tabs), it is prepended as an extra **Preview** tab and selected initially.
@@ -100,6 +101,7 @@ import org.jetbrains.compose.resources.stringResource
 internal fun MetadataTabs(
     state: MetadataUiState,
     item: DocListItem,
+    refused: Set<String>,
     actions: MetadataActions,
     previewTab: (@Composable (Modifier) -> Unit)?,
     modifier: Modifier = Modifier,
@@ -154,6 +156,7 @@ internal fun MetadataTabs(
                 DetailsTab(
                     state = state,
                     item = item,
+                    refused = refused,
                     actions = actions,
                     modifier = Modifier.fillMaxWidth().weight(1f),
                 )
@@ -198,6 +201,7 @@ private enum class PanelTab { PREVIEW, DETAILS, TEXT, HISTORY }
 private fun DetailsTab(
     state: MetadataUiState,
     item: DocListItem,
+    refused: Set<String>,
     actions: MetadataActions,
     modifier: Modifier = Modifier,
 ) {
@@ -214,6 +218,7 @@ private fun DetailsTab(
         ReviewStatusSection(state.document.reviewMode, state.document.reviewed, actions::setReviewed)
         FieldsSection(
             doc = doc,
+            refused = refused,
             defs = state.document.fieldDefs,
             vocabulary = vocabulary,
             actions = actions,

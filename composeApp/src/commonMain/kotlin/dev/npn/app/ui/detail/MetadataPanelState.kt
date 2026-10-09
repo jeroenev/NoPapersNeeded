@@ -4,6 +4,7 @@ import androidx.compose.runtime.Immutable
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.OcrVersion
 import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldParse
 import dev.npn.core.model.ReviewMode
 
 /**
@@ -112,10 +113,13 @@ interface DocumentWrites {
  * its edits are immediate.
  */
 interface MetadataActions : DocumentWrites {
-    /** A keystroke or pick for one field; the value is in the field's canonical form when it parses. */
+    /**
+     * A keystroke or pick for one field, as its editor reads it: the value in canonical form, or an
+     * entry the editor refused, as typed, which blocks the save until a valid edit replaces it.
+     */
     fun commitField(
         key: String,
-        value: String,
+        entry: FieldParse,
     )
 
     fun removeField(key: String)

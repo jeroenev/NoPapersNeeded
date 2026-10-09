@@ -19,6 +19,7 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleOwner
 import androidx.lifecycle.LifecycleRegistry
 import androidx.lifecycle.compose.LocalLifecycleOwner
+import dev.npn.app.resourcesIn
 import dev.npn.app.ui.common.LocalAppLocale
 import dev.npn.app.ui.common.ProvideWindowWidthClass
 import dev.npn.app.ui.theme.NpnTheme
@@ -33,9 +34,12 @@ import dev.npn.core.testing.FakeMetadataWriter
 import dev.npn.core.testing.doc
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.TestScope
+import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ux_save_changes
+import org.jetbrains.compose.resources.getString
 import java.util.Locale
-import javax.swing.SwingUtilities
 import kotlin.test.AfterTest
 import kotlin.test.BeforeTest
 import kotlin.test.Test
@@ -135,26 +139,123 @@ class NumberFieldEntryTest {
             }
         }
 
+    /**
+     * Where a comma is the decimal point, a dot groups thousands, so `12.34` is no number to the
+     * field. Nor can it be saved, though it reads as one canonically; `12,34` saves 12.34.
+     */
+    @Test
+    fun aDotDecimalInACommaLocaleCannotBeSaved() {
+        val save = DUTCH_SAVE
+        onUiThread {
+            editor(language = "nl") {
+                type("12.34")
+                shown() shouldBe "12.34"
+                field().hasError() shouldBe true
+                saveButton(save).shouldNotBeNull().isEnabled() shouldBe false
+
+                type("12,34")
+                field().hasError() shouldBe false
+                committed() shouldBe "12.34"
+                val button = saveButton(save).shouldNotBeNull()
+                button.isEnabled() shouldBe true
+                button.config[SemanticsActions.OnClick].action?.invoke()
+                drain()
+                writer.batchedEdits.single().fields shouldBe mapOf(KEY to "12.34")
+            }
+        }
+    }
+
+    /** `1,234` is 1.234 in Dutch, no whole number: refused, and never stored as 1234. */
+    @Test
+    fun aWholeNumberWithACommaInACommaLocaleCannotBeSaved() {
+        val save = DUTCH_SAVE
+        onUiThread {
+            editor(language = "nl") {
+                type("1,234", label = COUNT_LABEL)
+                field(COUNT_LABEL).hasError() shouldBe true
+                saveButton(save).shouldNotBeNull().isEnabled() shouldBe false
+                // Nor through the save shortcut, which asks the store directly.
+                store.save(DOC_ID)
+                drain()
+                writer.batchedEdits shouldBe emptyList()
+            }
+        }
+    }
+
+    /** Back on the document, a refused entry is shown as typed, with its error, not as a number. */
+    @Test
+    fun aRefusedEntryIsShownAsTypedWhenItsDocumentComesBack() =
+        onUiThread {
+            editor(language = "nl") {
+                type("12.34")
+                item = DocListItem(doc("other").withAmount("7"), emptyList())
+                scene.render()
+                shown() shouldBe "7"
+                item = DocListItem(doc(DOC_ID).withAmount("3"), emptyList())
+                scene.render()
+                shown() shouldBe "12.34"
+                field().hasError() shouldBe true
+            }
+        }
+
+    /**
+     * A refused entry that reads like the stored number is no edit back to it: it stays a draft that
+     * can't be saved, and discarding it shows the stored number the locale's way again.
+     */
+    @Test
+    fun aRefusedEntryLikeTheStoredNumberStaysUntilDiscarded() {
+        val save = DUTCH_SAVE
+        onUiThread {
+            editor(language = "nl", amount = "12.34") {
+                shown() shouldBe "12,34"
+                type("12.34")
+                shown() shouldBe "12.34"
+                saveButton(save).shouldNotBeNull().isEnabled() shouldBe false
+
+                store.discard(DOC_ID)
+                scene.render()
+                shown() shouldBe "12,34"
+                field().hasError() shouldBe false
+            }
+        }
+    }
+
     private inner class Editor(
-        val store: DocumentDrafts,
+        amount: String,
     ) {
-        var item by mutableStateOf(DocListItem(doc(DOC_ID).withAmount("3"), emptyList()))
+        val writer = FakeMetadataWriter()
+
+        /** Where saves run: only as far as [drain] takes them. */
+        val saves = TestScope()
+        val store = DocumentDrafts(writer, saves)
+        var item by mutableStateOf(DocListItem(doc(DOC_ID).withAmount(amount), emptyList()))
         var ai by mutableStateOf(AiPanelState())
         lateinit var scene: ImageComposeScene
 
-        fun field(): SemanticsNode = scene.node { it.isEditable() && LABEL in it.texts() }
+        fun field(label: String = LABEL): SemanticsNode = scene.node { it.isEditable() && label in it.texts() }
 
-        fun shown(): String? = field().config.getOrNull(SemanticsProperties.EditableText)?.text
+        fun shown(label: String = LABEL): String? =
+            field(label).config.getOrNull(SemanticsProperties.EditableText)?.text
 
         fun committed(): String? = store.state[item.doc.docId]?.fields?.get(KEY)
 
-        /** Empty the field, then type [keys] one at a time into whatever it shows. */
-        fun type(keys: String) {
-            field().config[SemanticsActions.RequestFocus].action?.invoke()
-            field().config[SemanticsActions.SetText].action?.invoke(AnnotatedString(""))
+        /** The save bar's button, whose text is [save] in the editor's language; null while there is no draft. */
+        fun saveButton(save: String = "Save changes"): SemanticsNode? =
+            scene.nodes().firstOrNull { save in it.texts() && it.config.contains(SemanticsActions.OnClick) }
+
+        /** Run the saves started so far up to their first hop back to the UI thread, which is past the write. */
+        fun drain() = saves.testScheduler.runCurrent()
+
+        /** Empty the field labelled [label], then type [keys] one at a time into whatever it shows. */
+        fun type(
+            keys: String,
+            label: String = LABEL,
+        ) {
+            field(label).config[SemanticsActions.RequestFocus].action?.invoke()
+            field(label).config[SemanticsActions.SetText].action?.invoke(AnnotatedString(""))
             scene.render()
             for (key in keys) {
-                field().config[SemanticsActions.InsertTextAtCursor].action?.invoke(AnnotatedString(key.toString()))
+                field(label).config[SemanticsActions.InsertTextAtCursor].action?.invoke(AnnotatedString(key.toString()))
                 scene.render()
             }
         }
@@ -162,6 +263,7 @@ class NumberFieldEntryTest {
 
     private fun editor(
         language: String? = null,
+        amount: String = "3",
         block: Editor.() -> Unit,
     ) {
         val owner =
@@ -169,8 +271,8 @@ class NumberFieldEntryTest {
                 override val lifecycle =
                     LifecycleRegistry.createUnsafe(this).apply { currentState = Lifecycle.State.RESUMED }
             }
-        val editor = Editor(DocumentDrafts(FakeMetadataWriter(), TestScope()))
-        val defs = FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) } + AMOUNT
+        val editor = Editor(amount)
+        val defs = FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) } + AMOUNT + COUNT
         val content: @Composable () -> Unit = {
             ProvideWindowWidthClass {
                 NpnTheme(darkTheme = false) {
@@ -221,45 +323,21 @@ class NumberFieldEntryTest {
 
     private fun Doc.withAmount(value: String) = copy(fields = fields + (KEY to value))
 
-    private fun SemanticsNode.isEditable(): Boolean = config.getOrNull(SemanticsProperties.EditableText) != null
-
-    private fun SemanticsNode.texts(): List<String> =
-        config.getOrNull(SemanticsProperties.Text).orEmpty().map { it.text }
-
-    private fun SemanticsNode.contentDescription(): String? =
-        config.getOrNull(SemanticsProperties.ContentDescription)?.firstOrNull()
-
-    private fun ImageComposeScene.nodes(): List<SemanticsNode> {
-        fun descendants(node: SemanticsNode): List<SemanticsNode> = listOf(node) + node.children.flatMap(::descendants)
-        return semanticsOwners.flatMap { descendants(it.rootSemanticsNode) }
-    }
-
-    private fun ImageComposeScene.node(match: (SemanticsNode) -> Boolean): SemanticsNode = nodes().first(match)
-
-    private fun ImageComposeScene.has(match: (SemanticsNode) -> Boolean): Boolean = nodes().any(match)
-
-    /** Click the nearest clickable node at or above the first node [match] finds. */
-    private fun ImageComposeScene.click(match: (SemanticsNode) -> Boolean) {
-        generateSequence(node(match)) { it.parent }
-            .first { it.config.getOrNull(SemanticsActions.OnClick) != null }
-            .config[SemanticsActions.OnClick]
-            .action
-            ?.invoke()
-    }
-
-    private fun onUiThread(block: () -> Unit) {
-        var failure: Throwable? = null
-        SwingUtilities.invokeAndWait { runCatching(block).onFailure { failure = it } }
-        failure?.let { throw it }
-    }
-
     private companion object {
         const val WIDTH = 1280
         const val HEIGHT = 1600
         const val DOC_ID = "invoice"
         const val KEY = "amount"
         const val LABEL = "Amount"
+        const val COUNT_LABEL = "Count"
         val AMOUNT =
             FieldDef(KEY, LABEL, FieldType.DECIMAL, showByDefault = true, aiEnabled = true, position = 10)
+        val COUNT =
+            FieldDef("count", COUNT_LABEL, FieldType.NUMBER, showByDefault = true, aiEnabled = false, position = 11)
+
+        /** The save bar's button in Dutch, read before a scene sets the JVM's locale. */
+        val DUTCH_SAVE: String by lazy {
+            runBlocking { getString(resourcesIn(Locale.forLanguageTag("nl")), Res.string.ux_save_changes) }
+        }
     }
 }

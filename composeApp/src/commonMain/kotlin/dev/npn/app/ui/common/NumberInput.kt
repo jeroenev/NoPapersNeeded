@@ -28,13 +28,14 @@ class NumberInput internal constructor(
     val type: FieldType,
     private val locale: FieldLocale,
     value: String?,
+    refused: Boolean,
 ) {
     /** Exactly what is typed, including a partial or off-type entry. */
-    var text by mutableStateOf(shown(value))
+    var text by mutableStateOf(shown(value, refused))
         private set
 
-    /** The value [follow] last took, so only a change to it can replace [text]. */
-    private var followed by mutableStateOf(value)
+    /** The value [follow] last took, and whether it was refused, so only a change to it can replace [text]. */
+    private var followed by mutableStateOf(value to refused)
 
     /** What [text] means for [type]. */
     val parsed: FieldParse get() = FieldValues.canonicalize(type, text, locale)
@@ -49,46 +50,57 @@ class NumberInput internal constructor(
     }
 
     /**
-     * Take the value the field's owner holds. Only a change to it that means something other than
-     * [text] replaces [text]: each keystroke comes back here in canonical form (`12.0` as `12`), and
-     * a bound's partial entry (`1.`) does not come back at all.
+     * Take the value the field's owner holds: a canonical value, or, when [refused], an entry this
+     * field refused, as typed. Only a change to it that [text] does not already stand for replaces
+     * [text]: each keystroke comes back here in canonical form (`12.0` as `12`) or as the refused
+     * entry it is, and a bound's partial entry (`1.`) does not come back at all.
      */
-    internal fun follow(value: String?) {
-        if (value == followed) return
-        followed = value
-        if (meaning(value, FieldLocale.CANONICAL) != meaning(text, locale)) text = shown(value)
+    internal fun follow(
+        value: String?,
+        refused: Boolean,
+    ) {
+        if (value to refused == followed) return
+        followed = value to refused
+        if (!holds(value, refused)) text = shown(value, refused)
     }
 
-    private fun shown(value: String?): String = value?.let { FieldValues.display(type, it, locale) }.orEmpty()
+    /** A value the locale's way; a refused entry as typed, since it is no number to show another way. */
+    private fun shown(
+        value: String?,
+        refused: Boolean,
+    ): String = if (refused) value.orEmpty() else value?.let { FieldValues.display(type, it, locale) }.orEmpty()
 
     /**
-     * What [entry], written the [entryLocale] way, stands for: the value it commits (canonical, or a
-     * refused entry as typed), read as a stored value is ([FieldValues.normalized]).
+     * Whether [text] is what [value] stands for: a number [text] reads as (comparing canonical forms,
+     * the value read as a stored one is, [FieldValues.normalized]), or the same refused entry.
      */
-    private fun meaning(
-        entry: String?,
-        entryLocale: FieldLocale,
-    ): String =
-        when (val parsed = FieldValues.canonicalize(type, entry, entryLocale)) {
-            is FieldParse.Ok -> parsed.canonical.orEmpty()
-            is FieldParse.Invalid -> FieldValues.normalized(type, parsed.raw)
+    private fun holds(
+        value: String?,
+        refused: Boolean,
+    ): Boolean {
+        val held = value?.trim()?.ifEmpty { null }
+        return when (val read = parsed) {
+            is FieldParse.Ok -> !refused && read.canonical == held?.let { FieldValues.normalized(type, it) }
+            is FieldParse.Invalid -> refused && read.raw == held
         }
+    }
 }
 
 /**
- * The [NumberInput] for a number of [def]'s type holding the canonical [value] (null for none). It
- * shows the value in [locale] form, so `1.5` reads `1,5` under a comma locale, and keeps what is
- * typed until [value] changes to something the text does not already mean, such as another
- * document's value or a cleared filter.
+ * The [NumberInput] for a number of [def]'s type holding the canonical [value] (null for none), or,
+ * when [refused], an entry the field refused, as typed. It shows a value in [locale] form, so `1.5`
+ * reads `1,5` under a comma locale, and keeps what is typed until [value] changes to something the
+ * text does not already stand for, such as another document's value or a cleared filter.
  */
 @Composable
 fun rememberNumberInput(
     def: FieldDef,
     value: String?,
     locale: FieldLocale,
+    refused: Boolean = false,
 ): NumberInput {
-    val input = remember(def.type, locale) { NumberInput(def.type, locale, value) }
-    input.follow(value)
+    val input = remember(def.type, locale) { NumberInput(def.type, locale, value, refused) }
+    input.follow(value, refused)
     return input
 }
 

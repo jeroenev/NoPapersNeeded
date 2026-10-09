@@ -24,20 +24,28 @@ import kotlin.time.Duration.Companion.seconds
 internal val SavedNoticeDuration = 3.seconds
 
 /**
- * True when [value] can be written to a field of [type]. Blank counts: it clears the field. Shared
- * by the save bar's guard and each editor's error state so the two can never disagree.
+ * True when [value], read in canonical form, can be written to a field of [type]. Blank counts: it
+ * clears the field. This is not the editor's verdict: a number is typed the way the user's locale
+ * writes it, so only the editor can tell that `12.34` is none where a comma is the decimal point.
+ * That verdict travels as [DocumentDraft.refused]; this check is for what reaches a draft otherwise,
+ * such as a draft saved by a build that kept no refusals.
  */
-internal fun isWritable(
+private fun isWritable(
     type: FieldType,
     value: String?,
 ): Boolean = FieldValues.canonicalize(type, value) is FieldParse.Ok
 
 @Serializable
 internal data class DocumentDraft(
-    /** Edited field values by registry key; null clears the field. */
+    /** Edited field values by registry key; null clears the field. A [refused] key holds what was typed. */
     val fields: Map<String, String?> = emptyMap(),
     /** The type each edited key was edited as, so validity can be judged without the registry. */
     val types: Map<String, FieldType> = emptyMap(),
+    /**
+     * Edited keys whose editor refused what was typed, judged the way the user writes numbers. Their
+     * value in [fields] is the entry as typed, never written.
+     */
+    val refused: Set<String> = emptySet(),
     val saving: Boolean = false,
     val saved: Boolean = false,
     val error: String? = null,
@@ -50,9 +58,12 @@ internal data class DocumentDraft(
      */
     val settled: Boolean get() = !dirty && !saving && error == null
 
-    /** Edited keys whose value the field's type refuses; a save is blocked while any remain. */
+    /** Edited keys the editor refused, or whose value the field's type refuses; a save is blocked while any remain. */
     val invalidKeys: Set<String>
-        get() = fields.keys.filterTo(LinkedHashSet()) { !isWritable(types[it] ?: FieldType.TEXT, fields[it]) }
+        get() =
+            fields.keys.filterTo(LinkedHashSet()) {
+                it in refused || !isWritable(types[it] ?: FieldType.TEXT, fields[it])
+            }
 
     val writable: Boolean get() = invalidKeys.isEmpty()
 
@@ -139,6 +150,11 @@ internal class DocumentDrafts(
      * no draft behind. That keeps the save bar and the resume banner reporting real changes only,
      * and stops a save from publishing a journal event that changes nothing (the journal is
      * append-only and syncs to every device, so no-op events are not free). A null [value] clears.
+     *
+     * [refused] says the editor refused [value], as typed: it blocks the save until a valid edit
+     * replaces it. A refused entry is no value, so it is an edit even where it reads like a stored
+     * value of the type (`12.34` refused under a comma locale); only an off-type stored value,
+     * typed back as it is, is no change.
      */
     fun field(
         docId: String,
@@ -146,12 +162,20 @@ internal class DocumentDrafts(
         value: String?,
         persisted: String?,
         type: FieldType = FieldType.TEXT,
+        refused: Boolean = false,
     ) {
+        val unchanged =
+            value.normalized() == persisted.normalized() &&
+                (!refused || FieldValues.canonicalize(type, persisted) is FieldParse.Invalid)
         edit(docId) { draft ->
-            if (value.normalized() == persisted.normalized()) {
-                draft.copy(fields = draft.fields - key, types = draft.types - key)
+            if (unchanged) {
+                draft.copy(fields = draft.fields - key, types = draft.types - key, refused = draft.refused - key)
             } else {
-                draft.copy(fields = draft.fields + (key to value), types = draft.types + (key to type))
+                draft.copy(
+                    fields = draft.fields + (key to value),
+                    types = draft.types + (key to type),
+                    refused = if (refused) draft.refused + key else draft.refused - key,
+                )
             }
         }
     }
@@ -166,7 +190,7 @@ internal class DocumentDrafts(
         docId: String,
         key: String,
     ) {
-        edit(docId) { it.copy(fields = it.fields - key, types = it.types - key) }
+        edit(docId) { it.copy(fields = it.fields - key, types = it.types - key, refused = it.refused - key) }
     }
 
     fun discard(docId: String) {
@@ -201,7 +225,8 @@ internal class DocumentDrafts(
     /**
      * Mark the save done, keeping only the field edits made *while* it ran — comparing against
      * [written] rather than clearing the map wholesale is what stops a keystroke landing mid-save
-     * from being swallowed.
+     * from being swallowed. A refused entry is always such an edit (a draft with one never saves),
+     * even one typed exactly like the value just written.
      */
     private fun settle(
         docId: String,
@@ -209,7 +234,10 @@ internal class DocumentDrafts(
     ) {
         mutate { all ->
             val latest = all.getValue(docId)
-            val unwritten = latest.fields.filter { (key, value) -> key !in written || written[key] != value }
+            val unwritten =
+                latest.fields.filter { (key, value) ->
+                    key in latest.refused || key !in written || written[key] != value
+                }
             val types = latest.types.filterKeys { it in unwritten }
             all + (docId to latest.copy(fields = unwritten, types = types, saving = false, saved = true))
         }

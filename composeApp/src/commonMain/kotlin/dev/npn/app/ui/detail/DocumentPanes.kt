@@ -45,12 +45,14 @@ private const val KEY_STEP = 0.05f
 /**
  * The page preview and the metadata tabs of [item], the document as its draft shows it: side by
  * side on a wide window, or the preview as the first tab on a compact one. The library's side panel
- * counts as compact (see [dev.npn.app.ui.library.DocPreviewPanel]).
+ * counts as compact (see [dev.npn.app.ui.library.DocPreviewPanel]). [refused] are the keys whose
+ * draft value is an entry its editor refused, as typed.
  */
 @Composable
 fun MetadataPanel(
     state: MetadataUiState,
     item: DocListItem,
+    refused: Set<String>,
     actions: MetadataActions,
     previewTab: @Composable (Modifier) -> Unit,
     modifier: Modifier = Modifier,
@@ -59,10 +61,10 @@ fun MetadataPanel(
         if (LocalWindowWidthClass.current.isWide) {
             DocumentPanes(
                 preview = previewTab,
-                details = { MetadataTabs(state, item, actions, previewTab = null, modifier = it) },
+                details = { MetadataTabs(state, item, refused, actions, previewTab = null, modifier = it) },
             )
         } else {
-            MetadataTabs(state, item, actions, previewTab, Modifier.fillMaxSize())
+            MetadataTabs(state, item, refused, actions, previewTab, Modifier.fillMaxSize())
         }
     }
 }

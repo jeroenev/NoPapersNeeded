@@ -30,6 +30,7 @@ import androidx.compose.ui.unit.dp
 import dev.npn.app.ui.common.ConfirmDialog
 import dev.npn.app.ui.common.TechnicalDetails
 import dev.npn.app.ui.library.reviewMarkerIsAuthoritative
+import dev.npn.core.model.FieldParse
 import dev.npn.core.model.FieldType
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.detail_saved
@@ -98,6 +99,7 @@ internal fun DocumentEditor(
             MetadataPanel(
                 state = state,
                 item = edited,
+                refused = draft.refused,
                 actions = actions,
                 previewTab = preview,
                 modifier = Modifier.fillMaxSize().weight(1f),
@@ -132,8 +134,14 @@ private class DraftedActions(
     DocumentWrites by writes {
     override fun commitField(
         key: String,
-        value: String,
-    ) = store.field(docId, key, value, persisted.value[key], types.value[key] ?: FieldType.TEXT)
+        entry: FieldParse,
+    ) {
+        val type = types.value[key] ?: FieldType.TEXT
+        when (entry) {
+            is FieldParse.Ok -> store.field(docId, key, entry.canonical, persisted.value[key], type)
+            is FieldParse.Invalid -> store.field(docId, key, entry.raw, persisted.value[key], type, refused = true)
+        }
+    }
 
     override fun removeField(key: String) = store.field(docId, key, null, persisted.value[key])
 

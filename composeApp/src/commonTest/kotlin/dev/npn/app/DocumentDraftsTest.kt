@@ -224,4 +224,57 @@ class DocumentDraftsTest : MainDispatcherTest() {
             store.field("two", "note", "2026-02-30", persisted = null)
             assertTrue(store.state.getValue("two").writable)
         }
+
+    /**
+     * The editor's verdict decides, not the canonical reading: `12.34` refused where a comma is the
+     * decimal point blocks the save, though canonically it is a number. A valid edit lifts it.
+     */
+    @Test
+    fun aRefusedEntryBlocksTheSaveUntilAValidEditReplacesIt() =
+        runTest(dispatcher) {
+            val writer = FakeMetadataWriter()
+            val store = DocumentDrafts(writer, this)
+            store.field("one", "amount", "12.34", persisted = null, type = FieldType.DECIMAL, refused = true)
+            store.state.getValue("one").invalidKeys shouldBe setOf("amount")
+            store.save("one")
+            runCurrent()
+            assertTrue(writer.batchedEdits.isEmpty())
+
+            store.field("one", "amount", "12.34", persisted = null, type = FieldType.DECIMAL)
+            assertTrue(store.state.getValue("one").writable)
+            store.save("one")
+            advanceUntilIdle()
+            writer.batchedEdits.single().fields shouldBe mapOf("amount" to "12.34")
+        }
+
+    /** A refused entry stays refused across a restore; a draft saved before refusals were kept still loads. */
+    @Test
+    fun aRefusalSurvivesARestoreAndOlderDraftsStillLoad() =
+        runTest(dispatcher) {
+            val store = DocumentDrafts(FakeMetadataWriter(), backgroundScope)
+            store.field("one", "count", "1,234", persisted = null, type = FieldType.NUMBER, refused = true)
+            val restored = DocumentDrafts(FakeMetadataWriter(), backgroundScope, store.serialize())
+            restored.state shouldBe store.state
+            assertFalse(restored.state.getValue("one").writable)
+
+            val older = """{"one":{"fields":{"count":"1234"},"types":{"count":"NUMBER"}}}"""
+            val loaded = DocumentDrafts(FakeMetadataWriter(), backgroundScope, older)
+            loaded.state.getValue("one").refused shouldBe emptySet()
+            assertTrue(loaded.state.getValue("one").writable)
+        }
+
+    /**
+     * A refused entry is no value, so it is an edit even when it reads like the stored number. Only
+     * an off-type stored value, typed back exactly, is no change.
+     */
+    @Test
+    fun aRefusedEntryIsAnEditUnlessTheStoredValueIsOffTypeToo() =
+        runTest(dispatcher) {
+            val store = DocumentDrafts(FakeMetadataWriter(), backgroundScope)
+            store.field("one", "amount", "12.34", persisted = "12.34", type = FieldType.DECIMAL, refused = true)
+            assertFalse(store.state.getValue("one").writable)
+
+            store.field("two", "count", "abc", persisted = "abc", type = FieldType.NUMBER, refused = true)
+            assertFalse(store.state.containsKey("two"))
+        }
 }
