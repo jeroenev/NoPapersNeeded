@@ -39,7 +39,7 @@ sealed interface BakeOutcome {
 
 /** Why a bake did not happen. The underlying cause, if any, is in the session log. */
 enum class BakeFailure {
-    /** The document is gone, trashed or missing. */
+    /** The document is gone, trashed or missing, or the file at its path is no longer its own. */
     DOCUMENT_UNAVAILABLE,
 
     /** The PDF cannot carry the metadata (unreadable, or the rewrite did not verify); it is untouched. */

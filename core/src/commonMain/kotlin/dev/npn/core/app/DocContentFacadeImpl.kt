@@ -3,6 +3,7 @@ package dev.npn.core.app
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.holds
 import dev.npn.core.index.RelinkService
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
@@ -101,6 +102,9 @@ class DocContentFacadeImpl internal constructor(
             documentDao.getByDocId(docId)?.takeIf { it.isLive }
                 ?: return BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
         return runCatchingCancellable {
+            // The bake replaces the file at the document's path, which may hold another file since the
+            // index last looked.
+            if (!fs.holds(doc.relPath, docId)) return BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
             // Rewritten bytes whose relink is then refused would orphan the metadata on the old hash.
             coordinator.checkWritable()
             bakeService.bakeInPlace(doc.relPath, buildXmpData(docId)) { oldSha, newSha ->

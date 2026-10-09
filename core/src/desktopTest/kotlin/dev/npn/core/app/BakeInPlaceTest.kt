@@ -66,6 +66,27 @@ class BakeInPlaceTest {
             }
         }
 
+    /** The file at a document's path was replaced and the index has not looked yet: that file is not baked. */
+    @Test
+    fun aDocumentWhosePathHoldsAnotherFileIsNotBaked() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                val replacement = PdfFixtures.embeddedTextPdf("replacement")
+                rig.fs.delete("a.pdf")
+                rig.writePdf("a.pdf", replacement)
+
+                rig.session.content.bakeInPlace(id) shouldBe BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE)
+
+                rig.fs.readBytes("a.pdf") shouldBe replacement
+            } finally {
+                rig.close()
+            }
+        }
+
     @Test
     fun aFileThatCannotCarryMetadataIsRefusedAndLeftAlone() =
         runTest {

@@ -309,8 +309,9 @@ class MetadataWriterImpl(
         ) {
             documentDao.upsert(doc.copy(deleted = true, trashed = false, trashedAt = null, missing = false))
         }
-        // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden.
-        val path = findTrashEntry(docId) ?: doc.relPath.takeIf { fs.exists(it) } ?: return
+        // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden. A
+        // trashed or missing document gave its path up, so the file there may be another one now.
+        val path = findTrashEntry(docId) ?: doc.relPath.takeIf { fs.holds(it, docId) } ?: return
         log.runLogged("Deleting the file of $docId") { fs.delete(path) }
     }
 
