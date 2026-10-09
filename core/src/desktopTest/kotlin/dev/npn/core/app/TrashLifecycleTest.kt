@@ -258,50 +258,6 @@ class TrashLifecycleTest {
             }
         }
 
-    /**
-     * A trashed document whose trash copy is gone gave its old path up: the file there now is another
-     * one, not yet indexed. Deleting the document for good deletes the document, not that file.
-     */
-    @Test
-    fun deletingForGoodADocumentWithNoTrashCopyLeavesAnotherFileAtItsOldPath() =
-        runTest {
-            val rig = AppSessionRig.create(backgroundScope)
-            try {
-                rig.writePdf("inbox/invoice.pdf", PdfFixtures.embeddedTextPdf("trashed"))
-                rig.session.rescan()
-                val trashed = rig.docId("inbox/invoice.pdf")
-                rig.session.docLifecycle.trashDoc(trashed)
-                trashEntries(rig.fs).forEach { rig.fs.delete(it.relPath) }
-                val newcomer = PdfFixtures.embeddedTextPdf("newcomer")
-                rig.writePdf("inbox/invoice.pdf", newcomer)
-
-                rig.session.docLifecycle.deleteDocPermanently(trashed)
-
-                rig.fs.readBytes("inbox/invoice.pdf") shouldBe newcomer
-                rig.db
-                    .documentDao()
-                    .getByDocId(trashed)
-                    .shouldNotBeNull()
-                    .deleted
-                    .shouldBeTrue()
-                // The journal holds the deletion: a rescan, which folds it, keeps the document gone
-                // and indexes the newcomer.
-                rig.session.rescan()
-                rig.db
-                    .documentDao()
-                    .getByDocId(trashed)
-                    .shouldNotBeNull()
-                    .deleted
-                    .shouldBeTrue()
-                rig.db
-                    .documentDao()
-                    .getByRelPath("inbox/invoice.pdf")
-                    ?.docId shouldBe rig.fs.sha256("inbox/invoice.pdf")
-            } finally {
-                rig.close()
-            }
-        }
-
     @Test
     fun trashingWhileWritesAreBlockedLeavesThePdfWhereItWas() =
         runTest {
@@ -634,4 +590,54 @@ class TrashLifecycleTest {
     private companion object {
         const val DAY = 24L * 60L * 60L * 1000L
     }
+}
+
+/** Deleting a document for good removes its own bytes and nothing else. */
+class PermanentDeleteTest {
+    /**
+     * A trashed document whose trash copy is gone gave its old path up: the file there now is another
+     * one, not yet indexed. Deleting the document for good deletes the document, not that file.
+     */
+    @Test
+    fun deletingForGoodADocumentWithNoTrashCopyLeavesAnotherFileAtItsOldPath() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("inbox/invoice.pdf", PdfFixtures.embeddedTextPdf("trashed"))
+                rig.session.rescan()
+                val trashed = rig.docId("inbox/invoice.pdf")
+                rig.session.docLifecycle.trashDoc(trashed)
+                rig.fs
+                    .listAllUnder(NpnPaths.TRASH_DIR)
+                    .filter { !it.isDirectory }
+                    .forEach { rig.fs.delete(it.relPath) }
+                val newcomer = PdfFixtures.embeddedTextPdf("newcomer")
+                rig.writePdf("inbox/invoice.pdf", newcomer)
+
+                rig.session.docLifecycle.deleteDocPermanently(trashed)
+
+                rig.fs.readBytes("inbox/invoice.pdf") shouldBe newcomer
+                rig.db
+                    .documentDao()
+                    .getByDocId(trashed)
+                    .shouldNotBeNull()
+                    .deleted
+                    .shouldBeTrue()
+                // The journal holds the deletion: a rescan, which folds it, keeps the document gone
+                // and indexes the newcomer.
+                rig.session.rescan()
+                rig.db
+                    .documentDao()
+                    .getByDocId(trashed)
+                    .shouldNotBeNull()
+                    .deleted
+                    .shouldBeTrue()
+                rig.db
+                    .documentDao()
+                    .getByRelPath("inbox/invoice.pdf")
+                    ?.docId shouldBe rig.fs.sha256("inbox/invoice.pdf")
+            } finally {
+                rig.close()
+            }
+        }
 }
