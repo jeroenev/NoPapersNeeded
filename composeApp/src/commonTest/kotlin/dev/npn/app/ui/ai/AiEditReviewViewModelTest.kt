@@ -23,6 +23,7 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
 import kotlin.test.Test
@@ -63,8 +64,12 @@ private class ScriptedReview(
     val applied = mutableListOf<List<ReviewDoc>>()
     var discarded = false
 
+    /** Thrown by [apply] when set, as dropping the finished run from the queue would after the writes. */
+    var applyFailure: Throwable? = null
+
     override suspend fun apply(reviewed: List<ReviewDoc>): ApplyOutcome {
         applied += reviewed
+        applyFailure?.let { throw it }
         return outcome
     }
 
@@ -161,6 +166,32 @@ class AiEditReviewViewModelTest : MainDispatcherTest() {
             val done = model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Done>()
             done.result.applied shouldBe 2
             done.result.moreRemain shouldBe false
+        }
+
+    /**
+     * What can throw comes after the writes (dropping the finished run from the queue), so the
+     * message says applying did not finish, and the Review is back for another Apply.
+     */
+    @Test
+    fun anApplyThatCannotFinishGoesBackToTheReviewAndSaysSo() =
+        runTest(dispatcher) {
+            val review = ScriptedReview().apply { applyFailure = IllegalStateException("database closed") }
+            val model = AiEditReviewViewModel(sessionWith(review), "job")
+            collecting(model.phase)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+            val before = model.phase.value
+
+            model.apply()
+            advanceUntilIdle()
+
+            model.phase.value shouldBe before
+            messages shouldContainExactly listOf(failure(Res.string.ai_edit_apply_finish_failed, "database closed"))
+
+            review.applyFailure = null
+            model.apply()
+            advanceUntilIdle()
+            model.phase.value.shouldBeInstanceOf<QueuedReviewPhase.Done>()
         }
 
     @Test

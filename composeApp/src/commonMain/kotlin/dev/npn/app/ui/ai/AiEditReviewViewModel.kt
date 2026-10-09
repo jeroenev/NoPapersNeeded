@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_discard_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_review_open_failed
 
@@ -99,12 +100,22 @@ class AiEditReviewViewModel(
             current.copy(docs = transform(current.docs))
         }
 
-    /** Write the selected suggestions; a fully applied run leaves the queue. */
+    /**
+     * Write the selected suggestions; a fully applied run leaves the queue. A failed write comes back
+     * as a Retry; what can still throw comes after the writes (dropping the run from the queue), so
+     * that failure says applying could not finish, and the Review is back for another Apply.
+     */
     override fun apply() {
         val current = _phase.value as? QueuedReviewPhase.Review ?: return
         val opened = review ?: return
         if (run?.isActive == true) return
-        run = viewModelScope.launch { applySelections(opened, current) }
+        run =
+            viewModelScope.launch {
+                _phase.value = QueuedReviewPhase.Applying
+                var outcome: ApplyOutcome? = null
+                reporting(Res.string.ai_edit_apply_finish_failed) { outcome = opened.apply(current.docs) }
+                showApplied(current, outcome)
+            }
     }
 
     /**
@@ -125,13 +136,13 @@ class AiEditReviewViewModel(
             }
     }
 
-    private suspend fun applySelections(
-        opened: EditRunReview,
+    /** Show what an Apply from [current] came to; a null [outcome] (it failed) is the Review again. */
+    private fun showApplied(
         current: QueuedReviewPhase.Review,
+        outcome: ApplyOutcome?,
     ) {
-        _phase.value = QueuedReviewPhase.Applying
-        when (val outcome = opened.apply(current.docs)) {
-            ApplyOutcome.NothingSelected -> {
+        when (outcome) {
+            null, ApplyOutcome.NothingSelected -> {
                 _phase.value = current
             }
 

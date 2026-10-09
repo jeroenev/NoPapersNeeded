@@ -163,6 +163,7 @@
         <item quantity="one">Could not apply the suggestions to %1$d of %2$d document</item>
         <item quantity="other">Could not apply the suggestions to %1$d of %2$d documents</item>
     </plurals>
+    <string name="ai_edit_apply_finish_failed">Could not finish applying the suggestions: %1$s</string>
     <plurals name="ai_edit_scope_count_batch">
         <item quantity="one">%1$d document - the first %2$d run in this batch</item>
         <item quantity="other">%1$d documents - the first %2$d run in this batch</item>

@@ -33,8 +33,8 @@ internal val seededAiFieldKeys: List<String> =
 /**
  * A scripted [AiEditRun]. Whatever the key, its scope is [documents] minus what it has [processed];
  * a batch reports [progress], waits for [gate] when one is set, answers [batch] and marks that
- * batch's rows processed; an apply answers [outcome]. It records every key, request and applied
- * batch.
+ * batch's rows processed; an apply answers [outcome], or throws [applyFailure]. It records every
+ * key, request and applied batch.
  */
 internal class FakeAiEditRun : AiEditRun {
     val documents = MutableStateFlow<List<DocListItem>>(emptyList())
@@ -53,6 +53,9 @@ internal class FakeAiEditRun : AiEditRun {
     var gate: CompletableDeferred<Unit>? = null
     var batch: BatchResult = BatchResult.Empty
     var outcome: ApplyOutcome = ApplyOutcome.NothingSelected
+
+    /** Thrown by [apply] when set, as a failing next-batch query after the writes would be. */
+    var applyFailure: Throwable? = null
 
     /** What [moreRemain] answers. */
     var moreLeft: Boolean = false
@@ -99,6 +102,7 @@ internal class FakeAiEditRun : AiEditRun {
         docs: List<ReviewDoc>,
     ): ApplyOutcome {
         applied += docs
+        applyFailure?.let { throw it }
         return outcome
     }
 }

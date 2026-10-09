@@ -4,6 +4,7 @@ package dev.npn.app.ui.ai
 
 import dev.npn.app.MainDispatcherTest
 import dev.npn.app.collecting
+import dev.npn.app.failure
 import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.ApplyOutcome
 import dev.npn.core.app.ApplyResult
@@ -21,6 +22,7 @@ import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
 import kotlin.test.Test
 
@@ -169,6 +171,31 @@ class AiEditApplicationTest : MainDispatcherTest() {
                     uiText(Res.plurals.ai_edit_apply_fields_failed, 2, 1, 2),
                     uiText(Res.plurals.ai_edit_apply_failed, 2, 2, 2),
                 )
+        }
+
+    /**
+     * What can throw comes after the writes (asking whether more remain), so the message says
+     * applying did not finish, and the Review is back for another Apply.
+     */
+    @Test
+    fun anApplyThatCannotFinishGoesBackToTheReviewAndSaysSo() =
+        runTest(dispatcher) {
+            val (run, model) = reviewing(reviewDoc("a", tags = listOf("t1")))
+            val messages = collecting(model.messages.map { it.text })
+            val review = model.ui.value.phase
+            run.applyFailure = IllegalStateException("database closed")
+
+            model.apply()
+            advanceUntilIdle()
+
+            model.ui.value.phase shouldBe review
+            messages shouldContainExactly listOf(failure(Res.string.ai_edit_apply_finish_failed, "database closed"))
+
+            run.applyFailure = null
+            run.outcome = ApplyOutcome.Done(ApplyResult(applied = 1, docsChanged = 1, moreRemain = false))
+            model.apply()
+            advanceUntilIdle()
+            model.ui.value.phase shouldBe EditPhase.Done(ApplyResult(applied = 1, docsChanged = 1, moreRemain = false))
         }
 
     @Test

@@ -42,6 +42,7 @@ import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_fields_failed
+import no_papers_needed.composeapp.generated.resources.ai_edit_apply_finish_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_apply_tags_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_queue_failed
 import no_papers_needed.composeapp.generated.resources.ai_edit_setup_load_failed
@@ -634,11 +635,23 @@ class AiEditViewModel(
             state.copy(phase = review.copy(docs = transform(review.docs)))
         }
 
-    /** Write the selected suggestions; see [AiEditRun] for partial-failure semantics. */
+    /**
+     * Write the selected suggestions; see [AiEditRun] for partial-failure semantics. A failed write
+     * comes back as a Retry; what can still throw comes after the writes (whether more remain), so
+     * that failure says applying could not finish, and the Review is back for another Apply.
+     */
     override fun apply() {
         val review = _ui.value.phase as? EditPhase.Review ?: return
         if (run?.isActive == true) return
-        run = viewModelScope.launch { applySelections(review) }
+        run =
+            viewModelScope.launch {
+                _ui.update { it.copy(phase = EditPhase.Applying) }
+                var outcome: ApplyOutcome? = null
+                reporting(Res.string.ai_edit_apply_finish_failed) {
+                    outcome = edit.apply(_ui.value.scopeKey(), review.docs)
+                }
+                showApplied(review, outcome)
+            }
     }
 
     /** From a Done state, run the next batch over the same scope, excluding processed docs. */
@@ -708,11 +721,14 @@ class AiEditViewModel(
             }
     }
 
-    private suspend fun applySelections(review: EditPhase.Review) {
-        _ui.update { it.copy(phase = EditPhase.Applying) }
-        when (val outcome = edit.apply(_ui.value.scopeKey(), review.docs)) {
-            ApplyOutcome.NothingSelected -> {
-                _ui.update { it.copy(phase = EditPhase.Review(review.docs, review.emptyDocs)) }
+    /** Show what an Apply from [review] came to; a null [outcome] (it failed) is the Review again. */
+    private fun showApplied(
+        review: EditPhase.Review,
+        outcome: ApplyOutcome?,
+    ) {
+        when (outcome) {
+            null, ApplyOutcome.NothingSelected -> {
+                _ui.update { it.copy(phase = review) }
             }
 
             is ApplyOutcome.Done -> {
