@@ -11,11 +11,17 @@ import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.filterNotNull
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlin.time.ComparableTimeMark
+import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.TimeSource
 
 /**
  * Auto-imports PDFs from a [WatchedFolder] through the library's [IngestFacade]. Import goes
@@ -99,25 +105,38 @@ class WatchedFolderImporter(
      * Continuous mode: one loop that sweeps on a periodic poll (the first at once) and on the
      * platform's change events, for platforms and syncs that have them. A change waits out the
      * quiet window first, since the file is likely still being written. Requests that arrive while
-     * a sweep (or its wait) runs are conflated into one more sweep, so a burst of events costs at
-     * most one extra pass rather than one each.
+     * a sweep (or its wait) runs are merged into one more sweep, due when the latest-due of them
+     * asked: a burst of events costs at most one extra pass rather than one each, and a poll never
+     * cuts a change's wait short, which would sweep before its file had gone quiet and skip it.
+     *
+     * [timeSource] measures the waits; a test passes its scheduler's to run them in virtual time.
      */
     fun start(
         scope: CoroutineScope,
         pollIntervalMillis: Long = DEFAULT_POLL_INTERVAL_MS,
+        timeSource: TimeSource.WithComparableMarks = TimeSource.Monotonic,
     ): Job =
         scope.launch {
-            // Each request is the wait before its sweep; only the latest one waiting is kept.
-            val requests = Channel<Long>(Channel.CONFLATED)
-            launch { folder.changes().collect { requests.send(minQuietMillis + CHANGE_SETTLE_MS) } }
+            // When the next sweep is due, the latest any request since the last one asked for; null
+            // while none is asked for.
+            val due = MutableStateFlow<ComparableTimeMark?>(null)
+
+            fun request(waitMillis: Long) {
+                val at = timeSource.markNow() + waitMillis.milliseconds
+                due.update { pending -> if (pending != null && pending > at) pending else at }
+            }
+            launch { folder.changes().collect { request(minQuietMillis + CHANGE_SETTLE_MS) } }
             launch {
                 while (true) {
-                    requests.send(0L)
+                    request(0L)
                     delay(pollIntervalMillis)
                 }
             }
-            for (wait in requests) {
-                delay(wait)
+            while (true) {
+                val at = due.filterNotNull().first()
+                // Taken whole: a request from here on is for the sweep after this one.
+                if (!due.compareAndSet(at, null)) continue
+                delay(-at.elapsedNow())
                 log.runLogged("Watched folder sweep") { scanOnce() }
             }
         }

@@ -5,6 +5,7 @@ import dev.npn.core.app.IngestFacade
 import dev.npn.core.app.ScanProgressUi
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.index.ScanReport
+import dev.npn.core.journal.EpochClock
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.async
@@ -16,6 +17,7 @@ import kotlinx.coroutines.flow.emptyFlow
 import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.advanceTimeBy
+import kotlinx.coroutines.test.currentTime
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Path
@@ -40,7 +42,7 @@ class WatchedFolderSweepTest {
 
         override suspend fun listPdfs(): List<WatchedFolderFile> {
             listings++
-            return files
+            return files.toList()
         }
 
         override suspend fun delete(file: WatchedFolderFile) = true
@@ -49,7 +51,8 @@ class WatchedFolderSweepTest {
     }
 
     private class FakeIngest(
-        private val import: suspend () -> ImportOutcome,
+        /** The outcome of an import of the file named so. */
+        private val import: suspend (String) -> ImportOutcome,
     ) : IngestFacade {
         var imports = 0
 
@@ -63,7 +66,7 @@ class WatchedFolderSweepTest {
             suggestedName: String,
         ): ImportOutcome {
             imports++
-            return import()
+            return import(suggestedName)
         }
 
         override suspend fun importPdfBytes(
@@ -125,11 +128,47 @@ class WatchedFolderSweepTest {
             val folder = FakeFolder(emptyList(), burst)
             val importer = WatchedFolderImporter(FakeIngest { error("nothing to import") }, folder, { false })
 
-            importer.start(backgroundScope, pollIntervalMillis = 3_600_000)
+            importer.start(backgroundScope, pollIntervalMillis = 3_600_000, timeSource = testScheduler.timeSource)
             advanceTimeBy(60_000)
             runCurrent()
 
             // The first poll's sweep, plus one for the whole burst.
             (folder.listings <= 2) shouldBe true
+        }
+
+    /**
+     * A scanner writes a file while a slow sweep runs, and the poll ticks before that sweep ends.
+     * The poll does not cut the change's quiet window short: the file is imported once it has gone
+     * quiet, not skipped as too fresh by a sweep at once and left for the next poll.
+     */
+    @Test
+    fun aPollDuringASlowSweepKeepsTheWaitAChangeAskedFor() =
+        runTest {
+            val slow = file.copy(id = "slow.pdf", name = "slow.pdf", mtimeMillis = -60_000)
+            val scan = file.copy(mtimeMillis = 59_500)
+            val files = mutableListOf(slow)
+            val scanner =
+                flow {
+                    delay(scan.mtimeMillis)
+                    files += scan
+                    emit(Unit)
+                }
+            val importedAt = HashMap<String, Long>()
+            val ingest =
+                FakeIngest { name ->
+                    if (name == slow.name) delay(61_000)
+                    importedAt[name] = currentTime
+                    ImportOutcome.Imported(name, name)
+                }
+            val importer =
+                WatchedFolderImporter(ingest, FakeFolder(files, scanner), { false }, clock = EpochClock { currentTime })
+
+            importer.start(backgroundScope, pollIntervalMillis = 60_000, timeSource = testScheduler.timeSource)
+            advanceTimeBy(64_000)
+            runCurrent()
+
+            importedAt[slow.name] shouldBe 61_000L
+            // The change's own wait: the quiet window and the settle margin after the event.
+            importedAt[scan.name] shouldBe 62_500L
         }
 }
