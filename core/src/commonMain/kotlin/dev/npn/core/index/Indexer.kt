@@ -260,9 +260,9 @@ class Indexer(
         val indexable = ArrayList<FileMeta>()
         val conflictFiles = ArrayList<String>()
         for (meta in all) {
-            if (!meta.isDirectory && NpnPaths.isSafe(meta.relPath) && !NpnPaths.isInternal(meta.relPath) &&
-                NpnPaths.isSyncConflict(meta.name)
-            ) {
+            // A name the library cannot address is neither, whatever it looks like.
+            if (!NpnPaths.isSafe(meta.relPath)) continue
+            if (!meta.isDirectory && !NpnPaths.isInternal(meta.relPath) && NpnPaths.isSyncConflict(meta.name)) {
                 conflictFiles.add(meta.relPath)
             } else if (NpnPaths.indexable(meta)) {
                 indexable.add(meta)
