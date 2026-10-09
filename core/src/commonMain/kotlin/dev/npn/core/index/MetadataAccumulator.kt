@@ -92,7 +92,7 @@ class MetadataAccumulator(
     /** Marks the journal staging files this installation wrote; the first reconcile deletes stale ones. */
     private val installationId: String,
     private val clock: EpochClock = SystemEpochClock,
-    /** Deletes what an applied snapshot superseded; the coordinator's compaction shares it. */
+    /** Deletes what an applied snapshot on disk superseded; the coordinator's compaction shares it. */
     private val snapshots: SnapshotSupport = SnapshotSupport(fs, db.metadataProjectionDao()),
 ) {
     private val dao = db.metadataProjectionDao()
@@ -233,10 +233,13 @@ class MetadataAccumulator(
         cleanOwnedStaging(entries)
         validator.unsupportedStorage(entries)?.let { fail(it) }
         val previous = dao.allSources()
-        val swept = snapshots.deleteSupersededLeftovers(entries, previous)
-        val files = entries.filter { !it.isDirectory && it.relPath !in swept }.associateBy { it.relPath }
+        val listed = entries.filter { !it.isDirectory }.associateBy { it.relPath }
 
-        val ingest = ingestFiles(files.values)
+        // Read first: a snapshot that changed or no longer reads fails the pass before any file it
+        // supersedes is deleted, and only a snapshot on disk now supersedes anything.
+        val ingest = ingestFiles(listed.values)
+        val swept = snapshots.deleteSupersededLeftovers(listed.keys, previous)
+        val files = listed - swept
         validator.unexplainedSourceLoss(previous, files)?.let { fail(it) }
 
         // A source present before but gone now (even with a validated replacement above) means the

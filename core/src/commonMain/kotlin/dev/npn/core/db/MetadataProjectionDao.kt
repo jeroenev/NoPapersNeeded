@@ -159,6 +159,14 @@ interface MetadataProjectionDao {
     )
     suspend fun appliedSupersededHashes(): List<String>
 
+    /** Every supersession a CURRENTLY-APPLIED snapshot source records. */
+    @Query(
+        "SELECT s.* FROM metadata_superseded s " +
+            "JOIN metadata_sources src ON src.path = s.snapshotPath " +
+            "WHERE src.status = '$SOURCE_APPLIED'",
+    )
+    suspend fun appliedSupersessions(): List<MetadataSupersededEntity>
+
     @Query("DELETE FROM metadata_superseded")
     suspend fun clearSuperseded()
 

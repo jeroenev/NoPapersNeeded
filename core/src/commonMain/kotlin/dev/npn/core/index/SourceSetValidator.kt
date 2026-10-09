@@ -51,14 +51,15 @@ class SourceSetValidator(
 
     /**
      * A reason to reject the set because a previously-applied source vanished without a validated
-     * replacement, or null when every loss is explained (or still inside its grace window).
+     * replacement, or null when every loss is explained (or still inside its grace window). [files]
+     * is what the pass listed and read, [previous] the source table before it.
      */
     suspend fun unexplainedSourceLoss(
         previous: List<MetadataSourceEntity>,
         files: Map<String, FileMeta>,
     ): String? {
         val current = dao.allSources()
-        val supersededHashes = dao.appliedSupersededHashes().toHashSet()
+        val supersededHashes = dao.supersededByListed(files.keys, previous)
         val stillMissing = HashSet<String>()
         val hardMissing =
             previous.firstOrNull { source ->
@@ -82,7 +83,8 @@ class SourceSetValidator(
      * True when a missing content-addressed source is UNEXPLAINED and its grace window is spent.
      *
      * A loss is explained (returns false) when either a hash-identical replacement path is present,
-     * or an applied snapshot lists the source's content hash as superseded. When neither holds yet
+     * or an applied snapshot on disk carries the source's events ([supersededByListed]); a snapshot
+     * the index remembers but the folder no longer holds explains nothing. When neither holds yet
      * — a deletion that raced ahead of its snapshot — the source becomes "pending supersession":
      * its events are still applied locally, so we tolerate it for [PENDING_SUPERSESSION_LIMIT]
      * reconciles and only then treat it as real damage.

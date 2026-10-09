@@ -474,7 +474,7 @@ data class MetadataTransactionActorEntity(
  * object (or older snapshot) whose content hash is [supersededHash]. Rows are keyed by the pair so
  * two concurrent snapshots superseding the same object are both idempotently recorded. A missing
  * previously-applied source is tolerated iff its content hash appears here for an applied snapshot
- * (see `SourceSetValidator.unexplainedSourceLoss`).
+ * still on disk, directly or through a snapshot that one superseded (see `supersededByListed`).
  */
 @Entity(
     tableName = "metadata_superseded",

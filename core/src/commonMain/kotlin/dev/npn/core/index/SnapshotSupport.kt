@@ -5,7 +5,6 @@ import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.SourceFingerprint
 import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
-import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.journal.CompactionCandidate
 import dev.npn.core.journal.CompactionSource
@@ -103,24 +102,52 @@ class SnapshotSupport(
     }
 
     /**
-     * Delete the applied objects and snapshots among [entries] that an applied snapshot supersedes:
-     * the compaction that published it could not delete them, and a later plan leaves them out.
-     * Their events are in the snapshot, so nothing is lost. [sources] is the source table. Returns
-     * the paths deleted.
+     * Delete the applied objects and snapshots among [listed] whose events a snapshot also in
+     * [listed] carries ([supersededByListed]): the compaction that published it could not delete
+     * them, and a later plan leaves them out. Runs after the pass read [listed], so every snapshot
+     * there reads as the one applied. [sources] is the source table before the pass. Returns the
+     * paths deleted.
      */
     suspend fun deleteSupersededLeftovers(
-        entries: List<FileMeta>,
+        listed: Set<String>,
         sources: List<MetadataSourceEntity>,
     ): Set<String> {
-        if (sources.none { it.kind == SourceKind.SNAPSHOT }) return emptySet()
-        val superseded = dao.appliedSupersededHashes().toHashSet()
-        val onDisk = entries.mapTo(HashSet()) { it.relPath }
+        val superseded = dao.supersededByListed(listed, sources)
+        if (superseded.isEmpty()) return emptySet()
         val leftovers =
             sources.filter { source ->
-                source.status == SourceStatus.APPLIED && source.path in onDisk && source.contentHash in superseded
+                source.status == SourceStatus.APPLIED && source.path in listed && source.contentHash in superseded
             }
         return leftovers
             .filter { runCatchingCancellable { fs.delete(it.path) }.isSuccess }
             .mapTo(HashSet()) { it.path }
     }
+}
+
+/**
+ * The content hashes whose events an applied snapshot in [listed] carries: the ones it supersedes,
+ * and in turn the ones each snapshot among those superseded. A snapshot that is gone vouches for
+ * nothing, whatever its source row says: the folder is the truth, and the index only a cache of it.
+ * [sources] maps a superseded snapshot's hash to its path; one gone from the folder was read in an
+ * earlier pass, so the table holds it from before this one.
+ */
+internal suspend fun MetadataProjectionDao.supersededByListed(
+    listed: Set<String>,
+    sources: List<MetadataSourceEntity>,
+): Set<String> {
+    val bySnapshot = appliedSupersessions().groupBy({ it.snapshotPath }, { it.supersededHash })
+    if (bySnapshot.isEmpty()) return emptySet()
+    val snapshotWithHash =
+        sources
+            .filter { it.kind == SourceKind.SNAPSHOT }
+            .mapNotNull { source -> source.contentHash?.let { it to source.path } }
+            .toMap()
+    val carried = HashSet<String>()
+    val pending = ArrayDeque(bySnapshot.keys.filter { it in listed })
+    while (pending.isNotEmpty()) {
+        for (hash in bySnapshot[pending.removeFirst()].orEmpty()) {
+            if (carried.add(hash)) snapshotWithHash[hash]?.let(pending::addLast)
+        }
+    }
+    return carried
 }

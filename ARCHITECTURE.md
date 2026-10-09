@@ -201,7 +201,10 @@ live in `buildSrc`. Hot Reload via `mise hot`.
 - **Formats.** Every transaction is published as one storage-v2 object,
   `.npn/journal/objects-v2-<xx>/<sha256>.jsonl`, named by the SHA-256 of its bytes, with a fresh
   actor id per transaction; compaction folds old objects into snapshots
-  (`objects-snap-v2-<xx>/`). Builds before storage-v2 wrote per-device v1 segments,
+  (`objects-snap-v2-<xx>/`) and deletes them. An object a snapshot supersedes is deleted later
+  (a delete that failed, a copy put back) only while that snapshot, or one that superseded it in
+  turn, is on disk and the same reconcile pass has read it; what the index remembers of a snapshot
+  vouches for nothing. Builds before storage-v2 wrote per-device v1 segments,
   `.npn/journal/<deviceId>/<seq>.jsonl`: those are still read and folded, never written. There is
   no fallback format.
 - **Publication.** An object is staged under a `.part` name in its bucket, hash-checked, then

@@ -1,8 +1,13 @@
 package dev.npn.core.index
 
 import dev.npn.core.app.JournalCoordinator
+import dev.npn.core.db.MetadataSourceEntity
 import dev.npn.core.db.ProjectionStatus
+import dev.npn.core.db.SourceFingerprint
+import dev.npn.core.db.SourceKind
+import dev.npn.core.db.SourceStatus
 import dev.npn.core.db.TempIndexDb
+import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.JvmLibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.PathExternalIo
@@ -15,6 +20,7 @@ import dev.npn.core.journal.SnapshotCompactor
 import io.kotest.matchers.booleans.shouldBeFalse
 import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.test.runTest
@@ -98,6 +104,10 @@ class CompactionReconcileTest {
     private suspend fun v2Count() = objects().count { it is JournalPath.ObjectV2 }
 
     private suspend fun snapCount() = objects().count { it is JournalPath.SnapshotV2 }
+
+    /** The paths of the journal files classified as [T]. */
+    private suspend inline fun <reified T : JournalPath> journalFiles(): List<String> =
+        fs.listAllUnder(NpnPaths.JOURNAL_DIR).map { it.relPath }.filter { JournalPaths.classify(it) is T }
 
     @Test
     fun compactionPublishesSnapshotDeletesSupersededAndKeepsProjection() =
@@ -210,6 +220,153 @@ class CompactionReconcileTest {
             clock.advance()
             coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "after"))).shouldBeTrue()
         }
+
+    /**
+     * A library put back from before a compaction holds the objects and not the snapshot. The index
+     * still remembers the snapshot, but nothing on disk carries the objects' events any more, so
+     * they stay, and the folder alone still folds to every event.
+     */
+    @Test
+    fun objectsBackWithoutTheSnapshotThatReplacedThemAreKept() =
+        runTest {
+            writePdf("a.pdf", "alpha")
+            val coordinator = coordinator(threshold = 3)
+            initialScan()
+            coordinator.refreshState()
+            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
+            repeat(6) { i ->
+                clock.advance()
+                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
+            }
+            coordinator.reconcileMetadata()
+            val backup = Files.createTempDirectory("npn-backup")
+            val objects = journalFiles<JournalPath.ObjectV2>()
+            objects.forEach {
+                Files.copy(
+                    libRoot.resolve(it),
+                    backup.resolve(NpnPaths.fileName(it)),
+                    StandardCopyOption.COPY_ATTRIBUTES,
+                )
+            }
+            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+
+            journalFiles<JournalPath.SnapshotV2>().forEach { Files.delete(libRoot.resolve(it)) }
+            objects.forEach {
+                Files.copy(
+                    backup.resolve(NpnPaths.fileName(it)),
+                    libRoot.resolve(it),
+                    StandardCopyOption.COPY_ATTRIBUTES,
+                )
+            }
+            coordinator.reconcileMetadata()
+
+            journalFiles<JournalPath.ObjectV2>() shouldContainExactlyInAnyOrder objects
+            db.tagDao().tagsForDocument(docId).size shouldBe 6
+            TempIndexDb("npn-compact-rebuild").use { rebuilt ->
+                val state = MetadataAccumulator(fs, rebuilt.db, installationId = "rebuild").reconcile().state
+                state.shouldNotBeNull().effectiveTags(docId).size shouldBe 6
+            }
+        }
+
+    /** A snapshot that no longer reads as what was applied fails the pass before its leftovers go. */
+    @Test
+    fun aChangedSnapshotFailsThePassBeforeAnythingIsDeleted() =
+        runTest {
+            writePdf("a.pdf", "alpha")
+            val coordinator = coordinator(threshold = 3)
+            initialScan()
+            coordinator.refreshState()
+            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
+            repeat(6) { i ->
+                clock.advance()
+                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
+            }
+            coordinator.reconcileMetadata()
+            val leftover = journalFiles<JournalPath.ObjectV2>().first()
+            val kept = Files.createTempDirectory("npn-leftover").resolve(NpnPaths.fileName(leftover))
+            Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
+            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            Files.copy(kept, libRoot.resolve(leftover), StandardCopyOption.COPY_ATTRIBUTES)
+
+            val snapshot = libRoot.resolve(journalFiles<JournalPath.SnapshotV2>().single())
+            Files.write(snapshot, Files.readAllBytes(snapshot) + "\n".encodeToByteArray())
+            assertFailsWith<MetadataWriteBlocked> { coordinator.reconcileMetadata() }
+
+            Files.exists(libRoot.resolve(leftover)).shouldBeTrue()
+        }
+
+    /**
+     * After a chain compaction the first snapshot is gone, and the objects it replaced are carried
+     * by the one that replaced it: a leftover of them is still deleted, and their loss stays
+     * explained past the grace window.
+     */
+    @Test
+    fun aSnapshotReplacedInTurnStillAccountsForTheObjectsItReplaced() =
+        runTest {
+            writePdf("a.pdf", "alpha")
+            val coordinator = coordinator(threshold = 3)
+            initialScan()
+            coordinator.refreshState()
+            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
+            repeat(6) { i ->
+                clock.advance()
+                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "a$i")))
+            }
+            coordinator.reconcileMetadata()
+            val leftover = journalFiles<JournalPath.ObjectV2>().first()
+            val kept = Files.createTempDirectory("npn-leftover").resolve(NpnPaths.fileName(leftover))
+            Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
+            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            repeat(4) { i ->
+                clock.advance()
+                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "b$i")))
+            }
+            coordinator.reconcileMetadata()
+            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            snapCount() shouldBe 1
+
+            Files.copy(kept, libRoot.resolve(leftover), StandardCopyOption.COPY_ATTRIBUTES)
+            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT + 1) { coordinator.reconcileMetadata() }
+
+            Files.exists(libRoot.resolve(leftover)).shouldBeFalse()
+            checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
+            db.tagDao().tagsForDocument(docId).size shouldBe 10
+        }
+
+    /** Only a snapshot on disk explains an object's loss; one the index remembers but is gone does not. */
+    @Test
+    fun aLossIsExplainedOnlyByASnapshotStillOnDisk() =
+        runTest {
+            val dao = db.metadataProjectionDao()
+            val objectHash = "a".repeat(64)
+            val snapshotHash = "b".repeat(64)
+            val objectPath = "${NpnPaths.JOURNAL_DIR}/objects-v2-aa/$objectHash.jsonl"
+            val snapshotPath = "${NpnPaths.JOURNAL_DIR}/objects-snap-v2-bb/$snapshotHash.jsonl"
+            dao.ingest(source(objectPath, SourceKind.OBJECT, objectHash), emptyList())
+            dao.ingest(
+                source(snapshotPath, SourceKind.SNAPSHOT, snapshotHash),
+                emptyList(),
+                supersedes = listOf(objectHash),
+            )
+            val lost = listOf(checkNotNull(dao.source(objectPath)))
+            val snapshotOnDisk = mapOf(snapshotPath to FileMeta(snapshotPath, "$snapshotHash.jsonl", 1, 1, false))
+
+            val withSnapshot = SourceSetValidator(dao)
+            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT + 1) {
+                withSnapshot.unexplainedSourceLoss(lost, snapshotOnDisk) shouldBe null
+            }
+            val withoutSnapshot = SourceSetValidator(dao)
+            repeat(SourceSetValidator.PENDING_SUPERSESSION_LIMIT) {
+                withoutSnapshot.unexplainedSourceLoss(lost, emptyMap()) shouldBe null
+            }
+            withoutSnapshot.unexplainedSourceLoss(lost, emptyMap()).shouldNotBeNull()
+        }
+
+    private fun source(
+        path: String,
+        kind: SourceKind,
+        hash: String,
+    ) = MetadataSourceEntity(path, kind, SourceFingerprint(1, 1, hash), hash, SourceStatus.APPLIED)
 
     @Test
     fun unexplainedObjectLossEventuallyHardBlocks() =
