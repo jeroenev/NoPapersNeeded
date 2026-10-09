@@ -60,9 +60,11 @@ class EmptyImportException : IllegalArgumentException("The file is empty")
  * move into place or delete. The staging file is cleaned on both success and failure.
  *
  * Only bytes the library shows are a [ImportResult.Duplicate]: a live document whose file still
- * holds them. Bytes the index knows as a document it does not show (trashed, deleted, missing, or
- * live with its file gone) bring that document back instead, its row and metadata kept: a caller
- * may delete a duplicate's source (the watched folder does), and those bytes may be the only copy.
+ * holds them, which an unchanged size and mtime prove as they do for a rescan, and a hash of the
+ * file proves otherwise. Bytes the index knows as a document it does not show (trashed, deleted,
+ * missing, or live with its file gone) bring that document back instead, its row and metadata
+ * kept: a caller may delete a duplicate's source (the watched folder does), and those bytes may be
+ * the only copy.
  * The file lands at the import target, or stays where the document's row says if its bytes are
  * back there already.
  *
@@ -132,11 +134,12 @@ class ImportService(
         suggestedName: String,
         toDir: String,
     ): ImportResult {
+        val size = fs.stat(tmpPath)?.size ?: error("Staged import vanished: $tmpPath")
         // An empty file is never a document; its hash would claim the empty-content identity.
-        if (fs.stat(tmpPath)?.size == 0L) throw EmptyImportException()
+        if (size == 0L) throw EmptyImportException()
         val hash = fs.sha256(tmpPath)
         var placement: Placement? = null
-        serialize { placement = place(tmpPath, hash, suggestedName, toDir) }
+        serialize { placement = place(tmpPath, hash, size, suggestedName, toDir) }
         val placed = checkNotNull(placement)
         val imported = placed.result as? ImportResult.Imported ?: return placed.result
         // After [serialize]: the restore is a journal write, which takes the same lock.
@@ -197,12 +200,13 @@ class ImportService(
     private suspend fun place(
         tmpPath: String,
         hash: String,
+        size: Long,
         suggestedName: String,
         toDir: String,
     ): Placement {
         val existing = documentDao.getByDocId(hash)
         // The document's own path, when its bytes are there.
-        val inPlace = existing?.relPath?.takeIf { fs.holds(it, hash) }
+        val inPlace = existing?.let { ownFileOf(it, size) }
         if (existing != null && existing.isLive && inPlace != null) {
             return Placement(ImportResult.Duplicate(existing.docId, existing.relPath))
         }
@@ -224,6 +228,21 @@ class ImportService(
             previousQueue = previousQueue,
             queuedOcr = queueOcr,
         )
+    }
+
+    /**
+     * [row]'s path when the file there holds its document's bytes, [size] bytes long. A live row's
+     * file that still has the size and mtime the row stored holds them by the evidence a rescan takes
+     * to skip hashing ([hasStoredStat]); any other file of that size is hashed. This runs under the
+     * writer lock, so re-importing a known, unchanged PDF must read no library file.
+     */
+    private suspend fun ownFileOf(
+        row: DocumentEntity,
+        size: Long,
+    ): String? {
+        val meta = fs.stat(row.relPath)?.takeIf { !it.isDirectory && it.size == size } ?: return null
+        val holds = (row.isLive && meta.hasStoredStat(row.size, row.mtime)) || fs.sha256(row.relPath) == row.docId
+        return row.relPath.takeIf { holds }
     }
 
     private fun newDocument(

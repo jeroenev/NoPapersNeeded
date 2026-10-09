@@ -124,7 +124,7 @@ class Indexer(
             val changed =
                 indexable.filter { meta ->
                     val known = byPath[meta.relPath]
-                    known == null || known.size != meta.size || known.mtime != meta.mtimeMillis
+                    known == null || !meta.hasStoredStat(known.size, known.mtime)
                 }
             // A file still being written is left for a later scan rather than given the
             // identity of a partial file. A known path keeps its old row meanwhile.
@@ -879,6 +879,16 @@ class Indexer(
         const val HASH_CONCURRENCY = 4
     }
 }
+
+/**
+ * Whether the file [this] describes still has the [size] and [mtime] a document's row stored: the
+ * evidence a rescan takes that the bytes there are still that document's without hashing them, and
+ * an import takes for a live document's file (`ImportService`).
+ */
+internal fun FileMeta.hasStoredStat(
+    size: Long,
+    mtime: Long,
+): Boolean = this.size == size && mtimeMillis == mtime
 
 /**
  * Every listed path whose content hash this pass knows without reading the file again: the ones

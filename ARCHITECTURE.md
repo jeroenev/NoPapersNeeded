@@ -136,7 +136,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
    scanner / share intent / watched folder, hashes bytes (`SHA-256` = document
    identity), dedups, moves the file into the library, adds its index row and
    queues it for OCR. Only a live document whose file still holds the bytes makes
-   an import a duplicate (whose source the watched folder may delete); the bytes
+   an import a duplicate (whose source the watched folder may delete): the size and
+   mtime its row stored prove that, as they do for a rescan, and only a file whose
+   stat drifted is hashed, under the writer lock the check runs in; the bytes
    of a trashed, deleted or missing document bring that document back, metadata
    and all, and any copy of it left in the trash is deleted. Its only journal
    write is the restore of bytes the journal had trashed or deleted. `OcrPipeline`

@@ -132,8 +132,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   kept (`DocumentDao.upsertAll`; for a rename or move onto it, `DocumentPathReconciler`). A hidden
   document is back only when the file at its path hashes to it; something else at its old name,
   or a file still being written, is no evidence. An import is a duplicate only of a live document
-  whose file holds the bytes; a hidden document's bytes bring it back (`ImportService`), since a
-  caller may delete a duplicate's source.
+  whose file holds the bytes (the size and mtime its row stored prove that, as for a rescan; a
+  drifted stat means hashing the file); a hidden document's bytes bring it back (`ImportService`),
+  since a caller may delete a duplicate's source.
 - Merge semantics: OR-set for tags, HLC last-writer-wins for single-value fields, system
   properties, settings and field definitions, and for trash/restore and delete/undelete.
 - Document fields are registry data, not code. Title, correspondent, docType, docDate and notes
