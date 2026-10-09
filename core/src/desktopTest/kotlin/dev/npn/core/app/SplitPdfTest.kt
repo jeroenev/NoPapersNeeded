@@ -75,6 +75,8 @@ class SplitPdfTest {
                 val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
                 rig.session.meta.addTag(listOf(imported.docId), "invoice")
                 rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
+                // The import's OCR writes the row in the background; it is done before the row is kept.
+                rig.session.work.drainOcr()
                 val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
                 original.relPath shouldBe "acme/contract.pdf"
                 rig.blockTrash()
@@ -103,6 +105,8 @@ class SplitPdfTest {
                 val imported = outcome.shouldBeInstanceOf<ImportOutcome.Imported>()
                 rig.session.meta.addTag(listOf(imported.docId), "invoice")
                 rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
+                // The import's OCR writes the row in the background; it is done before the row is kept.
+                rig.session.work.drainOcr()
                 val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
                 val replacement = PdfFixtures.embeddedTextPdf("another document")
                 rig.fs.delete(original.relPath)
