@@ -23,10 +23,13 @@ import dev.npn.core.pathrules.StoragePathContext
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pathrules.StoragePathTemplate
 import dev.npn.core.pathrules.pathOrNull
+import dev.npn.core.pathrules.pathTaken
 import dev.npn.core.pathrules.resolveUniqueTarget
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.withContext
 import kotlin.uuid.ExperimentalUuidApi
 import kotlin.uuid.Uuid
 
@@ -213,13 +216,31 @@ class ImportService(
         }
 
         val target = inPlace ?: chooseImportTarget(ensurePdfName(suggestedName), toDir).also { fs.move(tmpPath, it) }
+        var placement: Placement? = null
+        try {
+            placement = record(hash, target, existing)
+        } finally {
+            if (placement == null) unplace(hash, existing, target.takeIf { inPlace == null }, tmpPath)
+        }
+        return checkNotNull(placement)
+    }
+
+    /**
+     * Write the row of the document whose file [place] put at [target], [existing] brought back or a
+     * new one, and queue it for OCR.
+     */
+    private suspend fun record(
+        hash: String,
+        target: String,
+        existing: DocumentEntity?,
+    ): Placement {
         val meta = fs.stat(target) ?: error("Imported file vanished: $target")
         val now = clock.nowMillis()
         val row = existing?.backAt(target, meta) ?: newDocument(hash, target, meta, now)
         // A returning document whose text is indexed already has nothing for OCR to redo.
         val queueOcr = OcrState.fromColumn(row.ocrState) !in INDEXED
         val previousQueue = existing?.let { ocrQueueDao.getByDocId(hash) }
-        // The target was free on disk; a hidden row still naming it gives it up.
+        // No live row names the target ([uniqueTargetPath]); a hidden row naming it gives it up.
         documentDao.upsert(if (queueOcr) row.copy(ocrState = OcrState.PENDING.column) else row)
         if (queueOcr) ocrQueueDao.upsert(OcrQueueEntity(hash, state = QueueState.PENDING.column, updatedAt = now))
         if (existing != null && existing.fileName != row.fileName) indexFileName(row)
@@ -229,6 +250,27 @@ class ImportService(
             previousQueue = previousQueue,
             queuedOcr = queueOcr,
         )
+    }
+
+    /**
+     * Undo a [place] whose rows could not be written, still under the lock: [hash]'s row goes back to
+     * [existing] (away, for a new document), and the file [place] moved to [movedTo] goes back to
+     * [tmpPath], so a failed import leaves nothing in the library. Best effort and logged; the caller
+     * still throws the failure. A queue entry left behind is dropped by the OCR drain, which finds no
+     * live document for it.
+     */
+    private suspend fun unplace(
+        hash: String,
+        existing: DocumentEntity?,
+        movedTo: String?,
+        tmpPath: String,
+    ) = withContext(NonCancellable) {
+        log.runLogged("Putting back the row of $hash after a failed import") {
+            if (existing != null) documentDao.upsert(existing.onFreePath()) else forget(hash)
+        }
+        if (movedTo != null) {
+            log.runLogged("Taking the failed import back out of $movedTo") { fs.move(movedTo, tmpPath) }
+        }
     }
 
     private fun newDocument(
@@ -364,14 +406,20 @@ class ImportService(
         }
     }
 
-    /** Build `dir/name.pdf`, adding " (2)", " (3)", ... before the extension until free. */
+    /**
+     * Build `dir/name.pdf`, adding " (2)", " (3)", ... before the extension until free: no file is
+     * there and no live row names it. A live row whose file went outside the app names its path until
+     * a rescan finds it missing; a hidden row gives its path up to a live document.
+     */
     private suspend fun uniqueTargetPath(
         dir: String,
         name: String,
     ): String {
         val normDir = NpnPaths.normalize(dir)
         val target = if (normDir.isEmpty()) name else "$normDir/$name"
-        return uniquifyPath(target, startIndex = 2, suffix = { " ($it)" }, exists = fs::exists)
+        return uniquifyPath(target, startIndex = 2, suffix = { " ($it)" }) { candidate ->
+            pathTaken(fs, documentDao, currentDocId = null, candidate) { it.isLive }
+        }
     }
 
     private companion object {

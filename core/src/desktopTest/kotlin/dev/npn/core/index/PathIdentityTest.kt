@@ -1,5 +1,9 @@
 package dev.npn.core.index
 
+import dev.npn.core.db.DocumentEntity
+import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.FieldKeys
 import io.kotest.matchers.booleans.shouldBeFalse
@@ -7,6 +11,7 @@ import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.collections.shouldNotContain
+import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
@@ -16,6 +21,7 @@ import java.nio.file.StandardCopyOption
 import java.nio.file.attribute.FileTime
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.test.assertFailsWith
 
 /**
  * Which row holds which path. relPath is unique: a row whose path now holds other bytes, or a
@@ -173,6 +179,85 @@ class PathIdentityTest {
             row.trashed.shouldBeTrue()
             row.trashedOrigPath shouldBe "inbox/scan.pdf"
         }
+
+    /**
+     * A live row still names its path after its file went outside the app, until a rescan notices:
+     * an import under that name lands beside it, and leaves the row for the rescan to find missing.
+     */
+    @Test
+    fun anImportLandsBesideALiveRowWhoseFileWentUnnoticed() =
+        runTest {
+            rig.writePdf("inbox/scan.pdf", "alpha")
+            rig.rescan()
+            val gone = rig.fs.sha256("inbox/scan.pdf")
+            val row = rig.db.documentDao().getByDocId(gone)
+            rig.deleteFile("inbox/scan.pdf")
+
+            val imported =
+                rig.importService.importBytes("bravo".encodeToByteArray(), "scan.pdf") as ImportResult.Imported
+
+            imported.relPath shouldBe "inbox/scan (2).pdf"
+            rig.db
+                .documentDao()
+                .rowAtPath(imported.relPath)
+                ?.docId shouldBe imported.docId
+            rig.db.documentDao().getByDocId(gone) shouldBe row
+            val report = rig.rescan()
+            report.duplicates.shouldBeEmpty()
+            rig.db
+                .documentDao()
+                .getByDocId(gone)
+                .shouldNotBeNull()
+                .missing
+                .shouldBeTrue()
+            rig.db
+                .documentDao()
+                .rowAtPath(imported.relPath)
+                ?.docId shouldBe imported.docId
+        }
+
+    /** A row write that fails after the file moved in takes the file back out: a failed import leaves no file. */
+    @Test
+    fun anImportWhoseRowCannotBeWrittenLeavesNoFileInTheLibrary() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
+            // A live row takes the target the moment the file lands there, so the import's row write fails.
+            val racing =
+                object : LibraryFileSystem by rig.fs {
+                    override suspend fun move(
+                        fromRelPath: String,
+                        toRelPath: String,
+                    ) {
+                        rig.fs.move(fromRelPath, toRelPath)
+                        if (!NpnPaths.isInternal(toRelPath)) rig.db.documentDao().upsert(holderAt(toRelPath))
+                    }
+                }
+            val imports =
+                ImportService(racing, rig.db, rig.deviceDb.ocrQueueDao(), rig.clock, fieldTypes = { emptyMap() })
+
+            assertFailsWith<IllegalStateException> { imports.importBytes("bravo".encodeToByteArray(), "scan.pdf") }
+
+            rig.fs
+                .listAllIndexable()
+                .filter { !it.isDirectory }
+                .map { it.relPath } shouldContainExactly listOf("a.pdf")
+            rig.db
+                .documentDao()
+                .getByDocId(sha256Bytes("bravo".encodeToByteArray()))
+                .shouldBeNull()
+        }
+
+    /** A live row at [relPath] whose file is not there. */
+    private fun holderAt(relPath: String) =
+        DocumentEntity(
+            docId = "f".repeat(64),
+            relPath = relPath,
+            fileName = NpnPaths.fileName(relPath),
+            size = 1,
+            mtime = 1,
+            addedAt = 1,
+        )
 
     /** A file copied in from outside onto a deleted document's old path is a new document there. */
     @Test

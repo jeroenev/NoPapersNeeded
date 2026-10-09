@@ -1,6 +1,7 @@
 package dev.npn.core.pathrules
 
 import dev.npn.core.db.DocumentDao
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.uniquifyPath
@@ -308,15 +309,28 @@ suspend fun resolveUniqueTarget(
         } else {
             "$normalized.pdf"
         }
-    val exists: suspend (String) -> Boolean = { candidate ->
-        // relPath has a unique index (DocumentEntity), so at most one row can own a candidate.
-        val owner = documentDao.getByRelPath(candidate)
-        if (owner?.docId == currentDocId) false else fs.exists(candidate) || owner != null
-    }
     return uniquifyPath(
         path = withExtension,
         startIndex = 1,
         suffix = { "-$it" },
-        exists = exists,
+        exists = { pathTaken(fs, documentDao, currentDocId, it) },
     )
+}
+
+/**
+ * Whether [candidate] is taken for [currentDocId], the document about to occupy it (null for a file
+ * that is no document yet): a file is there, or another document's row names it. [holds] says which
+ * rows count; by default every one does, a missing file's row included.
+ */
+internal suspend fun pathTaken(
+    fs: LibraryFileSystem,
+    documentDao: DocumentDao,
+    currentDocId: String?,
+    candidate: String,
+    holds: (DocumentEntity) -> Boolean = { true },
+): Boolean {
+    // relPath has a unique index (DocumentEntity), so at most one row can own a candidate.
+    val owner = documentDao.getByRelPath(candidate)
+    if (owner != null && owner.docId == currentDocId) return false
+    return fs.exists(candidate) || (owner != null && holds(owner))
 }

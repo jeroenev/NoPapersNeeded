@@ -32,6 +32,27 @@ class StoragePathRuleIntegrationTest {
             }
         }
 
+    /** A file the index has not seen yet at the rule's target takes that path too: the import goes beside it. */
+    @Test
+    fun importGoesBesideAnUnindexedFileAtTheRulesTarget() =
+        runTest {
+            val rule = StoragePathRule("organized/{title}.pdf", enabled = true)
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule)
+            try {
+                val there = PdfFixtures.embeddedTextPdf("there")
+                rig.writePdf("organized/same.pdf", there)
+
+                val imported =
+                    rig.session.importPdfBytes(PdfFixtures.embeddedTextPdf("one"), "same.pdf")
+                        as ImportOutcome.Imported
+
+                imported.relPath shouldBe "organized/same-1.pdf"
+                rig.fs.readBytes("organized/same.pdf") shouldBe there
+            } finally {
+                rig.close()
+            }
+        }
+
     /**
      * A date pattern on a field the user defined is valid wherever the registry says the field is
      * a date. At import the document has no values yet, so the folder is empty and collapses;
