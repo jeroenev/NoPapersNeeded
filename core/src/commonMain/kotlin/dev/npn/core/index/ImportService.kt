@@ -200,7 +200,7 @@ class ImportService(
      */
     suspend fun undoImport(imported: ImportResult.Imported) {
         if (imported.broughtBack) return
-        serialize {
+        serialize { _ ->
             val row = documentDao.getByDocId(imported.docId) ?: return@serialize
             if (row.deleted || row.trashed) return@serialize
             if (fs.holds(row.relPath, imported.docId)) fs.delete(row.relPath)
@@ -362,7 +362,7 @@ class ImportService(
     private suspend fun takeBack(placed: Placement) {
         val imported = placed.result as ImportResult.Imported
         val previous = placed.previous ?: return undoImport(imported)
-        serialize {
+        serialize { _ ->
             val docId = imported.docId
             val placedAt = imported.relPath
             val row =
