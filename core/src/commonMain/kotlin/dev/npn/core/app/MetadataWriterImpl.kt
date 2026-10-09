@@ -311,8 +311,10 @@ class MetadataWriterImpl(
         }
         // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden. A
         // trashed or missing document gave its path up, so the file there may be another one now.
-        val path = findTrashEntry(docId) ?: doc.relPath.takeIf { fs.holds(it, docId) } ?: return
-        log.runLogged("Deleting the file of $docId") { fs.delete(path) }
+        log.runLogged("Deleting the file of $docId") {
+            val path = findTrashEntry(docId) ?: doc.relPath.takeIf { fs.holds(it, docId) }
+            if (path != null) fs.delete(path)
+        }
     }
 
     override suspend fun renameFile(
