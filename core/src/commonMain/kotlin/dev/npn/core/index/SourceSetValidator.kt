@@ -52,21 +52,22 @@ class SourceSetValidator(
     /**
      * A reason to reject the set because a previously-applied source vanished without a validated
      * replacement, or null when every loss is explained (or still inside its grace window). [files]
-     * is what the pass listed and read, [previous] the source table before it.
+     * is what the pass listed and read, [previous] the source table before it and [current] after
+     * it, and [carried] the content hashes whose events [files] hold ([carriedByListed]).
      */
     suspend fun unexplainedSourceLoss(
         previous: List<MetadataSourceEntity>,
+        current: List<MetadataSourceEntity>,
         files: Map<String, FileMeta>,
+        carried: Set<String>,
     ): String? {
-        val current = dao.allSources()
-        val supersededHashes = dao.supersededByListed(files.keys, previous)
         val stillMissing = HashSet<String>()
         val hardMissing =
             previous.firstOrNull { source ->
                 if (source.path in files) return@firstOrNull false
                 when (source.kind) {
                     SourceKind.OBJECT, SourceKind.SNAPSHOT -> {
-                        isUnexplainedObjectLoss(source, current, files, supersededHashes, stillMissing)
+                        isUnexplainedObjectLoss(source, carried, stillMissing)
                     }
 
                     SourceKind.LEGACY_SEGMENT -> {
@@ -82,27 +83,20 @@ class SourceSetValidator(
     /**
      * True when a missing content-addressed source is UNEXPLAINED and its grace window is spent.
      *
-     * A loss is explained (returns false) when either a hash-identical replacement path is present,
-     * or an applied snapshot on disk carries the source's events ([supersededByListed]); a snapshot
-     * the index remembers but the folder no longer holds explains nothing. When neither holds yet
-     * — a deletion that raced ahead of its snapshot — the source becomes "pending supersession":
-     * its events are still applied locally, so we tolerate it for [PENDING_SUPERSESSION_LIMIT]
-     * reconciles and only then treat it as real damage.
+     * A loss is explained (returns false) when the listed files hold the source's events
+     * ([carried]): a hash-identical replacement is listed, an applied snapshot on disk carries them,
+     * or, for a snapshot, the sources it superseded are back. A snapshot the index remembers but the
+     * folder no longer holds explains nothing. When none holds yet — a deletion that raced ahead of
+     * its snapshot — the source becomes "pending supersession": its events are still applied
+     * locally, so we tolerate it for [PENDING_SUPERSESSION_LIMIT] reconciles and only then treat it
+     * as real damage.
      */
     private fun isUnexplainedObjectLoss(
         source: MetadataSourceEntity,
-        current: List<MetadataSourceEntity>,
-        files: Map<String, FileMeta>,
-        supersededHashes: Set<String>,
+        carried: Set<String>,
         stillMissing: MutableSet<String>,
     ): Boolean {
-        val hasReplacement =
-            current.any { candidate ->
-                candidate.path in files && candidate.status == SourceStatus.APPLIED &&
-                    candidate.contentHash == source.contentHash
-            }
-        if (hasReplacement) return false
-        if (source.contentHash != null && source.contentHash in supersededHashes) return false
+        if (source.contentHash in carried) return false
         // Pending supersession: not yet explained. Withhold the hard block for a grace window.
         stillMissing.add(source.path)
         val count = (pendingSupersession[source.path] ?: 0) + 1

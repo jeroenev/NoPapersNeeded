@@ -103,6 +103,21 @@ interface MetadataProjectionDao {
     @Upsert
     suspend fun upsertSource(source: MetadataSourceEntity)
 
+    @Query("DELETE FROM metadata_sources WHERE path = :path")
+    suspend fun deleteSource(path: String)
+
+    /**
+     * Drop the source at [path]: its row, the supersessions it recorded, and its claim on its
+     * events, deleting those no other source references. For a source gone from the folder whose
+     * events other sources hold, so the fold stays as it was.
+     */
+    @Transaction
+    suspend fun forgetSource(path: String) {
+        replaceSourceEvents(path, emptyList())
+        deleteSupersededBy(path)
+        deleteSource(path)
+    }
+
     @Query("DELETE FROM metadata_source_events WHERE sourcePath = :sourcePath")
     suspend fun deleteSourceEvents(sourcePath: String)
 

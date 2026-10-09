@@ -216,7 +216,12 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   (`objects-snap-v2-<xx>/`) and deletes them. An object a snapshot supersedes is deleted later
   (a delete that failed, a copy put back) only while that snapshot, or one that superseded it in
   turn, is on disk and the same reconcile pass has read it; what the index remembers of a snapshot
-  vouches for nothing. Builds before storage-v2 wrote per-device v1 segments,
+  vouches for nothing. A source that vanished is a loss only while no listed file holds its
+  events (`carriedByListed`); an unexplained one is tolerated for a grace window
+  (`SourceSetValidator.PENDING_SUPERSESSION_LIMIT` reconciles, for a snapshot still on its way),
+  then blocks writes. A snapshot gone with everything it superseded back on disk (a folder put
+  back from before a compaction) lost nothing: the reconcile forgets it, as a rebuild would, and
+  the next compaction replaces those objects again. Builds before storage-v2 wrote per-device v1 segments,
   `.npn/journal/<deviceId>/<seq>.jsonl`: those are still read and folded, never written. There is
   no fallback format.
 - **Publication.** An object is staged under a `.part` name in its bucket, hash-checked, then

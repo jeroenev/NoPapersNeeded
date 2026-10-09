@@ -240,7 +240,12 @@ class MetadataAccumulator(
         val ingest = ingestFiles(listed.values)
         val swept = snapshots.deleteSupersededLeftovers(listed.keys, previous)
         val files = listed - swept
-        validator.unexplainedSourceLoss(previous, files)?.let { fail(it) }
+        val current = dao.allSources()
+        val carried = dao.carriedByListed(files.keys, current)
+        validator.unexplainedSourceLoss(previous, current, files, carried.hashes)?.let { fail(it) }
+        // A compaction a restore undid: its objects are back and hold its events, so the index
+        // forgets the snapshot as a rebuild would, and a later compaction replaces them again.
+        carried.undone.forEach { dao.forgetSource(it) }
 
         // A source present before but gone now (even with a validated replacement above) means the
         // event graph may have shrunk relative to a caller's in-memory state.

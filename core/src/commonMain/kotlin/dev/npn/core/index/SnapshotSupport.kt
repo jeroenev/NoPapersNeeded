@@ -2,6 +2,7 @@ package dev.npn.core.index
 
 import dev.npn.core.db.MetadataProjectionDao
 import dev.npn.core.db.MetadataSourceEntity
+import dev.npn.core.db.MetadataSupersededEntity
 import dev.npn.core.db.SourceFingerprint
 import dev.npn.core.db.SourceKind
 import dev.npn.core.db.SourceStatus
@@ -134,15 +135,21 @@ class SnapshotSupport(
 internal suspend fun MetadataProjectionDao.supersededByListed(
     listed: Set<String>,
     sources: List<MetadataSourceEntity>,
-): Set<String> {
-    val bySnapshot = appliedSupersessions().groupBy({ it.snapshotPath }, { it.supersededHash })
-    if (bySnapshot.isEmpty()) return emptySet()
+): Set<String> = supersededByListed(listed, sources, appliedSupersessions())
+
+private fun supersededByListed(
+    listed: Set<String>,
+    sources: List<MetadataSourceEntity>,
+    supersessions: List<MetadataSupersededEntity>,
+): HashSet<String> {
+    val carried = HashSet<String>()
+    val bySnapshot = supersessions.groupBy({ it.snapshotPath }, { it.supersededHash })
+    if (bySnapshot.isEmpty()) return carried
     val snapshotWithHash =
         sources
             .filter { it.kind == SourceKind.SNAPSHOT }
             .mapNotNull { source -> source.contentHash?.let { it to source.path } }
             .toMap()
-    val carried = HashSet<String>()
     val pending = ArrayDeque(bySnapshot.keys.filter { it in listed })
     while (pending.isNotEmpty()) {
         for (hash in bySnapshot[pending.removeFirst()].orEmpty()) {
@@ -150,4 +157,51 @@ internal suspend fun MetadataProjectionDao.supersededByListed(
         }
     }
     return carried
+}
+
+/** What the journal files one reconcile pass listed and read hold; see [carriedByListed]. */
+internal class ListedCarriage(
+    /** The content hashes whose events are on disk in the listed files. */
+    val hashes: Set<String>,
+    /** The paths of the gone snapshots a restore undid: nothing supersedes them, and their inputs carry them. */
+    val undone: List<String>,
+)
+
+/**
+ * What the files in [listed] carry, for a pass that read them; [sources] is the source table after
+ * the read. A source's events are on disk when the source is listed, when a listed snapshot carries
+ * them ([supersededByListed]), or, for a snapshot that is gone, when every hash it superseded is
+ * carried in turn: a snapshot holds the events of what it replaced and nothing else
+ * ([dev.npn.core.journal.SnapshotCompactor.publish]), so a folder put back from before a compaction
+ * lost none of them.
+ *
+ * Such a gone snapshot that no applied snapshot supersedes is [ListedCarriage.undone]: the index is
+ * to forget it, as a rebuild from the folder would never have known it, or compaction keeps choosing
+ * it and leaves out the objects it replaced although they are back. One that another gone snapshot
+ * supersedes still explains that one, so it is forgotten only after it.
+ */
+internal suspend fun MetadataProjectionDao.carriedByListed(
+    listed: Set<String>,
+    sources: List<MetadataSourceEntity>,
+): ListedCarriage {
+    val supersessions = appliedSupersessions()
+    val hashes = supersededByListed(listed, sources, supersessions)
+    sources.filter { it.status == SourceStatus.APPLIED && it.path in listed }.mapNotNullTo(hashes) { it.contentHash }
+    val inputs = supersessions.groupBy({ it.snapshotPath }, { it.supersededHash })
+    // Gone snapshots by content hash.
+    val gone =
+        sources
+            .filter { it.kind == SourceKind.SNAPSHOT && it.status == SourceStatus.APPLIED && it.path !in listed }
+            .mapNotNull { source -> source.contentHash?.let { it to source.path } }
+    do {
+        val unpacked =
+            gone.filter { (hash, path) ->
+                val replaced = inputs[path].orEmpty()
+                hash !in hashes && replaced.isNotEmpty() && hashes.containsAll(replaced)
+            }
+        unpacked.mapTo(hashes) { (hash, _) -> hash }
+    } while (unpacked.isNotEmpty())
+    val superseded = supersessions.mapTo(HashSet()) { it.supersededHash }
+    val undone = gone.filter { (hash, _) -> hash in hashes && hash !in superseded }.map { (_, path) -> path }
+    return ListedCarriage(hashes, undone)
 }
