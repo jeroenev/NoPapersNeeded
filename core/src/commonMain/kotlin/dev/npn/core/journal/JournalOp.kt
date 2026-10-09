@@ -14,8 +14,11 @@ data class Dot(
  * The operation carried by a journal event. Serialized on disk as an `op` string plus a
  * `p` payload object; see [JournalEventSerializer] for the exact mapping.
  *
- * Unknown op strings are represented by [Unknown] so that forward-compatible readers can
- * skip events they do not understand without crashing.
+ * An op string this build does not know, or a known op whose payload it cannot read (a system
+ * property or field type newer than it), decodes as [Unknown] rather than failing the line. No
+ * reader skips one: an object, snapshot or legacy segment holding it is refused as unsupported, so
+ * that build blocks writes and stops opening the library until it updates. A new op therefore ships
+ * in a build that reads it before any build writes it.
  */
 sealed class JournalOp {
     /** The `op` wire string for this operation. */
@@ -83,8 +86,9 @@ sealed class JournalOp {
      * registry. Last-writer-wins by HLC per key, so two devices adding two different fields both
      * survive. Removing a definition never touches stored values: they become orphans.
      *
-     * `perDocument` is written only when true. Builds from before it ignore the key, and one that
-     * rewrites the definition (a label edit there) drops it again.
+     * `perDocument` is written only when true. Builds from before it ignore the key and drop it from
+     * every definition they write again: a label edit there, or a compaction there, which re-encodes
+     * the events it carries from its own index.
      */
     data class FieldDefSet(
         val key: String,
@@ -129,8 +133,8 @@ sealed class JournalOp {
     /**
      * {}; doc required. Brings a deleted document back, once its file is in the library again (a
      * re-import, or a sync tool restoring it): it wins over an older [DocDelete] and, like
-     * [DocRestore], over an older [DocTrash]. Builds that predate it read it as [Unknown] and keep
-     * the document deleted until they update.
+     * [DocRestore], over an older [DocTrash]. Builds that predate it refuse an object holding it,
+     * as any [Unknown] op.
      */
     data object DocUndelete : JournalOp() {
         override val wire get() = WIRE

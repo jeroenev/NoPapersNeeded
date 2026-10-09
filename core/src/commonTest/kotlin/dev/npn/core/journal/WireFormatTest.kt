@@ -84,6 +84,66 @@ class WireFormatTest {
     }
 
     @Test
+    fun op_wire_names_are_pinned() {
+        // A new op makes older builds refuse every object that holds it (see JournalOp).
+        fun pinned(op: JournalOp): String? =
+            when (op) {
+                is JournalOp.TagAdd -> "tag-add"
+                is JournalOp.TagRemove -> "tag-remove"
+                is JournalOp.PropSet -> "prop-set"
+                is JournalOp.FieldSet -> "field-set"
+                is JournalOp.FieldDefSet -> "field-def"
+                is JournalOp.DocTrash -> "doc-trash"
+                JournalOp.DocRestore -> "doc-restore"
+                JournalOp.DocDelete -> "doc-delete"
+                JournalOp.DocUndelete -> "doc-undelete"
+                is JournalOp.Relink -> "relink"
+                is JournalOp.TagRename -> "tag-rename"
+                is JournalOp.TagMerge -> "tag-merge"
+                is JournalOp.TagStyle -> "tag-style"
+                is JournalOp.SettingSet -> "setting-set"
+                is JournalOp.Unknown -> null
+            }
+        val ops =
+            listOf(
+                JournalOp.TagAdd("t"),
+                JournalOp.TagRemove("t", emptyList()),
+                JournalOp.PropSet(SystemProperty.REVIEWED, null),
+                JournalOp.FieldSet("amount", null),
+                JournalOp.FieldDefSet("amount", null),
+                JournalOp.DocTrash("x.pdf"),
+                JournalOp.DocRestore,
+                JournalOp.DocDelete,
+                JournalOp.DocUndelete,
+                JournalOp.Relink(sha2),
+                JournalOp.TagRename("a", "b"),
+                JournalOp.TagMerge("a", "b"),
+                JournalOp.TagStyle("a", null, null),
+                JournalOp.SettingSet("reviewMode", null),
+            )
+        for (op in ops) assertEquals(pinned(op), op.wire)
+        assertEquals(
+            setOf(
+                "tag-add",
+                "tag-remove",
+                "prop-set",
+                "field-set",
+                "field-def",
+                "doc-trash",
+                "doc-restore",
+                "doc-delete",
+                "doc-undelete",
+                "relink",
+                "tag-rename",
+                "tag-merge",
+                "tag-style",
+                "setting-set",
+            ),
+            ops.map { it.wire }.toSet(),
+        )
+    }
+
+    @Test
     fun tag_remove_dots_wire_shape() {
         val e = event(sha, JournalOp.TagRemove("t", listOf(Dot("d2", 7))))
         val p = fields(JournalCodec.encode(e))["p"]!!.jsonObject

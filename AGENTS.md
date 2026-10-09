@@ -129,6 +129,9 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   to open the library; never add a fallback format. `device.id` belongs to one installation:
   `DeviceIdentity` gives a restored or cloned installation a fresh one (ARCHITECTURE.md,
   "Journal storage").
+- Older builds refuse a journal object holding an op they do not know (a new system property or
+  field type counts): they block writes and stop opening the library. Avoid new ops; an unavoidable
+  one ships in a build that reads it before any build writes it, and its commit says so.
 - Document identity = SHA-256 of bytes; duplicates are forbidden (one canonical path per hash).
   A path holds one row: a trashed, deleted or missing row gives it up to a live document, flags
   kept (`DocumentDao.upsertAll`; for a rename or move onto it, `DocumentPathReconciler`). A hidden

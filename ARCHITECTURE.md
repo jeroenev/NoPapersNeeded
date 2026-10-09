@@ -246,6 +246,15 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   the next compaction replaces those objects again. Builds before storage-v2 wrote per-device v1 segments,
   `.npn/journal/<deviceId>/<seq>.jsonl`: those are still read and folded, never written. There is
   no fallback format.
+- **Compatibility.** A build folds only the ops it knows. An object, snapshot or segment holding an
+  op it does not know, or a known op it cannot read (a `prop-set` of a newer system property, a
+  `field-def` of a newer field type), is refused there as unsupported: that build blocks writes and
+  stops opening the library until it updates. There is no skip path, so a new op ships in a build
+  that reads it before any build writes it; `WireFormatTest` pins the op names. A payload key a
+  build does not know breaks less, but lasts only in the object that holds it: that build drops it
+  from every event it writes again, compaction included, which re-encodes the events it carries
+  from its own index. A build from before `perDocument` that compacts the library takes the flag
+  off every field definition it carries.
 - **Publication.** An object is staged under a `.part` name in its bucket, hash-checked, then
   published without replacement: a hard link, or where the filesystem has none (Android's shared
   storage, exFAT) an exclusive rename (`renameat2(RENAME_NOREPLACE)` on Linux and Android,
@@ -278,7 +287,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   the document's path, or at the path it was trashed from when no other row holds that, and the
   hash must be the document's. Another file under the same name (a second `scan.pdf`) or a file
   still being written brings nothing back.
-  Builds from before `doc-undelete` ignore it and keep the document deleted until they update.
+  `doc-undelete` is newer than the other lifecycle ops: a build from before it refuses an object
+  holding one (see Compatibility), so it stops opening the library once a return is recorded.
 
 ## Where to look for common tasks
 
