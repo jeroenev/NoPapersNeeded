@@ -15,6 +15,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.OcrSidecarFiles
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.FtsRows
+import dev.npn.core.index.WriteSettle
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.journal.SystemEpochClock
 import dev.npn.core.pdf.PdfEngine
@@ -94,6 +95,9 @@ class OcrPipeline(
          * written by an older build for a file indexed before its bytes arrived.
          */
         private const val EMPTY_SHA256 = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+
+        /** A queue row's error after a read found other bytes than the document's. */
+        private const val STALE_FILE = "the file did not hold the document's bytes when read"
     }
 
     private val retry = QueueRetryPolicy(config.maxAttempts)
@@ -162,11 +166,15 @@ class OcrPipeline(
         if (stored.isEmpty() || canImprove(doc, stored, rerun = entry?.rerun == true, aiRequested)) {
             own = runOwnOcr(doc, stored, aiRequested)
             if (own == OwnOcr.Stale) {
-                // Not this document's bytes, so not its failure either. Left out of the queue: the
-                // rescan replaces the row, or refreshes it if the file turns out unchanged.
-                ocrQueueDao.delete(docId)
+                // Not this document's bytes, so not its failure either, the first time: the run
+                // waits, uncharged, for the rescan [onStaleFile] asks for to sort out what the file
+                // is now. Other bytes read again are charged, so a file no rescan changes (one whose
+                // size and mtime stayed, or an empty one) is given up on at the attempt cap.
+                val first = entry?.lastError != STALE_FILE
+                if (first) awaitRescan(docId, entry)
                 onStaleFile(docId)
-                return
+                if (first) return
+                own = OwnOcr.Failed(STALE_FILE)
             }
             stored = versions.of(docId)
         }
@@ -205,6 +213,29 @@ class OcrPipeline(
                 ),
             )
         }
+    }
+
+    /**
+     * Leave [docId]'s run owed, with what was asked of it and no attempt spent, but not due before the
+     * file has had [WriteSettle.QUIET_MILLIS] to settle. The follow-up rescan then refreshes the
+     * document's row, or finds the file replaced and the document gone, which the run cleans up after.
+     * Kept rather than dropped: a rescan queues only documents without an OCR state, and would leave a
+     * pending one owed nothing.
+     */
+    private suspend fun awaitRescan(
+        docId: String,
+        entry: OcrQueueEntity?,
+    ) {
+        val now = clock.nowMillis()
+        val owed = entry ?: OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = now)
+        ocrQueueDao.upsert(
+            owed.copy(
+                state = QueueState.PENDING.column,
+                updatedAt = now,
+                nextAttemptAt = now + WriteSettle.QUIET_MILLIS,
+                lastError = STALE_FILE,
+            ),
+        )
     }
 
     /**

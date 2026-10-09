@@ -211,7 +211,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
    A rescan only hashes a PDF once its bytes have settled (`WriteSettle`): files
    written in place (`cp`, scanner apps) are deferred and picked up by a follow-up
    rescan, and `OcrPipeline` re-checks the hash of the bytes it reads before
-   publishing a sidecar, so a partial file never gets a document identity.
+   publishing a sidecar, so a partial file never gets a document identity. A read
+   that finds other bytes asks for that follow-up rescan and leaves its run queued,
+   uncharged, until the file has settled; a second one in a row counts as a failure.
 4. **UI reads the cache**: viewmodels subscribe to Room DAO Flows (with the named
    `WhileSubscribed(5_000)` constant) and map rows into UI models via the
    `core.app` facet interfaces; the Compose layer is a pure renderer of those.

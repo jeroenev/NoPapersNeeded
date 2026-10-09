@@ -1,10 +1,17 @@
 package dev.npn.core.ocr
 
+import dev.npn.core.app.AppSessionRig
 import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.QueueState
+import dev.npn.core.db.queueState
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.index.MutableClock
+import dev.npn.core.index.WriteSettle
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
+import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
@@ -51,11 +58,119 @@ class OcrPipelineStaleFileTest {
             OcrSidecarFiles(rig.fs).listForHash(docId).shouldBeEmpty()
             stale shouldContainExactly listOf(docId)
             indexed.shouldBeEmpty()
-            // Not charged as a failure, and not left for the drain to spin on.
+            // Not charged as a failure, and not taken again before the rescan it asked for.
             rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)
-                .shouldBeNull()
+                .shouldNotBeNull()
+                .attempts shouldBe 0
+            pipeline.processNext() shouldBe false
+        }
+
+    /**
+     * A sync tool rewrote the file in place with the same bytes while OCR read it. The run is not
+     * dropped with the document left pending: once the follow-up rescan has found the document's
+     * bytes there again, OCR reads them.
+     */
+    @Test
+    fun aFileRewrittenInPlaceWhileItWasReadIsReadAgainOnceItSettles() =
+        runTest {
+            val bytes = PdfFixtures.embeddedTextPdf("rewritten in place")
+            val rewrite = MidRewrite("a.pdf", PdfFixtures.embeddedTextPdf("half written"))
+            val app = AppSessionRig.create(backgroundScope, files = rewrite::over)
+            try {
+                app.writePdf("a.pdf", bytes)
+                rewrite.armed = true
+                app.session.rescan()
+                app.session.work.drainOcr()
+                rewrite.armed = false
+                val id = app.docId("a.pdf")
+
+                app.writePdf("a.pdf", bytes)
+                app.session.rescan()
+                app.clock.advance(WriteSettle.QUIET_MILLIS)
+                app.session.work.drainOcr()
+
+                app.db
+                    .documentDao()
+                    .getByDocId(id)
+                    .shouldNotBeNull()
+                    .ocrState shouldBe OcrState.DONE.column
+            } finally {
+                app.close()
+            }
+        }
+
+    /** What was asked of the run stays with it while it waits for the file to settle. */
+    @Test
+    fun aStaleReadLeavesTheRunOwedWithItsRequestsUntilTheFileHasSettled() =
+        runTest {
+            val bytes = PdfFixtures.embeddedTextPdf("the bytes that were indexed")
+            val docId = rig.stageDoc("a.pdf", bytes)
+            val queue = rig.deviceDb.ocrQueueDao()
+            queue.upsert(
+                OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 1, rerun = true, aiRequested = true),
+            )
+            Files.write(rig.libRoot.resolve("a.pdf"), PdfFixtures.embeddedTextPdf("half written"))
+            val clock = MutableClock()
+            val pipeline = rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"), clock = clock)
+
+            pipeline.processNext() shouldBe true
+
+            val owed = queue.getByDocId(docId).shouldNotBeNull()
+            owed.queueState shouldBe QueueState.PENDING
+            owed.attempts shouldBe 0
+            owed.rerun shouldBe true
+            owed.aiRequested shouldBe true
+            owed.nextAttemptAt shouldBe clock.now + WriteSettle.QUIET_MILLIS
+            pipeline.processNext() shouldBe false
+
+            Files.write(rig.libRoot.resolve("a.pdf"), bytes)
+            clock.advance(WriteSettle.QUIET_MILLIS)
+            pipeline.processNext() shouldBe true
+
+            OcrSidecarFiles(rig.fs).listForHash(docId) shouldHaveSize 1
+            queue.getByDocId(docId).shouldNotBeNull().queueState shouldBe QueueState.DONE
+        }
+
+    /**
+     * Bytes that stay another document's (a file no rescan looks at again, or an empty one) are
+     * charged from the second read on, so the run is given up on at the cap rather than read again
+     * every few seconds for good.
+     */
+    @Test
+    fun aFileThatStaysStaleIsGivenUpOnAtTheAttemptCap() =
+        runTest {
+            val docId = rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("the bytes that were indexed"))
+            Files.write(rig.libRoot.resolve("a.pdf"), PdfFixtures.embeddedTextPdf("another document"))
+            val clock = MutableClock()
+            val stale = mutableListOf<String>()
+            val pipeline =
+                rig.pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit"),
+                    clock = clock,
+                    onStaleFile = { stale += it },
+                )
+            val queue = rig.deviceDb.ocrQueueDao()
+
+            pipeline.processNext() shouldBe true
+            queue.getByDocId(docId).shouldNotBeNull().attempts shouldBe 0
+            repeat(OcrConfig().maxAttempts) {
+                clock.advance(DAY_MILLIS)
+                pipeline.processNext() shouldBe true
+                queue.getByDocId(docId).shouldNotBeNull().attempts shouldBe it + 1
+            }
+
+            queue.getByDocId(docId).shouldNotBeNull().queueState shouldBe QueueState.FAILED
+            rig.db
+                .documentDao()
+                .getByDocId(docId)
+                .shouldNotBeNull()
+                .ocrState shouldBe OcrState.FAILED.column
+            stale shouldHaveSize OcrConfig().maxAttempts + 1
+            clock.advance(DAY_MILLIS)
+            pipeline.processNext() shouldBe false
         }
 
     @Test
@@ -113,7 +228,25 @@ class OcrPipelineStaleFileTest {
                 .shouldBeNull()
         }
 
+    /**
+     * A library filesystem over which, while [armed], a read of [path] gets [bytes]: what a reader
+     * sees of a file another app is rewriting in place.
+     */
+    private class MidRewrite(
+        private val path: String,
+        private val bytes: ByteArray,
+    ) {
+        @Volatile var armed = false
+
+        fun over(fs: LibraryFileSystem): LibraryFileSystem =
+            object : LibraryFileSystem by fs {
+                override suspend fun readBytes(relPath: String): ByteArray =
+                    if (armed && relPath == path) bytes else fs.readBytes(relPath)
+            }
+    }
+
     private companion object {
         const val EMPTY = "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        const val DAY_MILLIS = 24L * 60L * 60L * 1000L
     }
 }
