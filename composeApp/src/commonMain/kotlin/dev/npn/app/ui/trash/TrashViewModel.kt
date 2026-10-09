@@ -101,8 +101,7 @@ class TrashViewModel(
 
     override fun restoreAll() = runBulk(Res.plurals.common_restore_documents_failed, docLifecycle::restoreDocs)
 
-    override fun emptyTrash() =
-        runBulk(Res.plurals.common_trash_delete_all_failed, docLifecycle::deleteDocsPermanently)
+    override fun emptyTrash() = runBulk(Res.plurals.common_trash_delete_all_failed, docLifecycle::deleteDocsPermanently)
 
     /**
      * Run [op] over every trashed document, one bulk call that lists the trash once and returns how
