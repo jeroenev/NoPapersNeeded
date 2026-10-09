@@ -30,7 +30,8 @@ import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
 import dev.npn.core.rules.RuleApplier
-import dev.npn.core.util.runLogged
+import dev.npn.core.util.runCatchingCancellable
+import dev.npn.core.util.warn
 import dev.npn.core.work.DrainedQueue
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.work.drainedQueue
@@ -94,16 +95,39 @@ internal suspend fun createCoordinator(
  * Fold the journal, so the documents are there before the caller's initial rescan, and bring the
  * library's own data up to what this build expects: the seeded fields, and the library settings
  * this device kept before they became library data.
+ *
+ * A new library's first seeding is part of opening it: without it the library has no fields. Every
+ * other step is an [upgradeAtOpen].
  */
 internal suspend fun foldJournal(
     deps: SessionDeps,
     coordinator: JournalCoordinator,
 ) {
     coordinator.refreshState()
-    coordinator.seedFieldRegistryIfNeeded(FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) })
-    // Once per library. A failure leaves it for the next open rather than refusing this one.
-    deps.log.runLogged("Adopting this device's library settings") {
+    val seeds = FieldKeys.seedDefinitions { FieldKeys.SEED_LABELS.getValue(it) }
+    if (coordinator.setting(FieldKeys.SEEDED_SETTING) == null) {
+        coordinator.seedFieldRegistryIfNeeded(seeds)
+    } else {
+        deps.upgradeAtOpen("Upgrading the seeded field definitions") { coordinator.seedFieldRegistryIfNeeded(seeds) }
+    }
+    deps.upgradeAtOpen("Adopting this device's library settings") {
         coordinator.adoptSettings(deps.settings.legacyLibrarySettings().journalSettings())
+    }
+}
+
+/**
+ * Bring the library's data up to this build at open, once per library, as best effort: a failure
+ * (read-only or flaky storage) is logged and the next open tries again, rather than refusing this
+ * one. Storage that cannot publish without replacement at all still refuses the library, as it
+ * does wherever an open finds that out.
+ */
+private suspend fun SessionDeps.upgradeAtOpen(
+    what: String,
+    upgrade: suspend () -> Unit,
+) {
+    runCatchingCancellable { upgrade() }.onFailure { failure ->
+        if (failure is VerifiedPublicationUnavailableException) throw failure
+        log.warn("$what failed; trying again at the next open", failure)
     }
 }
 
@@ -120,7 +144,7 @@ internal suspend fun buildLibrary(
             coordinator.commitAndApply(listOf(PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, path)))
         }
     val savedViews = SavedViewRepositoryImpl(coordinator) { lifetime.owned(it) }
-    deps.log.runLogged("Moving saved views into the journal") { savedViews.adoptIndexViews(db) }
+    deps.upgradeAtOpen("Moving saved views into the journal") { savedViews.adoptIndexViews(db) }
     lateinit var rules: AutoMatchRuleRepositoryImpl
     val ruleApplier =
         RuleApplier(
