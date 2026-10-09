@@ -83,7 +83,10 @@ Every `core.app` facet keeps one contract, so a caller needs no defensive wrappi
 Opening a library is `LibrarySessionImpl.openSession(SessionDeps)` (commonMain) followed by
 `start()`. Everything the session runs — background loops, queue drains, every facet write — is a
 child of one `SessionLifetime` job under `SessionDeps.scope`, so `close()` stops and awaits all of
-it before the host closes the databases; closing is final. On a plain JVM the `SessionDeps` come
+it before the host closes the databases; closing is final. What an open writes to bring an existing
+library up to this build (a newer field seed, this device's old settings and saved views) is best
+effort, retried at the next open; only storage that cannot publish without replacement refuses the
+library. On a plain JVM the `SessionDeps` come
 from `core.app.jvmSessionDeps` (`desktopMain`): the one place that wires java.nio + PDFBox +
 Tesseract + the two Room databases under an `AppDirs`. The desktop app, the `AppSessionRig` test
 harness and any headless JVM host build their sessions through it — nothing in `composeApp` is
