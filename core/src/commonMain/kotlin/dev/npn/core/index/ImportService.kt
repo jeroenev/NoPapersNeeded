@@ -282,7 +282,7 @@ class ImportService(
                         previous
                     }
 
-                    trashCopies(docId).isNotEmpty() -> {
+                    trash.copiesOf(docId).isNotEmpty() -> {
                         fs.delete(placedAt)
                         previous
                     }
@@ -321,20 +321,10 @@ class ImportService(
         return if (holder == null || holder == docId) this else copy(relPath = missingSentinel(docId))
     }
 
-    /** The trash entries holding [docId]'s bytes. */
-    private suspend fun trashCopies(docId: String): List<String> {
-        val prefix = docId.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)
-        return trash
-            .listTrash()
-            .filter { NpnPaths.trashHashPrefix(it.name) == prefix }
-            .map { it.relPath }
-            .filter { fs.holds(it, docId) }
-    }
-
     /** Delete, best effort, what the trash holds of [docId], now that the document is back for good. */
     private suspend fun discardTrashCopies(docId: String) {
         log.runLogged("Removing the trashed copy of $docId") {
-            for (path in trashCopies(docId)) fs.delete(path)
+            for (path in trash.copiesOf(docId)) fs.delete(path)
         }
     }
 

@@ -139,6 +139,25 @@ class TrashOpsTest {
             fs.exists(unrelated).shouldBeTrue()
         }
 
+    /**
+     * Every document whose hash shares the prefix in an entry's name decides for it: one not in trash
+     * keeps it, and otherwise the latest trash time does. A prefix clash only ever keeps an entry
+     * longer, so the purge needs no hash to keep a document's copy.
+     */
+    @Test
+    fun purgeKeepsAnEntryWhileAnyDocumentSharingItsPrefixKeepsIt() =
+        runTest {
+            val entry = trashWithMtime("x/old.pdf", "ffffffff00000001", mtime = 1_000)
+            val trashedLongAgo = "ffffffff00000001" to 100_000L
+
+            trash.purgeOlderThan(500_000, mapOf(trashedLongAgo, "ffffffff00000002" to null))
+            fs.exists(entry).shouldBeTrue()
+            trash.purgeOlderThan(500_000, mapOf(trashedLongAgo, "ffffffff00000002" to 900_000L))
+            fs.exists(entry).shouldBeTrue()
+            trash.purgeOlderThan(500_000, mapOf(trashedLongAgo, "ffffffff00000002" to 200_000L))
+            fs.exists(entry).shouldBeFalse()
+        }
+
     @Test
     fun trashedNamesCarryTheirHashPrefix() {
         NpnPaths.trashHashPrefix("doc__deadbeef.pdf") shouldBe "deadbeef"

@@ -265,10 +265,11 @@ class MetadataWriterImpl(
         // A file moved out of the trash with no doc-restore event leaves the document trashed with
         // its trash entry gone, so refuse before the move, as trashDoc does.
         coordinator.checkWritable()
-        // The file lives in trash under a hash-suffixed name; find it and move it back (uniquify
-        // via TrashOps.restore if the target is taken). Another document may hold the target since
-        // the trash gave it up, so even with no copy left the row goes beside that one's file.
-        val entry = findTrashEntry(docId)
+        // The file lives in trash under a hash-suffixed name; find the entry that holds its bytes and
+        // move it back (uniquify via TrashOps.restore if the target is taken). Another document may
+        // hold the target since the trash gave it up, so even with no copy left the row goes beside
+        // that one's file.
+        val entry = trashOps.copiesOf(docId).firstOrNull()
         // Not cancellable from the move on, as in trashDoc.
         withContext(NonCancellable) {
             val finalPath =
@@ -314,11 +315,12 @@ class MetadataWriterImpl(
         ) {
             documentDao.upsert(doc.copy(deleted = true, trashed = false, trashedAt = null, missing = false))
         }
-        // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden. A
-        // trashed or missing document gave its path up, so the file there may be another one now.
+        // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden. Only
+        // the document's bytes go: its copies in the trash, or else its file. A trashed or missing
+        // document gave its path up, so the file there may be another one now.
         log.runLogged("Deleting the file of $docId") {
-            val path = findTrashEntry(docId) ?: doc.relPath.takeIf { fs.holds(it, docId) }
-            if (path != null) fs.delete(path)
+            val own = trashOps.copiesOf(docId).ifEmpty { listOfNotNull(doc.relPath.takeIf { fs.holds(it, docId) }) }
+            own.forEach { fs.delete(it) }
         }
     }
 
@@ -360,12 +362,6 @@ class MetadataWriterImpl(
 
     /** Trim a system-property input, coercing null/blank to null (clears the property). */
     private fun String?.normalized(): String? = this?.trim()?.ifEmpty { null }
-
-    /** Locate the file currently in `.npn/trash/` that belongs to [docId] (hash-suffixed name). */
-    private suspend fun findTrashEntry(docId: String): String? {
-        val marker = "__${docId.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)}"
-        return trashOps.listTrash().firstOrNull { it.name.contains(marker) }?.relPath
-    }
 }
 
 /**

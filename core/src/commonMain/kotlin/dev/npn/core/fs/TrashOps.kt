@@ -49,11 +49,25 @@ class TrashOps(
         fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory && NpnPaths.Temp.kindOf(it.relPath) == null }
 
     /**
+     * The trash entries that hold [docId]'s bytes. The hash prefix in an entry's name only narrows
+     * the search: another document's hash can share it, and an entry may hold other bytes than its
+     * name says, so each candidate is hashed.
+     */
+    suspend fun copiesOf(docId: String): List<String> {
+        val prefix = docId.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)
+        return listTrash()
+            .filter { NpnPaths.trashHashPrefix(it.name) == prefix }
+            .map { it.relPath }
+            .filter { fs.holds(it, docId) }
+    }
+
+    /**
      * Permanently delete trash entries trashed strictly before [cutoffMillis].
      *
      * [documents] maps each live document id to the time it was trashed, or to null while it is
      * not in trash. An entry belongs to the documents whose id starts with the hash prefix in its
-     * name ([NpnPaths.trashHashPrefix]):
+     * name ([NpnPaths.trashHashPrefix]), all of them, so a prefix two documents share only keeps it
+     * longer and its bytes need no hashing:
      * - a trashed document: its trash time decides. The entry's mtime cannot, because a move into
      *   trash keeps the PDF's own mtime, so a document imported long ago would go the moment it
      *   was trashed.

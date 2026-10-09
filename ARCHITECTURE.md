@@ -164,8 +164,10 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     trash moves the file at the document's path only while it is the document's own
     (the size and mtime its row stored, else its hash, as an import judges it); a file
     written over it since the last rescan stays where it is, and the trash is recorded
-    as for a document whose file is gone. Restore records its final destination: the
-    path the document was trashed from, or
+    as for a document whose file is gone. Restore and delete for good take a trash
+    entry for the document's only when it hashes to the document: the hash prefix in
+    its name (`NpnPaths.trashPath`) only narrows the search (`TrashOps.copiesOf`).
+    Restore records its final destination: the path the document was trashed from, or
     a `(restored)` name beside the file another document put there since. PDFs without
     a path intent retain their discovered location. A path holds one row: a trashed,
     deleted or missing row gives it up to a live document and waits under
