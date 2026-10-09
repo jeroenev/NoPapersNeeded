@@ -3,7 +3,8 @@ name: Release
 # Cut with `mise release <version>`, which bumps npn.version and pushes the matching v<version> tag.
 # Binaries go straight onto a draft release (release assets do not count against the Actions
 # artifact quota), and the draft is published only once every platform has uploaded. Tests are not
-# rerun here: the tagged commit is on main, where CI has already checked it.
+# rerun here, and nothing waits for CI on the tagged commit: `mise release` refuses unless CI passed
+# on the main commit it bumps, and the tagged commit changes only npn.version.
 #
 # Secrets are scoped to the steps that need them: GH_TOKEN (contents: write) to the steps that call
 # `gh`, the signing key to the one Gradle run that signs the APK. Every other step, including the

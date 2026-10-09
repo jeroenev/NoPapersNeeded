@@ -323,7 +323,9 @@ mise release 1.2.0
 
 That bumps `npn.version`, commits `[main] Release 1.2.0`, tags `v1.2.0` and pushes both.
 It refuses unless `main` matches `origin/main` and the CI workflow has passed on that commit,
-which it asks `gh` (the GitHub CLI, logged in); the release workflow does not rerun the tests.
+which it asks `gh` (the GitHub CLI, logged in). The tag goes on the bump commit, which changes
+only `npn.version`: CI runs on it as on any push to `main`, but the release workflow neither
+waits for that run nor reruns the tests.
 The tag starts `.github/workflows/release.yml`, which refuses a tag that does not match
 `npn.version`, builds the signed APK, AppImage (with its `.zsync`), `.deb`, `.rpm`,
 `.flatpak`, Linux tarball, `.msi` and `.exe` into a draft release, adds `SHA256SUMS` and

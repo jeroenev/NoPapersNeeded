@@ -33,7 +33,8 @@ git fetch --quiet --tags origin main
     die "main is not in sync with origin/main; push (and let CI pass) or pull first"
 ! git rev-parse --quiet --verify "refs/tags/$tag" >/dev/null || die "tag $tag already exists"
 
-# ...and only once CI has passed on it: release.yml builds the tag without rerunning the tests.
+# ...and only once CI has passed on it. The tag goes on the bump commit made below, which changes
+# only npn.version; release.yml builds it without rerunning the tests or waiting for CI on it.
 command -v gh >/dev/null || die "needs the GitHub CLI (gh) to check CI on main"
 head=$(git rev-parse --short HEAD)
 runs=$(gh run list --workflow ci.yml --commit "$(git rev-parse HEAD)" --json status,conclusion \
