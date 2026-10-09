@@ -103,26 +103,33 @@ class SnapshotSupport(
     }
 
     /**
-     * Delete the applied objects and snapshots among [listed] whose events a snapshot also in
-     * [listed] carries ([supersededByListed]): the compaction that published it could not delete
-     * them, and a later plan leaves them out. Runs after the pass read [listed], so every snapshot
-     * there reads as the one applied. [sources] is the source table before the pass. Returns the
-     * paths deleted.
+     * The applied objects and snapshots among [listed] whose events a snapshot also in [listed]
+     * carries ([supersededByListed]): the compaction that published it could not delete them, and a
+     * later plan leaves them out. A reconcile pass reads that snapshot rather than them, whatever
+     * their own bytes are now. [sources] is the source table before the pass.
      */
-    suspend fun deleteSupersededLeftovers(
+    suspend fun supersededLeftovers(
         listed: Set<String>,
         sources: List<MetadataSourceEntity>,
     ): Set<String> {
         val superseded = dao.supersededByListed(listed, sources)
         if (superseded.isEmpty()) return emptySet()
-        val leftovers =
-            sources.filter { source ->
+        return sources
+            .filter { source ->
                 source.status == SourceStatus.APPLIED && source.path in listed && source.contentHash in superseded
-            }
-        return leftovers
-            .filter { runCatchingCancellable { fs.delete(it.path) }.isSuccess }
-            .mapTo(HashSet()) { it.path }
+            }.mapTo(HashSet()) { it.path }
     }
+
+    /**
+     * Delete the [supersededLeftovers] among [listed]. Runs after the pass read [listed], so every
+     * snapshot there reads as the one applied. [sources] is the source table before the pass.
+     * Returns the paths deleted.
+     */
+    suspend fun deleteSupersededLeftovers(
+        listed: Set<String>,
+        sources: List<MetadataSourceEntity>,
+    ): Set<String> =
+        supersededLeftovers(listed, sources).filterTo(HashSet()) { runCatchingCancellable { fs.delete(it) }.isSuccess }
 }
 
 /**

@@ -235,9 +235,11 @@ class MetadataAccumulator(
         val previous = dao.allSources()
         val listed = entries.filter { !it.isDirectory }.associateBy { it.relPath }
 
-        // Read first: a snapshot that changed or no longer reads fails the pass before any file it
+        // A leftover a snapshot on disk supersedes is not read: that snapshot carries its events,
+        // whatever its own bytes are now (a sync conflict may have written over it). The snapshot is
+        // read first, so one that changed or no longer reads fails the pass before any file it
         // supersedes is deleted, and only a snapshot on disk now supersedes anything.
-        val ingest = ingestFiles(listed.values)
+        val ingest = ingestFiles((listed - snapshots.supersededLeftovers(listed.keys, previous)).values)
         val swept = snapshots.deleteSupersededLeftovers(listed.keys, previous)
         val files = listed - swept
         val current = dao.allSources()

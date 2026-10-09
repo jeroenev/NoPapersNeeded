@@ -102,12 +102,9 @@ class CompactionReconcileTest {
         accumulator.markReady(state.maxHlc)
     }
 
-    private suspend fun objects(): List<JournalPath> =
-        fs.listAllUnder(NpnPaths.JOURNAL_DIR).map { JournalPaths.classify(it.relPath) }
+    private suspend fun v2Count() = journalFiles<JournalPath.ObjectV2>().size
 
-    private suspend fun v2Count() = objects().count { it is JournalPath.ObjectV2 }
-
-    private suspend fun snapCount() = objects().count { it is JournalPath.SnapshotV2 }
+    private suspend fun snapCount() = journalFiles<JournalPath.SnapshotV2>().size
 
     /** The paths of the journal files classified as [T]. */
     private suspend inline fun <reified T : JournalPath> journalFiles(): List<String> =
@@ -219,6 +216,38 @@ class CompactionReconcileTest {
             coordinator.reconcileMetadata()
 
             Files.exists(libRoot.resolve(leftover.relPath)).shouldBeFalse()
+            checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
+            db.tagDao().tagsForDocument(docId).size shouldBe 6
+            clock.advance()
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "after"))).shouldBeTrue()
+        }
+
+    /**
+     * A leftover whose bytes changed since (a sync conflict wrote over it) is still swept: its events
+     * are in the snapshot on disk, which the pass reads instead of it, so it fails nothing.
+     */
+    @Test
+    fun aSupersededObjectLeftOnDiskWithOtherBytesIsDeletedByTheNextReconcile() =
+        runTest {
+            writePdf("a.pdf", "alpha")
+            val coordinator = coordinator(threshold = 3)
+            initialScan()
+            coordinator.refreshState()
+            val docId = checkNotNull(db.documentDao().rowAtPath("a.pdf")).docId
+            repeat(6) { i ->
+                clock.advance()
+                coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "tag$i")))
+            }
+            coordinator.reconcileMetadata()
+            val leftover = journalFiles<JournalPath.ObjectV2>().first()
+            val kept = Files.createTempDirectory("npn-leftover").resolve(NpnPaths.fileName(leftover))
+            Files.copy(libRoot.resolve(leftover), kept, StandardCopyOption.COPY_ATTRIBUTES)
+            coordinator.compact(nowMillis = farFuture).shouldNotBeNull()
+            Files.write(libRoot.resolve(leftover), Files.readAllBytes(kept) + "\n".encodeToByteArray())
+
+            coordinator.reconcileMetadata()
+
+            Files.exists(libRoot.resolve(leftover)).shouldBeFalse()
             checkNotNull(db.metadataProjectionDao().state()).migrationState shouldBe ProjectionStatus.READY
             db.tagDao().tagsForDocument(docId).size shouldBe 6
             clock.advance()
