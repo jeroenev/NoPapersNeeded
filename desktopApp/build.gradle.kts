@@ -25,6 +25,7 @@ dependencies {
     implementation(libs.kotlinx.coroutines.swing)
 
     testImplementation(kotlin("test"))
+    testImplementation(libs.kotlinx.coroutines.test)
 }
 
 tasks.test {

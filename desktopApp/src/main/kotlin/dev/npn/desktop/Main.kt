@@ -35,7 +35,6 @@ import dev.npn.core.app.SettingsRepositoryImpl
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.util.info
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_app_name
 import org.jetbrains.compose.resources.stringResource
@@ -95,11 +94,15 @@ private fun runApp() =
             onCloseRequest = {
                 if (!closing) {
                     closing = true
+                    // Closing the session stops OCR (and its tesseract processes) and lets a write in
+                    // progress finish.
                     scope.launch {
-                        // Closing the session stops OCR (and its tesseract processes) and lets a write
-                        // in progress finish; a close that hangs must not keep the app from quitting.
-                        withTimeoutOrNull(SESSION_CLOSE_TIMEOUT) { env.closeLibrary() }
-                        exitApplication()
+                        closeThenExit(
+                            close = env::closeLibrary,
+                            timeout = SESSION_CLOSE_TIMEOUT,
+                            log = DesktopLog,
+                            exit = ::exitApplication,
+                        )
                     }
                 }
             },
