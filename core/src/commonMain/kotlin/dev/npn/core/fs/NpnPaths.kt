@@ -308,9 +308,11 @@ object NpnPaths {
      * drive prefix on the first segment (`C:` makes java.nio treat the rest as absolute on
      * Windows). Leading, trailing and repeated `/` are tolerated — they cannot escape.
      *
-     * Observation-side predicates ([indexable], [isInternal], [isHidden], [isOwnDeviceWrite]) use
-     * this to *ignore* such a path; the I/O side ([normalize]) refuses it. The split keeps a
-     * hostile or merely exotic name on disk from killing a rescan or the watcher.
+     * Whatever reads a path seen on disk (a listing, a watcher event) uses this to *ignore* such a
+     * path ([indexable], `JournalPaths.classify`, the session's `watchAction`) or reads it without
+     * the gate ([isInternal], [isHidden], [isOwnDeviceWrite]); only the I/O side ([normalize])
+     * refuses it. The split keeps a hostile or merely exotic name on disk from failing a rescan, a
+     * journal reconcile or the watch.
      */
     fun isSafe(relPath: String): Boolean = unsafeReason(relPath) == null
 

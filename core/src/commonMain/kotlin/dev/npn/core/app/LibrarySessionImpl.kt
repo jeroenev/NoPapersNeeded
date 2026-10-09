@@ -36,6 +36,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.mapNotNull
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
@@ -214,12 +215,14 @@ class LibrarySessionImpl private constructor(
         // was down, a run left half-suggested. Each costs a single query when its queue is empty.
         queues.kickAll()
 
-        // Journal changes are routed apart from PDFs, so journal sync never scans or hashes PDFs.
+        // Journal changes are routed apart from PDFs, so journal sync never scans or hashes PDFs. An
+        // event that cannot be read is logged and passed over: one event never ends the watch.
         scope.launch {
             fs
                 .watch()
-                .map { watchAction(it, deviceId) }
-                .settled()
+                .mapNotNull { event ->
+                    log.runLogged("Reading the change at ${event.relPath}") { watchAction(event, deviceId) }
+                }.settled()
                 .collect { act(it) }
         }
 

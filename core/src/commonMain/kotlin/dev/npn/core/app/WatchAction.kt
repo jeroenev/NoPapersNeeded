@@ -18,7 +18,10 @@ import kotlin.time.TimeSource
  * without side effects; the session's watch loop acts on it in one place.
  */
 internal sealed interface WatchAction {
-    /** Nothing to do: this device's own write echoing back, or a journal write still being staged. */
+    /**
+     * Nothing to do: this device's own write echoing back, a journal write still being staged, or a
+     * name the library cannot address ([NpnPaths.isSafe]), which a rescan passes over too.
+     */
     data object Ignore : WatchAction
 
     /**
@@ -55,7 +58,7 @@ internal fun watchAction(
     deviceId: String,
 ): WatchAction {
     val rel = event.relPath ?: return WatchAction.Rescan
-    if (NpnPaths.isOwnDeviceWrite(rel, deviceId)) return WatchAction.Ignore
+    if (!NpnPaths.isSafe(rel) || NpnPaths.isOwnDeviceWrite(rel, deviceId)) return WatchAction.Ignore
     return when (JournalPaths.classify(rel)) {
         is JournalPath.ObjectV2 -> {
             WatchAction.IngestObject(rel)

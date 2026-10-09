@@ -54,6 +54,16 @@ class WatchActionTest {
         action(null) shouldBe WatchAction.Rescan
     }
 
+    /** A name the library cannot address is ignored, as the rescan ignores it, never thrown on. */
+    @Test
+    fun anUnsafePathIsIgnored() {
+        action("A: Taxes/x.pdf") shouldBe WatchAction.Ignore
+        action("C:x.pdf") shouldBe WatchAction.Ignore
+        action("../x.pdf") shouldBe WatchAction.Ignore
+        action("a\\b.pdf") shouldBe WatchAction.Ignore
+        action("${NpnPaths.JOURNAL_DIR}/objects-v2-ab/x\\$hash.jsonl") shouldBe WatchAction.Ignore
+    }
+
     @Test
     fun aBurstOfOneKindSettlesIntoOnePassAndAMixedOneIntoARescan() {
         WatchAction.ReconcileJournal.merge(WatchAction.ReconcileJournal) shouldBe WatchAction.ReconcileJournal

@@ -28,6 +28,16 @@ class JournalPathsTest {
         JournalPaths.objectStoreVersion(snap) shouldBe JournalPaths.SNAPSHOT_V2
     }
 
+    /** A file seen on disk under a name the library cannot address is no journal file, and never throws. */
+    @Test
+    fun anUnsafeObservedPathIsUnknownAndInNoBucket() {
+        val hash = "ab" + "0".repeat(62)
+        for (path in listOf(".npn/journal/objects-v2-ab/x\\$hash.jsonl", "C:x.jsonl", ".npn/journal/../$hash.jsonl")) {
+            JournalPaths.classify(path) shouldBe JournalPath.Unknown
+            JournalPaths.objectStoreVersion(path) shouldBe null
+        }
+    }
+
     @Test
     fun recoversDigestFromRecognizedConflictCopyOnly() {
         val hash = "ab" + "0".repeat(62)

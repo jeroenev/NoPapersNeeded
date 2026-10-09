@@ -1,5 +1,7 @@
 package dev.npn.core.app
 
+import dev.npn.core.fs.FsEvent
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.NpnLog
@@ -15,7 +17,10 @@ import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlinx.coroutines.withContext
@@ -161,6 +166,36 @@ class SessionSmokeTest {
                 rig.session.start()
 
                 reported.await().shouldNotBeNull()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A name the library cannot address, as the watcher reports it, is passed over; watching goes on. */
+    @Test
+    fun anUnsafePathFromTheWatcherLeavesTheWatchRunning() =
+        runTest {
+            val events = Channel<FsEvent>(Channel.UNLIMITED)
+            val rig =
+                AppSessionRig.create(backgroundScope) { fs ->
+                    object : LibraryFileSystem by fs {
+                        override fun watch(): Flow<FsEvent> = events.receiveAsFlow()
+                    }
+                }
+            try {
+                rig.session.start()
+                // The start's own rescan is done, so only the watch can find what comes next.
+                rig.session.lastScanReport.first { it != null }
+                rig.writePdf("later.pdf", PdfFixtures.embeddedTextPdf("later document"))
+                val id = rig.docId("later.pdf")
+
+                events.send(FsEvent("A: Taxes/x.pdf"))
+                events.send(FsEvent("later.pdf"))
+
+                rig.session.documents
+                    .observeDoc(id)
+                    .first { it != null }
+                    .shouldNotBeNull()
             } finally {
                 rig.close()
             }

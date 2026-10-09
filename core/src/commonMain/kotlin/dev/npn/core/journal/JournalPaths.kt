@@ -71,8 +71,13 @@ object JournalPaths {
         snapshot: Boolean = false,
     ): String = NpnPaths.parentDir(objectPath(hash, snapshot)) + "/.$hash.$installationId.$nonce.part"
 
-    /** Classify direct journal source files without letting object buckets masquerade as devices. */
+    /**
+     * Classify direct journal source files without letting object buckets masquerade as devices. A
+     * path the library cannot address ([NpnPaths.isSafe]), as a listing or the watcher may report
+     * one, is [JournalPath.Unknown] rather than a throw.
+     */
     fun classify(relPath: String): JournalPath {
+        if (!NpnPaths.isSafe(relPath)) return JournalPath.Unknown
         val norm = NpnPaths.normalize(relPath)
         val prefix = "$JOURNAL_DIR/"
         if (!norm.startsWith(prefix)) return JournalPath.Unknown
@@ -137,8 +142,12 @@ object JournalPaths {
         return matches.singleOrNull()
     }
 
-    /** The object-store version of the bucket [relPath] is in, or null outside any bucket. */
+    /**
+     * The object-store version of the bucket [relPath] is in, or null outside any bucket, and for a
+     * path the library cannot address ([NpnPaths.isSafe]).
+     */
     fun objectStoreVersion(relPath: String): Int? {
+        if (!NpnPaths.isSafe(relPath)) return null
         val norm = NpnPaths.normalize(relPath)
         if (!norm.startsWith("$JOURNAL_DIR/")) return null
         val dir = norm.removePrefix("$JOURNAL_DIR/").substringBefore('/')
