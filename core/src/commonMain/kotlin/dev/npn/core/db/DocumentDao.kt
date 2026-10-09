@@ -208,7 +208,7 @@ interface DocumentDao {
     suspend fun liveDocIdsWithOcrState(ocrState: String): List<String>
 
     /** Projection for the indexer diff: current known paths + fast-path fields. */
-    @Query("SELECT relPath, docId, size, mtime FROM documents WHERE deleted = 0")
+    @Query("SELECT relPath, docId, size, mtime, (trashed OR missing) AS hidden FROM documents WHERE deleted = 0")
     suspend fun allPathsAndMeta(): List<PathMeta>
 
     /** Every live (not deleted) document's trash time, for the trash auto-purge. */

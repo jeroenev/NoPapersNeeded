@@ -13,6 +13,7 @@ import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import java.nio.file.StandardCopyOption
+import java.nio.file.attribute.FileTime
 import kotlin.test.AfterTest
 import kotlin.test.Test
 
@@ -215,7 +216,11 @@ class PathIdentityTest {
             assertStillOnlyTrashed(trashed, "inbox/scan.pdf", report)
         }
 
-    /** Nor does another document's file moved onto a trashed document's old path take it out of the trash. */
+    /**
+     * Nor does another document's file moved onto a trashed document's old path take it out of the
+     * trash, even with the size and mtime the trashed document's file had: a hidden row's stored stat
+     * is no evidence that the file at its old path is still its own.
+     */
     @Test
     fun anotherDocumentMovedOntoATrashedDocumentsPathLeavesItInTheTrash() =
         runTest {
@@ -224,6 +229,9 @@ class PathIdentityTest {
             rig.rescan()
             val moved = rig.fs.sha256("q.pdf")
             val trashed = hide("inbox/scan.pdf") { PendingOp.docTrash(it, "inbox/scan.pdf") }
+            val trashedRow = rig.db.documentDao().getByDocId(trashed).shouldNotBeNull()
+            rig.fs.stat("q.pdf")?.size shouldBe trashedRow.size
+            Files.setLastModifiedTime(rig.libRoot.resolve("q.pdf"), FileTime.fromMillis(trashedRow.mtime))
 
             rig.moveFile("q.pdf", "inbox/scan.pdf")
             val report = rig.rescan()

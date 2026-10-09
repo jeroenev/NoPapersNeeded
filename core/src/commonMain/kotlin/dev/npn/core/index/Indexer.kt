@@ -121,10 +121,11 @@ class Indexer(
 
             val dbProjection = documentDao.allPathsAndMeta()
             val byPath = dbProjection.associateBy { it.relPath }
+            // A hidden row's stat is no evidence: a file at its old path is its own only if it hashes so.
             val changed =
                 indexable.filter { meta ->
                     val known = byPath[meta.relPath]
-                    known == null || !meta.hasStoredStat(known.size, known.mtime)
+                    known == null || known.hidden || !meta.hasStoredStat(known.size, known.mtime)
                 }
             // A file still being written is left for a later scan rather than given the
             // identity of a partial file. A known path keeps its old row meanwhile.
@@ -882,8 +883,9 @@ class Indexer(
 
 /**
  * Whether the file [this] describes still has the [size] and [mtime] a document's row stored: the
- * evidence a rescan takes that the bytes there are still that document's without hashing them, and
- * an import takes for a live document's file (`ImportService`).
+ * evidence a rescan and an import (`ImportService`) take that the bytes there are still that
+ * document's without hashing them, for a document that is not hidden. A hidden one gave its path
+ * up, so a file there is hashed.
  */
 internal fun FileMeta.hasStoredStat(
     size: Long,

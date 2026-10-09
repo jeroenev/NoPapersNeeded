@@ -6,6 +6,8 @@ data class PathMeta(
     val docId: String,
     val size: Long,
     val mtime: Long,
+    /** Trashed or missing: its stored size and mtime say nothing about the file at its path now. */
+    val hidden: Boolean = false,
 )
 
 /** A live document's trash time ([DocumentEntity.trashedAt]), null while it is not in trash. */
