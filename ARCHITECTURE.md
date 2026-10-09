@@ -177,11 +177,14 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     Trash, restore and delete for good read the row, check the file and move it under
     the writer lock, in one step with their journal write
     (`JournalCoordinator.changeLifecycle`), so no rescan or storage-path move lands in
-    between: a restore hashes the trash entries before it takes the lock, and under it
-    again only one whose stat changed; a delete for good deletes the bytes after its
-    tombstone is published, hashed before the lock and deleted under it only while
-    unchanged and while the document is still deleted (an import may have brought it
-    back meanwhile).
+    between: a restore lists and hashes the trash entries before it takes the lock, and
+    under it checks them by a stat, hashing again only one whose stat changed (it lists
+    the trash there only when every copy it found has gone); a delete for good deletes
+    the bytes after its tombstone is published, hashed before the lock and deleted under
+    it only while unchanged and while the document is still deleted (an import may have
+    brought it back meanwhile). Restoring or emptying the whole trash
+    (`DocLifecycle.restoreDocs`, `deleteDocsPermanently`) lists it once for all its
+    documents.
     Restore records its final destination: the path the document was trashed from, or
     a `(restored)` name beside it when a file is there now or another live row names it
     (as for an import: a row whose file went outside the app names its path until a

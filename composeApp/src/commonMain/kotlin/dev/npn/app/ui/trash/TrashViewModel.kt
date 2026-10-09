@@ -99,18 +99,23 @@ class TrashViewModel(
     override fun deleteForever(docId: String) =
         launchReporting(Res.string.common_trash_delete_failed) { docLifecycle.deleteDocPermanently(docId) }
 
-    override fun restoreAll() = runBulk(Res.plurals.common_restore_documents_failed, docLifecycle::restoreDoc)
+    override fun restoreAll() = runBulk(Res.plurals.common_restore_documents_failed, docLifecycle::restoreDocs)
 
-    override fun emptyTrash() = runBulk(Res.plurals.common_trash_delete_all_failed, docLifecycle::deleteDocPermanently)
+    override fun emptyTrash() =
+        runBulk(Res.plurals.common_trash_delete_all_failed, docLifecycle::deleteDocsPermanently)
 
+    /**
+     * Run [op] over every trashed document, one bulk call that lists the trash once and returns how
+     * many documents failed; a throw from it counts every one as failed.
+     */
     private fun runBulk(
         partlyFailed: PluralStringResource,
-        op: suspend (String) -> Unit,
+        op: suspend (List<String>) -> Int,
     ) {
         val ids = state.value.trashed.map { it.doc.docId }
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            val failed = ids.count { runCatchingCancellable { op(it) }.isFailure }
+            val failed = runCatchingCancellable { op(ids) }.getOrElse { ids.size }
             if (failed > 0) {
                 message(uiText(partlyFailed, ids.size, failed, ids.size))
             }

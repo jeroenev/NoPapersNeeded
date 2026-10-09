@@ -2,6 +2,7 @@ package dev.npn.app
 
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.TagAdmin
+import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CompletableDeferred
 
 // Write-side test doubles for the tag and lifecycle facets; the metadata writer's is shared, in
@@ -90,9 +91,15 @@ class FakeDocLifecycle : DocLifecycle {
         restoredDocs += docId
     }
 
+    override suspend fun restoreDocs(docIds: List<String>): Int =
+        docIds.count { runCatchingCancellable { restoreDoc(it) }.isFailure }
+
     override suspend fun deleteDocPermanently(docId: String) {
         deletedDocs += docId
     }
+
+    override suspend fun deleteDocsPermanently(docIds: List<String>): Int =
+        docIds.count { runCatchingCancellable { deleteDocPermanently(it) }.isFailure }
 
     override suspend fun renameFile(
         docId: String,

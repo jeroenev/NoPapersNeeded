@@ -34,11 +34,14 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Runnable
 import kotlinx.coroutines.async
 import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.runTest
 import java.io.IOException
 import java.nio.file.Files
 import java.nio.file.attribute.FileTime
+import java.util.Collections
+import kotlin.coroutines.ContinuationInterceptor
 import kotlin.coroutines.CoroutineContext
 import kotlin.test.AfterTest
 import kotlin.test.Test
@@ -711,6 +714,97 @@ class RestoreTargetTest {
         }
 }
 
+/**
+ * Restoring or deleting for good every document in the trash lists the trash once, before any of
+ * them takes the writer lock, rather than twice per document with one of those under the lock.
+ */
+class BulkTrashTest {
+    private val rig = IndexRig.create()
+
+    /** The coordinator's dispatcher: what runs on it runs under the writer lock. */
+    private val underTheLock = NamedDefault()
+    private val files = TrashListings(rig.fs, underTheLock)
+    private val coordinator =
+        JournalCoordinator(rig.writer(), rig.indexer, rig.accumulator, dispatcher = underTheLock)
+    private val writer =
+        MetadataWriterImpl(
+            coordinator,
+            rig.db,
+            files,
+            TrashOps(files),
+            StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
+            NpnLog.None,
+        )
+
+    @AfterTest
+    fun teardown() = rig.close()
+
+    @Test
+    fun restoringEveryTrashedDocumentListsTheTrashOnceOutsideTheLock() =
+        runTest {
+            val docs = trashed()
+
+            writer.restoreDocs(docs.keys.toList()) shouldBe 0
+
+            files.listings shouldBe listOf(false)
+            docs.forEach { (id, path) -> rig.fs.sha256(path) shouldBe id }
+            trashEntries().shouldBeEmpty()
+        }
+
+    @Test
+    fun deletingEveryTrashedDocumentForGoodListsTheTrashOnceOutsideTheLock() =
+        runTest {
+            val docs = trashed()
+
+            writer.deleteDocsPermanently(docs.keys.toList()) shouldBe 0
+
+            files.listings shouldBe listOf(false)
+            docs.keys.forEach {
+                rig.db
+                    .documentDao()
+                    .getByDocId(it)
+                    .shouldNotBeNull()
+                    .deleted
+                    .shouldBeTrue()
+            }
+            trashEntries().shouldBeEmpty()
+        }
+
+    /** Five documents in the trash, by id, each with the path it came from; the listings so far forgotten. */
+    private suspend fun trashed(): Map<String, String> {
+        val paths = (1..5).map { "doc $it.pdf" }
+        paths.forEach { rig.writePdf(it, "content of $it") }
+        coordinator.rescan()
+        val docs = paths.associateBy { rig.fs.sha256(it) }
+        docs.keys.forEach { writer.trashDoc(it) }
+        files.listings.clear()
+        return docs
+    }
+
+    private suspend fun trashEntries() = rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }
+
+    /** [Dispatchers.Default] as an instance of its own, so a coroutine can tell it runs there. */
+    private class NamedDefault : CoroutineDispatcher() {
+        override fun dispatch(
+            context: CoroutineContext,
+            block: Runnable,
+        ) = Dispatchers.Default.dispatch(context, block)
+    }
+
+    /** [fs], noting of each listing of the trash whether it ran on [locked], under the writer lock. */
+    private class TrashListings(
+        private val fs: LibraryFileSystem,
+        private val locked: CoroutineDispatcher,
+    ) : LibraryFileSystem by fs {
+        val listings: MutableList<Boolean> = Collections.synchronizedList(mutableListOf())
+
+        override suspend fun listAllUnder(relPath: String): List<FileMeta> {
+            if (relPath == NpnPaths.TRASH_DIR) listings += currentCoroutineContext()[ContinuationInterceptor] === locked
+            return fs.listAllUnder(relPath)
+        }
+    }
+}
+
 /** Deleting a document for good removes its own bytes and nothing else. */
 class PermanentDeleteTest {
     /**
@@ -743,6 +837,52 @@ class PermanentDeleteTest {
                         .shouldNotBeNull()
                 row.deleted.shouldBeFalse()
                 row.relPath shouldBe "a.pdf"
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * An import took the old path of a document being deleted for good, after the deletion and before
+     * the deletion read the file there. That file is the import's, as its row says, and is not read
+     * for the deleted document's bytes.
+     */
+    @Test
+    fun deletingForGoodReadsNoFileAnotherDocumentHoldsAtTheOldPath() =
+        runTest {
+            val rig = IndexRig.create()
+            try {
+                val recorded = WatchedFileSystem(rig.fs).also { it.db = rig.db }
+                val importing = BeforeTrashListing()
+                val files = importing.over(recorded)
+                val coordinator = rig.coordinator()
+                val writer =
+                    MetadataWriterImpl(
+                        coordinator,
+                        rig.db,
+                        files,
+                        TrashOps(files),
+                        StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
+                        NpnLog.None,
+                    )
+                rig.writePdf("inbox/x.pdf", "deleted for good")
+                coordinator.rescan()
+                val deleted = rig.fs.sha256("inbox/x.pdf")
+                writer.trashDoc(deleted)
+                importing.next = {
+                    rig.writePdf("inbox/x.pdf", "imported since")
+                    coordinator.rescan()
+                    recorded.clear()
+                }
+
+                writer.deleteDocPermanently(deleted)
+
+                recorded.calls("sha256").filterNot { it.contains(NpnPaths.TRASH_DIR) }.shouldBeEmpty()
+                rig.fs.readBytes("inbox/x.pdf").decodeToString() shouldBe "imported since"
+                rig.fs
+                    .listAllUnder(NpnPaths.TRASH_DIR)
+                    .filter { !it.isDirectory }
+                    .shouldBeEmpty()
             } finally {
                 rig.close()
             }

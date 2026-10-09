@@ -97,7 +97,16 @@ interface DocLifecycle {
 
     suspend fun restoreDoc(docId: String)
 
+    /**
+     * [restoreDoc] each of [docIds], listing the trash once for all of them rather than once each.
+     * One that fails does not stop the others; returns how many failed, each in the session log.
+     */
+    suspend fun restoreDocs(docIds: List<String>): Int
+
     suspend fun deleteDocPermanently(docId: String) // deletes file + doc-delete tombstone
+
+    /** [deleteDocPermanently] each of [docIds], over one listing of the trash, as [restoreDocs] restores. */
+    suspend fun deleteDocsPermanently(docIds: List<String>): Int
 
     suspend fun renameFile(
         docId: String,

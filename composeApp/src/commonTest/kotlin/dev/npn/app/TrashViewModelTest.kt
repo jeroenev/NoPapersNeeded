@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.trash.TrashViewModel
 import dev.npn.core.index.RelinkCandidate
 import dev.npn.core.testing.doc
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
 import no_papers_needed.composeapp.generated.resources.common_trash_restore_failed
 import kotlin.test.Test
 
@@ -65,6 +67,40 @@ class TrashViewModelTest : MainDispatcherTest() {
             advanceUntilIdle()
             session.docLifecycle.restoredDocs shouldContainExactly listOf("d1")
             session.docLifecycle.deletedDocs shouldContainExactly listOf("d2")
+        }
+
+    @Test
+    fun restoreAllRestoresEveryTrashedDocumentAndSaysHowManyFailed() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.documents.trashed.value = listOf(listItem("d1"), listItem("d2"))
+            session.docLifecycle.failRestore = { error("file exists at original path") }
+            val model = vm(session)
+            collecting(model.state)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+
+            model.restoreAll()
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf(uiText(Res.plurals.common_restore_documents_failed, 2, 2, 2))
+        }
+
+    @Test
+    fun emptyTrashDeletesEveryTrashedDocument() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.documents.trashed.value = listOf(listItem("d1"), listItem("d2"))
+            val model = vm(session)
+            collecting(model.state)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+
+            model.emptyTrash()
+            advanceUntilIdle()
+
+            session.docLifecycle.deletedDocs shouldContainExactly listOf("d1", "d2")
+            messages shouldBe emptyList()
         }
 
     @Test

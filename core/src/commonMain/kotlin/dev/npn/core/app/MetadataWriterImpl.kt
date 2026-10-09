@@ -10,6 +10,7 @@ import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.NpnPaths
 import dev.npn.core.fs.TrashOps
 import dev.npn.core.fs.holds
+import dev.npn.core.index.hasStoredStat
 import dev.npn.core.index.holdsDocument
 import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.PendingOp
@@ -21,7 +22,9 @@ import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pathrules.pathTaken
 import dev.npn.core.util.NpnLog
+import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
+import dev.npn.core.util.warn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 
@@ -232,10 +235,21 @@ class MetadataWriterImpl(
             )
         }
 
-    override suspend fun restoreDoc(docId: String) {
-        // Hashed before the lock, which every write, import and rescan waits on; under it, only an
-        // entry whose stat changed since is hashed again.
-        val hashed = trashOps.hashCandidates(docId)
+    override suspend fun restoreDoc(docId: String) = restore(docId, listing = null)
+
+    override suspend fun restoreDocs(docIds: List<String>): Int = forEachListed(docIds, "Restoring", ::restore)
+
+    /**
+     * Restore [docId] from the trash as [listing] (from [TrashOps.listTrash]) found it, or as listed
+     * now without one.
+     */
+    private suspend fun restore(
+        docId: String,
+        listing: List<FileMeta>?,
+    ) {
+        // Hashed before the lock, which every write, import and rescan waits on; under it, those
+        // entries are checked by a stat, and only one whose stat changed since is hashed again.
+        val hashed = trashOps.hashCandidates(docId, listing)
         coordinator.changeLifecycle(docId) { doc ->
             if (doc == null || !doc.trashed) return@changeLifecycle null
             val target = doc.trashedOrigPath ?: doc.relPath
@@ -243,7 +257,7 @@ class MetadataWriterImpl(
             // back to the target, or beside it when the target is taken. Another document may hold the
             // target since the trash gave it up, so even with no copy left the row goes beside that
             // one's file, or beside its row while that names the path with the file gone.
-            val entry = trashOps.copiesOf(docId, hashed).firstOrNull()
+            val entry = trashOps.confirmedCopiesOf(docId, hashed).firstOrNull()
             val finalPath =
                 if (entry != null) {
                     trashOps.restoreTarget(target, ::takenForRestore)
@@ -295,7 +309,19 @@ class MetadataWriterImpl(
             missing = false,
         )
 
-    override suspend fun deleteDocPermanently(docId: String) {
+    override suspend fun deleteDocPermanently(docId: String) = deleteForGood(docId, listing = null)
+
+    override suspend fun deleteDocsPermanently(docIds: List<String>): Int =
+        forEachListed(docIds, "Deleting", ::deleteForGood)
+
+    /**
+     * Delete [docId] for good, its copies in the trash as [listing] (from [TrashOps.listTrash]) found
+     * them, or as listed after the deletion without one.
+     */
+    private suspend fun deleteForGood(
+        docId: String,
+        listing: List<FileMeta>?,
+    ) {
         var deleted: DocumentEntity? = null
         // Tombstone first, bytes second: a refused commit must leave the file where it was. The
         // optimistic row write keeps it hidden (deleted flag) after any rescan.
@@ -317,16 +343,48 @@ class MetadataWriterImpl(
         // only while unchanged since and while the document is still deleted: an import of its bytes
         // can have brought it back meanwhile, with that very file.
         log.runLogged("Deleting the file of $docId") {
-            val hashed = trashOps.hashCandidates(docId)
-            val file = fs.stat(doc.relPath)?.let { mapOf(it to fs.holds(doc.relPath, docId)) }.orEmpty()
+            val hashed = trashOps.hashCandidates(docId, listing)
+            val file = fileAt(doc)
             coordinator.serialized { _ ->
                 if (documentDao.getByDocId(docId)?.deleted == false) return@serialized
                 val own =
-                    trashOps.copiesOf(docId, hashed).ifEmpty {
+                    trashOps.confirmedCopiesOf(docId, hashed).ifEmpty {
                         listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })
                     }
                 own.forEach { fs.delete(it) }
             }
+        }
+    }
+
+    /**
+     * Whether the file at the path of [doc], its row before the deletion, holds its bytes, keyed by
+     * the stat it had, for [stillHolds]. A file another live row names with the size and mtime that
+     * row stored is that document's, and is not read; nor is [doc]'s own while it was live and
+     * unchanged.
+     */
+    private suspend fun fileAt(doc: DocumentEntity): Map<FileMeta, Boolean> {
+        val meta = fs.stat(doc.relPath) ?: return emptyMap()
+        val holder = documentDao.getByRelPath(doc.relPath)?.takeIf { it.docId != doc.docId && it.isLive }
+        val held = holder?.let { meta.hasStoredStat(it.size, it.mtime) } != true && fs.holdsDocument(doc)
+        return mapOf(meta to held)
+    }
+
+    /**
+     * Run [step] for each of [docIds] over one listing of the trash, so a bulk restore or delete lists
+     * it once rather than once per document; a document that fails does not stop the others. Returns
+     * how many failed, each failure logged as "[what] <id> failed".
+     */
+    private suspend fun forEachListed(
+        docIds: List<String>,
+        what: String,
+        step: suspend (String, List<FileMeta>) -> Unit,
+    ): Int {
+        if (docIds.isEmpty()) return 0
+        val listing = trashOps.listTrash()
+        return docIds.count { docId ->
+            runCatchingCancellable { step(docId, listing) }
+                .onFailure { log.warn("$what $docId failed", it) }
+                .isFailure
         }
     }
 

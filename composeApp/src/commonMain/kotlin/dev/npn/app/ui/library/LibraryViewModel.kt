@@ -469,7 +469,7 @@ class LibraryViewModel(
     fun undoTrash(ids: List<String>) {
         if (ids.isEmpty()) return
         viewModelScope.launch {
-            val failed = ids.count { runCatchingCancellable { docLifecycle.restoreDoc(it) }.isFailure }
+            val failed = runCatchingCancellable { docLifecycle.restoreDocs(ids) }.getOrElse { ids.size }
             if (failed > 0) {
                 message(uiText(Res.plurals.common_restore_documents_failed, ids.size, failed, ids.size))
             }
