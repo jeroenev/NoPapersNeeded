@@ -783,12 +783,14 @@ class BulkTrashTest {
 
     private suspend fun trashEntries() = rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }
 
-    /** [Dispatchers.Default] as an instance of its own, so a coroutine can tell it runs there. */
-    private class NamedDefault : CoroutineDispatcher() {
+    /** [threads] as a dispatcher instance of its own, so a coroutine can tell it runs there. */
+    private class NamedDefault(
+        private val threads: CoroutineDispatcher = Dispatchers.Default,
+    ) : CoroutineDispatcher() {
         override fun dispatch(
             context: CoroutineContext,
             block: Runnable,
-        ) = Dispatchers.Default.dispatch(context, block)
+        ) = threads.dispatch(context, block)
     }
 
     /** [fs], noting of each listing of the trash whether it ran on [locked], under the writer lock. */
