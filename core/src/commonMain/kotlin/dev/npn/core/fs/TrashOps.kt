@@ -40,13 +40,19 @@ class TrashOps(
         trashRelPath: String,
         toRelPath: String,
     ): String {
-        val target = restoreTarget(toRelPath)
+        val target = restoreTarget(toRelPath, fs::exists)
         fs.move(trashRelPath, target)
         return target
     }
 
-    /** Where [restore] puts a file restored to [toRelPath]: there, or beside it when it is taken. */
-    suspend fun restoreTarget(toRelPath: String): String = uniquifyRestored(toRelPath)
+    /**
+     * Where a file restored to [toRelPath] goes: there, or beside it when it is [taken] ([restore]
+     * takes a path a file is at).
+     */
+    suspend fun restoreTarget(
+        toRelPath: String,
+        taken: suspend (String) -> Boolean,
+    ): String = uniquifyRestored(toRelPath, taken)
 
     /**
      * All entries currently in `.npn/trash/` (files only, never a temporary file a move into the trash
@@ -119,12 +125,15 @@ class TrashOps(
     private suspend fun uniquify(path: String): String =
         uniquifyPath(path, startIndex = 1, suffix = { "-$it" }, exists = fs::exists)
 
-    private suspend fun uniquifyRestored(path: String): String =
+    private suspend fun uniquifyRestored(
+        path: String,
+        taken: suspend (String) -> Boolean,
+    ): String =
         uniquifyPath(
             path,
             startIndex = 1,
             firstSuffix = " (restored)",
             suffix = { " (restored $it)" },
-            exists = fs::exists,
+            exists = taken,
         )
 }

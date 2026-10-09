@@ -19,6 +19,7 @@ import dev.npn.core.model.FieldValues
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
+import dev.npn.core.pathrules.pathTaken
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runLogged
 import kotlinx.coroutines.flow.Flow
@@ -241,13 +242,13 @@ class MetadataWriterImpl(
             // The file lives in trash under a hash-suffixed name; the entry that holds its bytes goes
             // back to the target, or beside it when the target is taken. Another document may hold the
             // target since the trash gave it up, so even with no copy left the row goes beside that
-            // one's file.
+            // one's file, or beside its row while that names the path with the file gone.
             val entry = trashOps.copiesOf(docId, hashed).firstOrNull()
             val finalPath =
                 if (entry != null) {
-                    trashOps.restoreTarget(target)
+                    trashOps.restoreTarget(target, ::takenForRestore)
                 } else {
-                    target.takeIf { freeOrHolding(it, doc) } ?: trashOps.restoreTarget(target)
+                    target.takeIf { freeFor(it, doc) } ?: trashOps.restoreTarget(target, ::takenForRestore)
                 }
             LifecycleChange(
                 ops =
@@ -262,11 +263,23 @@ class MetadataWriterImpl(
         }
     }
 
-    /** Whether nothing is at [path], or [doc]'s bytes are; a file of another size is not hashed. */
-    private suspend fun freeOrHolding(
+    /**
+     * Whether a restore must leave [path] alone: a file is there, or a live row names it. A live row
+     * whose file went outside the app names its path until a rescan finds it missing, and the
+     * restored row could not take the path from it. The trashed row itself is never live.
+     */
+    private suspend fun takenForRestore(path: String): Boolean =
+        pathTaken(fs, documentDao, currentDocId = null, path) { it.isLive }
+
+    /**
+     * Whether [doc] can come back at [path] with no copy to move there: no live row names it, and
+     * nothing is at it or [doc]'s bytes are; a file of another size is not hashed.
+     */
+    private suspend fun freeFor(
         path: String,
         doc: DocumentEntity,
     ): Boolean {
+        if (documentDao.getByRelPath(path)?.isLive == true) return false
         val meta = fs.stat(path) ?: return true
         return !meta.isDirectory && meta.size == doc.size && fs.holds(path, doc.docId)
     }

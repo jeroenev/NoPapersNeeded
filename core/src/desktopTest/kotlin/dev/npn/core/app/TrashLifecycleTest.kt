@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.FileMeta
 import dev.npn.core.fs.LibraryFileSystem
@@ -25,6 +26,7 @@ import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldHaveSize
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineName
@@ -291,6 +293,76 @@ class TrashLifecycleTest {
                         .shouldNotBeNull()
                 restored.trashed.shouldBeFalse()
                 restored.relPath shouldBe "inbox/invoice (restored).pdf"
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * A document imported since took the path a trashed one came from, and its file went outside the
+     * app with no rescan since: its live row still names the path, free on disk. The restore goes
+     * beside it, as when the file is there, and leaves that row alone.
+     */
+    @Test
+    fun aRestoreGoesBesideAPathALiveRowStillNames() =
+        withPathTakenByAGoneFile { rig, trashed, later ->
+            rig.session.docLifecycle.restoreDoc(trashed)
+
+            val restored =
+                rig.db
+                    .documentDao()
+                    .getByDocId(trashed)
+                    .shouldNotBeNull()
+            restored.isLive.shouldBeTrue()
+            restored.relPath shouldBe "inbox/x (restored).pdf"
+            rig.fs.sha256(restored.relPath) shouldBe trashed
+            rig.db.documentDao().getByDocId(later.docId) shouldBe later
+        }
+
+    /** The same with no copy left in the trash: the restored row does not take that path either. */
+    @Test
+    fun aRestoreWithNoTrashCopyGoesBesideAPathALiveRowStillNames() =
+        withPathTakenByAGoneFile { rig, trashed, later ->
+            trashEntries(rig.fs).forEach { rig.fs.delete(it.relPath) }
+
+            rig.session.docLifecycle.restoreDoc(trashed)
+
+            val restored =
+                rig.db
+                    .documentDao()
+                    .getByDocId(trashed)
+                    .shouldNotBeNull()
+            restored.trashed.shouldBeFalse()
+            restored.relPath shouldBe "inbox/x (restored).pdf"
+            rig.db.documentDao().getByDocId(later.docId) shouldBe later
+        }
+
+    /**
+     * Run [block] over a library where a document was trashed from `inbox/x.pdf`, another was then
+     * imported as `x.pdf` and landed there, and that one's file was deleted outside the app since.
+     * [block] gets the trashed document's id and the other one's row.
+     */
+    private fun withPathTakenByAGoneFile(block: suspend (AppSessionRig, String, DocumentEntity) -> Unit) =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("inbox/x.pdf", PdfFixtures.embeddedTextPdf("trashed"))
+                rig.session.rescan()
+                val trashed = rig.docId("inbox/x.pdf")
+                rig.session.docLifecycle.trashDoc(trashed)
+                val imported =
+                    rig.session.ingest
+                        .importPdfBytes(PdfFixtures.embeddedTextPdf("imported since"), "x.pdf")
+                        .shouldBeInstanceOf<ImportOutcome.Imported>()
+                imported.relPath shouldBe "inbox/x.pdf"
+                rig.session.work.drainOcr()
+                Files.delete(rig.libRoot.resolve("inbox/x.pdf"))
+                val later =
+                    rig.db
+                        .documentDao()
+                        .getByDocId(imported.docId)
+                        .shouldNotBeNull()
+                block(rig, trashed, later)
             } finally {
                 rig.close()
             }

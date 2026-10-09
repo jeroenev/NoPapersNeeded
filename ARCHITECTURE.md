@@ -181,7 +181,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     unchanged and while the document is still deleted (an import may have brought it
     back meanwhile).
     Restore records its final destination: the path the document was trashed from, or
-    a `(restored)` name beside the file another document put there since. PDFs without
+    a `(restored)` name beside it when a file is there now or another live row names it
+    (as for an import: a row whose file went outside the app names its path until a
+    rescan finds it missing). PDFs without
     a path intent retain their discovered location. A path holds one row: a trashed,
     deleted or missing row gives it up to a live document and waits under
     `.npn/missing/` with its flags kept (`DocumentDao.upsertAll`, which fails the write
