@@ -33,6 +33,38 @@ class ExternalDocumentMovesTest {
             }
         }
 
+    /**
+     * Baselines are compared as the strings stored, so a build must encode one exactly as earlier
+     * builds did: one that no longer compares equal hides the next move outside the app.
+     */
+    @Test
+    fun aBaselineStoredByAnEarlierBuildStillComparesEqual() =
+        runTest {
+            val rig = IndexRig.create()
+            try {
+                rig.writePdf("original.pdf", "document")
+                val hash = rig.fs.sha256("original.pdf")
+                val coordinator = rig.coordinator(rig.writer("local"))
+                coordinator.rescan()
+                val kv = rig.db.keyValueDao()
+                val key = "observed-document-path:$hash"
+                kv.get(key) shouldBe """{"path":"original.pdf","version":null}"""
+
+                kv.put(key, """{"path":"original.pdf","version":null}""")
+                rig.moveFile("original.pdf", "archive/manual.pdf")
+                coordinator.rescan()
+
+                val state = rig.accumulator.loadState()
+                state.effectiveProp(hash, SystemProperty.STORAGE_PATH) shouldBe "archive/manual.pdf"
+                val version = checkNotNull(state.propVersion(hash, SystemProperty.STORAGE_PATH))
+                kv.get(key) shouldBe
+                    """{"path":"archive/manual.pdf","version":""" +
+                    """{"t":${version.physicalMillis},"c":${version.counter},"d":"${version.deviceId}"}}"""
+            } finally {
+                rig.close()
+            }
+        }
+
     @Test
     fun manualMoveOverridesAppliedIntentAndReplicates() =
         runTest {

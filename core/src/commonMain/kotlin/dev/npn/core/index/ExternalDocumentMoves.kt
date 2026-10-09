@@ -13,8 +13,8 @@ import dev.npn.core.journal.FoldedState
 import dev.npn.core.journal.Hlc
 import dev.npn.core.journal.PendingOp
 import dev.npn.core.model.SystemProperty
+import dev.npn.core.util.NpnJson
 import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
 /** Device-local observations distinguish external moves from unapplied journal path changes. */
 internal class ExternalDocumentMoves(
@@ -107,7 +107,7 @@ internal class ExternalDocumentMoves(
         docId: String,
         path: String,
         state: FoldedState,
-    ): String = Json.encodeToString(Baseline(path, state.propVersion(docId, SystemProperty.STORAGE_PATH)))
+    ): String = NpnJson.Persisted.encodeToString(Baseline(path, state.propVersion(docId, SystemProperty.STORAGE_PATH)))
 
     private fun key(docId: String): String = "observed-document-path:$docId"
 }
