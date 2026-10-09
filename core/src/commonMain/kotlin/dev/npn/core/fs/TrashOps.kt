@@ -18,11 +18,18 @@ class TrashOps(
         relPath: String,
         sha256: String,
     ): String {
-        val name = NpnPaths.sanitizeFileName(NpnPaths.fileName(relPath))
-        val base = NpnPaths.trashPath(name, sha256)
-        val target = uniquify(base)
+        val target = trashTarget(relPath, sha256)
         fs.move(relPath, target)
         return target
+    }
+
+    /** Where [moveToTrash] puts [relPath], the file of the document [sha256]. */
+    suspend fun trashTarget(
+        relPath: String,
+        sha256: String,
+    ): String {
+        val name = NpnPaths.sanitizeFileName(NpnPaths.fileName(relPath))
+        return uniquify(NpnPaths.trashPath(name, sha256))
     }
 
     /**
@@ -51,14 +58,26 @@ class TrashOps(
     /**
      * The trash entries that hold [docId]'s bytes. The hash prefix in an entry's name only narrows
      * the search: another document's hash can share it, and an entry may hold other bytes than its
-     * name says, so each candidate is hashed.
+     * name says, so each candidate is hashed, unless [hashed] (from [hashCandidates]) knows it with
+     * the stat it has now.
      */
-    suspend fun copiesOf(docId: String): List<String> {
+    suspend fun copiesOf(
+        docId: String,
+        hashed: Map<FileMeta, Boolean> = emptyMap(),
+    ): List<String> = candidates(docId).filter { hashed[it] ?: fs.holds(it.relPath, docId) }.map { it.relPath }
+
+    /**
+     * Whether each entry [copiesOf] would look at for [docId] holds its bytes, keyed by the stat it
+     * had before it was hashed. Taken before the writer lock, it leaves [copiesOf] under the lock to
+     * hash only an entry that changed since, or appeared.
+     */
+    suspend fun hashCandidates(docId: String): Map<FileMeta, Boolean> =
+        candidates(docId).associateWith { fs.holds(it.relPath, docId) }
+
+    /** The trash entries whose name carries [docId]'s hash prefix. */
+    private suspend fun candidates(docId: String): List<FileMeta> {
         val prefix = docId.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH)
-        return listTrash()
-            .filter { NpnPaths.trashHashPrefix(it.name) == prefix }
-            .map { it.relPath }
-            .filter { fs.holds(it, docId) }
+        return listTrash().filter { NpnPaths.trashHashPrefix(it.name) == prefix }
     }
 
     /**

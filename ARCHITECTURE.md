@@ -170,6 +170,12 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     as for a document whose file is gone. Restore and delete for good take a trash
     entry for the document's only when it hashes to the document: the hash prefix in
     its name (`NpnPaths.trashPath`) only narrows the search (`TrashOps.copiesOf`).
+    Trash, restore and delete for good read the row, check the file and move it under
+    the writer lock, in one step with their journal write
+    (`JournalCoordinator.changeLifecycle`), so no rescan or storage-path move lands in
+    between: a restore hashes the trash entries before it takes the lock, and under it
+    again only one whose stat changed; a delete for good deletes the bytes after its
+    tombstone is published, outside the lock, each hashed right before it goes.
     Restore records its final destination: the path the document was trashed from, or
     a `(restored)` name beside the file another document put there since. PDFs without
     a path intent retain their discovered location. A path holds one row: a trashed,

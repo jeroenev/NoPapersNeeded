@@ -44,6 +44,32 @@ class TrashOpsTest {
             fs.readBytes("inbox/doc.pdf").decodeToString() shouldBe "content"
         }
 
+    /** An entry hashed before is not hashed again while its stat is unchanged; one written to since is. */
+    @Test
+    fun copiesOfHashesOnlyTheEntriesThatChangedSinceTheyWereHashed() =
+        runTest {
+            val content = "content".encodeToByteArray()
+            val id = sha256Bytes(content)
+            fs.writeBytesOnce("a/doc.pdf", content)
+            fs.writeBytesOnce("b/doc.pdf", content)
+            val kept = trash.moveToTrash("a/doc.pdf", id)
+            val changed = trash.moveToTrash("b/doc.pdf", id)
+            val hashed = trash.hashCandidates(id)
+            fs.delete(changed)
+            fs.writeBytesOnce(changed, "other content".encodeToByteArray())
+            val hashing = ArrayList<String>()
+            val counting =
+                object : LibraryFileSystem by fs {
+                    override suspend fun sha256(relPath: String): String {
+                        hashing += relPath
+                        return fs.sha256(relPath)
+                    }
+                }
+
+            TrashOps(counting).copiesOf(id, hashed) shouldBe listOf(kept)
+            hashing shouldBe listOf(changed)
+        }
+
     @Test
     fun moveToTrashAvoidsCollisionWithNumericSuffix() =
         runTest {

@@ -1,5 +1,6 @@
 package dev.npn.core.app
 
+import dev.npn.core.db.DocumentEntity
 import dev.npn.core.index.Indexer
 import dev.npn.core.index.MetadataAccumulator
 import dev.npn.core.index.OpenReconciliation
@@ -75,6 +76,23 @@ private class SyncedSettings {
             values.value.toMutableMap().apply {
                 changed.forEach { key -> put(key, current.effectiveSetting(key)) }
             }
+    }
+}
+
+/**
+ * A change to one document's lifecycle as [JournalCoordinator.changeLifecycle] carries it out under
+ * the writer lock: [move] its file (nothing, for a change that moves none), [optimisticWrite] its
+ * row as the change leaves it, then publish [ops]. [undoMove] puts the file back when nothing was
+ * published.
+ */
+class LifecycleChange(
+    val ops: List<PendingOp>,
+    val optimisticWrite: suspend () -> Unit,
+    val move: suspend () -> Unit = {},
+    val undoMove: suspend () -> Unit = {},
+) {
+    init {
+        require(ops.isNotEmpty()) { "A lifecycle change publishes at least one event" }
     }
 }
 
@@ -440,8 +458,10 @@ class JournalCoordinator internal constructor(
         }
 
     /**
-     * Throw now if a commit would be refused. For callers that change the filesystem before they
-     * commit, so a refused commit does not strand a moved PDF with no journal record of the move.
+     * Throw now if a commit would be refused. For a caller that changes the filesystem before it
+     * commits, outside the lock (an in-place bake, before its relink), so a refused commit does not
+     * strand a rewritten PDF with no journal record of it; or that pays for work only a commit can
+     * keep. A file move that can run under the lock goes through [changeLifecycle] instead.
      */
     suspend fun checkWritable() = locked { ensureWritable() }
 
@@ -459,52 +479,54 @@ class JournalCoordinator internal constructor(
     private val relinks = RelinkLookup { foldedState().resolveDocId(it) }
 
     /**
-     * Apply an immediate, optimistic DB mutation for [lifecycleDocs] and commit [ops] atomically
-     * under the single-writer mutex.
+     * Change [docId]'s lifecycle (trash, restore, delete) in one step under the single-writer mutex:
+     * reading its row, checking and moving its file, writing the row and publishing the events. A
+     * rescan, an import or a storage-path move that holds the mutex meanwhile cannot land between
+     * them and leave the change acting on a row or a file that is no longer so.
      *
-     * Ordering guarantee: [optimisticWrite] (e.g. flipping a trashed/deleted flag or a
-     * post-restore relPath so the UI reacts before the journal catches up) runs INSIDE the mutex,
-     * immediately before the commit that persists the corresponding journal event. Because every
-     * concurrent fold (periodic [reconcileMetadata], [rescan], [refreshState]) also holds this
-     * mutex, none can interleave between the optimistic write and its committing fold, so the
-     * optimistic value can never be clobbered by a fold that has not yet seen the event.
-     * [lifecycleDocs] are additionally passed to [Indexer.refreshEvents] as preserveLifecycleDocs,
-     * so the committing fold keeps the just-written lifecycle row rather than re-deriving it from a
-     * journal state that (for a not-yet-folded source) might not carry it.
+     * [plan] runs once writes are known to be allowed, with the document's row as it stands under
+     * the mutex (null without one), and returns the [LifecycleChange] to carry out, or null for
+     * nothing. From its [LifecycleChange.move] on, the change runs to its end even when the caller
+     * goes away: cut short, it could leave the file moved with no event, or the event published
+     * with the file moved back.
      *
-     * Throws only when nothing was published, and then puts the rows of [lifecycleDocs] back as
-     * they were before [optimisticWrite], still under the mutex, so the caller's undo of its own
-     * file move leaves row and file agreeing. Once the transaction is published the change stands
-     * ([projectStanding]).
+     * Ordering guarantee: [LifecycleChange.optimisticWrite] (a trashed/deleted flag or a restored
+     * path, so the UI reacts before the journal catches up) runs right before the publish. Every
+     * concurrent fold (periodic [reconcileMetadata], [rescan], [refreshState]) also holds this mutex,
+     * so none can clobber the row before its events are folded, and the committing fold keeps the
+     * row's lifecycle as written (preserveLifecycleDocs in [Indexer.refreshEvents]) rather than
+     * re-deriving it from a journal state that might not carry it yet.
+     *
+     * Throws only when nothing was published, and then, still under the mutex, puts the row back as
+     * it was and undoes the move ([LifecycleChange.undoMove]), so row and file agree; a failure of
+     * either is logged, as the commit's own failure is the one the caller needs. Once the transaction
+     * is published the change stands ([projectStanding]).
      */
-    suspend fun commitWithOptimisticLifecycle(
-        ops: List<PendingOp>,
-        lifecycleDocs: Set<String>,
-        optimisticWrite: suspend () -> Unit,
+    suspend fun changeLifecycle(
+        docId: String,
+        plan: suspend (DocumentEntity?) -> LifecycleChange?,
     ): Boolean =
         locked {
             ensureWritable()
             val current = foldedState()
-            if (ops.isEmpty()) {
-                optimisticWrite()
-                return@locked false
-            }
+            val docs = setOf(docId)
+            val before = indexer.rowsOf(docs)
+            val change = plan(before.singleOrNull()) ?: return@locked false
             withContext(NonCancellable) {
-                val before = indexer.rowsOf(lifecycleDocs)
+                var moved = false
                 var published: PublishedTransaction? = null
                 try {
-                    optimisticWrite()
-                    published = writeTransaction(ops)
+                    change.move()
+                    moved = true
+                    change.optimisticWrite()
+                    published = writeTransaction(change.ops)
                 } finally {
-                    if (published == null) {
-                        // Logged, not thrown: the commit's own failure is the one the caller needs, and
-                        // a row left behind is corrected by the next fold of it, which the journal drives.
-                        log.runLogged("Putting back the rows of ${lifecycleDocs.joinToString()}") {
-                            indexer.putBack(lifecycleDocs, before)
-                        }
+                    if (published == null && moved) {
+                        log.runLogged("Putting back the row of $docId") { indexer.putBack(docs, before) }
+                        log.runLogged("Moving the file of $docId back") { change.undoMove() }
                     }
                 }
-                projectStanding(current, checkNotNull(published), preserveLifecycleDocs = lifecycleDocs)
+                projectStanding(current, checkNotNull(published), preserveLifecycleDocs = docs)
             }
             true
         }

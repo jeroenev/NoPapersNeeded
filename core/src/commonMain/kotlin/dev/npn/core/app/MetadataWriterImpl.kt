@@ -19,13 +19,9 @@ import dev.npn.core.model.ReviewMode
 import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.util.NpnLog
-import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
-import dev.npn.core.util.warn
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.withContext
 
 /**
  * Journal-backed write side. Every metadata change is one or more [PendingOp]s committed through
@@ -36,6 +32,10 @@ import kotlinx.coroutines.withContext
  * File-level operations (trash/restore/permanent delete/rename/move) touch the filesystem directly
  * and keep the DB row in sync immediately (flags/paths) so the UI reacts without waiting for a
  * rescan. Rename and move journal an intended location before the fold reconciles the physical PDF.
+ * Trash, restore and delete read the row, check the file and move it under the writer lock, in the
+ * same step as their journal write ([JournalCoordinator.changeLifecycle]): no rescan or storage-path
+ * move lands in between, and a refused commit moves nothing (a trash entry with no doc-trash event
+ * would be invisible).
  */
 class MetadataWriterImpl(
     private val coordinator: JournalCoordinator,
@@ -211,113 +211,96 @@ class MetadataWriterImpl(
     }
 
     override suspend fun trashDoc(docId: String) {
-        val doc = documentDao.getByDocId(docId) ?: return
-        if (doc.trashed || doc.deleted) return
-        // A trash entry with no doc-trash event is invisible: the next rescan marks the document
-        // missing and there is nothing to restore. So refuse before the move, not after it.
-        coordinator.checkWritable()
-        val origPath = doc.relPath
-        // Only the document's own file goes into the trash. Another app may have written over it
-        // since the last rescan; that file stays where it is for the next rescan to index, and the
-        // trash is recorded as for a document whose file is gone.
-        val ownFile = fs.holdsDocument(doc)
-        // From the move on, a caller that goes away must not split the trash in two: a cancellation
-        // after the event was published would move the PDF back under a trashed document.
-        withContext(NonCancellable) {
-            val trashPath = if (ownFile) trashOps.moveToTrash(origPath, docId) else null
-            var committed = false
-            try {
-                // Immediate DB sync so the UI hides it now; the event carries origPath for cross-device
-                // restore. The optimistic row write runs under the coordinator mutex, atomically with
-                // the committing fold, so a concurrent reconcile cannot clobber the trashed flag before
-                // the journal event is folded; a commit that fails puts the row back (see
-                // JournalCoordinator.commitWithOptimisticLifecycle).
-                coordinator.commitWithOptimisticLifecycle(
-                    ops = listOf(PendingOp.docTrash(docId, origPath)),
-                    lifecycleDocs = setOf(docId),
-                ) {
+        coordinator.changeLifecycle(docId) { doc ->
+            if (doc == null || doc.trashed || doc.deleted) return@changeLifecycle null
+            val origPath = doc.relPath
+            // Only the document's own file goes into the trash, known by a stat while it is unchanged.
+            // Another app may have written over it since the last rescan; that file stays where it is
+            // for the next rescan to index, and the trash is recorded as for a document whose file is
+            // gone.
+            val trashPath = if (fs.holdsDocument(doc)) trashOps.trashTarget(origPath, docId) else null
+            LifecycleChange(
+                // The event carries origPath for a restore on another device.
+                ops = listOf(PendingOp.docTrash(docId, origPath)),
+                move = { trashPath?.let { fs.move(origPath, it) } },
+                optimisticWrite = {
                     documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
-                }
-                committed = true
-            } finally {
-                if (!committed && trashPath != null) moveBack(trashPath, origPath)
-            }
-        }
-    }
-
-    /**
-     * Best-effort undo of a move whose commit published nothing. The caller still sees the commit's
-     * failure; an undo that fails too is only logged.
-     */
-    private suspend fun moveBack(
-        from: String,
-        to: String,
-    ) {
-        withContext(NonCancellable) {
-            runCatchingCancellable { fs.move(from, to) }.onFailure { log.warn("Could not move $from back to $to", it) }
+                },
+                undoMove = { trashPath?.let { fs.move(it, origPath) } },
+            )
         }
     }
 
     override suspend fun restoreDoc(docId: String) {
-        val doc = documentDao.getByDocId(docId) ?: return
-        if (!doc.trashed) return
-        val target = doc.trashedOrigPath ?: doc.relPath
-        // A file moved out of the trash with no doc-restore event leaves the document trashed with
-        // its trash entry gone, so refuse before the move, as trashDoc does.
-        coordinator.checkWritable()
-        // The file lives in trash under a hash-suffixed name; find the entry that holds its bytes and
-        // move it back (uniquify via TrashOps.restore if the target is taken). Another document may
-        // hold the target since the trash gave it up, so even with no copy left the row goes beside
-        // that one's file.
-        val entry = trashOps.copiesOf(docId).firstOrNull()
-        // Not cancellable from the move on, as in trashDoc.
-        withContext(NonCancellable) {
+        // Hashed before the lock, which every write, import and rescan waits on; under it, only an
+        // entry whose stat changed since is hashed again.
+        val hashed = trashOps.hashCandidates(docId)
+        coordinator.changeLifecycle(docId) { doc ->
+            if (doc == null || !doc.trashed) return@changeLifecycle null
+            val target = doc.trashedOrigPath ?: doc.relPath
+            // The file lives in trash under a hash-suffixed name; the entry that holds its bytes goes
+            // back to the target, or beside it when the target is taken. Another document may hold the
+            // target since the trash gave it up, so even with no copy left the row goes beside that
+            // one's file.
+            val entry = trashOps.copiesOf(docId, hashed).firstOrNull()
             val finalPath =
-                entry?.let { trashOps.restore(it, target) }
-                    ?: target.takeIf { !fs.exists(it) || fs.holds(it, docId) }
-                    ?: trashOps.restoreTarget(target)
-            var committed = false
-            try {
-                coordinator.commitWithOptimisticLifecycle(
-                    ops =
-                        listOf(
-                            PendingOp.docRestore(docId),
-                            PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath),
-                        ),
-                    lifecycleDocs = setOf(docId),
-                ) {
-                    documentDao.upsert(
-                        doc.copy(
-                            trashed = false,
-                            trashedOrigPath = null,
-                            trashedAt = null,
-                            relPath = finalPath,
-                            fileName = NpnPaths.fileName(finalPath),
-                            missing = false,
-                        ),
-                    )
+                if (entry != null) {
+                    trashOps.restoreTarget(target)
+                } else {
+                    target.takeIf { freeOrHolding(it, doc) } ?: trashOps.restoreTarget(target)
                 }
-                committed = true
-            } finally {
-                if (!committed && entry != null) moveBack(finalPath, entry)
-            }
+            LifecycleChange(
+                ops =
+                    listOf(
+                        PendingOp.docRestore(docId),
+                        PendingOp.propSet(docId, SystemProperty.STORAGE_PATH, finalPath),
+                    ),
+                move = { entry?.let { fs.move(it, finalPath) } },
+                optimisticWrite = { documentDao.upsert(doc.restoredAt(finalPath)) },
+                undoMove = { entry?.let { fs.move(finalPath, it) } },
+            )
         }
     }
 
+    /** Whether nothing is at [path], or [doc]'s bytes are; a file of another size is not hashed. */
+    private suspend fun freeOrHolding(
+        path: String,
+        doc: DocumentEntity,
+    ): Boolean {
+        val meta = fs.stat(path) ?: return true
+        return !meta.isDirectory && meta.size == doc.size && fs.holds(path, doc.docId)
+    }
+
+    /** This trashed row, restored to [relPath]. */
+    private fun DocumentEntity.restoredAt(relPath: String) =
+        copy(
+            trashed = false,
+            trashedOrigPath = null,
+            trashedAt = null,
+            relPath = relPath,
+            fileName = NpnPaths.fileName(relPath),
+            missing = false,
+        )
+
     override suspend fun deleteDocPermanently(docId: String) {
-        val doc = documentDao.getByDocId(docId) ?: return
+        var deleted: DocumentEntity? = null
         // Tombstone first, bytes second: a refused commit must leave the file where it was. The
-        // optimistic row write keeps it hidden (deleted flag) after any rescan, and is serialized
-        // with the committing fold under the coordinator mutex.
-        coordinator.commitWithOptimisticLifecycle(
-            ops = listOf(PendingOp.docDelete(docId)),
-            lifecycleDocs = setOf(docId),
-        ) {
-            documentDao.upsert(doc.copy(deleted = true, trashed = false, trashedAt = null, missing = false))
+        // optimistic row write keeps it hidden (deleted flag) after any rescan.
+        coordinator.changeLifecycle(docId) { doc ->
+            if (doc == null) return@changeLifecycle null
+            deleted = doc
+            LifecycleChange(
+                ops = listOf(PendingOp.docDelete(docId)),
+                optimisticWrite = {
+                    documentDao.upsert(doc.copy(deleted = true, trashed = false, trashedAt = null, missing = false))
+                },
+            )
         }
+        val doc = deleted ?: return
         // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden. Only
         // the document's bytes go: its copies in the trash, or else its file. A trashed or missing
-        // document gave its path up, so the file there may be another one now.
+        // document gave its path up, so the file there may be another one now. Each is hashed right
+        // before it goes, outside the lock: a whole file read there would hold up every other write.
         log.runLogged("Deleting the file of $docId") {
             val own = trashOps.copiesOf(docId).ifEmpty { listOfNotNull(doc.relPath.takeIf { fs.holds(it, docId) }) }
             own.forEach { fs.delete(it) }
