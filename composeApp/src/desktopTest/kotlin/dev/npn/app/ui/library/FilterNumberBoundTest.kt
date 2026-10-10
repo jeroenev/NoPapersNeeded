@@ -124,6 +124,27 @@ class FilterNumberBoundTest {
         }
     }
 
+    /**
+     * Beside the list on a wide window, the search changes the filter while the panel is open: only
+     * the search changes in the panel's draft, and a bound typed and not applied stays.
+     */
+    @Test
+    fun aLiveSearchKeepsAnUnappliedBound() {
+        val words = Words.of(Locale.ENGLISH)
+        onUiThread {
+            panel(words) {
+                type("3")
+                filter = filter.copy(query = "electricity")
+                scene.render()
+                shown() shouldBe "3"
+
+                apply()
+                applied.single() shouldBe
+                    LibraryFilter(query = "electricity", fieldRanges = mapOf(KEY to FieldRange(from = "3")))
+            }
+        }
+    }
+
     /** The panel's words in one locale, read before the scene sets that locale. */
     private class Words(
         val from: String,

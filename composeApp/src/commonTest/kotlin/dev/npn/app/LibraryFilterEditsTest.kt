@@ -4,6 +4,7 @@ import dev.npn.app.ui.library.ActiveFilterChip
 import dev.npn.app.ui.library.TagBucket
 import dev.npn.app.ui.library.activeChips
 import dev.npn.app.ui.library.matchIncludedTags
+import dev.npn.app.ui.library.rebased
 import dev.npn.app.ui.library.removeChip
 import dev.npn.app.ui.library.tagBucket
 import dev.npn.app.ui.library.withTag
@@ -236,5 +237,50 @@ class LibraryFilterEditsTest {
             )
         val emptied = full.activeChips().fold(full) { acc, chip -> acc.removeChip(chip) }
         emptied shouldBe LibraryFilter()
+    }
+
+    /** A search typed beside the panel replaces the draft's search and nothing it drafted. */
+    @Test
+    fun aDraftRebasedOnANewSearchKeepsItsEdits() {
+        val live = LibraryFilter(tagsAll = listOf("bills"))
+        val draft =
+            live.copy(
+                tagsAll = listOf("bills", "2024"),
+                fieldRanges = mapOf(FieldKeys.DOC_DATE to FieldRange(from = "2024-01-01")),
+            )
+
+        draft.rebased(live, live.copy(query = "electricity")) shouldBe draft.copy(query = "electricity")
+    }
+
+    /** A chip removed beside the panel takes only its own tag or bound out of the draft. */
+    @Test
+    fun aDraftRebasedOnARemovedChipLosesOnlyThatPart() {
+        val live =
+            LibraryFilter(
+                tagsAll = listOf("bills"),
+                fieldRanges = mapOf("amount" to FieldRange(from = "10")),
+            )
+        val draft =
+            live.copy(
+                tagsAll = listOf("bills", "2024"),
+                tagsNone = listOf("paid"),
+                fieldRanges = live.fieldRanges + (FieldKeys.DOC_DATE to FieldRange(from = "2024-01-01")),
+            )
+
+        draft.rebased(live, live.removeChip(ActiveFilterChip.TagAll("bills"))) shouldBe
+            draft.copy(tagsAll = listOf("2024"))
+        draft.rebased(live, live.removeChip(ActiveFilterChip.FieldFrom("amount", "10"))) shouldBe
+            draft.copy(fieldRanges = mapOf(FieldKeys.DOC_DATE to FieldRange(from = "2024-01-01")))
+    }
+
+    /** A part both changed takes the live value; an unchanged live filter leaves the draft as it is. */
+    @Test
+    fun theLiveChangeWinsWhereBothChangedAPart() {
+        val live = LibraryFilter()
+        val draft = LibraryFilter(tagsAll = listOf("2024"), reviewed = true)
+        val now = LibraryFilter(tagsNone = listOf("2024"), reviewed = false, untaggedOnly = true)
+
+        draft.rebased(live, now) shouldBe now
+        draft.rebased(live, live) shouldBe draft
     }
 }

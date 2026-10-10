@@ -130,7 +130,15 @@ fun FilterPanel(
     fillHeight: Boolean,
     modifier: Modifier = Modifier,
 ) {
-    var draft by rememberSaveable(filter, stateSaver = LibraryFilterSaver) { mutableStateOf(filter) }
+    // The panel's draft and the live filter it was last brought up to. On a wide window the search
+    // and the chips beside the panel change the live filter while it is open: the draft takes only
+    // what such a change touched, and keeps the edits not applied yet.
+    var draft by rememberSaveable(stateSaver = LibraryFilterSaver) { mutableStateOf(filter) }
+    var live by rememberSaveable(stateSaver = LibraryFilterSaver) { mutableStateOf(filter) }
+    if (filter != live) {
+        draft = draft.rebased(live, filter)
+        live = filter
+    }
     // Keys of the numeric bounds currently holding text that does not parse. Apply is blocked while
     // any is present so an invalid entry can never be silently dropped and the stale value applied.
     var invalidBounds by remember { mutableStateOf(emptySet<String>()) }

@@ -64,6 +64,51 @@ fun LibraryFilter.matchIncludedTags(matchAll: Boolean): LibraryFilter {
 }
 
 /**
+ * This draft, edited over the live filter [from], once the live filter has changed to [to]: each part
+ * the change touched takes its new value and every other part keeps the draft's, so an edit not
+ * applied yet survives a search or a chip removed beside it. A part is one single-value facet, one
+ * field's equality or range, or one tag's bucket.
+ */
+fun LibraryFilter.rebased(
+    from: LibraryFilter,
+    to: LibraryFilter,
+): LibraryFilter {
+    if (from == to) return this
+    val draft = this
+
+    fun <T> part(read: LibraryFilter.() -> T): T = if (from.read() == to.read()) draft.read() else to.read()
+    val tags = (from.tagsAll + from.tagsAny + from.tagsNone + to.tagsAll + to.tagsAny + to.tagsNone).distinct()
+    val tagged =
+        tags.fold(draft) { edited, tag ->
+            val now = tagBucket(to, tag)
+            if (tagBucket(from, tag) == now) edited else edited.withTag(tag, now)
+        }
+    return tagged.copy(
+        docIds = part { docIds },
+        query = part { query },
+        reviewed = part { reviewed },
+        fieldEquals = rebasedByKey(fieldEquals, from.fieldEquals, to.fieldEquals),
+        fieldRanges = rebasedByKey(fieldRanges, from.fieldRanges, to.fieldRanges),
+        addedFrom = part { addedFrom },
+        addedTo = part { addedTo },
+        folder = part { folder },
+        untaggedOnly = part { untaggedOnly },
+        unreviewedOrUntagged = part { unreviewedOrUntagged },
+        missingFields = part { missingFields },
+    )
+}
+
+/** [draft] with each key whose value changed from [from] to [to] taking its value in [to]. */
+private fun <V : Any> rebasedByKey(
+    draft: Map<String, V>,
+    from: Map<String, V>,
+    to: Map<String, V>,
+): Map<String, V> =
+    (from.keys + to.keys)
+        .filter { from[it] != to[it] }
+        .fold(draft) { edited, key -> to[key]?.let { edited + (key to it) } ?: (edited - key) }
+
+/**
  * One removable filter chip: what facet it stands for, so the display layer can render a localized
  * label and know how to clear it, without re-encoding the filter's shape.
  *
