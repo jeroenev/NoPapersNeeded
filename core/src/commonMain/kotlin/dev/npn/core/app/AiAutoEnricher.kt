@@ -10,6 +10,7 @@ import dev.npn.core.db.AiEnrichQueueDao
 import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.AiEnrichedEntity
 import dev.npn.core.db.DocumentDao
+import dev.npn.core.db.FtsDao
 import dev.npn.core.db.isLive
 import dev.npn.core.journal.EpochClock
 import dev.npn.core.util.reason
@@ -43,7 +44,9 @@ import dev.npn.core.work.QueueRetryPolicy
  *
  * A successful pass stamps [AiEnrichQueueDao.markEnriched] and deletes the row. The stamp is what
  * stops a later re-OCR of the document from spending again; both live in the device database,
- * keyed by hash, so a rebuilt index forgets neither. A failed call backs off along the shared
+ * keyed by hash, so a rebuilt index forgets neither. Only a document the model was asked about is
+ * stamped: one with no indexed text, when fields are requested, is not asked and loses its row
+ * unstamped, so text produced for it later queues it again. A failed call backs off along the shared
  * [QueueRetryPolicy] ramp up to a daily ceiling and is retried for ever: an attempt cap would bet
  * on *why* calls fail, and an afternoon offline would then silently and permanently cost every
  * document queued in it. The worst case is one call a day for a document the endpoint always
@@ -56,6 +59,8 @@ import dev.npn.core.work.QueueRetryPolicy
  */
 class AiAutoEnricher(
     private val documentDao: DocumentDao,
+    /** Where a document's extracted text is indexed. */
+    private val ftsDao: FtsDao,
     private val queueDao: AiEnrichQueueDao,
     private val ai: AiSuggest,
     private val meta: MetadataWriter,
@@ -115,10 +120,19 @@ class AiAutoEnricher(
             queueDao.delete(entry.docId)
             return true
         }
+        val request = request()
+        if (request.fields.isNotEmpty() && !hasText(entry.docId)) {
+            // Nothing to fill a field from (OCR found no text, or ran with no engine), so no call and
+            // no mark: the row goes, and text produced for the document later queues it again.
+            queueDao.delete(entry.docId)
+            return true
+        }
         // An answer the library would not save is not worth paying for; the row waits, uncharged.
         if (runCatchingCancellable { checkWritable() }.isFailure) return false
-        return enrich(entry)
+        return enrich(entry, request)
     }
+
+    private suspend fun hasText(docId: String): Boolean = ftsDao.contentForDoc(docId)?.isNotBlank() == true
 
     /**
      * The row to work on now; null while the feature is off or the endpoint cools down, and when
@@ -135,8 +149,10 @@ class AiAutoEnricher(
      * One paid call for [entry], and the write of its answer. Only the call reports to the
      * endpoint's [health]: a write that fails after an answer backs off this row alone.
      */
-    private suspend fun enrich(entry: AiEnrichQueueEntity): Boolean {
-        val request = request()
+    private suspend fun enrich(
+        entry: AiEnrichQueueEntity,
+        request: AiEditRequest,
+    ): Boolean {
         val suggestion =
             runCatchingCancellable { ai.suggestEdits(entry.docId, request) }.getOrElse { cause ->
                 reschedule(entry, cause)

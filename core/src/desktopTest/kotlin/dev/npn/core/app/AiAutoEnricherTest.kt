@@ -301,6 +301,54 @@ class AiAutoEnricherTest {
                 rig.row("d1").shouldBeNull()
             }
         }
+
+    /**
+     * With no text (a scan read before this device had an OCR engine), the fields cannot be filled
+     * from anything, so the model is not asked and nothing marks the document as enriched: its row
+     * goes, and the text produced for it later queues it again.
+     */
+    @Test
+    fun `a document without text is not asked about or marked, and is queued again once it has text`() =
+        runTest {
+            withRig { rig ->
+                rig.insert("d1", text = " ")
+                rig.ai.edit = edit(addTags = listOf(TagSuggestion("invoice", isNew = false)))
+                rig.enricher.enqueue("d1") shouldBe true
+
+                rig.drain()
+
+                rig.ai.suggestEditsCalls.shouldBeEmpty()
+                rig.enrichedAt("d1").shouldBeNull()
+                rig.row("d1").shouldBeNull()
+
+                rig.indexText("d1", "Invoice 42 from Acme")
+                rig.enricher.enqueue("d1") shouldBe true
+                rig.drain()
+
+                rig.ai.suggestEditsCalls shouldContainExactly listOf("d1")
+                rig.meta.batchedEdits.map { it.docId to it.addTags } shouldContainExactly
+                    listOf("d1" to listOf("invoice"))
+                rig.enrichedAt("d1").shouldNotBeNull()
+            }
+        }
+
+    /** Tags need no text: with no field to fill, a document without any is still asked about. */
+    @Test
+    fun `a document without text is asked about its tags when no field is to be filled`() =
+        runTest {
+            withRig { rig ->
+                rig.fieldRegistry.defs.value =
+                    rig.fieldRegistry.defs.value
+                        .map { it.copy(aiEnabled = false) }
+                rig.insert("d1", text = null)
+                rig.enricher.enqueue("d1")
+
+                rig.drain()
+
+                rig.ai.suggestEditsCalls shouldContainExactly listOf("d1")
+                rig.enrichedAt("d1").shouldNotBeNull()
+            }
+        }
 }
 
 /** The enricher over a real session, whose writer settles what the pass may write under the journal's lock. */
@@ -316,6 +364,8 @@ class AiAutoEnricherSessionTest {
             try {
                 rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
                 rig.session.rescan()
+                // Its text is what the model is asked about.
+                rig.session.work.drainOcr()
                 val id = rig.docId("a.pdf")
                 val gate = CompletableDeferred<Unit>()
                 val answer =
@@ -336,6 +386,7 @@ class AiAutoEnricherSessionTest {
                 val enricher =
                     AiAutoEnricher(
                         documentDao = rig.db.documentDao(),
+                        ftsDao = rig.db.ftsDao(),
                         queueDao = rig.deviceDb.aiEnrichQueueDao(),
                         ai = ai,
                         meta = rig.session.meta,

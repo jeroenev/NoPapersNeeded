@@ -509,9 +509,8 @@ class OcrPipeline(
 
     /**
      * True when running this device's engine for [doc] would produce a better version than anything
-     * stored: the engine outranks every stored version and this device has not already
-     * published a sidecar for that engine. An own `embedded` sidecar also counts as "already
-     * tried": it means every page had a text layer, so re-running any engine is pointless.
+     * stored: the engine outranks every stored version, this device has not already published a
+     * sidecar for that engine, and no stored `embedded` sidecar has a full text layer.
      *
      * Selects with the doc row's page count rather than the PDF's, so this and the run it gates
      * agree about the AI page cap. They have to: without that, a document over the cap would be
@@ -534,15 +533,13 @@ class OcrPipeline(
         val ownRank = OcrEngineId.rank(engine.name)
         if (rerun) return ownRank >= OcrEngineId.rank(versions.select(stored, doc.ocrEngineOverride)?.engine)
         val outranksStored = ownRank > stored.maxOf { OcrEngineId.rank(it.engine) }
-        val triedHere =
-            stored.any {
-                it.deviceId == deviceId && (it.engine == engine.name || it.engine == OcrEngineId.EMBEDDED.column)
-            }
+        val triedHere = stored.any { it.deviceId == deviceId && it.engine == engine.name }
         if (!outranksStored || triedHere) return false
-        // Another device's `embedded` sidecar whose every page has a usable text layer means this
-        // device's run would OCR no page and publish the same text again: without this, a library
-        // opened on a new device re-extracts every born-digital document. One with a thin page does
-        // not count, since it may come from a device that had no OCR engine to run.
+        // An `embedded` sidecar whose every page has a usable text layer means this device's run
+        // would OCR no page and publish the same text again: without this, a library opened on a
+        // new device re-extracts every born-digital document. One with a thin page does not count,
+        // this device's own included, since it may come from a run that had no OCR engine (desktop
+        // before Tesseract is installed). With no engine now, the check above has already said no.
         return stored.none { versions.hasFullTextLayer(doc.docId, it) }
     }
 

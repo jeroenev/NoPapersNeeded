@@ -61,7 +61,7 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
   refused at every open, also when it was remounted since the last one.
 - OCR on desktop: the Windows installers and the Flatpak bundle Tesseract with models for
   every UI language. The other Linux packages need `tesseract-ocr` on `PATH`; without it,
-  only embedded PDF text is indexed.
+  only embedded PDF text is indexed, and scans imported meanwhile are OCR'd once it is there.
 
 ## Building
 

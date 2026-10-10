@@ -357,7 +357,7 @@ class OcrPipelineTest {
                     engine = "embedded",
                     lang = "eng",
                     createdAt = 1,
-                    pages = listOf("own embedded text"),
+                    pages = listOf("own embedded text, a full text layer on its one page"),
                 )
             OcrSidecarFiles(fs).writeOnce(docId, "devA.embedded", OcrSidecarCodec.encode(own))
 

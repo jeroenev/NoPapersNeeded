@@ -9,6 +9,7 @@ import dev.npn.core.db.DeviceDatabase
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.documentEntity
+import dev.npn.core.index.FtsRows
 import dev.npn.core.index.MutableClock
 import dev.npn.core.testing.FakeAiSuggest
 import dev.npn.core.testing.FakeFieldRegistry
@@ -65,6 +66,7 @@ internal class Rig(
     fun newEnricher(health: EndpointHealth = EndpointHealth()) =
         AiAutoEnricher(
             documentDao = db.documentDao(),
+            ftsDao = db.ftsDao(),
             queueDao = deviceDb.aiEnrichQueueDao(),
             ai = ai,
             meta = meta,
@@ -97,14 +99,25 @@ internal class Rig(
         }
     }
 
+    /** A document with [text] indexed for it, as OCR leaves one that has some; null for none yet. */
     suspend fun insert(
         docId: String,
         trashed: Boolean = false,
         aiEnrichedAt: Long? = null,
+        text: String? = "Invoice 42 from Acme, due in May",
     ) {
         db.documentDao().upsert(documentEntity(docId, trashed = trashed))
+        text?.let { indexText(docId, it) }
         aiEnrichedAt?.let { deviceDb.aiEnrichQueueDao().markEnriched(AiEnrichedEntity(docId, it)) }
     }
+
+    /** Index [text] as [docId]'s extracted text, as its OCR pass does. */
+    suspend fun indexText(
+        docId: String,
+        text: String,
+    ) = db.ftsDao().upsertContent(
+        FtsRows.row(docId, "$docId.pdf", tags = emptyList(), fields = emptyMap(), content = text),
+    )
 
     suspend fun trash(docId: String) {
         val doc = db.documentDao().getByDocId(docId)!!

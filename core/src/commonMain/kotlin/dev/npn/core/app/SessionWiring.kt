@@ -258,6 +258,7 @@ internal fun buildEnrichment(
     drainedQueue(lifetime.scope, "AI enrichment queue", deps.log, build = { onEnqueued ->
         AiAutoEnricher(
             documentDao = deps.db.documentDao(),
+            ftsDao = deps.db.ftsDao(),
             queueDao = deps.deviceDb.aiEnrichQueueDao(),
             ai = ai,
             meta = library.writer,
