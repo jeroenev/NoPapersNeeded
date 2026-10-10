@@ -13,7 +13,14 @@ import io.kotest.matchers.collections.shouldContain
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.shouldNotBe
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.concurrent.atomic.AtomicInteger
 import kotlin.test.Test
 
 class BakeInPlaceTest {
@@ -312,6 +319,48 @@ class BakeInPlaceTest {
             }
         }
 
+    /**
+     * Two bakes of one document at once, as the side panel and the full screen can each start one: the
+     * second, after a change to the title, starts while the first holds its verified rewrite. They run
+     * one after the other, so the second finds the document superseded, and the file at its path is
+     * the one the relink names, with the document's metadata.
+     */
+    @Test
+    fun twoBakesOfADocumentAtOnceRunOneAfterTheOther() =
+        runTest {
+            val readBacks = PausedReadBacks("a.pdf")
+            val rig = AppSessionRig.create(backgroundScope, files = readBacks::over)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.meta.setField(id, FieldKeys.TITLE, "Water bill")
+
+                val first = async { rig.session.content.bakeInPlace(id) }
+                readBacks.reached.receive()
+                rig.session.meta.setField(id, FieldKeys.TITLE, "Sewer bill")
+                val second = async { rig.session.content.bakeInPlace(id) }
+                // Unless it waits for the first, the second rewrites the same temporary file meanwhile.
+                withContext(Dispatchers.Default) { withTimeoutOrNull(QUIET_MILLIS) { readBacks.reached.receive() } }
+                readBacks.release(0)
+                val firstOutcome = first.await()
+                readBacks.release(1)
+
+                listOf(firstOutcome, second.await()).count { it == BakeOutcome.Baked } shouldBe 1
+                rig.session.rescan()
+                val baked = rig.docId("a.pdf")
+                fieldsOf(rig, baked)[FieldKeys.TITLE] shouldBe "Sewer bill"
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)
+                    ?.deleted shouldBe true
+                libraryPdfs(rig) shouldContainExactly listOf("a.pdf")
+            } finally {
+                readBacks.releaseAll()
+                rig.close()
+            }
+        }
+
     @Test
     fun aFileThatCannotCarryMetadataIsRefusedAndLeftAlone() =
         runTest {
@@ -415,7 +464,40 @@ class BakeInPlaceTest {
         }
     }
 
+    /**
+     * A library filesystem over which each bake's read-back of its rewrite of [path] (the n-th) says so
+     * on [reached], then waits until the n-th is [release]d: a bake held right after it verified its
+     * temporary file, before it swaps it in.
+     */
+    private class PausedReadBacks(
+        private val path: String,
+    ) {
+        val reached = Channel<Unit>(Channel.UNLIMITED)
+        private val gates = List(2) { CompletableDeferred<Unit>() }
+        private val reads = AtomicInteger()
+
+        fun release(n: Int) = gates[n].complete(Unit)
+
+        fun releaseAll() = gates.forEach { it.complete(Unit) }
+
+        fun over(fs: LibraryFileSystem): LibraryFileSystem =
+            object : LibraryFileSystem by fs {
+                override suspend fun readBytes(relPath: String): ByteArray {
+                    val bytes = fs.readBytes(relPath)
+                    if (relPath == NpnPaths.Temp.bakePath(path)) {
+                        val n = reads.getAndIncrement()
+                        reached.send(Unit)
+                        gates.getOrNull(n)?.await()
+                    }
+                    return bytes
+                }
+            }
+    }
+
     private companion object {
         val FILED = mapOf(FieldKeys.TITLE to "Water bill", FieldKeys.CORRESPONDENT to "Aquafin")
+
+        /** How long a bake that does not wait gets to reach its read-back. */
+        const val QUIET_MILLIS = 1_000L
     }
 }
