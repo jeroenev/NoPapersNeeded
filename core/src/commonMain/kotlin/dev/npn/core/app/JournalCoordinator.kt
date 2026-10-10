@@ -509,7 +509,9 @@ class JournalCoordinator internal constructor(
      * the mutex (null without one), and returns the [LifecycleChange] to carry out, or null for
      * nothing. From its [LifecycleChange.move] on, the change runs to its end even when the caller
      * goes away: cut short, it could leave the file moved with no event, or the event published
-     * with the file moved back.
+     * with the file moved back. With [followRelinks], [docId] stands for the document a relink made
+     * of it since ([FoldedState.resolveDocId]), whose row [plan] gets: a trash that waited for a
+     * bake acts on what the bake left.
      *
      * Ordering guarantee: [LifecycleChange.optimisticWrite] (a trashed/deleted flag or a restored
      * path, so the UI reacts before the journal catches up) runs right before the publish. Every
@@ -525,12 +527,14 @@ class JournalCoordinator internal constructor(
      */
     suspend fun changeLifecycle(
         docId: String,
+        followRelinks: Boolean = false,
         plan: suspend (DocumentEntity?) -> LifecycleChange?,
     ): Boolean =
         locked {
             ensureWritable()
             val current = foldedState()
-            val docs = setOf(docId)
+            val id = if (followRelinks) current.resolveDocId(docId) else docId
+            val docs = setOf(id)
             val before = indexer.rowsOf(docs)
             val change = plan(before.singleOrNull()) ?: return@locked false
             withContext(NonCancellable) {
@@ -543,13 +547,13 @@ class JournalCoordinator internal constructor(
                     published = writeTransaction(change.ops)
                 } finally {
                     if (published == null && moved) {
-                        log.runLogged("Putting back the row of $docId") { indexer.putBack(docs, before) }
-                        log.runLogged("Moving the file of $docId back") { change.undoMove() }
+                        log.runLogged("Putting back the row of $id") { indexer.putBack(docs, before) }
+                        log.runLogged("Moving the file of $id back") { change.undoMove() }
                     }
                 }
                 projectStanding(current, checkNotNull(published), preserveLifecycleDocs = docs)
                 // The change stands: a failure to read what it left is no failure of the change.
-                log.runLogged("Reading what the lifecycle change of $docId left") { change.standing() }
+                log.runLogged("Reading what the lifecycle change of $id left") { change.standing() }
             }
             true
         }

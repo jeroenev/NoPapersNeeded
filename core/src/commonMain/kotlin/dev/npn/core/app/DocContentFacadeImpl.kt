@@ -14,8 +14,6 @@ import dev.npn.core.util.warn
 import dev.npn.core.xmp.BakeRefusedException
 import dev.npn.core.xmp.BakeService
 import dev.npn.core.xmp.NpnXmpData
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 
 /**
  * Document-as-bytes facade: thumbnails, page rendering, raw bytes, and XMP baking.
@@ -41,17 +39,15 @@ class DocContentFacadeImpl internal constructor(
     private val coordinator: JournalCoordinator,
     private val relinkService: RelinkService,
     private val renderGate: RenderGate,
+    /**
+     * Held by each bake in place, the whole of it: every bake of a path writes the same temporary
+     * file ([dev.npn.core.fs.NpnPaths.Temp.bakePath]), which the temp sweep relies on, and the relink
+     * a bake journals must name the bytes it installed. A trash or delete for good waits on it too.
+     */
+    private val bakes: BakeLock,
     private val log: NpnLog,
 ) : DocContentFacade {
     private val documentDao get() = db.documentDao()
-
-    /**
-     * Bakes in place run one at a time, the whole of each: every bake of a path writes the same
-     * temporary file ([dev.npn.core.fs.NpnPaths.Temp.bakePath]), which the temp sweep relies on, and
-     * the relink a bake journals must name the bytes it installed. Taken before the coordinator's
-     * lock, which a bake takes inside it, and never under that lock.
-     */
-    private val bakes = Mutex()
 
     override suspend fun thumbnailPath(docId: String): String? =
         log.runLogged("Making the thumbnail of $docId") {
@@ -104,7 +100,7 @@ class DocContentFacadeImpl internal constructor(
             bakeService.bakeToBytes(doc.relPath, buildXmpData(docId))
         }
 
-    override suspend fun bakeInPlace(docId: String): BakeOutcome = lifetime.owned { bakes.withLock { bake(docId) } }
+    override suspend fun bakeInPlace(docId: String): BakeOutcome = lifetime.owned { bakes.held { bake(docId) } }
 
     /**
      * Run under [bakes], its row read there too: a bake queued behind another of the same document

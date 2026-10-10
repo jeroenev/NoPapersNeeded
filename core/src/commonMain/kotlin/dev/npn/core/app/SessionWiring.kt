@@ -159,6 +159,7 @@ internal suspend fun buildLibrary(
             lifetime.owned(it)
         }
     rules.mirror()
+    val bakes = BakeLock()
     val writer =
         MetadataWriterImpl(
             coordinator,
@@ -167,6 +168,7 @@ internal suspend fun buildLibrary(
             TrashOps(deps.fs),
             pathRules,
             deps.log,
+            bakes,
             applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
         )
     return Library(
@@ -180,7 +182,7 @@ internal suspend fun buildLibrary(
         writer = writer,
         ownedWriter = OwnedWriter(writer, lifetime),
         reviewConfig = JournalReviewConfig(coordinator, db.documentDao()) { lifetime.owned(it) },
-        content = buildContent(deps, lifetime, coordinator, relink),
+        content = buildContent(deps, lifetime, coordinator, relink, bakes),
         imports =
             ImportService(
                 fs = deps.fs,
@@ -200,6 +202,7 @@ private fun buildContent(
     lifetime: SessionLifetime,
     coordinator: JournalCoordinator,
     relink: RelinkService,
+    bakes: BakeLock,
 ): DocContentFacadeImpl {
     // Single shared gate so thumbnail + page rendering share one bounded concurrency budget and a
     // first-load burst (e.g. 200 PDFs) cannot flood the dispatchers.
@@ -224,6 +227,7 @@ private fun buildContent(
         coordinator,
         relink,
         renderGate,
+        bakes,
         deps.log,
     )
 }

@@ -40,19 +40,22 @@ import kotlinx.coroutines.flow.map
  * Trash, restore and delete read the row, check the file and move it under the writer lock, in the
  * same step as their journal write ([JournalCoordinator.changeLifecycle]): no rescan or storage-path
  * move lands in between, and a refused commit moves nothing (a trash entry with no doc-trash event
- * would be invisible).
+ * would be invisible). A trash or delete for good first waits for any bake in place ([BakeLock]), then
+ * acts on the document the bake left.
  *
  * What a write sets off once it is published (the storage-path rule, the auto-match rules) runs per
  * document through [followUp]: the write landed whatever they do, so their failure is logged, never
  * thrown.
  */
-class MetadataWriterImpl(
+class MetadataWriterImpl internal constructor(
     private val coordinator: JournalCoordinator,
     private val db: NpnDatabase,
     private val fs: LibraryFileSystem,
     private val trashOps: TrashOps,
     private val pathRuleApplicator: StoragePathRuleApplicator,
     private val log: NpnLog,
+    /** The session's, shared with its bakes: a trash or delete for good waits for a bake. */
+    private val bakeLock: BakeLock,
     private val applyAutoMatch: suspend (String) -> Unit = {},
 ) : MetadataWriter,
     TagAdmin,
@@ -292,30 +295,35 @@ class MetadataWriterImpl(
         coordinator.commitAndApply(listOf(PendingOp.tagStyle(t, color, icon)))
     }
 
-    override suspend fun trashDoc(docId: String): TrashReceipt? {
+    /** Trash [docId], or what a bake made of it once that bake is done: the receipt names the one trashed. */
+    override suspend fun trashDoc(docId: String): TrashReceipt? = bakeLock.held { trash(docId) }
+
+    private suspend fun trash(docId: String): TrashReceipt? {
+        var trashed: String? = null
         var trashedAt: Long? = null
-        val trashed =
-            coordinator.changeLifecycle(docId) { doc ->
-                if (doc == null || doc.trashed || doc.deleted) return@changeLifecycle null
-                val origPath = doc.relPath
-                // Only the document's own file goes into the trash, known by a stat while it is
-                // unchanged. Another app may have written over it since the last rescan; that file
-                // stays where it is for the next rescan to index, and the trash is recorded as for a
-                // document whose file is gone.
-                val trashPath = if (fs.holdsDocument(doc)) trashOps.trashTarget(origPath, docId) else null
-                LifecycleChange(
-                    // The event carries origPath for a restore on another device.
-                    ops = listOf(PendingOp.docTrash(docId, origPath)),
-                    move = { trashPath?.let { fs.move(origPath, it) } },
-                    optimisticWrite = {
-                        documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
-                    },
-                    undoMove = { trashPath?.let { fs.move(it, origPath) } },
-                    // The time the fold gives this trash, which a later one replaces: the Undo's check.
-                    standing = { trashedAt = documentDao.getByDocId(docId)?.trashedAt },
-                )
-            }
-        return if (trashed) TrashReceipt(docId, trashedAt) else null
+        coordinator.changeLifecycle(docId, followRelinks = true) { doc ->
+            if (doc == null || doc.trashed || doc.deleted) return@changeLifecycle null
+            val id = doc.docId
+            val origPath = doc.relPath
+            // Only the document's own file goes into the trash, known by a stat while it is
+            // unchanged. Another app may have written over it since the last rescan; that file
+            // stays where it is for the next rescan to index, and the trash is recorded as for a
+            // document whose file is gone.
+            val trashPath = if (fs.holdsDocument(doc)) trashOps.trashTarget(origPath, id) else null
+            trashed = id
+            LifecycleChange(
+                // The event carries origPath for a restore on another device.
+                ops = listOf(PendingOp.docTrash(id, origPath)),
+                move = { trashPath?.let { fs.move(origPath, it) } },
+                optimisticWrite = {
+                    documentDao.upsert(doc.copy(trashed = true, trashedOrigPath = origPath, missing = false))
+                },
+                undoMove = { trashPath?.let { fs.move(it, origPath) } },
+                // The time the fold gives this trash, which a later one replaces: the Undo's check.
+                standing = { trashedAt = documentDao.getByDocId(id)?.trashedAt },
+            )
+        }
+        return trashed?.let { TrashReceipt(it, trashedAt) }
     }
 
     override suspend fun restoreDoc(docId: String) = restore(docId, listing = null)
@@ -411,21 +419,24 @@ class MetadataWriterImpl(
             missing = false,
         )
 
-    override suspend fun deleteDocPermanently(docId: String) = deleteForGood(docId, listing = null)
+    override suspend fun deleteDocPermanently(docId: String) = bakeLock.held { deleteForGood(docId, listing = null) }
 
-    override suspend fun deleteDocsPermanently(docIds: List<String>): PermanentDeleteTally {
-        var filesLeft = 0
-        val failed =
-            forEachListed(docIds, "Deleting") { docId, listing ->
-                if (deleteForGood(docId, listing) == PermanentDeleteOutcome.FILE_LEFT) filesLeft++
-            }
-        return PermanentDeleteTally(failed = failed, filesLeft = filesLeft)
-    }
+    /** Held once around the whole run, so no bake starts or ends between its documents. */
+    override suspend fun deleteDocsPermanently(docIds: List<String>): PermanentDeleteTally =
+        bakeLock.held {
+            var filesLeft = 0
+            val failed =
+                forEachListed(docIds, "Deleting") { docId, listing ->
+                    if (deleteForGood(docId, listing) == PermanentDeleteOutcome.FILE_LEFT) filesLeft++
+                }
+            PermanentDeleteTally(failed = failed, filesLeft = filesLeft)
+        }
 
     /**
-     * Delete [docId] for good, its copies in the trash as [listing] (from [TrashOps.listTrash]) found
-     * them, or as listed after the deletion without one. Only while it is in the trash: one restored
-     * since (here, on another device, or by an import) is left alone.
+     * Delete [docId] for good, or what a bake made of it, its copies in the trash as [listing] (from
+     * [TrashOps.listTrash]) found them, or as listed after the deletion without one. Only while it is
+     * in the trash: one restored since (here, on another device, or by an import) is left alone. Run
+     * under [bakeLock].
      */
     private suspend fun deleteForGood(
         docId: String,
@@ -434,11 +445,11 @@ class MetadataWriterImpl(
         var deleted: DocumentEntity? = null
         // Tombstone first, bytes second: a refused commit must leave the file where it was. The
         // optimistic row write keeps it hidden (deleted flag) after any rescan.
-        coordinator.changeLifecycle(docId) { doc ->
+        coordinator.changeLifecycle(docId, followRelinks = true) { doc ->
             if (doc == null || !doc.trashed) return@changeLifecycle null
             deleted = doc
             LifecycleChange(
-                ops = listOf(PendingOp.docDelete(docId)),
+                ops = listOf(PendingOp.docDelete(doc.docId)),
                 optimisticWrite = {
                     documentDao.upsert(doc.copy(deleted = true, trashed = false, trashedAt = null, missing = false))
                 },
@@ -450,7 +461,7 @@ class MetadataWriterImpl(
         return runCatchingCancellable { removeBytes(doc, listing) }.fold(
             onSuccess = { PermanentDeleteOutcome.DELETED },
             onFailure = {
-                log.warn("Deleting the file of $docId failed", it)
+                log.warn("Deleting the file of ${doc.docId} failed", it)
                 PermanentDeleteOutcome.FILE_LEFT
             },
         )

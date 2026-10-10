@@ -505,6 +505,7 @@ class TrashLifecycleTest {
                 TrashOps(rig.fs),
                 StoragePathRuleApplicator(rig.fs, rig.db, { null }, { _, _ -> }),
                 NpnLog.None,
+                BakeLock(),
             )
     }
 
@@ -946,6 +947,7 @@ class BulkTrashTest {
             TrashOps(files),
             StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
             NpnLog.None,
+            BakeLock(),
         )
 
     @AfterTest
@@ -1194,6 +1196,7 @@ class PermanentDeleteTest {
                         TrashOps(files),
                         StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
                         NpnLog.None,
+                        BakeLock(),
                     )
                 rig.writePdf("inbox/x.pdf", "deleted for good")
                 coordinator.rescan()
@@ -1380,6 +1383,7 @@ class TrashOwnFileTest {
             TrashOps(files),
             StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
             NpnLog.None,
+            BakeLock(),
         )
 
     @AfterTest
@@ -1494,6 +1498,7 @@ class LifecycleBehindARescanTest {
             TrashOps(files),
             StoragePathRuleApplicator(files, rig.db, { null }, { _, _ -> }),
             NpnLog.None,
+            BakeLock(),
         )
 
     @AfterTest
@@ -1680,6 +1685,7 @@ class TrashEntryTest {
                 TrashOps(rig.fs),
                 StoragePathRuleApplicator(rig.fs, rig.db, { null }, { _, _ -> }),
                 NpnLog.None,
+                BakeLock(),
             )
 
         suspend fun trashEntries() = rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }
