@@ -132,7 +132,7 @@ class TrashLifecycleTest {
                 val id = rig.fs.sha256("a.pdf")
                 rig.session.docLifecycle.trashDoc(id)
 
-                rig.session.docLifecycle.deleteDocPermanently(id)
+                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.DELETED
                 rig.exists("a.pdf").shouldBeFalse()
                 trashEntries(rig.fs).shouldBeEmpty()
                 rig.db
@@ -745,7 +745,7 @@ class BulkTrashTest {
         runTest {
             val docs = trashed()
 
-            writer.deleteDocsPermanently(docs.keys.toList()) shouldBe 0
+            writer.deleteDocsPermanently(docs.keys.toList()) shouldBe PermanentDeleteTally()
 
             files.listings shouldBe listOf(false)
             docs.keys.forEach {
@@ -771,7 +771,7 @@ class BulkTrashTest {
             val (first, second) = docs.keys.take(2)
             files.afterNextListing = { writer.restoreDoc(second) }
 
-            writer.deleteDocsPermanently(listOf(first, second)) shouldBe 0
+            writer.deleteDocsPermanently(listOf(first, second)) shouldBe PermanentDeleteTally()
 
             rig.fs.sha256(docs.getValue(second)) shouldBe second
             rig.db
@@ -870,7 +870,7 @@ class PermanentDeleteTest {
                 rig.session.docLifecycle.restoreDoc(id)
                 val objects = rig.journalObjectCount()
 
-                rig.session.docLifecycle.deleteDocPermanently(id)
+                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.NOT_IN_TRASH
 
                 rig.fs.sha256("a.pdf") shouldBe id
                 rig.journalObjectCount() shouldBe objects
@@ -1039,6 +1039,48 @@ class PermanentDeleteTest {
                     ?.docId shouldBe rig.fs.sha256("inbox/invoice.pdf")
             } finally {
                 rig.close()
+            }
+        }
+
+    /**
+     * The provider refuses to delete what the trash holds. The documents are deleted all the same,
+     * as their tombstones say, and the files left behind are reported, one by one and in bulk.
+     */
+    @Test
+    fun aFileThatCouldNotBeRemovedIsReportedAndTheDocumentStaysDeleted() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope, files = ::refusingTrashDeletes)
+            try {
+                val names = listOf("a", "b", "c")
+                names.forEach { rig.writePdf("$it.pdf", PdfFixtures.embeddedTextPdf("file of $it")) }
+                rig.session.rescan()
+                val ids = names.map { rig.docId("$it.pdf") }
+                ids.forEach { rig.session.docLifecycle.trashDoc(it) }
+
+                rig.session.docLifecycle.deleteDocPermanently(ids[0]) shouldBe PermanentDeleteOutcome.FILE_LEFT
+                rig.session.docLifecycle.deleteDocsPermanently(ids.drop(1)) shouldBe
+                    PermanentDeleteTally(failed = 0, filesLeft = 2)
+
+                ids.forEach {
+                    rig.db
+                        .documentDao()
+                        .getByDocId(it)
+                        .shouldNotBeNull()
+                        .deleted
+                        .shouldBeTrue()
+                }
+                rig.fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory } shouldHaveSize 3
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** [fs], whose provider refuses to delete anything in the trash. */
+    private fun refusingTrashDeletes(fs: LibraryFileSystem): LibraryFileSystem =
+        object : LibraryFileSystem by fs {
+            override suspend fun delete(relPath: String) {
+                if (relPath.startsWith("${NpnPaths.TRASH_DIR}/")) throw IOException("Permission denied")
+                fs.delete(relPath)
             }
         }
 

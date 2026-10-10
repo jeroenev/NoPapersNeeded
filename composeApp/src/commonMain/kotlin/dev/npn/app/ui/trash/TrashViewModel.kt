@@ -7,6 +7,7 @@ import dev.npn.app.ui.common.uiText
 import dev.npn.core.app.Doc
 import dev.npn.core.app.DocListItem
 import dev.npn.core.app.LibrarySession
+import dev.npn.core.app.PermanentDeleteOutcome
 import dev.npn.core.index.RelinkCandidate
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.flow.StateFlow
@@ -16,7 +17,9 @@ import kotlinx.coroutines.launch
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
 import no_papers_needed.composeapp.generated.resources.common_trash_delete_all_failed
+import no_papers_needed.composeapp.generated.resources.common_trash_delete_all_files_left
 import no_papers_needed.composeapp.generated.resources.common_trash_delete_failed
+import no_papers_needed.composeapp.generated.resources.common_trash_delete_file_left
 import no_papers_needed.composeapp.generated.resources.common_trash_relink_failed
 import no_papers_needed.composeapp.generated.resources.common_trash_remove_duplicate_failed
 import no_papers_needed.composeapp.generated.resources.common_trash_restore_failed
@@ -47,7 +50,7 @@ interface TrashWrites {
     /**
      * Permanently delete every currently trashed document. Runs each doc independently so one
      * failure does not abort the rest; a partial failure is reported with the count that could
-     * not be deleted.
+     * not be deleted, and deleted documents whose files could not be removed with theirs.
      */
     fun emptyTrash()
 
@@ -96,12 +99,25 @@ class TrashViewModel(
     override fun restore(docId: String) =
         launchReporting(Res.string.common_trash_restore_failed) { docLifecycle.restoreDoc(docId) }
 
+    // A file that could not be removed leaves the document deleted, so it is said apart from a
+    // delete that failed.
     override fun deleteForever(docId: String) =
-        launchReporting(Res.string.common_trash_delete_failed) { docLifecycle.deleteDocPermanently(docId) }
+        launchReporting(Res.string.common_trash_delete_failed) {
+            if (docLifecycle.deleteDocPermanently(docId) == PermanentDeleteOutcome.FILE_LEFT) {
+                message(uiText(Res.string.common_trash_delete_file_left))
+            }
+        }
 
     override fun restoreAll() = runBulk(Res.plurals.common_restore_documents_failed, docLifecycle::restoreDocs)
 
-    override fun emptyTrash() = runBulk(Res.plurals.common_trash_delete_all_failed, docLifecycle::deleteDocsPermanently)
+    override fun emptyTrash() =
+        runBulk(Res.plurals.common_trash_delete_all_failed) { ids ->
+            val tally = docLifecycle.deleteDocsPermanently(ids)
+            if (tally.filesLeft > 0) {
+                message(uiText(Res.plurals.common_trash_delete_all_files_left, tally.filesLeft, tally.filesLeft))
+            }
+            tally.failed
+        }
 
     /**
      * Run [op] over every trashed document, one bulk call that lists the trash once and returns how

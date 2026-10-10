@@ -110,6 +110,11 @@
         <item quantity="one">Bei %1$d von %2$d Dokument ist das Löschen fehlgeschlagen</item>
         <item quantity="other">Bei %1$d von %2$d Dokumenten ist das Löschen fehlgeschlagen</item>
     </plurals>
+    <string name="common_trash_delete_file_left">Das Dokument wurde gelöscht, aber seine Datei konnte nicht aus dem Bibliotheksordner entfernt werden</string>
+    <plurals name="common_trash_delete_all_files_left">
+        <item quantity="one">%1$d Dokument wurde gelöscht, aber seine Datei konnte nicht aus dem Bibliotheksordner entfernt werden</item>
+        <item quantity="other">%1$d Dokumente wurden gelöscht, aber ihre Dateien konnten nicht aus dem Bibliotheksordner entfernt werden</item>
+    </plurals>
     <string name="common_trash_remove_duplicate_failed">Das Duplikat konnte nicht entfernt werden: %1$s</string>
     <string name="common_trash_relink_failed">Das Dokument konnte nicht neu verknüpft werden: %1$s</string>
     <string name="common_rules_save_failed">Die Regel konnte nicht gespeichert werden: %1$s</string>

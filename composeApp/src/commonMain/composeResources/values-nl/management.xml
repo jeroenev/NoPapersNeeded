@@ -110,6 +110,11 @@
         <item quantity="one">Kon %1$d van %2$d document niet verwijderen</item>
         <item quantity="other">Kon %1$d van de %2$d documenten niet verwijderen</item>
     </plurals>
+    <string name="common_trash_delete_file_left">Het document is verwijderd, maar het bestand kon niet uit de bibliotheekmap worden verwijderd</string>
+    <plurals name="common_trash_delete_all_files_left">
+        <item quantity="one">%1$d document is verwijderd, maar het bestand kon niet uit de bibliotheekmap worden verwijderd</item>
+        <item quantity="other">%1$d documenten zijn verwijderd, maar hun bestanden konden niet uit de bibliotheekmap worden verwijderd</item>
+    </plurals>
     <string name="common_trash_remove_duplicate_failed">Het duplicaat kon niet worden verwijderd: %1$s</string>
     <string name="common_trash_relink_failed">Het document kon niet opnieuw worden gekoppeld: %1$s</string>
     <string name="common_rules_save_failed">De regel kon niet worden opgeslagen: %1$s</string>

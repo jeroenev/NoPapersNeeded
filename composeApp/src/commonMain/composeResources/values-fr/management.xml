@@ -110,6 +110,11 @@
         <item quantity="one">Impossible de supprimer %1$d document sur %2$d</item>
         <item quantity="other">Impossible de supprimer %1$d des %2$d documents</item>
     </plurals>
+    <string name="common_trash_delete_file_left">Le document a été supprimé, mais son fichier n’a pas pu être retiré du dossier de la bibliothèque</string>
+    <plurals name="common_trash_delete_all_files_left">
+        <item quantity="one">%1$d document a été supprimé, mais son fichier n’a pas pu être retiré du dossier de la bibliothèque</item>
+        <item quantity="other">%1$d documents ont été supprimés, mais leurs fichiers n’ont pas pu être retirés du dossier de la bibliothèque</item>
+    </plurals>
     <string name="common_trash_remove_duplicate_failed">Impossible de retirer le doublon : %1$s</string>
     <string name="common_trash_relink_failed">Impossible de relier le document : %1$s</string>
     <string name="common_rules_save_failed">Impossible d’enregistrer la règle : %1$s</string>

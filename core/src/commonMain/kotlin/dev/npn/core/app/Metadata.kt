@@ -106,15 +106,15 @@ interface DocLifecycle {
     /**
      * Delete a document in the trash for good: a doc-delete tombstone, then its bytes. A document
      * not in the trash (restored here or on another device, brought back by an import, or unknown)
-     * is left alone, with nothing written.
+     * is left alone, with nothing written. Throws only when the tombstone was not written.
      */
-    suspend fun deleteDocPermanently(docId: String)
+    suspend fun deleteDocPermanently(docId: String): PermanentDeleteOutcome
 
     /**
      * [deleteDocPermanently] each of [docIds], over one listing of the trash, as [restoreDocs] restores.
-     * One no longer in the trash is left alone and is not a failure.
+     * One that fails does not stop the others, and one no longer in the trash is no failure.
      */
-    suspend fun deleteDocsPermanently(docIds: List<String>): Int
+    suspend fun deleteDocsPermanently(docIds: List<String>): PermanentDeleteTally
 
     suspend fun renameFile(
         docId: String,
@@ -126,3 +126,27 @@ interface DocLifecycle {
         newDirRelPath: String,
     )
 }
+
+/** What [DocLifecycle.deleteDocPermanently] did. */
+enum class PermanentDeleteOutcome {
+    /** The document is deleted, and its bytes are gone from the library. */
+    DELETED,
+
+    /** The document was not in the trash; nothing changed. */
+    NOT_IN_TRASH,
+
+    /**
+     * The document is deleted, but a file holding its bytes could not be removed and stays in the
+     * library folder. The cause is in the session log.
+     */
+    FILE_LEFT,
+}
+
+/**
+ * What [DocLifecycle.deleteDocsPermanently] came to: how many documents it [failed] to delete (each
+ * in the session log), and how many it deleted whose file stayed ([PermanentDeleteOutcome.FILE_LEFT]).
+ */
+data class PermanentDeleteTally(
+    val failed: Int = 0,
+    val filesLeft: Int = 0,
+)

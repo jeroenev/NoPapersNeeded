@@ -13,6 +13,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
 import no_papers_needed.composeapp.generated.resources.common_restore_documents_failed
+import no_papers_needed.composeapp.generated.resources.common_trash_delete_all_files_left
+import no_papers_needed.composeapp.generated.resources.common_trash_delete_file_left
 import no_papers_needed.composeapp.generated.resources.common_trash_restore_failed
 import kotlin.test.Test
 
@@ -101,6 +103,40 @@ class TrashViewModelTest : MainDispatcherTest() {
 
             session.docLifecycle.deletedDocs shouldContainExactly listOf("d1", "d2")
             messages shouldBe emptyList()
+        }
+
+    /** The document is deleted, but its file stayed: that is said, rather than nothing or a failure. */
+    @Test
+    fun deletingForeverSaysWhenTheFileCouldNotBeRemoved() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.docLifecycle.filesLeftDocIds = setOf("d1")
+            val model = vm(session)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+
+            model.deleteForever("d1")
+            advanceUntilIdle()
+
+            session.docLifecycle.deletedDocs shouldContainExactly listOf("d1")
+            messages shouldContainExactly listOf(uiText(Res.string.common_trash_delete_file_left))
+        }
+
+    @Test
+    fun emptyTrashSaysHowManyFilesCouldNotBeRemoved() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            session.documents.trashed.value = listOf(listItem("d1"), listItem("d2"), listItem("d3"))
+            session.docLifecycle.filesLeftDocIds = setOf("d1", "d3")
+            val model = vm(session)
+            collecting(model.state)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+
+            model.emptyTrash()
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf(uiText(Res.plurals.common_trash_delete_all_files_left, 2, 2))
         }
 
     @Test

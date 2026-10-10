@@ -1,6 +1,8 @@
 package dev.npn.app
 
 import dev.npn.core.app.DocLifecycle
+import dev.npn.core.app.PermanentDeleteOutcome
+import dev.npn.core.app.PermanentDeleteTally
 import dev.npn.core.app.TagAdmin
 import dev.npn.core.util.runCatchingCancellable
 import kotlinx.coroutines.CompletableDeferred
@@ -78,6 +80,9 @@ class FakeDocLifecycle : DocLifecycle {
     /** If set, restoreDoc throws. */
     var failRestore: (() -> Nothing)? = null
 
+    /** deleteDocPermanently deletes these, but their files cannot be removed. */
+    var filesLeftDocIds: Set<String> = emptySet()
+
     override suspend fun trashDoc(docId: String): Boolean {
         trashGate?.await()
         if (docId in failTrashDocIds) error("trash failed for $docId")
@@ -94,12 +99,18 @@ class FakeDocLifecycle : DocLifecycle {
     override suspend fun restoreDocs(docIds: List<String>): Int =
         docIds.count { runCatchingCancellable { restoreDoc(it) }.isFailure }
 
-    override suspend fun deleteDocPermanently(docId: String) {
+    override suspend fun deleteDocPermanently(docId: String): PermanentDeleteOutcome {
         deletedDocs += docId
+        return if (docId in filesLeftDocIds) PermanentDeleteOutcome.FILE_LEFT else PermanentDeleteOutcome.DELETED
     }
 
-    override suspend fun deleteDocsPermanently(docIds: List<String>): Int =
-        docIds.count { runCatchingCancellable { deleteDocPermanently(it) }.isFailure }
+    override suspend fun deleteDocsPermanently(docIds: List<String>): PermanentDeleteTally {
+        val outcomes = docIds.map { runCatchingCancellable { deleteDocPermanently(it) } }
+        return PermanentDeleteTally(
+            failed = outcomes.count { it.isFailure },
+            filesLeft = outcomes.count { it.getOrNull() == PermanentDeleteOutcome.FILE_LEFT },
+        )
+    }
 
     override suspend fun renameFile(
         docId: String,

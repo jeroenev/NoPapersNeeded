@@ -23,7 +23,6 @@ import dev.npn.core.pathrules.StoragePathRuleApplicator
 import dev.npn.core.pathrules.pathTaken
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
-import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -311,8 +310,14 @@ class MetadataWriterImpl(
 
     override suspend fun deleteDocPermanently(docId: String) = deleteForGood(docId, listing = null)
 
-    override suspend fun deleteDocsPermanently(docIds: List<String>): Int =
-        forEachListed(docIds, "Deleting", ::deleteForGood)
+    override suspend fun deleteDocsPermanently(docIds: List<String>): PermanentDeleteTally {
+        var filesLeft = 0
+        val failed =
+            forEachListed(docIds, "Deleting") { docId, listing ->
+                if (deleteForGood(docId, listing) == PermanentDeleteOutcome.FILE_LEFT) filesLeft++
+            }
+        return PermanentDeleteTally(failed = failed, filesLeft = filesLeft)
+    }
 
     /**
      * Delete [docId] for good, its copies in the trash as [listing] (from [TrashOps.listTrash]) found
@@ -322,7 +327,7 @@ class MetadataWriterImpl(
     private suspend fun deleteForGood(
         docId: String,
         listing: List<FileMeta>?,
-    ) {
+    ): PermanentDeleteOutcome {
         var deleted: DocumentEntity? = null
         // Tombstone first, bytes second: a refused commit must leave the file where it was. The
         // optimistic row write keeps it hidden (deleted flag) after any rescan.
@@ -336,25 +341,41 @@ class MetadataWriterImpl(
                 },
             )
         }
-        val doc = deleted ?: return
-        // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden. Only
-        // the document's bytes go: its copies in the trash, or else its file. A trashed or missing
-        // document gave its path up, so the file there may be another one now. Each is hashed before
-        // the lock, as a whole file read under it would hold up every other write, and goes under it
-        // only while unchanged since and while the journal still has the document deleted: an import
-        // of its bytes can have brought it back meanwhile, with that very file. Its row cannot say:
-        // a rescan meanwhile shows a file still in place again without that being a return.
-        log.runLogged("Deleting the file of $docId") {
-            val hashed = trashOps.hashCandidates(docId, listing)
-            val file = fileAt(doc)
-            coordinator.serialized { journal ->
-                if (!journal.isDeleted(docId)) return@serialized
-                val own =
-                    trashOps.confirmedCopiesOf(docId, hashed).ifEmpty {
-                        listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })
-                    }
-                own.forEach { fs.delete(it) }
-            }
+        val doc = deleted ?: return PermanentDeleteOutcome.NOT_IN_TRASH
+        // The tombstone is committed, so a failure here only leaves the bytes on disk, hidden: the
+        // document stays deleted, and the caller hears that its file did not go.
+        return runCatchingCancellable { removeBytes(doc, listing) }.fold(
+            onSuccess = { PermanentDeleteOutcome.DELETED },
+            onFailure = {
+                log.warn("Deleting the file of $docId failed", it)
+                PermanentDeleteOutcome.FILE_LEFT
+            },
+        )
+    }
+
+    /**
+     * Remove the bytes of [doc], its row before it was deleted for good: its copies in the trash as
+     * [listing] found them (listed now without one), or else its file. A trashed or missing document
+     * gave its path up, so the file there may be another one now. Each is hashed before the lock, as
+     * a whole file read under it would hold up every other write, and goes under it only while
+     * unchanged since and while the journal still has the document deleted: an import of its bytes
+     * can have brought it back meanwhile, with that very file. Its row cannot say: a rescan meanwhile
+     * shows a file still in place again without that being a return.
+     */
+    private suspend fun removeBytes(
+        doc: DocumentEntity,
+        listing: List<FileMeta>?,
+    ) {
+        val docId = doc.docId
+        val hashed = trashOps.hashCandidates(docId, listing)
+        val file = fileAt(doc)
+        coordinator.serialized { journal ->
+            if (!journal.isDeleted(docId)) return@serialized
+            val own =
+                trashOps.confirmedCopiesOf(docId, hashed).ifEmpty {
+                    listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })
+                }
+            own.forEach { fs.delete(it) }
         }
     }
 

@@ -71,11 +71,12 @@ Every `core.app` facet keeps one contract, so a caller needs no defensive wrappi
   fold and journal write on its own dispatcher; the filesystem, Room and PDF engines switch for
   their own work.
 - **Expected failures are typed outcomes.** What normal use can run into — a file that cannot be
-  imported, a split or bake that cannot happen, AI OCR without an endpoint — comes back as an
-  outcome carrying an error enum (`ImportFailure`, `SplitFailure`, `BakeFailure`, `AiOcrOutcome`),
-  with the cause in the session log. `composeApp` maps each enum to a string resource: no English
-  text built in `core` is shown to the user. `DocContentFacade`'s nullable reads return null for
-  anything they cannot show.
+  imported, a split or bake that cannot happen, AI OCR without an endpoint, a deleted document's
+  file that cannot be removed — comes back as an outcome carrying an error enum (`ImportFailure`,
+  `SplitFailure`, `BakeFailure`, `AiOcrOutcome`, `PermanentDeleteOutcome`), with the cause in the
+  session log. `composeApp` maps each enum to a string resource: no English text built in `core`
+  is shown to the user. `DocContentFacade`'s nullable reads return null for anything they cannot
+  show.
 - **Bugs and misuse throw**, a closed session included. A viewmodel runs its writes through
   `launchReporting`, which turns a throw into a message instead of a crash.
 - **Cancellation is always rethrown** (`runCatchingCancellable`), never reported as a failure.
@@ -186,7 +187,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     deleted under it only while unchanged and while the journal still has the document
     deleted (an import may have brought it back meanwhile, which it records under the
     lock; a rescan showing a file still in place records no return so soon, and keeps
-    nothing). Restoring or emptying the whole trash
+    nothing). A file it cannot remove leaves the document deleted and is reported
+    (`PermanentDeleteOutcome.FILE_LEFT`). Restoring or emptying the whole trash
     (`DocLifecycle.restoreDocs`, `deleteDocsPermanently`) lists it once for all its
     documents.
     Restore records its final destination: the path the document was trashed from, or

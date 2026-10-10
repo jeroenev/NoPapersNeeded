@@ -110,6 +110,11 @@
         <item quantity="one">Não foi possível excluir %1$d de %2$d documento</item>
         <item quantity="other">Não foi possível excluir %1$d de %2$d documentos</item>
     </plurals>
+    <string name="common_trash_delete_file_left">O documento foi excluído, mas não foi possível remover o arquivo da pasta da biblioteca</string>
+    <plurals name="common_trash_delete_all_files_left">
+        <item quantity="one">%1$d documento foi excluído, mas não foi possível remover o arquivo da pasta da biblioteca</item>
+        <item quantity="other">%1$d documentos foram excluídos, mas não foi possível remover os arquivos da pasta da biblioteca</item>
+    </plurals>
     <string name="common_trash_remove_duplicate_failed">Não foi possível remover o duplicado: %1$s</string>
     <string name="common_trash_relink_failed">Não foi possível revincular o documento: %1$s</string>
     <string name="common_rules_save_failed">Não foi possível salvar a regra: %1$s</string>

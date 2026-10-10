@@ -110,6 +110,11 @@
         <item quantity="one">Error al eliminar %1$d de %2$d documento</item>
         <item quantity="other">Error al eliminar %1$d de %2$d documentos</item>
     </plurals>
+    <string name="common_trash_delete_file_left">El documento se eliminó, pero su archivo no se pudo quitar de la carpeta de la biblioteca</string>
+    <plurals name="common_trash_delete_all_files_left">
+        <item quantity="one">Se eliminó %1$d documento, pero su archivo no se pudo quitar de la carpeta de la biblioteca</item>
+        <item quantity="other">Se eliminaron %1$d documentos, pero sus archivos no se pudieron quitar de la carpeta de la biblioteca</item>
+    </plurals>
     <string name="common_trash_remove_duplicate_failed">No se pudo quitar el duplicado: %1$s</string>
     <string name="common_trash_relink_failed">No se pudo revincular el documento: %1$s</string>
     <string name="common_rules_save_failed">No se pudo guardar la regla: %1$s</string>
