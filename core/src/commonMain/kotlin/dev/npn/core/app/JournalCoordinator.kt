@@ -179,6 +179,15 @@ class JournalCoordinator internal constructor(
      */
     private var folded: FoldedState? = null
 
+    /**
+     * Set, with [folded] dropped, when a pass failed or was cut short, or when rebuilding the
+     * projection after a failure failed: that pass may have recorded sources it never folded or
+     * projected. A fold built while it is set is the store's whole, but the projection may lack them,
+     * so the next reconcile or ingest refolds and reprojects in full ([recoverDurableProjection])
+     * rather than build on what it had. A rescan, which projects every document, settles it too.
+     */
+    private var refoldPending = false
+
     private val syncedSettings = SyncedSettings()
 
     fun settingFlow(key: String): Flow<String?> = syncedSettings.flow(key)
@@ -280,6 +289,8 @@ class JournalCoordinator internal constructor(
 
     suspend fun ingestObject(relPath: String) =
         locked {
+            // The full path reads this object too.
+            if (refoldPending) return@locked latching { recoverDurableProjection() }
             withDurableProjectionRecovery {
                 // Fold before opening the transaction: loadState reads the events as they stand
                 // BEFORE this object is ingested, which is exactly the base its events apply onto.
@@ -308,6 +319,10 @@ class JournalCoordinator internal constructor(
     suspend fun reconcileMetadata() =
         locked {
             latching {
+                if (refoldPending) {
+                    recoverDurableProjection()
+                    return@locked
+                }
                 val reconciliation = accumulator.reconcile(folded)
                 val current = reconciliation.state
                 if (current == null) {
@@ -560,13 +575,17 @@ class JournalCoordinator internal constructor(
      */
     private suspend fun rescanFrom(current: FoldedState): ScanReport {
         val reconciled = accumulator.reconcile(current).state ?: current
-        return adopt(reconciled) {
-            indexer.rescan(
-                metadataState = reconciled,
-                onExternalMoves = { ops -> withContext(NonCancellable) { recordProjected(reconciled, ops) } },
-                onResurrected = { resurrected -> recordRestores(reconciled, resurrected) },
-            )
-        }
+        val report =
+            adopt(reconciled) {
+                indexer.rescan(
+                    metadataState = reconciled,
+                    onExternalMoves = { ops -> withContext(NonCancellable) { recordProjected(reconciled, ops) } },
+                    onResurrected = { resurrected -> recordRestores(reconciled, resurrected) },
+                )
+            }
+        // Every document projected, from a fold built since any failed pass dropped the last one.
+        refoldPending = false
+        return report
     }
 
     /** Publish [ops] and fold them into [state], for a pass that projects what they say itself. */
@@ -625,20 +644,29 @@ class JournalCoordinator internal constructor(
      * live fold out of step with the journal, and building OR-set ops on it would be wrong.
      *
      * Cancellation is not such a failure. A rescan whose caller left the screen says nothing about
-     * the journal, so it blocks nothing. The pass may still have stopped between ingesting a
-     * source and folding it, so the live fold is dropped and refolded from the store when next
-     * needed.
+     * the journal, so it blocks nothing.
+     *
+     * Either way the pass may have stopped between recording a source and folding or projecting it,
+     * so the live fold is dropped, and the projection rebuilt in full when next reconciled
+     * ([refoldPending]).
      */
     private inline fun <T> latching(pass: () -> T): T =
         try {
             pass()
         } catch (cancelled: CancellationException) {
-            folded = null
+            dropFold()
             throw cancelled
         } catch (failure: Throwable) {
             blockWrites(failure)
+            dropFold()
             throw failure
         }
+
+    /** Drop the live fold and owe a full refold and reprojection ([refoldPending]). */
+    private fun dropFold() {
+        folded = null
+        refoldPending = true
+    }
 
     /**
      * Make [state], freshly reconciled from the store, this session's live fold: seed the write
@@ -694,7 +722,8 @@ class JournalCoordinator internal constructor(
      *  - recovery succeeds -> the projection is consistent again and writes are re-enabled, but the
      *    original failure is still rethrown so the caller learns the optimistic projection failed;
      *  - recovery fails -> that failure also latches [writeBlockReason] (never escapes unlatched)
-     *    and is attached as suppressed to the rethrown original.
+     *    and is attached as suppressed to the rethrown original, and the live fold is dropped
+     *    for the next reconcile or ingest to rebuild in full ([refoldPending]).
      *
      * This mirrors the latch-then-rethrow contract of [refreshState]/[rescan]/[reconcileMetadata]
      * so every entry point behaves uniformly, cancellation included (see [latching]).
@@ -707,17 +736,22 @@ class JournalCoordinator internal constructor(
             blockWrites(failure)
             runCatchingCancellable { recoverDurableProjection() }.onFailure { recoveryFailure ->
                 blockWrites(recoveryFailure)
+                dropFold()
                 failure.addSuppressed(recoveryFailure)
             }
             throw failure
         }
 
-    /** Rebuild the in-memory state + DB projection from the durable store; clears the write block. */
+    /**
+     * Rebuild the in-memory state + DB projection from the durable store; clears the write block and
+     * settles [refoldPending].
+     */
     private suspend fun recoverDurableProjection() {
         // Recovery must reproject unconditionally, so it always needs a materialized fold even
         // when the reconcile itself read nothing.
         val current = accumulator.reconcile().state ?: accumulator.loadState()
         adopt(current) { indexer.refreshState(current) }
+        refoldPending = false
     }
 
     companion object {
