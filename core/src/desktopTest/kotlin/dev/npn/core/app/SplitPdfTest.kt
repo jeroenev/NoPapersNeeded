@@ -115,6 +115,8 @@ class SplitPdfTest {
                 rig.session.meta.addTag(listOf(imported.docId), "invoice")
                 rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
                 // The import's OCR writes the row in the background; it is done before the row is kept.
+                // The queues drain once the session has had its first rescan, which start() runs.
+                rig.session.rescan()
                 rig.session.work.drainOcr()
                 val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
                 original.relPath shouldBe "acme/contract.pdf"
@@ -145,6 +147,8 @@ class SplitPdfTest {
                 rig.session.meta.addTag(listOf(imported.docId), "invoice")
                 rig.session.meta.setField(listOf(imported.docId), FieldKeys.CORRESPONDENT, "acme")
                 // The import's OCR writes the row in the background; it is done before the row is kept.
+                // The queues drain once the session has had its first rescan, which start() runs.
+                rig.session.rescan()
                 rig.session.work.drainOcr()
                 val original = checkNotNull(rig.db.documentDao().getByDocId(imported.docId))
                 val replacement = PdfFixtures.embeddedTextPdf("another document")
@@ -227,6 +231,8 @@ class SplitPdfTest {
                 val receipt = rig.importDocument(receiptBytes, "receipt", "beta")
                 val source = rig.importDocument(PdfFixtures.embeddedTextPdf("contract"), "invoice", "acme")
                 // The imports' OCR writes the rows in the background; it is done before the rows are kept.
+                // The queues drain once the session has had its first rescan, which start() runs.
+                rig.session.rescan()
                 rig.session.work.drainOcr()
                 val receiptRow = rig.db.documentDao().getByDocId(receipt)
                 val before = rig.metadataOf(receipt)

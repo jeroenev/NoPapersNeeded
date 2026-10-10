@@ -115,6 +115,8 @@ class WatchedFolderImporterTest {
             val rig = AppSessionRig.create(backgroundScope, ocr)
             var closed = false
             try {
+                // The queues drain once the session has had its first rescan, which start() runs.
+                rig.session.rescan()
                 stagePdf("scan.pdf", PdfFixtures.imageOnlyPdf())
                 WatchedFolderImporter(rig.session, JvmWatchedFolder(watchDir), { false })
                     .scanOnce()

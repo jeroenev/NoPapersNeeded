@@ -36,6 +36,8 @@ import dev.npn.core.work.DrainedQueue
 import dev.npn.core.work.QueueDrainer
 import dev.npn.core.work.drainedQueue
 import dev.npn.core.xmp.BakeService
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.flow.MutableStateFlow
 
 // The builders [LibrarySessionImpl.openSession] wires a session from, one per part, in the order it
@@ -241,13 +243,17 @@ private fun buildContent(
     )
 }
 
-/** Automatic AI enrichment: unattended, so it writes through [Library.writer] without review. */
+/**
+ * Automatic AI enrichment: unattended, so it writes through [Library.writer] without review. Its
+ * drain waits for [rescanned], as every queue drain does ([LibrarySessionImpl.openSession]).
+ */
 internal fun buildEnrichment(
     deps: SessionDeps,
     lifetime: SessionLifetime,
     coordinator: JournalCoordinator,
     library: Library,
     ai: AiFacadeImpl,
+    rescanned: Deferred<Unit>,
 ): DrainedQueue<AiAutoEnricher> =
     drainedQueue(lifetime.scope, "AI enrichment queue", deps.log, build = { onEnqueued ->
         AiAutoEnricher(
@@ -262,17 +268,21 @@ internal fun buildEnrichment(
             checkWritable = coordinator::checkWritable,
             onEnqueued = onEnqueued,
         )
-    }) { it.processNext() }
+    }) {
+        rescanned.await()
+        it.processNext()
+    }
 
 /**
  * Bulk AI edits handed to the background; their writes wait for a human review, which a caller
- * applies, so they go through [Library.ownedWriter].
+ * applies, so they go through [Library.ownedWriter]. Drained once [rescanned].
  */
 internal fun buildEditQueue(
     deps: SessionDeps,
     lifetime: SessionLifetime,
     library: Library,
     ai: AiFacadeImpl,
+    rescanned: Deferred<Unit>,
 ): DrainedQueue<AiEditQueue> =
     drainedQueue(lifetime.scope, "AI edit queue", deps.log, build = { onEnqueued ->
         AiEditQueue(
@@ -289,12 +299,15 @@ internal fun buildEditQueue(
             onEnqueued = onEnqueued,
             ownWrite = { lifetime.owned(it) },
         )
-    }) { it.processNext() }
+    }) {
+        rescanned.await()
+        it.processNext()
+    }
 
 /**
- * This device's OCR pipeline and queue. Indexed text runs the library's auto-match rules first;
- * [onOcrProduced] then fires only for text this device just produced, so rule-applied tags and
- * fields are part of what a paid follow-up sees.
+ * This device's OCR pipeline and queue, drained once [rescanned]. Indexed text runs the library's
+ * auto-match rules first; [onOcrProduced] then fires only for text this device just produced, so
+ * rule-applied tags and fields are part of what a paid follow-up sees.
  */
 internal fun buildOcr(
     deps: SessionDeps,
@@ -302,6 +315,7 @@ internal fun buildOcr(
     deviceId: String,
     library: Library,
     ai: AiFacadeImpl,
+    rescanned: Deferred<Unit>,
     onOcrProduced: suspend (docId: String) -> Unit,
     onStaleFile: suspend (docId: String) -> Unit,
 ): OcrFacadeImpl {
@@ -338,7 +352,11 @@ internal fun buildOcr(
         engines = engines,
         writer = library.writer,
         content = library.content,
-        worker = QueueDrainer(lifetime.scope, "OCR queue", deps.log) { pipeline.processNext() },
+        worker =
+            QueueDrainer(lifetime.scope, "OCR queue", deps.log) {
+                rescanned.await()
+                pipeline.processNext()
+            },
         clock = deps.clock,
     )
 }
@@ -371,19 +389,21 @@ internal fun buildMaintenance(
         log = deps.log,
     )
 
-/** The three drained queues behind [LibrarySession.work]. */
+/** The three drained queues behind [LibrarySession.work], and the [rescanned] gate their drains wait at. */
 internal fun buildWork(
     deps: SessionDeps,
     lifetime: SessionLifetime,
     ocr: OcrFacadeImpl,
     enrichment: QueueDrainer,
     edits: DrainedQueue<AiEditQueue>,
+    rescanned: CompletableDeferred<Unit>,
 ): SessionWork =
     SessionWork(
         lifetime = lifetime,
         ocr = ocr.worker,
         enrichment = enrichment,
         edits = edits.worker,
+        firstRescan = rescanned,
         reader =
             WorkQueueReader(
                 deps.db.documentDao(),

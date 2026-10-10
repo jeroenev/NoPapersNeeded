@@ -29,6 +29,7 @@ import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.util.runLogged
 import dev.npn.core.util.warn
 import dev.npn.core.xmp.PdfXmpIO
+import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -112,6 +113,9 @@ class LibrarySessionImpl private constructor(
             scanReports.value = report
             report.retryAfterMillis?.let { scheduleSettleRescan(it) }
             ocrFacade.reconcileAfterRescan()
+            // The index knows the library's documents and has their stored text: from here on a
+            // drain may take a document without a row for one that is gone.
+            queues.rescanned()
             report
         }
 
@@ -241,7 +245,8 @@ class LibrarySessionImpl private constructor(
         // maintenance tick below.
         //
         // These kicks resume whatever survived the last run: a killed process, an endpoint that
-        // was down, a run left half-suggested. Each costs a single query when its queue is empty.
+        // was down, a run left half-suggested. Each costs a single query when its queue is empty,
+        // once the initial rescan below has let the drains start (see openSession).
         queues.kickAll()
 
         // Journal changes are routed apart from PDFs, so journal sync never scans or hashes PDFs. An
@@ -389,8 +394,12 @@ class LibrarySessionImpl private constructor(
                     clock = deps.clock,
                     configProvider = deps.settings.aiConfig,
                 )
-            val enrichment = buildEnrichment(deps, lifetime, coordinator, library, ai)
-            val edits = buildEditQueue(deps, lifetime, library, ai)
+            // Each drain treats a document without a row as gone and drops this device's work for it,
+            // but until the first rescan an index may not know the library's documents (a rebuilt one
+            // has no rows at all), so no drain starts before then.
+            val rescanned = CompletableDeferred<Unit>()
+            val enrichment = buildEnrichment(deps, lifetime, coordinator, library, ai, rescanned)
+            val edits = buildEditQueue(deps, lifetime, library, ai, rescanned)
             // The pipeline's stale-file hook asks the session for a follow-up rescan; the session is
             // built last, and the hook only runs on a drain.
             lateinit var session: LibrarySessionImpl
@@ -401,6 +410,7 @@ class LibrarySessionImpl private constructor(
                     deviceId,
                     library,
                     ai,
+                    rescanned,
                     // Only the *intent* is recorded here: this runs on the OCR queue-drain thread,
                     // where a network call would stall OCR of every remaining document.
                     onOcrProduced = { docId -> enrichment.queue.enqueue(docId) },
@@ -421,7 +431,7 @@ class LibrarySessionImpl private constructor(
                     ocrFacade = ocr,
                     maintenance = buildMaintenance(deps, lifetime, coordinator, library, relink, ocr, scanReports),
                     aiEditQueue = edits.queue,
-                    queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits),
+                    queues = buildWork(deps, lifetime, ocr, enrichment.worker, edits, rescanned),
                     aiFacade = ai,
                 )
             return session

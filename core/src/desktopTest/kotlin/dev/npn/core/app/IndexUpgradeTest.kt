@@ -1,21 +1,40 @@
 package dev.npn.core.app
 
 import androidx.room3.useReaderConnection
+import dev.npn.core.ai.AiConfig
+import dev.npn.core.ai.AiProvider
+import dev.npn.core.ai.FakeSseGateway
 import dev.npn.core.db.AiEditJobDocEntity
 import dev.npn.core.db.AiEditJobEntity
+import dev.npn.core.db.AiEnrichQueueEntity
 import dev.npn.core.db.LegacyIndexTables
 import dev.npn.core.db.NpnDatabase
+import dev.npn.core.db.OcrPageCacheEntity
+import dev.npn.core.db.OcrQueueEntity
+import dev.npn.core.db.QueueState
 import dev.npn.core.db.createFromSchema
 import dev.npn.core.db.exec
+import dev.npn.core.db.queueState
+import dev.npn.core.fs.FileMeta
+import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.index.DeviceIdentity
+import dev.npn.core.ocr.OcrEngineId
 import dev.npn.core.pdf.PdfFixtures
 import dev.npn.core.util.NpnJson
+import io.kotest.matchers.collections.shouldBeEmpty
+import io.kotest.matchers.collections.shouldNotBeEmpty
 import io.kotest.matchers.collections.shouldNotContain
 import io.kotest.matchers.collections.shouldNotContainAnyOf
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeoutOrNull
 import java.io.File
 import java.nio.file.Files
 import java.nio.file.Path
@@ -186,6 +205,93 @@ class IndexUpgradeTest {
             }
         }
 
+    /**
+     * Opened over a dropped index, the session's queue drains wait for its first rescan: until it has
+     * listed the library, a document with no row is one the index does not know yet, not one that is
+     * gone. So this device's queued work outlives the wait, and then runs as it would have; a row for
+     * a document that really is gone is still dropped.
+     */
+    @Test
+    fun theQueuesWaitForTheFirstRescanOfARebuiltIndex() =
+        runTest {
+            val gateway = FakeSseGateway("").start()
+            val endpoint =
+                AiConfig(
+                    enabled = true,
+                    provider = AiProvider.CUSTOM,
+                    baseUrl = gateway.baseUrl,
+                    model = "test-model",
+                    autoOnOcr = true,
+                )
+            library.resolve("a.pdf").toFile().writeBytes(PdfFixtures.embeddedTextPdf("alpha"))
+            val gone = "f".repeat(64)
+            var docId = ""
+            openSession(backgroundScope, library, data).use { session, deps ->
+                session.rescan()
+                session.work.drainOcr()
+                docId = deps.fs.sha256("a.pdf")
+                val device = deps.deviceDb
+                // Due work this device owes: a paid-for AI run cut short, an enrichment, an edit run.
+                device.ocrQueueDao().upsert(
+                    OcrQueueEntity(docId, QueueState.PENDING.column, attempts = 2, updatedAt = 1, aiRequested = true),
+                )
+                device.ocrQueueDao().cachePage(OcrPageCacheEntity(docId, OcrEngineId.AI.column, "eng", 0, "paid page"))
+                device.ocrQueueDao().upsert(OcrQueueEntity(gone, QueueState.PENDING.column, updatedAt = 1))
+                device.aiEnrichQueueDao().upsert(AiEnrichQueueEntity(docId, nextAttemptAt = 0, updatedAt = 1))
+                device.aiEditJobDao().upsertJob(
+                    AiEditJobEntity("job-1", requestJson = "{}", createdAt = 1, updatedAt = 1, nextAttemptAt = 0),
+                )
+                device.aiEditJobDao().upsertDocs(listOf(AiEditJobDocEntity("job-1", docId, position = 0)))
+            }
+
+            data.listFiles { file -> file.name.startsWith("index.db") }.orEmpty().forEach { it.delete() }
+
+            val listing = HeldListing()
+            try {
+                val reopened =
+                    openSession(backgroundScope, library, data, aiConfig = { endpoint }, files = listing::over)
+                reopened.use { session, deps ->
+                    val device = deps.deviceDb
+                    session.start()
+                    listing.reached.await()
+
+                    // Every drain is asked for while the rescan is held, and none gets anywhere.
+                    val drains =
+                        backgroundScope.launch {
+                            session.work.drainOcr()
+                            session.work.drainEnrichment()
+                            session.work.drainEditRuns()
+                        }
+                    listing.finishesWithin(drains, millis = 1_000) shouldBe false
+                    val owed = device.ocrQueueDao().getByDocId(docId).shouldNotBeNull()
+                    owed.aiRequested shouldBe true
+                    owed.attempts shouldBe 2
+                    device
+                        .ocrQueueDao()
+                        .cachedPages(docId, OcrEngineId.AI.column, "eng")
+                        .single()
+                        .text shouldBe "paid page"
+                    device.ocrQueueDao().getByDocId(gone).shouldNotBeNull()
+                    device.aiEnrichQueueDao().getByDocId(docId).shouldNotBeNull()
+                    device.aiEditJobDao().docsFor("job-1").map { it.docId } shouldBe listOf(docId)
+                    gateway.requestedPaths.shouldBeEmpty()
+
+                    listing.release()
+                    drains.join()
+
+                    device.ocrQueueDao().getByDocId(docId)?.queueState shouldBe QueueState.DONE
+                    device.ocrQueueDao().getByDocId(gone) shouldBe null
+                    // The endpoint fails every call, so the work is tried and stays owed.
+                    gateway.requestedPaths.shouldNotBeEmpty()
+                    device.aiEnrichQueueDao().getByDocId(docId).shouldNotBeNull()
+                    device.aiEditJobDao().docsFor("job-1").map { it.docId } shouldBe listOf(docId)
+                }
+            } finally {
+                listing.release()
+                gateway.stop()
+            }
+        }
+
     private suspend fun NpnDatabase.tableNames(): List<String> =
         useReaderConnection { connection ->
             connection.usePrepared("SELECT name FROM sqlite_master WHERE type = 'table'") { statement ->
@@ -216,4 +322,30 @@ class IndexUpgradeTest {
         val MOVED_TABLES =
             listOf("ai_edit_jobs", "ai_edit_job_docs", "ai_enrich_queue", "ai_enriched", "ocr_queue", "ocr_page_cache")
     }
+}
+
+/**
+ * A library filesystem whose rescan listing says so on [reached], then waits until [release]: a
+ * rescan still listing and hashing the library. [finishesWithin] waits on the wall clock.
+ */
+private class HeldListing {
+    val reached = CompletableDeferred<Unit>()
+    private val gate = CompletableDeferred<Unit>()
+
+    fun release() = gate.complete(Unit)
+
+    /** Whether [job] finishes within [millis] of real time, not the test's virtual time. */
+    suspend fun finishesWithin(
+        job: Job,
+        millis: Long,
+    ): Boolean = withContext(Dispatchers.Default) { withTimeoutOrNull(millis) { job.join() } != null }
+
+    fun over(fs: LibraryFileSystem): LibraryFileSystem =
+        object : LibraryFileSystem by fs {
+            override suspend fun listAllIndexable(): List<FileMeta> {
+                reached.complete(Unit)
+                gate.await()
+                return fs.listAllIndexable()
+            }
+        }
 }

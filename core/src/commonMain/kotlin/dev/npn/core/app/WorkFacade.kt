@@ -10,7 +10,8 @@ import kotlinx.coroutines.flow.Flow
  * queue empty, feature off, endpoint unconfigured, or a backlog waiting out a retry backoff. It
  * deliberately does not wait out a backoff, because nothing is gained by holding the process open
  * for one — the queues are persistent, so whatever is left is picked up by the next drain (a queue
- * change, a rescan, or the next maintenance tick).
+ * change, a rescan, or the next maintenance tick). Before the session's first successful rescan no
+ * drain starts, so a call waits for that rescan.
  *
  * Drains are single-flight per queue and run on the session's own scope, so closing the session
  * cancels them rather than letting work touch a closed database.

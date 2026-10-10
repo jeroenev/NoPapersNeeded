@@ -393,7 +393,10 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   is owned by `OcrFacadeImpl`, which kicks on its own enqueues and watches the table
   for rows other writers add (an import, an upgrade). Beyond that the session only
   kicks every queue at start, to resume what a killed process left, and on its
-  15-minute tick, which is what serves a backoff that has fallen due.
+  15-minute tick, which is what serves a backoff that has fallen due. No drain
+  starts before the session's first successful rescan (and its OCR reconcile): a
+  drain drops this device's work for a document without a row, and until then the
+  index may not know the library's documents (a rebuilt one has no rows at all).
 - A queue row records only that work is *owed*, never that it is under way. No queue
   table has a `running` state: the drain is single-flight in-process, so a row left
   claiming to be running has nobody alive to withdraw the claim, and every drain

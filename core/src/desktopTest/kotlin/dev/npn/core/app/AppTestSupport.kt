@@ -160,26 +160,6 @@ class AppSessionRig private constructor(
             return AppSessionRig(libRoot, dbDir, base.fs, base.db, base.deviceDb, clock, scope, session)
         }
 
-        /** These deps with the library filesystem [fs] and the PDF engine [pdf] in place of their own. */
-        private fun SessionDeps.over(
-            fs: LibraryFileSystem,
-            pdf: PdfEngine,
-        ) = SessionDeps(
-            fs = fs,
-            db = db,
-            deviceDb = deviceDb,
-            pdfEngine = pdf,
-            ocrEngine = ocrEngine,
-            xmpIO = xmpIO,
-            thumbnailStore = thumbnailStore,
-            renderParallelism = renderParallelism,
-            scope = scope,
-            settings = settings,
-            log = log,
-            clock = clock,
-            installationId = installationId,
-        )
-
         /** One device's app-local dirs; each session over the folder gets its own. */
         private fun appDirs(
             dbDir: File,
@@ -234,21 +214,45 @@ suspend fun openSession(
     library: Path,
     data: File,
     installationId: String = "test-installation",
+    aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
+    /** The library filesystem the session sees, over the real one. */
+    files: (LibraryFileSystem) -> LibraryFileSystem = { it },
 ): OpenSession {
-    val deps =
+    val base =
         jvmSessionDeps(
             libraryRoot = library,
             dirs = AppDirs(dbDir = data.path, thumbsDir = "$data/thumbs", tmpDir = "$data/tmp"),
             scope = scope,
-            settings = SessionSettings(ocrLanguage = { "eng" }, trashRetentionDays = { 30 }),
+            settings = SessionSettings(ocrLanguage = { "eng" }, trashRetentionDays = { 30 }, aiConfig = aiConfig),
             // Far behind the files' real mtimes, so a just-written PDF counts as settled.
             clock = MutableClock(autoTick = true),
             installationId = installationId,
             ocrEngine = NoopOcrEngine(),
             thumbnailStore = FakeThumbStore(File(data, "thumbs")),
         )
+    val deps = base.over(files(base.fs), base.pdfEngine)
     return OpenSession(LibrarySessionImpl.openSession(deps), deps)
 }
+
+/** These deps with the library filesystem [fs] and the PDF engine [pdf] in place of their own. */
+private fun SessionDeps.over(
+    fs: LibraryFileSystem,
+    pdf: PdfEngine,
+) = SessionDeps(
+    fs = fs,
+    db = db,
+    deviceDb = deviceDb,
+    pdfEngine = pdf,
+    ocrEngine = ocrEngine,
+    xmpIO = xmpIO,
+    thumbnailStore = thumbnailStore,
+    renderParallelism = renderParallelism,
+    scope = scope,
+    settings = settings,
+    log = log,
+    clock = clock,
+    installationId = installationId,
+)
 
 /** An [openSession] result: [use] it, and it closes the session and its databases afterwards. */
 class OpenSession(
