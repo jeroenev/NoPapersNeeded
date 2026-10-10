@@ -214,7 +214,72 @@ class OcrPipelineRerunTest {
             settled.rerun shouldBe false
         }
 
+    /**
+     * A re-run asked for again while the re-run asked before is being read (the OCR language
+     * changed meanwhile) is a request of its own, though the row already carried the flag: the
+     * pass leaves it owed, and the next pass reads the document again, in the new language.
+     */
+    @Test
+    fun aRerunAskedAgainWhileARerunPassRunsSurvivesThatPass() =
+        runTest {
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            rig
+                .pipeline(
+                    "devA",
+                    FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "first reading"),
+                ).processDoc(docId)
+            requestRerun(docId)
+            var language = "eng"
+            val fake = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "second reading")
+            val asking =
+                object : OcrEngine by fake {
+                    override suspend fun recognizePng(
+                        png: ByteArray,
+                        lang: String,
+                    ): String {
+                        if (fake.calls == 0) {
+                            language = "nld"
+                            requestRerun(docId)
+                        }
+                        return fake.recognizePng(png, lang)
+                    }
+                }
+            val pipe = rig.pipeline("devA", asking, language = { language })
+
+            pipe.processDoc(docId)
+
+            val row =
+                rig.deviceDb
+                    .ocrQueueDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
+            row.state shouldBe QueueState.PENDING.column
+            row.rerun shouldBe true
+            pipe.processDoc(docId)
+            fake.calls shouldBe 2
+            fake.lastLang shouldBe "nld"
+            rig.deviceDb
+                .ocrQueueDao()
+                .getByDocId(docId)
+                .shouldNotBeNull()
+                .state shouldBe QueueState.DONE.column
+        }
+
+    /**
+     * What `OcrFacadeImpl.reOcr` leaves on the queue: the row owed with a re-run asked for, under a
+     * stamp of its own, and whatever else was asked before kept.
+     */
     private suspend fun requestRerun(docId: String) {
-        rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2, rerun = true))
+        val queue = rig.deviceDb.ocrQueueDao()
+        val existing = queue.getByDocId(docId)
+        queue.upsert(
+            OcrQueueEntity(
+                docId,
+                QueueState.PENDING.column,
+                updatedAt = (existing?.updatedAt ?: 0) + 1,
+                rerun = true,
+                aiRequested = existing?.aiRequested == true,
+            ),
+        )
     }
 }

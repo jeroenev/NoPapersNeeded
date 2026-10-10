@@ -249,6 +249,11 @@ data class OcrQueueEntity(
     /** A [QueueState.column] — see the class doc for why `running` is not one of them. */
     val state: String,
     val attempts: Int = 0,
+    /**
+     * When the row was last written. Asking for a run ([rerun], [aiRequested]) always moves it on,
+     * so a pass tells a request made while it ran from the one it read, even when the flag was
+     * already set (`OcrQueueDao.settle`).
+     */
     val updatedAt: Long,
     val lastError: String? = null,
     /**

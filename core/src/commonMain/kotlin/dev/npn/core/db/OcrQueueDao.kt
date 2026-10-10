@@ -51,10 +51,10 @@ interface OcrQueueDao {
 
     /**
      * Write what a pass over [docId] came to: [settled], built from the row as it is now. A row that
-     * holds a request the pass did not see, as [seen] (the row it started from) lacked it, was asked
-     * for while it ran ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]): it is left as it is,
-     * owed, for the drain to run that request. Returns the row written, or null when it was left for
-     * a request.
+     * holds a request ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]) made while the pass ran
+     * is left as it is, owed, for the drain to run that request. A request is new when [seen], the
+     * row the pass started from, lacked it, or when it was asked again, which stamps the row afresh
+     * ([OcrQueueEntity.updatedAt]). Returns the row written, or null when it was left for a request.
      */
     @Transaction
     suspend fun settle(
@@ -65,7 +65,8 @@ interface OcrQueueDao {
         val row = getByDocId(docId)
         val rerunAsked = row?.rerun == true && seen?.rerun != true
         val aiAsked = row?.aiRequested == true && seen?.aiRequested != true
-        if (rerunAsked || aiAsked) return null
+        val askedAgain = row != null && (row.rerun || row.aiRequested) && row.updatedAt != seen?.updatedAt
+        if (rerunAsked || aiAsked || askedAgain) return null
         val written = settled(row)
         upsert(written)
         return written

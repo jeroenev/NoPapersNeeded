@@ -269,6 +269,41 @@ class AiOcrPipelineTest {
             db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
         }
 
+    /**
+     * "OCR with AI" asked again while the AI pass asked before fails is a request of its own, though
+     * the row already carried the flag: the pass leaves it owed as asked, not charged that failure
+     * or held back by its backoff, and the next drain spends the call again at once.
+     */
+    @Test
+    fun anAiRequestAskedAgainWhileTheAiPassFailsIsNotChargedItsFailure() =
+        runTest {
+            val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "should-not-run")
+            val ai =
+                FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "model words").apply {
+                    failure = IllegalStateException("endpoint hiccup")
+                }
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            rig.askForAi(docId)
+            val asking = rig.askingForAiOnItsFirstPage(ai, docId)
+            val pipe = rig.pipeline("devA", local, engines = selector(local, asking, auto = false))
+
+            pipe.processDoc(docId)
+
+            val row =
+                rig.deviceDb
+                    .ocrQueueDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
+            row.state shouldBe QueueState.PENDING.column
+            row.aiRequested shouldBe true
+            row.attempts shouldBe 0
+            ai.failure = null
+            pipe.drain()
+            ai.calls shouldBe 2
+            local.calls shouldBe 0
+            db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
+        }
+
     @Test
     fun anAiPinFromAnotherDeviceDoesNotSpendHere() =
         runTest {
@@ -394,13 +429,22 @@ private fun selector(
 
 /**
  * What `OcrFacade.ocrWithAi` leaves behind on this device: the pin, as the journal fold projects
- * it onto the row, a queue row marking the run as asked for here, and the document pending.
+ * it onto the row, a queue row marking the run as asked for here under a stamp of its own (keeping
+ * whatever else was asked before), and the document pending.
  */
 private suspend fun OcrPipelineRig.askForAi(docId: String) {
     setOverride(docId, OcrEngineId.AI.column)
-    deviceDb
-        .ocrQueueDao()
-        .upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2, aiRequested = true))
+    val queue = deviceDb.ocrQueueDao()
+    val existing = queue.getByDocId(docId)
+    queue.upsert(
+        OcrQueueEntity(
+            docId,
+            QueueState.PENDING.column,
+            updatedAt = (existing?.updatedAt ?: 0) + 1,
+            rerun = existing?.rerun == true,
+            aiRequested = true,
+        ),
+    )
     db.documentDao().updateOcrState(docId, OcrState.PENDING.column, null, null)
 }
 

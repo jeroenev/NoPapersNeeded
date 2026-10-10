@@ -152,7 +152,9 @@ internal class OcrFacadeImpl(
      * concurrent journal fold just projected onto the same row.
      *
      * A request already on the row ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]) is kept:
-     * asking for one thing does not withdraw what was asked before it ran.
+     * asking for one thing does not withdraw what was asked before it ran. The row's stamp always
+     * moves on, even within the millisecond of the last: it is how a pass tells a request made while
+     * it ran from the one it read (`OcrQueueDao.settle`).
      */
     private suspend fun enqueue(
         docId: String,
@@ -164,7 +166,7 @@ internal class OcrFacadeImpl(
             OcrQueueEntity(
                 docId = docId,
                 state = QueueState.PENDING.column,
-                updatedAt = clock.nowMillis(),
+                updatedAt = maxOf(clock.nowMillis(), (existing?.updatedAt ?: 0) + 1),
                 rerun = rerun || existing?.rerun == true,
                 aiRequested = aiRequested || existing?.aiRequested == true,
             ),
