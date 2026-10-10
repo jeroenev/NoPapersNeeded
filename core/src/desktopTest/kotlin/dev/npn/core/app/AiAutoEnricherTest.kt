@@ -1,19 +1,30 @@
+@file:OptIn(ExperimentalCoroutinesApi::class)
+
 package dev.npn.core.app
 
 import dev.npn.core.ai.AiEditSuggestion
 import dev.npn.core.ai.AiFieldMode
 import dev.npn.core.ai.FieldSuggestion
 import dev.npn.core.ai.TagSuggestion
+import dev.npn.core.ai.UnattendedAiPolicy
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
+import dev.npn.core.pdf.PdfFixtures
+import dev.npn.core.testing.FakeAiSuggest
+import dev.npn.core.testing.edit
+import dev.npn.core.work.EndpointHealth
 import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldBeSingleton
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.nulls.shouldBeNull
 import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.async
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import kotlin.test.Test
 
@@ -146,6 +157,8 @@ class AiAutoEnricherTest {
                         .shouldBeSingleton()
                         .single()
                 edit.docId shouldBe "d1"
+                // Settled under the journal's lock: only what the document still lacks then.
+                edit.fillOnly shouldBe true
                 edit.addTags shouldContainExactly listOf("invoice")
                 edit.fields shouldBe
                     mapOf(
@@ -286,6 +299,70 @@ class AiAutoEnricherTest {
                 rig.meta.batchedEdits.shouldBeEmpty()
                 rig.enrichedAt("d1").shouldNotBeNull()
                 rig.row("d1").shouldBeNull()
+            }
+        }
+}
+
+/** The enricher over a real session, whose writer settles what the pass may write under the journal's lock. */
+class AiAutoEnricherSessionTest {
+    /**
+     * The model is asked about the document as it was; a title the user enters while the call is out
+     * is theirs, so the answer arriving afterwards fills only what is still empty.
+     */
+    @Test
+    fun `a value the user enters during the model call is not overwritten`() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                val gate = CompletableDeferred<Unit>()
+                val answer =
+                    edit(
+                        metadata =
+                            FieldSuggestion(
+                                mapOf(
+                                    FieldKeys.TITLE to "Model title",
+                                    FieldKeys.CORRESPONDENT to "Acme",
+                                ),
+                            ),
+                    )
+                val ai =
+                    FakeAiSuggest().apply {
+                        edit = answer
+                        this.gate = gate
+                    }
+                val enricher =
+                    AiAutoEnricher(
+                        documentDao = rig.db.documentDao(),
+                        queueDao = rig.deviceDb.aiEnrichQueueDao(),
+                        ai = ai,
+                        meta = rig.session.meta,
+                        fieldRegistry = rig.session.fieldRegistry,
+                        policy = UnattendedAiPolicy { ACTIVE },
+                        clock = rig.clock,
+                        health = EndpointHealth(),
+                        checkWritable = {},
+                        onEnqueued = {},
+                    )
+                enricher.enqueue(id) shouldBe true
+
+                val enriching = backgroundScope.async { enricher.processNext() }
+                while (ai.suggestEditsCalls.isEmpty()) runCurrent()
+                rig.session.meta.setField(id, FieldKeys.TITLE, "Mine")
+                gate.complete(Unit)
+
+                enriching.await() shouldBe true
+                val fields =
+                    rig.session.documents
+                        .observeDoc(id)
+                        .first()!!
+                        .doc.fields
+                fields[FieldKeys.TITLE] shouldBe "Mine"
+                fields[FieldKeys.CORRESPONDENT] shouldBe "Acme"
+            } finally {
+                rig.close()
             }
         }
 }

@@ -165,10 +165,11 @@ class DocumentDraftsTest : MainDispatcherTest() {
                         docIds: List<String>,
                         addTags: List<String>,
                         fields: Map<String, String?>,
+                        fillOnly: Boolean,
                     ) {
                         started.complete(Unit)
                         finish.await()
-                        fake.applyEdits(docIds, addTags, fields)
+                        fake.applyEdits(docIds, addTags, fields, fillOnly)
                     }
                 }
             val store = DocumentDrafts(writer, this)

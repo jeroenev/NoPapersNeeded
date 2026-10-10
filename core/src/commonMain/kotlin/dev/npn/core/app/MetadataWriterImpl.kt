@@ -129,6 +129,7 @@ class MetadataWriterImpl(
         docIds: List<String>,
         addTags: List<String>,
         fields: Map<String, String?>,
+        fillOnly: Boolean,
     ) {
         if (docIds.isEmpty()) return
         val tags =
@@ -139,16 +140,50 @@ class MetadataWriterImpl(
         val ids = docIds.distinct()
         val keyed = fields.mapNotNull { (key, value) -> FieldKeys.normalize(key)?.let { it to value } }
         if (tags.isEmpty() && keyed.isEmpty()) return
+        // What each document gets is decided under the lock, against the state the commit lands on.
+        var edits: List<DocEdit> = emptyList()
         coordinator.commitBuilt { state ->
             val values = keyed.map { (key, value) -> key to canonical(state, key, value) }
-            ids.flatMap { docId ->
-                tags.map { PendingOp.tagAdd(docId, it) } +
-                    values.map { (key, value) -> PendingOp.fieldSet(docId, key, value) }
-            }
+            edits =
+                ids.map { docId -> if (fillOnly) state.lackedBy(docId, tags, values) else DocEdit(docId, tags, values) }
+            edits.flatMap { it.ops() }
         }
         // The same follow-ups the individual setters do, but once per document for the whole edit
-        // instead of once per value. Auto-match only reacts to a new title, matching setField.
-        followUp(ids, autoMatch = keyed.any { it.first == FieldKeys.TITLE })
+        // instead of once per value, and only for a document it wrote to. Auto-match only reacts to a
+        // new title, matching setField.
+        for (edit in edits.filterNot { it.isEmpty }) followUp(listOf(edit.docId), autoMatch = edit.setsTitle)
+    }
+
+    /** What one document gets of an [applyEdits]: the [tags] to add and the field [values] to set. */
+    private class DocEdit(
+        val docId: String,
+        val tags: List<String>,
+        val values: List<Pair<String, String?>>,
+    ) {
+        val isEmpty: Boolean get() = tags.isEmpty() && values.isEmpty()
+        val setsTitle: Boolean get() = values.any { it.first == FieldKeys.TITLE }
+
+        fun ops(): List<PendingOp> =
+            tags.map { PendingOp.tagAdd(docId, it) } +
+                values.map { (key, value) -> PendingOp.fieldSet(docId, key, value) }
+    }
+
+    /**
+     * The part of [tags] and [values] that [docId] lacks in this state, as it shows them (inherited
+     * ones included): tags it does not carry in any case, and values for fields it has none for.
+     */
+    private fun FoldedState.lackedBy(
+        docId: String,
+        tags: List<String>,
+        values: List<Pair<String, String?>>,
+    ): DocEdit {
+        val carried = inheritedTags(docId).mapTo(HashSet()) { it.lowercase() }
+        val filled = inheritedFields(docId).keys
+        return DocEdit(
+            docId,
+            tags.filterNot { it.lowercase() in carried },
+            values.filter { (key, value) -> value != null && key !in filled },
+        )
     }
 
     /**

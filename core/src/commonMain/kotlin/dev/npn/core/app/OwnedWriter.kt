@@ -46,7 +46,8 @@ internal class OwnedWriter(
         docIds: List<String>,
         addTags: List<String>,
         fields: Map<String, String?>,
-    ) = owned { writer.applyEdits(docIds, addTags, fields) }
+        fillOnly: Boolean,
+    ) = owned { writer.applyEdits(docIds, addTags, fields, fillOnly) }
 
     override suspend fun renameTag(
         from: String,

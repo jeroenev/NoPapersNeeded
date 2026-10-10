@@ -131,6 +131,76 @@ class MetadataWriterBatchTest {
             }
         }
 
+    /**
+     * A fill-only edit (unattended enrichment) is settled against the document as it is when it
+     * commits: a value set since its caller looked is kept, a tag carried in another case is not
+     * added again, and only what is still missing is written.
+     */
+    @Test
+    fun aFillOnlyEditWritesOnlyWhatTheDocumentLacksWhenItCommits() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.meta.setField(id, FieldKeys.TITLE, "Mine")
+                rig.session.meta.addTag(listOf(id), "Invoice")
+
+                rig.session.meta.applyEdits(
+                    listOf(id),
+                    addTags = listOf("invoice", "energy"),
+                    fields = mapOf(FieldKeys.TITLE to "Model title", FieldKeys.CORRESPONDENT to "Acme"),
+                    fillOnly = true,
+                )
+
+                val doc = rig.db.documentDao().getByDocId(id)!!
+                doc.title shouldBe "Mine"
+                doc.correspondent shouldBe "Acme"
+                val items =
+                    rig.session.documents
+                        .observeDocuments(LibraryFilter(), LibrarySort())
+                        .first()
+                tagsOf(items, id) shouldContainExactlyInAnyOrder listOf("Invoice", "energy")
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** A fill-only edit that finds everything filled writes nothing at all. */
+    @Test
+    fun aFillOnlyEditOfAFilledDocumentWritesNothing() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("alpha"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.meta.applyEdits(
+                    listOf(id),
+                    addTags = listOf("invoice"),
+                    fields =
+                        mapOf(FieldKeys.TITLE to "Mine"),
+                )
+                val objectsBefore = rig.journalObjectCount()
+
+                rig.session.meta.applyEdits(
+                    listOf(id),
+                    addTags = listOf("invoice"),
+                    fields = mapOf(FieldKeys.TITLE to "Model title"),
+                    fillOnly = true,
+                )
+
+                rig.journalObjectCount() shouldBe objectsBefore
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)!!
+                    .title shouldBe "Mine"
+            } finally {
+                rig.close()
+            }
+        }
+
     private fun tagsOf(
         items: List<DocListItem>,
         docId: String,

@@ -61,11 +61,17 @@ interface MetadataWriter {
      * Every document gets the same values, so this fits carrying one set of metadata onto many
      * documents (a split's parts, a bulk edit). Per-document *values* still need a call each —
      * batching those into one transaction would make one document's rejection lose the rest.
+     *
+     * With [fillOnly], each document gets only what it lacks when the edit commits, judged under the
+     * journal's lock: a field it has a value for and a tag it carries (in any case) are left out, so
+     * a value entered while the caller worked out its edit is never overwritten. A document left with
+     * nothing to write gets no follow-ups either.
      */
     suspend fun applyEdits(
         docIds: List<String>,
         addTags: List<String> = emptyList(),
         fields: Map<String, String?> = emptyMap(),
+        fillOnly: Boolean = false,
     )
 }
 

@@ -30,6 +30,9 @@ import dev.npn.core.work.QueueRetryPolicy
  *   reviewed [AiEditRun]'s job.
  * - **Fields** (every registry field marked aiEnabled) use [AiFieldMode.UNFILLED], so a value a
  *   human entered is never overwritten. Fields are written even when no tag matched.
+ * - The write fills only what the document still lacks when it commits
+ *   ([MetadataWriter.applyEdits] with `fillOnly`): the model was asked about the document as it was,
+ *   and a value or tag a human added while it answered is theirs.
  *
  * Everything comes from ONE [AiSuggest.suggestEdits] call per document, and every write goes
  * through [MetadataWriter] (the journal).
@@ -196,7 +199,8 @@ class AiAutoEnricher(
      *
      * The request already asks for no new tags and no removals, but this path writes without
      * review, so new tags are dropped and removals never carried here too. Only the fields the
-     * model filled are written; an absent one leaves the document's value alone.
+     * model filled are written, and only where the document has no value when the write commits;
+     * an absent one leaves the document's value alone.
      */
     private suspend fun write(
         docId: String,
@@ -206,7 +210,7 @@ class AiAutoEnricher(
         val fields = suggestion.metadata.values
         // A model that found nothing gets no transaction, no rename, no journal entry at all.
         if (tags.isEmpty() && fields.isEmpty()) return
-        meta.applyEdits(listOf(docId), addTags = tags, fields = fields)
+        meta.applyEdits(listOf(docId), addTags = tags, fields = fields, fillOnly = true)
     }
 
     /**

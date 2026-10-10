@@ -2,11 +2,15 @@ package dev.npn.core.testing
 
 import dev.npn.core.app.MetadataWriter
 
-/** One [MetadataWriter.applyEdits] call: the tags it added and the field values it set. */
+/**
+ * One [MetadataWriter.applyEdits] call: the tags it added and the field values it set, and whether
+ * it asked to fill only what each document lacks ([fillOnly]).
+ */
 data class BatchedEdit(
     val docIds: List<String>,
     val addTags: List<String>,
     val fields: Map<String, String?>,
+    val fillOnly: Boolean = false,
 ) {
     /** The one document of a per-document apply. */
     val docId: String get() = docIds.single()
@@ -94,10 +98,11 @@ class FakeMetadataWriter(
         docIds: List<String>,
         addTags: List<String>,
         fields: Map<String, String?>,
+        fillOnly: Boolean,
     ) {
         check(!batchedFieldsOnly || docIds.size == 1) { "one applyEdits per document, got $docIds" }
         failBatchOps?.invoke()
         if (docIds.any { it in failApplyEditsForDocs }) error("applyEdits failed for $docIds")
-        batchedEdits += BatchedEdit(docIds, addTags, fields)
+        batchedEdits += BatchedEdit(docIds, addTags, fields, fillOnly)
     }
 }
