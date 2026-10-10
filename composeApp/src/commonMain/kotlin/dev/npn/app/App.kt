@@ -64,6 +64,8 @@ import dev.npn.app.ui.nav.NavigationShell
 import dev.npn.app.ui.nav.QueueStatus
 import dev.npn.app.ui.nav.Route
 import dev.npn.app.ui.nav.TopLevelDestination
+import dev.npn.app.ui.nav.navigateAi
+import dev.npn.app.ui.nav.navigateTopLevel
 import dev.npn.app.ui.nav.queueStatus
 import dev.npn.app.ui.onboarding.OnboardingScreen
 import dev.npn.app.ui.onboarding.OpenFailureMessage
@@ -379,8 +381,8 @@ private fun MainNavHost(
                     browse.setOrder(order, query)
                     nav.navigate(Route.DocDetail(docId))
                 },
-                onTrash = { nav.navigate(Route.Trash) },
-                onOpenQueue = { nav.navigate(Route.Queue) },
+                onTrash = { nav.navigateTopLevel(TopLevelDestination.TRASH) },
+                onOpenQueue = { nav.navigateTopLevel(TopLevelDestination.QUEUE) },
                 onAiEdit = { docIds ->
                     aiSelection.set(docIds)
                     nav.navigateAi(Route.AiEdit)
@@ -481,36 +483,6 @@ private fun NavHostController.currentAiDestination(): AiDestination? {
         destination.hasRoute<Route.AiChat>() -> AiDestination.CHAT
         destination.hasRoute<Route.AiEdit>() -> AiDestination.EDIT
         else -> null
-    }
-}
-
-private fun NavHostController.navigateTopLevel(dest: TopLevelDestination) {
-    val route: Route =
-        when (dest) {
-            TopLevelDestination.LIBRARY -> Route.Library
-            TopLevelDestination.TAGS -> Route.TagManagement
-            TopLevelDestination.TRASH -> Route.Trash
-            TopLevelDestination.QUEUE -> Route.Queue
-            TopLevelDestination.SETTINGS -> Route.Settings()
-        }
-    navigate(route) {
-        // Keep a single branch: switching destinations never stacks top-level screens on
-        // each other, and each destination's state survives the round trip.
-        popUpTo(Route.Library) { saveState = true }
-        launchSingleTop = true
-        restoreState = true
-    }
-}
-
-/** AI screens sit one level above Library, never stacked on other pushed screens or each other. */
-private fun NavHostController.navigateAi(
-    route: Route,
-    restoreState: Boolean = false,
-) {
-    navigate(route) {
-        popUpTo(Route.Library) { saveState = true }
-        launchSingleTop = true
-        this.restoreState = restoreState
     }
 }
 
