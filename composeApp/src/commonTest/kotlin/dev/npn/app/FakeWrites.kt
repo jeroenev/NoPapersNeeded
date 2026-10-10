@@ -3,6 +3,7 @@ package dev.npn.app
 import dev.npn.core.app.DocLifecycle
 import dev.npn.core.app.PermanentDeleteOutcome
 import dev.npn.core.app.PermanentDeleteTally
+import dev.npn.core.app.RelocationOutcome
 import dev.npn.core.app.TagAdmin
 import dev.npn.core.app.TrashReceipt
 import dev.npn.core.util.runCatchingCancellable
@@ -84,6 +85,9 @@ class FakeDocLifecycle : DocLifecycle {
     /** deleteDocPermanently deletes these, but their files cannot be removed. */
     var filesLeftDocIds: Set<String> = emptySet()
 
+    /** What renameFile and moveFile answer. */
+    var relocation: RelocationOutcome = RelocationOutcome.MOVED
+
     /** The trash time each document trashed here has now, as a receipt reports it. */
     private val trashTimes = HashMap<String, Long>()
     private var lastTrashTime = 0L
@@ -129,14 +133,16 @@ class FakeDocLifecycle : DocLifecycle {
     override suspend fun renameFile(
         docId: String,
         newFileName: String,
-    ) {
+    ): RelocationOutcome {
         renamedFiles += docId to newFileName
+        return relocation
     }
 
     override suspend fun moveFile(
         docId: String,
         newDirRelPath: String,
-    ) {
+    ): RelocationOutcome {
         movedFiles += docId to newDirRelPath
+        return relocation
     }
 }

@@ -169,7 +169,11 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     Explicit PDF renames/moves and storage-path rules also write the `storagePath`
     system property, keyed by document hash, before moving bytes. The rule's follow-ups to
     metadata writes run one at a time (`StoragePathRuleApplicator`), each reading after its
-    write committed, so the path follows the latest metadata. HLC LWW chooses
+    write committed, so the path follows the latest metadata, and journal a location once,
+    not again while the journal holds it. Storage that cannot move a document (SAF:
+    `LibraryFileSystem.supportsDocumentRelocation` is false) refuses a rename or move
+    (`RelocationOutcome.UNSUPPORTED`, nothing written); the rule's location is still journaled
+    there, once, for a replica that can carry it out. HLC LWW chooses
     the intended location across devices; `DocumentPathReconciler` materializes it
     on metadata refresh or rescan. The cached `relPath` remains the actual available
     location, not an unfulfilled intent. Trash/delete suspend path reconciliation. A

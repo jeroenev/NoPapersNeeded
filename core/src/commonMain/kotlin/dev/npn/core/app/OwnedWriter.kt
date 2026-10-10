@@ -84,10 +84,10 @@ internal class OwnedWriter(
     override suspend fun renameFile(
         docId: String,
         newFileName: String,
-    ) = owned { writer.renameFile(docId, newFileName) }
+    ): RelocationOutcome = owned { writer.renameFile(docId, newFileName) }
 
     override suspend fun moveFile(
         docId: String,
         newDirRelPath: String,
-    ) = owned { writer.moveFile(docId, newDirRelPath) }
+    ): RelocationOutcome = owned { writer.moveFile(docId, newDirRelPath) }
 }

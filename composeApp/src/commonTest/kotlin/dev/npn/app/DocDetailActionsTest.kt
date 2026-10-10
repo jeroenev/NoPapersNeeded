@@ -6,8 +6,10 @@ import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.AiOcrOutcome
 import dev.npn.core.app.BakeFailure
 import dev.npn.core.app.BakeOutcome
+import dev.npn.core.app.RelocationOutcome
 import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
+import io.kotest.matchers.collections.shouldBeEmpty
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.ExperimentalCoroutinesApi
@@ -23,14 +25,15 @@ import no_papers_needed.composeapp.generated.resources.detail_bake_failed_unsupp
 import no_papers_needed.composeapp.generated.resources.detail_baked_in_place
 import no_papers_needed.composeapp.generated.resources.detail_could_not_bake_copy
 import no_papers_needed.composeapp.generated.resources.detail_exported_baked_copy
+import no_papers_needed.composeapp.generated.resources.detail_rename_unsupported
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_split_failed_unreadable
 import no_papers_needed.composeapp.generated.resources.detail_trash_failed
 import kotlin.test.Test
 
 /**
- * The document actions menu (trash, OCR, split, bake, export and share): each runs in the viewmodel
- * and reports through its message channel, so a result outlives the dialog that started it.
+ * The document actions menu (trash, rename, OCR, split, bake, export and share): each runs in the
+ * viewmodel and reports through its message channel, so a result outlives the dialog that started it.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
 class DocDetailActionsTest : MainDispatcherTest() {
@@ -61,6 +64,36 @@ class DocDetailActionsTest : MainDispatcherTest() {
             advanceUntilIdle()
             done shouldBe false
             messages shouldContainExactly listOf(failure(Res.string.detail_trash_failed, "trash failed for doc-1"))
+        }
+
+    @Test
+    fun aRenameThatWorkedSaysNothing() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession()
+            val model = vm(session = session)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+
+            model.rename("invoice.pdf")
+            advanceUntilIdle()
+
+            session.docLifecycle.renamedFiles shouldContainExactly listOf("doc-1" to "invoice.pdf")
+            messages.shouldBeEmpty()
+        }
+
+    /** A library opened through Android's folder picker cannot rename a file, and the rename says so. */
+    @Test
+    fun aRenameTheLibraryCannotCarryOutSaysWhy() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { docLifecycle.relocation = RelocationOutcome.UNSUPPORTED }
+            val model = vm(session = session)
+            val messages = collecting(model.messages.map { it.text })
+            advanceUntilIdle()
+
+            model.rename("invoice.pdf")
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf(uiText(Res.string.detail_rename_unsupported))
         }
 
     @Test

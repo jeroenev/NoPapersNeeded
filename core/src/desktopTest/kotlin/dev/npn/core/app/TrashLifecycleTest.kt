@@ -234,7 +234,7 @@ class TrashLifecycleTest {
                 rig.session.rescan()
                 val id = rig.fs.sha256("a.pdf")
 
-                rig.session.docLifecycle.renameFile(id, "renamed.pdf")
+                rig.session.docLifecycle.renameFile(id, "renamed.pdf") shouldBe RelocationOutcome.MOVED
                 rig.exists("renamed.pdf").shouldBeTrue()
                 rig.exists("a.pdf").shouldBeFalse()
                 rig.db
@@ -262,7 +262,7 @@ class TrashLifecycleTest {
                 rig.session.rescan()
                 val id = rig.fs.sha256("a.pdf")
 
-                rig.session.docLifecycle.moveFile(id, "archive")
+                rig.session.docLifecycle.moveFile(id, "archive") shouldBe RelocationOutcome.MOVED
                 rig.exists("archive/a.pdf").shouldBeTrue()
                 rig.db
                     .documentDao()

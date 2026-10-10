@@ -13,7 +13,10 @@ import kotlinx.coroutines.sync.withLock
  *
  * Moves are only performed when the rule is enabled and the computed path differs from the current
  * one. Trashed, deleted, or missing documents are never moved. Collisions are resolved by suffixing
- * the filename with `-1`, `-2`, etc. The intended path is journaled before physical reconciliation.
+ * the filename with `-1`, `-2`, etc. The intended path is journaled before physical reconciliation,
+ * once: [setPath] writes nothing when the journal already holds that location for the document, as
+ * it does for one its storage cannot move (a library opened through Android's folder picker), where
+ * the intent waits for a replica that can carry it out.
  *
  * Applications run one at a time, each from its read to its path commit: each reads after the
  * write that asked for it committed, so the last to run sees the latest metadata, and no two pick

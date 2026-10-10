@@ -24,6 +24,7 @@ import dev.npn.core.app.DocListItem
 import dev.npn.core.app.DocumentRepository
 import dev.npn.core.app.LibrarySession
 import dev.npn.core.app.OcrVersion
+import dev.npn.core.app.RelocationOutcome
 import dev.npn.core.app.SettingsRepository
 import dev.npn.core.app.SplitFailure
 import dev.npn.core.app.SplitOutcome
@@ -74,6 +75,7 @@ import no_papers_needed.composeapp.generated.resources.detail_ocr_details_failed
 import no_papers_needed.composeapp.generated.resources.detail_ocr_engine_failed
 import no_papers_needed.composeapp.generated.resources.detail_remove_tag_failed
 import no_papers_needed.composeapp.generated.resources.detail_rename_failed
+import no_papers_needed.composeapp.generated.resources.detail_rename_unsupported
 import no_papers_needed.composeapp.generated.resources.detail_share_failed
 import no_papers_needed.composeapp.generated.resources.detail_shared_baked_copy
 import no_papers_needed.composeapp.generated.resources.detail_split_failed
@@ -544,8 +546,13 @@ class DocDetailViewModel(
             onDone()
         }
 
+    /** Rename this document's file; a library whose storage cannot rename files says so. */
     override fun rename(newFileName: String) =
-        launchReporting(Res.string.detail_rename_failed) { docLifecycle.renameFile(docId, newFileName) }
+        launchReporting(Res.string.detail_rename_failed) {
+            if (docLifecycle.renameFile(docId, newFileName) == RelocationOutcome.UNSUPPORTED) {
+                message(uiText(Res.string.detail_rename_unsupported))
+            }
+        }
 
     override fun reOcr() =
         launchReporting(Res.string.common_rerun_ocr_failed) {

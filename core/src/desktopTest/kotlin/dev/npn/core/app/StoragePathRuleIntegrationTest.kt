@@ -1,11 +1,18 @@
 package dev.npn.core.app
 
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.fs.NpnPaths
+import dev.npn.core.journal.JournalCodec
+import dev.npn.core.journal.JournalOp
+import dev.npn.core.journal.JournalPath
+import dev.npn.core.journal.JournalPaths
 import dev.npn.core.model.FieldDef
 import dev.npn.core.model.FieldKeys
 import dev.npn.core.model.FieldType
+import dev.npn.core.model.SystemProperty
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
+import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.CoroutineDispatcher
@@ -159,6 +166,77 @@ class StoragePathRuleIntegrationTest {
                 rig.close()
             }
         }
+
+    /**
+     * On storage that cannot move a document (a library opened through Android's folder picker), the
+     * rule's location is journaled once, for a replica that can carry it out: the document stays where
+     * it is, and a later write to it does not journal the same location again.
+     */
+    @Test
+    fun aLocationTheStorageCannotCarryOutIsJournaledOnce() =
+        runTest {
+            val rule = StoragePathRule("organized/{title}.pdf", enabled = true)
+            val rig = AppSessionRig.create(backgroundScope, storagePath = rule, files = ::notRelocating)
+            try {
+                rig.writePdf("scan.pdf", PdfFixtures.embeddedTextPdf("content"))
+                rig.session.rescan()
+                val id = rig.docId("scan.pdf")
+
+                rig.session.meta.addTag(listOf(id), "first")
+                rig.session.meta.addTag(listOf(id), "second")
+
+                rig.storagePathEvents() shouldContainExactly listOf(id to "organized/scan.pdf")
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)!!
+                    .relPath shouldBe "scan.pdf"
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** There, a rename the user asks for is refused rather than journaled as if it had happened. */
+    @Test
+    fun aRenameTheStorageCannotCarryOutIsRefused() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope, files = ::notRelocating)
+            try {
+                rig.writePdf("scan.pdf", PdfFixtures.embeddedTextPdf("content"))
+                rig.session.rescan()
+                val id = rig.docId("scan.pdf")
+                val objects = rig.journalObjectCount()
+
+                rig.session.docLifecycle.renameFile(id, "invoice.pdf") shouldBe RelocationOutcome.UNSUPPORTED
+                rig.session.docLifecycle.moveFile(id, "archive") shouldBe RelocationOutcome.UNSUPPORTED
+
+                rig.journalObjectCount() shouldBe objects
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)!!
+                    .relPath shouldBe "scan.pdf"
+                rig.exists("scan.pdf") shouldBe true
+            } finally {
+                rig.close()
+            }
+        }
+
+    /** [fs] as storage that cannot move a document, as a library opened through Android's folder picker. */
+    private fun notRelocating(fs: LibraryFileSystem): LibraryFileSystem =
+        object : LibraryFileSystem by fs {
+            override val supportsDocumentRelocation: Boolean get() = false
+        }
+
+    /** Every `storagePath` event in the journal, as its document and the location it names. */
+    private suspend fun AppSessionRig.storagePathEvents(): List<Pair<String?, String?>> =
+        fs
+            .listAllUnder(NpnPaths.JOURNAL_DIR)
+            .filter { JournalPaths.classify(it.relPath) is JournalPath.ObjectV2 }
+            .flatMap { fs.readBytes(it.relPath).decodeToString().lines() }
+            .mapNotNull(JournalCodec::decodeLineOrNull)
+            .mapNotNull { event ->
+                val op = event.op as? JournalOp.PropSet
+                if (op != null && op.key == SystemProperty.STORAGE_PATH) event.doc to op.value else null
+            }
 
     /**
      * A library filesystem whose first [LibraryFileSystem.exists] check of [path] says so on [reached],

@@ -165,6 +165,7 @@
     <string name="detail_add_field_failed">Impossible d’ajouter le champ : %1$s</string>
     <string name="detail_trash_failed">Impossible de mettre le document à la corbeille : %1$s</string>
     <string name="detail_rename_failed">Impossible de renommer le fichier : %1$s</string>
+    <string name="detail_rename_unsupported">Impossible de renommer le fichier : cette bibliothèque est ouverte via le sélecteur de dossiers d’Android, qui ne peut pas renommer de fichiers.</string>
     <string name="detail_ai_ocr_failed">Impossible de lire le texte avec l’assistant : %1$s</string>
     <string name="detail_ocr_engine_failed">Impossible de changer de moteur OCR : %1$s</string>
 </resources>

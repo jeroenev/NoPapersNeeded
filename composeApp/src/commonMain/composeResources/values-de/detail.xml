@@ -165,6 +165,7 @@
     <string name="detail_add_field_failed">Das Feld konnte nicht hinzugefügt werden: %1$s</string>
     <string name="detail_trash_failed">Das Dokument konnte nicht in den Papierkorb verschoben werden: %1$s</string>
     <string name="detail_rename_failed">Die Datei konnte nicht umbenannt werden: %1$s</string>
+    <string name="detail_rename_unsupported">Die Datei konnte nicht umbenannt werden: Diese Bibliothek ist über die Ordnerauswahl von Android geöffnet, die keine Dateien umbenennen kann.</string>
     <string name="detail_ai_ocr_failed">Der Text konnte nicht mit dem Assistenten gelesen werden: %1$s</string>
     <string name="detail_ocr_engine_failed">Die OCR-Engine konnte nicht geändert werden: %1$s</string>
 </resources>

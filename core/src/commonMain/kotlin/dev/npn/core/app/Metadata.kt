@@ -134,15 +134,35 @@ interface DocLifecycle {
      */
     suspend fun deleteDocsPermanently(docIds: List<String>): PermanentDeleteTally
 
+    /**
+     * Give the document's file [newFileName] in its folder: its new location is journaled and the file
+     * follows it. On storage that cannot move a document, nothing is written.
+     */
     suspend fun renameFile(
         docId: String,
         newFileName: String,
-    )
+    ): RelocationOutcome
 
+    /** Move the document's file into [newDirRelPath], as [renameFile] renames it. */
     suspend fun moveFile(
         docId: String,
         newDirRelPath: String,
-    )
+    ): RelocationOutcome
+}
+
+/** What [DocLifecycle.renameFile] or [DocLifecycle.moveFile] did. */
+enum class RelocationOutcome {
+    /** The document's new location is journaled, and its file follows it. */
+    MOVED,
+
+    /** Nothing to do: the document is not in the library, or already there. */
+    UNCHANGED,
+
+    /**
+     * This library's storage cannot move a document's file (a folder opened through Android's folder
+     * picker), so nothing was written.
+     */
+    UNSUPPORTED,
 }
 
 /**
