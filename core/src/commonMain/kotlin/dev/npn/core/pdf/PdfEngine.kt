@@ -87,7 +87,10 @@ interface PdfEngine {
      */
     suspend fun open(bytes: ByteArray): PdfDocumentHandle
 
-    /** Combine JPEG/PNG page images into a single PDF (one image per page). */
+    /**
+     * Combine JPEG/PNG page images into a single PDF (one image per page). The bytes depend only on
+     * [images], so converting the same images again makes a duplicate, not another document.
+     */
     suspend fun imagesToPdf(images: List<ByteArray>): ByteArray
 
     /**

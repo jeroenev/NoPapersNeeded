@@ -3,6 +3,9 @@ package dev.npn.core.pdf
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import org.apache.pdfbox.Loader
+import org.apache.pdfbox.cos.COSArray
+import org.apache.pdfbox.cos.COSName
+import org.apache.pdfbox.cos.COSString
 import org.apache.pdfbox.pdmodel.PDDocument
 import org.apache.pdfbox.pdmodel.PDPage
 import org.apache.pdfbox.pdmodel.PDPageContentStream
@@ -57,6 +60,7 @@ class PdfBoxEngine : PdfEngine {
                         cs.drawImage(image, 0f, 0f, image.width.toFloat(), image.height.toFloat())
                     }
                 }
+                doc.identifyBy(images)
                 val out = ByteArrayOutputStream()
                 doc.save(out)
                 out.toByteArray()
@@ -87,6 +91,17 @@ class PdfBoxEngine : PdfEngine {
                 }
             }
         }
+}
+
+/** Gives the document the `/ID` of [images] ([imagesPdfId]) rather than one PDFBox seeds from the clock. */
+private fun PDDocument.identifyBy(images: List<ByteArray>) {
+    val id = COSString(imagesPdfId(images))
+    val ids =
+        COSArray().apply {
+            add(id)
+            add(id)
+        }
+    document.trailer.setItem(COSName.ID, ids)
 }
 
 private class PdfBoxDocumentHandle(

@@ -7,6 +7,9 @@ import android.graphics.Canvas
 import android.graphics.Color
 import android.graphics.pdf.PdfRenderer
 import android.os.ParcelFileDescriptor
+import com.tom_roush.pdfbox.cos.COSArray
+import com.tom_roush.pdfbox.cos.COSName
+import com.tom_roush.pdfbox.cos.COSString
 import com.tom_roush.pdfbox.pdmodel.PDDocument
 import com.tom_roush.pdfbox.pdmodel.PDPage
 import com.tom_roush.pdfbox.pdmodel.PDPageContentStream
@@ -87,6 +90,7 @@ class PdfBoxAndroidEngine(
                         cs.drawImage(image, 0f, 0f, image.width.toFloat(), image.height.toFloat())
                     }
                 }
+                doc.identifyBy(images)
                 val out = ByteArrayOutputStream()
                 doc.save(out)
                 out.toByteArray()
@@ -125,6 +129,17 @@ class PdfBoxAndroidEngine(
                 source.close()
             }
         }
+}
+
+/** Gives the document the `/ID` of [images] ([imagesPdfId]) rather than one PDFBox seeds from the clock. */
+private fun PDDocument.identifyBy(images: List<ByteArray>) {
+    val id = COSString(imagesPdfId(images))
+    val ids =
+        COSArray().apply {
+            add(id)
+            add(id)
+        }
+    document.trailer.setItem(COSName.ID, ids)
 }
 
 private class PdfBoxTextBackend(
