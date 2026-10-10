@@ -13,6 +13,7 @@ import dev.npn.core.db.isLive
 import dev.npn.core.db.queueState
 import dev.npn.core.fs.LibraryFileSystem
 import dev.npn.core.fs.OcrSidecarFiles
+import dev.npn.core.fs.OcrSidecarName
 import dev.npn.core.fs.sha256Bytes
 import dev.npn.core.index.FtsRows
 import dev.npn.core.index.WriteSettle
@@ -427,6 +428,30 @@ class OcrPipeline(
         if (stored.isEmpty()) return
         applySelection(doc, stored)
         maybeQueueUpgrade(doc, stored)
+    }
+
+    /**
+     * Publish [from]'s text for [to], bytes with the same pages (a bake of [from]): of each engine
+     * [from] has a version of, the one [OcrVersions.select] indexes with that engine pinned, under
+     * this device's writer key for that engine, best engine first. Write-once: a version [to] already
+     * has under that key is kept. Indexing it is [reselect]'s, once [to] has a row.
+     */
+    suspend fun copyText(
+        from: String,
+        to: String,
+    ) {
+        val stored = versions.of(from)
+        // A label this build does not know has no writer key of its own to go under.
+        val engines = stored.map { it.engine }.distinct().filter { OcrEngineId.fromColumn(it) != null }
+        for (engine in engines.sortedByDescending { OcrEngineId.rank(it) }) {
+            val version = versions.select(stored, engine) ?: continue
+            val sidecar = versions.read(from, version.writerKey) ?: continue
+            val writerKey = OcrSidecarName.writerKey(deviceId, engine)
+            val copy = OcrSidecarCodec.encode(sidecar.copy(doc = to, dev = deviceId))
+            runCatchingCancellable { sidecars.writeOnce(to, writerKey, copy) }.getOrElse { failure ->
+                if (versions.read(to, writerKey) == null) throw failure
+            }
+        }
     }
 
     /** All stored OCR versions of [docId], decoded, best-ranked first. For UI listing. */

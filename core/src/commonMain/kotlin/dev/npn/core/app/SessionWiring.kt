@@ -131,11 +131,12 @@ private suspend fun SessionDeps.upgradeAtOpen(
     }
 }
 
+/** The library's facets. [relinkBake] ends a bake in place ([BakeRelink.relink]). */
 internal suspend fun buildLibrary(
     deps: SessionDeps,
     lifetime: SessionLifetime,
     coordinator: JournalCoordinator,
-    relink: RelinkService,
+    relinkBake: suspend (original: String, baked: String) -> Unit,
 ): Library {
     val db = deps.db
     val storagePath = JournalStoragePath(coordinator) { lifetime.owned(it) }
@@ -182,7 +183,7 @@ internal suspend fun buildLibrary(
         writer = writer,
         ownedWriter = OwnedWriter(writer, lifetime),
         reviewConfig = JournalReviewConfig(coordinator, db.documentDao()) { lifetime.owned(it) },
-        content = buildContent(deps, lifetime, coordinator, relink, bakes),
+        content = buildContent(deps, lifetime, coordinator, relinkBake, bakes),
         imports =
             ImportService(
                 fs = deps.fs,
@@ -201,7 +202,7 @@ private fun buildContent(
     deps: SessionDeps,
     lifetime: SessionLifetime,
     coordinator: JournalCoordinator,
-    relink: RelinkService,
+    relinkBake: suspend (original: String, baked: String) -> Unit,
     bakes: BakeLock,
 ): DocContentFacadeImpl {
     // Single shared gate so thumbnail + page rendering share one bounded concurrency budget and a
@@ -225,7 +226,7 @@ private fun buildContent(
         thumbnails,
         BakeService(deps.fs, deps.xmpIO, deps.log),
         coordinator,
-        relink,
+        relinkBake,
         renderGate,
         bakes,
         deps.log,

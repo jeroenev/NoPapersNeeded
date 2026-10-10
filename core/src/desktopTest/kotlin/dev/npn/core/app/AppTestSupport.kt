@@ -125,6 +125,7 @@ class AppSessionRig private constructor(
             log: NpnLog = JvmLog(),
             trashRetentionDays: suspend () -> Int = { 30 },
             legacyLibrarySettings: suspend () -> LegacyLibrarySettings = { LegacyLibrarySettings() },
+            aiConfig: suspend () -> AiConfig = { AiConfig.DISABLED },
             /** The PDF engine the session uses, over the real one. */
             pdfEngine: (PdfEngine) -> PdfEngine = { it },
             /** The library filesystem the session sees, over the real one the rig's [fs] reads directly. */
@@ -143,6 +144,7 @@ class AppSessionRig private constructor(
                             ocrLanguage = { "eng" },
                             trashRetentionDays = trashRetentionDays,
                             legacyLibrarySettings = legacyLibrarySettings,
+                            aiConfig = aiConfig,
                         ),
                     clock = clock,
                     installationId = "test-installation",

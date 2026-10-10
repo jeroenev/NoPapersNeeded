@@ -3,7 +3,6 @@ package dev.npn.core.app
 import dev.npn.core.db.NpnDatabase
 import dev.npn.core.db.isLive
 import dev.npn.core.fs.LibraryFileSystem
-import dev.npn.core.index.RelinkService
 import dev.npn.core.pdf.PdfEngine
 import dev.npn.core.pdf.RenderGate
 import dev.npn.core.pdf.ThumbnailService
@@ -22,8 +21,9 @@ import dev.npn.core.xmp.NpnXmpData
  * - [ThumbnailService] caches first-page thumbnails against a platform [ThumbnailStore].
  * - [PdfEngine] is opened per call and closed via `use` (kept simple; no long-lived handle cache).
  * - [BakeService] + [NpnXmpData] (assembled from the current DB row + tags) drive export/in-place
- *   bake. In-place bake relinks the new hash through [RelinkService], whose rescan carries the
- *   document's tags and fields onto it and marks the old row superseded.
+ *   bake. In-place bake relinks the new hash through [relinkBake] ([BakeRelink]): the relink's rescan
+ *   carries the document's tags and fields onto it and marks the old row superseded, and the baked
+ *   document keeps its original's text.
  *
  * Reads return null on failure and an in-place bake a [BakeOutcome.Failed]; both log the cause to
  * [log]. The calls that write (the thumbnail cache, the page-count backfill, an in-place bake) run
@@ -37,7 +37,8 @@ class DocContentFacadeImpl internal constructor(
     private val thumbnailService: ThumbnailService,
     private val bakeService: BakeService,
     private val coordinator: JournalCoordinator,
-    private val relinkService: RelinkService,
+    /** Relinks a bake's original to its baked bytes, handing its text on ([BakeRelink.relink]). */
+    private val relinkBake: suspend (original: String, baked: String) -> Unit,
     private val renderGate: RenderGate,
     /**
      * Held by each bake in place, the whole of it: every bake of a path writes the same temporary
@@ -117,7 +118,7 @@ class DocContentFacadeImpl internal constructor(
             // may be another one since the index last looked, or become one at any time.
             val baked =
                 bakeService.bakeInPlace(doc.relPath, docId, buildXmpData(docId)) { oldSha, newSha ->
-                    relinkService.applyRelink(oldSha, newSha)
+                    relinkBake(oldSha, newSha)
                 }
             if (baked == null) BakeOutcome.Failed(BakeFailure.DOCUMENT_UNAVAILABLE) else BakeOutcome.Baked
         }.getOrElse { failure ->

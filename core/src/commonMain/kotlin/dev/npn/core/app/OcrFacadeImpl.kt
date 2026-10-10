@@ -118,6 +118,15 @@ internal class OcrFacadeImpl(
     /** Re-select or adopt the sidecars on disk; see [OcrPipeline.reconcileSidecars]. */
     suspend fun reconcileSidecars() = pipeline.reconcileSidecars()
 
+    /** Give [baked], a bake of [original], the text [original] has; see [OcrPipeline.copyText]. */
+    suspend fun copyText(
+        original: String,
+        baked: String,
+    ) = pipeline.copyText(original, baked)
+
+    /** Index the version [docId] selects now; see [OcrPipeline.reselect]. */
+    suspend fun reselect(docId: String) = pipeline.reselect(docId)
+
     /**
      * After a rescan: adopt or re-select the sidecars it picked up, then queue every live document
      * still without OCR. A run this device's queue still owes keeps its attempts and requests (the

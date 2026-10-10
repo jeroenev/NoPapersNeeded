@@ -374,7 +374,11 @@ class LibrarySessionImpl private constructor(
             foldJournal(deps, coordinator)
 
             val relink = RelinkService(coordinator)
-            val library = buildLibrary(deps, lifetime, coordinator, relink)
+            // A bake's relink hands the document's text on through the OCR pipeline, built after the
+            // library it belongs to; no bake runs before the session is open.
+            lateinit var bakeRelink: BakeRelink
+            val library =
+                buildLibrary(deps, lifetime, coordinator) { original, baked -> bakeRelink.relink(original, baked) }
             // Built before the OCR pipeline because it is also the pipeline's AI engine: one
             // facade, so the vision calls share the cached endpoint client with chat and edits.
             val ai =
@@ -403,6 +407,7 @@ class LibrarySessionImpl private constructor(
                     // The file no longer matches its hash: rescan once it has settled.
                     onStaleFile = { session.scheduleSettleRescan(WriteSettle.QUIET_MILLIS) },
                 )
+            bakeRelink = BakeRelink(relink, ocr, deps.deviceDb.aiEnrichQueueDao(), deps.log)
             val scanReports = MutableStateFlow<ScanReport?>(null)
             session =
                 LibrarySessionImpl(
