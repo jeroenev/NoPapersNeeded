@@ -409,12 +409,13 @@ class MetadataWriterImpl(
 
     /**
      * Remove the bytes of [doc], its row before it was deleted for good: its copies in the trash as
-     * [listing] found them (listed now without one), or else its file. A trashed or missing document
-     * gave its path up, so the file there may be another one now. Each is hashed before the lock, as
-     * a whole file read under it would hold up every other write, and goes under it only while
-     * unchanged since and while the journal still has the document deleted: an import of its bytes
-     * can have brought it back meanwhile, with that very file. Its row cannot say: a rescan meanwhile
-     * shows a file still in place again without that being a return.
+     * [listing] found them (listed now without one), and the file at its path when that holds them
+     * (a sync can bring them back there). A trashed or missing document gave its path up, so the file
+     * there may be another one now. Each is hashed before the lock, as a whole file read under it
+     * would hold up every other write, and goes under it only while unchanged since and while the
+     * journal still has the document deleted: an import of its bytes can have brought it back
+     * meanwhile, with that very file. Its row cannot say: a rescan meanwhile shows a file still in
+     * place again without that being a return.
      */
     private suspend fun removeBytes(
         doc: DocumentEntity,
@@ -425,11 +426,9 @@ class MetadataWriterImpl(
         val file = fileAt(doc)
         coordinator.serialized { journal ->
             if (!journal.isDeleted(docId)) return@serialized
-            val own =
-                trashOps.confirmedCopiesOf(docId, hashed).ifEmpty {
-                    listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })
-                }
-            own.forEach { fs.delete(it) }
+            val inTrash = trashOps.confirmedCopiesOf(docId, hashed)
+            val atItsPath = listOfNotNull(doc.relPath.takeIf { stillHolds(it, docId, file) })
+            (inTrash + atItsPath).distinct().forEach { fs.delete(it) }
         }
     }
 

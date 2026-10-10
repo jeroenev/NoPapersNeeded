@@ -1195,6 +1195,45 @@ class PermanentDeleteTest {
         }
 
     /**
+     * A sync tool put the bytes of a document in the trash back at its path, and no rescan has looked
+     * since. Deleting the document for good removes both copies, so no rescan shows it again.
+     */
+    @Test
+    fun deletingForGoodRemovesTheCopyInTheTrashAndTheOneAtItsPath() =
+        runTest {
+            val rig = AppSessionRig.create(backgroundScope)
+            try {
+                val bytes = PdfFixtures.embeddedTextPdf("in the trash, and back at its path")
+                rig.writePdf("a.pdf", bytes)
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+                rig.writePdf("a.pdf", bytes)
+
+                rig.session.docLifecycle.deleteDocPermanently(id) shouldBe PermanentDeleteOutcome.DELETED
+
+                rig.exists("a.pdf").shouldBeFalse()
+                rig.fs
+                    .listAllUnder(NpnPaths.TRASH_DIR)
+                    .filter { !it.isDirectory }
+                    .shouldBeEmpty()
+                rig.session.rescan()
+                rig.fs
+                    .listAllIndexable()
+                    .filter { !it.isDirectory }
+                    .shouldBeEmpty()
+                rig.db
+                    .documentDao()
+                    .getByDocId(id)
+                    .shouldNotBeNull()
+                    .deleted
+                    .shouldBeTrue()
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
      * The provider refuses to delete what the trash holds. The documents are deleted all the same,
      * as their tombstones say, and the files left behind are reported, one by one and in bulk.
      */

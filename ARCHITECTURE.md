@@ -185,7 +185,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     the trash there only when no copy it found is left, or it found none: a copy can
     reach the trash after the listing); a delete for good acts on a document in the trash
     only (one restored meanwhile, here, on another device or by an import, is left alone),
-    and deletes the bytes after its tombstone is published, hashed before the lock and
+    and deletes the bytes (its copies in the trash, and a file at its path that holds
+    them) after its tombstone is published, hashed before the lock and
     deleted under it only while unchanged and while the journal still has the document
     deleted (an import may have brought it back meanwhile, which it records under the
     lock; a rescan showing a file still in place records no return so soon, and keeps
