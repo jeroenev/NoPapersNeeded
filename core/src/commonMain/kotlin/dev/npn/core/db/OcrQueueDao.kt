@@ -49,6 +49,28 @@ interface OcrQueueDao {
     @Query("SELECT COUNT(*) FROM ocr_queue WHERE state NOT IN ('$QUEUE_DONE', '$QUEUE_FAILED')")
     fun countActive(): Flow<Int>
 
+    /**
+     * Write what a pass over [docId] came to: [settled], built from the row as it is now. A row that
+     * holds a request the pass did not see, as [seen] (the row it started from) lacked it, was asked
+     * for while it ran ([OcrQueueEntity.rerun], [OcrQueueEntity.aiRequested]): it is left as it is,
+     * owed, for the drain to run that request. Returns the row written, or null when it was left for
+     * a request.
+     */
+    @Transaction
+    suspend fun settle(
+        docId: String,
+        seen: OcrQueueEntity?,
+        settled: (OcrQueueEntity?) -> OcrQueueEntity,
+    ): OcrQueueEntity? {
+        val row = getByDocId(docId)
+        val rerunAsked = row?.rerun == true && seen?.rerun != true
+        val aiAsked = row?.aiRequested == true && seen?.aiRequested != true
+        if (rerunAsked || aiAsked) return null
+        val written = settled(row)
+        upsert(written)
+        return written
+    }
+
     @Query("DELETE FROM ocr_queue WHERE docId = :docId")
     suspend fun deleteRow(docId: String)
 

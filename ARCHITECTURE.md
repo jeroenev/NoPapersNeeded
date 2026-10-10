@@ -371,7 +371,8 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   `AiEditQueue.inFlight`), which the read seam and `OcrStatus` combine in; it is never
   inferred from a row's progress. An interrupted pass must leave its
   row exactly as it found it — including its attempt count, which is why cancellation
-  is rethrown rather than recorded as a failure.
+  is rethrown rather than recorded as a failure. A pass that ends leaves a request made
+  while it ran (an OCR re-run, OCR with AI) on its row, owed (`OcrQueueDao.settle`).
 - Showing background work to the user → `WorkQueueReader` joins the queue tables to
   document names behind `WorkFacade.queue`, again whenever the index's documents table changes (a
   trash or a new title changes no queue row), and derives whole-run progress behind

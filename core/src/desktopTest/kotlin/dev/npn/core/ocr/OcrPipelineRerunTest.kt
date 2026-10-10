@@ -173,6 +173,39 @@ class OcrPipelineRerunTest {
             }
         }
 
+    /**
+     * A re-run asked for while a pass reads the document is a request that pass never saw:
+     * finishing, the pass leaves the row owed with it, and the next pass runs the engine again.
+     */
+    @Test
+    fun aRerunRequestedWhileAPassRunsSurvivesThatPass() =
+        runTest {
+            val fake = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "scanned words")
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val asking =
+                object : OcrEngine by fake {
+                    override suspend fun recognizePng(
+                        png: ByteArray,
+                        lang: String,
+                    ): String {
+                        if (fake.calls == 0) requestRerun(docId)
+                        return fake.recognizePng(png, lang)
+                    }
+                }
+            val pipe = rig.pipeline("devA", asking)
+
+            pipe.processDoc(docId)
+
+            val row = rig.deviceDb.ocrQueueDao().getByDocId(docId)!!
+            row.state shouldBe QueueState.PENDING.column
+            row.rerun shouldBe true
+            pipe.processDoc(docId)
+            fake.calls shouldBe 2
+            val settled = rig.deviceDb.ocrQueueDao().getByDocId(docId)!!
+            settled.state shouldBe QueueState.DONE.column
+            settled.rerun shouldBe false
+        }
+
     private suspend fun requestRerun(docId: String) {
         rig.deviceDb.ocrQueueDao().upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2, rerun = true))
     }

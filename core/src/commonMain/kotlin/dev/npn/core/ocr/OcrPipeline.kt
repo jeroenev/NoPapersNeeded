@@ -126,7 +126,9 @@ class OcrPipeline(
      * The row is left `pending` throughout and moved only by [processDoc]'s own terminal write, so
      * an interrupted pass is indistinguishable from one that never started and the next drain
      * simply takes it again. Safe because the drain is single-flight in-process
-     * ([dev.npn.core.work.QueueDrainer]): no second worker can pop the same row meanwhile.
+     * ([dev.npn.core.work.QueueDrainer]): no second worker can pop the same row meanwhile. A request
+     * recorded on the row while the pass ran outlives it ([OcrQueueDao.settle]): the row stays
+     * pending with it, and the drain takes it again.
      */
     suspend fun processNext(): Boolean {
         val entry = ocrQueueDao.nextPending(clock.nowMillis()) ?: return false
@@ -171,7 +173,7 @@ class OcrPipeline(
                 // is now. Other bytes read again are charged, so a file no rescan changes (one whose
                 // size and mtime stayed, or an empty one) is given up on at the attempt cap.
                 val first = entry?.lastError != STALE_FILE
-                if (first) awaitRescan(docId, entry)
+                if (first) awaitRescan(docId, seen = entry)
                 onStaleFile(docId)
                 if (first) return
                 own = OwnOcr.Failed(STALE_FILE)
@@ -183,7 +185,7 @@ class OcrPipeline(
         val desired = versions.select(stored, doc.ocrEngineOverride)
         val sidecar = desired?.let { versions.read(docId, it.writerKey) }
         if (desired == null || sidecar == null) {
-            fail(docId, failure ?: "no readable ocr version for $docId", textIndexed = false)
+            fail(docId, failure ?: "no readable ocr version for $docId", textIndexed = false, seen = entry)
             return
         }
         // A failed run still leaves the best stored version searchable meanwhile.
@@ -197,21 +199,24 @@ class OcrPipeline(
         // follow-up work they schedule has been recorded.
         if (failure != null) {
             // This device's run is still owed: the attempt, the error and a requested re-run stay.
-            fail(docId, failure, textIndexed = true)
+            fail(docId, failure, textIndexed = true, seen = entry)
         } else {
             // Done even when a hook failed — the text is indexed and searchable, which is what
             // this queue tracks — but the failure is kept on the row rather than dropped, since
-            // nothing retries a hook and there is no other trace of it.
+            // nothing retries a hook and there is no other trace of it. A request made while this
+            // pass ran keeps the row owed instead. Either way this run is over, and the pages it
+            // read go: a re-run asked for meanwhile must read them again.
             ocrQueueDao.clearCachedPages(docId)
-            ocrQueueDao.upsert(
+            val now = clock.nowMillis()
+            ocrQueueDao.settle(docId, seen = entry) { row ->
                 OcrQueueEntity(
                     docId = docId,
                     state = QueueState.DONE.column,
-                    attempts = ocrQueueDao.getByDocId(docId)?.attempts ?: 0,
-                    updatedAt = clock.nowMillis(),
+                    attempts = row?.attempts ?: 0,
+                    updatedAt = now,
                     lastError = hookError,
-                ),
-            )
+                )
+            }
         }
     }
 
@@ -220,22 +225,22 @@ class OcrPipeline(
      * file has had [WriteSettle.QUIET_MILLIS] to settle. The follow-up rescan then refreshes the
      * document's row, or finds the file replaced and the document gone, which the run cleans up after.
      * Kept rather than dropped: a rescan queues only documents without an OCR state, and would leave a
-     * pending one owed nothing.
+     * pending one owed nothing. A request made since the pass read the row ([seen]) leaves the row as
+     * that request wrote it, owed.
      */
     private suspend fun awaitRescan(
         docId: String,
-        entry: OcrQueueEntity?,
+        seen: OcrQueueEntity?,
     ) {
         val now = clock.nowMillis()
-        val owed = entry ?: OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = now)
-        ocrQueueDao.upsert(
-            owed.copy(
+        ocrQueueDao.settle(docId, seen) { row ->
+            (row ?: OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = now)).copy(
                 state = QueueState.PENDING.column,
                 updatedAt = now,
                 nextAttemptAt = now + WriteSettle.QUIET_MILLIS,
                 lastError = STALE_FILE,
-            ),
-        )
+            )
+        }
     }
 
     /**
@@ -567,7 +572,9 @@ class OcrPipeline(
 
     /**
      * Charge a failed pass to [docId]: spend an attempt, leave the row pending for a retry after
-     * its backoff or failed once the cap is reached, and record [error] as the diagnostic.
+     * its backoff or failed once the cap is reached, and record [error] as the diagnostic. A request
+     * made since the pass read the row ([seen]) is another run, not this one: the row is left as that
+     * request wrote it, owed and uncharged.
      *
      * [textIndexed] says another version's text was indexed for the document by this same pass. The
      * doc row then keeps the state that indexing gave it: it describes the searchable text, and a
@@ -578,25 +585,27 @@ class OcrPipeline(
         docId: String,
         error: String,
         textIndexed: Boolean,
+        seen: OcrQueueEntity?,
     ) {
-        val entry = ocrQueueDao.getByDocId(docId)
-        val attempts = (entry?.attempts ?: 0) + 1
-        val state = if (retry.givesUp(attempts)) QueueState.FAILED else QueueState.PENDING
         val now = clock.nowMillis()
-        ocrQueueDao.upsert(
-            OcrQueueEntity(
-                docId = docId,
-                state = state.column,
-                attempts = attempts,
-                updatedAt = now,
-                nextAttemptAt = retry.nextAttemptAt(now, attempts),
-                lastError = error,
-                // A retry of a requested run is still that request.
-                rerun = entry?.rerun ?: false,
-                aiRequested = entry?.aiRequested ?: false,
-            ),
-        )
-        if (!textIndexed) setOcrState(docId, if (state == QueueState.FAILED) OcrState.FAILED else OcrState.PENDING)
+        val settled =
+            ocrQueueDao.settle(docId, seen) { row ->
+                val attempts = (row?.attempts ?: 0) + 1
+                OcrQueueEntity(
+                    docId = docId,
+                    state = (if (retry.givesUp(attempts)) QueueState.FAILED else QueueState.PENDING).column,
+                    attempts = attempts,
+                    updatedAt = now,
+                    nextAttemptAt = retry.nextAttemptAt(now, attempts),
+                    lastError = error,
+                    // A retry of a requested run is still that request.
+                    rerun = row?.rerun ?: false,
+                    aiRequested = row?.aiRequested ?: false,
+                )
+            }
+        if (!textIndexed) {
+            setOcrState(docId, if (settled?.queueState == QueueState.FAILED) OcrState.FAILED else OcrState.PENDING)
+        }
     }
 }
 

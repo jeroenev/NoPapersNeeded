@@ -240,6 +240,8 @@ data class DuplicateEntity(
  * So a row stays `pending` while it is being worked on, and an interrupted pass leaves it exactly
  * as it found it — owed, and taken by the next drain. Who is being worked on right now is
  * in-process knowledge (`OcrPipeline.inFlight`), which cannot outlive the process that knows it.
+ * A request recorded while a pass runs outlives that pass too: the pass settles the row only when
+ * it saw every request on it (`OcrQueueDao.settle`).
  */
 @Entity(tableName = "ocr_queue")
 data class OcrQueueEntity(

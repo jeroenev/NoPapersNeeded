@@ -75,7 +75,7 @@ class AiOcrPipelineTest {
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "should-not-run")
             val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "model read the scan")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            askForAi(docId)
+            rig.askForAi(docId)
 
             rig.pipeline("devA", local, engines = selector(local, ai, auto = false)).processDoc(docId)
 
@@ -94,7 +94,7 @@ class AiOcrPipelineTest {
             rig.pipeline("devA", local, engines = selector(local, ai)).processDoc(docId)
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe "mlkit"
 
-            askForAi(docId)
+            rig.askForAi(docId)
             rig.pipeline("devA", local, engines = selector(local, ai)).processDoc(docId)
 
             ai.calls shouldBe 1
@@ -114,7 +114,7 @@ class AiOcrPipelineTest {
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
             val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "should-not-run")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            setOverride(docId, "mlkit")
+            rig.setOverride(docId, "mlkit")
 
             rig.pipeline("devA", local, engines = selector(local, ai, auto = true)).processDoc(docId)
 
@@ -164,7 +164,7 @@ class AiOcrPipelineTest {
             val docId = rig.stageDoc("ledger.pdf", PdfFixtures.imageOnlyPdf(pages = 3))
             val engines = selector(local, ai, auto = false, largeDocumentPages = 2)
             val pipe = rig.pipeline("devA", local, engines = engines)
-            askForAi(docId)
+            rig.askForAi(docId)
 
             pipe.processDoc(docId)
 
@@ -195,12 +195,73 @@ class AiOcrPipelineTest {
             val pipe = rig.pipeline("devA", local, engines = selector(local, ai, auto = false))
             pipe.processDoc(docId)
 
-            askForAi(docId)
+            rig.askForAi(docId)
             pipe.reconcileSidecars()
             pipe.drain()
 
             ai.calls shouldBe 1
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
+            db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
+        }
+
+    /**
+     * "OCR with AI" asked for while a local pass reads the document is a request that pass never
+     * saw: finishing, the pass leaves the row owed with it, and the next pass spends the call.
+     */
+    @Test
+    fun anAiRequestMadeWhileALocalPassRunsSurvivesThatPass() =
+        runTest {
+            val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local words")
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "model words")
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val asking = rig.askingForAiOnItsFirstPage(local, docId)
+            val pipe = rig.pipeline("devA", asking, engines = selector(asking, ai, auto = false))
+
+            pipe.processDoc(docId)
+
+            val row =
+                rig.deviceDb
+                    .ocrQueueDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
+            row.state shouldBe QueueState.PENDING.column
+            row.aiRequested shouldBe true
+            pipe.processDoc(docId)
+            ai.calls shouldBe 1
+            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
+            rig.deviceDb
+                .ocrQueueDao()
+                .getByDocId(docId)
+                .shouldNotBeNull()
+                .state shouldBe QueueState.DONE.column
+        }
+
+    /** The same request made during a local pass that then fails is owed as asked, not charged that failure. */
+    @Test
+    fun anAiRequestMadeWhileALocalPassFailsIsNotChargedItsFailure() =
+        runTest {
+            val local =
+                FakeOcrEngine(isAvailable = true, name = "mlkit").apply {
+                    failure =
+                        IllegalStateException("blurry")
+                }
+            val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column, canned = "model words")
+            val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
+            val asking = rig.askingForAiOnItsFirstPage(local, docId)
+            val pipe = rig.pipeline("devA", asking, engines = selector(asking, ai, auto = false))
+
+            pipe.processDoc(docId)
+
+            val row =
+                rig.deviceDb
+                    .ocrQueueDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
+            row.state shouldBe QueueState.PENDING.column
+            row.aiRequested shouldBe true
+            row.attempts shouldBe 0
+            pipe.drain()
+            ai.calls shouldBe 1
             db.ftsDao().searchDocIds("model") shouldContainExactly listOf(docId)
         }
 
@@ -215,7 +276,7 @@ class AiOcrPipelineTest {
             val pipe = rig.pipeline("devB", local, engines = selector(local, ai, auto = false))
             pipe.processDoc(docId)
 
-            setOverride(docId, OcrEngineId.AI.column)
+            rig.setOverride(docId, OcrEngineId.AI.column)
             pipe.reconcileSidecars()
             pipe.drain()
 
@@ -243,7 +304,7 @@ class AiOcrPipelineTest {
                     pages = listOf("model words"),
                 )
             OcrSidecarFiles(fs).writeOnce(docId, "devA.ai", OcrSidecarCodec.encode(fromA))
-            setOverride(docId, OcrEngineId.AI.column)
+            rig.setOverride(docId, OcrEngineId.AI.column)
             pipe.reconcileSidecars()
             pipe.drain()
 
@@ -263,7 +324,7 @@ class AiOcrPipelineTest {
             val pipe = rig.pipeline("devB", local, engines = selector(local, ai, auto = true, largeDocumentPages = 2))
             pipe.processDoc(docId)
 
-            setOverride(docId, OcrEngineId.AI.column)
+            rig.setOverride(docId, OcrEngineId.AI.column)
             pipe.reconcileSidecars()
             pipe.drain()
 
@@ -279,7 +340,7 @@ class AiOcrPipelineTest {
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit", canned = "local fallback words")
             val ai = FakeOcrEngine(isAvailable = false, name = OcrEngineId.AI.column, canned = "should-not-run")
             val docId = rig.stageDoc("scan.pdf", PdfFixtures.imageOnlyPdf())
-            askForAi(docId)
+            rig.askForAi(docId)
             val engines = selector(local, ai, auto = true)
 
             engines.aiAvailable() shouldBe false
@@ -305,7 +366,7 @@ class AiOcrPipelineTest {
             val local = FakeOcrEngine(isAvailable = true, name = "mlkit")
             val ai = FakeOcrEngine(isAvailable = true, name = OcrEngineId.AI.column)
             val docId = rig.stageDoc("inv.pdf", PdfFixtures.embeddedTextPdf("invoice 42 acme corporation"))
-            askForAi(docId)
+            rig.askForAi(docId)
 
             rig.pipeline("devA", local, engines = selector(local, ai, auto = true)).processDoc(docId)
 
@@ -313,44 +374,59 @@ class AiOcrPipelineTest {
             local.calls shouldBe 0
             db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.EMBEDDED.column
         }
+}
 
-    private fun selector(
-        local: OcrEngine,
-        ai: OcrEngine,
-        auto: Boolean = false,
-        largeDocumentPages: Int = OcrEngineSelector.DEFAULT_LARGE_DOCUMENT_PAGES,
-    ) = OcrEngineSelector(
-        local = local,
-        ai = ai,
-        largeDocumentPages = largeDocumentPages,
-        aiAuto = { auto },
-    )
+private fun selector(
+    local: OcrEngine,
+    ai: OcrEngine,
+    auto: Boolean = false,
+    largeDocumentPages: Int = OcrEngineSelector.DEFAULT_LARGE_DOCUMENT_PAGES,
+) = OcrEngineSelector(
+    local = local,
+    ai = ai,
+    largeDocumentPages = largeDocumentPages,
+    aiAuto = { auto },
+)
 
-    /**
-     * What `OcrFacade.ocrWithAi` leaves behind on this device: the pin, as the journal fold projects
-     * it onto the row, a queue row marking the run as asked for here, and the document pending.
-     */
-    private suspend fun askForAi(docId: String) {
-        setOverride(docId, OcrEngineId.AI.column)
-        rig.deviceDb
-            .ocrQueueDao()
-            .upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2, aiRequested = true))
-        db.documentDao().updateOcrState(docId, OcrState.PENDING.column, null, null)
-    }
+/**
+ * What `OcrFacade.ocrWithAi` leaves behind on this device: the pin, as the journal fold projects
+ * it onto the row, a queue row marking the run as asked for here, and the document pending.
+ */
+private suspend fun OcrPipelineRig.askForAi(docId: String) {
+    setOverride(docId, OcrEngineId.AI.column)
+    deviceDb
+        .ocrQueueDao()
+        .upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2, aiRequested = true))
+    db.documentDao().updateOcrState(docId, OcrState.PENDING.column, null, null)
+}
 
-    /** Work the queue the way the session's drainer does. */
-    private suspend fun OcrPipeline.drain() {
-        while (processNext()) {
-            // Each call processes one document.
+/** [engine], with the user asking for AI on [docId] ([askForAi]) as it reads its first page. */
+private fun OcrPipelineRig.askingForAiOnItsFirstPage(
+    engine: FakeOcrEngine,
+    docId: String,
+): OcrEngine =
+    object : OcrEngine by engine {
+        override suspend fun recognizePng(
+            png: ByteArray,
+            lang: String,
+        ): String {
+            if (engine.calls == 0) askForAi(docId)
+            return engine.recognizePng(png, lang)
         }
     }
 
-    /** Simulate the journal fold projecting a SystemProperty.OCR_ENGINE override onto the row. */
-    private suspend fun setOverride(
-        docId: String,
-        engine: String?,
-    ) {
-        val doc = db.documentDao().getByDocId(docId)!!
-        db.documentDao().upsert(doc.copy(ocrEngineOverride = engine))
+/** Work the queue the way the session's drainer does. */
+private suspend fun OcrPipeline.drain() {
+    while (processNext()) {
+        // Each call processes one document.
     }
+}
+
+/** Simulate the journal fold projecting a SystemProperty.OCR_ENGINE override onto the row. */
+private suspend fun OcrPipelineRig.setOverride(
+    docId: String,
+    engine: String?,
+) {
+    val doc = db.documentDao().getByDocId(docId)!!
+    db.documentDao().upsert(doc.copy(ocrEngineOverride = engine))
 }

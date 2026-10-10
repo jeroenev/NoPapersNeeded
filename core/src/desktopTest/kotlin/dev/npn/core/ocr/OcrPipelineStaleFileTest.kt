@@ -68,6 +68,33 @@ class OcrPipelineStaleFileTest {
         }
 
     /**
+     * A re-run asked for while a pass found the file changing is a request that pass never saw: it
+     * stays on the row, owed, rather than going with the pass's wait for the rescan.
+     */
+    @Test
+    fun aRequestMadeWhileAPassFoundTheFileChangingSurvivesThatPass() =
+        runTest {
+            val docId = rig.stageDoc("a.pdf", PdfFixtures.embeddedTextPdf("the bytes that were indexed"))
+            Files.write(rig.libRoot.resolve("a.pdf"), PdfFixtures.embeddedTextPdf("the bytes there now"))
+            val queue = rig.deviceDb.ocrQueueDao()
+            val asking =
+                object : LibraryFileSystem by rig.fs {
+                    override suspend fun readBytes(relPath: String): ByteArray {
+                        if (relPath == "a.pdf") {
+                            queue.upsert(OcrQueueEntity(docId, QueueState.PENDING.column, updatedAt = 2, rerun = true))
+                        }
+                        return rig.fs.readBytes(relPath)
+                    }
+                }
+
+            rig.pipeline("devA", FakeOcrEngine(isAvailable = true, name = "mlkit"), files = asking).processDoc(docId)
+
+            val row = queue.getByDocId(docId).shouldNotBeNull()
+            row.queueState shouldBe QueueState.PENDING
+            row.rerun shouldBe true
+        }
+
+    /**
      * A sync tool rewrote the file in place with the same bytes while OCR read it. The run is not
      * dropped with the document left pending: once the follow-up rescan has found the document's
      * bytes there again, OCR reads them.
