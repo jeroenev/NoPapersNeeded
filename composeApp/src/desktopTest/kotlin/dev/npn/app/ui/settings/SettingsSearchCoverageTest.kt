@@ -8,6 +8,7 @@ import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.semantics.SemanticsNode
 import androidx.compose.ui.semantics.SemanticsProperties
 import androidx.compose.ui.semantics.getOrNull
+import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.theme.NpnTheme
 import dev.npn.core.ai.AiProvider
 import dev.npn.core.app.SettingsSnapshot
@@ -130,6 +131,8 @@ class SettingsSearchCoverageTest {
         override fun setUntaggedOnlyMode() = Unit
 
         override fun setInboxWorkflowMode(migration: ReviewMigration) = Unit
+
+        override fun watchedFolderPicked(pick: FolderPick) = Unit
 
         override fun changeLibrary() = Unit
 

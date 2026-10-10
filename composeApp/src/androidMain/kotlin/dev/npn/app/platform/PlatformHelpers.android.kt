@@ -48,32 +48,53 @@ actual fun platformFileToExternalSource(file: PlatformFile): ExternalSource = Ex
 
 /**
  * The system document picker is the only folder picker Android has, so both modes start from its
- * tree uri. [FolderAccess.DIRECT] maps the uri back to the device-storage path it names (null for
- * cloud providers, which have none); [FolderAccess.SAF] takes the persistable grant and keeps the
- * uri, exactly as every library was opened before the direct mode existed.
+ * tree uri. [FolderAccess.DIRECT] maps the uri back to the device-storage path it names (none for
+ * cloud providers); [FolderAccess.SAF] takes the persistable grant and, once the system keeps it
+ * ([keepTreeAccess]), keeps the uri, as every library was opened before the direct mode existed.
  */
 actual fun persistDirectoryAccess(
     dir: PlatformFile,
     access: FolderAccess,
-): String? {
+): FolderPick {
     val uri =
         when (val af = dir.androidFile) {
-            is AndroidFile.FileWrapper -> return if (access == FolderAccess.DIRECT) af.file.absolutePath else null
-            is AndroidFile.UriWrapper -> af.uri
+            is AndroidFile.FileWrapper -> {
+                val path = af.file.absolutePath
+                return if (access == FolderAccess.DIRECT) FolderPick.Location(path) else FolderPick.Unusable
+            }
+
+            is AndroidFile.UriWrapper -> {
+                af.uri
+            }
         }
     return when (access) {
         FolderAccess.DIRECT -> {
-            ExternalStorageTreePaths.localDirectoryForTreeUri(uri)
+            ExternalStorageTreePaths.localDirectoryForTreeUri(uri)?.let(FolderPick::Location) ?: FolderPick.Unusable
         }
 
         FolderAccess.SAF -> {
             val resolver = FileKit.context.contentResolver
             val flags = Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_GRANT_WRITE_URI_PERMISSION
-            runCatching { resolver.takePersistableUriPermission(uri, flags) }
-            uri.toString()
+            keepTreeAccess(uri.toString()) { resolver.takePersistableUriPermission(uri, flags) }
         }
     }
 }
+
+/**
+ * [location], once [take] has the system keep this app's access to it. Without that grant the access
+ * the picker gave lasts only until the app stops, so a refusal ([SecurityException]) is
+ * [FolderPick.AccessNotKept], never a location to save.
+ */
+internal fun keepTreeAccess(
+    location: String,
+    take: () -> Unit,
+): FolderPick =
+    try {
+        take()
+        FolderPick.Location(location)
+    } catch (_: SecurityException) {
+        FolderPick.AccessNotKept
+    }
 
 actual fun supportsSafStorage(): Boolean = true
 

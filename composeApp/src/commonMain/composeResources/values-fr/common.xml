@@ -102,6 +102,8 @@
     <string name="common_storage_access_grant">Autoriser l’accès</string>
     <string name="common_ok">OK</string>
     <string name="common_folder_not_on_device">Ce dossier ne se trouve pas dans le stockage de l’appareil. Choisissez un dossier sur le stockage interne ou une carte SD, ou activez l’option Storage Access Framework sous Avancé pour utiliser des dossiers d’autres applications.</string>
+    <string name="common_folder_access_not_kept_library">Android n’a pas permis à l’application de conserver l’accès à ce dossier : il n’a donc pas été ouvert comme bibliothèque. Choisissez-le à nouveau ou choisissez un autre dossier.</string>
+    <string name="common_folder_access_not_kept_watched">Android n’a pas permis à l’application de conserver l’accès à ce dossier : le dossier surveillé n’a donc pas été modifié. Choisissez-le à nouveau ou choisissez un autre dossier.</string>
     <string name="common_settings_advanced">Avancé</string>
     <string name="common_settings_use_saf">Utiliser le Storage Access Framework</string>
     <string name="common_settings_use_saf_help">Ancien mode : ouvre les dossiers via le sélecteur de documents d’Android plutôt que directement sur le stockage de l’appareil. Plus lent, sans notification de changement ; les fichiers ajoutés par des outils de synchronisation peuvent passer inaperçus. S’applique au prochain choix de dossier.</string>

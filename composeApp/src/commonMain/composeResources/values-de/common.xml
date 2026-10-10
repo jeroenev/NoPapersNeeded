@@ -101,6 +101,8 @@
     <string name="common_storage_access_grant">Zugriff erlauben</string>
     <string name="common_ok">OK</string>
     <string name="common_folder_not_on_device">Dieser Ordner liegt nicht im Gerätespeicher. Wähle einen Ordner im internen Speicher oder auf einer SD-Karte, oder aktiviere unter Erweitert die Option Storage Access Framework, um Ordner anderer Apps zu nutzen.</string>
+    <string name="common_folder_access_not_kept_library">Android hat der App nicht erlaubt, den Zugriff auf diesen Ordner zu behalten, daher wurde er nicht als Bibliothek geöffnet. Wähle ihn erneut oder wähle einen anderen Ordner.</string>
+    <string name="common_folder_access_not_kept_watched">Android hat der App nicht erlaubt, den Zugriff auf diesen Ordner zu behalten, daher wurde der überwachte Ordner nicht geändert. Wähle ihn erneut oder wähle einen anderen Ordner.</string>
     <string name="common_settings_advanced">Erweitert</string>
     <string name="common_settings_use_saf">Storage Access Framework verwenden</string>
     <string name="common_settings_use_saf_help">Veralteter Modus: Ordner über die Dokumentauswahl von Android öffnen statt direkt im Gerätespeicher. Langsamer, ohne Änderungsbenachrichtigungen, und von Sync-Tools hinzugefügte Dateien werden eventuell nicht bemerkt. Gilt ab der nächsten Ordnerwahl.</string>

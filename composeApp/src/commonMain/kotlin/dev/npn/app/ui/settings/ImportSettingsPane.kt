@@ -28,6 +28,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.unit.dp
 import dev.npn.app.platform.FolderAccess
+import dev.npn.app.platform.FolderPick
 import dev.npn.app.platform.ocrHasLanguageSetting
 import dev.npn.app.platform.persistDirectoryAccess
 import dev.npn.app.ui.common.HelpText
@@ -76,7 +77,8 @@ internal fun ImportSettingsPane(
             watchedFolder = state.settings.snapshot.watchedFolder,
             useSaf = state.settings.snapshot.useSafStorage,
             deleteAfterImport = state.settings.snapshot.watchedFolderDeleteAfterImport,
-            onSetFolder = { folder -> actions.edit { it.copy(watchedFolder = folder) } },
+            onPicked = actions::watchedFolderPicked,
+            onStopWatching = { actions.edit { it.copy(watchedFolder = null) } },
             onSetDeleteAfterImport = { on -> actions.edit { it.copy(watchedFolderDeleteAfterImport = on) } },
         )
     }
@@ -106,26 +108,16 @@ private fun WatchedFolderSettings(
     watchedFolder: String?,
     useSaf: Boolean,
     deleteAfterImport: Boolean,
-    onSetFolder: (String?) -> Unit,
+    onPicked: (FolderPick) -> Unit,
+    onStopWatching: () -> Unit,
     onSetDeleteAfterImport: (Boolean) -> Unit,
 ) {
-    // The inbox is imported from, never written as a library, so a folder that is not on device
-    // storage may still be watched through SAF: prefer the configured mode, fall back to the other.
     val storage = rememberStorageAccess()
     val picker =
         rememberDirectoryPickerLauncher { dir ->
             if (dir == null) return@rememberDirectoryPickerLauncher
             val preferSaf = useSaf || !storage.usable
-            val preferred = if (preferSaf) FolderAccess.SAF else FolderAccess.DIRECT
-            val fallback = if (preferSaf) FolderAccess.DIRECT else FolderAccess.SAF
-            val location =
-                persistDirectoryAccess(dir, preferred)
-                    ?: if (fallback == FolderAccess.SAF || storage.usable) {
-                        persistDirectoryAccess(dir, fallback)
-                    } else {
-                        null
-                    }
-            if (location != null) onSetFolder(location)
+            onPicked(watchedFolderPick(preferSaf, directUsable = storage.usable) { persistDirectoryAccess(dir, it) })
         }
     HelpText(stringResource(Res.string.common_settings_watched_folder_help))
     Text(
@@ -138,7 +130,7 @@ private fun WatchedFolderSettings(
             Text(text = stringResource(Res.string.common_settings_choose_folder))
         }
         if (watchedFolder != null) {
-            OutlinedButton(onClick = { onSetFolder(null) }) {
+            OutlinedButton(onClick = onStopWatching) {
                 Text(text = stringResource(Res.string.common_settings_stop_watching))
             }
         }
@@ -152,6 +144,29 @@ private fun WatchedFolderSettings(
             onCheckedChange = onSetDeleteAfterImport,
         )
     }
+}
+
+/**
+ * What a folder picked to watch comes to. The inbox is imported from, never written as a library, so
+ * a folder that is not on device storage may still be watched through SAF: [persist] tries
+ * [FolderAccess.SAF] first when [preferSaf], else [FolderAccess.DIRECT], then the other, direct
+ * access only while the app may read device storage ([directUsable]). A folder that neither gives a
+ * location is [FolderPick.AccessNotKept] when that is why, so the user is told.
+ */
+internal fun watchedFolderPick(
+    preferSaf: Boolean,
+    directUsable: Boolean,
+    persist: (FolderAccess) -> FolderPick,
+): FolderPick {
+    val preferred = if (preferSaf) FolderAccess.SAF else FolderAccess.DIRECT
+    val order = listOf(preferred) + FolderAccess.entries.filter { it != preferred }
+    val refusals = mutableListOf<FolderPick>()
+    for (access in order.filter { it == FolderAccess.SAF || directUsable }) {
+        val pick = persist(access)
+        if (pick is FolderPick.Location) return pick
+        refusals += pick
+    }
+    return if (FolderPick.AccessNotKept in refusals) FolderPick.AccessNotKept else FolderPick.Unusable
 }
 
 /**

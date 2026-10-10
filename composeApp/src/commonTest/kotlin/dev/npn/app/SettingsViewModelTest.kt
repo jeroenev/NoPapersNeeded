@@ -1,5 +1,6 @@
 package dev.npn.app
 
+import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.common.uiText
 import dev.npn.app.ui.settings.ReviewMigration
 import dev.npn.app.ui.settings.SettingsViewModel
@@ -29,6 +30,8 @@ import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
+import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_review_workflow_failed
 import no_papers_needed.composeapp.generated.resources.common_settings_storage_error_not_a_date
@@ -64,6 +67,36 @@ class SettingsViewModelTest : MainDispatcherTest() {
                     uiText(Res.plurals.common_settings_thumbnails_cleared, 3, 3),
                     uiText(Res.string.common_settings_thumbnail_cache_empty),
                 )
+        }
+
+    @Test
+    fun aWatchedFolderWhoseAccessIsNotKeptLeavesTheOneBeforeAndSaysSo() =
+        runTest(dispatcher) {
+            val settings = FakeSettingsRepository().apply { updateSettings { it.copy(watchedFolder = "/inbox") } }
+            val model = vm(settings = settings)
+            val messages = collecting(model.messages.map { it.text })
+
+            model.watchedFolderPicked(FolderPick.AccessNotKept)
+            advanceUntilIdle()
+            settings.settingsFlow.value?.watchedFolder shouldBe "/inbox"
+            messages shouldContainExactly listOf(uiText(Res.string.common_folder_access_not_kept_watched))
+
+            model.watchedFolderPicked(FolderPick.Location(TREE))
+            advanceUntilIdle()
+            settings.settingsFlow.value?.watchedFolder shouldBe TREE
+            messages shouldContainExactly listOf(uiText(Res.string.common_folder_access_not_kept_watched))
+        }
+
+    @Test
+    fun aLibraryFolderWhoseAccessIsNotKeptIsSaid() =
+        runTest(dispatcher) {
+            val model = vm()
+            val messages = collecting(model.messages.map { it.text })
+
+            model.libraryAccessNotKept()
+            advanceUntilIdle()
+
+            messages shouldContainExactly listOf(uiText(Res.string.common_folder_access_not_kept_library))
         }
 
     @Test
@@ -528,6 +561,8 @@ class SettingsViewModelTest : MainDispatcherTest() {
         }
 
     private companion object {
+        const val TREE = "content://com.example.documents/tree/primary%3AInbox"
+
         val PREVIEW_CONTEXT =
             StoragePathContext(
                 fields =

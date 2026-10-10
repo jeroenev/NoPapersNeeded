@@ -111,6 +111,7 @@ fun SettingsScreen(
             useSaf = state.snapshot.useSafStorage,
             onPicked = onOpenLibrary,
             onUnusable = vm::folderNotOnDevice,
+            onAccessNotKept = vm::libraryAccessNotKept,
         )
     val onChangeLibrary = {
         // Resolved with the same predicate the dialog acts on, so "Continue editing" always has a

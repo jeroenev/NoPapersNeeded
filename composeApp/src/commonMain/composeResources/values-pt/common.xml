@@ -102,6 +102,8 @@
     <string name="common_storage_access_grant">Permitir acesso</string>
     <string name="common_ok">OK</string>
     <string name="common_folder_not_on_device">Esta pasta não está no armazenamento do dispositivo. Escolha uma pasta no armazenamento interno ou em um cartão SD, ou ative a opção Storage Access Framework em Avançado para usar pastas de outros apps.</string>
+    <string name="common_folder_access_not_kept_library">O Android não permitiu que o app mantivesse o acesso a essa pasta, então ela não foi aberta como biblioteca. Escolha-a novamente ou escolha outra pasta.</string>
+    <string name="common_folder_access_not_kept_watched">O Android não permitiu que o app mantivesse o acesso a essa pasta, então a pasta monitorada não foi alterada. Escolha-a novamente ou escolha outra pasta.</string>
     <string name="common_settings_advanced">Avançado</string>
     <string name="common_settings_use_saf">Usar o Storage Access Framework</string>
     <string name="common_settings_use_saf_help">Modo legado: abre as pastas pelo seletor de documentos do Android em vez de diretamente no armazenamento do dispositivo. É mais lento, não avisa sobre alterações, e arquivos adicionados por ferramentas de sincronização podem passar despercebidos. Vale a partir da próxima vez que você escolher uma pasta.</string>

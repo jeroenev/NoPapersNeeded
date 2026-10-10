@@ -1,6 +1,7 @@
 package dev.npn.app.ui.settings
 
 import androidx.lifecycle.viewModelScope
+import dev.npn.app.platform.FolderPick
 import dev.npn.app.ui.common.MessagesViewModel
 import dev.npn.app.ui.common.UiText
 import dev.npn.app.ui.common.WhileSubscribedTimeout
@@ -38,6 +39,8 @@ import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
+import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_watched
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_save_field_failed
 import no_papers_needed.composeapp.generated.resources.common_save_setting_failed
@@ -169,6 +172,12 @@ interface SettingsActions {
      * the mode flips.
      */
     fun setInboxWorkflowMode(migration: ReviewMigration)
+
+    /**
+     * A folder was picked to watch: its location replaces the watched folder, while a folder whose
+     * access Android would not keep leaves the one before and says so.
+     */
+    fun watchedFolderPicked(pick: FolderPick)
 }
 
 /**
@@ -351,6 +360,20 @@ class SettingsViewModel(
 
     /** A library folder was picked that direct mode cannot use: it is not on device storage. */
     fun folderNotOnDevice() = message(uiText(Res.string.common_folder_not_on_device))
+
+    /** A library folder was picked whose access Android would not keep, so the library stays as it was. */
+    fun libraryAccessNotKept() = message(uiText(Res.string.common_folder_access_not_kept_library))
+
+    override fun watchedFolderPicked(pick: FolderPick) {
+        when (pick) {
+            is FolderPick.Location -> edit { it.copy(watchedFolder = pick.value) }
+
+            FolderPick.AccessNotKept -> message(uiText(Res.string.common_folder_access_not_kept_watched))
+
+            // No access could watch it, so the pick changes nothing.
+            FolderPick.Unusable -> Unit
+        }
+    }
 
     override fun setUntaggedOnlyMode() =
         launchReporting(Res.string.common_settings_review_workflow_failed) {

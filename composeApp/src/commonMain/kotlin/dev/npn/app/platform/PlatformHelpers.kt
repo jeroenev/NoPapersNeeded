@@ -32,17 +32,35 @@ expect fun platformFileToExternalSource(file: PlatformFile): ExternalSource
  */
 enum class FolderAccess { DIRECT, SAF }
 
+/** What a picked folder came to in [persistDirectoryAccess]. */
+sealed interface FolderPick {
+    /** The location string of [dev.npn.app.di.AppEnvironment.openLibrary] and the watched-folder setting. */
+    data class Location(
+        val value: String,
+    ) : FolderPick
+
+    /**
+     * The folder has no location in that access: on Android, [FolderAccess.DIRECT] has no
+     * device-storage path for a cloud provider's folder; desktop has no [FolderAccess.SAF].
+     */
+    data object Unusable : FolderPick
+
+    /**
+     * Android gave [FolderAccess.SAF] access to the folder for now but would not keep it, so it
+     * would be gone by a later start: the folder must not replace the one chosen before.
+     */
+    data object AccessNotKept : FolderPick
+}
+
 /**
- * Persist access to a picked folder and return the location string used by
- * [dev.npn.app.di.AppEnvironment.openLibrary] and the watched-folder setting, or null when the
- * folder cannot be used in [access]: on Android, [FolderAccess.DIRECT] resolves the picker's tree
- * uri to a device-storage path and has none for cloud providers; [FolderAccess.SAF] is refused on
- * desktop, which has no document providers.
+ * Persist access to a picked folder in [access] and return its location, or why there is none:
+ * on Android, [FolderAccess.DIRECT] resolves the picker's tree uri to a device-storage path, and
+ * [FolderAccess.SAF] keeps the uri only once the system keeps this app's access to it.
  */
 expect fun persistDirectoryAccess(
     dir: PlatformFile,
     access: FolderAccess,
-): String?
+): FolderPick
 
 /**
  * Whether the platform offers [FolderAccess.SAF] at all (Android). Gates the advanced

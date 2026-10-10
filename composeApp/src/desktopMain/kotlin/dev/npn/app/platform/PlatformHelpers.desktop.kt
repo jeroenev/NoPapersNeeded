@@ -30,10 +30,10 @@ actual fun platformFileToExternalSource(file: PlatformFile): ExternalSource =
 actual fun persistDirectoryAccess(
     dir: PlatformFile,
     access: FolderAccess,
-): String? =
+): FolderPick =
     when (access) {
-        FolderAccess.DIRECT -> dir.absolutePath()
-        FolderAccess.SAF -> null
+        FolderAccess.DIRECT -> FolderPick.Location(dir.absolutePath())
+        FolderAccess.SAF -> FolderPick.Unusable
     }
 
 actual fun supportsSafStorage(): Boolean = false

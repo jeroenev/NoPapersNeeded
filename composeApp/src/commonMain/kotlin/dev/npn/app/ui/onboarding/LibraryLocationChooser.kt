@@ -24,17 +24,20 @@ import dev.npn.app.ui.common.TestTags
 import dev.npn.app.ui.common.rememberLibraryFolderPicker
 import dev.npn.app.ui.common.rememberStorageAccess
 import no_papers_needed.composeapp.generated.resources.Res
+import no_papers_needed.composeapp.generated.resources.common_folder_access_not_kept_library
 import no_papers_needed.composeapp.generated.resources.common_folder_not_on_device
 import no_papers_needed.composeapp.generated.resources.common_settings_advanced
 import no_papers_needed.composeapp.generated.resources.common_storage_access_grant
 import no_papers_needed.composeapp.generated.resources.common_storage_access_help
 import no_papers_needed.composeapp.generated.resources.common_storage_access_title
+import org.jetbrains.compose.resources.StringResource
 import org.jetbrains.compose.resources.stringResource
 
 /**
  * Where a library is chosen, for onboarding and for a saved library that failed to open: Android's
  * all-files grant that a folder on device storage needs, the folder pickers, the advanced Storage
- * Access Framework switch, and the one explanation for a picked folder that is not on the device.
+ * Access Framework switch, and why a picked folder was not taken: it is not on the device, or
+ * Android would not let the app keep its access to it.
  *
  * [choices] lays out the screen's own buttons, given the two pickers to launch: an existing library
  * folder, in the mode the switch selects ([onPick]), and the folder to create a new library in,
@@ -55,25 +58,28 @@ internal fun LibraryLocationChooser(
     choices: @Composable (pickLibrary: () -> Unit, pickParent: () -> Unit) -> Unit,
 ) {
     val storage = rememberStorageAccess()
-    var notOnDevice by remember { mutableStateOf(false) }
+    // Why the last folder picked was not taken, until another one is.
+    var refusal by remember { mutableStateOf<StringResource?>(null) }
     var showAdvanced by rememberSaveable { mutableStateOf(false) }
     val pickLibrary =
         rememberLibraryFolderPicker(
             useSaf = useSaf,
             onPicked = {
-                notOnDevice = false
+                refusal = null
                 onPick(it)
             },
-            onUnusable = { notOnDevice = true },
+            onUnusable = { refusal = Res.string.common_folder_not_on_device },
+            onAccessNotKept = { refusal = Res.string.common_folder_access_not_kept_library },
         )
     val pickParent =
         rememberLibraryFolderPicker(
             useSaf = false,
             onPicked = {
-                notOnDevice = false
+                refusal = null
                 onPickParent(it)
             },
-            onUnusable = { notOnDevice = true },
+            onUnusable = { refusal = Res.string.common_folder_not_on_device },
+            onAccessNotKept = { refusal = Res.string.common_folder_access_not_kept_library },
         )
     Column(
         modifier = modifier,
@@ -87,9 +93,9 @@ internal fun LibraryLocationChooser(
         if (storage.usable || useSaf) {
             choices(pickLibrary, pickParent)
         }
-        if (notOnDevice) {
+        refusal?.let { reason ->
             Text(
-                text = stringResource(Res.string.common_folder_not_on_device),
+                text = stringResource(reason),
                 color = MaterialTheme.colorScheme.error,
                 textAlign = TextAlign.Center,
             )
@@ -102,7 +108,7 @@ internal fun LibraryLocationChooser(
                 SafStorageSwitch(
                     checked = useSaf,
                     onCheckedChange = { enabled ->
-                        notOnDevice = false
+                        refusal = null
                         onUseSafChange(enabled)
                     },
                 )
