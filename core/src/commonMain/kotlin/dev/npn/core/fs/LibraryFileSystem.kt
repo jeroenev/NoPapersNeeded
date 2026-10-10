@@ -152,6 +152,14 @@ interface LibraryFileSystem {
     /** Whether this provider can atomically publish a complete staged object without replacement. */
     val verifiedPublicationCapability: VerifiedPublicationCapability
 
+    /**
+     * Whether [publishVerifiedObjectOnce] rests on what the storage under the library offers (a hard
+     * link, an exclusive rename), which a remount can take away, so every open tries a publication
+     * ([dev.npn.core.index.DeviceIdentity]). False for a provider that publishes with a rename of its
+     * own, which no open can lose; it is spared the round trips.
+     */
+    val publicationMayBeLost: Boolean get() = true
+
     /** Supports verified publication to arbitrary PDF names without replacing a concurrent file. */
     val supportsDocumentRelocation: Boolean get() = false
 

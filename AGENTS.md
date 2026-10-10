@@ -126,7 +126,8 @@ mise wraps Gradle (`mise tasks` lists all; see `mise.toml` + `.mise/tasks/`). Ke
   `core` and the coordinator's `writer` is private, so no outside caller can grab a raw writer.
 - The journal is written only as storage-v2 objects; legacy v1 segments are read, never written.
   A filesystem that cannot publish without replacement (no hard link, no exclusive rename) refuses
-  to open the library; never add a fallback format. `device.id` belongs to one installation:
+  to open the library, at every open (`DeviceIdentity` publishes before anything is written); never
+  add a fallback format. `device.id` belongs to one installation:
   `DeviceIdentity` gives a restored or cloned installation a fresh one (ARCHITECTURE.md,
   "Journal storage").
 - Older builds refuse a journal object holding an op they do not know (a new system property or

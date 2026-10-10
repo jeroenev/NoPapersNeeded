@@ -330,9 +330,9 @@ class LibrarySessionImpl private constructor(
          * so [documents] is populated before the caller's initial rescan.
          *
          * Refuses, with [VerifiedPublicationUnavailableException], a library on a filesystem that
-         * cannot publish without replacement: there is no other journal format to write. Recording
-         * this installation in the library publishes through the same primitive, so the first open
-         * finds out.
+         * cannot publish without replacement: there is no other journal format to write. Every open
+         * publishes through the same primitive before it writes anything ([DeviceIdentity]: this
+         * installation's marker, or a throwaway object once that is there), so each one finds out.
          */
         suspend fun openSession(deps: SessionDeps): LibrarySessionImpl {
             val lifetime = SessionLifetime(deps.scope)

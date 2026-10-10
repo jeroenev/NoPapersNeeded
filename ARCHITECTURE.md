@@ -291,9 +291,11 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   restored or reinstalled app gets a new id and keeps its queued, paid-for work), and the library
   holds one write-once marker per installation that used the id, `.npn/devices/<deviceId>/<installationId>.json`
   (a second installation's marker means a clone; each moves off the id once it sees the other's).
-  Publishing that marker uses the journal's primitive, which is how an unsupported filesystem is
-  found out at the first open. A fresh id costs nothing: the old id's sidecars are adopted as
-  another device's.
+  Publishing that marker uses the journal's primitive, and once it is there every open publishes
+  and deletes a throwaway object under `.npn/tmp` the same way, which is how an unsupported
+  filesystem is found out at every open, a remount since the last one included (SAF, whose
+  provider publishes with its own rename, skips that probe: `LibraryFileSystem.publicationMayBeLost`).
+  A fresh id costs nothing: the old id's sidecars are adopted as another device's.
 
 - **Delete and restore.** `doc-trash`/`doc-restore` and `doc-delete`/`doc-undelete` are
   last-writer-wins pairs by HLC; an undelete also takes the document out of the trash. When the

@@ -34,9 +34,10 @@ import kotlin.uuid.Uuid
  * A fresh id costs nothing that matters: the old id's OCR sidecars read as another device's, which
  * the OCR pipeline adopts rather than runs again.
  *
- * Publishing the marker is also where a library on a filesystem that cannot publish without
- * replacement is found out: [resolve] lets that [VerifiedPublicationUnavailableException] through so
- * the library refuses to open. Any other failure to publish is retried at the next open.
+ * Publishing the marker, and at every later open a throwaway object, is also where a library on a
+ * filesystem that cannot publish without replacement is found out, a remount since the last open
+ * included: [resolve] lets that [VerifiedPublicationUnavailableException] through so the library
+ * refuses to open. Any other failure to publish is retried at the next open.
  */
 class DeviceIdentity(
     private val kv: KeyValueDao,
@@ -95,27 +96,61 @@ class DeviceIdentity(
             .mapNotNull { markerInstallation(it.name) }
             .any { it != installationId }
 
-    /** Publish this installation's marker for [deviceId] once, through the journal's own primitive. */
+    /**
+     * Publish this installation's marker for [deviceId] once, through the journal's own primitive,
+     * and once it is there a throwaway object ([probePublication]): every open finds out whether the
+     * storage can still publish without replacement. Only that refusal escapes; any other failure is
+     * logged, and the next open tries again.
+     */
     private suspend fun publishMarker(deviceId: String) {
         val path = markerPath(deviceId, installationId)
         runCatchingCancellable {
-            if (fs.exists(path)) return
-            val bytes = """{"v":1,"device":"$deviceId","installation":"$installationId"}""".encodeToByteArray()
-            val stagingName = NpnPaths.Temp.markerStagingName(installationId, Uuid.random().toString())
-            val staging = "${markerDir(deviceId)}/$stagingName"
-            fs.writeBytesOnce(staging, bytes)
-            var published = false
-            try {
-                fs.publishVerifiedObjectOnce(staging, path, sha256Bytes(bytes))
-                published = true
-            } finally {
-                if (!published) runCatchingCancellable { fs.delete(staging) }
+            if (fs.exists(path)) {
+                probePublication()
+            } else {
+                val bytes = """{"v":1,"device":"$deviceId","installation":"$installationId"}""".encodeToByteArray()
+                val staging = "${markerDir(deviceId)}/${NpnPaths.Temp.markerStagingName(installationId, nonce())}"
+                publishOnce(staging, path, bytes)
             }
         }.onFailure { failure ->
             if (failure is VerifiedPublicationUnavailableException) throw failure
-            log.warn("Recording this installation in the library failed; trying again at the next open", failure)
+            log.warn("Publishing in the library at open failed; trying again at the next open", failure)
         }
     }
+
+    /**
+     * Publish a throwaway object under `.npn/tmp` and delete it, for storage that can lose its
+     * primitive between opens ([LibraryFileSystem.publicationMayBeLost]): remounted without hard
+     * links or an exclusive rename, it refuses the library here rather than at the first edit. Named
+     * as an import's staging files are, so the temporary-file sweep takes what a crash leaves.
+     */
+    private suspend fun probePublication() {
+        if (!fs.publicationMayBeLost) return
+        val published = NpnPaths.Temp.importPath(nonce())
+        try {
+            publishOnce(NpnPaths.Temp.importPath(nonce()), published, PROBE_BYTES)
+        } finally {
+            runCatchingCancellable { fs.delete(published) }
+        }
+    }
+
+    /** Stage [bytes] at [staging] and publish them as [path] without replacement; the staging file goes either way. */
+    private suspend fun publishOnce(
+        staging: String,
+        path: String,
+        bytes: ByteArray,
+    ) {
+        fs.writeBytesOnce(staging, bytes)
+        var published = false
+        try {
+            fs.publishVerifiedObjectOnce(staging, path, sha256Bytes(bytes))
+            published = true
+        } finally {
+            if (!published) runCatchingCancellable { fs.delete(staging) }
+        }
+    }
+
+    private fun nonce(): String = Uuid.random().toString()
 
     /**
      * Drop the bookkeeping a build that still wrote v1 segments kept about them (the last sequence
@@ -132,6 +167,9 @@ class DeviceIdentity(
         const val KEY_INSTALLATION = "device.installation"
 
         private const val MARKER_SUFFIX = ".json"
+
+        /** What [probePublication] publishes; any bytes do. */
+        private val PROBE_BYTES = "npn publication probe\n".encodeToByteArray()
 
         /** What a build that still wrote v1 segments kept about them; [resolve] drops it. */
         val LEGACY_JOURNAL_KEYS = listOf("journal.lastSeq", "journal.knownOwnSegments")

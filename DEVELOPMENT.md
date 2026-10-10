@@ -58,7 +58,7 @@ conventions and invariants, [AGENTS.md](AGENTS.md). The user-facing overview is 
 - Library storage that can create a file without replacing one another writer just created:
   hard links, or an exclusive rename (`renameat2` on Linux and Android, `MoveFileExW` on
   Windows), or Android's storage access framework. A library on storage with neither is
-  refused when it opens.
+  refused at every open, also when it was remounted since the last one.
 - OCR on desktop: the Windows installers and the Flatpak bundle Tesseract with models for
   every UI language. The other Linux packages need `tesseract-ocr` on `PATH`; without it,
   only embedded PDF text is indexed.
@@ -377,7 +377,8 @@ views) are journal transactions like any other metadata, so every device shares 
 Metadata uses content-addressed storage-v2 objects. Metadata writes require verified
 publication with atomic create-without-replacement semantics, supported by all current
 desktop and Android libraries. A library on storage that cannot guarantee this refuses
-to open, with its own message, rather than falling back to another storage format.
+to open, at every open and with its own message, rather than falling back to another storage
+format.
 Legacy v1 segments (`journal/<deviceId>/<seq>.jsonl`) from older builds are still read, never
 written. The `devices/` markers tie each device id to the one installation that uses it, so a
 restored or cloned installation takes a fresh id rather than writing under another's name.

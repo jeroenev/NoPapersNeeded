@@ -41,6 +41,10 @@ class SafLibraryFileSystem(
     override val verifiedPublicationCapability: VerifiedPublicationCapability =
         VerifiedPublicationCapability.ATOMIC_CREATE_NO_REPLACE
 
+    // The provider's own rename publishes, which no remount takes away: an open need not try one,
+    // and a cloud provider is spared syncing a file made and deleted at every open.
+    override val publicationMayBeLost: Boolean = false
+
     private val resolver get() = context.contentResolver
 
     private val treeDocId: String = DocumentsContract.getTreeDocumentId(treeUri)
