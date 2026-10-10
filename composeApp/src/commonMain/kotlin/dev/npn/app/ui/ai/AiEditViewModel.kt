@@ -374,6 +374,7 @@ class AiEditViewModel(
             session.content,
             session.aiSuggest,
             session.fieldRegistry,
+            session.tags,
             selection,
         ),
 ) : ReviewViewModel(),

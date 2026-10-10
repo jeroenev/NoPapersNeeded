@@ -17,6 +17,7 @@ import dev.npn.core.testing.FakeDocContentFacade
 import dev.npn.core.testing.FakeDocumentRepository
 import dev.npn.core.testing.FakeFieldRegistry
 import dev.npn.core.testing.FakeMetadataWriter
+import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.edit
 import dev.npn.core.testing.listItem
@@ -49,6 +50,9 @@ private class QueueRig(
     val content = FakeDocContentFacade()
     val ai = FakeAiSuggest()
     val fieldRegistry = FakeFieldRegistry()
+
+    /** The library's vocabulary: the tags these tests suggest as ones it already has. */
+    val tags = FakeTagRepository(listOf("t", "invoice"))
     val clock = MutableClock(start = 1_000L)
     var config: AiConfig = ACTIVE
     private var ids = 0
@@ -79,6 +83,7 @@ private class QueueRig(
             meta = meta,
             ai = ai,
             fieldRegistry = fieldRegistry,
+            tags = tags,
             readConfig = { config },
             clock = clock,
             health = health,
@@ -554,6 +559,89 @@ class AiEditQueueReviewTest {
                     listOf("a" to mapOf(FieldKeys.TITLE to "Electricity bill"))
                 rig.job(jobId) shouldBe null
                 rig.rows(jobId) shouldBe emptyList()
+            }
+        }
+
+    /**
+     * A run reopened after a partly failed Apply (as after a restart, or a queue deletion that
+     * failed) offers only what would still change something: the tag that landed is not offered
+     * again, so Applying once more does not add it a second time.
+     */
+    @Test
+    fun `reopening a run after a partly failed apply does not offer what already landed`() =
+        runTest {
+            withQueue { rig ->
+                rig.ai.edit = suggestion(tag = "invoice", title = "Bill")
+                val jobId = rig.suggestAll(rig.enqueue("a"))
+                rig.meta.failApplyEditsForDocs = setOf("a")
+                val first = rig.queue.openEditRun(jobId).shouldNotBeNull()
+                first.apply(first.docs).shouldBeInstanceOf<ApplyOutcome.Retry>()
+                rig.meta.addedTags shouldContainExactly listOf(listOf("a") to "invoice")
+
+                rig.documents.documents.value = listOf(listItem("a", tags = listOf("invoice")))
+                rig.meta.failApplyEditsForDocs = emptySet()
+                val reopened = rig.queue.openEditRun(jobId).shouldNotBeNull()
+
+                reopened.docs
+                    .single()
+                    .chips
+                    .filter { it.selected }
+                    .map { it.tag } shouldBe emptyList()
+                reopened.apply(reopened.docs).shouldBeInstanceOf<ApplyOutcome.Done>()
+                rig.meta.addedTags shouldContainExactly listOf(listOf("a") to "invoice")
+                rig.meta.batchedEdits.map { it.docId to it.fields } shouldContainExactly
+                    listOf("a" to mapOf(FieldKeys.TITLE to "Bill"))
+            }
+        }
+
+    /**
+     * Whether a tag is new is judged when the run opens: since it was suggested, the library may
+     * have dropped a tag it had or gained one the model invented, in its own spelling.
+     */
+    @Test
+    fun `a suggested tag is new or known by the vocabulary when the run opens`() =
+        runTest {
+            withQueue { rig ->
+                val known = TagSuggestion("invoice", isNew = false)
+                rig.ai.edit = edit(addTags = listOf(known, TagSuggestion("energy", isNew = true)))
+                val jobId = rig.suggestAll(rig.enqueue("a"))
+                rig.tags.tagNames = listOf("Energy")
+
+                rig.queue
+                    .openEditRun(jobId)
+                    .shouldNotBeNull()
+                    .docs
+                    .single()
+                    .chips shouldContainExactly
+                    listOf(
+                        ReviewChip("invoice", isNew = true, selected = false),
+                        ReviewChip("Energy", isNew = false, selected = true),
+                    )
+            }
+        }
+
+    /** A removal of a tag the document no longer carries, or a value it already has, changes nothing. */
+    @Test
+    fun `a review leaves out removals and values that would change nothing`() =
+        runTest {
+            withQueue { rig ->
+                rig.ai.edit =
+                    edit(
+                        removeTags = listOf("draft", "old"),
+                        metadata = FieldSuggestion(mapOf(FieldKeys.TITLE to "Bill", FieldKeys.CORRESPONDENT to "Acme")),
+                    )
+                val jobId = rig.suggestAll(rig.enqueue("a"))
+                rig.documents.documents.value = listOf(listItem(doc("a", title = "Bill"), tags = listOf("Draft")))
+
+                val row =
+                    rig.queue
+                        .openEditRun(jobId)
+                        .shouldNotBeNull()
+                        .docs
+                        .single()
+
+                row.removals.map { it.tag } shouldContainExactly listOf("Draft")
+                row.fields.map { it.key } shouldContainExactly listOf(FieldKeys.CORRESPONDENT)
             }
         }
 

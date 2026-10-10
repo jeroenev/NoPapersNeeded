@@ -14,6 +14,7 @@ import dev.npn.core.testing.FakeDocContentFacade
 import dev.npn.core.testing.FakeDocumentRepository
 import dev.npn.core.testing.FakeFieldRegistry
 import dev.npn.core.testing.FakeMetadataWriter
+import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.testing.doc
 import dev.npn.core.testing.edit
 import dev.npn.core.testing.listItem
@@ -43,7 +44,10 @@ private class Harness(
     val content = FakeDocContentFacade()
     val ai = FakeAiSuggest()
     val fieldRegistry = FakeFieldRegistry()
-    val run = AiEditRunImpl(documents, meta, content, ai, fieldRegistry, selection)
+
+    /** The library's vocabulary: every tag these tests suggest as one it already has. */
+    val tags = FakeTagRepository(listOf("x", "y", "z", "t", "t1", "t2", "invoice", "kept", "bad"))
+    val run = AiEditRunImpl(documents, meta, content, ai, fieldRegistry, tags, selection)
 }
 
 private val REQUEST = AiEditRequest()
@@ -118,7 +122,7 @@ class AiEditRunSuggestTest {
     fun preSelectPolicyForTags() =
         runTest {
             val h = Harness()
-            h.documents.documents.value = listOf(listItem("a"))
+            h.documents.documents.value = listOf(listItem("a", tags = listOf("utility")))
             h.ai.edit =
                 edit(
                     addTags =
@@ -319,7 +323,8 @@ class AiEditRunApplyTest {
         runTest {
             // Distinct removal tags keep the calls separate, so only a's fails.
             val h = Harness()
-            h.documents.documents.value = listOf(listItem("a"), listItem("b"))
+            h.documents.documents.value =
+                listOf(listItem("a", tags = listOf("utility")), listItem("b", tags = listOf("old")))
             h.ai.editByDoc =
                 mapOf(
                     "a" to edit(removeTags = listOf("utility")),
@@ -506,6 +511,7 @@ class AiEditRunSelectionQueryTest {
                         FakeDocContentFacade(),
                         FakeAiSuggest(),
                         FakeFieldRegistry(),
+                        FakeTagRepository(),
                         selection,
                     )
                 val key = key(scope = EditScope.SELECTION)

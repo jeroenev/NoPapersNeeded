@@ -7,6 +7,7 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.testing.FakeDocContentFacade
 import dev.npn.core.testing.FakeDocumentRepository
 import dev.npn.core.testing.FakeMetadataWriter
+import dev.npn.core.testing.FakeTagRepository
 import dev.npn.core.testing.listItem
 import dev.npn.core.work.QueueRetryPolicy
 import io.kotest.matchers.collections.shouldContainExactly
@@ -29,6 +30,7 @@ class EndpointCooldownTest {
             meta = FakeMetadataWriter(batchedFieldsOnly = true),
             ai = ai,
             fieldRegistry = fieldRegistry,
+            tags = FakeTagRepository(),
             readConfig = { config },
             clock = clock,
             health = health,

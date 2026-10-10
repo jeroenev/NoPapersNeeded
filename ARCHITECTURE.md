@@ -110,8 +110,8 @@ Shared Compose Multiplatform UI + viewmodels + dependency wiring.
 
 ### `core-testing` — `dev.npn.core.testing`
 
-Test doubles of `core`'s facets (documents, field registry, metadata writes, document content, AI
-suggestions) and the `Doc`/`DocListItem` builders that feed them. `core`'s desktopTest and
+Test doubles of `core`'s facets (documents, tags, field registry, metadata writes, document content,
+AI suggestions) and the `Doc`/`DocListItem` builders that feed them. `core`'s desktopTest and
 `composeApp`'s commonTest depend on it, so both suites fake each interface the same way; nothing
 else does, so it never ships.
 

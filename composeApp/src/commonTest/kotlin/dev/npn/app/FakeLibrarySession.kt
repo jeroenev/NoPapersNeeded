@@ -6,6 +6,7 @@ import dev.npn.core.testing.FakeDocContentFacade
 import dev.npn.core.testing.FakeDocumentRepository
 import dev.npn.core.testing.FakeFieldRegistry
 import dev.npn.core.testing.FakeMetadataWriter
+import dev.npn.core.testing.FakeTagRepository
 
 /**
  * The per-facet fakes composed into a session, mirroring how [dev.npn.core.app.LibrarySessionImpl]

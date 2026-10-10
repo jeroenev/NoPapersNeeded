@@ -269,6 +269,7 @@ internal fun buildEditQueue(
             meta = library.ownedWriter,
             ai = ai,
             fieldRegistry = library.fieldRegistry,
+            tags = library.tags,
             readConfig = deps.settings.aiConfig,
             clock = deps.clock,
             health = ai.endpointHealth,

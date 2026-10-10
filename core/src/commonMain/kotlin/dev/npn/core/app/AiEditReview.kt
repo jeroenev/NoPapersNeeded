@@ -8,13 +8,17 @@ import dev.npn.core.util.runCatchingCancellable
  * the **pre-select policy** ([ReviewDoc.recommended]) says.
  *
  * Shared by the interactive [AiEditRun] and by [AiEditQueue]'s stored runs precisely because a
- * queued run is projected *late*: its suggestion may have been produced hours earlier, so the
- * "would this overwrite something" half of the policy has to be decided against the document as it
- * is when the user opens the Review, not as it was when the model was asked.
+ * queued run is projected *late*: its suggestion may have been produced hours earlier, so it is
+ * decided against the document and the library as they are when the user opens the Review, not as
+ * they were when the model was asked. A row offers only what would still change something: a tag
+ * to add that the document does not carry, one to remove that it does (both in any case), a value
+ * other than the field's current one; and a tag is new only when the library's vocabulary does not
+ * hold it now. What an earlier Apply wrote is then not offered again.
  */
 internal class ReviewProjector(
     private val content: DocContentFacade,
     private val fieldRegistry: FieldRegistry,
+    private val tags: TagRepository,
 ) {
     suspend fun project(
         item: DocListItem,
@@ -22,26 +26,43 @@ internal class ReviewProjector(
     ): ReviewDoc {
         // Labels are looked up at projection time so a renamed field reads by its current name.
         val labels = fieldRegistry.current().associate { it.key to it.label }
+        val vocabulary = tags.allTagNames()
         return ReviewDoc(
             docId = item.doc.docId,
             title = item.doc.title,
             fileName = item.doc.fileName,
             snippet = snippetFor(item.doc.docId),
-            chips = suggestion.addTags.map { ReviewChip(it.tag, it.isNew, selected = false) },
-            removals = suggestion.removeTags.map { ReviewChip(it, isNew = false, selected = false) },
+            chips =
+                suggestion.addTags
+                    .filter { item.tags.spelling(it.tag) == null }
+                    .map { suggested ->
+                        val known = vocabulary.spelling(suggested.tag)
+                        ReviewChip(known ?: suggested.tag, isNew = known == null, selected = false)
+                    },
+            removals =
+                suggestion.removeTags
+                    .mapNotNull { item.tags.spelling(it) }
+                    .distinct()
+                    .map { ReviewChip(it, isNew = false, selected = false) },
             fields =
-                suggestion.metadata.values.map { (key, value) ->
-                    ReviewField(
-                        key = key,
-                        label = labels[key] ?: key,
-                        value = value,
-                        // A blank value is no value: filling it replaces nothing.
-                        current = item.doc.fields[key]?.takeIf { it.isNotBlank() },
-                        selected = false,
-                    )
-                },
+                suggestion.metadata.values
+                    // Canonical values compare as values: an equal one would change nothing.
+                    .filter { (key, value) -> item.doc.fields[key] != value }
+                    .map { (key, value) ->
+                        ReviewField(
+                            key = key,
+                            label = labels[key] ?: key,
+                            value = value,
+                            // A blank value is no value: filling it replaces nothing.
+                            current = item.doc.fields[key]?.takeIf { it.isNotBlank() },
+                            selected = false,
+                        )
+                    },
         ).recommended()
     }
+
+    /** How [tag] is spelled among these tags, matched in any case; null when none of them is it. */
+    private fun List<String>.spelling(tag: String): String? = firstOrNull { it.equals(tag, ignoreCase = true) }
 
     /** First ~[SNIPPET_LENGTH] chars of extracted text, whitespace-collapsed; null when unavailable. */
     private suspend fun snippetFor(docId: String): String? =

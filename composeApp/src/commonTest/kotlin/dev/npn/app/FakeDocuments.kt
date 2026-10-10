@@ -3,27 +3,16 @@ package dev.npn.app
 import dev.npn.core.app.AutoMatchRuleRepository
 import dev.npn.core.app.SavedView
 import dev.npn.core.app.SavedViewRepository
-import dev.npn.core.app.TagInfo
-import dev.npn.core.app.TagRepository
 import dev.npn.core.rules.AutoMatchRule
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.flow
 
 /**
- * Read-side test doubles: tags, saved views and auto-match rules (the documents' is shared, in
- * :core-testing). Everything is backed by [MutableStateFlow]s (so tests can push new emissions) and
- * public mutable fields for behavior injection.
+ * Read-side test doubles: saved views and auto-match rules (the documents' and the tags' are shared,
+ * in :core-testing). Everything is backed by [MutableStateFlow]s (so tests can push new emissions)
+ * and public mutable fields for behavior injection.
  */
-
-class FakeTagRepository : TagRepository {
-    val tags = MutableStateFlow<List<TagInfo>>(emptyList())
-    var tagNames: List<String> = emptyList()
-
-    override fun observeTags(): Flow<List<TagInfo>> = tags
-
-    override suspend fun allTagNames(): List<String> = tagNames
-}
 
 class FakeAutoMatchRuleRepository : AutoMatchRuleRepository {
     val rules = MutableStateFlow<List<AutoMatchRule>>(emptyList())

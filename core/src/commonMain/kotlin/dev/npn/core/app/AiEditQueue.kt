@@ -28,10 +28,11 @@ import kotlin.uuid.Uuid
  * or an explicit [discard] when the user walks away without writing. Nothing else removes it, so
  * closing the app mid-review costs nothing.
  *
- * Reopening a run that was left behind after a partial-failure [apply] re-projects the stored
- * suggestions against the documents' *current* metadata, so items already written on the earlier
- * attempt can be offered again. That is safe — writing them again is a no-op — but the run only
- * leaves the queue once the remaining selection is written or the review is discarded.
+ * Opening a run projects the stored suggestions against the documents' *current* metadata and the
+ * library's current vocabulary ([ReviewProjector]), so what an earlier [apply] already wrote is not
+ * offered again, whether the run is reopened after a partial-failure [apply], a restart or a failed
+ * removal from the queue. The run only leaves the queue once the remaining selection is written or
+ * the review is discarded.
  */
 interface EditRunReview {
     val jobId: String
@@ -39,7 +40,10 @@ interface EditRunReview {
     /** Documents with at least one suggestion, in the order they were submitted. */
     val docs: List<ReviewDoc>
 
-    /** Documents the model had nothing to say about; shown collapsed, never written. */
+    /**
+     * Documents with nothing to offer: the model had nothing to say, or all of it is already there.
+     * Shown collapsed, never written.
+     */
     val emptyDocs: List<ReviewDoc>
 
     /** Documents given up on after repeated model failures. */
@@ -143,6 +147,8 @@ class AiEditQueue(
     private val meta: MetadataWriter,
     ai: AiSuggest,
     fieldRegistry: FieldRegistry,
+    /** The library's tag vocabulary, which decides whether a suggested tag is new. */
+    tags: TagRepository,
     private val readConfig: suspend () -> AiConfig,
     private val clock: EpochClock,
     /** The endpoint's cooldown, shared with every other queue that calls it. */
@@ -153,7 +159,7 @@ class AiEditQueue(
     private val ownWrite: suspend (suspend () -> Unit) -> Unit = { it() },
     private val newJobId: () -> String = ::randomJobId,
 ) : AiEditQueueFacade {
-    private val projector = ReviewProjector(content, fieldRegistry)
+    private val projector = ReviewProjector(content, fieldRegistry, tags)
     private val runner = SuggestionRunner(ai)
 
     /** A document is given up on at [MAX_DOC_ATTEMPTS]; a job's own backoff has no cap. */

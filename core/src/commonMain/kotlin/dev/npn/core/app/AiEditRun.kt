@@ -236,6 +236,8 @@ class AiEditRunImpl(
     content: DocContentFacade,
     ai: AiSuggest,
     fieldRegistry: FieldRegistry,
+    /** The library's tag vocabulary, which decides whether a suggested tag is new. */
+    tags: TagRepository,
     /** Documents handed over from the library's selection mode; empty when opened standalone. */
     private val selection: List<String> = emptyList(),
 ) : AiEditRun {
@@ -243,7 +245,7 @@ class AiEditRunImpl(
     private var reviewApply = ReviewApply(meta)
 
     /** The shared pre-select policy, applied to each answered document. */
-    private val projector = ReviewProjector(content, fieldRegistry)
+    private val projector = ReviewProjector(content, fieldRegistry, tags)
 
     private val runner = SuggestionRunner(ai)
 
