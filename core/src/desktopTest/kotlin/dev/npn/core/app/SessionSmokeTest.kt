@@ -2,8 +2,12 @@ package dev.npn.core.app
 
 import dev.npn.core.fs.FsEvent
 import dev.npn.core.fs.LibraryFileSystem
+import dev.npn.core.model.FieldDef
+import dev.npn.core.model.FieldKeys
+import dev.npn.core.model.FieldType
 import dev.npn.core.model.ReviewMode
 import dev.npn.core.pdf.PdfFixtures
+import dev.npn.core.rules.AutoMatchRule
 import dev.npn.core.util.NpnLog
 import dev.npn.core.util.runCatchingCancellable
 import dev.npn.core.xmp.PdfBoxXmpIO
@@ -14,6 +18,7 @@ import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.asCoroutineDispatcher
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
@@ -250,6 +255,33 @@ class SessionSmokeTest {
                         { rig.session.aiEditQueue.discardEditRun("run") },
                         { rig.session.work.drainOcr() },
                         { rig.session.content.bakeInPlace(id) },
+                        { rig.session.meta.addTag(listOf(id), "tag") },
+                        { rig.session.meta.removeTag(listOf(id), "tag") },
+                        { rig.session.meta.setReviewed(listOf(id), true) },
+                        { rig.session.meta.setField(id, FieldKeys.TITLE, "Title") },
+                        { rig.session.meta.setField(listOf(id), FieldKeys.TITLE, "Title") },
+                        { rig.session.meta.applyEdits(listOf(id), addTags = listOf("tag")) },
+                        { rig.session.tagAdmin.renameTag("tag", "other") },
+                        { rig.session.tagAdmin.mergeTag("tag", "other") },
+                        { rig.session.tagAdmin.deleteTag("tag") },
+                        { rig.session.tagAdmin.setTagStyle("tag", "#ff0000", null) },
+                        { rig.session.docLifecycle.trashDoc(id) },
+                        { rig.session.docLifecycle.restoreDoc(id) },
+                        { rig.session.docLifecycle.restoreDocs(listOf(id)) },
+                        { rig.session.docLifecycle.deleteDocPermanently(id) },
+                        { rig.session.docLifecycle.deleteDocsPermanently(listOf(id)) },
+                        { rig.session.docLifecycle.renameFile(id, "renamed.pdf") },
+                        { rig.session.docLifecycle.moveFile(id, "elsewhere") },
+                        {
+                            rig.session.fieldRegistry.upsert(
+                                FieldDef("extra", "Extra", FieldType.TEXT, false, false, 0),
+                            )
+                        },
+                        { rig.session.fieldRegistry.remove(FieldKeys.TITLE, clearValues = true) },
+                        { rig.session.fieldRegistry.reorder(listOf(FieldKeys.TITLE)) },
+                        { rig.session.rules.save(AutoMatchRule(id = "", name = "rule", pattern = "first")) },
+                        { rig.session.rules.setEnabled("rule", enabled = true) },
+                        { rig.session.rules.delete("rule") },
                     )
                 for (call in calls) {
                     shouldThrow<IllegalStateException> { call() }.message shouldBe "Library session is closed"
@@ -264,6 +296,44 @@ class SessionSmokeTest {
                         .getByDocId(id)
                         ?.rerun == true
                 ) shouldBe false
+            } finally {
+                rig.close()
+            }
+        }
+
+    /**
+     * A delete for good removes the bytes after its tombstone, outside the writer lock. Closing the
+     * session meanwhile cancels and waits for it, rather than leave it to use the databases the
+     * environment closes next.
+     */
+    @Test
+    fun closeWaitsForADeleteForGoodStillRemovingItsFile() =
+        runTest {
+            val trashListing = BeforeTrashListing()
+            val rig = AppSessionRig.create(backgroundScope, files = trashListing::over)
+            try {
+                rig.writePdf("one.pdf", PdfFixtures.embeddedTextPdf("first document"))
+                rig.session.rescan()
+                val id = rig.docId("one.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+                val listing = CompletableDeferred<Unit>()
+                val release = CompletableDeferred<Unit>()
+                trashListing.next = {
+                    listing.complete(Unit)
+                    withContext(NonCancellable) { release.await() }
+                }
+                val delete = async { runCatchingCancellable { rig.session.docLifecycle.deleteDocPermanently(id) } }
+                listing.await()
+
+                val closing = async { rig.session.close() }
+                try {
+                    runCurrent()
+                    closing.isCompleted shouldBe false
+                } finally {
+                    release.complete(Unit)
+                }
+                closing.await()
+                delete.await().exceptionOrNull().shouldBeInstanceOf<IllegalStateException>()
             } finally {
                 rig.close()
             }

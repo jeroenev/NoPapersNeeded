@@ -14,11 +14,13 @@ import kotlinx.coroutines.flow.map
 /**
  * Registry reads come from the `field_defs` projection; writes are `field-def` journal ops
  * validated against the live [FoldedState] under the coordinator mutex, so a key collision check
- * and the write it guards cannot be split by a concurrent commit.
+ * and the write it guards cannot be split by a concurrent commit. Writes run through [owned], so
+ * the session waits them out before it closes.
  */
-class FieldRegistryImpl(
+class FieldRegistryImpl internal constructor(
     private val db: NpnDatabase,
     private val coordinator: JournalCoordinator,
+    private val owned: suspend (suspend () -> Unit) -> Unit,
 ) : FieldRegistry {
     private val defDao get() = db.fieldDefDao()
     private val fieldDao get() = db.documentFieldDao()
@@ -38,37 +40,38 @@ class FieldRegistryImpl(
 
     override suspend fun current(): List<FieldDef> = defDao.all().mapNotNull { it.toFieldDef() }
 
-    override suspend fun upsert(def: FieldDef) {
-        val key = FieldKeys.normalize(def.key) ?: throw IllegalArgumentException("Field key is empty")
-        val label = def.label.trim().ifEmpty { key }
-        coordinator.commitBuilt { state ->
-            val existing = state.effectiveFieldDefs()
-            val collision = existing.firstOrNull { it.key != key && FieldKeys.sameKey(it.key, key) }
-            require(collision == null) { "A field with key '${collision?.key}' already exists" }
-            val previous = state.effectiveFieldDef(key)
-            // Well-known keys keep their seeded type: templates like {docDate:yyyy} rely on it.
-            val type = if (key in FieldKeys.WELL_KNOWN && previous != null) previous.type else def.type
-            val position = if (previous != null) def.position else def.position.takeIf { it >= 0 } ?: existing.size
-            val next =
-                def
-                    .copy(
-                        key = key,
-                        label = label,
-                        type = type,
-                        position = position,
-                        hint =
-                            def.hint?.trim()?.ifEmpty {
-                                null
-                            },
-                    )
-            if (next == previous) emptyList() else listOf(PendingOp.fieldDefSet(next))
+    override suspend fun upsert(def: FieldDef) =
+        owned {
+            val key = FieldKeys.normalize(def.key) ?: throw IllegalArgumentException("Field key is empty")
+            val label = def.label.trim().ifEmpty { key }
+            coordinator.commitBuilt { state ->
+                val existing = state.effectiveFieldDefs()
+                val collision = existing.firstOrNull { it.key != key && FieldKeys.sameKey(it.key, key) }
+                require(collision == null) { "A field with key '${collision?.key}' already exists" }
+                val previous = state.effectiveFieldDef(key)
+                // Well-known keys keep their seeded type: templates like {docDate:yyyy} rely on it.
+                val type = if (key in FieldKeys.WELL_KNOWN && previous != null) previous.type else def.type
+                val position = if (previous != null) def.position else def.position.takeIf { it >= 0 } ?: existing.size
+                val next =
+                    def
+                        .copy(
+                            key = key,
+                            label = label,
+                            type = type,
+                            position = position,
+                            hint =
+                                def.hint?.trim()?.ifEmpty {
+                                    null
+                                },
+                        )
+                if (next == previous) emptyList() else listOf(PendingOp.fieldDefSet(next))
+            }
         }
-    }
 
     override suspend fun remove(
         key: String,
         clearValues: Boolean,
-    ) {
+    ) = owned {
         val affected = if (clearValues) fieldDao.docIdsWithKey(key) else emptyList()
         coordinator.commitBuilt { state ->
             val ops = ArrayList<PendingOp>()
@@ -78,13 +81,14 @@ class FieldRegistryImpl(
         }
     }
 
-    override suspend fun reorder(keys: List<String>) {
-        coordinator.commitBuilt { state ->
-            val byKey = state.effectiveFieldDefs().associateBy { it.key }
-            val ordered = keys.mapNotNull { byKey[it] } + byKey.values.filter { it.key !in keys }
-            ordered.mapIndexedNotNull { index, def ->
-                if (def.position == index) null else PendingOp.fieldDefSet(def.copy(position = index))
+    override suspend fun reorder(keys: List<String>) =
+        owned {
+            coordinator.commitBuilt { state ->
+                val byKey = state.effectiveFieldDefs().associateBy { it.key }
+                val ordered = keys.mapNotNull { byKey[it] } + byKey.values.filter { it.key !in keys }
+                ordered.mapIndexedNotNull { index, def ->
+                    if (def.position == index) null else PendingOp.fieldDefSet(def.copy(position = index))
+                }
             }
         }
-    }
 }

@@ -24,7 +24,8 @@ import kotlin.uuid.Uuid
  * keeps the last list that did decode, and every edit is refused rather than written over it,
  * since it could only write back what this build understood.
  *
- * Writes run through [owned], so the session waits them out before it closes.
+ * Writes, and applying a saved or enabled rule to the documents, run through [owned], so the session
+ * waits them out before it closes.
  */
 class AutoMatchRuleRepositoryImpl internal constructor(
     private val dao: AutoMatchRuleDao,
@@ -54,17 +55,19 @@ class AutoMatchRuleRepositoryImpl internal constructor(
     @OptIn(ExperimentalUuidApi::class)
     override suspend fun save(rule: AutoMatchRule): String {
         val saved = rule.copy(id = rule.id.ifBlank { Uuid.random().toString() }).toEntity().toRule()
-        edit { rules -> rules.filterNot { it.id == saved.id } + saved }
-        applier.applyToExistingDocs()
+        owned {
+            edit { rules -> rules.filterNot { it.id == saved.id } + saved }
+            applier.applyToExistingDocs()
+        }
         return saved.id
     }
 
-    override suspend fun delete(id: String) = edit { rules -> rules.filterNot { it.id == id } }
+    override suspend fun delete(id: String) = owned { edit { rules -> rules.filterNot { it.id == id } } }
 
     override suspend fun setEnabled(
         id: String,
         enabled: Boolean,
-    ) {
+    ) = owned {
         edit { rules -> rules.map { if (it.id == id) it.copy(enabled = enabled) else it } }
         if (enabled) applier.applyToExistingDocs()
     }
@@ -83,23 +86,25 @@ class AutoMatchRuleRepositoryImpl internal constructor(
         if (dao.getAll() != rows) dao.replaceAll(rows)
     }
 
-    /** Rewrite the journal's list through [change] against its live value, then refresh the cache. */
-    private suspend fun edit(change: (List<AutoMatchRule>) -> List<AutoMatchRule>) =
-        owned {
-            coordinator.commitBuilt { state ->
-                val json = state.effectiveSetting(LibrarySettingKeys.AUTO_MATCH_RULES)
-                val rules =
-                    checkNotNull(decoded(json)) { "The auto-match rules were saved by a newer version of the app" }
-                val next = change(rules).sortedWith(compareBy(AutoMatchRule::position, AutoMatchRule::id))
-                if (next == rules) {
-                    emptyList()
-                } else {
-                    val encoded = AutoMatchRuleJson.encodeList(next)
-                    listOf(PendingOp.settingSet(LibrarySettingKeys.AUTO_MATCH_RULES, encoded))
-                }
+    /**
+     * Rewrite the journal's list through [change] against its live value, then refresh the cache.
+     * Its callers run it, and applying the rules after it, through [owned].
+     */
+    private suspend fun edit(change: (List<AutoMatchRule>) -> List<AutoMatchRule>) {
+        coordinator.commitBuilt { state ->
+            val json = state.effectiveSetting(LibrarySettingKeys.AUTO_MATCH_RULES)
+            val rules =
+                checkNotNull(decoded(json)) { "The auto-match rules were saved by a newer version of the app" }
+            val next = change(rules).sortedWith(compareBy(AutoMatchRule::position, AutoMatchRule::id))
+            if (next == rules) {
+                emptyList()
+            } else {
+                val encoded = AutoMatchRuleJson.encodeList(next)
+                listOf(PendingOp.settingSet(LibrarySettingKeys.AUTO_MATCH_RULES, encoded))
             }
-            mirror()
         }
+        mirror()
+    }
 
     /** The rules in [json], none for a library that never had any, null for a list that does not decode. */
     private fun decoded(json: String?): List<AutoMatchRule>? {

@@ -159,24 +159,26 @@ internal suspend fun buildLibrary(
             lifetime.owned(it)
         }
     rules.mirror()
+    val writer =
+        MetadataWriterImpl(
+            coordinator,
+            db,
+            deps.fs,
+            TrashOps(deps.fs),
+            pathRules,
+            deps.log,
+            applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
+        )
     return Library(
         documents = DocumentRepositoryImpl(db),
         tags = TagRepositoryImpl(db.tagDao()),
         savedViews = savedViews,
-        fieldRegistry = FieldRegistryImpl(db, coordinator),
+        fieldRegistry = FieldRegistryImpl(db, coordinator) { lifetime.owned(it) },
         storagePath = storagePath,
         rules = rules,
         ruleApplier = ruleApplier,
-        writer =
-            MetadataWriterImpl(
-                coordinator,
-                db,
-                deps.fs,
-                TrashOps(deps.fs),
-                pathRules,
-                deps.log,
-                applyAutoMatch = { ruleApplier.applyToDoc(it, organize = false) },
-            ),
+        writer = writer,
+        ownedWriter = OwnedWriter(writer, lifetime),
         reviewConfig = JournalReviewConfig(coordinator, db.documentDao()) { lifetime.owned(it) },
         content = buildContent(deps, lifetime, coordinator, relink),
         imports =
@@ -249,7 +251,10 @@ internal fun buildEnrichment(
         )
     }) { it.processNext() }
 
-/** Bulk AI edits handed to the background; their writes wait for a human review. */
+/**
+ * Bulk AI edits handed to the background; their writes wait for a human review, which a caller
+ * applies, so they go through [Library.ownedWriter].
+ */
 internal fun buildEditQueue(
     deps: SessionDeps,
     lifetime: SessionLifetime,
@@ -261,7 +266,7 @@ internal fun buildEditQueue(
             dao = deps.deviceDb.aiEditJobDao(),
             documents = library.documents,
             content = library.content,
-            meta = library.writer,
+            meta = library.ownedWriter,
             ai = ai,
             fieldRegistry = library.fieldRegistry,
             readConfig = deps.settings.aiConfig,

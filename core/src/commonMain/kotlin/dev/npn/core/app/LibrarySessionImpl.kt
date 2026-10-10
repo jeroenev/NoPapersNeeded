@@ -72,7 +72,7 @@ class LibrarySessionImpl private constructor(
     private val db get() = deps.db
     private val log get() = deps.log
     private val importService = library.imports
-    private val writer = library.writer
+    private val writer = library.ownedWriter
 
     override val documents: DocumentRepository = library.documents
     override val tags: TagRepository = library.tags
@@ -84,7 +84,7 @@ class LibrarySessionImpl private constructor(
     override val reviewConfig: ReviewConfigFacade = library.reviewConfig
 
     // The facet properties only narrow the type a consumer sees: the session is the ingest facet,
-    // [MetadataWriterImpl] backs all three write facets, and [AiFacadeImpl] both AI facets.
+    // [OwnedWriter] backs all three write facets, and [AiFacadeImpl] both AI facets.
     override val ingest: IngestFacade get() = this
     override val ocr: OcrFacade get() = ocrFacade
     override val work: WorkFacade get() = queues
@@ -440,7 +440,10 @@ internal class Library(
     val storagePath: StoragePathFacade,
     val rules: AutoMatchRuleRepositoryImpl,
     val ruleApplier: RuleApplier,
+    /** The writer itself, for work that already runs as the session's: the drains, owned facet calls. */
     val writer: MetadataWriterImpl,
+    /** [writer] for a caller outside the session: each call owned by its lifetime. */
+    val ownedWriter: OwnedWriter,
     val reviewConfig: ReviewConfigFacade,
     val content: DocContentFacade,
     val imports: ImportService,
