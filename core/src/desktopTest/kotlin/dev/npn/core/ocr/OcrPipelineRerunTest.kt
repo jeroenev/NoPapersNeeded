@@ -196,12 +196,20 @@ class OcrPipelineRerunTest {
 
             pipe.processDoc(docId)
 
-            val row = rig.deviceDb.ocrQueueDao().getByDocId(docId)!!
+            val row =
+                rig.deviceDb
+                    .ocrQueueDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
             row.state shouldBe QueueState.PENDING.column
             row.rerun shouldBe true
             pipe.processDoc(docId)
             fake.calls shouldBe 2
-            val settled = rig.deviceDb.ocrQueueDao().getByDocId(docId)!!
+            val settled =
+                rig.deviceDb
+                    .ocrQueueDao()
+                    .getByDocId(docId)
+                    .shouldNotBeNull()
             settled.state shouldBe QueueState.DONE.column
             settled.rerun shouldBe false
         }

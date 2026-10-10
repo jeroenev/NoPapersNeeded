@@ -680,7 +680,8 @@ class MetadataWriterTest {
                 existsFails = false
                 rig.session.documents
                     .observeDoc(id)
-                    .first()!!
+                    .first()
+                    .shouldNotBeNull()
                     .tags shouldBe listOf("invoice")
                 rig.journalObjectCount() shouldBe before + 1
             } finally {

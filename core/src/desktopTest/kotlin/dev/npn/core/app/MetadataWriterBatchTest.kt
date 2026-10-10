@@ -4,6 +4,7 @@ import dev.npn.core.model.FieldKeys
 import dev.npn.core.pathrules.StoragePathRule
 import dev.npn.core.pdf.PdfFixtures
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.nulls.shouldNotBeNull
 import io.kotest.matchers.shouldBe
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.runTest
@@ -154,7 +155,11 @@ class MetadataWriterBatchTest {
                     fillOnly = true,
                 )
 
-                val doc = rig.db.documentDao().getByDocId(id)!!
+                val doc =
+                    rig.db
+                        .documentDao()
+                        .getByDocId(id)
+                        .shouldNotBeNull()
                 doc.title shouldBe "Mine"
                 doc.correspondent shouldBe "Acme"
                 val items =
@@ -194,7 +199,8 @@ class MetadataWriterBatchTest {
                 rig.journalObjectCount() shouldBe objectsBefore
                 rig.db
                     .documentDao()
-                    .getByDocId(id)!!
+                    .getByDocId(id)
+                    .shouldNotBeNull()
                     .title shouldBe "Mine"
             } finally {
                 rig.close()

@@ -228,7 +228,11 @@ class AiOcrPipelineTest {
             row.aiRequested shouldBe true
             pipe.processDoc(docId)
             ai.calls shouldBe 1
-            db.documentDao().getByDocId(docId)!!.ocrEngine shouldBe OcrEngineId.AI.column
+            db
+                .documentDao()
+                .getByDocId(docId)
+                .shouldNotBeNull()
+                .ocrEngine shouldBe OcrEngineId.AI.column
             rig.deviceDb
                 .ocrQueueDao()
                 .getByDocId(docId)
@@ -427,6 +431,6 @@ private suspend fun OcrPipelineRig.setOverride(
     docId: String,
     engine: String?,
 ) {
-    val doc = db.documentDao().getByDocId(docId)!!
+    val doc = db.documentDao().getByDocId(docId).shouldNotBeNull()
     db.documentDao().upsert(doc.copy(ocrEngineOverride = engine))
 }

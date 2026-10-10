@@ -357,7 +357,8 @@ class AiAutoEnricherSessionTest {
                 val fields =
                     rig.session.documents
                         .observeDoc(id)
-                        .first()!!
+                        .first()
+                        .shouldNotBeNull()
                         .doc.fields
                 fields[FieldKeys.TITLE] shouldBe "Mine"
                 fields[FieldKeys.CORRESPONDENT] shouldBe "Acme"
