@@ -52,6 +52,8 @@ class ImportTakeBackTest {
                                     recording.complete(Unit)
                                     return recorded.await()
                                 }
+
+                                override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
                             },
                         )
                     },

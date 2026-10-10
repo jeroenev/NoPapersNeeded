@@ -629,6 +629,48 @@ class TrashPurgeTest {
             }
         }
 
+    /**
+     * A document trashed a month ago is restored and trashed again after the purge listed the trash
+     * and before it deleted anything: the new trash takes the entry's name back, with a trash time of
+     * now, and the purge keeps it.
+     */
+    @Test
+    fun anEntryTrashedAgainWhileThePurgeRunsIsKept() =
+        runTest {
+            var afterListing: (suspend () -> Unit)? = null
+            val rig =
+                AppSessionRig.create(backgroundScope, files = { fs ->
+                    object : LibraryFileSystem by fs {
+                        override suspend fun listAllUnder(relPath: String): List<FileMeta> {
+                            val listed = fs.listAllUnder(relPath)
+                            if (relPath == NpnPaths.TRASH_DIR) afterListing?.also { afterListing = null }?.invoke()
+                            return listed
+                        }
+                    }
+                })
+            try {
+                val now = 400 * DAY
+                rig.clock.now = now
+                rig.writePdf("a.pdf", PdfFixtures.embeddedTextPdf("trashed, restored and trashed again"))
+                rig.session.rescan()
+                val id = rig.docId("a.pdf")
+                rig.session.docLifecycle.trashDoc(id)
+                val entry = trashEntries(rig.fs).single().relPath
+                rig.clock.now = now + 31 * DAY
+                afterListing = {
+                    rig.session.docLifecycle.restoreDoc(id)
+                    rig.session.docLifecycle.trashDoc(id)
+                }
+
+                rig.session.purgeTrash(olderThanDays = 30)
+
+                afterListing shouldBe null
+                rig.fs.sha256(entry) shouldBe id
+            } finally {
+                rig.close()
+            }
+        }
+
     private suspend fun trashEntries(fs: LibraryFileSystem) =
         fs.listAllUnder(NpnPaths.TRASH_DIR).filter { !it.isDirectory }
 

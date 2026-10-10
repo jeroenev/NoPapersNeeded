@@ -124,8 +124,10 @@ class TrashOps(
     }
 
     /**
-     * Permanently delete the trash entries whose documents were trashed, or deleted for good,
-     * strictly before [cutoffMillis].
+     * Permanently delete the trash entries, of [listing] (from [listTrash]) or else as listed now,
+     * whose documents were trashed, or deleted for good, strictly before [cutoffMillis]. For a caller
+     * under the writer lock, whose trash, restore and delete for good cannot land between [documents]
+     * and the deletes: a restore and a trash again reuse an entry's name.
      *
      * [documents] maps each document known to be trashed or deleted to when that happened, and may
      * map others to null. An entry belongs to the documents whose id starts with the hash prefix in
@@ -143,13 +145,14 @@ class TrashOps(
     suspend fun purgeOlderThan(
         cutoffMillis: Long,
         documents: Map<String, Long?>,
+        listing: List<FileMeta>? = null,
     ) {
         val byPrefix =
             documents.entries.groupBy(
                 keySelector = { it.key.take(NpnPaths.TRASH_HASH_PREFIX_LENGTH) },
                 valueTransform = { it.value },
             )
-        for (meta in listTrash()) {
+        for (meta in listing ?: listTrash()) {
             val owners = NpnPaths.trashHashPrefix(meta.name)?.let(byPrefix::get).orEmpty()
             if (owners.isNotEmpty() && owners.all { it != null && it < cutoffMillis }) fs.delete(meta.relPath)
         }

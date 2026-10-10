@@ -185,16 +185,43 @@ class LibrarySessionImpl private constructor(
      * Internal auto-purge, run after watch-triggered rescans; not part of any public facet.
      *
      * An entry goes once every document it may hold was trashed, or deleted for good, more than
-     * [olderThanDays] ago ([TrashOps.purgeOlderThan]); an entry no such document owns stays. A
-     * document's row decides when it has one: it also covers a trash in progress, whose PDF is moved
-     * before the event is committed. The journal covers documents with no row, which is every
-     * trashed or deleted one on a device whose index was just built; their PDFs keep an old mtime too.
+     * [olderThanDays] ago ([TrashOps.purgeOlderThan]); an entry no such document owns stays. The
+     * journal and the rows decide together ([keptLonger]): the journal covers documents with no row,
+     * which is every trashed or deleted one on a device whose index was just built (their PDFs keep
+     * an old mtime too), and a row can show a document the journal hides, its file found back in
+     * place by a rescan.
+     *
+     * The trash is listed before the writer lock; its entries are checked against the rows and the
+     * journal and deleted under it, so a restore and a trash again, which give the document its
+     * entry's name back with a new trash time, cannot land in between. A batch of [PURGE_BATCH]
+     * entries per hold: the check reads every document's trash time, so once per batch rather than
+     * per entry, and no hold lasts through a long run of deletes (binder calls under SAF) that every
+     * write waits on.
      */
     internal suspend fun purgeTrash(olderThanDays: Int) {
         val cutoff = deps.clock.nowMillis() - olderThanDays.toLong() * MILLIS_PER_DAY
-        val rows = db.documentDao().trashTimes().associate { it.docId to it.trashedAt }
-        trashOps().purgeOlderThan(cutoff, coordinator.journalTrashTimes() + rows)
+        val trash = trashOps()
+        for (batch in trash.listTrash().chunked(PURGE_BATCH)) {
+            coordinator.serialized { journal ->
+                val rows = db.documentDao().trashTimes().associate { it.docId to it.trashedAt }
+                trash.purgeOlderThan(cutoff, keptLonger(journal.trashTimes(), rows), batch)
+            }
+        }
     }
+
+    /**
+     * The [journal]'s trash times and the [rows]' as one, for a document both know the one that keeps
+     * its entries longer: null when either has it out of the trash, else the later time. A row that
+     * lags the journal (a projection that failed) then keeps an entry rather than delete it.
+     */
+    private fun keptLonger(
+        journal: Map<String, Long?>,
+        rows: Map<String, Long?>,
+    ): Map<String, Long?> =
+        journal +
+            rows.mapValues { (doc, row) ->
+                if (doc !in journal) row else journal[doc]?.let { trashed -> row?.let { maxOf(trashed, it) } }
+            }
 
     override fun start() {
         lifetime.checkOpen()
@@ -322,6 +349,9 @@ class LibrarySessionImpl private constructor(
         /** Slack past a deferred file's settle time, so the follow-up does not land just short. */
         private const val SETTLE_RESCAN_MARGIN_MS = 500L
         private const val MILLIS_PER_DAY = 24L * 60L * 60L * 1000L
+
+        /** How many trash entries the purge checks and deletes per hold of the writer lock. */
+        private const val PURGE_BATCH = 32
 
         /**
          * Boot a session over [deps]: move device state an older index still holds into the device

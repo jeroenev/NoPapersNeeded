@@ -192,9 +192,12 @@ live in `buildSrc`. Hot Reload via `mise hot`.
     nothing). A file it cannot remove leaves the document deleted and is reported
     (`PermanentDeleteOutcome.FILE_LEFT`). Restoring or emptying the whole trash
     (`DocLifecycle.restoreDocs`, `deleteDocsPermanently`) lists it once for all its
-    documents. The trash auto-purge (after a watch-triggered rescan) deletes an entry
-    once every document its name's hash prefix ties it to was trashed, or deleted for
-    good, longer ago than the retention (`TrashOps.purgeOlderThan`). An entry it cannot
+    documents. The trash auto-purge (after a watch-triggered rescan) lists the trash
+    before the writer lock and deletes an entry under it, in batches, once every
+    document its name's hash prefix ties it to was trashed, or deleted for good, longer
+    ago than the retention by the journal and the rows as they stand there: a restore
+    and a trash again in between reuse the entry's name (`TrashOps.purgeOlderThan`,
+    `LibrarySessionImpl.purgeTrash`). An entry it cannot
     tie to such a document stays, however old its mtime: another device's trash whose
     event has not arrived, or a document a crash left there with no event (Empty trash,
     which works by document, does not reach it either).

@@ -221,13 +221,6 @@ class JournalCoordinator internal constructor(
     }
 
     /**
-     * Every document the journal knows that is deleted, or else not superseded, mapped to when it was
-     * deleted for good or trashed, or to null while it is neither ([FoldedState.trashTimes]). Read from
-     * the live fold, which the rescan before a trash purge has built.
-     */
-    suspend fun journalTrashTimes(): Map<String, Long?> = locked { foldedState().trashTimes() }
-
-    /**
      * Write the well-known field definitions once per library, and bring a library seeded at an
      * older [version] up to it once ([FieldKeys.upgradeSeeded]). Guarded by the synced
      * [FieldKeys.SEEDED_SETTING] marker rather than by "are there any definitions", so a user who
@@ -465,9 +458,10 @@ class JournalCoordinator internal constructor(
      * against other imports and against every rescan, whose listing and row writes it would
      * otherwise interleave with. [block] reads and writes the journal through the [ImportJournal] it
      * is handed, under the same lock: an import reads the relinks and records a returning
-     * document's return in the step that made its row live, and a delete for good removes the bytes
-     * only while the journal still has the document deleted. It must not call another member here,
-     * as the lock is not reentrant.
+     * document's return in the step that made its row live, a delete for good removes the bytes
+     * only while the journal still has the document deleted, and the trash purge deletes an entry
+     * only while its documents' trash times say it is due. It must not call another member here, as
+     * the lock is not reentrant.
      */
     suspend fun <T> serialized(block: suspend (ImportJournal) -> T): T = locked { block(lockedJournal) }
 
@@ -489,6 +483,8 @@ class JournalCoordinator internal constructor(
                 withContext(NonCancellable) { projectStanding(current, writeTransaction(ops)) }
                 return true
             }
+
+            override suspend fun trashTimes(): Map<String, Long?> = foldedState().trashTimes()
         }
 
     /**

@@ -64,8 +64,8 @@ class SupersededImportException :
 
 /**
  * The journal as an import's step reads and writes it, under the writer lock that step holds
- * ([ImportService]), as does a delete for good's removal of the bytes. Its calls take no lock of
- * their own, so they are for that step alone.
+ * ([ImportService]), as do a delete for good's removal of the bytes and the trash purge's deletes.
+ * Its calls take no lock of their own, so they are for that step alone.
  */
 interface ImportJournal {
     /** The document [docId]'s bytes became, its relink chain followed to the end; [docId] when none superseded it. */
@@ -88,6 +88,13 @@ interface ImportJournal {
         relPath: String,
     ): Boolean
 
+    /**
+     * For the trash purge: every document the journal knows that is deleted, or else not superseded,
+     * mapped to when it was deleted for good or trashed, or to null while it is neither
+     * ([dev.npn.core.journal.FoldedState.trashTimes]).
+     */
+    suspend fun trashTimes(): Map<String, Long?>
+
     companion object {
         /** For a library whose journal holds no relink and hides no document. */
         val NONE: ImportJournal =
@@ -100,6 +107,8 @@ interface ImportJournal {
                     docId: String,
                     relPath: String,
                 ): Boolean = false
+
+                override suspend fun trashTimes(): Map<String, Long?> = emptyMap()
             }
     }
 }
