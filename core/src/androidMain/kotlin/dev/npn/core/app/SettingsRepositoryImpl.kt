@@ -9,6 +9,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import java.io.File
+import java.io.IOException
 import kotlin.uuid.Uuid
 
 /**
@@ -21,11 +22,15 @@ import kotlin.uuid.Uuid
  * All key mapping, defaults and clamping live in the shared [SettingsCodec]; this class only owns
  * the storage primitive (SharedPreferences and its change listener).
  */
-class SettingsRepositoryImpl(
-    context: Context,
+class SettingsRepositoryImpl internal constructor(
+    private val prefs: SharedPreferences,
+    /** Where this installation's id is kept, out of reach of Android's backups. */
+    private val noBackupDir: File,
 ) : SettingsRepository {
-    private val prefs: SharedPreferences =
-        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+    constructor(context: Context) : this(
+        context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE),
+        context.applicationContext.noBackupFilesDir,
+    )
 
     // Adapters that let the shared codec read from / write to SharedPreferences. Readers return
     // null when a key is absent (the codec then supplies the default) and treat empty strings as
@@ -42,7 +47,7 @@ class SettingsRepositoryImpl(
         }
 
     // Before `state`, whose initializer reads it through load().
-    private val installationId: String by lazy { readOrMintInstallationId(context.applicationContext.noBackupFilesDir) }
+    private val installationId: String by lazy { readOrMintInstallationId(noBackupDir) }
 
     private val state = MutableStateFlow(load())
 
@@ -95,18 +100,31 @@ class SettingsRepositoryImpl(
 
     override suspend fun edit(transform: (SettingsSnapshot) -> SettingsSnapshot) =
         persistMutex.withLock {
-            val next = SettingsCodec.normalise(transform(state.value))
+            val previous = state.value
+            val next = SettingsCodec.normalise(transform(previous))
             withContext(Dispatchers.IO) {
-                val editor = prefs.edit()
-                SettingsCodec.store(writer(editor), next)
-                // commit() (synchronous) rather than apply() so a following settings read never sees
-                // the previous value. It writes to disk inline, hence the IO dispatcher: callers reach
-                // here from viewModelScope (Dispatchers.Main.immediate), and the text settings
-                // write on every keystroke.
-                editor.commit()
+                if (!commit(next)) {
+                    // A commit that fails on disk has already put its values in memory, where this
+                    // run would read them until the next start reads the disk again. Put back what
+                    // the disk still holds, and fail as the desktop write does.
+                    commit(previous)
+                    throw IOException("The settings could not be written")
+                }
             }
             state.value = next
         }
+
+    /**
+     * Write [snapshot] with commit() (synchronous) rather than apply(), so a following settings read
+     * never sees the previous value, and so a write that fails says so. It writes to disk inline,
+     * hence the IO dispatcher: callers reach here from viewModelScope (Dispatchers.Main.immediate),
+     * and the text settings write on every keystroke.
+     */
+    private fun commit(snapshot: SettingsSnapshot): Boolean {
+        val editor = prefs.edit()
+        SettingsCodec.store(writer(editor), snapshot)
+        return editor.commit()
+    }
 
     override suspend fun legacyLibrarySettings(): LegacyLibrarySettings = SettingsCodec.legacyLibrarySettings(reader)
 

@@ -108,6 +108,49 @@ class DefaultAppEnvironmentTest {
             }
         }
 
+    /**
+     * A switch is done only once the new location is saved: one that cannot be saved closes the
+     * library it opened and goes back to the previous one, which the saved location still names.
+     */
+    @Test
+    fun aSwitchWhoseLocationCannotBeSavedGoesBackToThePreviousLibrary() =
+        runTest {
+            val good = library("good")
+            val other = library("other")
+            try {
+                env.openLibrary(good)
+                settings.failEdit = { throw IOException("Read-only file system") }
+
+                assertFails { env.openLibrary(other) }
+
+                built.map { it.first } shouldContainExactly listOf(good, other, good)
+                closed() shouldContainExactly listOf(good, other)
+                env.session.value.shouldNotBeNull()
+                env.opening.value shouldBe false
+                settings.settingsFlow.value
+                    ?.libraryLocation shouldBe good
+            } finally {
+                env.closeLibrary()
+            }
+        }
+
+    /** Opening the saved library writes nothing, so a configuration that cannot be written still opens it. */
+    @Test
+    fun theSavedLibraryOpensWhenSettingsCannotBeWritten() =
+        runTest {
+            val good = library("good")
+            settings.updateSettings { it.copy(libraryLocation = good) }
+            settings.failEdit = { throw IOException("Read-only file system") }
+            try {
+                env.openPersistedLibrary()
+
+                env.session.value.shouldNotBeNull()
+                closed() shouldBe emptyList()
+            } finally {
+                env.closeLibrary()
+            }
+        }
+
     @Test
     fun aFailedFirstOpenHasNothingToGoBackTo() =
         runTest {

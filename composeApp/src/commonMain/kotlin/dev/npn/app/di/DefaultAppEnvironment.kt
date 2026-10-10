@@ -132,26 +132,32 @@ class DefaultAppEnvironment(
                 if (previous != null && previous != location) reopen(previous)
                 throw failure
             }
-            settings.edit { it.copy(libraryLocation = location) }
         } finally {
             _opening.value = false
         }
     }
 
     /**
-     * Open and start a session at [location]. Whatever was built before a failure is closed again:
-     * left open, each Retry would leak another Room instance on the same file.
+     * Open and start a session at [location], save [location] as the library to open next time, and
+     * only then make the session the open one. Whatever was built before a failure is closed again:
+     * left open, each Retry would leak another Room instance on the same file, and a library whose
+     * location could not be saved would be in use now and forgotten at the next start. The location
+     * is written only when it changes, so a configuration that cannot be written still opens the
+     * library it names.
      */
     private suspend fun startSession(location: String) {
         val deps = factory(location, appScope)
         var session: LibrarySessionImpl? = null
-        var started = false
+        var kept = false
         try {
             session = LibrarySessionImpl.openSession(deps)
             session.start()
-            started = true
+            if (settings.settings.first().libraryLocation != location) {
+                settings.edit { it.copy(libraryLocation = location) }
+            }
+            kept = true
         } finally {
-            if (!started) {
+            if (!kept) {
                 withContext(NonCancellable) { session?.close() }
                 deps.closeDb()
             }
