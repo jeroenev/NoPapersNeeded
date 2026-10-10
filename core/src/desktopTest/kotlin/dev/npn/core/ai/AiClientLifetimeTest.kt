@@ -64,6 +64,30 @@ class AiClientLifetimeTest {
             runtimes.close()
         }
 
+    /**
+     * Switching to an endpoint whose runtime cannot be built (a malformed URL) changes nothing: the
+     * runtime of the endpoint that works stays cached and open, so going back to it carries on.
+     */
+    @Test
+    fun aFailedEndpointChangeKeepsTheWorkingRuntimeOpen() =
+        runTest {
+            val working = custom("http://localhost:1")
+            val closedWorking = AtomicInteger()
+            val closedBroken = AtomicInteger()
+            val runtimes =
+                AiRuntimeCache { config ->
+                    val closed = if (config == working) closedWorking else closedBroken
+                    AiRuntime.build(config, newTransport = { probedClient(closed) })
+                }
+            val first = runtimes.runtimeFor(working)
+
+            assertFailsWith<URLParserException> { runtimes.runtimeFor(custom("http://exa mple.com")) }
+
+            runtimes.runtimeFor(working) shouldBe first
+            closedWorking.get() shouldBe 0
+            runtimes.close()
+        }
+
     @Test
     fun aFacadeCallAfterCloseBuildsAFreshRuntime() =
         runTest {

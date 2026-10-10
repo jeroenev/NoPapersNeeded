@@ -32,18 +32,23 @@ internal class AiRuntimeCache(
 
     private fun AiConfig.runtimeKey() = RuntimeKey(enabled, provider, baseUrl, apiKey, model)
 
-    /** The runtime for [config], built now if the cached one was built for another endpoint. */
+    /**
+     * The runtime for [config], built now if the cached one was built for another endpoint. The new
+     * one is built first: only once that succeeded is the old one closed and replaced, so a config
+     * that cannot build (a malformed URL) throws and leaves the working runtime cached, and open.
+     */
     suspend fun runtimeFor(config: AiConfig): AiRuntime {
         check(config.configured) { "AI endpoint is not configured (see Settings > AI assistant)" }
         val key = config.runtimeKey()
         return mutex.withLock {
             val current = cached
             current?.takeIf { it.first == key }?.second ?: run {
-                // Runtime-relevant config changed: close the stale runtime's HTTP client before
-                // swapping. Any in-flight request still holding the old runtime will fail once its
+                val built = build(config)
+                // Runtime-relevant config changed: close the stale runtime's HTTP client as it is
+                // swapped out. Any in-flight request still holding the old runtime will fail once its
                 // client is closed — acceptable, since the endpoint changed out from under it.
                 current?.second?.close()
-                build(config).also { cached = key to it }
+                built.also { cached = key to it }
             }
         }
     }
