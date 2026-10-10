@@ -4,12 +4,16 @@ name: Release
 # Binaries go straight onto a draft release (release assets do not count against the Actions
 # artifact quota), and the draft is published only once every platform has uploaded. Tests are not
 # rerun here, and nothing waits for CI on the tagged commit: `mise release` refuses unless CI passed
-# on the main commit it bumps, and the tagged commit changes only npn.version.
+# on the main commit it bumps, and the tagged commit changes only npn.version. The draft job holds
+# every tag to that before anything is built (.github/scripts/check-release-commit.sh): CI passed on
+# the tagged commit itself, or it changes only the npn.version line on top of a main commit CI
+# passed on.
 #
-# Secrets are scoped to the steps that need them: GH_TOKEN (contents: write) to the steps that call
-# `gh`, the signing key to the one Gradle run that signs the APK. Every other step, including the
-# downloaded tools the packaging runs (appimagetool, flatpak-builder), runs without them. Actions
-# are pinned to a commit, with the release they came from in a comment.
+# Secrets are scoped to the steps that need them: GH_TOKEN (contents: write, plus actions: read in
+# the draft job for that check) to the steps that call `gh`, the signing key to the one Gradle run
+# that signs the APK. Every other step, including the downloaded tools the packaging runs
+# (appimagetool, flatpak-builder), runs without them. Actions are pinned to a commit, with the
+# release they came from in a comment.
 on:
   push:
     tags: ["v*"]
@@ -28,12 +32,18 @@ jobs:
   draft:
     name: Check version and create draft
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # The release check reads ci.yml's runs.
+      actions: read
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           # Nothing here pushes; a token left in .git/config would reach every later step.
           persist-credentials: false
+          # The release check needs the tagged commit's parent and origin/main.
+          fetch-depth: 0
 
       - name: Tag must match npn.version
         run: |
@@ -42,6 +52,11 @@ jobs:
             echo "::error::Tag $TAG does not match npn.version=$version in gradle.properties. Use 'mise release <version>'."
             exit 1
           fi
+
+      - name: Tagged commit passed CI, or only bumps a main commit that did
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: bash .github/scripts/check-release-commit.sh
 
       - name: Create draft release
         env:
