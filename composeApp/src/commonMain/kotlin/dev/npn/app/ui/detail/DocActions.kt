@@ -23,6 +23,7 @@ import dev.npn.app.ui.common.TopBarAction
 import dev.npn.app.ui.common.TopBarActions
 import dev.npn.core.app.AiOcrOffer
 import dev.npn.core.app.DocListItem
+import dev.npn.core.fs.NpnPaths
 import io.github.vinceglb.filekit.PlatformFile
 import io.github.vinceglb.filekit.dialogs.FileKitDialogSettings
 import io.github.vinceglb.filekit.dialogs.compose.rememberFileSaverLauncher
@@ -340,10 +341,10 @@ private fun DocActionDialogs(
     }
 }
 
-internal fun exportName(item: DocListItem): String {
-    val base =
-        item.doc.displayTitle
-            .substringBeforeLast('.')
-            .ifBlank { "document" }
-    return base
-}
+/**
+ * The name, without its extension, that a shared or saved copy of [item] gets: its title as one
+ * file name, never a path. A separator becomes `_`, leading and trailing dots go (no `..`, no
+ * hidden file), and a dot inside the title stays; a title with nothing left gives "document".
+ */
+internal fun exportName(item: DocListItem): String =
+    NpnPaths.sanitizeSegment(NpnPaths.stripPdfExtension(item.doc.displayTitle)).ifBlank { "document" }

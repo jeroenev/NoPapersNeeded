@@ -11,6 +11,7 @@ import dev.npn.core.app.LibraryLocations
 import dev.npn.core.fs.ExternalSource
 import dev.npn.core.fs.ExternalStorageTreePaths
 import dev.npn.core.fs.LocalLibraryFolders
+import dev.npn.core.fs.NpnPaths
 import io.github.vinceglb.filekit.AndroidFile
 import io.github.vinceglb.filekit.FileKit
 import io.github.vinceglb.filekit.PlatformFile
@@ -113,8 +114,10 @@ actual suspend fun sharePdfBytes(
     bytes: ByteArray,
 ) {
     val context = FileKit.context.applicationContext
-    val file = File(context.cacheDir, "share").apply { mkdirs() }.resolve(fileName)
-    withContext(Dispatchers.IO) { file.writeBytes(bytes) }
+    val file =
+        withContext(Dispatchers.IO) {
+            shareFile(File(context.cacheDir, "share").apply { mkdirs() }, fileName).apply { writeBytes(bytes) }
+        }
     val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", file)
     val share =
         Intent(Intent.ACTION_SEND).apply {
@@ -123,4 +126,18 @@ actual suspend fun sharePdfBytes(
             addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
         }
     context.startActivity(Intent.createChooser(share, null).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+}
+
+/**
+ * The file in [dir] a copy shared as [fileName] is written to: [fileName] made one safe file name,
+ * so a title never reaches a folder of its own or outside [dir]. A name that still would (a blank
+ * one names [dir] itself) throws instead of writing anywhere else.
+ */
+internal fun shareFile(
+    dir: File,
+    fileName: String,
+): File {
+    val file = File(dir, NpnPaths.sanitizeFileName(fileName))
+    require(file.canonicalFile.parentFile == dir.canonicalFile) { "Not a file name: $fileName" }
+    return file
 }
