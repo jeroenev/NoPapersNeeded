@@ -237,6 +237,33 @@ class SettingsViewModelTest : MainDispatcherTest() {
             model.state.value.storagePathTemplate shouldBe "{docType}/{title}.pdf"
         }
 
+    /** A template whose save failed stays on screen as typed, and the failure is said. */
+    @Test
+    fun aTemplateWhoseSaveFailsStaysAsTyped() =
+        runTest(dispatcher) {
+            val session = FakeLibrarySession().apply { storagePath.failTemplate = { error("read-only file system") } }
+            val model = vm(session = session)
+            collecting(model.state)
+            val messages = collecting(model.messages.map { it.text })
+
+            model.setStoragePathTemplate("{docType}/{title}.pdf")
+            advanceUntilIdle()
+
+            model.state.value.storagePathTemplate shouldBe "{docType}/{title}.pdf"
+            messages shouldContainExactly
+                listOf(failure(Res.string.common_save_setting_failed, "read-only file system"))
+
+            // Turning the rule on arms what the screen shows, so it is the way to try again.
+            session.storagePath.failTemplate = null
+            model.setStoragePathEnabled(true)
+            advanceUntilIdle()
+            session.storagePath.storagePathFlow.value shouldBe StoragePathSetting("{docType}/{title}.pdf", true)
+            // Saved, it is no draft any more: the screen follows the library's template again.
+            session.storagePath.storagePathFlow.value = StoragePathSetting("{title}.pdf", true)
+            runCurrent()
+            model.state.value.storagePathTemplate shouldBe "{title}.pdf"
+        }
+
     @Test
     fun enablingArmsTheTemplateTheScreenShows() =
         runTest(dispatcher) {

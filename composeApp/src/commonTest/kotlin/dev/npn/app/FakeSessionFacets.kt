@@ -160,7 +160,11 @@ class FakeStoragePathFacade : StoragePathFacade {
 
     val templateWrites = mutableListOf<String?>()
 
+    /** If set, [setStoragePathTemplate] throws this. */
+    var failTemplate: (() -> Nothing)? = null
+
     override suspend fun setStoragePathTemplate(template: String?) {
+        failTemplate?.invoke()
         templateWrites += template
         storagePathFlow.update { it.copy(template = template?.takeIf(String::isNotBlank)) }
     }

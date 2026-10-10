@@ -108,7 +108,8 @@ interface SettingsActions {
     /**
      * Edit the library's storage-path template. Each saved value is a journal event every replica
      * keeps, so a keystroke only updates what the screen shows, and the template is saved once
-     * typing pauses. Leaving the screen during that pause still saves it.
+     * typing pauses. Leaving the screen during that pause still saves it. A template whose save
+     * failed stays on screen as typed, for the next edit or [setStoragePathEnabled] to save.
      */
     fun setStoragePathTemplate(template: String)
 
@@ -272,11 +273,10 @@ class SettingsViewModel(
             }
     }
 
+    /** Save [template]; the screen shows it as a draft until it has landed, failed saves included. */
     private suspend fun saveTemplate(template: String) {
-        reporting(Res.string.common_save_setting_failed) {
-            storagePath.setStoragePathTemplate(template)
-        }
-        templateDraft.compareAndSet(template, null)
+        val saved = reporting(Res.string.common_save_setting_failed) { storagePath.setStoragePathTemplate(template) }
+        if (saved) templateDraft.compareAndSet(template, null)
     }
 
     override fun setStoragePathEnabled(enabled: Boolean) =
@@ -294,6 +294,8 @@ class SettingsViewModel(
                     return@launchReporting
                 }
                 storagePath.setStoragePathTemplate(template)
+                // Saved: a draft of it, left by a failed save or still waiting for its pause, is done.
+                templateDraft.compareAndSet(template, null)
             }
             storagePath.setStoragePathEnabled(enabled)
         }
@@ -332,14 +334,8 @@ class SettingsViewModel(
     }
 
     /** Switch AI page reading off; true once it is, false (and reported) when the write failed. */
-    private suspend fun turnOffAiOcr(): Boolean {
-        var done = false
-        reporting(Res.string.common_save_setting_failed) {
-            settings.edit { it.copy(aiOcrAuto = false) }
-            done = true
-        }
-        return done
-    }
+    private suspend fun turnOffAiOcr(): Boolean =
+        reporting(Res.string.common_save_setting_failed) { settings.edit { it.copy(aiOcrAuto = false) } }
 
     override fun clearThumbnailCache() =
         launchReporting(Res.string.common_settings_clear_thumbnails_failed) {

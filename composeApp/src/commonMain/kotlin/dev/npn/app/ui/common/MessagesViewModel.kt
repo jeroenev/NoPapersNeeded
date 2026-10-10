@@ -47,11 +47,15 @@ abstract class MessagesViewModel : ViewModel() {
         viewModelScope.launch { reporting(failed, block) }
     }
 
-    /** [launchReporting]'s failure handling, for a write inside a coroutine the caller launched. */
+    /**
+     * [launchReporting]'s failure handling, for a write inside a coroutine the caller launched.
+     * Returns whether [block] completed, for a caller that keeps what it wrote until it has landed.
+     */
     protected suspend fun reporting(
         failed: StringResource,
         block: suspend () -> Unit,
-    ) {
-        runCatchingCancellable { block() }.onFailure { message(uiText(failed, it.reasonText())) }
-    }
+    ): Boolean =
+        runCatchingCancellable { block() }
+            .onFailure { message(uiText(failed, it.reasonText())) }
+            .isSuccess
 }
