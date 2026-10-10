@@ -185,7 +185,8 @@ tasks.register<PackageLinuxInstallerTask>("packageRpm") { packageAs("rpm") }
 // On Windows the plugin still owns that task and produces the .msi/.exe.
 
 // --- AppImage packaging ---------------------------------------------------
-// appimagetool wraps the app image; it is downloaded into build/ (needs network). It is a tagged
+// appimagetool wraps the app image; it is downloaded into build/appimagetool/ (needs network), not
+// next to the AppImage: the workflows publish every *.AppImage in build/appimage/. It is a tagged
 // release, pinned by hash: the release job runs this binary, so it must be the bytes that were
 // reviewed, never whatever the rolling "continuous" release holds that day. To bump it, take the
 // SHA-256 GitHub lists for the asset on the release page.
@@ -199,7 +200,7 @@ val downloadAppImageTool =
     tasks.register<DownloadAppImageToolTask>("downloadAppImageTool") {
         url.set(appImageToolUrl)
         sha256.set(appImageToolSha256)
-        outFile.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
+        outFile.set(layout.buildDirectory.file("appimagetool/appimagetool.AppImage"))
     }
 
 val appImageDesktopEntry = desktopEntry("appImageDesktopEntry", npnAppName, npnAppName)
@@ -208,7 +209,7 @@ val packageAppImage =
     tasks.register<PackageAppImageTask>("packageAppImage") {
         group = "compose desktop"
         description = "Builds a Linux AppImage from the jpackage app-image output."
-        dependsOn("createDistributable", downloadAppImageTool)
+        dependsOn("createDistributable")
 
         appName.set(npnAppName)
         desktopEntry.set(appImageDesktopEntry.flatMap { it.outFile })
@@ -217,7 +218,7 @@ val packageAppImage =
         // release, so the release has to upload it next to the AppImage.
         updateInfo.set("gh-releases-zsync|jeroenev|NoPapersNeeded|latest|$npnAppName-*-$appImageArch.AppImage.zsync")
         appImageSrc.set(distributableAppImage)
-        appImageTool.set(layout.buildDirectory.file("appimage/appimagetool.AppImage"))
+        appImageTool.set(downloadAppImageTool.flatMap { it.outFile })
         iconFile.set(npnIconPng)
         appDir.set(layout.buildDirectory.dir("appimage/AppDir"))
         outFile.set(layout.buildDirectory.file("appimage/$npnAppName-$npnAppVersion-$appImageArch.AppImage"))
