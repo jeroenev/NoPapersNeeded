@@ -11,15 +11,13 @@ import dev.npn.core.db.TempIndexDb
 import dev.npn.core.db.documentEntity
 import io.kotest.matchers.collections.shouldContainExactly
 import io.kotest.matchers.shouldBe
-import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.runTest
-import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeout
 import kotlin.test.AfterTest
 import kotlin.test.Test
+import kotlin.time.Duration.Companion.seconds
 
 /** A real index database wired to the reader under test; the two suites below share it. */
 internal open class WorkQueueReaderFixture {
@@ -218,32 +216,25 @@ internal class WorkQueueReaderTest : WorkQueueReaderFixture() {
             queue() shouldBe emptyList()
         }
 
-    /** An open subscription follows its rows' documents: a new title renames a row, a trash drops it. */
+    /**
+     * An open subscription follows its rows' documents: a new title renames a row, a trash drops it.
+     * The database notifies from its own threads, so the wait is bounded in real time.
+     */
     @Test
     fun `a subscribed queue follows a document retitled and then trashed`() =
-        runTest {
+        runTest(timeout = 10.seconds) {
             putDoc("a")
             putOcr("a", state = QueueState.FAILED.column, attempts = 3)
             val latest = MutableStateFlow<List<QueuedWork>?>(null)
             backgroundScope.launch { reader.queue.collect { latest.value = it } }
-            latest.awaitMatching { it.singleOrNull()?.displayTitle == "a.pdf" }
+            latest.first { it?.singleOrNull()?.displayTitle == "a.pdf" }
 
             putDoc("a", title = "Electricity bill")
-            latest.awaitMatching { it.singleOrNull()?.displayTitle == "Electricity bill" }
+            latest.first { it?.singleOrNull()?.displayTitle == "Electricity bill" }
 
             putDoc("a", title = "Electricity bill", trashed = true)
-            latest.awaitMatching { it.isEmpty() }
+            latest.first { it?.isEmpty() == true }
         }
-
-    /** Wait, in real time since the database notifies from its own threads, for a list [matching]. */
-    private suspend fun MutableStateFlow<List<QueuedWork>?>.awaitMatching(matching: (List<QueuedWork>) -> Boolean) =
-        withContext(Dispatchers.Default) {
-            withTimeout(SUBSCRIPTION_TIMEOUT_MS) { first { it != null && matching(it) } }
-        }
-
-    private companion object {
-        const val SUBSCRIPTION_TIMEOUT_MS = 5_000L
-    }
 }
 
 /**

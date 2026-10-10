@@ -37,11 +37,7 @@ class ReconcileRetryTest {
     private suspend fun failReconcileOnTheLaterOfTwoRemoteObjects(): FailedReconcile {
         rig.writePdf("a.pdf", "alpha")
         rig.rescan()
-        val docId =
-            rig.db
-                .documentDao()
-                .rowAtPath("a.pdf")!!
-                .docId
+        val docId = checkNotNull(rig.db.documentDao().rowAtPath("a.pdf")).docId
         val coordinator = rig.coordinator(rig.writer("dev-main"))
         coordinator.refreshState()
         rig.clock.advance()
@@ -51,7 +47,7 @@ class ReconcileRetryTest {
         val published =
             listOf("one", "two").map { tag ->
                 rig.clock.advance()
-                tag to remote.commit(listOf(PendingOp.tagAdd(docId, tag)))!!.relPath
+                tag to checkNotNull(remote.commit(listOf(PendingOp.tagAdd(docId, tag)))).relPath
             }
         val (earlier, later) = published.sortedBy { (_, path) -> path }
         val laterBytes = rig.fs.readBytes(later.second)
