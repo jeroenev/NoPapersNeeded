@@ -27,6 +27,13 @@ sealed interface JournalPath {
 
     data object Staging : JournalPath
 
+    /**
+     * A file a sync tool writes beside an object or snapshot while it transfers it
+     * ([NpnPaths.isSyncTemp]): neither an object nor an error, and never the app's to delete. The
+     * object is read once the tool renames it into place.
+     */
+    data object SyncTemp : JournalPath
+
     data object Unknown : JournalPath
 }
 
@@ -120,6 +127,8 @@ object JournalPaths {
             // The direct filesystem stages a write beside its target, so publishing an object's
             // staging file can leave one of its own in the bucket too.
             objectStagingPattern.matches(name) || Temp.kindOf(name) == Temp.Kind.WRITE -> JournalPath.Staging
+
+            NpnPaths.isSyncTemp(name) -> JournalPath.SyncTemp
 
             expected == null || !prefixMatches -> JournalPath.Unknown
 

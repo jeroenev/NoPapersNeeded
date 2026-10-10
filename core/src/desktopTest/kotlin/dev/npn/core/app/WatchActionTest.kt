@@ -37,6 +37,8 @@ class WatchActionTest {
     @Test
     fun aWriteInProgressOrOurOwnEchoIsIgnored() {
         action(JournalPaths.stagingPath(hash, "installation", "nonce")) shouldBe WatchAction.Ignore
+        // A sync tool's transfer: the object it becomes is ingested once it is renamed into place.
+        action("${NpnPaths.JOURNAL_DIR}/objects-v2-ab/.syncthing.$hash.jsonl.tmp") shouldBe WatchAction.Ignore
         action(OcrSidecarName(hash, OcrSidecarName.writerKey(DEVICE, "mlkit")).path) shouldBe WatchAction.Ignore
     }
 

@@ -424,7 +424,7 @@ class MetadataAccumulator(
         val sources =
             files.sortedBy { it.relPath }.filter { meta ->
                 val path = JournalPaths.classify(meta.relPath)
-                path !is JournalPath.Staging && path !is JournalPath.Unknown
+                path !is JournalPath.Staging && path !is JournalPath.SyncTemp && path !is JournalPath.Unknown
             }
         for (meta in sources) ingestFile(meta, batch)
         return batch

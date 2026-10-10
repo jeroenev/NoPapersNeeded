@@ -259,14 +259,22 @@ object NpnPaths {
     }
 
     /**
-     * Detects sync-tool *temporary* files that should be ignored entirely (never indexed,
-     * never surfaced): syncthing's `~syncthing~*` temp files and `.syncthing.*` hidden temps.
+     * Detects sync-tool *temporary* files that should be ignored entirely (never indexed, never
+     * surfaced, never deleted: the tool renames one into place, or drops it, itself). Each is written
+     * beside the file it transfers:
+     * - Syncthing: `~syncthing~<name>.tmp` and `.syncthing.<name>.tmp`
+     * - Nextcloud / ownCloud desktop clients: `.<name>.~<hex>`
+     * - Resilio Sync: `<name>.!sync`
      */
     fun isSyncTemp(name: String): Boolean {
         if (name.startsWith("~syncthing~")) return true
         if (name.startsWith(".syncthing.")) return true
-        return false
+        if (nextcloudTempPattern.matches(name)) return true
+        return name.endsWith(RESILIO_TEMP_SUFFIX)
     }
+
+    private val nextcloudTempPattern = Regex("^\\..+\\.~[0-9a-fA-F]+$")
+    private const val RESILIO_TEMP_SUFFIX = ".!sync"
 
     /**
      * True when a file should be indexed as a document: a PDF that is not app-internal, not

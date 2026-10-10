@@ -19,8 +19,9 @@ import kotlin.time.TimeSource
  */
 internal sealed interface WatchAction {
     /**
-     * Nothing to do: this device's own write echoing back, a journal write still being staged, or a
-     * name the library cannot address ([NpnPaths.isSafe]), which a rescan passes over too.
+     * Nothing to do: this device's own write echoing back, a journal object still being staged or
+     * transferred by a sync tool, or a name the library cannot address ([NpnPaths.isSafe]), which a
+     * rescan passes over too.
      */
     data object Ignore : WatchAction
 
@@ -64,7 +65,7 @@ internal fun watchAction(
             WatchAction.IngestObject(rel)
         }
 
-        JournalPath.Staging -> {
+        JournalPath.Staging, JournalPath.SyncTemp -> {
             WatchAction.Ignore
         }
 

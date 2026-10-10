@@ -284,7 +284,9 @@ live in `buildSrc`. Hot Reload via `mise hot`.
   back from before a compaction) lost nothing: the reconcile forgets it, as a rebuild would, and
   the next compaction replaces those objects again. Builds before storage-v2 wrote per-device v1 segments,
   `.npn/journal/<deviceId>/<seq>.jsonl`: those are still read and folded, never written. There is
-  no fallback format.
+  no fallback format. Beside its objects a bucket may hold their staging files and a sync tool's
+  file for one still in transfer (`NpnPaths.isSyncTemp`: Syncthing, Nextcloud and ownCloud,
+  Resilio), which a reconcile passes over and never deletes; any other name there fails the pass.
 - **Compatibility.** A build folds only the ops it knows. An object, snapshot or segment holding an
   op it does not know, or a known op it cannot read (a `prop-set` of a newer system property, a
   `field-def` of a newer field type), is refused there as unsupported: that build blocks writes and

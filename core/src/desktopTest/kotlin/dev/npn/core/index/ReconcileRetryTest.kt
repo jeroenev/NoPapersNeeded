@@ -1,8 +1,13 @@
 package dev.npn.core.index
 
 import dev.npn.core.app.JournalCoordinator
+import dev.npn.core.db.TempIndexDb
+import dev.npn.core.fs.NpnPaths
 import dev.npn.core.journal.PendingOp
+import io.kotest.matchers.booleans.shouldBeTrue
 import io.kotest.matchers.collections.shouldContainExactlyInAnyOrder
+import io.kotest.matchers.shouldBe
+import io.kotest.matchers.types.shouldBeInstanceOf
 import kotlinx.coroutines.test.runTest
 import java.nio.file.Files
 import kotlin.test.AfterTest
@@ -86,6 +91,52 @@ class ReconcileRetryTest {
             failed.coordinator.reconcileMetadata()
 
             tagsOf(failed.docId) shouldContainExactlyInAnyOrder listOf("local", failed.earlierTag)
+        }
+
+    /**
+     * A sync tool's file for an object it is still transferring, left in the bucket (an interrupted
+     * transfer can leave one for a day): no reconcile and no open fails on it, and nothing deletes it.
+     */
+    @Test
+    fun aSyncToolsTransferFileInABucketFailsNothing() =
+        runTest {
+            rig.writePdf("a.pdf", "alpha")
+            rig.rescan()
+            val docId = checkNotNull(rig.db.documentDao().rowAtPath("a.pdf")).docId
+            val coordinator = rig.coordinator()
+            coordinator.refreshState()
+            rig.clock.advance()
+            val published = checkNotNull(rig.writer("device-two").commit(listOf(PendingOp.tagAdd(docId, "remote"))))
+            val bucket = NpnPaths.parentDir(published.relPath)
+            val name = NpnPaths.fileName(published.relPath)
+            val partial = rig.fs.readBytes(published.relPath).let { it.copyOf(it.size / 2) }
+            val transfers =
+                listOf(
+                    "$bucket/.syncthing.$name.tmp",
+                    "$bucket/~syncthing~$name.tmp",
+                    "$bucket/.$name.~3fa9c2d1",
+                    "$bucket/$name.!sync",
+                    "${NpnPaths.JOURNAL_DIR}/objects-snap-v2-cd/.syncthing.${"cd".repeat(32)}.jsonl.tmp",
+                )
+            for (transfer in transfers) {
+                Files.createDirectories(rig.libRoot.resolve(transfer).parent)
+                Files.write(rig.libRoot.resolve(transfer), partial)
+            }
+
+            coordinator.reconcileMetadata()
+            rig.clock.advance()
+            coordinator.commitAndApply(listOf(PendingOp.tagAdd(docId, "local"))).shouldBeTrue()
+
+            tagsOf(docId) shouldContainExactlyInAnyOrder listOf("remote", "local")
+            transfers.forEach { rig.exists(it).shouldBeTrue() }
+            TempIndexDb("npn-transfer-open").use { fresh ->
+                val opened = MetadataAccumulator(rig.fs, fresh.db, installationId = "fresh").reconcileOnOpen()
+                opened
+                    .shouldBeInstanceOf<OpenReconciliation.Refolded>()
+                    .state
+                    .effectiveTags(docId) shouldBe setOf("remote", "local")
+            }
+            transfers.forEach { rig.exists(it).shouldBeTrue() }
         }
 
     /** The folder watch's ingest of the object the reconcile failed on refolds in full too. */

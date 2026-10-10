@@ -122,7 +122,13 @@ class NpnPathsTest {
     fun isSyncTemp() {
         NpnPaths.isSyncTemp("~syncthing~doc.pdf.tmp").shouldBeTrue()
         NpnPaths.isSyncTemp(".syncthing.doc.pdf.tmp").shouldBeTrue()
+        // Nextcloud and ownCloud desktop clients, and Resilio Sync.
+        NpnPaths.isSyncTemp(".doc.pdf.~3fa9c2d1").shouldBeTrue()
+        NpnPaths.isSyncTemp("doc.pdf.!sync").shouldBeTrue()
         NpnPaths.isSyncTemp("doc.pdf").shouldBeFalse()
+        NpnPaths.isSyncTemp(".hidden.pdf").shouldBeFalse()
+        NpnPaths.isSyncTemp("doc.pdf.~3fa9c2d1").shouldBeFalse()
+        NpnPaths.isSyncTemp(".doc.pdf.~backup").shouldBeFalse()
     }
 
     @Test
