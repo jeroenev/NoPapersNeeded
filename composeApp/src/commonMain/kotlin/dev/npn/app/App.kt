@@ -14,15 +14,23 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.NonRestartableComposable
+import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.ViewModel
+import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.ViewModelStoreOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.LocalViewModelStoreOwner
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavGraphBuilder
@@ -82,6 +90,7 @@ import no_papers_needed.composeapp.generated.resources.library_settings
 import no_papers_needed.composeapp.generated.resources.library_tags
 import no_papers_needed.composeapp.generated.resources.library_trash
 import org.jetbrains.compose.resources.stringResource
+import kotlin.random.Random
 
 @Composable
 @NonRestartableComposable
@@ -91,29 +100,58 @@ fun App(env: AppEnvironment) {
 
 /**
  * What the open library's UI keeps when the app's language changes: its unsaved [drafts], where its
- * navigation stands ([nav]), and the order the detail screen walks ([browse]).
+ * navigation stands ([nav]), its screens' viewmodels ([viewModels]), and the order the detail
+ * screen walks ([browse]). All of it belongs to one session: another library gets its own.
  */
 @Stable
 internal class LibraryUi(
     val drafts: DocumentDrafts,
     val nav: NavHostController,
+    val viewModels: ViewModelStoreOwner,
 ) {
     val browse = BrowseContext()
 }
 
 /**
+ * The viewmodel stores of the open library's screens, one per session. Held in the window's store
+ * (the activity's on Android), so an activity recreated for a configuration change finds its
+ * library's screens as they were. [keepOnly] clears every other session's store, so nothing a
+ * closed library's screens started runs on against it.
+ */
+internal class LibraryViewModelStores : ViewModel() {
+    private val owners = HashMap<LibrarySession, ViewModelStoreOwner>()
+
+    fun of(session: LibrarySession): ViewModelStoreOwner =
+        owners.getOrPut(session) {
+            object : ViewModelStoreOwner {
+                override val viewModelStore = ViewModelStore()
+            }
+        }
+
+    fun keepOnly(session: LibrarySession?) {
+        for (gone in owners.keys.filter { it != session }) owners.remove(gone)?.viewModelStore?.clear()
+    }
+
+    override fun onCleared() = keepOnly(null)
+}
+
+/**
  * [content] in the app's language ([LocaleProvider]), handed the open library's [LibraryUi], or
  * null while no library is open. A change of language rebuilds everything below [LocaleProvider],
- * so what must outlive it is remembered here, above it, for as long as [session] is open.
+ * so what must outlive it is remembered here, above it, for as long as [session] is open. Once the
+ * UI of a session that left is gone, its screens' viewmodels are cleared.
  */
 @Composable
 internal fun LocalizedApp(
     settings: SettingsRepository,
     session: LibrarySession?,
     scope: CoroutineScope,
+    stores: LibraryViewModelStores = viewModel { LibraryViewModelStores() },
     content: @Composable (LibraryUi?) -> Unit,
 ) {
-    val library = session?.let { rememberLibraryUi(it, scope) }
+    val library = session?.let { rememberLibraryUi(it, scope, stores.of(it)) }
+    // Side effects run once the composition has let go of what it no longer shows.
+    SideEffect { stores.keepOnly(session) }
     LocaleProvider(settings) { content(library) }
 }
 
@@ -121,10 +159,24 @@ internal fun LocalizedApp(
 private fun rememberLibraryUi(
     session: LibrarySession,
     scope: CoroutineScope,
+    viewModels: ViewModelStoreOwner,
 ): LibraryUi {
     val drafts = rememberDocumentDrafts(session, scope)
-    val nav = rememberNavController()
-    return remember(drafts, nav) { LibraryUi(drafts, nav) }
+    // A controller of the session's own, as its back stack holds the session's viewmodel stores: a
+    // new one for another session, and the saved one again for the same session in a recreated
+    // activity or a restored process. Saved, so the restore finds the key it was saved under.
+    val navKey = rememberSaveable(session) { Random.nextLong() }
+    val nav = key(navKey) { rememberNavController() }
+    return remember(drafts, nav, viewModels) { LibraryUi(drafts, nav, viewModels) }
+}
+
+/** [content], with [library]'s screens' viewmodels kept in its store ([LibraryUi.viewModels]). */
+@Composable
+internal fun LibraryViewModelHost(
+    library: LibraryUi,
+    content: @Composable () -> Unit,
+) {
+    CompositionLocalProvider(LocalViewModelStoreOwner provides library.viewModels, content = content)
 }
 
 @Composable
@@ -174,16 +226,20 @@ private fun AppRoot(
                     is AppState.Open -> {
                         val aiConfigured by vm.aiConfigured.collectAsStateWithLifecycle()
                         // Never null here: LocalizedApp remembers it for the session this state opened.
+                        // Keyed, so nothing remembered for one library's screens carries over to
+                        // another's when the session changes with no screen in between.
                         if (library != null) {
-                            DocumentDraftHost(library.drafts) {
-                                MainNav(
-                                    env = env,
-                                    session = current.session,
-                                    library = library,
-                                    aiConfigured = aiConfigured,
-                                    snackbar = snackbar,
-                                    onOpenLibrary = vm::open,
-                                )
+                            key(library) {
+                                DocumentDraftHost(library.drafts) {
+                                    MainNav(
+                                        env = env,
+                                        session = current.session,
+                                        library = library,
+                                        aiConfigured = aiConfigured,
+                                        snackbar = snackbar,
+                                        onOpenLibrary = vm::open,
+                                    )
+                                }
                             }
                         }
                         // A switch to another library that failed lands back in this one; say why.
@@ -271,16 +327,18 @@ private fun MainNav(
                     nav.navigateAi(Route.AiEdit)
                 },
             ) {
-                MainNavHost(
-                    nav = nav,
-                    env = env,
-                    session = session,
-                    browse = browse,
-                    aiSelection = aiSelection,
-                    libraryFilterHandoff = libraryFilterHandoff,
-                    showAiEditTopBar = !aiEditInSidebar,
-                    onOpenLibrary = onOpenLibrary,
-                )
+                LibraryViewModelHost(library) {
+                    MainNavHost(
+                        nav = nav,
+                        env = env,
+                        session = session,
+                        browse = browse,
+                        aiSelection = aiSelection,
+                        libraryFilterHandoff = libraryFilterHandoff,
+                        showAiEditTopBar = !aiEditInSidebar,
+                        onOpenLibrary = onOpenLibrary,
+                    )
+                }
             }
         }
     }
