@@ -5,7 +5,10 @@ import org.gradle.api.tasks.Input
 import org.gradle.api.tasks.OutputFile
 import org.gradle.api.tasks.TaskAction
 
-/** Downloads appimagetool, pinned to [sha256]: the release job runs it. */
+/**
+ * Downloads appimagetool or the AppImage runtime, pinned to [sha256]: the release job runs the one and
+ * ships the other inside every AppImage.
+ */
 abstract class DownloadAppImageToolTask : DefaultTask() {
     @get:Input
     abstract val url: Property<String>

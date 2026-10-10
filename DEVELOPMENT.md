@@ -256,7 +256,10 @@ network access. It is kept out of `desktopApp/build/appimage/`, since the releas
 `.AppImage` and `.zsync` there. It is pinned to a tagged release and its SHA-256
 (`appImageToolVersion`/`appImageToolSha256` in `desktopApp/build.gradle.kts`, checked by
 `VerifiedDownload` in buildSrc, as the Windows Tesseract downloads are); to bump it, take the
-hash GitHub lists for the asset. It builds with `--appimage-extract-and-run` and therefore does not
+hash GitHub lists for the asset. The AppImage runtime it embeds is pinned the same way
+(`appImageRuntimeVersion`/`appImageRuntimeSha256`, a tagged `AppImage/type2-runtime` release,
+passed with `--runtime-file`); left to itself, appimagetool downloads the rolling `continuous`
+runtime on every build. It builds with `--appimage-extract-and-run` and therefore does not
 need FUSE on the build host; running the resulting AppImage still needs FUSE, or the
 end user can run it with `--appimage-extract-and-run`. The AppImage is x86_64 only.
 

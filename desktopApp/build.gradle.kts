@@ -189,18 +189,30 @@ tasks.register<PackageLinuxInstallerTask>("packageRpm") { packageAs("rpm") }
 // next to the AppImage: the workflows publish every *.AppImage in build/appimage/. It is a tagged
 // release, pinned by hash: the release job runs this binary, so it must be the bytes that were
 // reviewed, never whatever the rolling "continuous" release holds that day. To bump it, take the
-// SHA-256 GitHub lists for the asset on the release page.
+// SHA-256 GitHub lists for the asset on the release page. The runtime every AppImage starts with
+// is pinned the same way: left to itself, appimagetool downloads the "continuous" one.
 val appImageArch = "x86_64"
 val appImageToolVersion = "1.9.1"
 val appImageToolUrl =
     "https://github.com/AppImage/appimagetool/releases/download/$appImageToolVersion/appimagetool-$appImageArch.AppImage"
 val appImageToolSha256 = "ed4ce84f0d9caff66f50bcca6ff6f35aae54ce8135408b3fa33abfc3cb384eb0"
+val appImageRuntimeVersion = "20251108"
+val appImageRuntimeUrl =
+    "https://github.com/AppImage/type2-runtime/releases/download/$appImageRuntimeVersion/runtime-$appImageArch"
+val appImageRuntimeSha256 = "2fca8b443c92510f1483a883f60061ad09b46b978b2631c807cd873a47ec260d"
 
 val downloadAppImageTool =
     tasks.register<DownloadAppImageToolTask>("downloadAppImageTool") {
         url.set(appImageToolUrl)
         sha256.set(appImageToolSha256)
         outFile.set(layout.buildDirectory.file("appimagetool/appimagetool.AppImage"))
+    }
+
+val downloadAppImageRuntime =
+    tasks.register<DownloadAppImageToolTask>("downloadAppImageRuntime") {
+        url.set(appImageRuntimeUrl)
+        sha256.set(appImageRuntimeSha256)
+        outFile.set(layout.buildDirectory.file("appimagetool/runtime-$appImageArch"))
     }
 
 val appImageDesktopEntry = desktopEntry("appImageDesktopEntry", npnAppName, npnAppName)
@@ -219,6 +231,7 @@ val packageAppImage =
         updateInfo.set("gh-releases-zsync|jeroenev|NoPapersNeeded|latest|$npnAppName-*-$appImageArch.AppImage.zsync")
         appImageSrc.set(distributableAppImage)
         appImageTool.set(downloadAppImageTool.flatMap { it.outFile })
+        runtimeFile.set(downloadAppImageRuntime.flatMap { it.outFile })
         iconFile.set(npnIconPng)
         appDir.set(layout.buildDirectory.dir("appimage/AppDir"))
         outFile.set(layout.buildDirectory.file("appimage/$npnAppName-$npnAppVersion-$appImageArch.AppImage"))

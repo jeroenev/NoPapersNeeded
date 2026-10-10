@@ -28,6 +28,13 @@ abstract class PackageAppImageTask
         @get:InputFile
         abstract val appImageTool: RegularFileProperty
 
+        /**
+         * The runtime the AppImage starts with. Without it appimagetool fetches whatever the rolling
+         * "continuous" runtime release holds at build time.
+         */
+        @get:InputFile
+        abstract val runtimeFile: RegularFileProperty
+
         /** The AppDir's desktop entry, which appimagetool requires; its Icon names [appName]. */
         @get:InputFile
         abstract val desktopEntry: RegularFileProperty
@@ -97,6 +104,8 @@ abstract class PackageAppImageTask
                     args =
                         listOf(
                             "--appimage-extract-and-run",
+                            "--runtime-file",
+                            runtimeFile.get().asFile.absolutePath,
                             "--updateinformation",
                             updateInfo.get(),
                             dir.absolutePath,
